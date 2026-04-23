@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.test.frontend.fir
 import com.intellij.openapi.vfs.StandardFileSystems.FILE_PROTOCOL
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.search.ProjectScope.getLibrariesScope
+import org.jetbrains.kotlin.cli.extensionsStorage
 import org.jetbrains.kotlin.cli.jvm.compiler.PsiBasedProjectFileSearchScope
 import org.jetbrains.kotlin.cli.jvm.compiler.TopDownAnalyzerFacadeForJVM
 import org.jetbrains.kotlin.cli.jvm.compiler.VfsBasedProjectEnvironment
