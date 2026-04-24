@@ -676,6 +676,8 @@ enum class LanguageFeature(
             )
         }
     },
+
+    JavaDirect(sinceVersion = null, "KT-70023"),
     ;
 
     constructor(
