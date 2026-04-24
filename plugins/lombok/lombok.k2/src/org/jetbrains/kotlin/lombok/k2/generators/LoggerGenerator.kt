@@ -216,6 +216,7 @@ class LoggerGenerator(session: FirSession) : FirDeclarationGenerationExtension(s
             buildJavaField {
                 isFromSource = true
                 lazyHasConstantInitializer = lazy { false }
+                lazyHasInitializer = lazy { false }
                 containingClassSymbol = logContainingClass
 
                 moduleData = logContainingClass.moduleData

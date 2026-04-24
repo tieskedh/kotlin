@@ -1,0 +1,305 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+@file:Suppress("UnstableApiUsage")
+
+package org.jetbrains.kotlin.java.direct.util
+
+import com.intellij.java.syntax.element.JavaSyntaxElementType
+import com.intellij.java.syntax.element.JavaSyntaxTokenType
+import com.intellij.openapi.vfs.VirtualFile
+import org.jetbrains.kotlin.java.direct.model.JavaClassOverAst
+import org.jetbrains.kotlin.java.direct.parse.JavaLightNode
+import org.jetbrains.kotlin.java.direct.parse.JavaLightTree
+import org.jetbrains.kotlin.java.direct.parse.parseJavaToLightTree
+import org.jetbrains.kotlin.java.direct.resolution.JavaImports
+import org.jetbrains.kotlin.java.direct.resolution.JavaResolutionContext
+import org.jetbrains.kotlin.load.java.structure.JavaClass
+import org.jetbrains.kotlin.name.ClassId
+import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.name.Name
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.collections.iterator
+
+/**
+ * Encapsulates supertype-graph queries for Java source classes: direct supertypes and
+ * transitively inherited inner class names.
+ *
+ * The graph is computed lazily from the AST, preferring already-cached [org.jetbrains.kotlin.load.java.structure.JavaClass] instances
+ * (fast path, no I/O). When a class hasn't been cached yet, the owning file is re-parsed as a
+ * fallback (slow path). Results are memoized in per-instance caches.
+ *
+ * This component intentionally does NOT own the source index or the class cache — it consults
+ * them via callbacks passed to the constructor, so that a single authoritative copy lives in
+ * [org.jetbrains.kotlin.java.direct.JavaClassFinderOverAstImpl].
+ *
+ * @param classCacheLookup returns the cached [org.jetbrains.kotlin.load.java.structure.JavaClass] for a given [org.jetbrains.kotlin.name.ClassId], or `null` if
+ *     it hasn't been parsed/cached yet.
+ * @param filesForClassLookup returns the candidate source files that may contain the top-level
+ *     class identified by the given [org.jetbrains.kotlin.name.ClassId].
+ * @param sameClassInSameFilePackage returns whether the given simple name exists as a top-level
+ *     class in the given package in the source index (for same-package supertype resolution).
+ * @param sourceFileReader reader used to fetch the text of a [com.intellij.openapi.vfs.VirtualFile] on the slow path.
+ */
+internal class JavaSupertypeGraph(
+    private val classCacheLookup: (ClassId) -> JavaClass?,
+    private val filesForClassLookup: (ClassId) -> List<VirtualFile>,
+    private val sameClassInSameFilePackage: (FqName, String) -> Boolean,
+    private val sourceFileReader: JavaSourceFileReader,
+) {
+    // Cache: ClassId -> list of supertype ClassIds (direct only)
+    private val supertypeCache: MutableMap<ClassId, List<ClassId>> = ConcurrentHashMap()
+
+    // Cache: ClassId -> Map<simpleName, Set<ClassId>> for inherited inner classes
+    private val inheritedInnerClassesCache: MutableMap<ClassId, Map<String, Set<ClassId>>> = ConcurrentHashMap()
+
+    /**
+     * Returns the direct supertype [ClassId]s for a class.
+     *
+     * Uses [ConcurrentHashMap.computeIfAbsent] (not `getOrPut`) so that
+     * concurrent callers do not both re-parse the same file or re-extract from the same AST.
+     */
+    fun getDirectSupertypes(classId: ClassId): List<ClassId> {
+        return supertypeCache.computeIfAbsent(classId) {
+            val packageFqName = classId.packageFqName
+
+            // Fast path: use the cached JavaClassOverAst's AST node directly.
+            // IMPORTANT: we read raw JAVA_CODE_REFERENCE text from the node, NOT classifierQualifiedName,
+            // because the latter triggers resolution which can circle back into getDirectSupertypes
+            // via findInnerClassFromSupertypes → collectInheritedInnerClasses.
+            val cachedClass = classCacheLookup(classId)
+            if (cachedClass is JavaClassOverAst) {
+                val imports = cachedClass.resolutionContext.getImports()
+                return@computeIfAbsent extractSupertypeRefsFromNode(
+                    cachedClass.tree, cachedClass.node, packageFqName, imports
+                )
+            }
+
+            // Slow path: re-parse the file to extract supertype references.
+            val files = filesForClassLookup(classId)
+            if (files.isEmpty()) return@computeIfAbsent emptyList()
+
+            val file = files.first()
+            val source = sourceFileReader.readFileContent(file) ?: return@computeIfAbsent emptyList()
+            val tree = parseJavaToLightTree(source, 0)
+            val root = tree.getRoot()
+
+            val imports = JavaResolutionContext.extractImports(tree, root)
+            val classNode = findClassInTree(tree, root, classId) ?: return@computeIfAbsent emptyList()
+            extractSupertypeRefsFromNode(tree, classNode, packageFqName, imports)
+        }
+    }
+
+    /**
+     * Recursively collects all inner class names from the supertype hierarchy.
+     * Returns Map<simpleName, Set<ClassId>> to detect ambiguities.
+     *
+     * Nested recursion reads the cache via plain `get` (not `computeIfAbsent`) so it cannot self-deadlock.
+     */
+    fun collectInheritedInnerClasses(classId: ClassId): Map<String, Set<ClassId>> {
+        return inheritedInnerClassesCache.computeIfAbsent(classId) {
+            val result = mutableMapOf<String, MutableSet<ClassId>>()
+            val visited = mutableSetOf<ClassId>()
+
+            // shadowedNames: inner class names declared by closer classes in the current inheritance path.
+            // Per JLS 8.5, a member type declared in a subclass shadows same-named types from supertypes.
+            // Example: if B extends A and both declare Inner, then from C extends B, B.Inner shadows A.Inner.
+            // Only inner class names from UNRELATED paths that can't shadow each other indicate ambiguity.
+            fun collectRecursive(current: ClassId, shadowedNames: Set<String>) {
+                if (current in visited) return
+
+                // Cache short-circuit: a previously computed result for [current] already reflects
+                // intra-subtree shadowing (closer classes shadowing farther supertypes). The only
+                // extra filtering we need is the [shadowedNames] coming from the caller's path.
+                // Safe in diamond inheritance: merging via getOrPut + addAll is idempotent for
+                // ClassId sets, and the `visited` guard above only affects duplicate traversal of
+                // the same ClassId within a single top-level call — which the cache makes redundant.
+                inheritedInnerClassesCache[current]?.let { cached ->
+                    visited.add(current)
+                    for ([name, classIds] in cached) {
+                        if (name !in shadowedNames) {
+                            result.getOrPut(name) { mutableSetOf() }.addAll(classIds)
+                        }
+                    }
+                    return
+                }
+
+                visited.add(current)
+
+                val innerClasses = getInnerClassNames(current)
+                for (innerName in innerClasses) {
+                    if (innerName !in shadowedNames) {
+                        val innerClassId = current.createNestedClassId(Name.identifier(innerName))
+                        result.getOrPut(innerName) { mutableSetOf() }.add(innerClassId)
+                    }
+                }
+
+                val shadowedByThisClass = shadowedNames + innerClasses
+                for (supertypeId in getDirectSupertypes(current)) {
+                    collectRecursive(supertypeId, shadowedByThisClass)
+                }
+            }
+
+            collectRecursive(classId, emptySet())
+            result.mapValues { it.value.toSet() }
+        }
+    }
+
+    private fun getInnerClassNames(classId: ClassId): Set<String> {
+        // Fast path: use the cached JavaClass (no file I/O, no parsing)
+        val cachedClass = classCacheLookup(classId)
+        if (cachedClass != null) {
+            val inner = cachedClass.innerClassNames
+            if (inner.isEmpty()) return emptySet()
+            return inner.mapTo(HashSet(inner.size)) { it.asString() }
+        }
+
+        // Slow path: re-parse for inner class names.
+        val files = filesForClassLookup(classId)
+        if (files.isEmpty()) return emptySet()
+
+        val file = files.first()
+        val source = sourceFileReader.readFileContent(file) ?: return emptySet()
+        val tree = parseJavaToLightTree(source, 0)
+        val root = tree.getRoot()
+
+        val classNode = findClassInTree(tree, root, classId) ?: return emptySet()
+
+        return tree.getChildren(classNode)
+            .mapNotNullTo(mutableSetOf()) {
+                if (tree.getType(it) == JavaSyntaxElementType.CLASS)
+                    tree.findChildByType(it, JavaSyntaxTokenType.IDENTIFIER)?.let { id -> tree.getText(id).toString() }
+                else null
+            }
+    }
+
+    /**
+     * Extracts supertype [ClassId]s from extends/implements clauses of an AST node.
+     * Uses raw text from JAVA_CODE_REFERENCE nodes — no type resolution involved.
+     */
+    private fun extractSupertypeRefsFromNode(
+        tree: JavaLightTree,
+        classNode: JavaLightNode,
+        packageFqName: FqName,
+        imports: JavaImports = JavaImports.EMPTY,
+    ): List<ClassId> {
+        val supertypes = mutableListOf<ClassId>()
+        tree.findChildByType(classNode, JavaSyntaxElementType.EXTENDS_LIST)?.let { el ->
+            tree.getChildrenByType(el, JavaSyntaxElementType.JAVA_CODE_REFERENCE).forEach { ref ->
+                supertypes.addAll(resolveSupertypeReference(tree.getText(ref).toString(), packageFqName, imports))
+            }
+        }
+        tree.findChildByType(classNode, JavaSyntaxElementType.IMPLEMENTS_LIST)?.let { il ->
+            tree.getChildrenByType(il, JavaSyntaxElementType.JAVA_CODE_REFERENCE).forEach { ref ->
+                supertypes.addAll(resolveSupertypeReference(tree.getText(ref).toString(), packageFqName, imports))
+            }
+        }
+        return supertypes
+    }
+
+    private fun findClassInTree(tree: JavaLightTree, root: JavaLightNode, classId: ClassId): JavaLightNode? {
+        val segments = classId.relativeClassName.pathSegments().map { it.asString() }
+        if (segments.isEmpty()) return null
+
+        var currentNode: JavaLightNode = root
+        for (segment in segments) {
+            val classNode = tree.getChildrenByType(currentNode, JavaSyntaxElementType.CLASS).firstOrNull { node ->
+                tree.findChildByType(node, JavaSyntaxTokenType.IDENTIFIER)?.let { tree.textEquals(it, segment) } == true
+            } ?: return null
+            currentNode = classNode
+        }
+        return currentNode
+    }
+
+    /**
+     * Returns one or more candidate [ClassId]s for a supertype reference in extends/implements.
+     *
+     * Each candidate is a *potential* supertype — the caller (the inherited-inner-class walker
+     * in [JavaInheritedMemberResolver] and [JavaResolutionContext.directSupertypeClassIds]) is
+     * expected to filter via `tryResolve` / per-origin dispatch and discard candidates whose
+     * symbol the FIR session does not know.
+     *
+     * Multiple candidates are returned only for star-imported supertypes (JLS 7.5.2) where the
+     * binary classpath cannot be scanned at this layer; one candidate per star-import package is
+     * emitted. Source/explicit-import paths return a single candidate (or none).
+     */
+    private fun resolveSupertypeReference(
+        ref: String,
+        packageFqName: FqName,
+        imports: JavaImports = JavaImports.EMPTY,
+    ): List<ClassId> {
+        val simpleName = ref.substringBefore('<').trim()
+
+        if (!simpleName.contains('.')) {
+            // Same-package source class — resolves to the in-module ClassId.
+            if (sameClassInSameFilePackage(packageFqName, simpleName)) {
+                return listOf(ClassId(packageFqName, Name.identifier(simpleName)))
+            }
+
+            // JLS 6.4.1 rank-4 type-then-static single imports. Downstream consumers filter
+            // via the FIR symbol provider / class finder. Emit all longest-package-first
+            // splits so nested-class explicit imports such as `import a.b.C.D;` produce
+            // `ClassId(a.b, C.D)` as well as `ClassId(a.b.C, D)` — the trivial last-dot split
+            // alone missed every nested type declared on such a supertype (e.g.
+            // `LintIdeQuickFix extends PriorityAction` where `PriorityAction` is on the
+            // classpath as `.class` / `.sig`).
+            val explicitFqName = imports.simpleTypeImports[simpleName] ?: imports.staticSingleImports[simpleName]
+            if (explicitFqName != null) {
+                return fqNameSplitCandidates(explicitFqName)
+            }
+
+            // JLS 7.5.2 type-import-on-demand (rank 6) — entries are *packages*. Source
+            // candidates first when present; binary candidates (one per star-import package)
+            // are emitted unconditionally so the caller can probe via `tryResolve`. The
+            // previous source-only filter silently dropped binary star-imported supertypes
+            // (e.g. `Filter extends RowFilter` where `javax.swing.RowFilter` is on the JDK
+            // classpath via `import javax.swing.*`).
+            val candidates = mutableListOf<ClassId>()
+            for (starPkg in imports.typeStarImports) {
+                if (sameClassInSameFilePackage(starPkg, simpleName)) {
+                    candidates.add(ClassId(starPkg, Name.identifier(simpleName)))
+                }
+            }
+            if (candidates.isNotEmpty()) return candidates
+            val typeStarCandidates = imports.typeStarImports.map { ClassId(it, Name.identifier(simpleName)) }
+            if (typeStarCandidates.isNotEmpty()) return typeStarCandidates
+
+            // JLS 7.5.4 static-import-on-demand (rank 7) — entries are *outer-class* FqNames.
+            // The candidate `ClassId` shape is nested-class: `ClassId(outerPkg, outerRel.X)`.
+            // We don't know the outer class's package/class split here; emit every plausible
+            // split via [fqNameSplitCandidates] of `outerFqName + simpleName` so the caller's
+            // `tryResolve` probe can pick the one the FIR symbol provider recognises.
+            if (imports.staticStarImports.isNotEmpty()) {
+                val staticStarCandidates = mutableListOf<ClassId>()
+                for (outerFqName in imports.staticStarImports) {
+                    staticStarCandidates += fqNameSplitCandidates(outerFqName.child(Name.identifier(simpleName)))
+                }
+                if (staticStarCandidates.isNotEmpty()) return staticStarCandidates
+            }
+            return emptyList()
+        }
+
+        // Dotted form is delegated to JavaResolutionContext.resolve; this candidate-layer
+        // shortcut covers same-package / explicit-import / star-import only.
+        return emptyList()
+    }
+
+    // Emit candidate ClassIds for an imported FqName, longest-package-first. Mirrors
+    // resolveAsClassId / probeFqnSplits in JavaResolutionContext.kt. The caller filters via
+    // tryResolve / per-origin dispatch, so the wrong split has no symbol-provider entry and
+    // is dropped downstream.
+    private fun fqNameSplitCandidates(fqName: FqName): List<ClassId> {
+        val parts = fqName.pathSegments().map { it.asString() }
+        if (parts.isEmpty()) return emptyList()
+        val result = mutableListOf<ClassId>()
+        for (classStartIndex in (parts.size - 1) downTo 0) {
+            val pkg = if (classStartIndex == 0) FqName.ROOT
+            else FqName.fromSegments(parts.subList(0, classStartIndex))
+            val cls = FqName.fromSegments(parts.subList(classStartIndex, parts.size))
+            result.add(ClassId(pkg, cls, isLocal = false))
+        }
+        return result
+    }
+}
