@@ -184,11 +184,7 @@ open class WasmSecondStageEnvironmentConfigurator(
         val hasUseOldExceptionsDirective = USE_OLD_EXCEPTION_HANDLING_PROPOSAL in registeredDirectives
         if (hasUseNewExceptionsDirective && hasUseOldExceptionsDirective) error("Can't use both old and new exception handling proposals")
 
-        val useNewExceptions = when {
-            hasUseNewExceptionsDirective -> true
-            hasUseOldExceptionsDirective -> false
-            else -> wasmTarget == WasmTarget.WASI
-        }
+        val useNewExceptions = registeredDirectives.useNewExceptionHandling(wasmTarget)
 
         configuration.put(WasmConfigurationKeys.WASM_USE_NEW_EXCEPTION_PROPOSAL, useNewExceptions)
         configuration.put(WasmConfigurationKeys.WASM_USE_STACK_SWITCHING_PROPOSAL, USE_STACK_SWITCHING_PROPOSAL in registeredDirectives)
@@ -222,3 +218,12 @@ fun TestConfigurationBuilder.enableByConfigurationKey(key: CompilerConfiguration
         { WasmJsCompilerConfigurationKeyEnablerConfigurator(it, key) }
     )
 }
+
+fun RegisteredDirectives.useNewExceptionHandling(wasmTarget: WasmTarget): Boolean = when {
+    USE_NEW_EXCEPTION_HANDLING_PROPOSAL in this -> true
+    USE_OLD_EXCEPTION_HANDLING_PROPOSAL in this -> false
+    else -> wasmTarget == WasmTarget.WASI
+}
+
+fun TestServices.useNewExceptionHandling(wasmTarget: WasmTarget): Boolean =
+    moduleStructure.allDirectives.useNewExceptionHandling(wasmTarget)
