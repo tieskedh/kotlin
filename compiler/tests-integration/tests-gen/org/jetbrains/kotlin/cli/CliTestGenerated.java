@@ -1764,11 +1764,6 @@ public class CliTestGenerated extends AbstractCliTest {
       runTest("compiler/testData/cli/jvm/progressiveModeOn.args");
     }
 
-    @TestMetadata("removedArguments.args")
-    public void testRemovedArguments() {
-      runTest("compiler/testData/cli/jvm/removedArguments.args");
-    }
-
     @TestMetadata("replLaunchError.args")
     public void testReplLaunchError() {
       runTest("compiler/testData/cli/jvm/replLaunchError.args");
@@ -2486,6 +2481,11 @@ public class CliTestGenerated extends AbstractCliTest {
     @TestMetadata("optionalExpectationUsage.args")
     public void testOptionalExpectationUsage() {
       runTest("compiler/testData/cli/metadata/optionalExpectationUsage.args");
+    }
+
+    @TestMetadata("removedArguments.args")
+    public void testRemovedArguments() {
+      runTest("compiler/testData/cli/metadata/removedArguments.args");
     }
 
     @TestMetadata("reportPerf.args")
