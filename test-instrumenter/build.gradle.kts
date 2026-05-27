@@ -1,3 +1,4 @@
+import JdkMajorVersion.JDK_1_8
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
@@ -5,6 +6,8 @@ plugins {
     id("test-federation-convention")
     id("com.autonomousapps.dependency-analysis")
     kotlin("jvm")
+    `java-test-fixtures`
+    alias(libs.plugins.jmh)
 }
 
 sourceSets {
@@ -17,10 +20,21 @@ sourceSets {
         compileClasspath += sourceSets["bootClasspath"].output
     }
 
+    testFixtures {
+        projectDefault()
+        compileClasspath += sourceSets["bootClasspath"].output
+        runtimeClasspath += sourceSets["bootClasspath"].output
+    }
+
     test {
         projectDefault()
         compileClasspath += sourceSets["bootClasspath"].output
         runtimeClasspath += sourceSets["bootClasspath"].output
+    }
+
+    "jmh" {
+        java.srcDirs("jmh")
+        compileClasspath += sourceSets["bootClasspath"].output
     }
 }
 
@@ -31,7 +45,15 @@ dependencies {
     bootClasspathCompileOnly(libs.org.jetbrains.annotations)
 
     implementation(kotlinStdlib())
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.bytebuddy)
+
+    testFixturesApi(libs.junit.jupiter.api)
+    testFixturesImplementation(kotlinStdlib())
+
+    testImplementation(libs.junit.jupiter.api)
+    testRuntimeOnly(libs.junit.jupiter.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 val agentJar by task<ShadowJar> {
@@ -60,4 +82,39 @@ configurations {
             artifact(bootClasspathJar)
         }
     }
+}
+
+kotlin {
+    // JDK 25 is only for executing tests and benchmarks
+    // The instrumentation code itself is compiled with JDK 8
+    jvmToolchain(25)
+}
+
+tasks {
+    compileKotlin {
+        configureTaskToolchain(JDK_1_8)
+    }
+
+    compileJava {
+        configureTaskToolchain(JDK_1_8)
+    }
+
+    named<JavaCompile>("compileBootClasspathJava") {
+        configureTaskToolchain(JDK_1_8)
+    }
+
+    test {
+        useJUnitPlatform()
+    }
+}
+
+jmh {
+    warmupIterations = 5
+    iterations = 10
+    fork = 3
+    threads = 1
+}
+
+tasks.jmh {
+    jmhClasspath.from(sourceSets["bootClasspath"].output)
 }

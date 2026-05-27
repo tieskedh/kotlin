@@ -91,6 +91,7 @@ bouncycastle = "1.84"
 kotlin-before-bta-v2 = "2.2.21"
 bytebuddy = "1.18.9"
 playwright = "1.60.0"
+jmh = "0.7.3"
 
 analysis-api-kotlin = "2.3.21"
 analysis-api-kotlinx-coroutines = "1.8.0-intellij-13" # Should be synchronized with 'kotlinx-coroutines'
@@ -238,3 +239,4 @@ gradle-node = { id = "com.github.node-gradle.node", version.ref = "gradle-node-p
 kotlinx-benchmark = { id = "org.jetbrains.kotlinx.benchmark", version.ref = "kotlinx-benchmark" }
 kotlinx-bcv = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "kotlinx-bcv" }
 jetbrains-ideaExt = { id = "org.jetbrains.gradle.plugin.idea-ext", version.ref = "jetbrains-ideaExt" }
+jmh = { id = "me.champeau.jmh", version.ref = "jmh" }
