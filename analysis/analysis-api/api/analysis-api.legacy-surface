@@ -183,8 +183,17 @@ org.jetbrains.kotlin.analysis.api.components.KaImplicitReceiverSmartCastKind
 org.jetbrains.kotlin.analysis.api.components.KaImplicitReceiverSmartCastKind.DISPATCH
 org.jetbrains.kotlin.analysis.api.components.KaImplicitReceiverSmartCastKind.EXTENSION
 org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asFacadePsiClass()
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asFacadePsiClass()
 org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asKaType(PsiElement)
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiClass()
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiField()
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiField()
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiField()
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiMethods()
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiParameters()
 org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiType(PsiElement, Boolean, KaTypeMappingMode, Boolean, Boolean?, Boolean, Boolean)
+org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.asPsiTypeParameters()
 org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.callableSymbol
 org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.containingJvmClassName
 org.jetbrains.kotlin.analysis.api.components.KaJavaInteroperabilityComponent.isPrimitiveBacked
@@ -561,8 +570,17 @@ org.jetbrains.kotlin.analysis.api.components.approximateToSuperPublicDenotable(B
 org.jetbrains.kotlin.analysis.api.components.approximateToSuperPublicDenotableOrSelf(Boolean)
 org.jetbrains.kotlin.analysis.api.components.arrayElementType
 org.jetbrains.kotlin.analysis.api.components.asCompositeScope()
+org.jetbrains.kotlin.analysis.api.components.asFacadePsiClass()
+org.jetbrains.kotlin.analysis.api.components.asFacadePsiClass()
 org.jetbrains.kotlin.analysis.api.components.asKaType(PsiElement)
+org.jetbrains.kotlin.analysis.api.components.asPsiClass()
+org.jetbrains.kotlin.analysis.api.components.asPsiField()
+org.jetbrains.kotlin.analysis.api.components.asPsiField()
+org.jetbrains.kotlin.analysis.api.components.asPsiField()
+org.jetbrains.kotlin.analysis.api.components.asPsiMethods()
+org.jetbrains.kotlin.analysis.api.components.asPsiParameters()
 org.jetbrains.kotlin.analysis.api.components.asPsiType(PsiElement, Boolean, KaTypeMappingMode, Boolean, Boolean?, Boolean, Boolean)
+org.jetbrains.kotlin.analysis.api.components.asPsiTypeParameters()
 org.jetbrains.kotlin.analysis.api.components.asSignature()
 org.jetbrains.kotlin.analysis.api.components.asSignature()
 org.jetbrains.kotlin.analysis.api.components.asSignature()

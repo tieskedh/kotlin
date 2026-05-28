@@ -66,7 +66,10 @@ import org.jetbrains.kotlin.fir.symbols.impl.FirCallableSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.types.*
 import org.jetbrains.kotlin.fir.types.jvm.buildJavaTypeRef
+import org.jetbrains.kotlin.light.classes.symbol.SymbolLightClassUtil
 import org.jetbrains.kotlin.light.classes.symbol.annotations.annotateByKtType
+import org.jetbrains.kotlin.light.classes.symbol.createLightClassInternal
+import org.jetbrains.kotlin.light.classes.symbol.createLightFacadeInternal
 import org.jetbrains.kotlin.load.java.JvmAbi
 import org.jetbrains.kotlin.load.java.JvmAnnotationNames
 import org.jetbrains.kotlin.load.java.structure.impl.JavaClassImpl
@@ -319,6 +322,60 @@ internal class KaFirJavaInteroperabilityComponent(
 
             return false
         }
+
+    override fun KaClassSymbol.asPsiClass(): PsiClass? = withValidityAssertion {
+        with(analysisSession) {
+            createLightClassInternal(this@asPsiClass)
+        }
+    }
+
+    override fun KaFileSymbol.asFacadePsiClass(): PsiClass? = withValidityAssertion {
+        with(analysisSession) {
+            createLightFacadeInternal(this@asFacadePsiClass)
+        }
+    }
+
+    override fun KaScriptSymbol.asFacadePsiClass(): PsiClass? = withValidityAssertion {
+        with(analysisSession) {
+            createLightFacadeInternal(this@asFacadePsiClass)
+        }
+    }
+
+    override fun KaFunctionSymbol.asPsiMethods(): List<PsiMethod> = withValidityAssertion {
+        with(analysisSession) {
+            SymbolLightClassUtil.getLightClassMethods(this@asPsiMethods)
+        }
+    }
+
+    override fun KaTypeParameterSymbol.asPsiTypeParameters(): List<PsiTypeParameter> = withValidityAssertion {
+        with(analysisSession) {
+            SymbolLightClassUtil.getLightClassTypeParameter(this@asPsiTypeParameters)
+        }
+    }
+
+    override fun KaParameterSymbol.asPsiParameters(): List<PsiParameter> = withValidityAssertion {
+        with(analysisSession) {
+            SymbolLightClassUtil.getLightClassParameters(this@asPsiParameters)
+        }
+    }
+
+    override fun KaBackingFieldSymbol.asPsiField(): PsiField? = withValidityAssertion {
+        with(analysisSession) {
+            SymbolLightClassUtil.getLightClassBackingField(this@asPsiField)
+        }
+    }
+
+    override fun KaClassSymbol.asPsiField(): PsiField? = withValidityAssertion {
+        with(analysisSession) {
+            SymbolLightClassUtil.getLightClassBackingField(this@asPsiField)
+        }
+    }
+
+    override fun KaEnumEntrySymbol.asPsiField(): PsiEnumConstant? = withValidityAssertion {
+        with(analysisSession) {
+            SymbolLightClassUtil.getLightClassBackingField(this@asPsiField) as? PsiEnumConstant
+        }
+    }
 
     override val PsiClass.namedClassSymbol: KaNamedClassSymbol?
         get() = withPsiValidityAssertion {

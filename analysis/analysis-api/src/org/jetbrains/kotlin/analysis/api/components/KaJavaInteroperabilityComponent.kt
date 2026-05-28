@@ -1,3 +1,4 @@
+// LATEST_LV_DIFFERENCE
 /*
  * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
@@ -5,18 +6,9 @@
 
 package org.jetbrains.kotlin.analysis.api.components
 
-import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiMember
-import com.intellij.psi.PsiType
-import org.jetbrains.kotlin.analysis.api.KaContextParameterApi
-import org.jetbrains.kotlin.analysis.api.KaCustomContextParameterBridge
-import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
-import org.jetbrains.kotlin.analysis.api.KaNoContextParameterBridgeRequired
-import org.jetbrains.kotlin.analysis.api.KaSession
-import org.jetbrains.kotlin.analysis.api.symbols.KaCallableSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.KaNamedClassSymbol
-import org.jetbrains.kotlin.analysis.api.symbols.KaPropertySymbol
+import com.intellij.psi.*
+import org.jetbrains.kotlin.analysis.api.*
+import org.jetbrains.kotlin.analysis.api.symbols.*
 import org.jetbrains.kotlin.analysis.api.types.KaType
 import org.jetbrains.kotlin.analysis.api.types.KaTypeMappingMode
 import org.jetbrains.kotlin.load.kotlin.TypeMappingMode
@@ -101,6 +93,402 @@ public interface KaJavaInteroperabilityComponent : KaSessionComponent {
      */
     @KaExperimentalApi
     public val KaType.isPrimitiveBacked: Boolean
+
+    /**
+     * Converts the given [KaClassSymbol] to Java [PsiClass] in the context of the [useSiteModule].
+     *
+     * The resulting [PsiClass] is the view on the given Kotlin class from Java.
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced [PsiClass] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * [PsiClass]es are used to represent the following Kotlin declarations:
+     * - Regular named class declarations
+     * - Companion objects
+     * - Enum entry initializers
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaClassSymbol] is not visible from Java, returns `null`.
+     *
+     * ### Example:
+     * The following Kotlin class:
+     * ```kotlin
+     * interface MyInterface {
+     *     val property: String
+     *
+     *     fun function(argument: Int): Int
+     * }
+     * ```
+     *
+     * Is seen as the following [PsiClass] from Java:
+     * ```java
+     * public interface MyInterface {
+     *     @org.jetbrains.annotations.NotNull()
+     *     java.lang.String getProperty();
+     *
+     *     int function(int argument);
+     * }
+     * ```
+     *
+     * The following Kotlin enum class:
+     * ```kotlin
+     * package example
+     *
+     * enum class MyEnum {
+     *     A {
+     *         fun foo() {}
+     *     },
+     *     B,
+     * }
+     * ```
+     *
+     * Is seen as the following [PsiClass] from Java:
+     * ```java
+     * public enum MyEnum {
+     *     A // PsiField
+     *     {
+     *         A();                     // Anonymous initializer PsiClass
+     *         public final void foo(); //
+     *     },
+     *
+     *     B; // Does not have an anonymous initializer class, just PsiField
+     *
+     *     public static kotlin.enums.EnumEntries<example.MyEnum> getEntries();
+     *     public static example.MyEnum [] values();
+     *     public static example.MyEnum valueOf(java.lang.String) throws java.lang.IllegalArgumentException, java.lang.NullPointerException;
+     *     private  MyEnum();
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaClassSymbol.asPsiClass(): PsiClass?
+
+    /**
+     * Converts the given [KaFileSymbol] to Java facade [PsiClass] in the context of the [useSiteModule].
+     *
+     * The resulting [PsiClass] is the view on the given Kotlin file from Java. E.g., `main.kt` file is converted to `MainKt` class facade.
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced [PsiClass] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * Note that the produced facade class only stores non-class declarations. Each Kotlin class is mapped to its own top-level [PsiClass].
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaFileSymbol] is not supported, returns `null`.
+     *
+     * Examples of non-supported files are:
+     * - Scripts
+     * - Files with no top-level callables
+     *
+     * ### Example:
+     * The following Kotlin file:
+     * ```kotlin
+     * // MyFile.kt
+     * class MyClass
+     *
+     * fun foo(t: Int) {}
+     *
+     * val x: Int = 0
+     * ```
+     *
+     * Is seen as the following [PsiClass] from Java:
+     * ```java
+     * public final class MyFileKt { // Doesn't contain `MyClass` declaration
+     *     private static final int x = 0;
+     *
+     *     public static int getX();
+     *
+     *     public static void foo(int);
+     * }
+     * ```
+     *
+     * @see KaScriptSymbol.asFacadePsiClass
+     */
+    @KaExperimentalApi
+    public fun KaFileSymbol.asFacadePsiClass(): PsiClass?
+
+    /**
+     * Converts the given [KaScriptSymbol] to Java facade [PsiClass] in the context of the [useSiteModule].
+     *
+     * The resulting [PsiClass] is the view on the given Kotlin script from Java.
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced [PsiClass] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * In contrast to [KaFileSymbol.asFacadePsiClass], regular Kotlin classes in scripts are mapped to nested [PsiClass]es.
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaScriptSymbol] comes from a code fragment, returns `null`.
+     *
+     * ### Example:
+     * The following Kotlin script:
+     * ```kotlin
+     * // MyScript.kts
+     * println("Hello, World!")
+     *
+     * val x = 1
+     *
+     * class MyClass {
+     *     fun bar() {}
+     * }
+     * ```
+     *
+     * Is seen as the following [PsiClass] from Java:
+     * ```java
+     * public final class MyScript extends kotlin.script.templates.standard.ScriptTemplateWithArgs {
+     *     public static void main(java.lang.String[]);
+     *
+     *     public MyScript(java.lang.String[]);
+     *
+     *     private final int x = 1;
+     *     public int getX();
+     *
+     *     public static final class MyClass {
+     *         public MyClass();
+     *         public void bar();
+     *     }
+     * }
+     * ```
+     *
+     * @see KaFileSymbol.asFacadePsiClass
+     */
+    @KaExperimentalApi
+    public fun KaScriptSymbol.asFacadePsiClass(): PsiClass?
+
+    /**
+     * Converts the given [KaFunctionSymbol] to Java [PsiMethod]s in the context of the [useSiteModule].
+     *
+     * The resulting list is the view on the given Kotlin declaration from Java and contains all [PsiMethod]s produced by [this].
+     *
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced list is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaFunctionSymbol] is not visible from Java, returns an empty list.
+     *
+     * ### Example:
+     * The following Kotlin function:
+     * ```kotlin
+     * // MyFile.kt
+     * @JvmOverloads
+     * @JvmName("jvmFoo")
+     * fun foo(a: Int, b: Int = 1) {}
+     * ```
+     *
+     * Is seen as the following [PsiMethod]s from Java:
+     * ```java
+     * public final class MyFileKt {
+     *     @kotlin.jvm.JvmName(name = "jvmFoo")
+     *     @kotlin.jvm.JvmOverloads()
+     *     public static void jvmFoo(int);
+     *
+     *     @kotlin.jvm.JvmName(name = "jvmFoo")
+     *     @kotlin.jvm.JvmOverloads()
+     *     public static void jvmFoo(int, int);
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaFunctionSymbol.asPsiMethods(): List<PsiMethod>
+
+    /**
+     * Converts the given [KaTypeParameterSymbol] to Java [PsiTypeParameter]s in the context of the [useSiteModule].
+     *
+     * The resulting list is the view on the given Kotlin type parameter from Java and contains all [PsiTypeParameter]s produced by [this].
+     * Multiple type parameters might be produced when the enclosing Kotlin declaration is mapped to multiple Java PSI declarations.
+     *
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced list is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaTypeParameterSymbol] is not visible from Java, returns an empty list.
+     *
+     * ### Example:
+     * The following Kotlin type parameter `T`:
+     * ```kotlin
+     * // MyFile.kt
+     * @JvmOverloads
+     * @JvmName("jvmFoo")
+     * fun <T> foo(a: T, b: Int = 1) {}
+     * ```
+     *
+     * Is seen as the following [PsiTypeParameter]s from Java:
+     * ```java
+     * public final class MyFileKt {
+     *     @kotlin.jvm.JvmName(name = "jvmFoo")
+     *     @kotlin.jvm.JvmOverloads()
+     *     public static final <T> void jvmFoo(T a);
+     * //                      ^^^
+     * //                  PsiTypeParameter
+     *     @kotlin.jvm.JvmName(name = "jvmFoo")
+     *     @kotlin.jvm.JvmOverloads()
+     *     public static final <T> void jvmFoo(T a, int b);
+     * //                      ^^^
+     * //                  PsiTypeParameter
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaTypeParameterSymbol.asPsiTypeParameters(): List<PsiTypeParameter>
+
+    /**
+     * Converts the given [KaParameterSymbol] to Java [PsiParameter]s in the context of the [useSiteModule].
+     *
+     * The resulting list is the view on the given Kotlin parameter from Java and contains all [PsiParameter]s produced by [this].
+     * Multiple parameters might be produced when the enclosing Kotlin declaration is mapped to multiple Java PSI declarations.
+     *
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced list is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaParameterSymbol] is not visible from Java, returns an empty list.
+     *
+     * ### Example:
+     * The following Kotlin parameter `a`:
+     * ```kotlin
+     * // MyFile.kt
+     * @JvmOverloads
+     * @JvmName("jvmFoo")
+     * fun foo(a: Int, b: Int = 1) {}
+     * ```
+     *
+     * Is seen as the following [PsiParameter]s from Java:
+     * ```java
+     * public final class MyFileKt {
+     *     @kotlin.jvm.JvmName(name = "jvmFoo")
+     *     @kotlin.jvm.JvmOverloads()
+     *     public static void jvmFoo(int a);
+     * //                               ^^^
+     * //                          PsiParameter
+     *     @kotlin.jvm.JvmName(name = "jvmFoo")
+     *     @kotlin.jvm.JvmOverloads()
+     *     public static void jvmFoo(int a, int b);
+     * //                               ^^^
+     * //                          PsiParameter
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaParameterSymbol.asPsiParameters(): List<PsiParameter>
+
+    /**
+     * Converts the given [KaBackingFieldSymbol] to Java [PsiField] in the context of the [useSiteModule].
+     *
+     * The resulting [PsiField] is the view on the given Kotlin backing field from Java.
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced [PsiField] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaBackingFieldSymbol] is not visible from Java as a [PsiField],
+     * returns `null`.
+     *
+     * ### Example:
+     * The following Kotlin property with implicit backing field:
+     * ```kotlin
+     * // MyFile.kt
+     * val x: Int = 0 // implicit backing field
+     * ```
+     *
+     * Is seen as the following [PsiMethod] getter and [PsiField] from Java:
+     * ```java
+     * public final class MyFileKt {
+     *     private static final int x = 0; // PsiField
+     *
+     *     public static int getX();
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaBackingFieldSymbol.asPsiField(): PsiField?
+
+    /**
+     * Converts the given [KaClassSymbol] to Java [PsiField] in the context of the [useSiteModule].
+     *
+     * The resulting [PsiField] is the view on the given Kotlin declaration from Java.
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced [PsiField] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * [KaClassSymbol] has be mapped to [PsiField] in several cases:
+     * - `INSTANCE` field for object declarations
+     * - `Companion` field for companion objects
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaClassSymbol] is not visible from Java as a [PsiField],
+     * returns `null`.
+     *
+     * ### Example:
+     * The following Kotlin companion object
+     * ```kotlin
+     * package example
+     *
+     * class MyClass {
+     *     companion object {
+     *         fun foo() {}
+     *     }
+     * }
+     * ```
+     *
+     * Is seen as the following [PsiField] from Java:
+     * ```java
+     * public final class MyClass {
+     *     public static final example.MyClass.Companion Companion; // `Companion` instance field
+     *
+     *     public MyClass();
+     *
+     *     public static final class Companion {
+     *         private  Companion();
+     *
+     *         public final void foo();
+     *     }
+     * }
+     * ```
+     *
+     * The following Kotlin object
+     * ```kotlin
+     * package example
+     *
+     * object MyObject {
+     *     fun foo() {}
+     * }
+     * ```
+     *
+     * Is seen as the following [PsiField] from Java:
+     * ```java
+     * public final class MyObject {
+     *     public static final example.MyObject INSTANCE; // `INSTANCE` field
+     *
+     *     private MyObject();
+     *
+     *     public void foo();
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaClassSymbol.asPsiField(): PsiField?
+
+    /**
+     * Converts the given [KaEnumEntrySymbol] to Java [PsiEnumConstant] in the context of the [useSiteModule].
+     *
+     * The resulting [PsiEnumConstant] is the view on the given Kotlin enum entry from Java.
+     * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+     * Since the produced [PsiEnumConstant] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+     *
+     * If [useSiteModule] is not a JVM module or the provided [KaEnumEntrySymbol] is not visible from Java as a [PsiEnumConstant],
+     * returns `null`.
+     *
+     * ### Example:
+     * The following Kotlin enum entries
+     * ```kotlin
+     * enum class MyEnum {
+     *     A,
+     *     B
+     * }
+     * ```
+     *
+     * Are seen as the following [PsiEnumConstant]s from Java:
+     * ```java
+     * public enum MyEnum {
+     *     A, // PsiEnumConstant for MyEnum.A
+     *     B; // PsiEnumConstant for MyEnum.B
+     *
+     *     public static kotlin.enums.EnumEntries<example.MyEnum> getEntries();
+     *     public static example.MyEnum [] values();
+     *     public static example.MyEnum valueOf(java.lang.String) throws java.lang.IllegalArgumentException, java.lang.NullPointerException;
+     *     private  MyEnum();
+     * }
+     * ```
+     */
+    @KaExperimentalApi
+    public fun KaEnumEntrySymbol.asPsiField(): PsiEnumConstant?
 
     /**
      * A [KaNamedClassSymbol] for the given [PsiClass], or `null` for anonymous classes, local classes, type parameters (which are also
@@ -256,6 +644,465 @@ public fun KaType.mapToJvmTypeDescriptor(): String {
 context(session: KaSession)
 public val KaType.isPrimitiveBacked: Boolean
     get() = with(session) { isPrimitiveBacked }
+
+/**
+ * Converts the given [KaClassSymbol] to Java [PsiClass] in the context of the [useSiteModule].
+ *
+ * The resulting [PsiClass] is the view on the given Kotlin class from Java.
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced [PsiClass] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * [PsiClass]es are used to represent the following Kotlin declarations:
+ * - Regular named class declarations
+ * - Companion objects
+ * - Enum entry initializers
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaClassSymbol] is not visible from Java, returns `null`.
+ *
+ * ### Example:
+ * The following Kotlin class:
+ * ```kotlin
+ * interface MyInterface {
+ *     val property: String
+ *
+ *     fun function(argument: Int): Int
+ * }
+ * ```
+ *
+ * Is seen as the following [PsiClass] from Java:
+ * ```java
+ * public interface MyInterface {
+ *     @org.jetbrains.annotations.NotNull()
+ *     java.lang.String getProperty();
+ *
+ *     int function(int argument);
+ * }
+ * ```
+ *
+ * The following Kotlin enum class:
+ * ```kotlin
+ * package example
+ *
+ * enum class MyEnum {
+ *     A {
+ *         fun foo() {}
+ *     },
+ *     B,
+ * }
+ * ```
+ *
+ * Is seen as the following [PsiClass] from Java:
+ * ```java
+ * public enum MyEnum {
+ *     A // PsiField
+ *     {
+ *         A();                     // Anonymous initializer PsiClass
+ *         public final void foo(); //
+ *     },
+ *
+ *     B; // Does not have an anonymous initializer class, just PsiField
+ *
+ *     public static kotlin.enums.EnumEntries<example.MyEnum> getEntries();
+ *     public static example.MyEnum [] values();
+ *     public static example.MyEnum valueOf(java.lang.String) throws java.lang.IllegalArgumentException, java.lang.NullPointerException;
+ *     private  MyEnum();
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaClassSymbol.asPsiClass(): PsiClass? {
+    return with(session) {
+        asPsiClass()
+    }
+}
+
+/**
+ * Converts the given [KaFileSymbol] to Java facade [PsiClass] in the context of the [useSiteModule].
+ *
+ * The resulting [PsiClass] is the view on the given Kotlin file from Java. E.g., `main.kt` file is converted to `MainKt` class facade.
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced [PsiClass] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * Note that the produced facade class only stores non-class declarations. Each Kotlin class is mapped to its own top-level [PsiClass].
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaFileSymbol] is not supported, returns `null`.
+ *
+ * Examples of non-supported files are:
+ * - Scripts
+ * - Files with no top-level callables
+ *
+ * ### Example:
+ * The following Kotlin file:
+ * ```kotlin
+ * // MyFile.kt
+ * class MyClass
+ *
+ * fun foo(t: Int) {}
+ *
+ * val x: Int = 0
+ * ```
+ *
+ * Is seen as the following [PsiClass] from Java:
+ * ```java
+ * public final class MyFileKt { // Doesn't contain `MyClass` declaration
+ *     private static final int x = 0;
+ *
+ *     public static int getX();
+ *
+ *     public static void foo(int);
+ * }
+ * ```
+ *
+ * @see KaScriptSymbol.asFacadePsiClass
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaFileSymbol.asFacadePsiClass(): PsiClass? {
+    return with(session) {
+        asFacadePsiClass()
+    }
+}
+
+/**
+ * Converts the given [KaScriptSymbol] to Java facade [PsiClass] in the context of the [useSiteModule].
+ *
+ * The resulting [PsiClass] is the view on the given Kotlin script from Java.
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced [PsiClass] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * In contrast to [KaFileSymbol.asFacadePsiClass], regular Kotlin classes in scripts are mapped to nested [PsiClass]es.
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaScriptSymbol] comes from a code fragment, returns `null`.
+ *
+ * ### Example:
+ * The following Kotlin script:
+ * ```kotlin
+ * // MyScript.kts
+ * println("Hello, World!")
+ *
+ * val x = 1
+ *
+ * class MyClass {
+ *     fun bar() {}
+ * }
+ * ```
+ *
+ * Is seen as the following [PsiClass] from Java:
+ * ```java
+ * public final class MyScript extends kotlin.script.templates.standard.ScriptTemplateWithArgs {
+ *     public static void main(java.lang.String[]);
+ *
+ *     public MyScript(java.lang.String[]);
+ *
+ *     private final int x = 1;
+ *     public int getX();
+ *
+ *     public static final class MyClass {
+ *         public MyClass();
+ *         public void bar();
+ *     }
+ * }
+ * ```
+ *
+ * @see KaFileSymbol.asFacadePsiClass
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaScriptSymbol.asFacadePsiClass(): PsiClass? {
+    return with(session) {
+        asFacadePsiClass()
+    }
+}
+
+/**
+ * Converts the given [KaFunctionSymbol] to Java [PsiMethod]s in the context of the [useSiteModule].
+ *
+ * The resulting list is the view on the given Kotlin declaration from Java and contains all [PsiMethod]s produced by [this].
+ *
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced list is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaFunctionSymbol] is not visible from Java, returns an empty list.
+ *
+ * ### Example:
+ * The following Kotlin function:
+ * ```kotlin
+ * // MyFile.kt
+ * @JvmOverloads
+ * @JvmName("jvmFoo")
+ * fun foo(a: Int, b: Int = 1) {}
+ * ```
+ *
+ * Is seen as the following [PsiMethod]s from Java:
+ * ```java
+ * public final class MyFileKt {
+ *     @kotlin.jvm.JvmName(name = "jvmFoo")
+ *     @kotlin.jvm.JvmOverloads()
+ *     public static void jvmFoo(int);
+ *
+ *     @kotlin.jvm.JvmName(name = "jvmFoo")
+ *     @kotlin.jvm.JvmOverloads()
+ *     public static void jvmFoo(int, int);
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaFunctionSymbol.asPsiMethods(): List<PsiMethod> {
+    return with(session) {
+        asPsiMethods()
+    }
+}
+
+/**
+ * Converts the given [KaTypeParameterSymbol] to Java [PsiTypeParameter]s in the context of the [useSiteModule].
+ *
+ * The resulting list is the view on the given Kotlin type parameter from Java and contains all [PsiTypeParameter]s produced by [this].
+ * Multiple type parameters might be produced when the enclosing Kotlin declaration is mapped to multiple Java PSI declarations.
+ *
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced list is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaTypeParameterSymbol] is not visible from Java, returns an empty list.
+ *
+ * ### Example:
+ * The following Kotlin type parameter `T`:
+ * ```kotlin
+ * // MyFile.kt
+ * @JvmOverloads
+ * @JvmName("jvmFoo")
+ * fun <T> foo(a: T, b: Int = 1) {}
+ * ```
+ *
+ * Is seen as the following [PsiTypeParameter]s from Java:
+ * ```java
+ * public final class MyFileKt {
+ *     @kotlin.jvm.JvmName(name = "jvmFoo")
+ *     @kotlin.jvm.JvmOverloads()
+ *     public static final <T> void jvmFoo(T a);
+ * //                      ^^^
+ * //                  PsiTypeParameter
+ *     @kotlin.jvm.JvmName(name = "jvmFoo")
+ *     @kotlin.jvm.JvmOverloads()
+ *     public static final <T> void jvmFoo(T a, int b);
+ * //                      ^^^
+ * //                  PsiTypeParameter
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaTypeParameterSymbol.asPsiTypeParameters(): List<PsiTypeParameter> {
+    return with(session) {
+        asPsiTypeParameters()
+    }
+}
+
+/**
+ * Converts the given [KaParameterSymbol] to Java [PsiParameter]s in the context of the [useSiteModule].
+ *
+ * The resulting list is the view on the given Kotlin parameter from Java and contains all [PsiParameter]s produced by [this].
+ * Multiple parameters might be produced when the enclosing Kotlin declaration is mapped to multiple Java PSI declarations.
+ *
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced list is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaParameterSymbol] is not visible from Java, returns an empty list.
+ *
+ * ### Example:
+ * The following Kotlin parameter `a`:
+ * ```kotlin
+ * // MyFile.kt
+ * @JvmOverloads
+ * @JvmName("jvmFoo")
+ * fun foo(a: Int, b: Int = 1) {}
+ * ```
+ *
+ * Is seen as the following [PsiParameter]s from Java:
+ * ```java
+ * public final class MyFileKt {
+ *     @kotlin.jvm.JvmName(name = "jvmFoo")
+ *     @kotlin.jvm.JvmOverloads()
+ *     public static void jvmFoo(int a);
+ * //                               ^^^
+ * //                          PsiParameter
+ *     @kotlin.jvm.JvmName(name = "jvmFoo")
+ *     @kotlin.jvm.JvmOverloads()
+ *     public static void jvmFoo(int a, int b);
+ * //                               ^^^
+ * //                          PsiParameter
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaParameterSymbol.asPsiParameters(): List<PsiParameter> {
+    return with(session) {
+        asPsiParameters()
+    }
+}
+
+/**
+ * Converts the given [KaBackingFieldSymbol] to Java [PsiField] in the context of the [useSiteModule].
+ *
+ * The resulting [PsiField] is the view on the given Kotlin backing field from Java.
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced [PsiField] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaBackingFieldSymbol] is not visible from Java as a [PsiField],
+ * returns `null`.
+ *
+ * ### Example:
+ * The following Kotlin property with implicit backing field:
+ * ```kotlin
+ * // MyFile.kt
+ * val x: Int = 0 // implicit backing field
+ * ```
+ *
+ * Is seen as the following [PsiMethod] getter and [PsiField] from Java:
+ * ```java
+ * public final class MyFileKt {
+ *     private static final int x = 0; // PsiField
+ *
+ *     public static int getX();
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaBackingFieldSymbol.asPsiField(): PsiField? {
+    return with(session) {
+        asPsiField()
+    }
+}
+
+/**
+ * Converts the given [KaClassSymbol] to Java [PsiField] in the context of the [useSiteModule].
+ *
+ * The resulting [PsiField] is the view on the given Kotlin declaration from Java.
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced [PsiField] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * [KaClassSymbol] has be mapped to [PsiField] in several cases:
+ * - `INSTANCE` field for object declarations
+ * - `Companion` field for companion objects
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaClassSymbol] is not visible from Java as a [PsiField],
+ * returns `null`.
+ *
+ * ### Example:
+ * The following Kotlin companion object
+ * ```kotlin
+ * package example
+ *
+ * class MyClass {
+ *     companion object {
+ *         fun foo() {}
+ *     }
+ * }
+ * ```
+ *
+ * Is seen as the following [PsiField] from Java:
+ * ```java
+ * public final class MyClass {
+ *     public static final example.MyClass.Companion Companion; // `Companion` instance field
+ *
+ *     public MyClass();
+ *
+ *     public static final class Companion {
+ *         private  Companion();
+ *
+ *         public final void foo();
+ *     }
+ * }
+ * ```
+ *
+ * The following Kotlin object
+ * ```kotlin
+ * package example
+ *
+ * object MyObject {
+ *     fun foo() {}
+ * }
+ * ```
+ *
+ * Is seen as the following [PsiField] from Java:
+ * ```java
+ * public final class MyObject {
+ *     public static final example.MyObject INSTANCE; // `INSTANCE` field
+ *
+ *     private MyObject();
+ *
+ *     public void foo();
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaClassSymbol.asPsiField(): PsiField? {
+    return with(session) {
+        asPsiField()
+    }
+}
+
+/**
+ * Converts the given [KaEnumEntrySymbol] to Java [PsiEnumConstant] in the context of the [useSiteModule].
+ *
+ * The resulting [PsiEnumConstant] is the view on the given Kotlin enum entry from Java.
+ * [useSiteModule] for the current [KaSession] is used to provide proper actualizations for `expect` declarations.
+ * Since the produced [PsiEnumConstant] is a JVM-specific representation, [useSiteModule] is expected to be a JVM one.
+ *
+ * If [useSiteModule] is not a JVM module or the provided [KaEnumEntrySymbol] is not visible from Java as a [PsiEnumConstant],
+ * returns `null`.
+ *
+ * ### Example:
+ * The following Kotlin enum entries
+ * ```kotlin
+ * enum class MyEnum {
+ *     A,
+ *     B
+ * }
+ * ```
+ *
+ * Are seen as the following [PsiEnumConstant]s from Java:
+ * ```java
+ * public enum MyEnum {
+ *     A, // PsiEnumConstant for MyEnum.A
+ *     B; // PsiEnumConstant for MyEnum.B
+ *
+ *     public static kotlin.enums.EnumEntries<example.MyEnum> getEntries();
+ *     public static example.MyEnum [] values();
+ *     public static example.MyEnum valueOf(java.lang.String) throws java.lang.IllegalArgumentException, java.lang.NullPointerException;
+ *     private  MyEnum();
+ * }
+ * ```
+ */
+// Auto-generated bridge. DO NOT EDIT MANUALLY!
+@KaExperimentalApi
+@KaContextParameterApi
+context(session: KaSession)
+public fun KaEnumEntrySymbol.asPsiField(): PsiEnumConstant? {
+    return with(session) {
+        asPsiField()
+    }
+}
 
 /**
  * A [KaNamedClassSymbol] for the given [PsiClass], or `null` for anonymous classes, local classes, type parameters (which are also
