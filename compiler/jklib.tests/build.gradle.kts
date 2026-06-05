@@ -54,7 +54,7 @@ projectTests {
     testGenerator("org.jetbrains.kotlin.generators.tests.GenerateJklibTestsKt", generateTestsInBuildDirectory = true)
 }
 
-val stdlibJvmIr by configurations.creating {
+val stdlibJvmIr = configurations.create("stdlibJvmIr") {
     isCanBeConsumed = false
     isCanBeResolved = true
 }

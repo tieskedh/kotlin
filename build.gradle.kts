@@ -83,16 +83,18 @@ findProperty("deployVersion")?.let {
     assert(findProperty("build.number") != null) { "`build.number` parameter is expected to be explicitly set with the `deployVersion`" }
 }
 
-val kotlinLanguageVersion: String by extra
-val kotlinApiVersionForModulesUsedInIDE: String by extra
+val kotlinLanguageVersion: String get() = extra["kotlinLanguageVersion"] as String
+val kotlinApiVersionForModulesUsedInIDE: String get() = extra["kotlinApiVersionForModulesUsedInIDE"] as String
 
 extra["kotlin_root"] = rootDir
 
-val jpsBootstrap by configurations.creating
+val jpsBootstrap = configurations.create("jpsBootstrap")
 
 val commonBuildDir = File(rootDir, "build")
-val distDir by extra("$rootDir/dist")
-val distKotlinHomeDir by extra("$distDir/kotlinc")
+val distDir = "$rootDir/dist"
+extra["distDir"] = distDir
+val distKotlinHomeDir = "$distDir/kotlinc"
+extra["distKotlinHomeDir"] = distKotlinHomeDir
 val distLibDir = "$distKotlinHomeDir/lib"
 val commonLocalDataDir = "$rootDir/local"
 val ideaSandboxDir = "$commonLocalDataDir/ideaSandbox"
@@ -133,25 +135,22 @@ extra["kotlinJpsPluginMavenDependenciesNonTransitiveLibs"] = listOf(
     commonDependency("org.jetbrains.kotlin:kotlin-reflect")
 )
 
-val coreLibProjects by extra {
-    listOfNotNull(
-        ":kotlin-stdlib",
-        ":kotlin-stdlib-jdk7",
-        ":kotlin-stdlib-jdk8",
-        ":kotlin-test",
-        ":kotlin-reflect",
-        ":kotlin-metadata-jvm",
-    )
-}
-val mppProjects by extra {
-    listOf(
-        ":kotlin-stdlib",
-        ":kotlin-test",
-    )
-}
+val coreLibProjects = listOfNotNull(
+    ":kotlin-stdlib",
+    ":kotlin-stdlib-jdk7",
+    ":kotlin-stdlib-jdk8",
+    ":kotlin-test",
+    ":kotlin-reflect",
+    ":kotlin-metadata-jvm",
+)
+extra["coreLibProjects"] = coreLibProjects
+val mppProjects = listOf(
+    ":kotlin-stdlib",
+    ":kotlin-test",
+)
+extra["mppProjects"] = mppProjects
 
-val projectsWithOptInToUnsafeCastFunctionsFromAddToStdLib by extra {
-    listOf(
+val projectsWithOptInToUnsafeCastFunctionsFromAddToStdLib = listOf(
         ":analysis:analysis-api-fir",
         ":analysis:decompiled:light-classes-for-decompiled",
         ":analysis:symbol-light-classes",
@@ -163,8 +162,8 @@ val projectsWithOptInToUnsafeCastFunctionsFromAddToStdLib by extra {
         ":kotlin-gradle-plugin",
         ":kotlin-scripting-jvm-host-test",
         ":native:kotlin-klib-commonizer",
-    )
-}
+)
+extra["projectsWithOptInToUnsafeCastFunctionsFromAddToStdLib"] = projectsWithOptInToUnsafeCastFunctionsFromAddToStdLib
 
 val gradlePluginProjects = listOf(
     ":kotlin-gradle-plugin",
@@ -683,7 +682,7 @@ tasks {
     }
 }
 
-val zipCompiler by tasks.registering(Zip::class) {
+val zipCompiler = tasks.register("zipCompiler", Zip::class) {
     dependsOn(dist)
     destinationDirectory.set(file(distDir))
     archiveFileName.set("kotlin-compiler-${project.version}.zip")
@@ -696,7 +695,7 @@ val zipCompiler by tasks.registering(Zip::class) {
     }
 }
 
-fun Project.secureZipTask(zipTask: TaskProvider<Zip>): RegisteringDomainObjectDelegateProviderWithAction<out TaskContainer, Task> {
+fun Project.secureZipTask(name: String, zipTask: TaskProvider<Zip>): TaskProvider<Task> {
     val checkSumTask: TaskProvider<Checksum> = tasks.register("${zipTask.name}Checksum", Checksum::class) {
         dependsOn(zipTask)
         inputFiles.setFrom(zipTask.map { it.outputs.files.singleFile })
@@ -725,7 +724,7 @@ fun Project.secureZipTask(zipTask: TaskProvider<Zip>): RegisteringDomainObjectDe
         sign(zipTask.get())
     }
 
-    return tasks.registering {
+    return tasks.register(name) {
         dependsOn(copyChecksumTask)
         dependsOn(signTask)
     }
@@ -735,7 +734,7 @@ signing {
     useGpgCmd()
 }
 
-val zipCompilerWithSignature by secureZipTask(zipCompiler)
+val zipCompilerWithSignature = secureZipTask("zipCompilerWithSignature", zipCompiler)
 
 configure<IdeaModel> {
     module {

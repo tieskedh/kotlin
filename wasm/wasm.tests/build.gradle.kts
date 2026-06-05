@@ -1,7 +1,6 @@
 import com.github.gradle.node.npm.task.NpmTask
 import org.gradle.internal.os.OperatingSystem
 import org.jetbrains.kotlin.testFederation.SmokeTestConfig
-import org.jetbrains.kotlin.testFederation.TemporaryTestFederationApi
 import org.jetbrains.kotlin.testFederation.smokeTestConfig
 import java.util.*
 
@@ -110,7 +109,7 @@ val jsShellSuffix = when (currentOsType) {
     else -> error("unsupported os type $currentOsType")
 }
 
-val jsShell by configurations.creating {
+val jsShell = configurations.create("jsShell") {
     isCanBeResolved = true
     isCanBeConsumed = false
 }
@@ -125,7 +124,7 @@ val wasmEdgeSuffix = when (currentOsType) {
     else -> error("unsupported os type $currentOsType")
 }
 
-val wasmEdge by configurations.creating {
+val wasmEdge = configurations.create("wasmEdge") {
     isCanBeResolved = true
     isCanBeConsumed = false
 }
@@ -152,7 +151,7 @@ val jscOsDependentRevision = when (currentOsType.name) {
     else -> error("unsupported os type $currentOsType")
 }.get()
 
-val jsc by configurations.creating {
+val jsc = configurations.create("jsc") {
     isCanBeResolved = true
     isCanBeConsumed = false
 }
@@ -173,7 +172,7 @@ val wasmtimeSuffix = wasmtimePlatformSuffix + "@" + when (currentOsType.name) {
     else -> error("unsupported os type $currentOsType")
 }
 
-val wasmtime by configurations.creating {
+val wasmtime = configurations.create("wasmtime") {
     isCanBeResolved = true
     isCanBeConsumed = false
 }
@@ -235,7 +234,7 @@ val prepareNpmTestData by task<Copy> {
     into(node.nodeProjectDir)
 }
 
-val npmInstall by tasks.getting(NpmTask::class) {
+val npmInstall = tasks.named("npmInstall", NpmTask::class) {
     val packageLockFile = testDataDir.resolve("package-lock.json")
 
     inputs.file(node.nodeProjectDir.file("package.json"))
