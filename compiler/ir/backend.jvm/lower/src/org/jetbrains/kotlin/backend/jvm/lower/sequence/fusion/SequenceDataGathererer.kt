@@ -39,16 +39,17 @@ import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 
 private const val SEQUENCE_OF = "sequenceOf"
-internal const val AS_SEQUENCE = "asSequence"
+private const val AS_SEQUENCE = "asSequence"
 private const val GENERATE_SEQUENCE = "generateSequence"
-private const val MAP = "map"
-private const val MAP_INDEXED = "mapIndexed"
-private const val MAP_NOT_NULL = "mapNotNull"
-private const val MAP_NOT_NULL_INDEXED = "mapIndexedNotNull"
-private const val FILTER = "filter"
-private const val FILTER_NOT = "filterNot"
-private const val FILTER_NOT_NULL = "filterNotNull"
-private const val TAKE = "take"
+private const val SEQUENCE = "sequence"
+internal const val MAP = "map"
+internal const val MAP_INDEXED = "mapIndexed"
+internal const val MAP_NOT_NULL = "mapNotNull"
+internal const val MAP_NOT_NULL_INDEXED = "mapIndexedNotNull"
+internal const val FILTER = "filter"
+internal const val FILTER_NOT = "filterNot"
+internal const val FILTER_NOT_NULL = "filterNotNull"
+internal const val TAKE = "take"
 
 // this is stored for expressions, intended to be passed either to value declarations or to for loops iterated over the expression result
 internal var IrExpression.sequenceDataOfExpression: SequenceData? by irAttribute(true)
@@ -83,7 +84,6 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
                 SequenceSource.Variable(declaration.symbol),
                 SequenceData.defaultLoopPrologue,
                 SequenceData.defaultTakeVariableDeclarations,
-                emptyList(),
             )
         } else {
             expressionSequenceData?.let {
@@ -92,7 +92,6 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
                     it.sequenceSource,
                     it.newLoopPrologue,
                     it.declarationsBeforeLoop,
-                    emptyList(),
                 )
             }
         }
@@ -103,20 +102,20 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
         super.visitGetValue(expression)
         // now the children have assigned appropriate sequence data
         if (!isElementSequence(context, expression)) return
-        expression.sequenceDataOfExpression = expression.symbol.owner.sequenceDataOfVariable?.let {
+        val variableDeclaration = expression.symbol.owner
+        variableDeclaration.accept(this, null)
+        expression.sequenceDataOfExpression = variableDeclaration.sequenceDataOfVariable?.let {
             SequenceData(
                 it.mapReplacement,
                 it.sequenceSource,
                 it.newLoopPrologue,
                 it.declarationsBeforeLoop,
-                listOf(expression.startOffset to expression.endOffset)
             )
         } ?: SequenceData(
             SequenceData.defaultMapReplacement,
             SequenceSource.Variable(expression.symbol),
             SequenceData.defaultLoopPrologue,
             SequenceData.defaultTakeVariableDeclarations,
-            listOf(expression.startOffset to expression.endOffset)
         )
     }
 
@@ -229,10 +228,10 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
         val newMapReplacement = results.first
         val sequenceDataWithDeclarations = results.second
 
-        val mappedSequenceData = sequenceDataWithDeclarations.applyMap(newMapReplacement, expression.startOffset to expression.endOffset)
+        val mappedSequenceData = sequenceDataWithDeclarations.applyMap(newMapReplacement)
         val filteredSequenceData = if (isNotNull) {
             val filterNotNullSegment = mappedSequenceData.createNewFilterNotNullSegment()
-            mappedSequenceData.applyFilter(expression.startOffset to expression.endOffset, filterNotNullSegment)
+            mappedSequenceData.applyFilter(filterNotNullSegment)
         } else {
             mappedSequenceData
         }
@@ -241,13 +240,13 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
 
     private inline fun updateSequenceDataUsingExpression(
         call: IrCall,
-        applyFunction: (SequenceData, IrExpression, Pair<Int, Int>) -> SequenceData
+        applyFunction: (SequenceData, IrExpression) -> SequenceData
     ) {
         val receiver = call.arguments.getOrNull(0) ?: return
         val argumentExpression = call.arguments.getOrNull(1) ?: return
         val receiverData = receiver.sequenceDataOfExpression ?: return
         if (containsMutable(argumentExpression)) return
-        call.sequenceDataOfExpression = applyFunction(receiverData, argumentExpression, call.startOffset to call.endOffset)
+        call.sequenceDataOfExpression = applyFunction(receiverData, argumentExpression)
     }
 
     private fun containsMutable(expression: IrExpression): Boolean {
@@ -304,7 +303,6 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             SequenceSource.GenerateSequence(initialValue, func, elementType),
             SequenceData.defaultLoopPrologue,
             SequenceData.defaultTakeVariableDeclarations,
-            listOf(expression.startOffset to expression.endOffset)
         )
     }
 
@@ -326,7 +324,6 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             FilterVersion.FilterNotNull -> receiverData.createNewFilterNotNullSegment()
         }
         call.sequenceDataOfExpression = receiverData.applyFilter(
-            call.startOffset to call.endOffset,
             newSegment
         )
     }
@@ -341,7 +338,6 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
                 SequenceSource.SequenceOf(listOf(), elementType),
                 SequenceData.defaultLoopPrologue,
                 SequenceData.defaultTakeVariableDeclarations,
-                listOf(expression.startOffset to expression.endOffset)
             )
             return
         }
@@ -361,7 +357,6 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             SequenceSource.SequenceOf(sequenceOfArguments, elementType),
             SequenceData.defaultLoopPrologue,
             SequenceData.defaultTakeVariableDeclarations,
-            listOf(expression.startOffset to expression.endOffset)
         )
     }
 
@@ -376,13 +371,23 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             SequenceSource.AsSequence(receiver),
             SequenceData.defaultLoopPrologue,
             SequenceData.defaultTakeVariableDeclarations,
-            listOf(expression.startOffset to expression.endOffset)
+        )
+    }
+
+    private fun matchWithSequence(expression: IrCall) {
+        val sequenceScope = expression.arguments.getOrNull(0) ?: return
+        expression.sequenceDataOfExpression = SequenceData(
+            SequenceData.defaultMapReplacement,
+            SequenceSource.Sequence(sequenceScope),
+            SequenceData.defaultLoopPrologue,
+            SequenceData.defaultTakeVariableDeclarations,
         )
     }
 
     override fun visitCall(expression: IrCall) {
         super.visitCall(expression)
         if (!isElementSequence(context, expression)) return
+        if (!isCallFromKotlinSequences(expression)) return
         val functionName = expression.symbol.owner.name.asString()
         when (functionName) {
             MAP -> matchWithMap(expression, isIndexed = false, isNotNull = false)
@@ -396,6 +401,7 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             GENERATE_SEQUENCE -> matchWithGenerateSequence(expression)
             SEQUENCE_OF -> matchWithSequenceOf(expression)
             AS_SEQUENCE -> matchWithAsSequence(expression)
+            SEQUENCE -> matchWithSequence(expression)
         }
     }
 }

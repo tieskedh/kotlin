@@ -8,8 +8,6 @@ package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceSource
-import org.jetbrains.kotlin.ir.IrStatement
-import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irBranch
 import org.jetbrains.kotlin.ir.builders.irCall
@@ -21,12 +19,10 @@ import org.jetbrains.kotlin.ir.builders.irSet
 import org.jetbrains.kotlin.ir.builders.irWhen
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrVariable
-import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrBranch
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
-import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 
@@ -80,55 +76,7 @@ internal class SequenceOfStrategy(val source: SequenceSource.SequenceOf) : Lower
         )
     }
 
-    override fun lowerFunction(
-        builderWithParent: IrBuilderWithParent,
-        function: IrRichFunctionReference,
-        sequenceData: SequenceData
-    ): IrExpression {
-        val builder = builderWithParent.first
-        val iteratorReplacement = createIteratorReplacement(builderWithParent)
-        val newLoop = builder.createSequenceWhile()
-        val newBody = builder.irBlock {
-            // iteratorVariable++
-            +iteratorReplacement.iteratorNextStatement
-            +addReplacementsToForEachCall(
-                builderWithParent,
-                function,
-                sequenceData,
-                irGet(iteratorReplacement.outerLoopVariable),
-                newLoop
-            )
-        }
-        return createLoweredLoop(
-            iteratorReplacement.iteratorVariable,
-            iteratorReplacement.outerLoopVariable,
-            iteratorReplacement.condition,
-            builder,
-            newBody,
-            sequenceData,
-            newLoop
-        )
-    }
-
-    override fun prepareLoopBody(
-        loopBody: IrBlock,
-        builder: IrBuilderWithScope,
-        oldLoopVariable: IrVariable,
-        oldLoop: IrLoop?
-    ): Pair<(IrVariable) -> IrContainerExpression, IrLoop> {
-        val newLoop = builder.createSequenceWhile()
-        return updateLoopVariableInBody(builder, oldLoopVariable, loopBody, newLoop, oldLoop) to newLoop
-    }
-
-
-    private data class IteratorReplacement(
-        val iteratorVariable: IrVariable,
-        val outerLoopVariable: IrVariable,
-        val iteratorNextStatement: IrStatement,
-        val condition: IrExpression,
-    )
-
-    private fun createIteratorReplacement(
+    override fun createIteratorReplacement(
         builderWithParent: IrBuilderWithParent,
     ): IteratorReplacement {
         val builder = builderWithParent.first

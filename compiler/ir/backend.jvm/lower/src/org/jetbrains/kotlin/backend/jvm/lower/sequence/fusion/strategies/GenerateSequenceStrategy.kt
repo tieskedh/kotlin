@@ -10,7 +10,6 @@ import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParen
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceSource
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
-import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irComposite
 import org.jetbrains.kotlin.ir.builders.irGet
@@ -19,11 +18,9 @@ import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.builders.irSet
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrVariable
-import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
-import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.makeNullable
@@ -39,7 +36,7 @@ internal class GenerateSequenceStrategy(val source: SequenceSource.GenerateSeque
     ): IrContainerExpression {
         val builder = builderWithParent.first
         val iteratorReplacement =
-            createIteratorReplacement(builderWithParent, source.sequenceElementType)
+            createIteratorReplacement(builderWithParent)
         val newBody = builder.irComposite {
             +iteratorReplacement.iteratorNextStatement
             +addReplacementsToBody(
@@ -63,50 +60,8 @@ internal class GenerateSequenceStrategy(val source: SequenceSource.GenerateSeque
         )
     }
 
-    override fun lowerFunction(
+    override fun createIteratorReplacement(
         builderWithParent: IrBuilderWithParent,
-        function: IrRichFunctionReference,
-        sequenceData: SequenceData
-    ): IrExpression {
-        val builder = builderWithParent.first
-        val iteratorReplacement =
-            createIteratorReplacement(builderWithParent, source.sequenceElementType)
-        val newLoop = builder.createSequenceWhile()
-        val newBody = builder.irComposite {
-            +iteratorReplacement.iteratorNextStatement
-            +addReplacementsToForEachCall(
-                builderWithParent,
-                function,
-                sequenceData,
-                builder.irGet(iteratorReplacement.outerLoopVariable),
-                newLoop
-            )
-        }
-        return createLoweredLoop(
-            iteratorReplacement.iteratorVariable,
-            iteratorReplacement.outerLoopVariable,
-            iteratorReplacement.condition,
-            builder,
-            newBody,
-            sequenceData,
-            newLoop,
-        )
-    }
-
-    override fun prepareLoopBody(
-        loopBody: IrBlock,
-        builder: IrBuilderWithScope,
-        oldLoopVariable: IrVariable,
-        oldLoop: IrLoop?
-    ): Pair<(IrVariable) -> IrContainerExpression, IrLoop> {
-        loopBody.statements.remove(oldLoopVariable)
-        val newLoop = builder.createSequenceWhile()
-        return updateLoopVariableInBody(builder, oldLoopVariable, loopBody, newLoop, oldLoop) to newLoop
-    }
-
-    private fun createIteratorReplacement(
-        builderWithParent: IrBuilderWithParent,
-        elementType: IrType,
     ): IteratorReplacement {
         val builder = builderWithParent.first
         val parent = builderWithParent.second
@@ -129,38 +84,29 @@ internal class GenerateSequenceStrategy(val source: SequenceSource.GenerateSeque
                 builder.callRichFunctionReference(generatingFunction, parent) to zeroArgumentIteratingFunction
             }
         }
-        return IteratorReplacement.create(results.first, results.second, builder, elementType)
+        return IteratorReplacement(results.first, results.second, builder, source.sequenceElementType)
     }
 
-    private data class IteratorReplacement(
-        val iteratorVariable: IrVariable,
-        val outerLoopVariable: IrVariable,
-        val iteratorNextStatement: IrStatement,
-        val condition: IrExpression,
-    ) {
-        companion object {
-            fun create(
-                initialExpression: IrExpression,
-                evaluateNext: (IrVariable) -> IrExpression,
-                builder: IrBuilderWithScope,
-                elementType: IrType,
-            ): IteratorReplacement = with(builder) {
-                val iteratorVariable = scope.createTemporaryVariable(
-                    initialExpression,
-                    isMutable = true,
-                    irType = elementType.makeNullable(),
-                    origin = IrDeclarationOrigin.FOR_LOOP_ITERATOR
-                )
-                val condition = irNotEquals(irGet(iteratorVariable), irNull())
-                val next = evaluateNext(iteratorVariable)
-                val outerLoopVariable =
-                    builder.scope.createTemporaryVariable(
-                        builder.irAsNotNull(builder.irGet(iteratorVariable)),
-                        nameHint = "outerLoopVariable",
-                    )
-                val iteratorNextStatement = irSet(iteratorVariable, next)
-                return IteratorReplacement(iteratorVariable, outerLoopVariable, iteratorNextStatement, condition)
-            }
-        }
+    operator fun IteratorReplacement.Companion.invoke(
+        initialExpression: IrExpression,
+        evaluateNext: (IrVariable) -> IrExpression,
+        builder: IrBuilderWithScope,
+        elementType: IrType,
+    ): IteratorReplacement = with(builder) {
+        val iteratorVariable = scope.createTemporaryVariable(
+            initialExpression,
+            isMutable = true,
+            irType = elementType.makeNullable(),
+            origin = IrDeclarationOrigin.FOR_LOOP_ITERATOR
+        )
+        val condition = irNotEquals(irGet(iteratorVariable), irNull())
+        val next = evaluateNext(iteratorVariable)
+        val outerLoopVariable =
+            builder.scope.createTemporaryVariable(
+                builder.irAsNotNull(builder.irGet(iteratorVariable)),
+                nameHint = "outerLoopVariable",
+            )
+        val iteratorNextStatement = irSet(iteratorVariable, next)
+        return IteratorReplacement(iteratorVariable, outerLoopVariable, iteratorNextStatement, condition)
     }
 }

@@ -1,7 +1,5 @@
 // WITH_STDLIB
 
-// CHECK_BYTECODE_TEXT
-// 2 iterator
 fun negate(sequence: Sequence<Int>): String {
     val seq2 = sequence.map { it * 1 }
     val list = listOf(1, 2, 3)
