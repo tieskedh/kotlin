@@ -234,6 +234,10 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
                 }
             }
             transitiveSwiftPMMetadata.get().metadataByDependencyIdentifier.forEach { (dependencyIdentifier, swiftPMDependencies) ->
+                // Implicit platform constraint from the dependency's konanTargets; null means unconstrained.
+                val implicitConstraints: Set<SwiftPMDependency.Platform>? =
+                    swiftPMDependencies.konanTargets.toSwiftPMPlatforms().takeIf { it.isNotEmpty() }
+
                 generatePackageManifest(
                     identifier = dependencyIdentifier.identifier,
                     packageRoot = packageRoot.resolve("${SUBPACKAGES}/${dependencyIdentifier.identifier}"),
@@ -247,6 +251,7 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
                     transitiveSyntheticPackages = setOf(),
                     transitiveSyntheticPackagesPath = "..",
                     binaryTarget = null,
+                    implicitPlatformConstraints = implicitConstraints,
                 )
             }
         }
@@ -290,6 +295,7 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
         transitiveSyntheticPackages: Set<SwiftPMDependencyIdentifier>,
         transitiveSyntheticPackagesPath: String,
         binaryTarget: BinaryTarget?,
+        implicitPlatformConstraints: Set<SwiftPMDependency.Platform>? = null,
     ) {
         val repoDependencies = (directlyImportedSwiftPMDependencies.map { importedPackage ->
             buildString {
@@ -325,6 +331,9 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
         } + transitiveSyntheticPackages.map {
             ".package(path: \"${transitiveSyntheticPackagesPath}/${it.identifier}\")"
         })
+        // Skip the condition when it would cover all umbrella platforms anyway.
+        val umbrellaPlatforms: Set<SwiftPMDependency.Platform> = konanTargets.get().toSwiftPMPlatforms()
+
         val targetDependencies = (directlyImportedSwiftPMDependencies.flatMap { dependency ->
             dependency.products.map { product -> product to dependency.packageName }
         }.map { dependency ->
@@ -333,9 +342,20 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
                 val dependencyArguments = mutableListOf<String>()
                 dependencyArguments += "  name: \"${dependency.first.name}\""
                 dependencyArguments += "  package: \"${dependency.second}\""
-                val platformConstraints = dependency.first.platformConstraints
-                if (platformConstraints != null) {
-                    val platformsString = platformConstraints.joinToString(", ") { platform -> ".${platform.swiftEnumName}" }
+                val effectiveConstraint: Set<SwiftPMDependency.Platform>? = run {
+                    val explicit = dependency.first.platformConstraints
+                    when {
+                        // Both present: intersect. An empty intersection (e.g. explicit={macOS} ∩ implicit={iOS})
+                        // means no valid platform — omit the condition and let SwiftPM report the conflict.
+                        explicit != null && implicitPlatformConstraints != null ->
+                            explicit.intersect(implicitPlatformConstraints).takeIf { it.isNotEmpty() }
+                        explicit != null -> explicit
+                        implicitPlatformConstraints != null -> implicitPlatformConstraints
+                        else -> null
+                    }
+                }
+                if (effectiveConstraint != null && effectiveConstraint != umbrellaPlatforms) {
+                    val platformsString = effectiveConstraint.joinToString(", ") { platform -> ".${platform.swiftEnumName}" }
                     dependencyArguments += "  condition: .when(platforms: [${platformsString}])"
                 }
                 appendLine(dependencyArguments.joinToString(",\n"))
