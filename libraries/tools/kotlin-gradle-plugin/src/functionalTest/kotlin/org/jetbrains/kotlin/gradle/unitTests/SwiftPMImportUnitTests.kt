@@ -29,9 +29,13 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SwiftPMDependenc
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.ValidateLocalSwiftPMDependencies
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SyncPackageResolvedTask
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.transitiveSwiftPMMetadataProvider
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SwiftPMDependencyIdentifier
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SwiftPMImportMetadata
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.TransitiveSwiftPMMetadata
 import org.jetbrains.kotlin.gradle.util.*
 import org.jetbrains.kotlin.gradle.utils.lowerCamelCaseName
 import org.jetbrains.kotlin.konan.target.HostManager
+import org.jetbrains.kotlin.konan.target.KonanTarget
 import kotlin.test.Test
 import java.nio.file.Files
 import org.jetbrains.kotlin.gradle.utils.normalizedAbsoluteFile
@@ -46,6 +50,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
+import kotlin.io.path.createTempDirectory
 
 class SwiftPMImportUnitTests {
 
@@ -1127,8 +1132,125 @@ class SwiftPMImportUnitTests {
             leftProjectXcodeDumpTask.xcodebuildFingerprint.get().asFile,
             "Convert task should use the same xcodebuild fingerprint as the dump task in the same project"
         )
+    }
 
+    @Test
+    fun `transitive dependency with iOS-only konanTargets gets implicit iOS platform condition`() {
+        val projectDir = createTempDirectory("swiftPMImplicitConstraintsTest").toFile()
+        val syntheticRoot = projectDir.resolve("syntheticImport")
 
+        val project = buildProjectWithMPP {
+            kotlin {
+                iosArm64()
+                iosSimulatorArm64()
+                macosArm64()
+            }
+        }
+
+        val iosOnlyMetadata = SwiftPMImportMetadata(
+            konanTargets = setOf("ios_arm64", "ios_simulator_arm64"),
+            iosDeploymentVersion = null,
+            macosDeploymentVersion = null,
+            watchosDeploymentVersion = null,
+            tvosDeploymentVersion = null,
+            isModulesDiscoveryEnabled = false,
+            dependencies = setOf(
+                SwiftPMDependency.Remote(
+                    repository = SwiftPMDependency.Remote.Repository.Url("https://github.com/example/ios-sdk.git"),
+                    version = SwiftPMDependency.Remote.Version.Exact("1.0.0"),
+                    products = listOf(SwiftPMDependency.Product(name = "iOSOnlyProduct")),
+                    cinteropClangModules = emptyList(),
+                    packageName = "ios-sdk",
+                    traits = emptySet(),
+                )
+            ),
+        )
+
+        val transitiveId = SwiftPMDependencyIdentifier(identifier = "ios-sdk", isModular = false)
+        val transitiveDependencies = TransitiveSwiftPMMetadata(
+            metadataByDependencyIdentifier = mapOf(transitiveId to iosOnlyMetadata)
+        )
+
+        val task = project.tasks.register("testGenerate", GenerateSyntheticLinkageImportProject::class.java).get()
+        task.syntheticImportProjectRoot.set(syntheticRoot)
+        task.konanTargets.set(
+            setOf(KonanTarget.IOS_ARM64, KonanTarget.IOS_SIMULATOR_ARM64, KonanTarget.MACOS_ARM64)
+        )
+        task.syntheticProductType.set(GenerateSyntheticLinkageImportProject.Companion.SyntheticProductType.INFERRED)
+        task.transitiveSwiftPMMetadata.set(transitiveDependencies)
+        task.useOnlyTransitiveImportedDependencies()
+
+        task.generateSwiftPMSyntheticImportProjectAndFetchPackages()
+
+        val subpackageManifest = syntheticRoot
+            .resolve("subpackages/ios-sdk/Package.swift")
+            .readText()
+
+        assertTrue(
+            subpackageManifest.contains("condition: .when(platforms: [.iOS])"),
+            "Expected iOS condition in manifest but got:\n$subpackageManifest"
+        )
+    }
+
+    @Test
+    fun `transitive dependency whose konanTargets match umbrella platforms gets no condition`() {
+        val projectDir = createTempDirectory("swiftPMNoConstraintTest").toFile()
+        val syntheticRoot = projectDir.resolve("syntheticImport")
+
+        val project = buildProjectWithMPP {
+            kotlin {
+                iosArm64()
+                iosSimulatorArm64()
+            }
+        }
+
+        // Producer targets match the consumer's, so no platform condition should appear.
+        val iosOnlyMetadata = SwiftPMImportMetadata(
+            konanTargets = setOf("ios_arm64", "ios_simulator_arm64"),
+            iosDeploymentVersion = null,
+            macosDeploymentVersion = null,
+            watchosDeploymentVersion = null,
+            tvosDeploymentVersion = null,
+            isModulesDiscoveryEnabled = false,
+            dependencies = setOf(
+                SwiftPMDependency.Remote(
+                    repository = SwiftPMDependency.Remote.Repository.Url("https://github.com/example/ios-sdk.git"),
+                    version = SwiftPMDependency.Remote.Version.Exact("1.0.0"),
+                    products = listOf(SwiftPMDependency.Product(name = "iOSOnlyProduct")),
+                    cinteropClangModules = emptyList(),
+                    packageName = "ios-sdk",
+                    traits = emptySet(),
+                )
+            ),
+        )
+
+        val transitiveId = SwiftPMDependencyIdentifier(identifier = "ios-sdk", isModular = false)
+        val transitiveDependencies = TransitiveSwiftPMMetadata(
+            metadataByDependencyIdentifier = mapOf(transitiveId to iosOnlyMetadata)
+        )
+
+        val task = project.tasks.register("testGenerate2", GenerateSyntheticLinkageImportProject::class.java).get()
+        task.syntheticImportProjectRoot.set(syntheticRoot)
+        task.konanTargets.set(setOf(KonanTarget.IOS_ARM64, KonanTarget.IOS_SIMULATOR_ARM64))
+        task.syntheticProductType.set(GenerateSyntheticLinkageImportProject.Companion.SyntheticProductType.INFERRED)
+        task.transitiveSwiftPMMetadata.set(transitiveDependencies)
+        task.useOnlyTransitiveImportedDependencies()
+
+        task.generateSwiftPMSyntheticImportProjectAndFetchPackages()
+
+        val subpackageManifest = syntheticRoot
+            .resolve("subpackages/ios-sdk/Package.swift")
+            .readText()
+
+        // No condition when producer and consumer targets match — guards against over-constraining.
+        assertTrue(
+            subpackageManifest.contains("iOSOnlyProduct"),
+            "Expected manifest to contain the product 'iOSOnlyProduct' but got:\n$subpackageManifest"
+        )
+        assertFalse(
+            subpackageManifest.contains("condition:"),
+            "Expected no platform condition in manifest but got:\n$subpackageManifest"
+        )
     }
 }
 
