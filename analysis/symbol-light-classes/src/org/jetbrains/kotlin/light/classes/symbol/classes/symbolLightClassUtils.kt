@@ -89,19 +89,19 @@ internal fun createLightClassNoCache(
     manager: PsiManager,
 ): SymbolLightClassBase = when (classSymbol.classKind) {
     KaClassKind.INTERFACE -> SymbolLightClassForInterface(
-        ktModule = ktModule,
+        useSiteModule = ktModule,
         classSymbol = classSymbol,
         manager = manager,
     )
 
     KaClassKind.ANNOTATION_CLASS -> SymbolLightClassForAnnotationClass(
-        ktModule = ktModule,
+        useSiteModule = ktModule,
         classSymbol = classSymbol,
         manager = manager,
     )
 
     else -> SymbolLightClassForClassOrObject(
-        ktModule = ktModule,
+        useSiteModule = ktModule,
         classSymbol = classSymbol,
         manager = manager,
     )
@@ -619,7 +619,7 @@ internal fun KaSession.createInnerClasses(
         if (classOrObjectDeclaration != null) {
             classOrObjectDeclaration.toLightClass() as? SymbolLightClassBase
         } else {
-            createLightClassNoCache(it, ktModule = containingClass.ktModule, manager)
+            createLightClassNoCache(it, ktModule = containingClass.useSiteModule, manager)
         }
     }
 

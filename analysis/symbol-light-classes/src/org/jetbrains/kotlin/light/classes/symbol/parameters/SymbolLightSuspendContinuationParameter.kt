@@ -28,7 +28,7 @@ internal class SymbolLightSuspendContinuationParameter(
     private val containingMethod: SymbolLightMethodBase,
 ) : SymbolLightParameterBase(containingMethod) {
     private inline fun <T> withFunctionSymbol(crossinline action: KaSession.(KaNamedFunctionSymbol) -> T): T {
-        return functionSymbolPointer.withSymbol(ktModule, action)
+        return functionSymbolPointer.withSymbol(useSiteModule, action)
     }
 
     override fun getName(): String = SUSPEND_FUNCTION_COMPLETION_PARAMETER_NAME
@@ -76,5 +76,5 @@ internal class SymbolLightSuspendContinuationParameter(
 
     override fun hashCode(): Int = name.hashCode() * 31 + containingMethod.hashCode()
 
-    override fun isValid(): Boolean = super.isValid() && functionSymbolPointer.isValid(ktModule)
+    override fun isValid(): Boolean = super.isValid() && functionSymbolPointer.isValid(useSiteModule)
 }

@@ -8,8 +8,11 @@ package org.jetbrains.kotlin.light.classes.symbol.methods
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.psi.*
 import org.jetbrains.kotlin.analysis.api.KaSession
-import org.jetbrains.kotlin.analysis.api.symbols.*
+import org.jetbrains.kotlin.analysis.api.symbols.KaClassKind
+import org.jetbrains.kotlin.analysis.api.symbols.KaConstructorSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.KaSymbolVisibility
 import org.jetbrains.kotlin.analysis.api.symbols.pointers.KaSymbolPointer
+import org.jetbrains.kotlin.analysis.api.symbols.sourcePsiSafe
 import org.jetbrains.kotlin.asJava.builder.LightMemberOriginForDeclaration
 import org.jetbrains.kotlin.asJava.classes.METHOD_INDEX_BASE
 import org.jetbrains.kotlin.asJava.classes.METHOD_INDEX_FOR_DEFAULT_CTOR
@@ -68,8 +71,8 @@ internal class SymbolLightConstructor private constructor(
             ),
             annotationsBox = GranularAnnotationsBox(
                 annotationsProvider = SymbolAnnotationsProvider(
-                    ktModule = ktModule,
-                    annotatedSymbolPointer = functionSymbolPointer,
+                    useSiteModule = useSiteModule,
+                    annotatedSymbolPointer = symbolPointer,
                 ),
                 annotationFilter = jvmExposeBoxedAwareAnnotationFilter,
                 additionalAnnotationsProvider = JvmExposeBoxedAdditionalAnnotationsProvider,
@@ -235,7 +238,7 @@ internal class SymbolLightConstructor private constructor(
             visibility = visibility,
             methodIndex = methodIndex,
             isJvmExposedBoxed = isJvmExposedBoxed,
-            functionSymbolPointer = functionSymbolPointer,
+            symbolPointer = functionSymbolPointer,
         )
     }
 }

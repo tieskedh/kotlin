@@ -33,8 +33,10 @@ import org.jetbrains.kotlin.utils.addToStdlib.ifFalse
 import javax.swing.Icon
 
 
-internal abstract class SymbolLightClassBase protected constructor(val ktModule: KaModule, manager: PsiManager) :
+internal abstract class SymbolLightClassBase protected constructor(manager: PsiManager) :
     LightElement(manager, KotlinLanguage.INSTANCE), PsiClass, KtExtensibleLightClass {
+
+    abstract val useSiteModule: KaModule
 
     private val contentFinderCache by lazyPub {
         ClassContentFinderCache(
@@ -103,7 +105,7 @@ internal abstract class SymbolLightClassBase protected constructor(val ktModule:
         val baseClassOrigin = (baseClass as? KtLightClass)?.kotlinOrigin
 
         return if (baseClassOrigin != null && thisClassOrigin != null) {
-            analyzeForLightClasses(ktModule) {
+            analyzeForLightClasses(useSiteModule) {
                 checkIsInheritor(thisClassOrigin, baseClassOrigin, checkDeep)
             }
         } else {

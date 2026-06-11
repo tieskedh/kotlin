@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.analysis.api.symbols.KaScriptSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.pointers.KaSymbolPointer
 import org.jetbrains.kotlin.asJava.classes.*
 import org.jetbrains.kotlin.asJava.elements.FakeFileForLightClass
+import org.jetbrains.kotlin.light.classes.symbol.KaSymbolJavaView
 import org.jetbrains.kotlin.light.classes.symbol.analyzeForLightClasses
 import org.jetbrains.kotlin.light.classes.symbol.cachedValue
 import org.jetbrains.kotlin.light.classes.symbol.fields.SymbolLightField
@@ -22,12 +23,12 @@ import org.jetbrains.kotlin.light.classes.symbol.modifierLists.SymbolLightClassM
 import org.jetbrains.kotlin.light.classes.symbol.withSymbol
 import org.jetbrains.kotlin.psi.KtScript
 
+@OptIn(KaImplementationDetail::class)
 internal class SymbolLightClassForScript private constructor(
     override val script: KtScript,
-    private val symbolPointer: KaSymbolPointer<KaScriptSymbol>,
-    ktModule: KaModule,
-) : KtLightClassForScript, SymbolLightClassBase(ktModule, script.manager) {
-    @OptIn(KaImplementationDetail::class)
+    override val symbolPointer: KaSymbolPointer<KaScriptSymbol>,
+    override val useSiteModule: KaModule,
+) : KtLightClassForScript, SymbolLightClassBase(script.manager), KaSymbolJavaView<KaScriptSymbol> {
     internal constructor(
         script: KtScript,
         ktModule: KaModule,
@@ -60,14 +61,14 @@ internal class SymbolLightClassForScript private constructor(
 
         result.addScriptDefaultMethods()
 
-        symbolPointer.withSymbol(ktModule) { scriptSymbol ->
+        symbolPointer.withSymbol(useSiteModule) { scriptSymbol ->
             createMethods(this@SymbolLightClassForScript, scriptSymbol.declaredMemberScope.callables, result)
         }
         result
     }
 
     override fun getOwnFields(): List<PsiField> = cachedValue {
-        symbolPointer.withSymbol(ktModule) { scriptSymbol ->
+        symbolPointer.withSymbol(useSiteModule) { scriptSymbol ->
             buildList {
                 addPropertyBackingFields(this@SymbolLightClassForScript, this, scriptSymbol, SymbolLightField.FieldNameGenerator())
             }
@@ -75,13 +76,13 @@ internal class SymbolLightClassForScript private constructor(
     }
 
     override fun getOwnInnerClasses(): List<SymbolLightClassBase> = cachedValue {
-        symbolPointer.withSymbol(ktModule) { scriptSymbol ->
+        symbolPointer.withSymbol(useSiteModule) { scriptSymbol ->
             createInnerClasses(scriptSymbol, manager, this@SymbolLightClassForScript, classOrObject = null)
         }
     }
 
     override fun copy(): SymbolLightClassForScript =
-        SymbolLightClassForScript(script, symbolPointer, ktModule)
+        SymbolLightClassForScript(script, symbolPointer, useSiteModule)
 
     override fun getModifierList(): PsiModifierList = cachedValue {
         SymbolLightClassModifierList(
