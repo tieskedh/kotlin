@@ -184,8 +184,8 @@ internal fun FirSession.registerJavaModelTypeUseCacheIfAbsent() {
 
 /**
  * Whether the annotation class identified by [classId] carries `@Target(ElementType.TYPE_USE)`
- * (Java) or `@Target(AnnotationTarget.TYPE)` (Kotlin). Mirrors javac-wrapper's structure-build-time
- * `filterTypeAnnotations` predicate, using [FirSession.symbolProvider] for the @Target lookup.
+ * (Java) or `@Target(AnnotationTarget.TYPE)` (Kotlin), using [FirSession.symbolProvider] for the
+ * `@Target` lookup.
  *
  * Result is cached on the session via [JavaModelTypeUseClassIdCache] so each annotation class
  * is probed at most once per build.
@@ -200,9 +200,8 @@ internal fun FirSession.isTypeUseAnnotationClass(classId: ClassId): Boolean {
 private fun FirSession.computeIsTypeUseAnnotationClass(classId: ClassId): Boolean {
     val symbol = cycleSafeClassLikeSymbol(classId) ?: return false
     // Reject cross-package matches: PSI-based class finders match by simple name alone and may
-    // return a class from a different package (see KotlinCliJavaFileManagerImpl.findClass fallback
-    // paths). Treating such results as TYPE_USE would conflate unrelated annotations sharing the
-    // same simple name.
+    // return a class from a different package. Treating such results as TYPE_USE would conflate
+    // unrelated annotations sharing the same simple name.
     if (symbol.classId != classId) return false
     val annotationClass = symbol.fir as? FirRegularClass ?: return false
     val targetAnnotation = annotationClass.annotations.find { firAnnotation ->

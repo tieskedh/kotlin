@@ -14,36 +14,26 @@ import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
 /**
- * Resolves inherited inner classes from supertype hierarchies, implementing JLS 6.5.2
- * (inherited member types in scope).
+ * Resolves inherited inner classes from supertype hierarchies (JLS 6.5.2 — inherited member
+ * types are in scope).
  *
  * Two entry points serve different consumers:
  *
- * - [findInnerClassFromSupertypes] returns a [JavaClass] (with its full AST-side outer-class
- *   chain) for inherited inner classes, including cross-file Java-source supertypes via the
- *   [classFinder]. Used by [findClassInCurrentScope] step 3 so that the rest of the
- *   AST pipeline (`JavaTypeOverAst.computeClassifier`, [findInnerClassInSameFileSupertypes])
- *   can thread outer-class type arguments through the AST chain — the substitution context
- *   FIR needs for cases like
- *   `compiler/testData/diagnostics/tests/generics/innerClasses/j+k_complex.kt`.
+ * - [findInnerClassFromSupertypes] returns a [JavaClass] with its full AST-side outer-class
+ *   chain, so the AST pipeline can thread outer-class type arguments through the chain — the
+ *   substitution context FIR needs for inherited inner classes of generic outer classes.
+ *   Cross-file Java-source supertypes are handled via the [classFinder].
  *
  * - [resolveInheritedInnerClassToClassId] returns a `ClassId` via a two-pass BFS:
- *   [walkJavaSourceSupertypes] walks Java-source supertypes through the AST / classFinder
- *   source index — independent of FIR's lazy phase machinery, so it stays correct even when
- *   the BFS is invoked while the supertype's own `SUPER_TYPES` resolution is on the call
- *   stack. [walkBinarySupertypes] walks Kotlin / binary supertypes through the
- *   per-origin dispatcher (see `RESOLVER_UNIFICATION_AND_LAZINESS_2026_05_04.md`).
+ *   [walkJavaSourceSupertypes] walks Java-source supertypes through the [classFinder] source
+ *   index — independent of FIR's lazy phase machinery, so it stays correct even when invoked
+ *   while the supertype's own `SUPER_TYPES` resolution is on the call stack;
+ *   [walkBinarySupertypes] walks Kotlin / binary supertypes through the per-origin dispatcher.
  *
- * The two passes are intentionally NOT merged: dropping [walkJavaSourceSupertypes] regresses
- * `compiler/testData/diagnostics/tests/j+k/collectionOverrides/mapMethodsImplementedInJava.kt`
- * (the AST walk reads supertype names from the source index without depending on FIR's
- * phase state). Collapsing the two passes remains conditional on routing the BFS through a
- * phase-aware adapter — see `RESOLVER_UNIFICATION_AND_LAZINESS_2026_05_04.md` for the
- * Stage 2b / Stage 5 rationale.
- *
- * The source-pass also deliberately does NOT subsume [findInnerClassFromSupertypes]: the BFS
- * yields a bare `ClassId`, but downstream FIR conversion needs an AST-side `JavaClass` to
- * recover outer-class type-argument substitutions for inherited inner classes.
+ * The passes are kept separate by design:
+ * - the source pass must not depend on FIR phase state, unlike the binary pass;
+ * - the source pass yields a bare `ClassId`, while [findInnerClassFromSupertypes] must also
+ *   recover the AST-side `JavaClass` for outer-class type-argument substitution.
  */
 internal class JavaInheritedMemberResolver(
     private val packageFqName: FqName,
@@ -53,13 +43,12 @@ internal class JavaInheritedMemberResolver(
 
     /**
      * Searches for an inner class with the given name in the supertype hierarchy.
-     * Implements JLS 6.5.2 — inherited member types are in scope.
      *
      * Returns null if multiple inner classes with the same name are found (ambiguity),
      * matching `javac`'s `MISSING_DEPENDENCY_CLASS` error. Uses the [classFinder] (if
      * available) to detect cross-file ambiguities and to materialize the inherited
-     * `JavaClass` for cross-file Java-source supertypes; falls back to local resolution for
-     * same-file supertypes via [sameFileTopLevelClassProvider].
+     * `JavaClass` for cross-file Java-source supertypes; falls back to
+     * [sameFileTopLevelClassProvider] for same-file supertypes.
      */
     fun findInnerClassFromSupertypes(name: Name, javaClass: JavaClass, visited: MutableSet<JavaClass>): JavaClass? {
         if (!visited.add(javaClass)) return null
@@ -67,8 +56,7 @@ internal class JavaInheritedMemberResolver(
         var foundInnerClass: JavaClass? = null
 
         // Same-file supertypes — local resolution by simple name. Cross-file supertypes are
-        // handled by the classFinder fallback below; that path is the one the
-        // `j+k_complex.kt` trip-wire depends on.
+        // handled by the classFinder fallback below.
         for (supertype in javaClass.supertypes) {
             val supertypeRef = supertype.presentableText.let { text ->
                 val withoutGenerics = text.substringBefore('<').trim()
@@ -95,16 +83,13 @@ internal class JavaInheritedMemberResolver(
     }
 
     /**
-     * Try to resolve a simple name as an inner class inherited from supertypes.
+     * Tries to resolve a simple name as an inner class inherited from supertypes. Binary
+     * supertypes go through the per-origin [directSupertypeClassIds] dispatcher; Java-source
+     * supertypes use the class-finder source index directly. Both passes share `visited` and
+     * detect ambiguity.
      *
-     * The per-origin [directSupertypeClassIds] dispatcher (see
-     * `FIRSESSION_INJECTION_PROPOSAL_2026_05_05.md` §11) is used for binary supertypes;
-     * Java-source supertypes use the class-finder source index directly. Both passes share
-     * `visited` and use the `SupertypeClassId.SimpleName` probe pattern with ambiguity
-     * detection.
-     *
-     * @param resolveWithoutInheritance function to resolve a name without checking inherited
-     *        inner classes (to avoid infinite recursion back into this method).
+     * @param resolveWithoutInheritance resolves a name without checking inherited inner
+     *        classes, to avoid infinite recursion back into this method.
      */
     fun resolveInheritedInnerClassToClassId(
         simpleName: String,

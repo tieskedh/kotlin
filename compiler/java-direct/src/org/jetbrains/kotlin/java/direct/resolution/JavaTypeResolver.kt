@@ -70,10 +70,10 @@ internal fun resolve(name: String): ClassId? {
         val cachedTryResolve: (ClassId) -> Boolean = { classId ->
             cache.getOrPut(classId) { tryResolve(classId) }
         }
-        // Pre-split once so recursive prefix probes don't re-split. Despite the historical
-        // "nested/qualified" naming, this is the entry point for *all* dotted Java type names —
-        // fully qualified ones like `java.util.Map` reach `tryResolve` only through the
-        // [probeFqnSplits] tail of [resolveQualifiedNameToClassIdFromParts].
+        // Pre-split once so recursive prefix probes don't re-split. This is the entry point for
+        // *all* dotted Java type names — fully qualified ones like `java.util.Map` reach
+        // `tryResolve` only through the [probeFqnSplits] tail of
+        // [resolveQualifiedNameToClassIdFromParts].
         return resolveQualifiedNameToClassIdFromParts(name.split('.'), cachedTryResolve, checkInheritance = true)
     }
     return resolveSimpleNameToClassIdImpl(name, { tryResolve(it) }, checkInheritance = true)
@@ -361,7 +361,7 @@ private fun resolveFromJavaLang(simpleName: String, tryResolve: (ClassId) -> Boo
  * Step 6: Type-import-on-demand (`import a.b.*;`, JLS 7.5.2).
  *
  * Each entry is *nominally* a package FqName; the primary probe is `ClassId(pkg, simpleName)`.
- * However, the Kotlin compiler historically also accepts `import a.D.*;` where `a.D` is a *class*
+ * However, the Kotlin compiler also accepts `import a.D.*;` where `a.D` is a *class*
  * (strictly illegal per JLS — must be `import static a.D.*;`) and resolves nested types through
  * it; the test suite (`testImportThriceNestedClass`, `testNestedAndTopLevelClassClash`) relies on
  * this permissive behaviour. So when the package-shape probe misses, we additionally try the
@@ -410,7 +410,7 @@ private fun resolveFromTypeStarImports(
  *  2. Form `outerClassId.createNestedClassId(simpleName)` and probe via [tryResolve].
  *
  * Without [checkInheritance] (reentrance-safe fallback path) only direct nested-class resolution
- * is attempted; that matches the prior `checkInheritance == false` branch of the merged star step.
+ * is attempted.
  */
 context(c: JavaResolutionContext)
 private fun resolveFromStaticStarImports(
@@ -499,8 +499,7 @@ internal fun tryResolve(classId: ClassId): Boolean =
 /**
  * Whether [classId] denotes an annotation class whose declared `@Target` lists `TYPE_USE`
  * (Java) or `TYPE` (Kotlin). Used by [org.jetbrains.kotlin.java.direct.model.JavaTypeOverAst]
- * to pre-filter `memberAnnotations` so the FIR layer no longer needs the
- * `JavaTypeWithExternalAnnotationFiltering` callback bridge.
+ * to pre-filter `memberAnnotations`.
  *
  * Cached per session via [JavaModelTypeUseClassIdCache]; the underlying probe goes through
  * [cycleSafeClassLikeSymbol] so KT-74097-class cycles cannot fire here either.
@@ -696,8 +695,7 @@ internal fun directSupertypeClassIds(classId: ClassId): List<ClassId> =
 /**
  * Resolves the supertype names of a Java source [enclosing] class to a list of direct-supertype
  * [ClassId]s. Reads the materialised `classifier` field on each [JavaClassifierType] in
- * [JavaClass.supertypes] — under post-Step-4.5a injection that field is reliable for every
- * reference (cross-file too).
+ * [JavaClass.supertypes], which is reliable for every reference (cross-file too).
  */
 private fun resolveSupertypeNames(enclosing: JavaClass): List<ClassId> =
     enclosing.supertypes.mapNotNull { supertype ->

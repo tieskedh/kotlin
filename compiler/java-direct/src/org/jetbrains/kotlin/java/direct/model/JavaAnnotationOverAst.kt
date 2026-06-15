@@ -73,7 +73,7 @@ class JavaAnnotationOverAst(
         return ClassId.topLevel(FqName(reference))
     }
 
-    // Resolution is now consumed via [classId]; the FIR side reads it directly.
+    // Resolution is consumed via [classId]; the FIR side reads it directly.
     override fun resolve(): JavaClass? = null
 }
 
@@ -114,13 +114,10 @@ internal fun createAnnotationArgumentFromValue(
         }
         JavaSyntaxElementType.REFERENCE_EXPRESSION -> {
             // Could be an enum entry reference (e.g. `RetentionPolicy.RUNTIME`) or a const-val
-            // reference (e.g. `KotlinClass.FOO_INT`). PSI/javac-wrapper split these at
-            // structure-build time; java-direct does the same here through
-            // `JavaResolutionContext.resolveConstFieldValue` (session-backed), which mirrors the
-            // FIR-side disambiguation that used to live in `javaAnnotationsMapping.kt` behind the
-            // retired `JavaEnumValueAnnotationArgumentWithConstFallback` callback. If the
-            // reference does not resolve to a const value (or the session has no symbol
-            // provider — parsing-level unit fixtures), fall back to the enum-entry shape.
+            // reference (e.g. `KotlinClass.FOO_INT`). These are disambiguated here through
+            // `JavaResolutionContext.resolveConstFieldValue` (session-backed): if the reference
+            // does not resolve to a const value (or the session has no symbol provider —
+            // parsing-level unit fixtures), fall back to the enum-entry shape.
             val enumArg = JavaEnumValueAnnotationArgumentOverAst(name, valueNode, tree, resolutionContext)
             val classId = enumArg.enumClassId
             val constValue = if (classId != null) {

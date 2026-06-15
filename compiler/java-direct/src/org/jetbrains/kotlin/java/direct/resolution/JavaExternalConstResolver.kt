@@ -28,13 +28,6 @@ import org.jetbrains.kotlin.name.Name
  * [org.jetbrains.kotlin.java.direct.model.JavaFieldOverAst.initializerValue] and the
  * enum-vs-const-field disambiguation in
  * [org.jetbrains.kotlin.java.direct.model.createAnnotationArgumentFromValue].
- *
- * Relocated from `compiler/fir/fir-jvm/.../FirJavaFacade.kt` and `.../javaAnnotationsMapping.kt`
- * (2026-05-25). The earlier shape went through the
- * `JavaFieldWithExternalInitializerResolution` and
- * `JavaEnumValueAnnotationArgumentWithConstFallback` callbacks; both have been retired in favour
- * of direct calls from the java-direct model layer (`JavaResolutionContext` already carries the
- * `FirSession`).
  */
 
 /**
@@ -106,8 +99,8 @@ private fun FirSession.tryResolveAsCompanionMember(classIds: List<ClassId>, prop
  * Used by the enum-vs-const disambiguation in
  * [org.jetbrains.kotlin.java.direct.model.createAnnotationArgumentFromValue] for annotation
  * arguments that *syntactically* look like enum entries (e.g. `RetentionPolicy.RUNTIME`) but may
- * actually denote a Kotlin `const val` (e.g. `KConstsKt.WARNING`). PSI/javac-wrapper resolve this
- * at structure-build time; java-direct does the same here through the session-backed lookup.
+ * actually denote a Kotlin `const val` (e.g. `KConstsKt.WARNING`), resolved here through the
+ * session-backed lookup.
  *
  * Checks, in order: enum-class companion only (the entry/const split shape used by Java
  * `@Retention(RUNTIME)` and friends), class member, class companion member, top-level facade.

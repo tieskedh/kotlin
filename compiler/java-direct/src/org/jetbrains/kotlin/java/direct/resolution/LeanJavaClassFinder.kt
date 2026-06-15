@@ -14,7 +14,7 @@ import org.jetbrains.kotlin.name.ClassId
  *
  * Decouples [JavaResolutionContext] and [JavaInheritedMemberResolver] from the concrete
  * [JavaClassFinderOverAstImpl][org.jetbrains.kotlin.java.direct.JavaClassFinderOverAstImpl],
- * exposing only the three operations they actually use.
+ * exposing only the operations they actually use.
  */
 internal interface LeanJavaClassFinder {
     /** Checks if a top-level class with the given [classId] is present in the source index. */

@@ -120,10 +120,9 @@ class JavaClassFinderOverAstImpl internal constructor(
         //  3. The package is an ancestor of an indexed Java source file — e.g. a single file at
         //     `priv/members/check/Foo.java` makes `priv` and `priv.members` valid Java packages
         //     too, matching PSI's [org.jetbrains.kotlin.load.java.JavaClassFinderImpl.findPackage]
-        //     behaviour. Required for source parity once [BinaryJavaClassFinder] is the binary
-        //     half (it only consults binary roots and cannot see source-only ancestor packages),
-        //     otherwise dotted FQN references and star imports across non-direct ancestors fail
-        //     to resolve.
+        //     behaviour. Required because the binary half only consults binary roots and cannot
+        //     see source-only ancestor packages; otherwise dotted FQN references and star imports
+        //     across non-direct ancestors fail to resolve.
         val classesByName = packageIndexer.ensurePackageIndexed(fqName)
         if (classesByName.isNotEmpty()) return JavaPackageOverAst(fqName, this)
         if (packageInfoIndexer.hasPackageAnnotations(fqName)) return JavaPackageOverAst(fqName, this)

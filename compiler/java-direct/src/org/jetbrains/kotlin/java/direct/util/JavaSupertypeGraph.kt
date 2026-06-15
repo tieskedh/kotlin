@@ -254,10 +254,10 @@ internal class JavaSupertypeGraph(
 
             // JLS 7.5.2 type-import-on-demand (rank 6) — entries are *packages*. Source
             // candidates first when present; binary candidates (one per star-import package)
-            // are emitted unconditionally so the caller can probe via `tryResolve`. The
-            // previous source-only filter silently dropped binary star-imported supertypes
-            // (e.g. `Filter extends RowFilter` where `javax.swing.RowFilter` is on the JDK
-            // classpath via `import javax.swing.*`).
+            // are emitted unconditionally so the caller can probe via `tryResolve` — otherwise
+            // binary star-imported supertypes (e.g. `Filter extends RowFilter` where
+            // `javax.swing.RowFilter` is on the JDK classpath via `import javax.swing.*`) are
+            // missed.
             val candidates = mutableListOf<ClassId>()
             for (starPkg in imports.typeStarImports) {
                 if (sameClassInSameFilePackage(starPkg, simpleName)) {

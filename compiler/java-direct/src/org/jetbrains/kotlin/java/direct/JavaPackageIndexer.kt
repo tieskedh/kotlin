@@ -229,11 +229,10 @@ internal class JavaPackageIndexer(
      * This recognises **ancestor** packages: e.g. a single file at
      * `priv/members/check/Foo.java` makes the intermediate packages `priv` and `priv.members`
      * valid even though those directories carry no `.java` files of their own. PSI's
-     * [org.jetbrains.kotlin.load.java.JavaClassFinderImpl.findPackage] used to recognise these
-     * the same way, so dotted FQN references (`priv.members.check.Foo()`) and star imports
-     * (`import priv.members.check.*`) need this recognition for source parity once
-     * [BinaryJavaClassFinder] is the binary half (the index-based binary finder only consults
-     * binary roots and cannot see the source-only ancestor packages).
+     * [org.jetbrains.kotlin.load.java.JavaClassFinderImpl.findPackage] recognises these the same
+     * way, so dotted FQN references (`priv.members.check.Foo()`) and star imports
+     * (`import priv.members.check.*`) need this recognition for source parity: the binary half
+     * only consults binary roots and cannot see the source-only ancestor packages.
      *
      * Cheaper than [ensurePackageIndexed]: walks `findChild` chains and `fileRootIndex.keys`,
      * never reads file contents.

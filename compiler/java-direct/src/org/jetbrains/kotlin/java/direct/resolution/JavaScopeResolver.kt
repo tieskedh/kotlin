@@ -84,10 +84,9 @@ internal fun findClassInCurrentScope(name: Name): JavaClass? {
 }
 
 /**
- * Declared lookup first, then the same-file inherited-member-type walk. Preserves the resolution
- * order that [JavaClass.findInnerClass] used to perform internally before it was made declared-only
- * (matching the PSI / binary implementations): callers that need inherited member types in scope
- * invoke this explicitly.
+ * Declared lookup first, then the same-file inherited-member-type walk. [JavaClass.findInnerClass]
+ * is declared-only (matching the PSI / binary implementations); callers that need inherited member
+ * types in scope invoke this explicitly.
  */
 internal fun JavaClass.declaredOrSameFileInherited(name: Name): JavaClass? =
     findInnerClass(name)
@@ -112,8 +111,8 @@ internal fun JavaClass.declaredOrSameFileInherited(name: Name): JavaClass? =
  * ambiguities that simple-name AST scanning cannot see.
  *
  * Each supertype reference is resolved within the walked class's *own* [JavaClassOverAst.resolutionContext]
- * (its own imports/scope), exactly as the model-side walk used to do — using the caller's ambient
- * context instead would mis-resolve names and can loop.
+ * (its own imports/scope); using the caller's ambient context instead would mis-resolve names and
+ * can loop.
  */
 internal fun findInnerClassInSameFileSupertypes(
     cls: JavaClassOverAst,
@@ -125,7 +124,7 @@ internal fun findInnerClassInSameFileSupertypes(
         val supertypeClass = with(cls.resolutionContext) {
             resolveSameFileSupertypeRefToClass(supertypeRef)
         } ?: continue
-        // Declared-only probe (findInnerClass no longer walks supertypes itself).
+        // Declared-only probe; supertype inheritance is handled by the recursive call below.
         supertypeClass.findInnerClass(name)?.let { return it }
         findInnerClassInSameFileSupertypes(supertypeClass, name, visited)?.let { return it }
     }
@@ -138,16 +137,14 @@ internal fun findInnerClassInSameFileSupertypes(
  * current (same-file) scope, navigating every dotted segment through the module's own reference
  * resolution rather than guessing with `substringBefore('.')`.
  *
- * Behaviour on the two cases the old first-segment shortcut mishandled:
+ * Behaviour on the two tricky cases:
  * - **Qualified-nested same-file supertype** (`class x1 extends x.S`, both top-level in this file):
  *   resolves the head `x` via [findClassInCurrentScope] and then navigates `.S` via
  *   [JavaClass.findInnerClass], yielding `x.S` — so member types inherited from `x.S` are found.
- *   The old shortcut stopped at `x` and probed the inner class on the wrong class.
  * - **Package-qualified supertype** (`extends com.example.Base`): the head `com` is not a class in
  *   scope, so navigation returns `null` and the reference is correctly *declined* by this same-file
  *   walk — it is owned by the cross-file / `ClassId` paths
- *   ([JavaInheritedMemberResolver.findInnerClassFromSupertypes], [resolve]). The old shortcut
- *   instead mistook the package root `com` for a class name.
+ *   ([JavaInheritedMemberResolver.findInnerClassFromSupertypes], [resolve]).
  *
  * The tail segments are navigated with the declared-only [JavaClass.findInnerClass] (a written
  * `x.S` names a concrete declared nested type), which also keeps this resolution from re-entering

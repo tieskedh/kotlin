@@ -50,10 +50,9 @@ abstract class JavaMemberOverAst(
         get() {
             // Check explicit `private` first, including on interface members:
             // Java 9+ allows `private` methods inside interfaces (they must have a body and
-            // are not implicitly public). The previous shape returned `Public` for every
-            // interface member, which then caused the override-checker to look for an
-            // implementation of a method that should never have been visible to subclasses
-            // in the first place.
+            // are not implicitly public). Treating every interface member as `Public` would make
+            // the override-checker look for an implementation of a method that should never have
+            // been visible to subclasses.
             return when {
                 hasModifier(JavaSyntaxTokenType.PRIVATE_KEYWORD) -> Visibilities.Private
                 containingClass.isInterface -> Visibilities.Public
@@ -253,11 +252,6 @@ class JavaFieldOverAst(
      * to Kotlin `const val`s (e.g. `Foo.BAR`) are routed through
      * `JavaResolutionContext.resolveExternalFieldValue`, which delegates to the session-backed
      * cross-language resolver in `JavaExternalConstResolver.kt`.
-     *
-     * Before the 2026-05-25 `JavaModelExtensions.kt` cleanup this lived behind the
-     * `JavaFieldWithExternalInitializerResolution` callback bridge consumed by `FirJavaFacade.kt`.
-     * Inlining the call here makes the FIR side a single read (`javaField.initializerValue`)
-     * rather than the `value ?: callback`-fallback pair.
      */
     override val initializerValue: Any?
         get() {

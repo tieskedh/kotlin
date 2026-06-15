@@ -60,8 +60,7 @@ abstract class JavaTypeOverAst(
     /**
      * `memberAnnotations` filtered to only those whose annotation class declares
      * `@Target(ElementType.TYPE_USE)` (Java) or `@Target(AnnotationTarget.TYPE)` (Kotlin).
-     * Lazy so the per-annotation symbol-provider lookup fires only when [annotations] is read,
-     * which preserves the laziness boundary the FIR-side filter used to live behind.
+     * Lazy so the per-annotation symbol-provider lookup fires only when [annotations] is read.
      */
     private val filteredMemberAnnotations: Collection<JavaAnnotation> by lazy(LazyThreadSafetyMode.PUBLICATION) {
         if (memberAnnotations.isEmpty()) emptyList()
@@ -383,7 +382,6 @@ class JavaWildcardTypeOverAst(
 /**
  * A JavaClassifierType that represents a type parameter reference.
  * Used for implicit type arguments from outer classes of inner class types.
- * This matches TreeBasedTypeParameterType in javac-wrapper.
  */
 class JavaTypeParameterTypeOverAst(
     override val classifier: JavaTypeParameter,
@@ -436,9 +434,9 @@ fun createJavaType(
  * N array dimensions, innermost first.
  *
  * For varargs (`@NonNull String... args`), member annotations (from the parameter's
- * MODIFIER_LIST) apply to the component type, not the array wrapper — matching
- * PSI/javac-wrapper behaviour where TYPE_USE annotations like `@NonNull` enhance the component
- * type's nullability, not the array's.
+ * MODIFIER_LIST) apply to the component type, not the array wrapper — matching PSI behaviour
+ * where TYPE_USE annotations like `@NonNull` enhance the component type's nullability, not the
+ * array's.
  *
  * Non-vararg arrays never receive [memberAnnotations] on the outer wrapper or component:
  * a method/parameter MODIFIER_LIST annotation is delivered to FIR via the member's own
@@ -521,9 +519,9 @@ private fun createClassifierOrPrimitive(
 
 /**
  * Creates a JavaType with annotations from a member's modifier list.
- * Member annotations are passed separately from type-position annotations so that
- * filterTypeUseAnnotations can apply callback-based filtering only to member annotations
- * while returning type-position annotations unconditionally.
+ * Member annotations are passed separately from type-position annotations so that the TYPE_USE
+ * filtering (see [JavaTypeOverAst]) is applied only to member annotations, while type-position
+ * annotations are returned unconditionally.
  */
 fun createJavaTypeWithAnnotations(
     typeNode: JavaLightNode,
@@ -638,7 +636,6 @@ class JavaTypeParameterOverAst(
     }
 
     // Annotations on the type parameter declaration itself (e.g., <@NonNull T>).
-    // Matches TreeBasedTypeParameter which reads tree.annotations().
     // See [collectModifierListAndDirectAnnotations] for the parser-shape handling.
     override val annotations: Collection<JavaAnnotation>
         get() = collectModifierListAndDirectAnnotations(node, tree, resolutionContext)

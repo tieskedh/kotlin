@@ -58,7 +58,7 @@ object DefaultJavaSourceFileReader : JavaSourceFileReader {
         // `VirtualFile.charset` requires an IDE `Application` (EncodingManager); the
         // java-direct module also runs in unit-test contexts without one. `.java` sources
         // are specified by JLS to be decoded with whatever charset the compiler chooses —
-        // we follow javac's convention of UTF-8, matching the legacy lightweight scanner.
+        // we follow javac's convention of UTF-8.
         return String(file.contentsToByteArray(), StandardCharsets.UTF_8)
     }
 
