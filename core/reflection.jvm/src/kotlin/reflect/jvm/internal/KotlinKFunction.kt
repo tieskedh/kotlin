@@ -72,7 +72,7 @@ internal abstract class KotlinKFunction(
                 else ->
                     createStaticMethodCaller(member, isCallByToValueClassMangledMethod = false)
             }
-            else -> throw KotlinReflectionInternalError("Could not compute caller for function: $this")
+            else -> throw KotlinReflectionInternalError("Could not compute caller for function: $this (signature=$signature)")
         }.createValueClassAwareCallerIfNeeded(this, isDefault = false, forbidUnboxingForIndices = emptyList())
     }
 
