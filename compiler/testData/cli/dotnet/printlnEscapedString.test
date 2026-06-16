@@ -1,0 +1,2 @@
+// EXISTS: printlnEscapedString.il
+// CONTAINS: printlnEscapedString.il, ldstr "Quote: \""

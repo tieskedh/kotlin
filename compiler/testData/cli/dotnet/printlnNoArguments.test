@@ -1,0 +1,2 @@
+// EXISTS: printlnNoArguments.il
+// CONTAINS: printlnNoArguments.il, System.Console::WriteLine()
