@@ -21,13 +21,13 @@ import org.jetbrains.kotlin.psi.KtClassOrObject
 
 internal class SymbolLightClassForAnonymousObject : SymbolLightClassForClassLike<KaAnonymousObjectSymbol>, PsiAnonymousClass {
     constructor(
-        anonymousObjectDeclaration: KtClassOrObject,
+        anonymousObjectDeclaration: KaAnonymousObjectSymbol,
         useSiteModule: KaModule,
     ) : this(
-        classOrObjectDeclaration = anonymousObjectDeclaration,
-        classSymbolPointer = anonymousObjectDeclaration.createSymbolPointer(useSiteModule),
+        classOrObjectDeclaration = anonymousObjectDeclaration.psi as? KtClassOrObject,
+        classSymbolPointer = anonymousObjectDeclaration.createPointer(),
         useSiteModule = useSiteModule,
-        manager = anonymousObjectDeclaration.manager,
+        manager = anonymousObjectDeclaration.psi?.manager ?: PsiManager.getInstance(useSiteModule.project),
     )
 
     private constructor(

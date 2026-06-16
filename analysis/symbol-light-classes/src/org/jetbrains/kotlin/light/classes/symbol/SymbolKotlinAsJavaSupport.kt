@@ -15,8 +15,12 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.impl.ResolveScopeManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.util.concurrency.annotations.RequiresReadLock
+import org.jetbrains.kotlin.analysis.api.KaContextParameterApi
 import org.jetbrains.kotlin.analysis.api.KaIdeApi
 import org.jetbrains.kotlin.analysis.api.KaNonPublicApi
+import org.jetbrains.kotlin.analysis.api.KaSession
+import org.jetbrains.kotlin.analysis.api.components.containingFile
+import org.jetbrains.kotlin.analysis.api.components.containingModule
 import org.jetbrains.kotlin.analysis.api.platform.KaCachedService
 import org.jetbrains.kotlin.analysis.api.platform.analysisMessageBus
 import org.jetbrains.kotlin.analysis.api.platform.declarations.createDeclarationProvider
@@ -27,6 +31,7 @@ import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KaModuleConve
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinModuleDependentsProvider
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinProjectStructureProvider
 import org.jetbrains.kotlin.analysis.api.projectStructure.*
+import org.jetbrains.kotlin.analysis.api.symbols.*
 import org.jetbrains.kotlin.analysis.decompiled.light.classes.DecompiledLightClassesFactory
 import org.jetbrains.kotlin.analysis.decompiled.light.classes.KtLightClassForDecompiledDeclaration
 import org.jetbrains.kotlin.analysis.decompiler.psi.file.KtClsFile
@@ -48,7 +53,7 @@ import org.jetbrains.kotlin.utils.exceptions.withPsiEntry
 import java.time.Duration
 import java.util.*
 
-private val KMP_CACHE: ThreadLocal<MutableMap<KtElement, KtLightClass?>> = ThreadLocal.withInitial { null }
+private val KMP_CACHE: ThreadLocal<MutableMap<KaSymbol, KtLightClass?>> = ThreadLocal.withInitial { null }
 
 private val isMultiplatformSupportAvailable: Boolean
     get() = KMP_CACHE.get() != null
@@ -116,6 +121,7 @@ private fun KaModule.isValidContextModule(): Boolean {
     return targetPlatform.isJvm() || isMultiplatformSupportAvailable
 }
 
+@OptIn(KaContextParameterApi::class)
 internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinAsJavaSupport() {
 
     init {
@@ -143,7 +149,8 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     // ============ LIGHT FACADES ============
     //region Light Facades
 
-    private fun createLightFacade(file: KtFile, module: KaModule): KtLightClassForFacade? {
+    private fun createLightFacade(fileSymbol: KaFileSymbol, module: KaModule): KtLightClassForFacade? {
+        val file = fileSymbol.psi as? KtFile ?: return null
         if (!file.facadeIsPossible()) return null
 
         val facadeFqName = file.javaFileFacadeFqName
@@ -198,11 +205,13 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
         val kaModule = file.findContextModule(searchScope) {
             facadeIsApplicable(it)
         } ?: return null
-        getLightFacade(file, kaModule)
+        analyzeForLightClasses(file) {
+            getLightFacade(file.symbol, kaModule)
+        }
     }
 
-    private fun getLightFacade(file: KtFile, module: KaModule): KtLightClassForFacade? = ifValid(file) {
-        cacheLightClass(file, module) {
+    private fun getLightFacade(file: KaFileSymbol, module: KaModule): KtLightClassForFacade? {
+        return cacheLightClass(file, module) {
             createLightFacade(file, module)
         }
     }
@@ -235,7 +244,11 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     }.groupBy { [file, module] ->
         FacadeKey(file.javaFileFacadeFqName, file.isJvmMultifileClassFile, module)
     }.mapNotNull { [_, pairs] ->
-        pairs.firstOrNull()?.let { [file, module] -> getLightFacade(file, module) }
+        pairs.firstOrNull()?.let { [file, module] ->
+            analyzeForLightClasses(file) {
+                getLightFacade(file.symbol, module)
+            }
+        }
     }
 
     private data class FacadeKey<TModule>(val fqName: FqName, val isMultifile: Boolean, val module: TModule)
@@ -259,14 +272,15 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     // ============ LIGHT SCRIPTS ============
     //region Light Scripts
 
-    private fun createLightScript(script: KtScript, module: KaModule): KtLightClass? {
-        val containingFile = script.containingFile
+    private fun createLightScript(script: KaScriptSymbol, module: KaModule): KtLightClass? {
+        val scriptPsi = script.psi as? KtScript ?: return null
+        val containingFile = scriptPsi.containingFile
         if (containingFile is KtCodeFragment) {
             // Avoid building light classes for code fragments
             return null
         }
 
-        return SymbolLightClassForScript(script, module)
+        return SymbolLightClassForScript(scriptPsi, module)
     }
 
     override fun getScriptClasses(scriptFqName: FqName, scope: GlobalSearchScope): Collection<PsiClass> {
@@ -279,8 +293,11 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
 
     override fun getLightClassForScript(script: KtScript, searchScope: GlobalSearchScope?): KtLightClass? = ifValid(script) {
         val kaModule = script.findContextModule(searchScope) ?: return null
-        cacheLightClass(script, kaModule) {
-            createLightScript(script, kaModule)
+        analyzeForLightClasses(script) {
+            val symbol = script.symbol
+            cacheLightClass(symbol, kaModule) {
+                createLightScript(symbol, kaModule)
+            }
         }
     }
 
@@ -289,11 +306,11 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     // ============ LIGHT CLASSES ============
     //region Light Classes
 
-    private fun createLightClass(classOrObject: KtClassOrObject, module: KaModule): KtLightClass? {
+    context(_: KaSession)
+    private fun createLightClass(classOrObject: KaClassSymbol, module: KaModule): KtLightClass? {
         if (classOrObject.shouldNotBeVisibleAsLightClass()) return null
 
-        val containingFile = classOrObject.containingKtFile
-        when (declarationLocation(containingFile)) {
+        when (declarationLocation(classOrObject.containingModule)) {
             DeclarationLocation.ProjectSources -> {
                 return createSymbolLightClassNoCache(classOrObject, module)
             }
@@ -303,11 +320,12 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
             }
 
             DeclarationLocation.LibrarySources -> {
+                val classOrObjectPsi = classOrObject.psi as? KtClassOrObject ?: return null
                 val originalClassOrObject = ApplicationManager.getApplication()
                     .getService(KotlinDeclarationNavigationPolicy::class.java)
-                    ?.getOriginalElement(classOrObject) as? KtClassOrObject
+                    ?.getOriginalElement(classOrObjectPsi) as? KtClassOrObject
 
-                val value = originalClassOrObject?.takeUnless(classOrObject::equals)?.let {
+                val value = originalClassOrObject?.classSymbol?.takeUnless(classOrObject::equals)?.let {
                     guardedRun { getLightClass(it, module) }
                 }
 
@@ -317,7 +335,9 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
             null -> Unit
         }
 
-        if (containingFile.analysisContext != null || containingFile.originalFile.virtualFile != null) {
+        val containingKtFile = classOrObject.containingFile?.psi as? KtFile ?: return null
+
+        if (containingKtFile.analysisContext != null || containingKtFile.originalFile.virtualFile != null) {
             return createSymbolLightClassNoCache(classOrObject, module)
         }
 
@@ -326,19 +346,25 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
 
     override fun getLightClass(classOrObject: KtClassOrObject, searchScope: GlobalSearchScope?): KtLightClass? = ifValid(classOrObject) {
         val kaModule = classOrObject.findContextModule(searchScope) ?: return null
-        getLightClass(classOrObject, kaModule)
+        analyzeForLightClasses(classOrObject) {
+            val classSymbol = classOrObject.classSymbol ?: return@analyzeForLightClasses null
+            getLightClass(classSymbol, kaModule)
+        }
     }
 
-    private fun getLightClass(classOrObject: KtClassOrObject, module: KaModule): KtLightClass? = ifValid(classOrObject) {
-        cacheLightClass(classOrObject, module) {
+    context(_: KaSession)
+    private fun getLightClass(classOrObject: KaClassSymbol, module: KaModule): KtLightClass? {
+        return cacheLightClass(classOrObject, module) {
             createLightClass(classOrObject, module)
         }
     }
 
     override fun getFakeLightClass(classOrObject: KtClassOrObject): KtFakeLightClass = SymbolBasedFakeLightClass(classOrObject)
 
-    private fun createInstanceOfDecompiledLightClass(classOrObject: KtClassOrObject, module: KaModule): KtLightClass? {
-        val lightClass = DecompiledLightClassesFactory.getLightClassForDecompiledClassOrObject(classOrObject, project)
+    context(_: KaSession)
+    private fun createInstanceOfDecompiledLightClass(classOrObject: KaClassSymbol, module: KaModule): KtLightClass? {
+        val ktClassOrObject = classOrObject.psi as? KtClassOrObject ?: return null
+        val lightClass = DecompiledLightClassesFactory.getLightClassForDecompiledClassOrObject(ktClassOrObject, project)
         if (lightClass != null) {
             return lightClass
         }
@@ -505,7 +531,7 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
         }
     }
 
-    private fun declarationLocation(file: KtFile): DeclarationLocation? = when (file.getContainingModule()) {
+    private fun declarationLocation(module: KaModule): DeclarationLocation? = when (module) {
         is KaSourceModule -> DeclarationLocation.ProjectSources
         is KaLibraryModule -> DeclarationLocation.LibraryClasses
         is KaLibrarySourceModule -> DeclarationLocation.LibrarySources
@@ -628,13 +654,13 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     //region Cache
 
     /**
-     * Stores a map [KaModule] -> [KtElement] -> [KtLightClass].
+     * Stores a map [KaModule] -> [KaSymbol] -> [KtLightClass].
      *
      * [KaModule] represents the module which is used as a context for the light class creation.
      *
      * The whole cache gets invalidated on every project modification.
      */
-    private val moduleBasedLightClassCache = SafeNestedNullableCaffeineCache<KaModule, KtElement, KtLightClass>(
+    private val moduleBasedLightClassCache = SafeNestedNullableCaffeineCache<KaModule, KaSymbol, KtLightClass>(
         outerCache =
             Caffeine.newBuilder()
                 .weakKeys()
@@ -668,7 +694,7 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     )
 
     private fun <R : KtLightClass> cacheLightClass(
-        element: KtElement,
+        element: KaSymbol,
         module: KaModule,
         provider: () -> R?
     ): R? {

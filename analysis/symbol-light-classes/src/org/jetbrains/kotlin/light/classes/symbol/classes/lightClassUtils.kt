@@ -1,0 +1,91 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package org.jetbrains.kotlin.asJava.classes
+
+import com.intellij.psi.PsiElement
+import com.intellij.psi.TokenType
+import com.intellij.psi.impl.source.tree.TreeUtil
+import com.intellij.psi.util.PsiUtilCore
+import org.jetbrains.kotlin.analysis.api.KaContextParameterApi
+import org.jetbrains.kotlin.analysis.api.KaSession
+import org.jetbrains.kotlin.analysis.api.components.containingFile
+import org.jetbrains.kotlin.analysis.api.components.containingModule
+import org.jetbrains.kotlin.analysis.api.projectStructure.KaDanglingFileModule
+import org.jetbrains.kotlin.analysis.api.symbols.KaClassSymbol
+import org.jetbrains.kotlin.analysis.api.symbols.isLocal
+import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.serialization.deserialization.builtins.BuiltInSerializerProtocol
+
+
+@OptIn(KaContextParameterApi::class)
+context(_: KaSession)
+internal fun KaClassSymbol.shouldNotBeVisibleAsLightClass(): Boolean {
+    if ((containingFile?.containingModule as? KaDanglingFileModule)?.isCodeFragment == true) {
+        // Avoid building light classes for code fragments
+        return true
+    }
+
+    val containingKtFile = containingFile?.psi as? KtFile
+    // Avoid building light classes for decompiled built-ins
+    if (containingKtFile?.isCompiled == true &&
+        containingKtFile.virtualFile.extension == BuiltInSerializerProtocol.BUILTINS_FILE_EXTENSION
+    ) {
+        return true
+    }
+
+    if (isExpect) {
+        return true
+    }
+
+    val classOrObjectPsi = psi as? KtClassOrObject
+    if (isLocal && classOrObjectPsi != null) {
+        if (containingKtFile?.virtualFile == null) return true
+        if (hasParseErrorsAround(classOrObjectPsi) || PsiUtilCore.hasErrorElementChild(classOrObjectPsi)) return true
+        if (classDeclaredInUnexpectedPosition(classOrObjectPsi)) return true
+    }
+
+    return false
+}
+
+/**
+ * If class is declared in some strange context (for example, in expression like `10 < class A`),
+ * we don't want to try to build a light class for it.
+ *
+ * The expression itself is incorrect and won't compile, but the parser is able the parse the class nonetheless.
+ *
+ * This does not concern objects, since object literals are expressions and can be used almost anywhere.
+ */
+private fun classDeclaredInUnexpectedPosition(classOrObject: KtClassOrObject): Boolean {
+    if (classOrObject is KtObjectDeclaration) return false
+
+    val classParent = classOrObject.parent
+
+    return classParent !is KtBlockExpression &&
+            classParent !is KtDeclarationContainer
+}
+
+private fun hasParseErrorsAround(psi: PsiElement): Boolean {
+    val node = psi.node ?: return false
+
+    TreeUtil.nextLeaf(node)?.let { nextLeaf ->
+        if (nextLeaf.elementType == TokenType.ERROR_ELEMENT || nextLeaf.treePrev?.elementType == TokenType.ERROR_ELEMENT) {
+            return true
+        }
+    }
+
+    TreeUtil.prevLeaf(node)?.let { prevLeaf ->
+        if (prevLeaf.elementType == TokenType.ERROR_ELEMENT || prevLeaf.treeNext?.elementType == TokenType.ERROR_ELEMENT) {
+            return true
+        }
+    }
+
+    return false
+}
+
+internal fun getOutermostClassOrObject(classOrObject: KtClassOrObject): KtClassOrObject {
+    return KtPsiUtil.getOutermostClassOrObject(classOrObject)
+        ?: throw IllegalStateException("Attempt to build a light class for a local class: " + classOrObject.text)
+}

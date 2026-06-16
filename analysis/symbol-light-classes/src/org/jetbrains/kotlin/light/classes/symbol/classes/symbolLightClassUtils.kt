@@ -11,6 +11,8 @@ import com.intellij.psi.*
 import org.jetbrains.kotlin.analysis.api.KaContextParameterApi
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
+import org.jetbrains.kotlin.analysis.api.components.containingDeclaration
+import org.jetbrains.kotlin.analysis.api.components.containingSymbol
 import org.jetbrains.kotlin.analysis.api.components.getExpectsForActual
 import org.jetbrains.kotlin.analysis.api.getModule
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaModule
@@ -50,27 +52,24 @@ import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.JvmStandardClassIds
 import org.jetbrains.kotlin.name.StandardClassIds
 import org.jetbrains.kotlin.psi.*
-import org.jetbrains.kotlin.psi.psiUtil.containingClass
-import org.jetbrains.kotlin.psi.psiUtil.isObjectLiteral
 import org.jetbrains.kotlin.utils.SmartList
 import org.jetbrains.kotlin.utils.addToStdlib.applyIf
 import org.jetbrains.kotlin.utils.exceptions.requireWithAttachment
 import org.jetbrains.kotlin.utils.exceptions.withPsiEntry
 import java.util.*
 
-internal fun createSymbolLightClassNoCache(classOrObject: KtClassOrObject, ktModule: KaModule): KtLightClass? = when {
-    classOrObject.isObjectLiteral() -> SymbolLightClassForAnonymousObject(classOrObject, ktModule)
-    classOrObject is KtEnumEntry -> lightClassForEnumEntry(classOrObject)
-    else -> createLightClassNoCache(classOrObject, ktModule)
-}
-
-internal fun createLightClassNoCache(
-    ktClassOrObject: KtClassOrObject,
-    ktModule: KaModule,
-): SymbolLightClassBase = when (ktClassOrObject) {
-    is KtClass if ktClassOrObject.isAnnotation() -> SymbolLightClassForAnnotationClass(ktClassOrObject, ktModule)
-    is KtClass if ktClassOrObject.isInterface() -> SymbolLightClassForInterface(ktClassOrObject, ktModule)
-    else -> SymbolLightClassForClassOrObject(ktClassOrObject, ktModule)
+@OptIn(KaContextParameterApi::class)
+context(_: KaSession)
+internal fun createSymbolLightClassNoCache(classOrObject: KaClassSymbol, ktModule: KaModule): KtLightClass? = when (classOrObject) {
+    is KaAnonymousObjectSymbol -> when (val containingSymbol = classOrObject.containingSymbol) {
+        is KaEnumEntrySymbol -> lightClassForEnumEntryInitializer(containingSymbol)
+        else -> SymbolLightClassForAnonymousObject(classOrObject, ktModule)
+    }
+    is KaNamedClassSymbol -> createLightClassNoCache(
+        classOrObject,
+        ktModule,
+        classOrObject.psi?.manager ?: PsiManager.getInstance(ktModule.project)
+    )
 }
 
 internal fun KtClassOrObject.contentModificationTrackers(): List<ModificationTracker> {
@@ -107,12 +106,15 @@ internal fun createLightClassNoCache(
     )
 }
 
-private fun lightClassForEnumEntry(ktEnumEntry: KtEnumEntry): KtLightClass? {
-    if (ktEnumEntry.body == null) return null
+@OptIn(KaContextParameterApi::class)
+context(_: KaSession)
+private fun lightClassForEnumEntryInitializer(enumEntrySymbol: KaEnumEntrySymbol): KtLightClass? {
+    if (enumEntrySymbol.initializer == null) return null
 
-    val symbolLightClass = ktEnumEntry.containingClass()?.toLightClass() as? SymbolLightClassForClassOrObject ?: return null
+    val symbolLightClass =
+        (enumEntrySymbol.containingDeclaration?.psi as? KtClassOrObject)?.toLightClass() as? SymbolLightClassForClassOrObject ?: return null
     val targetField = symbolLightClass.ownFields.firstOrNull {
-        it is SymbolLightFieldForEnumEntry && it.kotlinOrigin == ktEnumEntry
+        it is SymbolLightFieldForEnumEntry && it.symbolPointer.pointsToTheSameSymbolAs(enumEntrySymbol.createPointer())
     } ?: return null
 
     return (targetField as? SymbolLightFieldForEnumEntry)?.initializingClass as? KtLightClass
