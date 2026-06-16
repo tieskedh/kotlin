@@ -2787,6 +2787,16 @@ public class CliTestGenerated extends AbstractCliTest {
     public void testWasmHelp() {
       run("wasmHelp.args");
     }
+
+    @TestMetadata("printlnEscapedString.args")
+    public void testPrintlnEscapedString() {
+      runTest("compiler/testData/cli/dotnet/printlnEscapedString.args");
+    }
+
+    @TestMetadata("printlnNoArguments.args")
+    public void testPrintlnNoArguments() {
+      runTest("compiler/testData/cli/dotnet/printlnNoArguments.args");
+    }
   }
 
   @Nested
