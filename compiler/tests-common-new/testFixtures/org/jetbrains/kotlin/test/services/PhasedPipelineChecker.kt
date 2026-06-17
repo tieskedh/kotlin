@@ -53,6 +53,7 @@ class PhasedPipelineChecker(
         is FrontendKind -> TestPhase.FRONTEND
         is BackendKind -> TestPhase.FIR2IR
         ArtifactKinds.Jvm -> TestPhase.BACKEND
+        ArtifactKinds.DotNet -> TestPhase.BACKEND
         ArtifactKinds.KLib -> TestPhase.BACKEND
         else -> error("Cannot infer phase by output artifact kind `${this.javaClass.simpleName}`.")
     }
