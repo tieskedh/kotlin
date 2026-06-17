@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.diagnostics.impl.DiagnosticsCollectorImpl
 import org.jetbrains.kotlin.platform.DotNetPlatforms
 import org.jetbrains.kotlin.platform.isDotNet
+import org.jetbrains.kotlin.test.Constructor
 import org.jetbrains.kotlin.test.FirParser
 import org.jetbrains.kotlin.test.TargetBackend
 import org.jetbrains.kotlin.test.backend.handlers.DotNetBinaryArtifactHandler
@@ -31,6 +32,7 @@ import org.jetbrains.kotlin.test.builders.dotNetArtifactsHandlersStep
 import org.jetbrains.kotlin.test.builders.firHandlersStep
 import org.jetbrains.kotlin.test.builders.irHandlersStep
 import org.jetbrains.kotlin.test.directives.configureFirParser
+import org.jetbrains.kotlin.test.directives.model.RegisteredDirectives
 import org.jetbrains.kotlin.test.frontend.fir.Fir2IrCliBasedOutputArtifact
 import org.jetbrains.kotlin.test.frontend.fir.Fir2IrCliFacade
 import org.jetbrains.kotlin.test.frontend.fir.FirCliFacade
@@ -40,22 +42,66 @@ import org.jetbrains.kotlin.test.model.BackendKinds
 import org.jetbrains.kotlin.test.model.BinaryArtifacts
 import org.jetbrains.kotlin.test.model.DependencyKind
 import org.jetbrains.kotlin.test.model.FrontendKinds
+import org.jetbrains.kotlin.test.model.TestFile
 import org.jetbrains.kotlin.test.model.TestModule
 import org.jetbrains.kotlin.test.runners.AbstractKotlinCompilerWithTargetBackendTest
+import org.jetbrains.kotlin.test.services.AdditionalSourceProvider
 import org.jetbrains.kotlin.test.services.EnvironmentConfigurator
+import org.jetbrains.kotlin.test.services.TestModuleStructure
 import org.jetbrains.kotlin.test.services.TestServices
 import org.jetbrains.kotlin.test.services.getOrCreateTempDirectory
 import org.jetbrains.kotlin.test.services.moduleStructure
 import org.jetbrains.kotlin.test.services.targetPlatform
+import org.jetbrains.kotlin.test.services.temporaryDirectoryManager
 import org.jetbrains.kotlin.test.services.configuration.CommonEnvironmentConfigurator
 import org.jetbrains.kotlin.test.services.configuration.addSourcesForDependsOnClosure
+import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
 import org.jetbrains.kotlin.test.utils.MultiModuleInfoDumper
 import org.jetbrains.kotlin.test.utils.withExtension
+import org.jetbrains.kotlin.utils.bind
+import java.io.File
+import java.util.concurrent.TimeUnit
 
 abstract class AbstractDotNetIlTextTestBase(
     private val parser: FirParser,
 ) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
     override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
+        configureDotNetBase(parser, outputExtension = "il")
+
+        dotNetArtifactsHandlersStep {
+            useHandlers(::DotNetIlTextHandler)
+        }
+    }
+}
+
+open class AbstractFirLightTreeDotNetIlTextTest : AbstractDotNetIlTextTestBase(FirParser.LightTree)
+
+@FirPsiCodegenTest
+open class AbstractFirPsiDotNetIlTextTest : AbstractDotNetIlTextTestBase(FirParser.Psi)
+
+abstract class AbstractDotNetBoxTestBase(
+    private val parser: FirParser,
+) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
+    override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
+        configureDotNetBase(parser, outputExtension = "exe", additionalSourceProvider = ::DotNetBoxMainSourceProvider)
+
+        dotNetArtifactsHandlersStep {
+            useHandlers(::DotNetBoxRunner)
+        }
+    }
+}
+
+open class AbstractFirLightTreeDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.LightTree)
+
+@FirPsiCodegenTest
+open class AbstractFirPsiDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.Psi)
+
+private fun TestConfigurationBuilder.configureDotNetBase(
+    parser: FirParser,
+    outputExtension: String,
+    additionalSourceProvider: Constructor<AdditionalSourceProvider>? = null,
+) {
+    with(this) {
         globalDefaults {
             frontend = FrontendKinds.FIR
             targetPlatform = DotNetPlatforms.defaultDotNetPlatform
@@ -64,9 +110,11 @@ abstract class AbstractDotNetIlTextTestBase(
             dependencyKind = DependencyKind.Binary
         }
 
+        additionalSourceProvider?.let { useAdditionalSourceProviders(it) }
+
         useConfigurators(
             ::CommonEnvironmentConfigurator,
-            ::DotNetEnvironmentConfigurator,
+            ::DotNetEnvironmentConfigurator.bind(outputExtension),
         )
 
         facadeStep(::FirCliDotNetFacade)
@@ -78,18 +126,10 @@ abstract class AbstractDotNetIlTextTestBase(
         irHandlersStep()
 
         facadeStep(::BackendCliDotNetFacade)
-        dotNetArtifactsHandlersStep {
-            useHandlers(::DotNetIlTextHandler)
-        }
 
         configureFirParser(parser)
     }
 }
-
-open class AbstractFirLightTreeDotNetIlTextTest : AbstractDotNetIlTextTestBase(FirParser.LightTree)
-
-@FirPsiCodegenTest
-open class AbstractFirPsiDotNetIlTextTest : AbstractDotNetIlTextTestBase(FirParser.Psi)
 
 private class FirCliDotNetFacade(
     testServices: TestServices,
@@ -122,7 +162,10 @@ private class BackendCliDotNetFacade(
     }
 }
 
-private class DotNetEnvironmentConfigurator(testServices: TestServices) : EnvironmentConfigurator(testServices) {
+private class DotNetEnvironmentConfigurator(
+    testServices: TestServices,
+    private val outputExtension: String,
+) : EnvironmentConfigurator(testServices) {
     override fun configureCompilerConfiguration(configuration: CompilerConfiguration, module: TestModule) {
         if (!module.targetPlatform(testServices).isDotNet()) return
 
@@ -142,7 +185,7 @@ private class DotNetEnvironmentConfigurator(testServices: TestServices) : Enviro
     }
 
     private fun getOutputFile(module: TestModule, artifactName: String) =
-        testServices.getOrCreateTempDirectory("dotnet").resolve("${module.name}-$artifactName.il")
+        testServices.getOrCreateTempDirectory("dotnet").resolve("${module.name}-$artifactName.$outputExtension")
 
     private fun getOrCreateStdlibSource() =
         testServices.getOrCreateTempDirectory("dotnet-stdlib").resolve("DotNetStdlib.kt").also { file ->
@@ -162,6 +205,87 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
     override fun processAfterAllModules(someAssertionWasFailed: Boolean) {
         val expectedFile = testServices.moduleStructure.originalTestDataFiles.first().withExtension(".txt")
         assertions.assertEqualsToFile(expectedFile, multiModuleInfoDumper.generateResultingDump())
+    }
+}
+
+private class DotNetBoxMainSourceProvider(testServices: TestServices) : AdditionalSourceProvider(testServices) {
+    override fun produceAdditionalFiles(
+        globalDirectives: RegisteredDirectives,
+        module: TestModule,
+        testModuleStructure: TestModuleStructure
+    ): List<TestFile> {
+        val fileWithBox = module.files.firstOrNull {
+            MainFunctionForBlackBoxTestsSourceProvider.containsBoxMethod(it.originalContent)
+        } ?: return emptyList()
+
+        val code = buildString {
+            MainFunctionForBlackBoxTestsSourceProvider.detectPackage(fileWithBox)?.let {
+                appendLine("package $it")
+                appendLine()
+            }
+            appendLine("import kotlin.io.println")
+            appendLine()
+            appendLine("fun main() {")
+            appendLine("    println(box())")
+            appendLine("}")
+        }
+        val file = testServices.temporaryDirectoryManager.getOrCreateTempDirectory("src")
+            .resolve(MainFunctionForBlackBoxTestsSourceProvider.BOX_MAIN_FILE_NAME)
+        file.writeText(code)
+
+        return listOf(file.toTestFile())
+    }
+}
+
+private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifactHandler(testServices) {
+    private var boxMethodFound = false
+
+    override fun processModule(module: TestModule, info: BinaryArtifacts.DotNet) {
+        if (module.files.none { MainFunctionForBlackBoxTestsSourceProvider.containsBoxMethod(it.originalContent) }) return
+
+        boxMethodFound = true
+        val result = runExecutable(info.outputFile).trim()
+        val outputFile = testServices.moduleStructure.originalTestDataFiles.first().withExtension(OUTPUT_EXTENSION)
+        if (outputFile.exists()) {
+            assertions.assertEqualsToFile(outputFile, result)
+        } else {
+            assertions.assertEquals(DEFAULT_EXPECTED_RESULT, result)
+        }
+    }
+
+    override fun processAfterAllModules(someAssertionWasFailed: Boolean) {
+        if (!boxMethodFound) {
+            assertions.fail { "Can't find box methods" }
+        }
+    }
+
+    private fun runExecutable(file: File): String {
+        if (!file.isFile) {
+            assertions.fail { "Expected .NET executable was not produced: ${file.path}" }
+        }
+
+        val process = ProcessBuilder(file.absolutePath)
+            .directory(file.parentFile)
+            .redirectErrorStream(true)
+            .start()
+        if (!process.waitFor(3, TimeUnit.MINUTES)) {
+            process.destroyForcibly()
+            assertions.fail { ".NET executable timed out: ${file.path}" }
+        }
+
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.exitValue()
+        if (exitCode != 0) {
+            assertions.fail {
+                ".NET executable failed with exit code $exitCode${output.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
+            }
+        }
+        return output
+    }
+
+    private companion object {
+        const val DEFAULT_EXPECTED_RESULT = "OK"
+        const val OUTPUT_EXTENSION = "box.txt"
     }
 }
 

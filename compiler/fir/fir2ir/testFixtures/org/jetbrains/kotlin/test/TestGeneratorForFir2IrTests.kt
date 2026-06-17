@@ -50,6 +50,17 @@ fun main(args: Array<String>) {
                 model("box")
                 model("boxJvm")
             }
+
+            testClass<AbstractFirLightTreeDotNetBoxTest> {
+                model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
+                model("box/strings", pattern = "^(kt50140)\\.kt$")
+            }
+
+            testClass<AbstractFirPsiDotNetBoxTest> {
+                model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
+                model("box/strings", pattern = "^(kt50140)\\.kt$")
+            }
+
             testClass<AbstractJvmLightTreeBlackBoxCodegenWithSeparateKmpCompilationTest> {
                 model("box/multiplatform/k2")
                 model("boxJvm/multiplatform/k2")
