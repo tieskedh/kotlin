@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.analysis.api.impl.base.util.requireIsInstance
 import org.jetbrains.kotlin.analysis.api.platform.modification.publishGlobalSourceOutOfBlockModificationEvent
 import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinProjectStructureProvider
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaDanglingFileModule
+import org.jetbrains.kotlin.analysis.api.projectStructure.KaModule
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaSourceModule
 import org.jetbrains.kotlin.analysis.api.resolution.KaSuccessCallInfo
 import org.jetbrains.kotlin.analysis.api.resolution.successfulFunctionCallOrNull
@@ -32,7 +33,6 @@ import org.jetbrains.kotlin.analysis.api.types.KaClassType
 import org.jetbrains.kotlin.analysis.project.structure.builder.buildKtLibraryModule
 import org.jetbrains.kotlin.analysis.project.structure.builder.buildKtSdkModule
 import org.jetbrains.kotlin.analysis.project.structure.builder.buildKtSourceModule
-import org.jetbrains.kotlin.asJava.toLightClass
 import org.jetbrains.kotlin.codegen.forTestCompile.ForTestCompileRuntime
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.light.classes.symbol.withMultiplatformLightClassSupport
@@ -592,8 +592,8 @@ class StandaloneSessionBuilderTest : AbstractStandaloneTest() {
     }
 
     @Test
-    fun testJvmLightClasses() = testLightClasses(JvmPlatforms.defaultJvmPlatform) { kotlinClass ->
-        val kotlinPsiClass = kotlinClass.toLightClass()
+    fun testJvmLightClasses() = testLightClasses(JvmPlatforms.defaultJvmPlatform) { mainModule ->
+        val kotlinPsiClass = mainModule.findKotlinClassAsPsi()
         require(kotlinPsiClass != null)
 
         val kotlinPsiClassFromFacade = JavaPsiFacade
@@ -606,8 +606,8 @@ class StandaloneSessionBuilderTest : AbstractStandaloneTest() {
     }
 
     @Test
-    fun testCommonLightClasses() = testLightClasses(JvmPlatforms.defaultJvmPlatform) { kotlinClass ->
-        val kotlinPsiClass = kotlinClass.toLightClass()
+    fun testCommonLightClasses() = testLightClasses(JvmPlatforms.defaultJvmPlatform) { mainModule ->
+        val kotlinPsiClass = mainModule.findKotlinClassAsPsi()
         require(kotlinPsiClass != null)
 
         val kotlinPsiClassFromFacade = JavaPsiFacade
@@ -620,9 +620,9 @@ class StandaloneSessionBuilderTest : AbstractStandaloneTest() {
     }
 
     @Test
-    fun testJavaScriptLightClasses() = testLightClasses(JsPlatforms.defaultJsPlatform) { kotlinClass ->
-        val unavailableKotlinClass = kotlinClass.toLightClass()
-        require(unavailableKotlinClass == null) // By default, light classes are not available for non-JVM platforms
+    fun testJavaScriptLightClasses() = testLightClasses(JsPlatforms.defaultJsPlatform) { mainModule ->
+        // By default, light classes are not available for non-JVM platforms
+        require(mainModule.findKotlinClassAsPsi() == null)
 
         val unavailableKotlinClassFromFacade = JavaPsiFacade
             .getInstance(project)
@@ -640,7 +640,9 @@ class StandaloneSessionBuilderTest : AbstractStandaloneTest() {
 
         @OptIn(KaNonPublicApi::class)
         withMultiplatformLightClassSupport(project) {
-            val kotlinPsiClass = kotlinClass.toLightClass()
+            // The symbol must be resolved in a fresh analysis session created after the modification event above;
+            // reusing a symbol from an earlier session would fail lifetime validation ('PSI has changed since creation').
+            val kotlinPsiClass = mainModule.findKotlinClassAsPsi()
             require(kotlinPsiClass != null)
 
             val kotlinPsiClassFromFacade = JavaPsiFacade
@@ -654,7 +656,11 @@ class StandaloneSessionBuilderTest : AbstractStandaloneTest() {
         }
     }
 
-    private fun testLightClasses(platform: TargetPlatform, block: StandaloneAnalysisAPISession.(KtClassOrObject) -> Unit) {
+    private fun KaModule.findKotlinClassAsPsi(): PsiClass? = analyze(this) {
+        findClass(ClassId.fromString("org/test/KotlinClass"))!!.asPsiClass()
+    }
+
+    private fun testLightClasses(platform: TargetPlatform, block: StandaloneAnalysisAPISession.(KaModule) -> Unit) {
         val root = "lightClasses"
 
         val session = buildStandaloneAnalysisAPISession(disposable) {
@@ -671,13 +677,7 @@ class StandaloneSessionBuilderTest : AbstractStandaloneTest() {
         }
 
         val mainModule = session.modulesWithFiles.keys.single()
-
-        val kotlinClass = analyze(mainModule) {
-            val symbol = findClass(ClassId.fromString("org/test/KotlinClass"))!!
-            symbol.psi as KtClassOrObject
-        }
-
-        session.block(kotlinClass)
+        session.block(mainModule)
     }
 
     private fun checkKotlinPsiClass(kotlinPsiClass: PsiClass) {

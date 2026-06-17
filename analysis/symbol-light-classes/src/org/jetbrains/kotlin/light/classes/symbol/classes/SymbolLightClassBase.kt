@@ -23,7 +23,6 @@ import org.jetbrains.annotations.NonNls
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaModule
 import org.jetbrains.kotlin.asJava.KotlinAsJavaSupport
 import org.jetbrains.kotlin.asJava.classes.*
-import org.jetbrains.kotlin.asJava.toLightClass
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.light.classes.symbol.SymbolFakeFile
 import org.jetbrains.kotlin.light.classes.symbol.analyzeForLightClasses
@@ -118,7 +117,11 @@ internal abstract class SymbolLightClassBase protected constructor(manager: PsiM
 
     private val _containingFile: PsiFile? by lazyPub {
         val kotlinOrigin = kotlinOrigin ?: return@lazyPub null
-        val containingClass = isTopLevel.ifFalse { getOutermostClassOrObject(kotlinOrigin).toLightClass() } ?: this
+        val containingClass = isTopLevel.ifFalse {
+            analyzeForLightClasses(useSiteModule) {
+                getOutermostClassOrObject(kotlinOrigin).classSymbol?.asPsiClass() as? KtLightClass
+            }
+        } ?: this
         SymbolFakeFile(kotlinOrigin, containingClass)
     }
 

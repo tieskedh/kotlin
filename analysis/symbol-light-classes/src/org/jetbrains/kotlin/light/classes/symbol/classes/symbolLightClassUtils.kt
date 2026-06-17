@@ -11,7 +11,7 @@ import com.intellij.psi.*
 import org.jetbrains.kotlin.analysis.api.KaContextParameterApi
 import org.jetbrains.kotlin.analysis.api.KaExperimentalApi
 import org.jetbrains.kotlin.analysis.api.KaSession
-import org.jetbrains.kotlin.analysis.api.components.containingDeclaration
+import org.jetbrains.kotlin.analysis.api.components.asPsiClass
 import org.jetbrains.kotlin.analysis.api.components.containingSymbol
 import org.jetbrains.kotlin.analysis.api.components.getExpectsForActual
 import org.jetbrains.kotlin.analysis.api.getModule
@@ -30,7 +30,6 @@ import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.asJava.classes.METHOD_INDEX_BASE
 import org.jetbrains.kotlin.asJava.classes.findEntry
 import org.jetbrains.kotlin.asJava.hasInterfaceDefaultImpls
-import org.jetbrains.kotlin.asJava.toLightClass
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.config.JvmDefaultMode
 import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl
@@ -112,7 +111,7 @@ private fun lightClassForEnumEntryInitializer(enumEntrySymbol: KaEnumEntrySymbol
     if (enumEntrySymbol.initializer == null) return null
 
     val symbolLightClass =
-        (enumEntrySymbol.containingDeclaration?.psi as? KtClassOrObject)?.toLightClass() as? SymbolLightClassForClassOrObject ?: return null
+        (enumEntrySymbol.containingSymbol as? KaClassSymbol)?.asPsiClass() as? SymbolLightClassForClassOrObject ?: return null
     val targetField = symbolLightClass.ownFields.firstOrNull {
         it is SymbolLightFieldForEnumEntry && it.symbolPointer.pointsToTheSameSymbolAs(enumEntrySymbol.createPointer())
     } ?: return null
@@ -610,19 +609,13 @@ internal fun KaSession.createInheritanceList(
 
 internal fun KaSession.createInnerClasses(
     declarationContainer: KaDeclarationContainerSymbol,
-    manager: PsiManager,
     containingClass: SymbolLightClassBase,
     classOrObject: KtClassOrObject?,
 ): List<SymbolLightClassBase> {
     val result = SmartList<SymbolLightClassBase>()
 
-    declarationContainer.staticDeclaredMemberScope.classifiers.filterIsInstance<KaNamedClassSymbol>().mapNotNullTo(result) {
-        val classOrObjectDeclaration = it.sourcePsiSafe<KtClassOrObject>()
-        if (classOrObjectDeclaration != null) {
-            classOrObjectDeclaration.toLightClass() as? SymbolLightClassBase
-        } else {
-            createLightClassNoCache(it, ktModule = containingClass.useSiteModule, manager)
-        }
+    declarationContainer.staticDeclaredMemberScope.classifiers.filterIsInstance<KaNamedClassSymbol>().mapNotNullTo(result) { symbol ->
+        symbol.asPsiClass() as? SymbolLightClassBase
     }
 
     val languageVersionSettings = classOrObject?.let { getModule(it) as? KaSourceModule }?.languageVersionSettings

@@ -10,9 +10,9 @@ import org.jetbrains.kotlin.analysis.api.KaSession
 import org.jetbrains.kotlin.analysis.api.projectStructure.KaModule
 import org.jetbrains.kotlin.analysis.api.symbols.*
 import org.jetbrains.kotlin.analysis.api.symbols.pointers.KaSymbolPointer
-import org.jetbrains.kotlin.asJava.classes.getParentForLocalDeclaration
 import org.jetbrains.kotlin.light.classes.symbol.fields.SymbolLightField
 import org.jetbrains.kotlin.light.classes.symbol.fields.SymbolLightFieldForObject
+import org.jetbrains.kotlin.light.classes.symbol.getParentForLocalDeclaration
 import org.jetbrains.kotlin.light.classes.symbol.isConstOrJvmField
 import org.jetbrains.kotlin.light.classes.symbol.modifierLists.GranularModifiersBox
 import org.jetbrains.kotlin.psi.KtClassOrObject
@@ -45,7 +45,7 @@ internal abstract class SymbolLightClassForNamedClassLike : SymbolLightClassForC
 
     override fun getParent(): PsiElement? {
         if (isLocal) {
-            return classOrObjectDeclaration?.let(::getParentForLocalDeclaration)
+            return classOrObjectDeclaration?.let { getParentForLocalDeclaration(it, useSiteModule) }
         }
 
         return containingClass ?: containingFile
