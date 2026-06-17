@@ -263,5 +263,6 @@ val optimizationLoweringList: List<NamedCompilerPhase<JsIrBackendContext, IrModu
     ::PurifyObjectInstanceGettersLowering,
     ::InlineObjectsWithPureInitializationLowering,
     ::MoveCallableFactoriesToDeclarationsLowering,
-    ::DeduplicateCallableReferenceFactoriesLowering
+    ::DeduplicateCallableReferenceFactoriesLowering,
+    ::EffectAnalysisLowering,
 )
