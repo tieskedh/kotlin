@@ -65,6 +65,7 @@ private class DirectivesValidationHandler(testServices: TestServices) : Analysis
         TargetBackend.WASM_JS,
         TargetBackend.WASM_WASI,
         TargetBackend.NATIVE,
+        TargetBackend.DOTNET,
     ).filter { backend ->
         backend !in this && backend.compatibleWith !in this
     }

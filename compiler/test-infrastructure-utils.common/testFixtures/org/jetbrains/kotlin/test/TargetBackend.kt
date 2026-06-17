@@ -19,6 +19,7 @@ enum class TargetBackend(
     WASM_WASI(WASM),
     ANDROID(JVM),
     NATIVE,
+    DOTNET,
     JKLIB(JVM_IR)
     ;
 
