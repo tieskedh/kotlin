@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.test.builders.CompilerStepsNames.JS_ARTIFACTS_HANDLE
 import org.jetbrains.kotlin.test.builders.CompilerStepsNames.JVM_ARTIFACTS_HANDLERS_STEP_NAME
 import org.jetbrains.kotlin.test.builders.CompilerStepsNames.KLIB_ARTIFACTS_HANDLERS_STEP_NAME
 import org.jetbrains.kotlin.test.builders.CompilerStepsNames.LOWERED_IR_HANDLERS_STEP_NAME
+import org.jetbrains.kotlin.test.builders.CompilerStepsNames.DOTNET_ARTIFACTS_HANDLERS_STEP_NAME
 import org.jetbrains.kotlin.test.builders.CompilerStepsNames.NATIVE_ARTIFACTS_HANDLERS_STEP_NAME
 import org.jetbrains.kotlin.test.builders.CompilerStepsNames.RAW_IR_HANDLERS_STEP_NAME
 import org.jetbrains.kotlin.test.builders.CompilerStepsNames.WASM_ARTIFACTS_HANDLERS_STEP_NAME
@@ -37,6 +38,7 @@ object CompilerStepsNames {
 
     const val JVM_ARTIFACTS_HANDLERS_STEP_NAME = "jvm artifacts handlers"
     const val NATIVE_ARTIFACTS_HANDLERS_STEP_NAME = "native artifacts handlers"
+    const val DOTNET_ARTIFACTS_HANDLERS_STEP_NAME = "dotnet artifacts handlers"
     const val JS_ARTIFACTS_HANDLERS_STEP_NAME = "js artifacts handlers"
     const val WASM_ARTIFACTS_HANDLERS_STEP_NAME = "wasm artifacts handlers"
     const val KLIB_ARTIFACTS_HANDLERS_STEP_NAME = "klib artifacts handlers"
@@ -79,6 +81,12 @@ inline fun TestConfigurationBuilder.nativeArtifactsHandlersStep(
     init: TestStepBuilder.HandlersStepBuilder.NonGroupingStage<BinaryArtifacts.Native, ArtifactKinds.Native>.() -> Unit = {}
 ) {
     namedHandlersStep(NATIVE_ARTIFACTS_HANDLERS_STEP_NAME, ArtifactKinds.Native, CompilationStage.SECOND, init)
+}
+
+inline fun TestConfigurationBuilder.dotNetArtifactsHandlersStep(
+    init: TestStepBuilder.HandlersStepBuilder.NonGroupingPhase<BinaryArtifacts.DotNet, ArtifactKinds.DotNet>.() -> Unit = {}
+) {
+    namedHandlersStep(DOTNET_ARTIFACTS_HANDLERS_STEP_NAME, ArtifactKinds.DotNet, CompilationStage.FIRST, init)
 }
 
 inline fun TestConfigurationBuilder.jsArtifactsHandlersStep(
@@ -127,6 +135,12 @@ inline fun TestConfigurationBuilder.configureJsArtifactsHandlersStep(
     init: TestStepBuilder.HandlersStepBuilder.NonGroupingStage<BinaryArtifacts.Js, ArtifactKinds.Js>.() -> Unit = {}
 ) {
     configureNamedHandlersStep(JS_ARTIFACTS_HANDLERS_STEP_NAME, ArtifactKinds.Js, skipMissingStep = false, init)
+}
+
+inline fun TestConfigurationBuilder.configureDotNetArtifactsHandlersStep(
+    init: TestStepBuilder.HandlersStepBuilder.NonGroupingPhase<BinaryArtifacts.DotNet, ArtifactKinds.DotNet>.() -> Unit = {}
+) {
+    configureNamedHandlersStep(DOTNET_ARTIFACTS_HANDLERS_STEP_NAME, ArtifactKinds.DotNet, skipMissingStep = false, init)
 }
 
 inline fun TestConfigurationBuilder.configureWasmArtifactsHandlersStep(

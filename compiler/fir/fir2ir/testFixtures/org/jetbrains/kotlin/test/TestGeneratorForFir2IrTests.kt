@@ -112,6 +112,14 @@ fun main(args: Array<String>) {
                 model("codegen/bytecodeListing")
             }
 
+            testClass<AbstractFirPsiDotNetIlTextTest> {
+                model("codegen/dotnet/ilText")
+            }
+
+            testClass<AbstractFirLightTreeDotNetIlTextTest> {
+                model("codegen/dotnet/ilText")
+            }
+
             testClass<AbstractFirPsiAsmLikeInstructionListingTest> {
                 model("codegen/asmLike")
             }

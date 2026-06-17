@@ -1,0 +1,16 @@
+.assembly extern mscorlib {}
+.assembly 'printlnEscapedString' {}
+.module 'printlnEscapedString.exe'
+
+.class public abstract sealed auto ansi beforefieldinit printlnEscapedStringKt
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void main() cil managed
+  {
+    .entrypoint
+    .maxstack 8
+    ldstr "Quote: \""
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

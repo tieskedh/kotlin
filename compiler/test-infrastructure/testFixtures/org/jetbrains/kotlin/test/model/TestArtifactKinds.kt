@@ -32,6 +32,7 @@ object ArtifactKinds {
     object Jvm : ArtifactKind<BinaryArtifacts.Jvm>("JVM", CompilationStage.FIRST)
     object Js : ArtifactKind<BinaryArtifacts.Js>("JS", CompilationStage.SECOND)
     object Native : ArtifactKind<BinaryArtifacts.Native>("Native", CompilationStage.SECOND)
+    object DotNet : ArtifactKind<BinaryArtifacts.DotNet>("DotNet", CompilationStage.FIRST)
     object Wasm : ArtifactKind<BinaryArtifacts.Wasm>("Wasm", CompilationStage.SECOND)
     object KLib : ArtifactKind<BinaryArtifacts.KLib>("KLib", CompilationStage.FIRST)
 }
