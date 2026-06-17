@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.test.services.impl
 
+import org.jetbrains.kotlin.platform.DotNetPlatforms
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.js.JsPlatforms
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
@@ -39,6 +40,7 @@ class TestModuleStructureImpl(
                 in JvmPlatforms.allJvmPlatforms -> ArtifactKinds.Jvm
                 in JsPlatforms.allJsPlatforms -> ArtifactKinds.Js
                 in NativePlatforms.allNativePlatforms -> ArtifactKinds.Native
+                in DotNetPlatforms.allDotNetPlatforms -> ArtifactKinds.DotNet
                 in WasmPlatforms.allWasmPlatforms -> ArtifactKinds.Wasm
                 else -> ArtifactKind.NoArtifact
             }

@@ -65,6 +65,17 @@ abstract class NativeBinaryArtifactHandler(
     doNotRunIfThereWerePreviousFailures
 )
 
+abstract class DotNetBinaryArtifactHandler(
+    testServices: TestServices,
+    failureDisablesNextSteps: Boolean = false,
+    doNotRunIfThereWerePreviousFailures: Boolean = false
+) : BinaryArtifactHandler<BinaryArtifacts.DotNet>(
+    testServices,
+    ArtifactKinds.DotNet,
+    failureDisablesNextSteps,
+    doNotRunIfThereWerePreviousFailures
+)
+
 abstract class WasmBinaryArtifactHandler(
     testServices: TestServices,
     failureDisablesNextSteps: Boolean = false,
