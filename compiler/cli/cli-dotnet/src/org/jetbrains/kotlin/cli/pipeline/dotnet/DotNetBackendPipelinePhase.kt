@@ -11,7 +11,12 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
     postActions = setOf(PerformanceNotifications.BackendFinished, CheckCompilationErrors.CheckDiagnosticCollector),
 ) {
     override fun executePhase(input: DotNetFir2IrPipelineArtifact): DotNetBackendPipelineArtifact {
-        val output = DotNetBackend.compile(input.result.irModuleFragment, input.configuration)
+        val output = DotNetBackend.compile(
+            input.result.irModuleFragment,
+            input.result.irBuiltIns,
+            input.result.symbolTable,
+            input.configuration,
+        )
         return DotNetBackendPipelineArtifact(output, input.configuration)
     }
 }
