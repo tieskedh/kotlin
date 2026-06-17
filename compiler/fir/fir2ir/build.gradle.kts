@@ -42,6 +42,8 @@ dependencies {
     testFixturesApi(testFixtures(project(":compiler:fir:analysis-tests")))
     testFixturesImplementation(testFixtures(project(":generators:test-generator")))
     testFixturesImplementation(testFixtures(project(":compiler:tests-spec")))
+    testFixturesImplementation(project(":compiler:backend.dotnet"))
+    testFixturesImplementation(project(":compiler:cli-dotnet"))
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter.api)

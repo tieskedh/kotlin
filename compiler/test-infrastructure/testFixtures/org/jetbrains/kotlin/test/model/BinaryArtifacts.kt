@@ -28,6 +28,11 @@ object BinaryArtifacts {
             get() = ArtifactKinds.Native
     }
 
+    class DotNet(val outputFile: File) : ResultingArtifact.Binary<DotNet>() {
+        override val kind: ArtifactKind<DotNet>
+            get() = ArtifactKinds.DotNet
+    }
+
     abstract class Wasm: ResultingArtifact.Binary<Wasm>() {
         override val kind: ArtifactKind<Wasm>
             get() = ArtifactKinds.Wasm
