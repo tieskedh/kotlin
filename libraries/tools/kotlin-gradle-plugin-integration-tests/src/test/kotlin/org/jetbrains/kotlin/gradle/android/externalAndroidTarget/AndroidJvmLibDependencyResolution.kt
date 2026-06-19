@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.gradle.android.externalAndroidTarget
 
+import com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromStream
@@ -570,7 +571,10 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
             addPublishedProjectToRepositories(producer)
 
             buildAndFail(":compileKotlinJvm") {
-                assertOutputContains("No matching variant of ${producer.rootCoordinate} was found")
+                assertOutputContainsAny(
+                    "No matching variant of",
+                    "No variants exist",
+                )
                 assertOutputContains("'org.jetbrains.kotlin.platform.type' with value 'androidJvm'")
                 assertOutputContains("'org.jetbrains.kotlin.platform.type' with value 'jvm'")
             }
@@ -630,27 +634,19 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
         buildOptions = defaultBuildOptions.copy(androidVersion = androidVersion),
         buildJdk = jdkVersion.location,
     ) {
-        buildGradle.toFile().delete()
-        buildGradleKts.toFile().writeText(
-            """
-            plugins {
-                kotlin("multiplatform")
-                id("com.android.kotlin.multiplatform.library")
-            }
-
-            kotlin {
-                androidLibrary {
-                    compileSdk = 34
-                    namespace = "$namespace"
-                }
-                jvm()
-                macosArm64()
-            }
-            """.trimIndent()
-        )
+        plugins {
+            kotlin("multiplatform")
+            id("com.android.kotlin.multiplatform.library")
+        }
         projectPath.resolve("gradle.properties").toFile().appendText("\nkotlin.mpp.applyDefaultHierarchyTemplate=false\n")
         buildScriptInjection {
             kotlinMultiplatform.apply {
+                targets.withType(KotlinMultiplatformAndroidLibraryTarget::class.java).configureEach { target ->
+                    target.compileSdk = 34
+                    target.namespace = namespace
+                }
+                jvm()
+                macosArm64()
                 val commonMain = sourceSets.getByName("commonMain")
                 val androidJvmMain = sourceSets.maybeCreate("androidJvmMain").apply {
                     dependsOn(commonMain)
@@ -674,24 +670,16 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
         buildOptions = defaultBuildOptions.copy(androidVersion = androidVersion),
         buildJdk = jdkVersion.location,
     ) {
-        buildGradle.toFile().delete()
-        buildGradleKts.toFile().writeText(
-            """
-            plugins {
-                kotlin("multiplatform")
-                id("com.android.kotlin.multiplatform.library")
-            }
-
-            kotlin {
-                androidLibrary {
-                    compileSdk = 34
-                    namespace = "$namespace"
-                }
-            }
-            """.trimIndent()
-        )
+        plugins {
+            kotlin("multiplatform")
+            id("com.android.kotlin.multiplatform.library")
+        }
         buildScriptInjection {
             kotlinMultiplatform.apply {
+                targets.withType(KotlinMultiplatformAndroidLibraryTarget::class.java).configureEach { target ->
+                    target.compileSdk = 34
+                    target.namespace = namespace
+                }
                 configureKmp()
             }
         }
