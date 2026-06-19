@@ -5,8 +5,11 @@
 
 package org.jetbrains.kotlin.gradle.android.externalAndroidTarget
 
+import com.android.build.api.dsl.KotlinMultiplatformAndroidLibraryTarget
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.kotlin.dsl.kotlin
 import org.gradle.util.GradleVersion
+import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilerArgumentsProducer
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.gradle.testbase.*
@@ -33,8 +36,12 @@ class JvmToolchainExternalAndroidTargetIT : KGPBaseTest() {
             androidVersion = androidVersion,
             jdkVersion = jdkVersion,
             namespace = "org.jetbrains.sample.multitarget",
-            androidLibraryConfiguration = "withHostTest {}",
-            kotlinConfiguration = "jvmToolchain(11)",
+            androidLibraryConfiguration = {
+                withHostTest {}
+            },
+            kotlinConfiguration = {
+                jvmToolchain(11)
+            },
         ) {
 
             val taskConfigurations = kotlinTaskConfigurations("compileAndroidMain", "compileAndroidHostTest")
@@ -59,8 +66,9 @@ class JvmToolchainExternalAndroidTargetIT : KGPBaseTest() {
             androidVersion = androidVersion,
             jdkVersion = jdkVersion,
             namespace = "org.jetbrains.sample.withjava",
-            androidLibraryConfiguration = "withJava()",
-            kotlinConfiguration = "jvmToolchain(11)",
+            kotlinConfiguration = {
+                jvmToolchain(11)
+            },
         ) {
 
             val kotlinTaskConfiguration = kotlinTaskConfigurations("compileAndroidMain").getValue("compileAndroidMain")
@@ -91,8 +99,12 @@ class JvmToolchainExternalAndroidTargetIT : KGPBaseTest() {
             androidVersion = androidVersion,
             jdkVersion = jdkVersion,
             namespace = "com.example.lib",
-            androidLibraryConfiguration = "compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)",
-            kotlinConfiguration = "jvmToolchain(17)",
+            androidLibraryConfiguration = {
+                compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+            },
+            kotlinConfiguration = {
+                jvmToolchain(17)
+            },
         ) {
 
             assertEquals(
@@ -110,8 +122,8 @@ class JvmToolchainExternalAndroidTargetIT : KGPBaseTest() {
         androidVersion: String,
         jdkVersion: JdkVersions.ProvidedJdk,
         namespace: String,
-        androidLibraryConfiguration: String = "",
-        kotlinConfiguration: String = "",
+        androidLibraryConfiguration: KotlinMultiplatformAndroidLibraryTarget.() -> Unit = {},
+        kotlinConfiguration: KotlinMultiplatformExtension.() -> Unit = {},
         configureProject: TestProject.() -> Unit = {},
     ): TestProject = project(
         "empty",
@@ -119,24 +131,21 @@ class JvmToolchainExternalAndroidTargetIT : KGPBaseTest() {
         buildOptions = defaultBuildOptions.copy(androidVersion = androidVersion),
         buildJdk = jdkVersion.location,
     ) {
-        buildGradle.toFile().delete()
-        buildGradleKts.toFile().writeText(
-            """
-            plugins {
-                kotlin("multiplatform")
-                id("com.android.kotlin.multiplatform.library")
-            }
-
-            kotlin {
-                androidLibrary {
-                    compileSdk = 34
-                    namespace = "$namespace"
-            ${androidLibraryConfiguration.trim().prependIndent("        ")}
+        plugins {
+            kotlin("multiplatform")
+            id("com.android.kotlin.multiplatform.library")
+        }
+        buildScriptInjection {
+            kotlinMultiplatform.apply {
+                targets.withType(KotlinMultiplatformAndroidLibraryTarget::class.java).configureEach { target ->
+                    target.compileSdk = 34
+                    target.namespace = namespace
+                    target.withJava()
+                    target.androidLibraryConfiguration()
                 }
-            ${kotlinConfiguration.trim().prependIndent("    ")}
+                kotlinConfiguration()
             }
-            """.trimIndent()
-        )
+        }
         projectPath.resolve("gradle.properties").toFile().appendText(
             """
 
