@@ -4,3 +4,4 @@ $TEMP_DIR$
 -Xuse-k2
 -output=path/to/file
 -Xg0=true
+-no-endorsed-libs=true
