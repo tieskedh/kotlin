@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.arguments.description
 
 object CompilerArgumentsLevelNames {
+    const val removedCompilerArguments = "removedCompilerArguments"
     const val commonToolArguments = "commonToolArguments"
     const val commonCompilerArguments = "commonCompilerArguments"
     const val jvmCompilerArguments = "jvmCompilerArguments"

@@ -59,6 +59,8 @@ data class KotlinCompilerArgument(
 
     val deprecatedMessage: String? = null,
 ) : WithKotlinReleaseVersionsMetadata {
+    val isAlreadyRemoved: Boolean
+        get() = releaseVersionsMetadata.removedVersion?.let { it.toKotlinVersion() <= KotlinVersion.CURRENT } == true
 
     // corresponds to [org.jetbrains.kotlin.cli.common.arguments.Argument.Delimiters]
     enum class Delimiter(val constantName: String) {
