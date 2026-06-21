@@ -1564,11 +1564,6 @@ public class CliTestGenerated extends AbstractCliTest {
       runTest("compiler/testData/cli/jvm/firHello20.args");
     }
 
-    @TestMetadata("firHello20WithFlag.args")
-    public void testFirHello20WithFlag() {
-      runTest("compiler/testData/cli/jvm/firHello20WithFlag.args");
-    }
-
     @TestMetadata("firLightTreeOff.args")
     public void testFirLightTreeOff() {
       runTest("compiler/testData/cli/jvm/firLightTreeOff.args");
@@ -1767,6 +1762,11 @@ public class CliTestGenerated extends AbstractCliTest {
     @TestMetadata("progressiveModeOn.args")
     public void testProgressiveModeOn() {
       runTest("compiler/testData/cli/jvm/progressiveModeOn.args");
+    }
+
+    @TestMetadata("removedArguments.args")
+    public void testRemovedArguments() {
+      runTest("compiler/testData/cli/jvm/removedArguments.args");
     }
 
     @TestMetadata("replLaunchError.args")
