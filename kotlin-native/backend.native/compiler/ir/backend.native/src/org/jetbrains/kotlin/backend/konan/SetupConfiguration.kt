@@ -285,6 +285,7 @@ fun CompilerConfiguration.setupFromArguments(arguments: K2NativeCompilerArgument
             AllocationMode.CUSTOM
         }
     })
+    @Suppress("DEPRECATION_ERROR")
     when (arguments.workerExceptionHandling) {
         null -> {}
         "legacy" -> {
