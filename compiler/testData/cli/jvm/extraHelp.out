@@ -141,6 +141,7 @@ where advanced options include:
   -Xuse-type-table           Use a type table in metadata serialization.
   -Xvalidate-bytecode        Validate generated JVM bytecode before and after optimizations.
   -Xvalue-classes            Enable experimental value classes.
+                             The option will be removed in $ABI_VERSION_NEXT$.
   -Xwhen-expressions={indy|inline}
                              Select the code generation scheme for type-checking 'when' expressions:
                              -Xwhen-expressions=indy         Generate type-checking 'when' expressions using 'invokedynamic' with 'SwitchBootstraps.typeSwitch(..)' and

@@ -131,6 +131,18 @@ fun <A : CommonToolArguments> parseCommandLineArgumentsFromEnvironment(arguments
 }
 
 private val argumentsCache = ConcurrentHashMap<Class<*>, ArgumentsInfo>()
+private val removedArguments: ArgumentsInfo by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    extractArgumentsInfo(@Suppress("DEPRECATION_ERROR") RemovedCompilerArguments::class.java)
+}
+
+enum class ArgumentLifecycleStatus {
+    NORMAL,
+    WILL_BE_DEPRECATED,
+    WILL_BE_REMOVED,
+    DEPRECATED,
+    DEPRECATED_AND_WILL_BE_REMOVED,
+    REMOVED,
+}
 
 data class ArgumentField(
     val getter: Method,
@@ -142,6 +154,39 @@ data class ArgumentField(
 ) {
     val changesLanguageFeatures: Boolean
         get() = enablesAnnotations.isNotEmpty() || disablesAnnotations.isNotEmpty()
+
+    val status: ArgumentLifecycleStatus
+        get() {
+            val removedVersion = argument.removedVersion
+            val deprecatedVersion = argument.deprecatedVersion
+
+            if (removedVersion.isNotEmpty()) {
+                return when {
+                    parseKotlinVersion(removedVersion) <= KotlinVersion.CURRENT -> {
+                        ArgumentLifecycleStatus.REMOVED
+                    }
+                    deprecatedVersion.isEmpty() || deprecatedVersion == removedVersion -> {
+                        ArgumentLifecycleStatus.WILL_BE_REMOVED
+                    }
+                    else -> {
+                        ArgumentLifecycleStatus.DEPRECATED_AND_WILL_BE_REMOVED
+                    }
+                }
+            }
+
+            if (deprecatedVersion.isNotEmpty()) {
+                return when {
+                    parseKotlinVersion(deprecatedVersion) <= KotlinVersion.CURRENT -> {
+                        ArgumentLifecycleStatus.DEPRECATED
+                    }
+                    else -> {
+                        ArgumentLifecycleStatus.WILL_BE_DEPRECATED
+                    }
+                }
+            }
+
+            return ArgumentLifecycleStatus.NORMAL
+        }
 }
 
 data class ArgumentsInfo(
@@ -156,32 +201,35 @@ data class ArgumentsInfo(
 }
 
 fun getArgumentsInfo(klass: Class<*>): ArgumentsInfo {
+    require(CommonToolArguments::class.java.isAssignableFrom(klass))
     return argumentsCache.getOrPut(klass) {
-        ArgumentsInfo(
-            cliArgNameToArguments = buildMap {
-                for (field in klass.declaredFields) {
-                    val argument = field.getAnnotation(Argument::class.java) ?: continue
-                    val enablesAnnotations = field.getAnnotationsByType(Enables::class.java).toList()
-                    val disablesAnnotations = field.getAnnotationsByType(Disables::class.java).toList()
-                    val getter = klass.getMethod(JvmAbi.getterName(field.name))
-                    val setter = klass.getMethod(JvmAbi.setterName(field.name), field.type)
-                    val deprecatedAnnotation =
-                        getter.getAnnotation(Deprecated::class.java) // Check the getter because `@Deprecated` doesn't have `FIELD` target
-                    val argumentField =
-                        ArgumentField(getter, setter, argument, enablesAnnotations, disablesAnnotations, deprecatedAnnotation)
-                    for (key in listOf(argument.value, argument.shortName, argument.deprecatedName)) {
-                        if (key.isNotEmpty()) put(key, argumentField)
-                    }
-                }
-                val superclass = klass.superclass
-                if (CommonToolArguments::class.java.isAssignableFrom(superclass)) {
-                    putAll(getArgumentsInfo(superclass).cliArgNameToArguments)
-                }
-            },
-            defaultArgsConstructor = klass.constructors.find { it.parameters.isEmpty() },
-        )
+        extractArgumentsInfo(klass)
     }
 }
+
+private fun extractArgumentsInfo(klass: Class<*>): ArgumentsInfo = ArgumentsInfo(
+    cliArgNameToArguments = buildMap {
+        for (field in klass.declaredFields) {
+            val argument = field.getAnnotation(Argument::class.java) ?: continue
+            val enablesAnnotations = field.getAnnotationsByType(Enables::class.java).toList()
+            val disablesAnnotations = field.getAnnotationsByType(Disables::class.java).toList()
+            val getter = klass.getMethod(JvmAbi.getterName(field.name))
+            val setter = klass.getMethod(JvmAbi.setterName(field.name), field.type)
+            val deprecatedAnnotation =
+                getter.getAnnotation(Deprecated::class.java) // Check the getter because `@Deprecated` doesn't have `FIELD` target
+            val argumentField =
+                ArgumentField(getter, setter, argument, enablesAnnotations, disablesAnnotations, deprecatedAnnotation)
+            for (key in listOf(argument.value, argument.shortName, argument.deprecatedName)) {
+                if (key.isNotEmpty()) put(key, argumentField)
+            }
+        }
+        val superclass = klass.superclass
+        if (CommonToolArguments::class.java.isAssignableFrom(superclass)) {
+            putAll(extractArgumentsInfo(superclass).cliArgNameToArguments)
+        }
+    },
+    defaultArgsConstructor = klass.constructors.find { it.parameters.isEmpty() },
+)
 
 private fun <A : CommonToolArguments> parsePreprocessedCommandLineArguments(
     args: List<String>,
@@ -216,7 +264,15 @@ private fun <A : CommonToolArguments> parsePreprocessedCommandLineArguments(
             else -> '='
         }
         val key = arg.substringBefore(delimiter)
-        val argumentField = properties[key]
+        var argumentField = properties[key]
+        var removedArg = false
+
+        if (argumentField == null) {
+            argumentField = removedArguments.cliArgNameToArguments[key]
+            // We still should parse a value of the removed argument to get rid of potential CLI parse error.
+            removedArg = true
+        }
+
         if (argumentField == null) {
             when {
                 // Unknown -X argument
@@ -284,7 +340,10 @@ private fun <A : CommonToolArguments> parsePreprocessedCommandLineArguments(
             }
         }
 
-        argumentField.setter(result, newValue)
+        if (!removedArg) {
+            // We can't set the value if the argument is removed because object types are incompatible
+            argumentField.setter(result, newValue)
+        }
     }
 
     result.freeArgs += freeArgs
