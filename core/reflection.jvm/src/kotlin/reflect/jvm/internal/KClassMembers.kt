@@ -86,7 +86,7 @@ internal fun KClassImpl<*>.computeDeclaredMembersByName(name: String): Collectio
 }
 
 internal fun KClassImpl<*>.computeMembersByName(name: String): Collection<ReflectKCallable<*>> =
-    if (!newFakeOverridesImplementation || useK1Implementation || isComplicatedBuiltinSubclass) {
+    if (useK1Implementation || isComplicatedBuiltinSubclass) {
         buildList {
             addAll(data.value.getDeclaredMembersByName(name))
             addAll(getDescriptorBasedMembers(memberScope, INHERITED, name))
@@ -103,7 +103,7 @@ internal fun KClassImpl<*>.computeMembersByName(name: String): Collection<Reflec
     }
 
 internal fun KClassImpl<*>.computeDeclaredMemberNames(): Set<String> =
-    if (!newFakeOverridesImplementation || useK1Implementation || isComplicatedBuiltinSubclass || kmClass != null) {
+    if (useK1Implementation || isComplicatedBuiltinSubclass || kmClass != null) {
         getMemberNamesFromDescriptors()
     } else buildSet {
         if (!jClass.isAnnotation) {
