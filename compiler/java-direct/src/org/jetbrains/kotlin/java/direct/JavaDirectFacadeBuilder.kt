@@ -25,18 +25,10 @@ import org.jetbrains.kotlin.load.java.createJavaClassFinder
 import org.jetbrains.kotlin.name.FqName
 
 /**
- * Direct-injection seam used to plug `java-direct` into the FIR JVM sessions through
- * `FirJvmSessionFactory.Context.javaFacadeBuilder`. The production CLI populates the builder in
- * `JvmFrontendPipelinePhase.preprocessSessions`; test fixtures populate the equivalent
- * `JavaFacadeBuilderProvider` `TestService` via `JavaDirectFacadeBuilderProvider`.
- *
- * For the source scope (Java source roots non-empty) the builder yields a
- * [CombinedJavaClassFinder] over [JavaClassFinderOverAstImpl] + binary java class finder; for the
- * library scope (no Java source roots) it yields the binary finder alone. The binary finder is
- * memoised per `(scope identityHash, enableCtSym)` so the source-session and library-session
- * facades share the same binary backing and its caches.
- *
- * This is the temporary solution until we separate source and binary facades.
+ * Direct-injection seam used to plug `java-direct` into the FIR JVM sessions through the
+ * `createJavaFacade` lambda parameter on `FirJvmSessionFactory.createSourceSession` and
+ * `FirJvmSessionFactory.createLibrarySession`. `JvmFrontendPipelinePhase.prepareJvmSessions`
+ * populates the builder when the `JvmAnalysisFlags.useJavaDirect` flag is set.
  */
 @OptIn(K1Deprecation::class)
 fun createJavaDirectSourceJavaFacadeBuilder(
