@@ -95,7 +95,7 @@ class JavaResolutionContext private constructor(
             }
 
             val inheritedMemberResolver = JavaInheritedMemberResolver(
-                packageFqName, classFinder, sameFileTopLevelClassProvider,
+                classFinder, sameFileTopLevelClassProvider,
             )
             val scopeContext = JavaScopeContext(
                 sameFileTopLevelClassProvider,

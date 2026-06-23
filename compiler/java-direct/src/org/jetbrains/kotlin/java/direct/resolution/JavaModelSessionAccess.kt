@@ -8,7 +8,6 @@ package org.jetbrains.kotlin.java.direct.resolution
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.FirSessionComponent
 import org.jetbrains.kotlin.fir.SessionConfiguration
-import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
 import org.jetbrains.kotlin.fir.expressions.FirAnnotation
 import org.jetbrains.kotlin.fir.expressions.FirCollectionLiteral
@@ -90,18 +89,6 @@ internal fun FirSession.cycleSafeClassLikeSymbol(classId: ClassId): FirClassLike
     } finally {
         inFlight?.remove(classId)
     }
-}
-
-/**
- * `true` if [classId] resolves through this session's symbol provider to a non-builtin class
- * (`origin != BuiltIns`, mirroring PSI behaviour for stdlib classes whose `.class` files exist
- * only when stdlib is on the classpath).
- *
- * Returns `false` under the same conditions as [cycleSafeClassLikeSymbol] returning `null`.
- */
-internal fun FirSession.cycleSafeTryResolveClass(classId: ClassId): Boolean {
-    val symbol = cycleSafeClassLikeSymbol(classId) ?: return false
-    return symbol.origin != FirDeclarationOrigin.BuiltIns
 }
 
 /**

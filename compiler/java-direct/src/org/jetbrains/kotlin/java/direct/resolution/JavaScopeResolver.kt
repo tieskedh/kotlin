@@ -38,10 +38,12 @@ internal fun findInheritedTypeParameter(name: String): JavaTypeParameter? =
  * Checks (in order):
  * 1. Inner classes of the containing class — declared members ([JavaClass.findInnerClass]) plus
  *    same-file inherited member types ([findInnerClassInSameFileSupertypes], JLS 8.5).
- * 2. Sibling inner classes — declared and same-file-inherited members of the immediate outer class.
- * 3. Inherited inner classes from the containing class's supertypes
+ * 2. Inherited inner classes from the containing class's supertypes
  *    ([JavaInheritedMemberResolver.findInnerClassFromSupertypes], JLS 6.5.2) — the cross-file /
- *    resolved-supertype path.
+ *    resolved-supertype path. This runs *before* the sibling/outer-declared step (3) because, per
+ *    JLS 6.4.1, a member type inherited by the containing class shadows one merely declared in a
+ *    lexically-enclosing class.
+ * 3. Sibling inner classes — declared and same-file-inherited members of the immediate outer class.
  * 4. Inner classes (declared + same-file-inherited) of each outer class up the containing chain
  *    (so deeply-nested classes see siblings of every enclosing class).
  * 5. Top-level classes declared in the same file (`sameFileTopLevelClassProvider`).
@@ -61,16 +63,15 @@ internal fun findClassInCurrentScope(name: Name): JavaClass? {
     // 1. Inner classes of the containing class — declared members (purely syntactic AST query)
     // plus the same-file supertype walk for inherited member types ([findInnerClassInSameFileSupertypes]).
     scope.containingClass?.declaredOrSameFileInherited(name)?.let { return it }
-    // 2. Sibling inner classes — declared and same-file-inherited members of the immediate outer class.
-    // Handles cases like: class J { class AImpl {} class A extends AImpl {} }
-    scope.containingClass?.outerClass?.declaredOrSameFileInherited(name)?.let { return it }
-    // 3. Inherited inner classes from the containing class's supertypes (JLS 6.5.2).
-    // Required for cross-file Java-source supertypes; see KDoc above.
-    // The resolver is read from [JavaFileContext] (per-file, scope-invariant);
-    // the scope data holds no reference to it.
-    scope.containingClass?.let { cls ->
+    // 2. Inherited inner classes from the containing class's supertypes; cross-file Java-source path.
+    // The resolver is read from [JavaFileContext] (per-file, scope-invariant); the scope data holds
+    // no reference to it.
+    (scope.containingClass as? JavaClassOverAst)?.let { cls ->
         inheritedMemberResolver.findInnerClassFromSupertypes(name, cls, mutableSetOf())?.let { return it }
     }
+    // 3. Sibling inner classes — declared and same-file-inherited members of the immediate outer class.
+    // Handles cases like: class J { class AImpl {} class A extends AImpl {} }
+    scope.containingClass?.outerClass?.declaredOrSameFileInherited(name)?.let { return it }
     // 4. Inner classes of each outer class up the containing chain.
     // For deeply-nested classes (Outer { Inner1 { Inner2 { ... } } }) Inner2 must
     // see siblings of every enclosing class.

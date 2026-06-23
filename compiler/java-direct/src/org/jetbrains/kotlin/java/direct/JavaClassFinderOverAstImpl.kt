@@ -45,9 +45,9 @@ class JavaClassFinderOverAstImpl internal constructor(
 ) : JavaClassFinder, LeanJavaClassFinder {
 
     init {
-        // Attach the per-session re-entrance guard used by [cycleSafeClassLikeSymbol] /
-        // [cycleSafeTryResolveClass]. Idempotent; safe to call once per `JavaClassFinderOverAstImpl`
-        // construction even if the same session backs multiple finders.
+        // Attach the per-session re-entrance guard used by [cycleSafeClassLikeSymbol]. Idempotent;
+        // safe to call once per `JavaClassFinderOverAstImpl` construction even if the same session
+        // backs multiple finders.
         session.registerJavaModelInFlightResolutionsIfAbsent()
         // Attach the per-session supertype-walk guard used by [cycleGuardedSupertypeWalk] to bound
         // Java inheritance cycles during supertype walks. Same idempotency guarantees as above.

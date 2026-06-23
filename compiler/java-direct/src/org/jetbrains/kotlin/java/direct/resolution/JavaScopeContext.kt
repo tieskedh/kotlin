@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.load.java.structure.JavaClass
 import org.jetbrains.kotlin.load.java.structure.JavaTypeParameter
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.Name
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Per-position immutable scope **data** for Java source resolution.
@@ -30,19 +31,19 @@ internal class JavaScopeContext(
     /** Type parameters with LOW priority (outer class inherited params, shadowed by inner class names). */
     val inheritedTypeParametersInScope: Map<String, JavaTypeParameter> = emptyMap(),
     /**
-     * Lazily computed aggregated inherited inner classes for the entire containing class chain.
-     * Maps simpleName -> Set<ClassId> across the containing class and all its outer classes.
-     * Cached to avoid re-walking the outer class chain on every simple-name resolution.
+     * Lazily computed inherited inner classes, cached per enclosing class. For a given class
+     * [ClassId] maps simpleName -> Set<ClassId> of the inner classes it transitively inherits
+     * from its supertypes. Resolution walks the containing chain level by level and queries this
+     * cache once per level, so the per-class keying preserves the JLS 6.4.1 priority (an inner
+     * level shadows an outer one) while still avoiding repeated supertype walks.
      *
-     * Keyed by [containingClass]: shared by reference across [withTypeParameters] /
-     * [withInheritedTypeParameters] forks (containing class unchanged) and reset on
-     * [withContainingClass] (containing class changed, aggregated inherited inner classes may differ).
+     * Shared by reference across [withTypeParameters] / [withInheritedTypeParameters] forks
+     * (containing class unchanged) and reset on [withContainingClass].
      */
     val inheritedInnerCache: InheritedInnerCache = InheritedInnerCache(),
 ) {
     class InheritedInnerCache {
-        @Volatile
-        var value: Map<String, Set<ClassId>>? = null
+        val byClass: ConcurrentHashMap<ClassId, Map<String, Set<ClassId>>> = ConcurrentHashMap()
     }
 
     /**

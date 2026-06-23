@@ -9,6 +9,8 @@ import org.jetbrains.kotlin.java.direct.model.JavaClassOverAst
 import org.jetbrains.kotlin.load.java.JavaClassFinder
 import org.jetbrains.kotlin.load.java.structure.JavaClass
 import org.jetbrains.kotlin.load.java.structure.JavaClassifierType
+import org.jetbrains.kotlin.load.java.structure.classId
+import org.jetbrains.kotlin.load.java.structure.impl.splitCanonicalFqName
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
@@ -36,7 +38,6 @@ import org.jetbrains.kotlin.name.Name
  *   recover the AST-side `JavaClass` for outer-class type-argument substitution.
  */
 internal class JavaInheritedMemberResolver(
-    private val packageFqName: FqName,
     private val classFinder: LeanJavaClassFinder?,
     private val sameFileTopLevelClassProvider: (Name) -> JavaClass?,
 ) {
@@ -50,7 +51,7 @@ internal class JavaInheritedMemberResolver(
      * `JavaClass` for cross-file Java-source supertypes; falls back to
      * [sameFileTopLevelClassProvider] for same-file supertypes.
      */
-    fun findInnerClassFromSupertypes(name: Name, javaClass: JavaClass, visited: MutableSet<JavaClass>): JavaClass? {
+    fun findInnerClassFromSupertypes(name: Name, javaClass: JavaClassOverAst, visited: MutableSet<JavaClass>): JavaClass? {
         if (!visited.add(javaClass)) return null
 
         var foundInnerClass: JavaClass? = null
@@ -58,28 +59,35 @@ internal class JavaInheritedMemberResolver(
         // Same-file supertypes — local resolution by simple name. Cross-file supertypes are
         // handled by the classFinder fallback below.
         for (supertype in javaClass.supertypes) {
-            val supertypeRef = supertype.presentableText.let { text ->
-                val withoutGenerics = text.substringBefore('<').trim()
-                withoutGenerics.substringBefore('.').trim()
-            }
-            if (supertypeRef.isEmpty()) continue
-            val supertypeClass = sameFileTopLevelClassProvider(Name.identifier(supertypeRef)) ?: continue
+            val supertypeClass = resolveSameFileSupertype(supertype) ?: continue
             (supertypeClass.findInnerClass(name) ?: findInnerClassFromSupertypes(name, supertypeClass, visited))?.let {
                 if (foundInnerClass == null) foundInnerClass = it else return null
             }
         }
 
-        if (foundInnerClass == null) {
-            val javaClassOverAst = javaClass as? JavaClassOverAst
-            if (javaClassOverAst != null && classFinder != null) {
-                val containingClassId = fqNameInPackageToClassId(javaClassOverAst.fqName, packageFqName)
-                val candidates = classFinder.collectInheritedInnerClasses(containingClassId)[name.asString()] ?: emptySet()
-                if (candidates.size > 1) return null
-                if (candidates.size == 1) return classFinder.findClass(JavaClassFinder.Request(candidates.first()))
-            }
-        }
+        if (foundInnerClass != null || classFinder == null) return foundInnerClass
 
-        return foundInnerClass
+        val containingClassId = javaClass.classId ?: return foundInnerClass
+        val candidates = classFinder.collectInheritedInnerClasses(containingClassId)[name.asString()]
+        return candidates?.singleOrNull()?.let { classFinder.findClass(JavaClassFinder.Request(it)) }
+    }
+
+    /**
+     * Resolves a same-file supertype reference to the [JavaClassOverAst] it denotes.
+     *
+     * Only AST-backed same-file classes are produced here: the outermost segment comes from
+     * [sameFileTopLevelClassProvider] and each nested segment from [JavaClass.findInnerClass], both
+     * of which yield [JavaClassOverAst] for same-file classes. The result is narrowed accordingly so
+     * [findInnerClassFromSupertypes] keeps recursing only over AST classes.
+     */
+    private fun resolveSameFileSupertype(supertype: JavaClassifierType): JavaClassOverAst? {
+        val segments = supertype.presentableText.splitCanonicalFqName().map { it.substringBefore('<').trim() }
+        if (segments.isEmpty() || segments.any { it.isEmpty() }) return null
+        var resolved = sameFileTopLevelClassProvider(Name.identifier(segments.first())) as? JavaClassOverAst ?: return null
+        for (i in 1 until segments.size) {
+            resolved = resolved.findInnerClass(Name.identifier(segments[i])) as? JavaClassOverAst ?: return null
+        }
+        return resolved
     }
 
     /**
@@ -90,6 +98,12 @@ internal class JavaInheritedMemberResolver(
      *
      * @param resolveWithoutInheritance resolves a name without checking inherited inner
      *        classes, to avoid infinite recursion back into this method.
+     * @param includeOuterClasses when `true`, the search starts from the supertypes of
+     *        [containingClass] *and* of every enclosing class; when `false`, only the supertypes
+     *        of [containingClass] itself are searched. The per-level (`false`) flavor lets the
+     *        caller interleave declared and inherited member types level by level, preserving the
+     *        JLS 6.4.1 rule that an inner level's inherited member type shadows an outer level's
+     *        declared one.
      */
     fun resolveInheritedInnerClassToClassId(
         simpleName: String,
@@ -97,14 +111,16 @@ internal class JavaInheritedMemberResolver(
         directSupertypeClassIds: (ClassId) -> List<ClassId>,
         containingClass: JavaClass?,
         resolveWithoutInheritance: (String, (ClassId) -> Boolean) -> ClassId?,
+        includeOuterClasses: Boolean = true,
     ): ClassId? {
         containingClass ?: return null
 
-        // Collect direct supertypes from the containing class and its outer classes.
+        // Collect direct supertypes from the containing class (and, when requested, its outer classes).
         val initialSupertypes = mutableListOf<JavaClassifierType>()
         var currentClass: JavaClass? = containingClass
         while (currentClass != null) {
             initialSupertypes.addAll(currentClass.supertypes)
+            if (!includeOuterClasses) break
             currentClass = currentClass.outerClass
         }
         val visited = mutableSetOf<ClassId>()
