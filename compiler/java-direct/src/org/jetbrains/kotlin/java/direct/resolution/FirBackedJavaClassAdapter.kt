@@ -12,9 +12,17 @@ import org.jetbrains.kotlin.fir.declarations.FirOuterClassTypeParameterRef
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
 import org.jetbrains.kotlin.fir.declarations.FirTypeParameterRef
 import org.jetbrains.kotlin.fir.java.declarations.FirJavaClass
+import org.jetbrains.kotlin.fir.resolve.ScopeSession
+import org.jetbrains.kotlin.fir.resolve.providers.firProvider
+import org.jetbrains.kotlin.fir.resolve.transformers.FirSupertypeResolverVisitor
+import org.jetbrains.kotlin.fir.resolve.transformers.SupertypeComputationSession
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirRegularClassSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol
+import org.jetbrains.kotlin.fir.types.ConeClassLikeType
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
+import org.jetbrains.kotlin.fir.types.FirTypeRef
+import org.jetbrains.kotlin.java.direct.model.FirBackedJavaClassifierType
 import org.jetbrains.kotlin.load.java.structure.JavaAnnotation
 import org.jetbrains.kotlin.load.java.structure.JavaClass
 import org.jetbrains.kotlin.load.java.structure.JavaClassifierType
@@ -122,6 +130,7 @@ internal class FirBackedJavaClassAdapter(
         get() = emptyList()
     override val isDeprecatedInJavaDoc: Boolean
         get() = false
+
     override fun findAnnotation(fqName: FqName): JavaAnnotation? = null
 
     override val isAbstract: Boolean
@@ -131,10 +140,36 @@ internal class FirBackedJavaClassAdapter(
     override val visibility: Visibility
         get() = Visibilities.Public
 
-    override val supertypes: Collection<JavaClassifierType>
-        get() = emptyList()
+    /**
+     * Real, fully-shaped resolved supertype chain — the `java-direct` analog of the PSI light
+     * class's `EXTENDS_LIST` (see [org.jetbrains.kotlin.fir.java.FirJavaElementFinder]). Mirrors
+     * its `resolveSupertypesOnAir` strategy: prefer already-resolved `superTypeRefs`; otherwise
+     * resolve on-air using a fresh, throwaway `SupertypeComputationSession` / `ScopeSession` and
+     * `FirSupertypeResolverVisitor`, against the adapter's existing shared [session].
+     *
+     * Each resolved [ConeClassLikeType] is exposed as a [FirBackedJavaClassifierType] so the
+     * model-side inherited-outer-argument recovery in `JavaClassifierTypeOverAst.computeTypeArguments`
+     * (and FIR's own re-conversion) can read the cone arguments back.
+     *
+     * Cycle safety: the walk is wrapped in [cycleGuardedSupertypeWalk] keyed by [resolvedClassId]
+     * and symbol resolution funnels through [cycleSafeClassLikeSymbol] (via [firRegularClass]);
+     * sessions without a symbol provider (parsing-level fixtures) yield `emptyList()`.
+     */
+    override val supertypes: Collection<JavaClassifierType> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        val fir = firRegularClass ?: return@lazy emptyList()
+        session.cycleGuardedSupertypeWalk(resolvedClassId, default = emptyList()) {
+            val refs = if (fir.superTypeRefs.all { it is FirResolvedTypeRef }) {
+                fir.superTypeRefs
+            } else {
+                fir.resolveSupertypesOnAir(session)
+            }
+            refs.mapNotNull { (it as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType }
+                .map { FirBackedJavaClassifierType(it, session) }
+        }
+    }
     override val innerClassNames: Collection<Name>
         get() = emptyList()
+
     override fun findInnerClass(name: Name): JavaClass? = null
 
     override val isInterface: Boolean
@@ -160,6 +195,7 @@ internal class FirBackedJavaClassAdapter(
         get() = emptyList()
     override val recordComponents: Collection<JavaRecordComponent>
         get() = emptyList()
+
     override fun hasDefaultConstructor(): Boolean = false
 
     override fun equals(other: Any?): Boolean = other is FirBackedJavaClassAdapter && resolvedClassId == other.resolvedClassId
@@ -197,4 +233,20 @@ internal class FirBackedJavaTypeParameter(
 
     override fun hashCode(): Int = firTypeParameterSymbol.hashCode()
     override fun toString(): String = "FirBackedJavaTypeParameter(${firTypeParameterSymbol.name})"
+}
+
+/**
+ * Resolves this class's supertypes on-air using a fresh, throwaway [SupertypeComputationSession]
+ * and [ScopeSession] (and the [FirSupertypeResolverVisitor] itself) against the given shared
+ * [session] — the [FirSession] is the real, long-lived compiler session and is **not** disposable;
+ * only the per-call computation/scope caches are. Mirrors `FirJavaElementFinder.resolveSupertypesOnAir`.
+ * Used by [FirBackedJavaClassAdapter.supertypes] only when `superTypeRefs` are not yet all
+ * [FirResolvedTypeRef] (the common case for already resolved outer/super classes reuses
+ * `superTypeRefs` directly and never reaches this path).
+ */
+private fun FirRegularClass.resolveSupertypesOnAir(session: FirSession): List<FirTypeRef> {
+    val visitor = FirSupertypeResolverVisitor(session, SupertypeComputationSession(), ScopeSession())
+    return visitor.withFile(session.firProvider.getFirClassifierContainerFile(this.symbol)) {
+        visitor.resolveSpecificClassLikeSupertypes(this, superTypeRefs, resolveRecursively = true)
+    }
 }
