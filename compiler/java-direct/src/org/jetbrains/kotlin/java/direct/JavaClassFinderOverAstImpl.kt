@@ -88,7 +88,6 @@ class JavaClassFinderOverAstImpl internal constructor(
     override fun findClasses(request: JavaClassFinder.Request): List<JavaClass> {
         val classId = request.classId
         val segments = classId.relativeClassName.pathSegments().map(Name::asString)
-        if (segments.isEmpty()) return emptyList()
         val topLevelName = segments.first()
         val innerNames = segments.drop(1)
 
