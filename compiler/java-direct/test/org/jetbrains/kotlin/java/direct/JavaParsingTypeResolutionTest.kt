@@ -117,11 +117,11 @@ class JavaParsingTypeResolutionTest : JavaParsingTestBase() {
 
         assert(javaClass.supertypes.size == 1) { "Expected 1 supertype" }
         val supertype = javaClass.supertypes.first()
-        assert(supertype.classifierQualifiedName == "java.util.ArrayList") { "Expected qualified name java.util.ArrayList, got ${supertype.classifierQualifiedName}" }
+        assert(supertype.classifierQualifiedName == "ArrayList") { "Expected simple name ArrayList, got ${supertype.classifierQualifiedName}" }
 
         val listField = javaClass.fields.first { it.name.asString() == "list" }
         val listType = listField.type as JavaClassifierType
-        assert(listType.classifierQualifiedName == "java.util.List") { "Expected qualified name java.util.List for list field, got ${listType.classifierQualifiedName}" }
+        assert(listType.classifierQualifiedName == "List") { "Expected simple name List for list field, got ${listType.classifierQualifiedName}" }
 
         val counterField = javaClass.fields.first { it.name.asString() == "counter" }
         val counterType = counterField.type as JavaClassifierType
@@ -333,16 +333,21 @@ class JavaParsingTypeResolutionTest : JavaParsingTestBase() {
         val supertypes = copyConfig!!.supertypes.toList()
         assert(supertypes.isNotEmpty()) { "CopyConfiguration should have supertypes" }
 
-        // First verify that findInnerClass on SimpleFunctionDescriptor finds CopyBuilder
+        // Declared-only contract: findInnerClass returns ONLY directly declared member types,
+        // matching JavaClassImpl (PSI) / BinaryJavaClass. CopyBuilder is inherited (declared in
+        // FunctionDescriptor), so a direct findInnerClass on SimpleFunctionDescriptor must NOT find it;
+        // inherited lookup is the resolution layer's job (validated via the type reference below).
         val simpleFuncDesc = outerClass.findInnerClass(Name.identifier("SimpleFunctionDescriptor"))
         assert(simpleFuncDesc != null) { "Expected to find SimpleFunctionDescriptor" }
         val inheritedCopyBuilder = simpleFuncDesc!!.findInnerClass(Name.identifier("CopyBuilder"))
-        assert(inheritedCopyBuilder != null) {
-            "SimpleFunctionDescriptor.findInnerClass('CopyBuilder') should find inherited inner class. " +
-                    "innerClassNames=${simpleFuncDesc.innerClassNames}"
+        assert(inheritedCopyBuilder == null) {
+            "SimpleFunctionDescriptor.findInnerClass('CopyBuilder') must return null for an inherited " +
+                    "(not directly declared) member type. innerClassNames=${simpleFuncDesc.innerClassNames}"
         }
 
-        // Now check the supertype resolution in the actual type reference
+        // Inherited resolution must still work end-to-end through the resolver / type-reference path:
+        // CopyConfiguration's supertype `SimpleFunctionDescriptor.CopyBuilder` resolves CopyBuilder as a
+        // member type inherited by SimpleFunctionDescriptor from FunctionDescriptor.
         val allQualifiedNames = supertypes.map { it.classifierQualifiedName }
         val copyBuilderSupertype = supertypes.find { it.classifierQualifiedName.contains("CopyBuilder") }
         assert(copyBuilderSupertype != null) {
@@ -361,6 +366,49 @@ class JavaParsingTypeResolutionTest : JavaParsingTestBase() {
         assert(classifier != null) {
             "Expected supertype classifier to resolve for SimpleFunctionDescriptor.CopyBuilder " +
                     "(inherited inner class). classifierQualifiedName='$supertypeQualified'"
+        }
+    }
+
+    @Test
+    fun testInheritedInnerClassFromQualifiedNestedSameFileSupertype() {
+        // Regression for the fragile `substringBefore('.')` supertype-ref shortcut in the same-file
+        // supertype walk: here the supertype is a *qualified-nested* same-file class `x.S`, and `B`
+        // is a member type declared in `x.S` and inherited by `x1`. Resolving the bare `B` in x1's
+        // scope must navigate the full `x.S` reference (resolve `x`, then `.S`) — the old shortcut
+        // stopped at the outer class `x` and missed `B`.
+        val source = """
+            public class x {
+                public static class S {
+                    public static class B {}
+                }
+            }
+            public class x1 extends x.S {
+                public B getB() { return null; }
+            }
+        """.trimIndent()
+        val parsed = parseSource(source)
+        val root = parsed.root
+        val tree = parsed.tree
+        val context = parsed.context
+
+        val x1Node = tree.getChildren(root).first {
+            tree.getType(it).toString() == "CLASS" &&
+                    tree.findChildByType(it, JavaSyntaxTokenType.IDENTIFIER)?.let { id -> tree.getText(id).toString() } == "x1"
+        }
+        val x1Class = JavaClassOverAst(x1Node, tree, context)
+
+        val getBMethod = x1Class.methods.first { it.name.asString() == "getB" }
+        val returnType = getBMethod.returnType as JavaClassifierType
+
+        // `B` is inherited from the qualified-nested supertype `x.S`; the same-file supertype walk
+        // must resolve it by navigating the full reference, not just its first segment.
+        assert(returnType.classifier != null) {
+            "Return type 'B' should resolve to the inherited nested class x.S.B via the same-file " +
+                    "supertype walk, but classifier was null " +
+                    "(classifierQualifiedName='${returnType.classifierQualifiedName}')"
+        }
+        assert(returnType.classifier?.name?.asString() == "B") {
+            "Classifier should be 'B', got '${returnType.classifier?.name}'"
         }
     }
 }

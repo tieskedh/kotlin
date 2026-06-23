@@ -3,8 +3,12 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
+@file:Suppress("UnstableApiUsage")
+
 package org.jetbrains.kotlin.java.direct.model
 
+import com.intellij.java.syntax.element.JavaSyntaxElementType
+import com.intellij.java.syntax.element.JavaSyntaxTokenType
 import org.jetbrains.kotlin.KtSourceElement
 import org.jetbrains.kotlin.KtSourceElementKind
 import org.jetbrains.kotlin.KtLightSourceElement
@@ -18,6 +22,22 @@ abstract class JavaElementOverAst(
     val node: JavaLightNode,
     val tree: JavaLightTree,
 ) : JavaElement, JavaDirectSourceElementOwner {
+
+    open val isFromSource: Boolean get() = true
+
+    /**
+     * Text of this element's own IDENTIFIER child node, or `null` if it has none.
+     */
+    protected fun identifierText(): String? =
+        tree.findChildByType(node, JavaSyntaxTokenType.IDENTIFIER)?.let { tree.getText(it).toString() }
+
+    /**
+     * This element's own MODIFIER_LIST child, if present. `open` so [JavaClassOverAst] can cache it
+     * lazily; the default plain getter is reused by members and value parameters.
+     */
+    protected open val modifierList: JavaLightNode?
+        get() = tree.findChildByType(node, JavaSyntaxElementType.MODIFIER_LIST)
+
     override fun toKtSourceElement(kind: KtSourceElementKind): KtSourceElement =
         KtLightSourceElement(
             JavaLightAstNode(tree, node),
