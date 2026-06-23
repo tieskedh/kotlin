@@ -39,12 +39,6 @@ sourceSets {
 
 optInToExperimentalCompilerApi()
 
-publish()
-
-runtimeJar()
-sourcesJar()
-javadocJar()
-
 projectTests {
     testTask(
         jUnitMode = JUnitMode.JUnit5,
@@ -55,10 +49,7 @@ projectTests {
             JdkMajorVersion.JDK_17_0,
             JdkMajorVersion.JDK_21_0
         )
-    ) {
-        useJUnitPlatform()
-        workingDir = rootDir
-    }
+    ) {}
     withJvmStdlibAndReflect()
     withScriptRuntime()
     withMockJdkAnnotationsJar()
