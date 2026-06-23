@@ -7,18 +7,16 @@ package org.jetbrains.kotlin.java.direct
 
 import org.jetbrains.kotlin.test.FirParser
 import org.jetbrains.kotlin.test.builders.TestConfigurationBuilder
-import org.jetbrains.kotlin.test.frontend.fir.JavaFacadeBuilderProvider
 import org.jetbrains.kotlin.test.runners.codegen.AbstractJvmBlackBoxCodegenTestBase
 
 abstract class AbstractJavaUsingAstBoxTest : AbstractJvmBlackBoxCodegenTestBase(FirParser.LightTree) {
     override fun configure(builder: TestConfigurationBuilder) {
+        super.configure(builder)
         with(builder) {
             useMetaTestConfigurators(
                 ::OnlyTestsWithJavaSourcesMetaConfigurator
             )
             useConfigurators(::JavaDirectConfigurator)
-            useAdditionalService<JavaFacadeBuilderProvider>(::JavaDirectFacadeBuilderProvider)
         }
-        super.configure(builder)
     }
 }
