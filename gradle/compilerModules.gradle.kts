@@ -100,6 +100,7 @@ val fe10CompilerModules = arrayOf(
     ":compiler:ir.psi2ir",
     ":kotlin-util-klib-metadata",
     ":compiler:javac-wrapper",
+    ":compiler:java-direct",
     ":js:js.frontend",
     ":native:frontend.native",
     ":wasm:wasm.frontend",
