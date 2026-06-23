@@ -47,6 +47,11 @@ class ObjectDeclarationLowering(
     val context: JsCommonBackendContext,
     private val initializeParentCompanions: Boolean = false
 ) : DeclarationTransformer {
+    companion object {
+        internal val INSTANCE_FIELD_NAME: Name = Name.identifier("instance")
+        internal val GET_INSTANCE_METHOD_NAME: Name = Name.identifier("getInstance")
+    }
+
     override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? {
         if (declaration !is IrClass || declaration.kind != ClassKind.OBJECT || declaration.isEffectivelyExternal())
             return null
@@ -54,16 +59,17 @@ class ObjectDeclarationLowering(
         val getInstanceFun = getOrCreateGetInstanceFunction(declaration)
 
         val instanceField = context.irFactory.buildField {
-            name = Name.identifier(declaration.name.asString() + "_instance")
+            name = INSTANCE_FIELD_NAME
             type = declaration.defaultType.makeNullable()
             isStatic = true
             origin = IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE
         }.apply {
-            parent = declaration.parent
+            parent = declaration
             initializer = null  // Initialized with 'undefined'
         }
 
         declaration.objectInstanceField = instanceField
+        declaration.declarations.addAll(0, listOf(instanceField, getInstanceFun))
 
         val primaryConstructor = declaration.primaryConstructor ?: declaration.syntheticPrimaryConstructor!!
 
@@ -106,7 +112,7 @@ class ObjectDeclarationLowering(
             }.statements
         }
 
-        return listOf(declaration, instanceField, getInstanceFun)
+        return null
     }
 
     private fun IrBuilderWithScope.irNullabilityCheck(instanceField: IrField): IrExpression {
@@ -175,11 +181,11 @@ class ObjectUsageLowering(val context: JsCommonBackendContext) : BodyLoweringPas
 private fun getOrCreateGetInstanceFunction(obj: IrClass): IrSimpleFunction =
     obj::objectGetInstanceFunction.getOrSetIfNull {
         obj.factory.buildFun {
-            name = Name.identifier(obj.name.asString() + "_getInstance")
+            name = ObjectDeclarationLowering.GET_INSTANCE_METHOD_NAME
             returnType = obj.defaultType
             origin = JsLoweredDeclarationOrigin.OBJECT_GET_INSTANCE_FUNCTION
             visibility = obj.visibility
         }.apply {
-            parent = obj.parent
+            parent = obj
         }
     }
