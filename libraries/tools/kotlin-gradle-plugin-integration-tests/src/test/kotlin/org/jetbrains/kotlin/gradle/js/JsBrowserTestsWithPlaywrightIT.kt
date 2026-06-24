@@ -29,11 +29,6 @@ import kotlin.io.path.writeText
 import kotlin.test.Ignore
 import kotlin.test.assertEquals
 
-// remove after KTI-3326 Allow kotlin teamcity agents to run playwright browsers
-@OsCondition(
-    supportedOn = [OS.MAC],
-    enabledOnCI = [OS.MAC]
-)
 @OptIn(ExperimentalJsTestDsl::class)
 @JsBrowserGradlePluginTests
 class JsBrowserTestsWithPlaywrightIT : KGPBaseTest() {
