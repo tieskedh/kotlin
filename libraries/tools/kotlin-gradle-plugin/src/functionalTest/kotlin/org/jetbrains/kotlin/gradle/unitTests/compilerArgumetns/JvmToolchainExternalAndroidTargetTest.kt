@@ -30,14 +30,14 @@ class JvmToolchainExternalAndroidTargetTest {
                 withHostTest {}
             },
             kotlinConfiguration = {
-                jvmToolchain(currentJvmToolchainVersion)
+                jvmToolchain(jvm8ToolchainVersion)
             },
         )
         project.evaluate()
 
         val expectedConfiguration = KotlinTaskConfiguration(
-            jvmTarget = currentJvmTarget,
-            toolchainVersion = currentJvmToolchainVersion,
+            jvmTarget = jvm8Target,
+            toolchainVersion = jvm8ToolchainVersion,
         )
 
         assertEquals(expectedConfiguration, project.kotlinTaskConfiguration("compileAndroidMain"))
@@ -48,20 +48,20 @@ class JvmToolchainExternalAndroidTargetTest {
     fun `jvmToolchain configures Kotlin and Java tasks for androidLibrary withJava`() {
         val project = externalAndroidLibraryProject(
             kotlinConfiguration = {
-                jvmToolchain(currentJvmToolchainVersion)
+                jvmToolchain(jvm8ToolchainVersion)
             },
         )
         project.evaluate()
 
         assertEquals(
             KotlinTaskConfiguration(
-                jvmTarget = currentJvmTarget,
-                toolchainVersion = currentJvmToolchainVersion,
+                jvmTarget = jvm8Target,
+                toolchainVersion = jvm8ToolchainVersion,
             ),
             project.kotlinTaskConfiguration("compileAndroidMain"),
         )
         assertEquals(
-            JavaTaskConfiguration(toolchainVersion = currentJvmToolchainVersion),
+            JavaTaskConfiguration(toolchainVersion = jvm8ToolchainVersion),
             project.javaTaskConfiguration("compileAndroidMainJavaWithJavac"),
         )
     }
@@ -73,7 +73,7 @@ class JvmToolchainExternalAndroidTargetTest {
                 compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
             },
             kotlinConfiguration = {
-                jvmToolchain(currentJvmToolchainVersion)
+                jvmToolchain(jvm8ToolchainVersion)
             },
         )
         project.evaluate()
@@ -81,7 +81,7 @@ class JvmToolchainExternalAndroidTargetTest {
         assertEquals(
             KotlinTaskConfiguration(
                 jvmTarget = JvmTarget.JVM_11.target,
-                toolchainVersion = currentJvmToolchainVersion,
+                toolchainVersion = jvm8ToolchainVersion,
             ),
             project.kotlinTaskConfiguration("compileAndroidMain"),
         )
@@ -130,7 +130,7 @@ class JvmToolchainExternalAndroidTargetTest {
     )
 
     private companion object {
-        val currentJvmToolchainVersion: Int = JavaVersion.current().majorVersion.toInt()
-        val currentJvmTarget: String = JvmTarget.fromTarget(JavaVersion.current().majorVersion).target
+        val jvm8ToolchainVersion: Int = JavaVersion.VERSION_1_8.majorVersion.toInt()
+        val jvm8Target: String = JvmTarget.fromTarget(JavaVersion.VERSION_1_8.toString()).target
     }
 }
