@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.konan.serialization
 
 import org.jetbrains.kotlin.K1Deprecation
 import org.jetbrains.kotlin.backend.common.IdSignaturesExtractor
+import org.jetbrains.kotlin.backend.common.IdSignaturesExtractor.ExtractedSignatures
 import org.jetbrains.kotlin.ir.util.IdSignature
 import org.jetbrains.kotlin.library.KotlinLibrary
 import org.jetbrains.kotlin.library.metadata.isCInteropLibrary
@@ -20,11 +21,11 @@ class IdSignaturesExtractorFromCInteropKlib(library: KotlinLibrary) : IdSignatur
         check(library.isCInteropLibrary()) { "Not a C-interop library: $library" }
     }
 
-    override fun extractAllPublicSignatures(): IdSignaturesExtractor.ExtractedSignatures {
+    override fun extractAllPublicSignatures(): ExtractedSignatures {
         TODO("Not yet implemented")
     }
 
-    override fun extractOnlyTopLevelPublicSignatures(): IdSignaturesExtractor.ExtractedSignatures {
+    override fun extractOnlyTopLevelPublicSignatures(): ExtractedSignatures {
         TODO("Not yet implemented")
     }
 }
