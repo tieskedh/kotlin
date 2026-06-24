@@ -1,4 +1,4 @@
-KtLightClassForDecompiledDeclaration
+SymbolLightClassForDecompiledDeclaration
   name: DefaultImpls
   qualifier: one.two.MyInterface.DefaultImpls
   superTypes: [

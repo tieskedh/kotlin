@@ -3,7 +3,7 @@ BaseInterface1.class:
     line: 6
     name: BaseInterface1
     qualifier: abc.BaseInterface1
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: BaseInterface1
       qualifier: abc.BaseInterface1
       superTypes: [
@@ -20,7 +20,7 @@ BaseInterface2.class:
     line: 6
     name: BaseInterface2
     qualifier: abc.BaseInterface2
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: BaseInterface2
       qualifier: abc.BaseInterface2
       superTypes: [
@@ -37,7 +37,7 @@ InterfaceWithBase.class:
     line: 6
     name: InterfaceWithBase
     qualifier: abc.InterfaceWithBase
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: InterfaceWithBase
       qualifier: abc.InterfaceWithBase
       superTypes: [
@@ -46,13 +46,13 @@ InterfaceWithBase.class:
       ]
       superClass: ClsClassImpl: Object (java.lang.Object)
       interfaces: [
-        KtLightClassForDecompiledDeclaration: BaseInterface1 (abc.BaseInterface1)
-        KtLightClassForDecompiledDeclaration: BaseInterface2 (abc.BaseInterface2)
+        SymbolLightClassForDecompiledDeclaration: BaseInterface1 (abc.BaseInterface1)
+        SymbolLightClassForDecompiledDeclaration: BaseInterface2 (abc.BaseInterface2)
       ]
       supers: [
         ClsClassImpl: Object (java.lang.Object)
-        KtLightClassForDecompiledDeclaration: BaseInterface1 (abc.BaseInterface1)
-        KtLightClassForDecompiledDeclaration: BaseInterface2 (abc.BaseInterface2)
+        SymbolLightClassForDecompiledDeclaration: BaseInterface1 (abc.BaseInterface1)
+        SymbolLightClassForDecompiledDeclaration: BaseInterface2 (abc.BaseInterface2)
       ]
 
 InterfaceWithTransitive.class:
@@ -60,7 +60,7 @@ InterfaceWithTransitive.class:
     line: 6
     name: InterfaceWithTransitive
     qualifier: abc.InterfaceWithTransitive
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: InterfaceWithTransitive
       qualifier: abc.InterfaceWithTransitive
       superTypes: [
@@ -68,11 +68,11 @@ InterfaceWithTransitive.class:
       ]
       superClass: ClsClassImpl: Object (java.lang.Object)
       interfaces: [
-        KtLightClassForDecompiledDeclaration: InterfaceWithBase (abc.InterfaceWithBase)
+        SymbolLightClassForDecompiledDeclaration: InterfaceWithBase (abc.InterfaceWithBase)
       ]
       supers: [
         ClsClassImpl: Object (java.lang.Object)
-        KtLightClassForDecompiledDeclaration: InterfaceWithBase (abc.InterfaceWithBase)
+        SymbolLightClassForDecompiledDeclaration: InterfaceWithBase (abc.InterfaceWithBase)
       ]
 
 SingleInterface.class:
@@ -80,7 +80,7 @@ SingleInterface.class:
     line: 6
     name: SingleInterface
     qualifier: abc.SingleInterface
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: SingleInterface
       qualifier: abc.SingleInterface
       superTypes: [
@@ -91,4 +91,3 @@ SingleInterface.class:
       supers: [
         ClsClassImpl: Object (java.lang.Object)
       ]
-

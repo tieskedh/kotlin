@@ -15,13 +15,14 @@ import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtClassOrObject
 import org.jetbrains.kotlin.psi.KtFile
 
-internal class KtLightClassForDecompiledFacade(
+open class KtLightClassForDecompiledFacade(
     clsDelegate: PsiClass,
     clsParent: PsiElement,
     file: KtClsFile,
     kotlinOrigin: KtClassOrObject?,
     override val files: Collection<KtFile>,
-) : KtLightClassForDecompiledDeclaration(clsDelegate, clsParent, file, kotlinOrigin), KtLightClassForFacade {
+    factory: DecompiledLightClassFactory = DecompiledLightClassFactory,
+) : KtLightClassForDecompiledDeclaration(clsDelegate, clsParent, file, kotlinOrigin, factory), KtLightClassForFacade {
     override fun getName(): String = super<KtLightClassForFacade>.getName()
     override val facadeClassFqName: FqName get() = file.javaFileFacadeFqName
     override val originKind: LightClassOriginKind get() = LightClassOriginKind.BINARY

@@ -3,7 +3,7 @@ AbstractClass.class:
     line: 6
     name: AbstractClass
     qualifier: cba.AbstractClass
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: AbstractClass
       qualifier: cba.AbstractClass
       superTypes: [
@@ -20,16 +20,16 @@ ChildOfOpen.class:
     line: 6
     name: ChildOfOpen
     qualifier: cba.ChildOfOpen
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: ChildOfOpen
       qualifier: cba.ChildOfOpen
       superTypes: [
         PsiType:OpenClassFromAbstractClass
       ]
-      superClass: KtLightClassForDecompiledDeclaration: OpenClassFromAbstractClass (cba.OpenClassFromAbstractClass)
+      superClass: SymbolLightClassForDecompiledDeclaration: OpenClassFromAbstractClass (cba.OpenClassFromAbstractClass)
       interfaces: []
       supers: [
-        KtLightClassForDecompiledDeclaration: OpenClassFromAbstractClass (cba.OpenClassFromAbstractClass)
+        SymbolLightClassForDecompiledDeclaration: OpenClassFromAbstractClass (cba.OpenClassFromAbstractClass)
       ]
 
 FinalClass.class:
@@ -37,7 +37,7 @@ FinalClass.class:
     line: 6
     name: FinalClass
     qualifier: cba.FinalClass
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: FinalClass
       qualifier: cba.FinalClass
       superTypes: [
@@ -54,15 +54,14 @@ OpenClassFromAbstractClass.class:
     line: 6
     name: OpenClassFromAbstractClass
     qualifier: cba.OpenClassFromAbstractClass
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: OpenClassFromAbstractClass
       qualifier: cba.OpenClassFromAbstractClass
       superTypes: [
         PsiType:AbstractClass
       ]
-      superClass: KtLightClassForDecompiledDeclaration: AbstractClass (cba.AbstractClass)
+      superClass: SymbolLightClassForDecompiledDeclaration: AbstractClass (cba.AbstractClass)
       interfaces: []
       supers: [
-        KtLightClassForDecompiledDeclaration: AbstractClass (cba.AbstractClass)
+        SymbolLightClassForDecompiledDeclaration: AbstractClass (cba.AbstractClass)
       ]
-

@@ -6,11 +6,12 @@ import com.intellij.psi.*
 import org.jetbrains.kotlin.analysis.decompiled.light.classes.origin.LightMemberOriginForCompiledField
 import org.jetbrains.kotlin.analysis.decompiler.psi.file.KtClsFile
 
-internal class KtLightEnumEntryForDecompiledDeclaration(
+open class KtLightEnumEntryForDecompiledDeclaration(
     private val fldDelegate: PsiEnumConstant,
     fldParent: KtLightClassForDecompiledDeclaration,
     lightMemberOrigin: LightMemberOriginForCompiledField,
     private val file: KtClsFile,
+    private val factory: DecompiledLightClassFactory = DecompiledLightClassFactory,
 ) : KtLightFieldForDecompiledDeclaration(
     fldDelegate,
     fldParent,
@@ -23,7 +24,7 @@ internal class KtLightEnumEntryForDecompiledDeclaration(
 
     override fun getInitializingClass(): PsiEnumConstantInitializer? = cachedValueWithLibraryTracker {
         fldDelegate.initializingClass?.let {
-            KtLightEnumClassForDecompiledDeclaration(
+            factory.createEnumEntryInitializerClass(
                 psiConstantInitializer = it,
                 enumConstant = this,
                 clsParent = containingClass,

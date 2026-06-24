@@ -3,7 +3,7 @@ WithCompanionBlock.class:
     line: 6
     name: WithCompanionBlock
     qualifier: cba.WithCompanionBlock
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: WithCompanionBlock
       qualifier: cba.WithCompanionBlock
       superTypes: [
@@ -20,7 +20,7 @@ WithCompanionBlockAndObject.class:
     line: 6
     name: WithCompanionBlockAndObject
     qualifier: cba.WithCompanionBlockAndObject
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: WithCompanionBlockAndObject
       qualifier: cba.WithCompanionBlockAndObject
       superTypes: [
@@ -36,7 +36,7 @@ WithCompanionBlockAndObject.class:
     line: 7
     name: Companion
     qualifier: cba.WithCompanionBlockAndObject.Companion
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: Companion
       qualifier: cba.WithCompanionBlockAndObject.Companion
       superTypes: [

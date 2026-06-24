@@ -3,7 +3,7 @@ A.class:
     line: 4
     name: A
     qualifier: A
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: A
       qualifier: A
       superTypes: [
@@ -19,7 +19,7 @@ A.class:
     line: 5
     name: NestedInA
     qualifier: A.NestedInA
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: NestedInA
       qualifier: A.NestedInA
       superTypes: [
@@ -35,7 +35,7 @@ A.class:
     line: 6
     name: NestedInNestedInA
     qualifier: A.NestedInA.NestedInNestedInA
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: NestedInNestedInA
       qualifier: A.NestedInA.NestedInNestedInA
       superTypes: [
@@ -51,7 +51,7 @@ A.class:
     line: 9
     name: InnerInNestedInA
     qualifier: A.NestedInA.InnerInNestedInA
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: InnerInNestedInA
       qualifier: A.NestedInA.InnerInNestedInA
       superTypes: [
@@ -67,7 +67,7 @@ A.class:
     line: 13
     name: InnerInA
     qualifier: A.InnerInA
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: InnerInA
       qualifier: A.InnerInA
       superTypes: [
@@ -83,7 +83,7 @@ A.class:
     line: 14
     name: InnerInInnerInA
     qualifier: A.InnerInA.InnerInInnerInA
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: InnerInInnerInA
       qualifier: A.InnerInA.InnerInInnerInA
       superTypes: [
@@ -100,39 +100,39 @@ B.class:
     line: 4
     name: B
     qualifier: B
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: B
       qualifier: B
       superTypes: [
         PsiType:A
       ]
-      superClass: KtLightClassForDecompiledDeclaration: A (A)
+      superClass: SymbolLightClassForDecompiledDeclaration: A (A)
       interfaces: []
       supers: [
-        KtLightClassForDecompiledDeclaration: A (A)
+        SymbolLightClassForDecompiledDeclaration: A (A)
       ]
 
   KtClass:
     line: 5
     name: NestedInB
     qualifier: B.NestedInB
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: NestedInB
       qualifier: B.NestedInB
       superTypes: [
         PsiType:NestedInNestedInA
       ]
-      superClass: KtLightClassForDecompiledDeclaration: NestedInNestedInA (A.NestedInA.NestedInNestedInA)
+      superClass: SymbolLightClassForDecompiledDeclaration: NestedInNestedInA (A.NestedInA.NestedInNestedInA)
       interfaces: []
       supers: [
-        KtLightClassForDecompiledDeclaration: NestedInNestedInA (A.NestedInA.NestedInNestedInA)
+        SymbolLightClassForDecompiledDeclaration: NestedInNestedInA (A.NestedInA.NestedInNestedInA)
       ]
 
   KtClass:
     line: 8
     name: InnerInB
     qualifier: B.InnerInB
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: InnerInB
       qualifier: B.InnerInB
       superTypes: [
@@ -143,4 +143,3 @@ B.class:
       supers: [
         ClsClassImpl: Object (java.lang.Object)
       ]
-

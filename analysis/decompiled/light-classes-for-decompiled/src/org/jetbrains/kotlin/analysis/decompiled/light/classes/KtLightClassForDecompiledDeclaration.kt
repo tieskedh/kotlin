@@ -43,7 +43,12 @@ open class KtLightClassForDecompiledDeclaration(
     clsDelegate: PsiClass,
     clsParent: PsiElement,
     protected val file: KtClsFile,
-    kotlinOrigin: KtClassOrObject?
+    kotlinOrigin: KtClassOrObject?,
+    /**
+     * The strategy used to construct nested/member light elements, so the whole subtree shares the same kind
+     * (for instance, Analysis-API-aware subclasses). See [DecompiledLightClassFactory].
+     */
+    protected val factory: DecompiledLightClassFactory = DecompiledLightClassFactory,
 ) : KtLightClassForDecompiledDeclarationBase(clsDelegate, clsParent, kotlinOrigin) {
     private val contentFinderCache by lazyPub {
         ClassContentFinderCache(
@@ -125,7 +130,7 @@ open class KtLightClassForDecompiledDeclaration(
     override fun getRecordHeader(): PsiRecordHeader? = cachedValueWithLibraryTracker {
         val clsRecordHeader = clsDelegate.recordHeader
         if (clsRecordHeader != null) {
-            KtLightRecordHeaderForDecompiledDeclaration(
+            factory.createRecordHeader(
                 clsDelegate = clsRecordHeader,
                 containingClass = this,
                 kotlinOrigin = kotlinOrigin?.primaryConstructor,
@@ -182,7 +187,7 @@ open class KtLightClassForDecompiledDeclaration(
                 isGetEntriesMethod(psiMethod) -> return@mapNotNull getEnumEntriesPsiMethod(this)
             }
 
-            KtLightMethodForDecompiledDeclaration(
+            factory.createMethod(
                 funDelegate = psiMethod,
                 funParent = this,
                 lightMemberOrigin = LightMemberOriginForCompiledMethod(psiMethod, file)
@@ -193,14 +198,14 @@ open class KtLightClassForDecompiledDeclaration(
     override fun getOwnFields(): List<PsiField> = cachedValueWithLibraryTracker {
         this.clsDelegate.fields.map { psiField ->
             if (psiField is PsiEnumConstant) {
-                KtLightEnumEntryForDecompiledDeclaration(
+                factory.createEnumEntry(
                     fldDelegate = psiField,
                     fldParent = this,
                     lightMemberOrigin = LightMemberOriginForCompiledField(psiField, file),
                     file = file,
                 )
             } else {
-                KtLightFieldForDecompiledDeclaration(
+                factory.createField(
                     fldDelegate = psiField,
                     fldParent = this,
                     lightMemberOrigin = LightMemberOriginForCompiledField(psiField, file),
@@ -218,7 +223,7 @@ open class KtLightClassForDecompiledDeclaration(
                     (clsDeclaration as? KtClassOrObject)?.takeIf { it.name == innerClassName }
                 }
 
-            KtLightClassForDecompiledDeclaration(
+            factory.createClass(
                 clsDelegate = psiClass,
                 clsParent = this,
                 file = file,

@@ -18,7 +18,7 @@ import org.jetbrains.kotlin.asJava.elements.KtLightMember
 import org.jetbrains.kotlin.asJava.elements.KtLightMethod
 import org.jetbrains.kotlin.psi.KtDeclaration
 
-class KtLightMethodForDecompiledDeclaration(
+open class KtLightMethodForDecompiledDeclaration(
     private val funDelegate: PsiMethod,
     private val funParent: KtLightClass,
     override val lightMemberOrigin: LightMemberOriginForCompiledMethod,

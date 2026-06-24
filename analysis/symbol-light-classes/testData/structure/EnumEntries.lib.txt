@@ -3,7 +3,7 @@ BaseInterface.class:
     line: 6
     name: BaseInterface
     qualifier: one.two.BaseInterface
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: BaseInterface
       qualifier: one.two.BaseInterface
       superTypes: [
@@ -20,7 +20,7 @@ EnumClassWithInterface.class:
     line: 6
     name: EnumClassWithInterface
     qualifier: one.two.EnumClassWithInterface
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: EnumClassWithInterface
       qualifier: one.two.EnumClassWithInterface
       superTypes: [
@@ -29,11 +29,11 @@ EnumClassWithInterface.class:
       ]
       superClass: ClsClassImpl: Enum (java.lang.Enum)
       interfaces: [
-        KtLightClassForDecompiledDeclaration: BaseInterface (one.two.BaseInterface)
+        SymbolLightClassForDecompiledDeclaration: BaseInterface (one.two.BaseInterface)
       ]
       supers: [
         ClsClassImpl: Enum (java.lang.Enum)
-        KtLightClassForDecompiledDeclaration: BaseInterface (one.two.BaseInterface)
+        SymbolLightClassForDecompiledDeclaration: BaseInterface (one.two.BaseInterface)
       ]
 
   KtEnumEntry:
@@ -53,7 +53,7 @@ EnumEntries.class:
     line: 6
     name: EnumEntries
     qualifier: one.two.EnumEntries
-    light: KtLightClassForDecompiledDeclaration
+    light: SymbolLightClassForDecompiledDeclaration
       name: EnumEntries
       qualifier: one.two.EnumEntries
       superTypes: [
@@ -76,4 +76,3 @@ EnumEntries.class:
     name: SecondEntryWithBody
     qualifier: one.two.EnumEntries.SecondEntryWithBody
     light: null
-

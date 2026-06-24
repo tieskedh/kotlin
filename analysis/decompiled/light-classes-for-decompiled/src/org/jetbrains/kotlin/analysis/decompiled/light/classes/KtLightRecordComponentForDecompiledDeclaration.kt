@@ -12,7 +12,7 @@ import org.jetbrains.kotlin.asJava.elements.KtLightElement
 import org.jetbrains.kotlin.asJava.elements.KtLightElementBase
 import org.jetbrains.kotlin.psi.KtParameter
 
-internal class KtLightRecordComponentForDecompiledDeclaration(
+open class KtLightRecordComponentForDecompiledDeclaration(
     private val clsDelegate: PsiRecordComponent,
     recordHeader: KtLightRecordHeaderForDecompiledDeclaration,
     internal val containingClass: KtLightClassForDecompiledDeclarationBase,

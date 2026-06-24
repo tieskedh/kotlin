@@ -2,7 +2,7 @@ KtClass:
   line: 6
   name: MyAnnotationClass
   qualifier: one.MyAnnotationClass
-  light: KtLightClassForDecompiledDeclaration
+  light: SymbolLightClassForDecompiledDeclaration
     name: MyAnnotationClass
     qualifier: one.MyAnnotationClass
     superTypes: [
@@ -16,4 +16,3 @@ KtClass:
       ClsClassImpl: Object (java.lang.Object)
       ClsClassImpl: Annotation (java.lang.annotation.Annotation)
     ]
-

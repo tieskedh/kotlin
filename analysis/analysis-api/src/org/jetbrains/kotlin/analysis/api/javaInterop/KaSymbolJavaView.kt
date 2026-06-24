@@ -35,6 +35,9 @@ public interface KaSymbolJavaView<out T : KaSymbol> {
     /**
      * [KaModule] from which view is provided.
      * The module is used for providing proper actualizations for `expect` declarations.
+     *
+     * [useSiteModule] is `null` when the represented declaration comes from a library.
+     * In this case, the declaration is already actualized, so the [useSiteModule] is redundant.
      */
-    public val useSiteModule: KaModule
+    public val useSiteModule: KaModule?
 }

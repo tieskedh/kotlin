@@ -15,10 +15,11 @@ import org.jetbrains.kotlin.asJava.elements.KtLightElement
 import org.jetbrains.kotlin.asJava.elements.KtLightElementBase
 import org.jetbrains.kotlin.psi.KtPrimaryConstructor
 
-internal class KtLightRecordHeaderForDecompiledDeclaration(
+open class KtLightRecordHeaderForDecompiledDeclaration(
     private val clsDelegate: PsiRecordHeader,
     private val containingClass: KtLightClassForDecompiledDeclarationBase,
     override val kotlinOrigin: KtPrimaryConstructor?,
+    private val factory: DecompiledLightClassFactory = DecompiledLightClassFactory,
 ) : KtLightElementBase(parent = containingClass), PsiRecordHeader, KtLightElement<KtPrimaryConstructor, PsiRecordHeader> {
     override fun getRecordComponents(): Array<PsiRecordComponent> =
         cachedValueWithLibraryTracker { createRecordComponents() }.toArrayIfNotEmptyOrDefault(PsiRecordComponent.EMPTY_ARRAY)
@@ -26,7 +27,7 @@ internal class KtLightRecordHeaderForDecompiledDeclaration(
     private fun createRecordComponents(): List<PsiRecordComponent> {
         val originParameters = kotlinOrigin?.valueParameters.orEmpty()
         return clsDelegate.recordComponents.mapIndexed { index, recordComponent ->
-            KtLightRecordComponentForDecompiledDeclaration(
+            factory.createRecordComponent(
                 clsDelegate = recordComponent,
                 recordHeader = this,
                 containingClass = containingClass,

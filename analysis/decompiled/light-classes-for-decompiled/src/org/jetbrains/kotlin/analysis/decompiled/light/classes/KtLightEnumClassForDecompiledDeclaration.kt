@@ -10,17 +10,19 @@ import org.jetbrains.kotlin.analysis.decompiler.psi.file.KtClsFile
 import org.jetbrains.kotlin.asJava.classes.KtLightClass
 import org.jetbrains.kotlin.psi.KtClassOrObject
 
-internal class KtLightEnumClassForDecompiledDeclaration(
+open class KtLightEnumClassForDecompiledDeclaration(
     private val psiConstantInitializer: PsiEnumConstantInitializer,
     private val enumConstant: KtLightEnumEntryForDecompiledDeclaration,
     clsParent: KtLightClass,
     file: KtClsFile,
-    kotlinOrigin: KtClassOrObject?
+    kotlinOrigin: KtClassOrObject?,
+    factory: DecompiledLightClassFactory = DecompiledLightClassFactory,
 ) : KtLightClassForDecompiledDeclaration(
     clsDelegate = psiConstantInitializer,
     clsParent = clsParent,
     file = file,
-    kotlinOrigin = kotlinOrigin
+    kotlinOrigin = kotlinOrigin,
+    factory = factory,
 ), PsiEnumConstantInitializer {
     override fun getBaseClassType(): PsiClassType = psiConstantInitializer.baseClassType
 

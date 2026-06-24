@@ -33,7 +33,6 @@ import org.jetbrains.kotlin.analysis.api.platform.projectStructure.KotlinProject
 import org.jetbrains.kotlin.analysis.api.projectStructure.*
 import org.jetbrains.kotlin.analysis.api.symbols.*
 import org.jetbrains.kotlin.analysis.decompiled.light.classes.DecompiledLightClassesFactory
-import org.jetbrains.kotlin.analysis.decompiled.light.classes.KtLightClassForDecompiledDeclaration
 import org.jetbrains.kotlin.analysis.decompiler.psi.file.KtClsFile
 import org.jetbrains.kotlin.asJava.KotlinAsJavaSupport
 import org.jetbrains.kotlin.asJava.classes.*
@@ -42,6 +41,7 @@ import org.jetbrains.kotlin.asJava.finder.JavaElementFinder
 import org.jetbrains.kotlin.fileClasses.isJvmMultifileClassFile
 import org.jetbrains.kotlin.fileClasses.javaFileFacadeFqName
 import org.jetbrains.kotlin.light.classes.symbol.classes.*
+import org.jetbrains.kotlin.light.classes.symbol.decompiled.SymbolDecompiledLightClassFactory
 import org.jetbrains.kotlin.light.classes.symbol.utils.SafeNestedNullableCaffeineCache
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
@@ -226,7 +226,9 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
         module: KaModule,
         files: List<KtFile>
     ): KtLightClassForFacade? {
-        val lightClass = DecompiledLightClassesFactory.createLightFacadeForDecompiledKotlinFile(project, facadeFqName, files)
+        val lightClass = DecompiledLightClassesFactory.createLightFacadeForDecompiledKotlinFile(
+            project, facadeFqName, files, SymbolDecompiledLightClassFactory,
+        )
         if (lightClass != null) {
             return lightClass
         }
@@ -364,7 +366,9 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
     context(_: KaSession)
     private fun createInstanceOfDecompiledLightClass(classOrObject: KaClassSymbol, module: KaModule): KtLightClass? {
         val ktClassOrObject = classOrObject.psi as? KtClassOrObject ?: return null
-        val lightClass = DecompiledLightClassesFactory.getLightClassForDecompiledClassOrObject(ktClassOrObject, project)
+        val lightClass = DecompiledLightClassesFactory.getLightClassForDecompiledClassOrObject(
+            ktClassOrObject, project, SymbolDecompiledLightClassFactory,
+        )
         if (lightClass != null) {
             return lightClass
         }
@@ -396,7 +400,7 @@ internal class SymbolKotlinAsJavaSupport(private val project: Project) : KotlinA
                     project = project,
                 ) ?: return@mapNotNull null
 
-                KtLightClassForDecompiledDeclaration(javaClsClass, javaClsClass.parent, psiFile, null)
+                SymbolDecompiledLightClassFactory.createClass(javaClsClass, javaClsClass.parent, psiFile, null)
             } else {
                 null
             }
