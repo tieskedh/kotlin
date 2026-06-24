@@ -7,7 +7,7 @@ package org.jetbrains.kotlin.cli.klib
 
 import org.jetbrains.kotlin.K1Deprecation
 import org.jetbrains.kotlin.backend.common.DumpIrReferenceRenderingAsSignatureStrategy
-import org.jetbrains.kotlin.backend.common.IrSignaturesExtractor
+import org.jetbrains.kotlin.backend.common.IdSignaturesExtractorFromRegularKlib
 import org.jetbrains.kotlin.backend.common.serialization.IrInterningService
 import org.jetbrains.kotlin.backend.common.serialization.IrModuleDeserializer
 import org.jetbrains.kotlin.backend.common.serialization.NonLinkingIrInlineFunctionDeserializer
@@ -342,7 +342,7 @@ internal class DumpIrSignatures(output: KlibToolOutput, args: KlibToolArguments)
 
         val idSignatureRenderer = args.signatureVersion.getMostSuitableSignatureRenderer() ?: return
 
-        val signatures = with(IrSignaturesExtractor(library)) {
+        val signatures = with(IdSignaturesExtractorFromRegularKlib(library)) {
             if (args.onlyTopLevelSignatures) extractOnlyTopLevelPublicSignatures() else extractAllPublicSignatures()
         }
 
