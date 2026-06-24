@@ -50,8 +50,6 @@ fun createJavaDirectSourceJavaFacadeBuilder(
     }
 }
 
-private data class BinaryFinderCacheKey(val scopeIdentity: Int, val enableCtSym: Boolean?)
-
 private fun buildJavaDirectClassFinder(
     configuration: CompilerConfiguration,
     localFs: VirtualFileSystem,
