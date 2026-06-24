@@ -239,6 +239,7 @@ enum class JunitTag {
     JvmKGP,
     DaemonsKGP,
     JsKGP,
+    JsBrowserKGP,
     NativeKGP,
     MppKGP,
     AndroidKGP,
@@ -320,6 +321,11 @@ val perTagJunitTasks = JunitTag.values().map { junitTag ->
         JunitTag.JsKGP -> junitTag.taskConfiguration(
             "Run tests for Kotlin/JS part of Gradle plugin",
             "kgpJsTests",
+        )
+
+        JunitTag.JsBrowserKGP -> junitTag.taskConfiguration(
+            "Run tests for Kotlin/JS part of Gradle plugin",
+            "kgpJsBrowserTests",
         )
         JunitTag.NativeKGP -> junitTag.taskConfiguration(
             "Run tests for Kotlin/Native part of Gradle plugin",

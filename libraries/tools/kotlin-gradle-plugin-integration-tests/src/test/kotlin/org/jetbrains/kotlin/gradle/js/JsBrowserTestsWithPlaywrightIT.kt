@@ -35,7 +35,7 @@ import kotlin.test.assertEquals
     enabledOnCI = [OS.MAC]
 )
 @OptIn(ExperimentalJsTestDsl::class)
-@JsGradlePluginTests
+@JsBrowserGradlePluginTests
 class JsBrowserTestsWithPlaywrightIT : KGPBaseTest() {
     override val defaultBuildOptions: BuildOptions
         get() = super.defaultBuildOptions.copy().disableIsolatedProjectsBecauseOfJsAndWasmKT75899()

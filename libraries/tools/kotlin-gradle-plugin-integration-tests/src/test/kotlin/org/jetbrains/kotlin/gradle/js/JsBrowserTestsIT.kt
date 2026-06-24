@@ -16,7 +16,7 @@ import org.jetbrains.kotlin.gradle.uklibs.applyMultiplatform
 import org.junit.jupiter.api.Assumptions.assumeFalse
 import kotlin.test.assertContains
 
-@JsGradlePluginTests
+@JsBrowserGradlePluginTests
 class JsBrowserTestsIT : KGPBaseTest() {
 
     @GradleTest
