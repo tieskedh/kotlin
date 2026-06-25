@@ -189,7 +189,12 @@ class IrElementToJsStatementTransformer : BaseIrElementToJsNodeTransformer<JsSta
             synthetic = syntheticVariable
             wasMovedFromItsDeclarationPlace = declaration.wasMovedFromItsDeclarationPlace
         }
-        return JsVars(JsVars.Variant.Var, variable).apply { synthetic = syntheticVariable }
+        val variant = when {
+            !context.staticContext.backendContext.es6mode -> JsVars.Variant.Var
+            declaration.isVar -> JsVars.Variant.Let
+            else -> JsVars.Variant.Const
+        }
+        return JsVars(variant, variable).apply { synthetic = syntheticVariable }
     }
 
     override fun visitDelegatingConstructorCall(expression: IrDelegatingConstructorCall, context: JsGenerationContext): JsStatement {
