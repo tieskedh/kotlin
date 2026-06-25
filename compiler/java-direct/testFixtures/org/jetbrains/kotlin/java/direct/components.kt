@@ -9,10 +9,7 @@ import org.jetbrains.kotlin.config.AnalysisFlag
 import org.jetbrains.kotlin.config.JvmAnalysisFlags
 import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.test.directives.model.RegisteredDirectives
-import org.jetbrains.kotlin.test.services.EnvironmentConfigurator
-import org.jetbrains.kotlin.test.services.MetaTestConfigurator
-import org.jetbrains.kotlin.test.services.TestServices
-import org.jetbrains.kotlin.test.services.moduleStructure
+import org.jetbrains.kotlin.test.services.*
 
 /**
  * Enables `java-direct` for `JavaUsingAst*` tests by setting the
@@ -33,6 +30,6 @@ private val javaFileRegex = Regex("""^\s*//\s* FILE:\s* .*\.java\s*$""")
 
 class OnlyTestsWithJavaSourcesMetaConfigurator(testServices: TestServices) : MetaTestConfigurator(testServices) {
     override fun shouldSkipTest(): Boolean =
-        testServices.moduleStructure.originalTestDataFiles.first().useLines { lines -> lines.none { it.matches(javaFileRegex) } }
+        testServices.moduleStructure.modules.any { module -> module.files.any { it.isJavaFile } }
 }
 
