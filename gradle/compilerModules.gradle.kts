@@ -81,6 +81,7 @@ val firCompilerModules = arrayOf(
     ":compiler:fir:entrypoint", // TODO should not be in core modules but FIR IDE uses DependencyListForCliModule from this module
     ":compiler:fir:fir2ir:jvm-backend",  // TODO should not be in core modules but FIR IDE uses Fir2IrSignatureComposer from this module
     ":compiler:fir:fir2ir", // TODO should not be in core modules but FIR IDE uses Fir2IrSignatureComposer from this module
+    ":compiler:java-direct",
 ).also { extra["firCompilerModules"] = it }
 
 /**
@@ -100,7 +101,6 @@ val fe10CompilerModules = arrayOf(
     ":compiler:ir.psi2ir",
     ":kotlin-util-klib-metadata",
     ":compiler:javac-wrapper",
-    ":compiler:java-direct",
     ":js:js.frontend",
     ":native:frontend.native",
     ":wasm:wasm.frontend",
