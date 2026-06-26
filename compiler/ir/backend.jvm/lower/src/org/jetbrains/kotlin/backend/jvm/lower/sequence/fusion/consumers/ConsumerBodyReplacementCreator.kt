@@ -5,31 +5,20 @@
 
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.consumers
 
-import org.jetbrains.kotlin.backend.common.lower.irThrow
 import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.*
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies.LoweringStrategy
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies.irAsNotNull
+import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
-import org.jetbrains.kotlin.ir.builders.irBlock
-import org.jetbrains.kotlin.ir.builders.irBreak
-import org.jetbrains.kotlin.ir.builders.irCallConstructor
-import org.jetbrains.kotlin.ir.builders.irGet
-import org.jetbrains.kotlin.ir.builders.irIfThen
-import org.jetbrains.kotlin.ir.builders.irNull
-import org.jetbrains.kotlin.ir.builders.irSet
-import org.jetbrains.kotlin.ir.builders.irString
-import org.jetbrains.kotlin.ir.builders.irTrue
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrBlock
+import org.jetbrains.kotlin.ir.expressions.IrBreak
 import org.jetbrains.kotlin.ir.expressions.IrCall
-import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrContinue
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
-import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
-import org.jetbrains.kotlin.ir.types.IrType
-import org.jetbrains.kotlin.ir.types.makeNullable
-import org.jetbrains.kotlin.ir.util.dumpKotlinLike
+import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
+import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 
 private const val FOR_EACH = "forEach"
 private const val FIND = "find"
@@ -44,151 +33,66 @@ private const val FILTER_TO = "filterTo"
 private const val FILTER_NOT_TO = "filterNotTo"
 private const val FILTER_NOT_NULL_TO = "filterNotNullTo"
 
-abstract class ConsumerBodyReplacementCreator {
-    abstract fun create(expression: IrCall): IrExpression?
+internal abstract class ConsumerStrategy(val data: ConsumerData, val expression: IrExpression) {
+    abstract fun initializeState(): List<IrVariable>
+
+    abstract fun getConsumerBuilder(): ConsumerBodyBuilder?
+
+    abstract fun finalizeResult(): IrExpression
+    abstract val returnsElement: Boolean
 }
 
-internal fun createConsumerBodyReplacementCreator(
+internal data class ConsumerData(
+    val context: JvmBackendContext,
+    val builder: IrBuilderWithScope,
+    val parent: IrDeclarationParent,
+    val sequenceData: SequenceData
+)
+
+internal fun createConsumerStrategy(
+    expression: IrCall,
     functionName: String,
-    context: JvmBackendContext,
-    builder: IrBuilderWithScope,
-    parent: IrDeclarationParent,
-    sequenceData: SequenceData,
-): ConsumerBodyReplacementCreator? {
+    data: ConsumerData,
+): ConsumerStrategy? {
     return when (functionName) {
-        FOR_EACH -> ForEachBodyReplacementCreator(context, builder, parent, sequenceData)
-        FIND -> FindBodyReplacementCreator(true, context, builder, parent, sequenceData)
-        FIND_LAST -> FindBodyReplacementCreator(false, context, builder, parent, sequenceData)
-        FIRST -> FirstLastBodyReplacementCreator(isOrNull = false, isFirst = true, context, builder, parent, sequenceData)
-        FIRST_OR_NULL -> FirstLastBodyReplacementCreator(isOrNull = true, isFirst = true, context, builder, parent, sequenceData)
-        FIRST_NOT_NULL_OF -> FirstNotNullOfBodyReplacementCreator(false, context, builder, parent, sequenceData)
-        FIRST_NOT_NULL_OF_OR_NULL -> FirstNotNullOfBodyReplacementCreator(true, context, builder, parent, sequenceData)
-        LAST -> FirstLastBodyReplacementCreator(isOrNull = false, isFirst = false, context, builder, parent, sequenceData)
-        LAST_OR_NULL -> FirstLastBodyReplacementCreator(isOrNull = true, isFirst = false, context, builder, parent, sequenceData)
-        FILTER_TO -> FilterToBodyReplacementCreator(FilterVersion.Filter, context, builder, parent, sequenceData)
-        FILTER_NOT_TO -> FilterToBodyReplacementCreator(FilterVersion.FilterNot, context, builder, parent, sequenceData)
-        FILTER_NOT_NULL_TO -> FilterToBodyReplacementCreator(FilterVersion.FilterNotNull, context, builder, parent, sequenceData)
+        FOR_EACH -> ForEachConsumerStrategy(data, expression)
+        FIND -> FindConsumerStrategy(data, expression, isFirst = true)
+        FIND_LAST -> FindConsumerStrategy(data, expression, isFirst = false)
+        FIRST -> FirstLastConsumerStrategy(data, expression, isOrNull = false, isFirst = true)
+        FIRST_OR_NULL -> FirstLastConsumerStrategy(data, expression, isOrNull = true, isFirst = true)
+        FIRST_NOT_NULL_OF -> FirstNotNullOfConsumerStrategy(data, expression, isOrNull = false)
+        FIRST_NOT_NULL_OF_OR_NULL -> FirstNotNullOfConsumerStrategy(data, expression, isOrNull = true)
+        LAST -> FirstLastConsumerStrategy(data, expression, isOrNull = false, isFirst = false)
+        LAST_OR_NULL -> FirstLastConsumerStrategy(data, expression, isOrNull = true, isFirst = false)
+        FILTER_TO -> FilterToConsumerStrategy(data, expression, FilterVersion.Filter)
+        FILTER_NOT_TO -> FilterToConsumerStrategy(data, expression, FilterVersion.FilterNot)
+        FILTER_NOT_NULL_TO -> FilterToConsumerStrategy(data, expression, FilterVersion.FilterNotNull)
         else -> null
     }
 }
 
-internal fun createFirstInnerBody(builder: IrBuilderWithScope, loop: IrLoop): (IrExpression, IrVariable) -> IrExpression {
-    return { argument: IrExpression, resultVariable: IrVariable ->
-        builder.irBlock {
-            +irSet(resultVariable, argument)
-            +irBreak(loop)
-        }
-    }
+internal fun createConsumerStrategy(
+    expression: IrBlock,
+    data: ConsumerData,
+): ConsumerStrategy? {
+    val loopData = gatherLoopData(expression, data.parent, data.context) ?: return null
+    return ForLoopConsumerStrategy(data, loopData, expression)
 }
 
-internal fun createLastInnerBody(builder: IrBuilderWithScope): (IrExpression, IrVariable) -> IrExpression {
-    return { argument: IrExpression, resultVariable: IrVariable ->
-        builder.irBlock {
-            +irSet(resultVariable, argument)
-        }
-    }
-}
-
-internal fun lowerAndReturnVariable(
-    builder: IrBuilderWithScope,
-    parent: IrDeclarationParent,
-    sequenceData: SequenceData,
-    loop: IrLoop,
-    resultVariable: IrVariable,
-    loopBody: (IrVariable) -> IrContainerExpression,
-    returnType: IrType
-): IrExpression? {
-    val strategy = sequenceData.sequenceSource.createStrategy(builder)
-    val newBody = strategy.lowerLoop(builder to parent, loopBody, sequenceData, loop, null) ?: return null
-    newBody.statements.add(builder.irGet(resultVariable))
-    newBody.type = returnType
-    return newBody
-}
-
-internal fun createLoweredFirstLastBody(
-    strategy: LoweringStrategy,
-    builderWithParent: IrBuilderWithParent,
-    oldBody: (IrVariable) -> IrContainerExpression,
-    sequenceData: SequenceData,
-    loop: IrLoop,
-    skippedIterationVariable: IrVariable,
-    isOrNull: Boolean,
-    context: JvmBackendContext,
-): IrContainerExpression? {
-    val builder = builderWithParent.first
-    val newBody =
-        strategy.lowerLoop(
-            builderWithParent,
-            oldBody,
-            sequenceData,
-            loop,
-            null
-        )
-            ?: return null
-
-    val notFoundStatement = if (isOrNull) null else builder.irIfThen(
-        context.irBuiltIns.unitType,
-        builder.irGet(skippedIterationVariable),
-        builder.irThrow(
-            builder.irCallConstructor(context.symbols.noSuchElementExceptionCtorString, emptyList()).apply {
-                arguments[0] = builder.irString("Sequence is empty.")
-            }
-        )
-    )
-
-    if (notFoundStatement != null)
-        newBody.statements.add(notFoundStatement)
-    return newBody
-}
-
-internal inline fun firstLastDeclarations(
-    expression: IrCall,
-    sequenceData: SequenceData,
-    builderWithParent: IrBuilderWithParent,
-    context: JvmBackendContext,
-    block: (
-        builder: IrBuilderWithScope,
-        parent: IrDeclarationParent,
-        updatedData: SequenceData,
-        strategy: LoweringStrategy,
-        predicate: IrRichFunctionReference?,
-        resultVariable: IrVariable,
-        skippedIterationVariable: IrVariable,
-    ) -> IrExpression
-): IrExpression? {
-    val builder = builderWithParent.first
-    val resultVariable = builder.scope.createTemporaryVariable(
-        builder.irNull(),
-        isMutable = true,
-        irType = expression.type.makeNullable(),
-        nameHint = "FirstLastResult"
-    )
-    val skippedIterationVariable = builder.scope.createTemporaryVariable(
-        builder.irTrue(),
-        isMutable = true,
-        irType = context.irBuiltIns.booleanType,
-        nameHint = "skippedIteration"
-    )
-    val updatedSequenceData = sequenceData.addDeclaration(resultVariable).addDeclaration(skippedIterationVariable)
-    val strategy = updatedSequenceData.sequenceSource.createStrategy(builder)
-    val lambda = expression.arguments.getOrNull(1)
-    if (lambda != null) {
-        if (lambda !is IrRichFunctionReference) return null
-    }
-    return block(builder, builderWithParent.second, updatedSequenceData, strategy, lambda, resultVariable, skippedIterationVariable)
-}
-
-internal fun addResultGetValueToBody(
-    expression: IrExpression,
-    resultVariable: IrVariable,
-    builder: IrBuilderWithScope,
-    newBody: IrContainerExpression
+fun IrElement.rebindJumps(
+    targetLoop: IrLoop,
+    onBreak: (IrBreak) -> IrExpression,
+    onContinue: (IrContinue) -> IrExpression
 ) {
-    if (expression.type == resultVariable.type) {
-        newBody.statements.add(builder.irGet(resultVariable))
-    } else if (expression.type.makeNullable() == resultVariable.type) {
-        newBody.statements.add(builder.irAsNotNull(builder.irGet(resultVariable)))
-    } else {
-        error("resultVariable type mismatch: ${expression.type.dumpKotlinLike()}, ${resultVariable.type.dumpKotlinLike()}")
-    }
+    this.transformChildrenVoid(object : IrElementTransformerVoid() {
+        override fun visitBreak(jump: IrBreak): IrExpression {
+            if (jump.loop == targetLoop) return onBreak(jump)
+            return super.visitBreak(jump)
+        }
+
+        override fun visitContinue(jump: IrContinue): IrExpression {
+            if (jump.loop == targetLoop) return onContinue(jump)
+            return super.visitContinue(jump)
+        }
+    })
 }

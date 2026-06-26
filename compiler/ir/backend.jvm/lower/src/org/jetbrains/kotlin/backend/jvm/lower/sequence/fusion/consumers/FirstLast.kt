@@ -5,89 +5,96 @@
 
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.consumers
 
-import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
+import org.jetbrains.kotlin.backend.common.lower.irIfThen
+import org.jetbrains.kotlin.backend.common.lower.irNot
+import org.jetbrains.kotlin.backend.common.lower.irThrow
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies.createSequenceWhile
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irBlock
+import org.jetbrains.kotlin.ir.builders.irCallConstructor
 import org.jetbrains.kotlin.ir.builders.irFalse
 import org.jetbrains.kotlin.ir.builders.irGet
-import org.jetbrains.kotlin.ir.builders.irIfThen
+import org.jetbrains.kotlin.ir.builders.irNull
+import org.jetbrains.kotlin.ir.builders.irReturn
+import org.jetbrains.kotlin.ir.builders.irReturnableBlock
 import org.jetbrains.kotlin.ir.builders.irSet
-import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
+import org.jetbrains.kotlin.ir.builders.irString
+import org.jetbrains.kotlin.ir.builders.irTrue
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
-import org.jetbrains.kotlin.ir.expressions.IrLoop
+import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
+import org.jetbrains.kotlin.ir.types.makeNullable
 
-internal class FirstLastBodyReplacementCreator(
-    val isOrNull: Boolean,
-    val isFirst: Boolean,
-    val context: JvmBackendContext,
-    val builder: IrBuilderWithScope,
-    val parent: IrDeclarationParent,
-    val sequenceData: SequenceData
-) :
-    ConsumerBodyReplacementCreator() {
+internal class FirstLastConsumerStrategy(data: ConsumerData, expression: IrCall, val isFirst: Boolean, val isOrNull: Boolean) :
+    ConsumerStrategy(data, expression) {
+    override val returnsElement: Boolean = true
+    val resultVariable: IrVariable = data.builder.scope.createTemporaryVariable(
+        data.builder.irNull(),
+        "result",
+        isMutable = true,
+        irType = expression.type.makeNullable()
+    )
+    val skippedVariable: IrVariable = data.builder.scope.createTemporaryVariable(data.builder.irTrue(), "skipped", isMutable = true)
+    override fun initializeState(): List<IrVariable> = listOf(skippedVariable, resultVariable)
 
-    private fun handleFirstLast(
-        builderWithParent: IrBuilderWithParent,
-        expression: IrCall,
-        sequenceData: SequenceData,
-        updateVariableBlock: (IrExpression, IrVariable) -> IrExpression,
-        loop: IrLoop,
-    ): IrExpression? {
-        return firstLastDeclarations(
-            expression,
-            sequenceData,
-            builderWithParent,
-            context
-        ) { builder, parent, updatedSequenceData, strategy, predicateLambda, resultVariable, skippedIterationVariable ->
-            val predicate = predicateLambda?.let {
-                { argument: IrExpression -> builder.callRichFunctionReference(it, parent, argument) }
-            }
-            val oldBody = { loopVariable: IrVariable ->
-                val thenPart = builder.irBlock {
-                    +irSet(skippedIterationVariable, builder.irFalse())
-                    +updateVariableBlock(irGet(loopVariable), resultVariable)
-                }
-                builder.irBlock {
-                    if (predicate != null) {
-                        +irIfThen(
-                            context.irBuiltIns.unitType,
-                            predicate(irGet(loopVariable)),
-                            thenPart
+    override fun getConsumerBuilder(): ConsumerBodyBuilder {
+        val possiblePredicate = (expression as IrCall).arguments.getOrNull(1)
+        val containsPredicate = possiblePredicate != null
+        val predicate = if (containsPredicate)
+            possiblePredicate as? IrRichFunctionReference
+                ?: error("The predicate argument for first/last is not a function reference")
+        else null
+        with(data.builder) {
+            return { sequenceElement ->
+                val block = irReturnableBlock(context.irBuiltIns.booleanType) {}
+                var predicateResult: IrVariable? = null
+                if (containsPredicate) {
+                    predicateResult =
+                        scope.createTemporaryVariable(
+                            callRichFunctionReference(predicate!!, data.parent, irGet(sequenceElement)),
+                            nameHint = "predicateResult"
                         )
-                    } else +thenPart
+                    val thenPart = irBlock {
+                        +irSet(resultVariable, irGet(sequenceElement))
+                        +irSet(skippedVariable, irFalse())
+                    }
+                    block.statements.add(predicateResult)
+                    block.statements.add(irIfThen(irGet(predicateResult), thenPart))
+                } else {
+                    block.statements.add(irSet(resultVariable, irGet(sequenceElement)))
+                    block.statements.add(irSet(skippedVariable, irFalse()))
                 }
+                val result = if (isFirst) if (containsPredicate) irNot(irGet(predicateResult!!)) else irFalse() else irTrue()
+                block.statements.add(irReturn(result).apply { returnTargetSymbol = block.symbol })
+                block
             }
-            val newBody =
-                createLoweredFirstLastBody(
-                    strategy,
-                    builderWithParent,
-                    oldBody,
-                    updatedSequenceData,
-                    loop,
-                    skippedIterationVariable,
-                    isOrNull,
-                    context
-                )
-                    ?: return null
-            addResultGetValueToBody(expression, resultVariable, builder, newBody)
-            newBody.type = expression.type
-            return newBody
         }
     }
 
-    override fun create(expression: IrCall): IrExpression? {
-        return if (isFirst) {
-            val loop = builder.createSequenceWhile()
-            handleFirstLast(builder to parent, expression, sequenceData, createFirstInnerBody(builder, loop), loop)
-        } else {
-            val loop = builder.createSequenceWhile()
-            handleFirstLast(builder to parent, expression, sequenceData, createLastInnerBody(builder), loop)
-        }
+    override fun finalizeResult(): IrExpression {
+        return createFirstLastFinalResult(isOrNull, data.builder, resultVariable, skippedVariable, data)
+    }
+}
+
+internal fun createFirstLastFinalResult(
+    isOrNull: Boolean,
+    builder: IrBuilderWithScope,
+    resultVariable: IrVariable,
+    skippedVariable: IrVariable,
+    data: ConsumerData,
+): IrExpression = builder.irBlock {
+    if (isOrNull) {
+        +irGet(resultVariable)
+    } else {
+        val wasSkipped = irGet(skippedVariable)
+        val throwException = irThrow(
+            irCallConstructor(data.context.symbols.noSuchElementExceptionCtorString, emptyList()).apply {
+                arguments[0] = irString("Sequence is empty.")
+            }
+        )
+        +irIfThen(wasSkipped, throwException)
+        +irGet(resultVariable)
     }
 }

@@ -3,14 +3,14 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies
+package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.producers
 
 import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
 import org.jetbrains.kotlin.ir.IrElement
-import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irBlock
@@ -38,6 +38,7 @@ import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
+
 
 internal fun IrBuilderWithScope.irAsNotNull(value: IrExpression): IrExpression {
     val nonNullType = value.type.makeNotNull()
@@ -95,27 +96,14 @@ class VariableSubstitutionTransformer(
     }
 }
 
-internal sealed class LoweringStrategy {
-    abstract fun lowerLoop(
+internal sealed class ProducerStrategy {
+    abstract fun fuseConsumer(
         builderWithParent: IrBuilderWithParent,
-        loopBody: (IrVariable) -> IrContainerExpression,
         sequenceData: SequenceData,
-        newLoop: IrLoop,
-        loopVariable: IrVariable?,
+        consumerBodyBuilder: ConsumerBodyBuilder,
+        initialDeclarations: List<IrVariable>,
+        finalExpression: IrExpression
     ): IrContainerExpression?
-
-    abstract fun createIteratorReplacement(
-        builderWithParent: IrBuilderWithParent,
-    ): IteratorReplacement?
-
-    internal data class IteratorReplacement(
-        val iteratorVariable: IrVariable,
-        val outerLoopVariable: IrVariable,
-        val iteratorNextStatement: IrStatement,
-        val condition: IrExpression,
-    ) {
-        companion object
-    }
 
     /**
      * Transforms loop body:
@@ -133,12 +121,11 @@ internal sealed class LoweringStrategy {
      *  }
      * ```
      */
-    protected fun addReplacementsToBody(
+    protected fun addTransformerReplacements(
         builderWithParent: IrBuilderWithParent,
-        bodyRewriter: (IrVariable) -> IrContainerExpression,
+        bodyRewriter: (IrValueDeclaration) -> IrContainerExpression,
         sequenceData: SequenceData,
         initialValue: IrExpression,
-        newBodyOrigin: IrStatementOrigin?,
         loop: IrLoop,
         innerLoopVariable: IrVariable?,
     ): IrExpression {
@@ -149,7 +136,7 @@ internal sealed class LoweringStrategy {
         ) { filteredValue ->
             val builder = builderWithParent.first
             val mappedValue = sequenceData.mapReplacement(builderWithParent, filteredValue)
-            builder.irBlock(origin = newBodyOrigin) {
+            builder.irBlock {
                 val valueAfterReplacements = scope.createTemporaryVariable(
                     mappedValue,
                     origin = IrDeclarationOrigin.FOR_LOOP_VARIABLE,
@@ -162,85 +149,27 @@ internal sealed class LoweringStrategy {
             }
         }
     }
+}
 
-    internal fun addReplacementsToForEachCall(
-        builderWithParent: IrBuilderWithParent,
-        forEachFunction: IrRichFunctionReference,
-        sequenceData: SequenceData,
-        initialValue: IrExpression,
-        loop: IrLoop,
-    ): IrExpression {
-        return sequenceData.newLoopPrologue(
-            builderWithParent,
-            loop,
-            initialValue,
-        ) { filteredValue ->
-            val mappedValue = sequenceData.mapReplacement(builderWithParent, filteredValue)
-            builderWithParent.first.irBlock(origin = IrStatementOrigin.FOR_LOOP_INNER_WHILE) {
-                val valueAfterReplacements = scope.createTemporaryVariable(
-                    mappedValue,
-                    origin = IrDeclarationOrigin.FOR_LOOP_VARIABLE,
-                )
-                +valueAfterReplacements
-                +callRichFunctionReference(forEachFunction, builderWithParent.second, irGet(valueAfterReplacements))
-            }
-        }
+fun updateLoopVariableInBody(
+    builder: IrBuilderWithScope,
+    oldLoopVariable: IrValueDeclaration,
+    body: IrContainerExpression,
+    oldLoop: IrLoop?,
+    parent: IrDeclarationParent,
+): Pair<(IrValueDeclaration) -> IrContainerExpression, IrLoop> {
+    val newLoop = builder.createSequenceWhile().apply {
+        this.label = oldLoop?.label ?: "sequence_while_loop"
     }
-
-    fun updateLoopVariableInBody(
-        builder: IrBuilderWithScope,
-        oldLoopVariable: IrValueDeclaration,
-        body: IrContainerExpression,
-        oldLoop: IrLoop?,
-        parent: IrDeclarationParent,
-    ): Pair<(IrVariable) -> IrContainerExpression, IrLoop> {
-        val newLoop = builder.createSequenceWhile().apply {
-            this.label = oldLoop?.label ?: "sequence_while_loop"
-        }
-        return { newInnerLoopVariable: IrVariable ->
-            body.transformChildrenVoid(
-                VariableSubstitutionTransformer(
-                    oldLoopVariable.symbol,
-                    newInnerLoopVariable.symbol,
-                    newLoop,
-                    oldLoop,
-                )
+    return { newInnerLoopVariable: IrValueDeclaration ->
+        body.transformChildrenVoid(
+            VariableSubstitutionTransformer(
+                oldLoopVariable.symbol,
+                newInnerLoopVariable.symbol,
+                newLoop,
+                oldLoop,
             )
-            body.patchDeclarationParents(parent)
-        } to newLoop
-    }
-
-    protected fun addTakeVariableDeclarations(
-        oldLoop: IrContainerExpression,
-        sequenceData: SequenceData,
-        builder: IrBuilderWithScope
-    ): IrContainerExpression =
-        builder.irBlock {
-            +sequenceData.declarationsBeforeLoop(builder)
-            +oldLoop
-        }
-
-    /**
-     * Given a loop body, iteratorDeclaration, and loopVariable definition, creates the outer shell of what is expected in a lowered for loop.
-     */
-    internal fun createLoweredLoop(
-        iteratorDeclaration: IrVariable,
-        outerLoopVariable: IrVariable,
-        loopCondition: IrExpression,
-        builder: IrBuilderWithScope,
-        loopBody: IrExpression,
-        sequenceData: SequenceData,
-        newLoop: IrLoop,
-    ): IrContainerExpression {
-        newLoop.body = builder.irBlock {
-            +outerLoopVariable
-            +loopBody
-        }
-        newLoop.condition = loopCondition
-        val newBlock = builder.irBlock {
-            +iteratorDeclaration
-            +newLoop
-        }
-        return addTakeVariableDeclarations(newBlock, sequenceData, builder)
-    }
+        )
+        body.patchDeclarationParents(parent)
+    } to newLoop
 }

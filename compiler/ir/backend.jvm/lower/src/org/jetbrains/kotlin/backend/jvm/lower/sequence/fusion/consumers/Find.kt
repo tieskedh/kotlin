@@ -5,48 +5,69 @@
 
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.consumers
 
-import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
+import org.jetbrains.kotlin.backend.common.lower.irNot
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies.createSequenceWhile
-import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
-import org.jetbrains.kotlin.ir.builders.irBlock
-import org.jetbrains.kotlin.ir.builders.irBreak
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irIfThen
 import org.jetbrains.kotlin.ir.builders.irNull
+import org.jetbrains.kotlin.ir.builders.irReturn
+import org.jetbrains.kotlin.ir.builders.irReturnableBlock
 import org.jetbrains.kotlin.ir.builders.irSet
-import org.jetbrains.kotlin.ir.builders.irTemporary
-import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
+import org.jetbrains.kotlin.ir.builders.irTrue
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 
-internal class FindBodyReplacementCreator(
-    val isFirst: Boolean,
-    val context: JvmBackendContext,
-    val builder: IrBuilderWithScope,
-    val parent: IrDeclarationParent,
-    val sequenceData: SequenceData
-) : ConsumerBodyReplacementCreator() {
-    override fun create(expression: IrCall): IrExpression? {
-        val findPredicate = expression.arguments.getOrNull(1) as? IrRichFunctionReference ?: return null
-        val loop = builder.createSequenceWhile()
-        val resultVariable = builder.scope.createTemporaryVariable(builder.irNull(), isMutable = true, irType = expression.type)
-        val findBody = { loopVariable: IrVariable ->
-            builder.irBlock {
-                val predicateCall = callRichFunctionReference(findPredicate, parent, irGet(loopVariable))
-                val isFoundVariable = irTemporary(predicateCall)
-                val thenPart = irBlock {
-                    +irSet(resultVariable, irGet(loopVariable))
-                    if (isFirst) +irBreak(loop)
-                }
-                +irIfThen(context.irBuiltIns.unitType, irGet(isFoundVariable), thenPart)
+internal class FindConsumerStrategy(data: ConsumerData, expression: IrCall, val isFirst: Boolean) : ConsumerStrategy(data, expression) {
+    override val returnsElement: Boolean = true
+    val resultVariable: IrVariable = data.builder.scope.createTemporaryVariable(
+        data.builder.irNull(),
+        isMutable = true,
+        irType = expression.type
+    )
+
+    override fun initializeState(): List<IrVariable> {
+        return listOf(resultVariable)
+    }
+
+    override fun getConsumerBuilder(): ConsumerBodyBuilder {
+        with(data.builder) {
+            return { sequenceElement ->
+                val expression = expression as IrCall
+                val findPredicate = expression.arguments.getOrNull(1) as? IrRichFunctionReference ?: error("No predicate argument for find")
+                /*
+                for find:
+                ```
+                val wasFound = findPredicate(sequenceElement)
+                if (wasFound) result = sequenceElement
+                return !wasFound
+                ```
+                for findLast:
+                ```
+                val wasFound = findPredicate(sequenceElement)
+                if (wasFound) result = sequenceElement
+                return true // always tell the producer to check all the elements
+                ```
+                 */
+                val block = irReturnableBlock(context.irBuiltIns.booleanType) {}
+                val wasFoundVariable =
+                    scope.createTemporaryVariable(callRichFunctionReference(findPredicate, data.parent, irGet(sequenceElement)))
+                block.statements.add(wasFoundVariable)
+                block.statements.add(
+                    irIfThen(
+                        context.irBuiltIns.unitType,
+                        irGet(wasFoundVariable),
+                        irSet(resultVariable, irGet(sequenceElement))
+                    )
+                )
+                val result = if (isFirst) irNot(irGet(wasFoundVariable)) else irTrue()
+                block.statements.add(irReturn(result).apply { returnTargetSymbol = block.symbol })
+                block
             }
         }
-
-        val updatedSequenceData = sequenceData.addDeclaration(resultVariable)
-        return lowerAndReturnVariable(builder, parent, updatedSequenceData, loop, resultVariable, findBody, expression.type)
     }
+
+    override fun finalizeResult(): IrExpression = data.builder.irGet(resultVariable)
 }

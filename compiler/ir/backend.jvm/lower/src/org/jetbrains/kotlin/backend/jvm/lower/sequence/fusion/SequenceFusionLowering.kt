@@ -29,8 +29,11 @@ import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
+import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.typeOrNull
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.util.getPackageFragment
@@ -67,6 +70,8 @@ import org.jetbrains.kotlin.utils.addToStdlib.assignFrom
  * ```
  */
 
+internal typealias ConsumerBodyBuilder = (IrValueDeclaration) -> IrContainerExpression
+
 class SequenceFusionLowering(val context: JvmBackendContext) : FileLoweringPass {
     override fun lower(irFile: IrFile) {
         val reuseMarker = ReusedSequenceMarker(context)
@@ -101,6 +106,12 @@ internal fun isSequenceTransformer(expression: IrExpression): Boolean {
         else -> false
     }
 }
+
+internal fun getBaseTypeFromSequence(sequence: IrExpression): IrType? =
+    (sequence.type as? IrSimpleType)?.arguments?.getOrNull(0)?.typeOrNull
+
+internal fun getBaseTypeFromSequenceScopeFunction(sequenceScope: IrExpression): IrType? =
+    ((sequenceScope.type as? IrSimpleType)?.arguments?.getOrNull(0) as? IrSimpleType)?.arguments?.getOrNull(0)?.typeOrNull
 
 internal fun IrBuilderWithScope.callRichFunctionReference(
     ref: IrRichFunctionReference,
@@ -139,50 +150,52 @@ internal fun getInnerMostReceiver(expression: IrExpression): IrExpression? {
 private fun lookupForLoopVariable(loopBody: IrBlock): IrVariable? = loopBody.statements.filterIsInstance<IrVariable>()
     .singleOrNull { v -> v.origin == IrDeclarationOrigin.FOR_LOOP_VARIABLE }
 
+internal data class LoopData(
+    val loop: IrLoop?,
+    val loopVariable: IrVariable,
+    val loopBody: IrBlock,
+)
+
+internal fun gatherLoopData(block: IrBlock, parent: IrDeclarationParent, context: JvmBackendContext): LoopData? {
+    if (block.origin != IrStatementOrigin.FOR_LOOP) return null
+
+    // extract loop iterator variable and loop body from IrBlock
+    if (block.statements.size != 2) return null
+    val blockCopy = block.deepCopyWithSymbols(parent)
+    val iteratorDeclaration = blockCopy.statements[0] as? IrVariable ?: return null
+    val loop = blockCopy.statements[1] as? IrWhileLoop ?: return null
+
+    val possiblySequenceInitializer = iteratorDeclaration.initializer as? IrCall ?: return null
+    val iterable = possiblySequenceInitializer.arguments.firstOrNull() ?: return null
+    if (!isElementSequence(context, iterable)) return null
+    if (loop.body !is IrBlock) return null
+    val body = loop.body as IrBlock
+    val loopVariable = lookupForLoopVariable(body) ?: return null
+    body.statements.remove(loopVariable)
+    return LoopData(loop, loopVariable, body)
+}
+
 private class SequenceFusionTransformer(val context: JvmBackendContext) : IrElementTransformerVoidWithContext() {
-    private data class LoopData(
-        val loop: IrLoop?,
-        val loopVariable: IrVariable,
-        val loopBody: IrBlock,
-    )
-
-    private fun gatherLoopData(block: IrBlock, parent: IrDeclarationParent): LoopData? {
-        if (block.origin != IrStatementOrigin.FOR_LOOP) return null
-
-        // extract loop iterator variable and loop body from IrBlock
-        if (block.statements.size != 2) return null
-        val blockCopy = block.deepCopyWithSymbols(parent)
-        val iteratorDeclaration = blockCopy.statements[0] as? IrVariable ?: return null
-        val loop = blockCopy.statements[1] as? IrWhileLoop ?: return null
-
-        val possiblySequenceInitializer = iteratorDeclaration.initializer as? IrCall ?: return null
-        val iterable = possiblySequenceInitializer.arguments.firstOrNull() ?: return null
-        if (!isElementSequence(context, iterable)) return null
-        if (loop.body !is IrBlock) return null
-        val body = loop.body as IrBlock
-        val loopVariable = lookupForLoopVariable(body) ?: return null
-        body.statements.remove(loopVariable)
-        return LoopData(loop, loopVariable, body)
-    }
-
     override fun visitBlock(expression: IrBlock): IrExpression {
         val visitedExpression = super.visitBlock(expression)
         if (visitedExpression !is IrBlock) return visitedExpression
 
         val builder = context.createIrBuilder(currentScope!!.scope.scopeOwnerSymbol, expression.startOffset, expression.endOffset)
         val parent = currentScope?.scope?.scopeOwnerSymbol as? IrDeclarationParent ?: currentDeclarationParent ?: return visitedExpression
-        val loopData = gatherLoopData(visitedExpression, parent) ?: return visitedExpression
         val receiver =
             ((expression.statements.getOrNull(0) as? IrVariable)?.initializer as? IrCall)?.arguments?.getOrNull(0)
                 ?: return visitedExpression
         val gatherer = SequenceDataGatherer(context)
         receiver.accept(gatherer, null)
         val sequenceData = receiver.sequenceDataOfExpression ?: return visitedExpression
-        val strategy = sequenceData.sequenceSource.createStrategy(builder)
-        val results = strategy.updateLoopVariableInBody(builder, loopData.loopVariable, loopData.loopBody, loopData.loop, parent)
-        val preparedBody = results.first
-        val newLoop = results.second
-        return strategy.lowerLoop(builder to parent, preparedBody, sequenceData, newLoop, loopData.loopVariable) ?: visitedExpression
+        val data = ConsumerData(context, builder, parent, sequenceData)
+        val consumerStrategy = createConsumerStrategy(visitedExpression, data) ?: return visitedExpression
+        val initialDeclarations = consumerStrategy.initializeState() + sequenceData.declarationsBeforeLoop(builder)
+        val consumerBuilder = consumerStrategy.getConsumerBuilder() ?: return visitedExpression
+        val finalResult = consumerStrategy.finalizeResult()
+        val producerStrategy = sequenceData.sequenceSource.createProducerStrategy(builder, context)
+        return producerStrategy.fuseConsumer(builder to parent, sequenceData, consumerBuilder, initialDeclarations, finalResult)
+            ?: return visitedExpression
     }
 
     override fun visitCall(expression: IrCall): IrExpression {
@@ -197,8 +210,19 @@ private class SequenceFusionTransformer(val context: JvmBackendContext) : IrElem
         val gatherer = SequenceDataGatherer(context)
         receiver.accept(gatherer, null)
         val sequenceData = receiver.sequenceDataOfExpression ?: return visitedExpression
+        val data = ConsumerData(context, builder, parent, sequenceData)
+        val consumerStrategy =
+            createConsumerStrategy(
+                visitedExpression,
+                functionName,
+                data
+            ) ?: return visitedExpression
+        val producerStrategy = sequenceData.sequenceSource.createProducerStrategy(builder, context)
+        val initialDeclarations = consumerStrategy.initializeState() + sequenceData.declarationsBeforeLoop(builder)
+        val consumerBuilder = consumerStrategy.getConsumerBuilder() ?: return visitedExpression
+        val finalResult = consumerStrategy.finalizeResult()
         val newExpression =
-            createConsumerBodyReplacementCreator(functionName, context, builder, parent, sequenceData)?.create(visitedExpression)
+            producerStrategy.fuseConsumer(builder to parent, sequenceData, consumerBuilder, initialDeclarations, finalResult)
                 ?: return visitedExpression
         return if (isSequenceTransformer(receiver)) {
             builder.irBlock {

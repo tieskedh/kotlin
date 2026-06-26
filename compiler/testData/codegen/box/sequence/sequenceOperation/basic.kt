@@ -5,11 +5,17 @@
 fun box(): String {
     var result = ""
     val x = sequence {
-        result += "OK"
+        result += "O"
         yield(1)
         result += "NOT OK"
         yield(2)
     }.first()
+
+    val y = sequence {
+        yield(3)
+        yield(4)
+        result += "K"
+    }.last()
 
     return result
 }

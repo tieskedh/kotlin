@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrFunctionExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrSetField
@@ -375,7 +376,7 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
     }
 
     private fun matchWithSequence(expression: IrCall) {
-        val sequenceScope = expression.arguments.getOrNull(0) ?: return
+        val sequenceScope = expression.arguments.getOrNull(0) as? IrRichFunctionReference ?: return
         expression.sequenceDataOfExpression = SequenceData(
             SequenceData.defaultMapReplacement,
             SequenceSource.Sequence(sequenceScope),

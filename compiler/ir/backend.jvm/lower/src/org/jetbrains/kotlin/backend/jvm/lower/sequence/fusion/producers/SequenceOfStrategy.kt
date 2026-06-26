@@ -3,26 +3,33 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.strategies
+package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.producers
 
+import org.jetbrains.kotlin.backend.common.lower.irNot
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceSource
 import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irBranch
+import org.jetbrains.kotlin.ir.builders.irBreak
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irElseBranch
 import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irIfThen
 import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irSet
+import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.builders.irWhen
+import org.jetbrains.kotlin.ir.builders.irWhile
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBranch
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
-import org.jetbrains.kotlin.ir.expressions.IrLoop
+import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 
@@ -41,69 +48,65 @@ import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
  * }
  * ```
  * */
-internal class SequenceOfStrategy(val source: SequenceSource.SequenceOf) : LoweringStrategy() {
-    override fun lowerLoop(
+
+internal class SequenceOfStrategy(
+    val source: SequenceSource.SequenceOf
+) : ProducerStrategy() {
+
+    override fun fuseConsumer(
         builderWithParent: IrBuilderWithParent,
-        loopBody: (IrVariable) -> IrContainerExpression,
         sequenceData: SequenceData,
-        newLoop: IrLoop,
-        loopVariable: IrVariable?,
+        consumerBodyBuilder: ConsumerBodyBuilder,
+        initialDeclarations: List<IrVariable>,
+        finalExpression: IrExpression,
     ): IrContainerExpression {
         val builder = builderWithParent.first
 
-        val iteratorReplacement = createIteratorReplacement(builderWithParent)
-        val newBody = builder.irBlock {
-            // iteratorVariable++
-            +iteratorReplacement.iteratorNextStatement
-            +addReplacementsToBody(
-                builderWithParent,
-                loopBody,
-                sequenceData,
-                irGet(iteratorReplacement.outerLoopVariable),
-                null,
-                newLoop,
-                loopVariable,
+        return builder.irBlock {
+            val iteratorVariable = scope.createTemporaryVariable(
+                irInt(0),
+                isMutable = true,
+                origin = IrDeclarationOrigin.FOR_LOOP_ITERATOR,
+                nameHint = "sequenceOfIterator"
             )
-        }
-        return createLoweredLoop(
-            iteratorReplacement.iteratorVariable,
-            iteratorReplacement.outerLoopVariable,
-            iteratorReplacement.condition,
-            builder,
-            newBody,
-            sequenceData,
-            newLoop
-        )
-    }
+            +iteratorVariable
+            +initialDeclarations
 
-    override fun createIteratorReplacement(
-        builderWithParent: IrBuilderWithParent,
-    ): IteratorReplacement {
-        val builder = builderWithParent.first
-        val iteratorVariable = builder.scope.createTemporaryVariable(
-            builder.irInt(0),
-            isMutable = true,
-            origin = IrDeclarationOrigin.FOR_LOOP_ITERATOR,
-            nameHint = "sequenceOfIterator"
-        )
-        val loopCondition = with(builder) {
-            irCall(context.irBuiltIns.lessFunByOperandType[context.irBuiltIns.intClass]!!).apply {
+            val loopCondition = irCall(context.irBuiltIns.lessFunByOperandType[context.irBuiltIns.intClass]!!).apply {
                 arguments[0] = irGet(iteratorVariable)
                 arguments[1] = irInt(source.elements.size)
             }
-        }
-        val iteratorNextStatement = builder.irSet(
-            iteratorVariable,
-            builder.irCall(builder.context.irBuiltIns.intPlusSymbol).apply {
-                dispatchReceiver = builder.irGet(iteratorVariable)
-                arguments[1] = builder.irInt(1)
-            },
-        )
-        val outerLoopVariable = builder.scope.createTemporaryVariable(
-            generateWhen(builderWithParent, source.elements, source.type, iteratorVariable)
-        )
 
-        return IteratorReplacement(iteratorVariable, outerLoopVariable, iteratorNextStatement, loopCondition)
+            val loop = irWhile()
+            val currentElementExpr = generateWhen(builderWithParent, source.elements, source.type, iteratorVariable)
+            val bodyBuilder = { currentElementVar: IrValueDeclaration ->
+                irBlock {
+                    val shouldContinueVar = irTemporary(consumerBodyBuilder(currentElementVar), nameHint = "shouldContinue")
+                    +irIfThen(context.irBuiltIns.unitType, irNot(irGet(shouldContinueVar)), irBreak(loop))
+                }
+            }
+            val bodyAfterTransformers =
+                addTransformerReplacements(builderWithParent, bodyBuilder, sequenceData, currentElementExpr, loop, null)
+
+            loop.apply {
+                origin = IrStatementOrigin.WHILE_LOOP
+                condition = loopCondition
+
+                body = irBlock {
+                    +bodyAfterTransformers
+                    val incrementStatement = irSet(
+                        iteratorVariable,
+                        irCall(context.irBuiltIns.intPlusSymbol).apply {
+                            dispatchReceiver = irGet(iteratorVariable)
+                            arguments[1] = irInt(1)
+                        }
+                    )
+                    +incrementStatement
+                }
+            }
+            +loop
+            +finalExpression
+        }
     }
 
     private fun generateWhen(
@@ -113,7 +116,7 @@ internal class SequenceOfStrategy(val source: SequenceSource.SequenceOf) : Lower
         takeIteratorVariable: IrVariable
     ): IrExpression {
         val builder = builderWithParent.first
-        with(builder) {
+        return with(builder) {
             val branches: MutableList<IrBranch> = elements.mapIndexed { index, element ->
                 val elementCopy = element.deepCopyWithSymbols(builderWithParent.second)
                 irBranch(irEquals(irGet(takeIteratorVariable), irInt(index)), elementCopy)
@@ -123,7 +126,7 @@ internal class SequenceOfStrategy(val source: SequenceSource.SequenceOf) : Lower
                     irCall(context.irBuiltIns.noWhenBranchMatchedExceptionSymbol)
                 )
             )
-            return irWhen(returnedType, branches)
+            irWhen(returnedType, branches)
         }
     }
 }
