@@ -24,7 +24,7 @@ import kotlin.test.assertEquals
 class JvmToolchainExternalAndroidTargetTest {
 
     @Test
-    fun `jvmToolchain configures compiler arguments for androidLibrary and androidHostTest`() {
+    fun `jvmToolchain configures Kotlin and Java tasks for androidLibrary and androidHostTest`() {
         val project = externalAndroidLibraryProject(
             androidLibraryConfiguration = {
                 withHostTest {}
@@ -42,26 +42,8 @@ class JvmToolchainExternalAndroidTargetTest {
 
         assertEquals(expectedConfiguration, project.kotlinTaskConfiguration("compileAndroidMain"))
         assertEquals(expectedConfiguration, project.kotlinTaskConfiguration("compileAndroidHostTest"))
-    }
-
-    @Test
-    fun `jvmToolchain configures Kotlin and Java tasks for androidLibrary withJava`() {
-        val project = externalAndroidLibraryProject(
-            kotlinConfiguration = {
-                jvmToolchain(jvm8ToolchainVersion)
-            },
-        )
-        project.evaluate()
-
         assertEquals(
-            KotlinTaskConfiguration(
-                jvmTarget = jvm8Target,
-                toolchainVersion = jvm8ToolchainVersion,
-            ),
-            project.kotlinTaskConfiguration("compileAndroidMain"),
-        )
-        assertEquals(
-            JavaTaskConfiguration(toolchainVersion = jvm8ToolchainVersion),
+            JavaTaskConfiguration(toolchainVersion = jvm8ToolchainVersion,),
             project.javaTaskConfiguration("compileAndroidMainJavaWithJavac"),
         )
     }
