@@ -69,10 +69,12 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 package consumer
 
                 import producer.CommonProducer
+                import producer.AndroidJvmProducer
 
                 class AndroidJvmConsumer(
                     val common: CommonConsumer = CommonConsumer(),
                     val producer: CommonProducer = CommonProducer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
                 )
                 """.trimIndent()
             )
@@ -81,10 +83,12 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 package consumer
 
                 import producer.AndroidProducer
+                import producer.AndroidJvmProducer
 
                 class AndroidConsumer(
                     val common: CommonConsumer = CommonConsumer(),
                     val shared: AndroidJvmConsumer = AndroidJvmConsumer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
                     val dependency: AndroidProducer = AndroidProducer(),
                 )
                 """.trimIndent()
@@ -94,10 +98,12 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 package consumer
 
                 import producer.JvmProducer
+                import producer.AndroidJvmProducer
 
                 class JvmConsumer(
                     val common: CommonConsumer = CommonConsumer(),
                     val shared: AndroidJvmConsumer = AndroidJvmConsumer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
                     val dependency: JvmProducer = JvmProducer(),
                 )
                 """.trimIndent()
@@ -285,10 +291,12 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 package consumer
 
                 import producer.CommonProducer
+                import producer.AndroidJvmProducer
 
                 class AndroidJvmConsumer(
                     val common: CommonConsumer = CommonConsumer(),
                     val producer: CommonProducer = CommonProducer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
                 )
                 """.trimIndent()
             )
@@ -297,10 +305,12 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 package consumer
 
                 import producer.AndroidProducer
+                import producer.AndroidJvmProducer
 
                 class AndroidConsumer(
                     val common: CommonConsumer = CommonConsumer(),
                     val shared: AndroidJvmConsumer = AndroidJvmConsumer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
                     val dependency: AndroidProducer = AndroidProducer(),
                 )
                 """.trimIndent()
@@ -310,10 +320,12 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 package consumer
 
                 import producer.JvmProducer
+                import producer.AndroidJvmProducer
 
                 class JvmConsumer(
                     val common: CommonConsumer = CommonConsumer(),
                     val shared: AndroidJvmConsumer = AndroidJvmConsumer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
                     val dependency: JvmProducer = JvmProducer(),
                 )
                 """.trimIndent()
@@ -390,9 +402,15 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                 """
                 package consumer
 
+                import producer.CommonProducer
+                import producer.AndroidJvmProducer
                 import producer.AndroidProducer
 
-                class AndroidConsumer(val dependency: AndroidProducer = AndroidProducer())
+                class AndroidConsumer(
+                    val common: CommonProducer = CommonProducer(),
+                    val androidJvmProducer: AndroidJvmProducer = AndroidJvmProducer(),
+                    val dependency: AndroidProducer = AndroidProducer(),
+                )
                 """.trimIndent()
             }
         }.apply {
@@ -575,6 +593,9 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
                     "No matching variant of",
                     "No variants exist",
                 )
+                assertOutputContains(producer.rootCoordinate)
+                assertOutputContains("'org.gradle.jvm.environment' with value 'android'")
+                assertOutputContains("'org.gradle.jvm.environment' with value 'standard-jvm'")
                 assertOutputContains("'org.jetbrains.kotlin.platform.type' with value 'androidJvm'")
                 assertOutputContains("'org.jetbrains.kotlin.platform.type' with value 'jvm'")
             }
