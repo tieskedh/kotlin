@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.gradle.testing.prettyPrinted
 import org.jetbrains.kotlin.gradle.testing.resolveProjectDependencyComponentsWithArtifacts
 import org.jetbrains.kotlin.gradle.uklibs.*
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 // Used AGP 9.0 as the minimal stable version supported for the android library
 @AndroidTestVersions(minVersion = TestVersions.AGP.AGP_90)
@@ -588,17 +589,20 @@ class AndroidJvmLibDependencyResolutionIT : KGPBaseTest() {
         }.apply {
             addPublishedProjectToRepositories(producer)
 
-            buildAndFail(":compileKotlinJvm") {
-                assertOutputContainsAny(
-                    "No matching variant of",
-                    "No variants exist",
-                )
-                assertOutputContains(producer.rootCoordinate)
-                assertOutputContains("'org.gradle.jvm.environment' with value 'android'")
-                assertOutputContains("'org.gradle.jvm.environment' with value 'standard-jvm'")
-                assertOutputContains("'org.jetbrains.kotlin.platform.type' with value 'androidJvm'")
-                assertOutputContains("'org.jetbrains.kotlin.platform.type' with value 'jvm'")
-            }
+            val jvmCompileClasspathResolved = buildScriptReturn {
+                project.ignoreAccessViolations {
+                    runCatching {
+                        project.configurations.getByName("jvmCompileClasspath")
+                            .resolveProjectDependencyComponentsWithArtifacts()
+                        true
+                    }.getOrDefault(false)
+                }
+            }.buildAndReturn(":help")
+
+            assertFalse(
+                jvmCompileClasspathResolved,
+                "Expected '${producer.rootCoordinate}' to be incompatible with 'jvmCompileClasspath'",
+            )
         }
     }
 
