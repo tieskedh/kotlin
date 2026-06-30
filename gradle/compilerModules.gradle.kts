@@ -20,6 +20,7 @@ val commonCompilerModules = descriptorsCompilerModules + arrayOf(
     ":compiler:serialization.common",
     ":compiler:compiler.version",
     ":compiler:resolution.common",
+    ":compiler:resolution.common.js",
     ":compiler:resolution.common.jvm",
     ":compiler:backend.common.jvm",
     ":compiler:plugin-api",
@@ -47,7 +48,6 @@ val commonCompilerModules = descriptorsCompilerModules + arrayOf(
     ":kotlin-util-klib-metadata",
     ":compiler:build-tools:kotlin-build-statistics",
     ":js:js.config",
-    ":js:js.frontend.common",
     ":js:js.ast", // used by js fir checkers and js backend
     ":wasm:wasm.config",
     ":native:base",
