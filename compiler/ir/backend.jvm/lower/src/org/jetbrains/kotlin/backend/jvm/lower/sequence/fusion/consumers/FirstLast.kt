@@ -12,20 +12,26 @@ import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilde
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irBlock
+import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irCallConstructor
 import org.jetbrains.kotlin.ir.builders.irFalse
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irNull
-import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irReturnableBlock
 import org.jetbrains.kotlin.ir.builders.irSet
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irTrue
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
+import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
+import org.jetbrains.kotlin.ir.symbols.IrReturnableBlockSymbol
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.makeNullable
+import org.jetbrains.kotlin.ir.util.dump
 
 internal class FirstLastConsumerStrategy(data: ConsumerData, expression: IrCall, val isFirst: Boolean, val isOrNull: Boolean) :
     ConsumerStrategy(data, expression) {
@@ -39,37 +45,89 @@ internal class FirstLastConsumerStrategy(data: ConsumerData, expression: IrCall,
     val skippedVariable: IrVariable = data.builder.scope.createTemporaryVariable(data.builder.irTrue(), "skipped", isMutable = true)
     override fun initializeState(): List<IrVariable> = listOf(skippedVariable, resultVariable)
 
-    override fun getConsumerBuilder(): ConsumerBodyBuilder {
-        val possiblePredicate = (expression as IrCall).arguments.getOrNull(1)
-        val containsPredicate = possiblePredicate != null
-        val predicate = if (containsPredicate)
-            possiblePredicate as? IrRichFunctionReference
-                ?: error("The predicate argument for first/last is not a function reference")
-        else null
-        with(data.builder) {
-            return { sequenceElement ->
-                val block = irReturnableBlock(context.irBuiltIns.booleanType) {}
-                var predicateResult: IrVariable? = null
-                if (containsPredicate) {
-                    predicateResult =
-                        scope.createTemporaryVariable(
-                            callRichFunctionReference(predicate!!, data.parent, irGet(sequenceElement)),
-                            nameHint = "predicateResult"
-                        )
-                    val thenPart = irBlock {
-                        +irSet(resultVariable, irGet(sequenceElement))
-                        +irSet(skippedVariable, irFalse())
-                    }
-                    block.statements.add(predicateResult)
-                    block.statements.add(irIfThen(irGet(predicateResult), thenPart))
-                } else {
-                    block.statements.add(irSet(resultVariable, irGet(sequenceElement)))
-                    block.statements.add(irSet(skippedVariable, irFalse()))
+    override fun getConsumerBuilder(): ConsumerBodyBuilder? {
+        val predicate = (expression as IrCall).arguments.getOrNull(1)
+        if (predicate is IrCall) return null
+        return when (predicate) {
+            is IrRichFunctionReference -> { sequenceElement ->
+                data.builder.irReturnableBlock(data.context.irBuiltIns.booleanType) {
+                    val predicateCall = callRichFunctionReference(
+                        predicate,
+                        data.parent,
+                        irGet(sequenceElement)
+                    )
+                    +buildFirstLastBody(data.builder, sequenceElement, predicateCall, returnableBlockSymbol)
                 }
-                val result = if (isFirst) if (containsPredicate) irNot(irGet(predicateResult!!)) else irFalse() else irTrue()
-                block.statements.add(irReturn(result).apply { returnTargetSymbol = block.symbol })
-                block
             }
+            null -> { sequenceElement ->
+                data.builder.irReturnableBlock(data.context.irBuiltIns.booleanType) {
+                    +irSet(resultVariable, irGet(sequenceElement))
+                    +irSet(skippedVariable, irFalse())
+                    if (isFirst) +IrReturnImpl(
+                        startOffset = startOffset,
+                        endOffset = endOffset,
+                        type = context.irBuiltIns.nothingType,
+                        returnTargetSymbol = returnableBlockSymbol,
+                        value = irFalse()
+                    )
+                    else +IrReturnImpl(
+                        startOffset = startOffset,
+                        endOffset = endOffset,
+                        type = context.irBuiltIns.nothingType,
+                        returnTargetSymbol = returnableBlockSymbol,
+                        value = irTrue()
+                    )
+                }
+            }
+            else -> { sequenceElement ->
+                val invokeSymbol = expression.arguments.getOrNull(1)?.type?.classOrNull?.owner?.declarations
+                    ?.filterIsInstance<IrSimpleFunction>()
+                    ?.first { it.name.asString() == "invoke" }?.symbol
+                val predicateCall = invokeSymbol?.let {
+                    data.builder.irCall(it).apply {
+                        dispatchReceiver = predicate
+                        arguments[1] = data.builder.irGet(sequenceElement)
+                    }
+                } ?: error("Didn't find invoke for the predicate argument of first: ${predicate.dump()}")
+                data.builder.irReturnableBlock(data.context.irBuiltIns.booleanType) {
+                    +buildFirstLastBody(data.builder, sequenceElement, predicateCall, returnableBlockSymbol)
+                }
+            }
+        }
+    }
+
+    private fun buildFirstLastBody(
+        builder: IrBuilderWithScope,
+        sequenceElement: IrValueDeclaration,
+        predicateCall: IrExpression,
+        returnableBlockSymbol: IrReturnableBlockSymbol
+    ): IrExpression = with(builder) {
+        val predicateResult =
+            scope.createTemporaryVariable(
+                predicateCall,
+                nameHint = "predicateResult"
+            )
+        val thenPart = irBlock {
+            +irSet(resultVariable, irGet(sequenceElement))
+            +irSet(skippedVariable, irFalse())
+        }
+        irBlock {
+            +predicateResult
+            +irIfThen(irGet(predicateResult), thenPart)
+            if (isFirst) +IrReturnImpl(
+                startOffset = startOffset,
+                endOffset = endOffset,
+                type = context.irBuiltIns.nothingType,
+                returnTargetSymbol = returnableBlockSymbol,
+                value = irNot(irGet(predicateResult))
+            )
+            else +IrReturnImpl(
+                startOffset = startOffset,
+                endOffset = endOffset,
+                type = context.irBuiltIns.nothingType,
+                returnTargetSymbol = returnableBlockSymbol,
+                value = irTrue()
+            )
         }
     }
 

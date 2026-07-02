@@ -5,22 +5,20 @@
 
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion
 
+import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
 import org.jetbrains.kotlin.ir.IrElement
-import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
-import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irGet
-import org.jetbrains.kotlin.ir.builders.irInt
-import org.jetbrains.kotlin.ir.builders.irSet
-import org.jetbrains.kotlin.ir.builders.irTemporary
+import org.jetbrains.kotlin.ir.builders.irNull
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrExpression
-import org.jetbrains.kotlin.ir.expressions.IrFunctionExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrSetField
@@ -30,10 +28,13 @@ import org.jetbrains.kotlin.ir.expressions.IrVararg
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.isPrimitiveType
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.typeOrNull
+import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.dump
 import org.jetbrains.kotlin.ir.util.isSubtypeOfClass
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
@@ -66,6 +67,101 @@ internal sealed class FilterVersion {
     object FilterNotNull : FilterVersion()
 }
 
+private fun isSafeToLowerFromSequenceOf(expression: IrExpression): Boolean {
+    if (containsMutable(expression)) return false
+    if (!expression.isSafeToMove()) return false // skip lowering if an expression contains something that has to be evaluated only once
+    return true
+}
+
+internal fun gatherVarargArgument(argument: IrExpression): List<IrExpression>? {
+    return if (argument is IrVararg) {
+        // argument is vararg arguments
+        if (argument.elements.any { it is IrSpreadElement }) return null // skip lowering sequenceOf with spread arguments
+        if (argument.elements.any { !isSafeToLowerFromSequenceOf(it as IrExpression) }) return null
+        argument.elements.map { it as IrExpression }
+    } else {
+        // single argument
+        if (!isSafeToLowerFromSequenceOf(argument)) return null
+        listOf(argument)
+    }
+}
+
+private fun isSafeToLower(reference: IrRichFunctionReference): Boolean {
+    if (reference.boundValues.isNotEmpty()) return false
+    if (reference.invokeFunction.dispatchReceiverParameter != null) return false
+    return true
+}
+
+private fun isSafeToLower(expression: IrExpression): Boolean {
+    if (containsMutable(expression)) return false
+    when (expression) {
+        is IrRichFunctionReference -> {
+            return isSafeToLower(expression)
+        }
+    }
+    return true
+}
+
+private fun IrExpression.isSafeToMove(): Boolean {
+    var safe = true
+    this.acceptVoid(object : IrVisitorVoid() {
+        override fun visitElement(element: IrElement) {
+            if (safe) element.acceptChildrenVoid(this)
+        }
+
+        override fun visitCall(expression: IrCall) {
+            if (!expression.isPrimitiveIntrinsic()) {
+                safe = false
+            }
+            super.visitCall(expression)
+        }
+
+        override fun visitSetValue(expression: IrSetValue) {
+            safe = false
+            super.visitSetValue(expression)
+        }
+
+        override fun visitSetField(expression: IrSetField) {
+            safe = false
+            super.visitSetField(expression)
+        }
+
+        override fun visitGetValue(expression: IrGetValue) {
+            val owner = expression.symbol.owner
+            if (owner is IrVariable && owner.isVar) safe = false
+        }
+
+        override fun visitConst(expression: IrConst) {}
+    })
+    return safe
+}
+
+private fun IrCall.isPrimitiveIntrinsic(): Boolean {
+    val owner = symbol.owner
+
+    val parentClass = owner.parent as? IrClass ?: return false
+    return parentClass.defaultType.isPrimitiveType() || parentClass.defaultType.isString()
+}
+
+private fun containsMutable(expression: IrExpression): Boolean {
+    var found = false
+    expression.acceptVoid(object : IrVisitorVoid() {
+        override fun visitElement(element: IrElement) {
+            if (!found) {
+                element.acceptChildrenVoid(this)
+            }
+        }
+
+        override fun visitGetValue(expression: IrGetValue) {
+            val variable = expression.symbol.owner as? IrVariable ?: return
+            if (variable.isVar) {
+                found = true
+            }
+        }
+    })
+    return found
+}
+
 internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorVoid() {
     override fun visitElement(element: IrElement) {
         element.acceptChildrenVoid(this)
@@ -81,20 +177,11 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             (declaration.usageCounter ?: 0) > 1
         ) {
             SequenceData(
-                SequenceData.defaultMapReplacement,
                 SequenceSource.Variable(declaration.symbol),
-                SequenceData.defaultLoopPrologue,
-                SequenceData.defaultTakeVariableDeclarations,
+                emptyList()
             )
         } else {
-            expressionSequenceData?.let {
-                SequenceData(
-                    it.mapReplacement,
-                    it.sequenceSource,
-                    it.newLoopPrologue,
-                    it.declarationsBeforeLoop,
-                )
-            }
+            expressionSequenceData
         }
     }
 
@@ -105,82 +192,10 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
         if (!isElementSequence(context, expression)) return
         val variableDeclaration = expression.symbol.owner
         variableDeclaration.accept(this, null)
-        expression.sequenceDataOfExpression = variableDeclaration.sequenceDataOfVariable?.let {
-            SequenceData(
-                it.mapReplacement,
-                it.sequenceSource,
-                it.newLoopPrologue,
-                it.declarationsBeforeLoop,
-            )
-        } ?: SequenceData(
-            SequenceData.defaultMapReplacement,
+        expression.sequenceDataOfExpression = variableDeclaration.sequenceDataOfVariable ?: SequenceData(
             SequenceSource.Variable(expression.symbol),
-            SequenceData.defaultLoopPrologue,
-            SequenceData.defaultTakeVariableDeclarations,
+            emptyList()
         )
-    }
-
-    private fun IrExpression.isSafeToMove(): Boolean {
-        var safe = true
-        this.acceptVoid(object : IrVisitorVoid() {
-            override fun visitElement(element: IrElement) {
-                if (safe) element.acceptChildrenVoid(this)
-            }
-
-            override fun visitCall(expression: IrCall) {
-                if (!expression.isPrimitiveIntrinsic()) {
-                    safe = false
-                }
-                super.visitCall(expression)
-            }
-
-            override fun visitSetValue(expression: IrSetValue) {
-                safe = false
-                super.visitSetValue(expression)
-            }
-
-            override fun visitSetField(expression: IrSetField) {
-                safe = false
-                super.visitSetField(expression)
-            }
-
-            override fun visitGetValue(expression: IrGetValue) {
-                val owner = expression.symbol.owner
-                if (owner is IrVariable && owner.isVar) safe = false
-            }
-
-            override fun visitConst(expression: IrConst) {}
-        })
-        return safe
-    }
-
-    private fun IrCall.isPrimitiveIntrinsic(): Boolean {
-        val owner = symbol.owner
-
-        val parentClass = owner.parent as? IrClass ?: return false
-        return parentClass.defaultType.isPrimitiveType() || parentClass.defaultType.isString()
-    }
-
-    private fun isSafeToLower(reference: IrRichFunctionReference): Boolean {
-        if (reference.boundValues.isNotEmpty()) return false
-        if (reference.invokeFunction.dispatchReceiverParameter != null) return false
-        return true
-    }
-
-    private fun isSafeToLower(expression: IrExpression): Boolean {
-        if (containsMutable(expression)) return false
-        when (expression) {
-            is IrRichFunctionReference -> {
-                return isSafeToLower(expression)
-            }
-        }
-        return true
-    }
-
-    private fun isSafeToLowerFromSequenceOf(expression: IrExpression): Boolean {
-        if (containsMutable(expression)) return false
-        if (!expression.isSafeToMove()) return false // skip lowering if an expression contains something that has to be evaluated only once
-        return true
     }
 
     private fun matchWithMap(
@@ -190,83 +205,75 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
     ) {
         val receiver = expression.arguments.getOrNull(0) ?: return
         val receiverData = receiver.sequenceDataOfExpression ?: return
-        val fnArg = expression.arguments.getOrNull(1) ?: return
-        val fnRef = fnArg as? IrRichFunctionReference ?: return
-        if (!isSafeToLower(fnRef)) return
-        val results = if (isIndexed) {
-            val indexVariableCell = object {
-                var value: IrVariable? = null
+        val fnArg = getPredicateArgument(expression, 1) ?: return
+        if (fnArg is IrCall) return
+        val invokeSymbol = fnArg.type.classOrNull?.owner?.declarations
+            ?.filterIsInstance<IrSimpleFunction>()
+            ?.first { it.name.asString() == "invoke" }?.symbol
+        val nonIndexedPredicateCall: MapPredicate = { builderWithParent ->
+            val builder = builderWithParent.first
+            val parent = builderWithParent.second
+            when (fnArg) {
+                is IrRichFunctionReference ->
+                    { sequenceElement ->
+                        builder.callRichFunctionReference(fnArg.deepCopyWithSymbols(parent), parent, builder.irGet(sequenceElement))
+                    }
+                else ->
+                    { sequenceElement ->
+                        invokeSymbol?.let {
+                            builder.irCall(it).apply {
+                                dispatchReceiver = fnArg.deepCopyWithSymbols(parent)
+                                arguments[1] = builder.irGet(sequenceElement)
+                            }
+                        }
+                            ?: error("Didn't find invoke for the predicate argument of map: ${fnArg.dump()}")
+                    }
             }
-            val indexVariableLambda =
-                { builder: IrBuilderWithScope ->
-                    builder.scope.createTemporaryVariable(
-                        builder.irInt(0),
-                        isMutable = true,
-                        nameHint = "mapIndexedVariable"
-                    )
-                }
-            val getOrCreateIndexVariable = { builder: IrBuilderWithScope ->
-                indexVariableCell.value ?: indexVariableLambda(builder).also {
-                    indexVariableCell.value = it
-                }
-            }
-
-            val updatedSequenceData = receiverData.addDeclarationExpectingBuilder(getOrCreateIndexVariable)
-            SequenceData.MapReplacement { builderWithParent: IrBuilderWithParent, value: IrExpression ->
-                val builder = builderWithParent.first
-                val indexVariable = getOrCreateIndexVariable(builder)
-                val mapReplacement = updatedSequenceData.createMapReplacement(fnRef, builder.irGet(indexVariable))
-                builder.irBlock {
-                    val mapResult = irTemporary(mapReplacement(builderWithParent, value), nameHint = "mapIndexedResult")
-                    +irSet(indexVariable, irCall(context.irBuiltIns.intPlusSymbol).apply {
-                        dispatchReceiver = irGet(indexVariable)
-                        arguments[1] = irInt(1)
-                    })
-                    +irGet(mapResult)
-                }
-            } to updatedSequenceData
-        } else receiverData.createMapReplacement(fnRef) to receiverData
-        val newMapReplacement = results.first
-        val sequenceDataWithDeclarations = results.second
-
-        val mappedSequenceData = sequenceDataWithDeclarations.applyMap(newMapReplacement)
-        val filteredSequenceData = if (isNotNull) {
-            val filterNotNullSegment = mappedSequenceData.createNewFilterNotNullSegment()
-            mappedSequenceData.applyFilter(filterNotNullSegment)
-        } else {
-            mappedSequenceData
         }
-        expression.sequenceDataOfExpression = filteredSequenceData
+        val indexedPredicateCall: MapIndexedPredicate = { builderWithParent ->
+            val builder = builderWithParent.first
+            val parent = builderWithParent.second
+            when (fnArg) {
+                is IrRichFunctionReference ->
+                    { indexVariable, sequenceElement ->
+                        builder.callRichFunctionReference(
+                            fnArg.deepCopyWithSymbols(parent),
+                            parent,
+                            builder.irGet(indexVariable),
+                            builder.irGet(sequenceElement)
+                        )
+                    }
+                else ->
+                    { indexVariable, sequenceElement ->
+                        invokeSymbol?.let {
+                            builder.irCall(it).apply {
+                                dispatchReceiver = fnArg.deepCopyWithSymbols(parent)
+                                arguments[1] = builder.irGet(indexVariable)
+                                arguments[2] = builder.irGet(sequenceElement)
+                            }
+                        }
+                            ?: error("Didn't find invoke for the predicate argument of map: ${fnArg.dump()}")
+                    }
+            }
+        }
+        val predicateCall = if (isIndexed) {
+            MapPredicateCall.Indexed(indexedPredicateCall)
+        } else {
+            MapPredicateCall.NonIndexed(nonIndexedPredicateCall)
+        }
+        val transformers = listOf(SequenceTransformer.Map(predicateCall, isIndexed, isNotNull)) + receiverData.transformers
+        expression.sequenceDataOfExpression = SequenceData(receiverData.sequenceSource, transformers)
     }
 
-    private inline fun updateSequenceDataUsingExpression(
+    private fun matchWithTake(
         call: IrCall,
-        applyFunction: (SequenceData, IrExpression) -> SequenceData
     ) {
         val receiver = call.arguments.getOrNull(0) ?: return
         val argumentExpression = call.arguments.getOrNull(1) ?: return
         val receiverData = receiver.sequenceDataOfExpression ?: return
-        if (containsMutable(argumentExpression)) return
-        call.sequenceDataOfExpression = applyFunction(receiverData, argumentExpression)
-    }
-
-    private fun containsMutable(expression: IrExpression): Boolean {
-        var found = false
-        expression.acceptVoid(object : IrVisitorVoid() {
-            override fun visitElement(element: IrElement) {
-                if (!found) {
-                    element.acceptChildrenVoid(this)
-                }
-            }
-
-            override fun visitGetValue(expression: IrGetValue) {
-                val variable = expression.symbol.owner as? IrVariable ?: return
-                if (variable.isVar) {
-                    found = true
-                }
-            }
-        })
-        return found
+        if (!isSafeToLower(argumentExpression)) return
+        val transformers = listOf(SequenceTransformer.Take(argumentExpression)) + receiverData.transformers
+        call.sequenceDataOfExpression = SequenceData(receiverData.sequenceSource, transformers)
     }
 
     private fun matchWithGenerateSequence(expression: IrCall) {
@@ -300,10 +307,8 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
         val func = results.second
         val elementType = extractSequenceArgumentType(expression.type) ?: return
         expression.sequenceDataOfExpression = SequenceData(
-            SequenceData.defaultMapReplacement,
             SequenceSource.GenerateSequence(initialValue, func, elementType),
-            SequenceData.defaultLoopPrologue,
-            SequenceData.defaultTakeVariableDeclarations,
+            emptyList()
         )
     }
 
@@ -313,20 +318,55 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
     private fun matchWithFilter(call: IrCall, version: FilterVersion) {
         val receiver = call.arguments.getOrNull(0) ?: return
         val receiverData = receiver.sequenceDataOfExpression ?: return
-        val newSegment = when (version) {
-            FilterVersion.Filter -> {
-                val filterFunction = call.arguments.getOrNull(1) as? IrRichFunctionReference ?: return
-                receiverData.createNewFilterSegment(filterFunction)
+        val invokeSymbol = call.arguments.getOrNull(1)?.type?.classOrNull?.owner?.declarations
+            ?.filterIsInstance<IrSimpleFunction>()
+            ?.first { it.name.asString() == "invoke" }?.symbol
+        val predicate = if (version == FilterVersion.FilterNotNull) null else (getPredicateArgument(call, 1) ?: return)
+        if (predicate is IrCall) return
+        val filterFunction: (IrBuilderWithParent) -> (IrValueDeclaration) -> IrExpression = { builderWithParent: IrBuilderWithParent ->
+            val parent = builderWithParent.second
+            with(builderWithParent.first) {
+                when (predicate) {
+                    is IrRichFunctionReference -> when (version) {
+                        FilterVersion.Filter -> { sequenceElement -> callRichFunctionReference(predicate, parent, irGet(sequenceElement)) }
+                        FilterVersion.FilterNot -> { sequenceElement ->
+                            irNot(
+                                callRichFunctionReference(
+                                    predicate,
+                                    parent,
+                                    irGet(sequenceElement)
+                                )
+                            )
+                        }
+                        FilterVersion.FilterNotNull -> { _ -> error("FilterNotNullTo with a third argument: ${predicate.dump()}") }
+                    }
+                    else -> when (version) {
+                        FilterVersion.Filter -> { sequenceElement ->
+                            invokeSymbol?.let {
+                                irCall(it).apply {
+                                    dispatchReceiver = predicate!!
+                                    arguments[1] = irGet(sequenceElement)
+                                }
+                            }
+                                ?: error("Didn't find invoke for the predicate argument of filter: ${predicate?.dump()}")
+                        }
+                        FilterVersion.FilterNot -> { sequenceElement ->
+                            invokeSymbol?.let {
+                                irNot(irCall(it).apply {
+                                    dispatchReceiver = predicate!!
+                                    arguments[1] = irGet(sequenceElement)
+                                })
+                            }
+                                ?: error("Didn't find invoke for the predicate argument of filterNot: ${predicate?.dump()}")
+                        }
+                        FilterVersion.FilterNotNull -> if (predicate != null) error("FilterNotNull with a second argument: ${predicate.dump()}") else
+                            { sequenceElement -> irNot(irEquals(irGet(sequenceElement), irNull())) }
+                    }
+                }
             }
-            FilterVersion.FilterNot -> {
-                val filterFunction = call.arguments.getOrNull(1) as? IrRichFunctionReference ?: return
-                receiverData.createNewFilterNotSegment(filterFunction)
-            }
-            FilterVersion.FilterNotNull -> receiverData.createNewFilterNotNullSegment()
         }
-        call.sequenceDataOfExpression = receiverData.applyFilter(
-            newSegment
-        )
+        val transformers = listOf(SequenceTransformer.Filter(filterFunction)) + receiverData.transformers
+        call.sequenceDataOfExpression = SequenceData(receiverData.sequenceSource, transformers)
     }
 
     private fun matchWithSequenceOf(expression: IrCall) {
@@ -335,31 +375,19 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
         val elementType = extractSequenceArgumentType(expression.type) ?: return
         if (expression.arguments.isEmpty()) {
             expression.sequenceDataOfExpression = SequenceData(
-                SequenceData.defaultMapReplacement,
                 SequenceSource.SequenceOf(listOf(), elementType),
-                SequenceData.defaultLoopPrologue,
-                SequenceData.defaultTakeVariableDeclarations,
+                emptyList()
             )
             return
         }
         val argument = expression.arguments.getOrNull(0) ?: return
-        val sequenceOfArguments = if (argument is IrVararg) {
-            // sequenceOf(vararg arguments)
-            if (argument.elements.any { it is IrSpreadElement }) return // skip lowering sequenceOf with spread arguments
-            if (argument.elements.any { !isSafeToLowerFromSequenceOf(it as IrExpression) }) return
-            argument.elements.map { it as IrExpression }
-        } else {
-            // sequenceOf(argument)
-            if (!isSafeToLowerFromSequenceOf(argument)) return
-            listOf(argument)
-        }
+        val sequenceOfArguments = gatherVarargArgument(argument) ?: return
         expression.sequenceDataOfExpression = SequenceData(
-            SequenceData.defaultMapReplacement,
             SequenceSource.SequenceOf(sequenceOfArguments, elementType),
-            SequenceData.defaultLoopPrologue,
-            SequenceData.defaultTakeVariableDeclarations,
+            emptyList()
         )
     }
+
 
     private fun matchWithAsSequence(expression: IrCall) {
         val receiver = expression.arguments.getOrNull(0) ?: return
@@ -368,20 +396,16 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             if (!receiver.type.isSubtypeOfClass(context.irBuiltIns.iterableClass)) return
         }
         expression.sequenceDataOfExpression = SequenceData(
-            SequenceData.defaultMapReplacement,
             SequenceSource.AsSequence(receiver),
-            SequenceData.defaultLoopPrologue,
-            SequenceData.defaultTakeVariableDeclarations,
+            emptyList()
         )
     }
 
     private fun matchWithSequence(expression: IrCall) {
         val sequenceScope = expression.arguments.getOrNull(0) as? IrRichFunctionReference ?: return
         expression.sequenceDataOfExpression = SequenceData(
-            SequenceData.defaultMapReplacement,
             SequenceSource.Sequence(sequenceScope),
-            SequenceData.defaultLoopPrologue,
-            SequenceData.defaultTakeVariableDeclarations,
+            emptyList()
         )
     }
 
@@ -398,7 +422,7 @@ internal class SequenceDataGatherer(val context: JvmBackendContext) : IrVisitorV
             FILTER -> matchWithFilter(expression, FilterVersion.Filter)
             FILTER_NOT -> matchWithFilter(expression, FilterVersion.FilterNot)
             FILTER_NOT_NULL -> matchWithFilter(expression, FilterVersion.FilterNotNull)
-            TAKE -> updateSequenceDataUsingExpression(expression, SequenceData::applyTake)
+            TAKE -> matchWithTake(expression)
             GENERATE_SEQUENCE -> matchWithGenerateSequence(expression)
             SEQUENCE_OF -> matchWithSequenceOf(expression)
             AS_SEQUENCE -> matchWithAsSequence(expression)

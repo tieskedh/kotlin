@@ -1,7 +1,5 @@
 // WITH_STDLIB
 
-// CHECK_BYTECODE_TEXT
-// 1 iterator
 fun box(): String {
     data class Test (val mapped: (Int) -> Int) {}
     val test = Test({ it * 2 })

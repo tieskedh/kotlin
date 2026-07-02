@@ -6,10 +6,10 @@
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.producers
 
 import org.jetbrains.kotlin.backend.common.lower.irNot
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.GenerateSequenceInitialValue
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceReplacement
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceSource
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
 import org.jetbrains.kotlin.ir.builders.irBlock
@@ -22,7 +22,6 @@ import org.jetbrains.kotlin.ir.builders.irSet
 import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.builders.irWhile
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
-import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
@@ -37,9 +36,7 @@ internal class GenerateSequenceStrategy(
     override fun fuseConsumer(
         builderWithParent: IrBuilderWithParent,
         sequenceData: SequenceData,
-        consumerBodyBuilder: ConsumerBodyBuilder,
-        initialDeclarations: List<IrVariable>,
-        finalExpression: IrExpression
+        sequenceReplacement: SequenceReplacement,
     ): IrContainerExpression {
         val builder = builderWithParent.first
         val parent = builderWithParent.second
@@ -79,29 +76,24 @@ internal class GenerateSequenceStrategy(
             val loop = irWhile()
 
             val loopCondition = irNotEquals(irGet(stateVariable), irNull())
-            val bodyBuilder = { currentElementVar: IrValueDeclaration ->
-                irBlock {
-                    val shouldContinueVar = irTemporary(consumerBodyBuilder(currentElementVar), nameHint = "shouldContinue")
-                    +irIfThen(context.irBuiltIns.unitType, irNot(irGet(shouldContinueVar)), irBreak(loop))
-                }
-            }
-            val bodyWithTransformers =
-                addTransformerReplacements(builderWithParent, bodyBuilder, sequenceData, irGet(stateVariable), loop, null)
 
             loop.apply {
                 origin = IrStatementOrigin.WHILE_LOOP
                 condition = loopCondition
 
                 body = irBlock {
-                    +bodyWithTransformers
+                    +irBlock {
+                        val shouldContinueVar = irTemporary(sequenceReplacement.mainBodyBuilder(stateVariable), nameHint = "shouldContinue")
+                        +irIfThen(context.irBuiltIns.unitType, irNot(irGet(shouldContinueVar)), irBreak(loop))
+                    }
                     +irSet(stateVariable, evaluateNext(stateVariable))
                 }
             }
             irBlock {
                 +stateVariable
-                +initialDeclarations
+                +sequenceReplacement.initialDeclarations
                 +loop
-                +finalExpression
+                +sequenceReplacement.finalExpression
             }
         }
     }

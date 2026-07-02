@@ -6,39 +6,38 @@
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.producers
 
 import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.callRichFunctionReference
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceReplacement
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
-import org.jetbrains.kotlin.ir.builders.irBlock
-import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irWhile
-import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
-import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBreakContinue
+import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrLoop
-import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.expressions.impl.IrTypeOperatorCallImpl
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.getClass
 import org.jetbrains.kotlin.ir.types.makeNotNull
+import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
+import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.patchDeclarationParents
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.visitors.acceptVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
-
 
 internal fun IrBuilderWithScope.irAsNotNull(value: IrExpression): IrExpression {
     val nonNullType = value.type.makeNotNull()
@@ -100,58 +99,11 @@ internal sealed class ProducerStrategy {
     abstract fun fuseConsumer(
         builderWithParent: IrBuilderWithParent,
         sequenceData: SequenceData,
-        consumerBodyBuilder: ConsumerBodyBuilder,
-        initialDeclarations: List<IrVariable>,
-        finalExpression: IrExpression
+        sequenceReplacement: SequenceReplacement,
     ): IrContainerExpression?
-
-    /**
-     * Transforms loop body:
-     * ```
-     *  {
-     *      val next = iterator.next()
-     *      body(next)
-     *  }
-     * ```
-     * into
-     * ```
-     *  {
-     *      val mappedValue = mapReplacement(filterReplacement(initialValue))
-     *      body(mappedValue)
-     *  }
-     * ```
-     */
-    protected fun addTransformerReplacements(
-        builderWithParent: IrBuilderWithParent,
-        bodyRewriter: (IrValueDeclaration) -> IrContainerExpression,
-        sequenceData: SequenceData,
-        initialValue: IrExpression,
-        loop: IrLoop,
-        innerLoopVariable: IrVariable?,
-    ): IrExpression {
-        return sequenceData.newLoopPrologue(
-            builderWithParent,
-            loop,
-            initialValue,
-        ) { filteredValue ->
-            val builder = builderWithParent.first
-            val mappedValue = sequenceData.mapReplacement(builderWithParent, filteredValue)
-            builder.irBlock {
-                val valueAfterReplacements = scope.createTemporaryVariable(
-                    mappedValue,
-                    origin = IrDeclarationOrigin.FOR_LOOP_VARIABLE,
-                    nameHint = innerLoopVariable?.name?.asString(),
-                    inventUniqueName = innerLoopVariable == null,
-                    irType = innerLoopVariable?.type,
-                )
-                +valueAfterReplacements
-                +bodyRewriter(valueAfterReplacements)
-            }
-        }
-    }
 }
 
-fun updateLoopVariableInBody(
+internal fun updateLoopVariableInBody(
     builder: IrBuilderWithScope,
     oldLoopVariable: IrValueDeclaration,
     body: IrContainerExpression,
@@ -172,4 +124,19 @@ fun updateLoopVariableInBody(
         )
         body.patchDeclarationParents(parent)
     } to newLoop
+}
+
+internal fun IrBuilderWithScope.buildCallWithReceiver(
+    receiver: IrExpression,
+    receiverType: IrType,
+    functionName: String,
+    parent: IrDeclarationParent,
+): IrCall? {
+    val receiverCopy = receiver.deepCopyWithSymbols(parent)
+    val function = receiverType.getClass()?.functions?.singleOrNull { function ->
+        function.name.asString() == functionName && function.parameters.size == 1
+    } ?: return null
+    return irCall(function.symbol).apply {
+        arguments[0] = receiverCopy
+    }
 }

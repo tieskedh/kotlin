@@ -8,14 +8,15 @@ package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.consumers
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.LoopData
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.producers.updateLoopVariableInBody
-import org.jetbrains.kotlin.ir.builders.irReturnFalse
-import org.jetbrains.kotlin.ir.builders.irReturnTrue
+import org.jetbrains.kotlin.ir.builders.irFalse
 import org.jetbrains.kotlin.ir.builders.irReturnableBlock
+import org.jetbrains.kotlin.ir.builders.irTrue
 import org.jetbrains.kotlin.ir.builders.irUnit
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBlock
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
+import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 
 internal class ForLoopConsumerStrategy(data: ConsumerData, val loopData: LoopData, expression: IrBlock) :
     ConsumerStrategy(data, expression) {
@@ -28,16 +29,22 @@ internal class ForLoopConsumerStrategy(data: ConsumerData, val loopData: LoopDat
             val results = updateLoopVariableInBody(data.builder, loopData.loopVariable, loopData.loopBody, loopData.loop, data.parent)
             val preparedBody = results.first(sequenceElement)
             loop = results.second
-            val block = data.builder.irReturnableBlock(data.context.irBuiltIns.booleanType) {}
-            loop?.let {
-                preparedBody.rebindJumps(
-                    it,
-                    { data.builder.irReturnFalse().apply { returnTargetSymbol = block.symbol } },
-                    { data.builder.irReturnTrue().apply { returnTargetSymbol = block.symbol } })
+            data.builder.irReturnableBlock(data.context.irBuiltIns.booleanType) {
+                loop?.let {
+                    preparedBody.rebindJumps(
+                        it,
+                        { IrReturnImpl(startOffset, endOffset, context.irBuiltIns.nothingType, returnableBlockSymbol, irFalse()) },
+                        { IrReturnImpl(startOffset, endOffset, context.irBuiltIns.nothingType, returnableBlockSymbol, irTrue()) })
+                }
+                +preparedBody
+                +IrReturnImpl(
+                    startOffset = startOffset,
+                    endOffset = endOffset,
+                    type = context.irBuiltIns.nothingType,
+                    returnTargetSymbol = returnableBlockSymbol,
+                    value = irTrue()
+                )
             }
-            block.statements.add(preparedBody)
-            block.statements.add(data.builder.irReturnTrue().apply { returnTargetSymbol = block.symbol })
-            block
         }
     }
 

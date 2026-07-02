@@ -6,9 +6,9 @@
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.producers
 
 import org.jetbrains.kotlin.backend.common.lower.irNot
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.ConsumerBodyBuilder
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceData
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceReplacement
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceSource
 import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irBranch
@@ -24,7 +24,6 @@ import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.builders.irWhen
 import org.jetbrains.kotlin.ir.builders.irWhile
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
-import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBranch
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
@@ -56,9 +55,7 @@ internal class SequenceOfStrategy(
     override fun fuseConsumer(
         builderWithParent: IrBuilderWithParent,
         sequenceData: SequenceData,
-        consumerBodyBuilder: ConsumerBodyBuilder,
-        initialDeclarations: List<IrVariable>,
-        finalExpression: IrExpression,
+        sequenceReplacement: SequenceReplacement,
     ): IrContainerExpression {
         val builder = builderWithParent.first
 
@@ -70,7 +67,7 @@ internal class SequenceOfStrategy(
                 nameHint = "sequenceOfIterator"
             )
             +iteratorVariable
-            +initialDeclarations
+            +sequenceReplacement.initialDeclarations
 
             val loopCondition = irCall(context.irBuiltIns.lessFunByOperandType[context.irBuiltIns.intClass]!!).apply {
                 arguments[0] = irGet(iteratorVariable)
@@ -79,21 +76,18 @@ internal class SequenceOfStrategy(
 
             val loop = irWhile()
             val currentElementExpr = generateWhen(builderWithParent, source.elements, source.type, iteratorVariable)
-            val bodyBuilder = { currentElementVar: IrValueDeclaration ->
-                irBlock {
-                    val shouldContinueVar = irTemporary(consumerBodyBuilder(currentElementVar), nameHint = "shouldContinue")
-                    +irIfThen(context.irBuiltIns.unitType, irNot(irGet(shouldContinueVar)), irBreak(loop))
-                }
-            }
-            val bodyAfterTransformers =
-                addTransformerReplacements(builderWithParent, bodyBuilder, sequenceData, currentElementExpr, loop, null)
 
             loop.apply {
                 origin = IrStatementOrigin.WHILE_LOOP
                 condition = loopCondition
 
                 body = irBlock {
-                    +bodyAfterTransformers
+                    val currentElementVar = irTemporary(currentElementExpr, nameHint = "currentElement")
+                    +irBlock {
+                        val shouldContinueVar =
+                            irTemporary(sequenceReplacement.mainBodyBuilder(currentElementVar), nameHint = "shouldContinue")
+                        +irIfThen(context.irBuiltIns.unitType, irNot(irGet(shouldContinueVar)), irBreak(loop))
+                    }
                     val incrementStatement = irSet(
                         iteratorVariable,
                         irCall(context.irBuiltIns.intPlusSymbol).apply {
@@ -105,7 +99,7 @@ internal class SequenceOfStrategy(
                 }
             }
             +loop
-            +finalExpression
+            +sequenceReplacement.finalExpression
         }
     }
 

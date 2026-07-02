@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.consumers.*
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.transformers.TransformerReplacementCreator
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irBlock
@@ -72,6 +73,12 @@ import org.jetbrains.kotlin.utils.addToStdlib.assignFrom
 
 internal typealias ConsumerBodyBuilder = (IrValueDeclaration) -> IrContainerExpression
 
+internal data class SequenceReplacement(
+    val initialDeclarations: List<IrVariable>,
+    val mainBodyBuilder: ConsumerBodyBuilder,
+    val finalExpression: IrExpression,
+)
+
 class SequenceFusionLowering(val context: JvmBackendContext) : FileLoweringPass {
     override fun lower(irFile: IrFile) {
         val reuseMarker = ReusedSequenceMarker(context)
@@ -107,7 +114,7 @@ internal fun isSequenceTransformer(expression: IrExpression): Boolean {
     }
 }
 
-internal fun getBaseTypeFromSequence(sequence: IrExpression): IrType? =
+internal fun getGenericTypeFromExpression(sequence: IrExpression): IrType? =
     (sequence.type as? IrSimpleType)?.arguments?.getOrNull(0)?.typeOrNull
 
 internal fun getBaseTypeFromSequenceScopeFunction(sequenceScope: IrExpression): IrType? =
@@ -150,6 +157,13 @@ internal fun getInnerMostReceiver(expression: IrExpression): IrExpression? {
 private fun lookupForLoopVariable(loopBody: IrBlock): IrVariable? = loopBody.statements.filterIsInstance<IrVariable>()
     .singleOrNull { v -> v.origin == IrDeclarationOrigin.FOR_LOOP_VARIABLE }
 
+internal fun getPredicateArgument(expression: IrCall, argument: Int): IrExpression? {
+    val predicate = expression.arguments.getOrNull(argument)
+    // we don't want to duplicate calls
+    if (predicate is IrCall) return null
+    return predicate
+}
+
 internal data class LoopData(
     val loop: IrLoop?,
     val loopVariable: IrVariable,
@@ -190,11 +204,9 @@ private class SequenceFusionTransformer(val context: JvmBackendContext) : IrElem
         val sequenceData = receiver.sequenceDataOfExpression ?: return visitedExpression
         val data = ConsumerData(context, builder, parent, sequenceData)
         val consumerStrategy = createConsumerStrategy(visitedExpression, data) ?: return visitedExpression
-        val initialDeclarations = consumerStrategy.initializeState() + sequenceData.declarationsBeforeLoop(builder)
-        val consumerBuilder = consumerStrategy.getConsumerBuilder() ?: return visitedExpression
-        val finalResult = consumerStrategy.finalizeResult()
+        val sequenceReplacement = deployStrategies(consumerStrategy, sequenceData, builder to parent) ?: return visitedExpression
         val producerStrategy = sequenceData.sequenceSource.createProducerStrategy(builder, context)
-        return producerStrategy.fuseConsumer(builder to parent, sequenceData, consumerBuilder, initialDeclarations, finalResult)
+        return producerStrategy.fuseConsumer(builder to parent, sequenceData, sequenceReplacement)
             ?: return visitedExpression
     }
 
@@ -218,11 +230,9 @@ private class SequenceFusionTransformer(val context: JvmBackendContext) : IrElem
                 data
             ) ?: return visitedExpression
         val producerStrategy = sequenceData.sequenceSource.createProducerStrategy(builder, context)
-        val initialDeclarations = consumerStrategy.initializeState() + sequenceData.declarationsBeforeLoop(builder)
-        val consumerBuilder = consumerStrategy.getConsumerBuilder() ?: return visitedExpression
-        val finalResult = consumerStrategy.finalizeResult()
+        val sequenceReplacement = deployStrategies(consumerStrategy, sequenceData, builder to parent) ?: return visitedExpression
         val newExpression =
-            producerStrategy.fuseConsumer(builder to parent, sequenceData, consumerBuilder, initialDeclarations, finalResult)
+            producerStrategy.fuseConsumer(builder to parent, sequenceData, sequenceReplacement)
                 ?: return visitedExpression
         return if (isSequenceTransformer(receiver)) {
             builder.irBlock {
@@ -231,4 +241,20 @@ private class SequenceFusionTransformer(val context: JvmBackendContext) : IrElem
             }
         } else newExpression
     }
+}
+
+private fun deployStrategies(
+    consumerStrategy: ConsumerStrategy,
+    sequenceData: SequenceData,
+    builderWithParent: IrBuilderWithParent,
+): SequenceReplacement? {
+    var sequenceReplacement = consumerStrategy.createSequenceReplacement() ?: return null
+    var doesShortCircuit = true
+    for (replacement in sequenceData.transformers) {
+        val transformerReplacementCreator = TransformerReplacementCreator.create(replacement)
+        sequenceReplacement =
+            transformerReplacementCreator.addTransformerToBodyBuilder(sequenceReplacement, doesShortCircuit, builderWithParent)
+        doesShortCircuit = transformerReplacementCreator.doesShortCircuit
+    }
+    return sequenceReplacement
 }

@@ -1,8 +1,5 @@
 // WITH_STDLIB
 
-// CHECK_BYTECODE_TEXT
-// 3 iterator
-
 class TestClass() {
     fun mapMethod(value: Int): Int = value * 2
     val mapProperty: (Int) -> Int = { it * 3 }

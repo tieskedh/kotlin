@@ -39,6 +39,9 @@ internal abstract class ConsumerStrategy(val data: ConsumerData, val expression:
     abstract fun getConsumerBuilder(): ConsumerBodyBuilder?
 
     abstract fun finalizeResult(): IrExpression
+    fun createSequenceReplacement(): SequenceReplacement? =
+        getConsumerBuilder()?.let { SequenceReplacement(initializeState(), it, finalizeResult()) }
+
     abstract val returnsElement: Boolean
 }
 
