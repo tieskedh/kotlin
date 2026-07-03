@@ -366,16 +366,18 @@ internal class ExportModelGenerator(private val config: TypeScriptExportConfig) 
                 )
             }
             function.receiverParameter?.let {
-                add(
-                    ExportedParameter(
-                        EXTENSION_RECEIVER_NAME,
-                        exportType(
-                            it.returnType,
-                            functionTypeParameterScope,
-                            inlineClassesShouldBeUnboxed = inlineClassesShouldBeUnboxed
+                if (!function.isCompanion) {
+                    add(
+                        ExportedParameter(
+                            EXTENSION_RECEIVER_NAME,
+                            exportType(
+                                it.returnType,
+                                functionTypeParameterScope,
+                                inlineClassesShouldBeUnboxed = inlineClassesShouldBeUnboxed
+                            )
                         )
                     )
-                )
+                }
             }
             for (parameter in function.valueParameters) {
                 val type = if (parameter.isVararg) {
