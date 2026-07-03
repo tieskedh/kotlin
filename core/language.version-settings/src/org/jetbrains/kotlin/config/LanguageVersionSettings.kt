@@ -799,7 +799,9 @@ enum class LanguageVersion(val major: Int, val minor: Int) : DescriptionAware, L
         val FIRST_NON_DEPRECATED = KOTLIN_2_2
 
         @JvmField
-        val LATEST_STABLE = KOTLIN_2_4
+        val LATEST_STABLE = LanguageVersion.entries.single {
+            it.major == KotlinVersion.CURRENT.major && it.minor == KotlinVersion.CURRENT.minor
+        }
     }
 }
 
