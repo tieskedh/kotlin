@@ -28,6 +28,7 @@ KtUserType(10,13): 'Int'
 KtNameReferenceExpression(10,13): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -54,6 +55,7 @@ KtUserType(25,28): 'Int'
 KtNameReferenceExpression(25,28): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -74,6 +76,7 @@ KtUserType(31,34): 'Int'
 KtNameReferenceExpression(31,34): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -117,6 +120,7 @@ KtThisExpression(37,41): 'this'
 KtNameReferenceExpression(37,41): 'this'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       KaReceiverParameterSymbol:
@@ -148,6 +152,7 @@ KtNameReferenceExpression(37,41): 'this'
 KtOperationReferenceExpression(42,43): '-'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int.minus(<dispatch receiver>: kotlin.Int, other: kotlin.Int): kotlin.Int
@@ -156,6 +161,7 @@ KtOperationReferenceExpression(42,43): '-'
 KtNameReferenceExpression(44,45): 'i'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: true
   KaSymbolResolutionSuccess:
     symbols = [
       i: kotlin.Int
@@ -185,6 +191,7 @@ KtUserType(68,71): 'Int'
 KtNameReferenceExpression(68,71): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -205,6 +212,7 @@ KtBinaryExpression(98,117): 'parameter myMinus 5'
 KtNameReferenceExpression(98,107): 'parameter'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: true
   KaSymbolResolutionSuccess:
     symbols = [
       parameter: kotlin.Int
@@ -213,6 +221,7 @@ KtNameReferenceExpression(98,107): 'parameter'
 KtOperationReferenceExpression(108,115): 'myMinus'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       /myMinus(<extension receiver>: kotlin.Int, i: kotlin.Int): kotlin.Int
@@ -239,6 +248,7 @@ KtBinaryExpression(145,161): 'newParameter + 1'
 KtNameReferenceExpression(145,157): 'newParameter'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: true
   KaSymbolResolutionSuccess:
     symbols = [
       val newParameter: kotlin.Int
@@ -247,6 +257,7 @@ KtNameReferenceExpression(145,157): 'newParameter'
 KtOperationReferenceExpression(158,159): '+'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int.plus(<dispatch receiver>: kotlin.Int, other: kotlin.Int): kotlin.Int
@@ -258,6 +269,7 @@ KtConstantExpression(160,161): '1'
 KtOperationReferenceExpression(162,169): 'myMinus'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       /myMinus(<extension receiver>: kotlin.Int, i: kotlin.Int): kotlin.Int
@@ -278,6 +290,7 @@ KtDotQualifiedExpression(195,249): 'newParameter.plus(parameter.myMinus(oneMoreP
 KtNameReferenceExpression(195,207): 'newParameter'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: true
   KaSymbolResolutionSuccess:
     symbols = [
       val newParameter: kotlin.Int
@@ -292,6 +305,7 @@ KtCallExpression(208,249): 'plus(parameter.myMinus(oneMoreParameter))'
 KtNameReferenceExpression(208,212): 'plus'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int.plus(<dispatch receiver>: kotlin.Int, other: kotlin.Int): kotlin.Int
@@ -312,6 +326,7 @@ KtDotQualifiedExpression(213,248): 'parameter.myMinus(oneMoreParameter)'
 KtNameReferenceExpression(213,222): 'parameter'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: true
   KaSymbolResolutionSuccess:
     symbols = [
       parameter: kotlin.Int
@@ -326,6 +341,7 @@ KtCallExpression(223,248): 'myMinus(oneMoreParameter)'
 KtNameReferenceExpression(223,230): 'myMinus'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: false
   KaSymbolResolutionSuccess:
     symbols = [
       /myMinus(<extension receiver>: kotlin.Int, i: kotlin.Int): kotlin.Int
@@ -340,6 +356,7 @@ KtValueArgument(231,247): 'oneMoreParameter'
 KtNameReferenceExpression(231,247): 'oneMoreParameter'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
+  managedLocalResolve: true
   KaSymbolResolutionSuccess:
     symbols = [
       val oneMoreParameter: kotlin.Int
