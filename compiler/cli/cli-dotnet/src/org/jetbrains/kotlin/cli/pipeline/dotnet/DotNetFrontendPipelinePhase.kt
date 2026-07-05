@@ -25,7 +25,6 @@ import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.jvm.asKtFilesList
 import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
-import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.moduleName
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.config.useLightTree
@@ -48,7 +47,6 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
     override fun executePhase(input: ConfigurationPipelineArtifact): DotNetFrontendPipelineArtifact? {
         val (configuration, rootDisposable) = input
         val diagnosticsReporter = configuration.diagnosticsCollector
-        val messageCollector = configuration.messageCollector
         val rootModuleName = Name.special("<${configuration.moduleName!!}>")
         val isLightTree = configuration.getBoolean(CommonConfigurationKeys.USE_LIGHT_TREE)
         val environment = KotlinCoreEnvironment.createForProduction(
@@ -130,7 +128,11 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
         } else {
             checkKotlinPackageUsageForPsi(configuration, sourceFiles.asKtFilesList())
         }
-        if (!kotlinPackageUsageIsFine || messageCollector.hasErrors() || diagnosticsReporter.hasErrors) return null
+        // Frontend errors must NOT make this phase return null: the artifact is returned so the
+        // CheckDiagnosticCollector post-action (and, in tests, FIR handlers such as
+        // NoFirCompilationErrorsHandler) can render the actual diagnostics, mirroring
+        // JvmFrontendPipelinePhase.
+        if (!kotlinPackageUsageIsFine) return null
 
         return DotNetFrontendPipelineArtifact(AllModulesFrontendOutput(outputs), configuration, sourceFiles)
     }
