@@ -63,7 +63,7 @@ class DotNetIlEmitter(
             }
         }
 
-        val renderedMethods = LinkedHashMap<IrSimpleFunction, String>()
+        val renderedMethods = LinkedHashMap<IrSimpleFunction, DotNetIlRenderedMethod>()
         do {
             renderedMethods.clear()
             var anyFunctionRemoved = false
@@ -101,10 +101,21 @@ class DotNetIlEmitter(
 
         return buildString {
             appendHeader()
+            val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
             for ((file, functions) in topLevelFunctionsByFile) {
                 val methods = functions.mapNotNull { renderedMethods[it] }
                 if (methods.isEmpty()) continue
-                DotNetIlClassCodegen(fileClassNames.getValue(file), methods).generate(this)
+                methods.flatMapTo(requiredHelpers) { it.requiredRuntimeHelpers }
+                DotNetIlClassCodegen(fileClassNames.getValue(file), methods.map { it.ilText }).generate(this)
+            }
+            // The shared runtime helper class (see DotNetIlRuntimeHelper) comes last, and only
+            // when some emitted method actually called one of its helpers.
+            if (requiredHelpers.isNotEmpty()) {
+                DotNetIlClassCodegen(
+                    DOTNET_RUNTIME_HELPER_CLASS_NAME,
+                    requiredHelpers.map { it.methodIlText },
+                    exported = false,
+                ).generate(this)
             }
         }
     }
