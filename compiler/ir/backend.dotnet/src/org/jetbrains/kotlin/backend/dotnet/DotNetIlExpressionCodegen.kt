@@ -86,11 +86,11 @@ internal class DotNetIlExpressionCodegen(
                 }
                 DotNetIlValueType.Int32 -> {
                     emitExpression(expression, DotNetIlValueType.Int32)
-                    emitBoxedInvariantToString("[mscorlib]System.Int32")
+                    emitBoxedInvariantToString("${CORE_LIB_REF}System.Int32")
                 }
                 DotNetIlValueType.Int64 -> {
                     emitExpression(expression, DotNetIlValueType.Int64)
-                    emitBoxedInvariantToString("[mscorlib]System.Int64")
+                    emitBoxedInvariantToString("${CORE_LIB_REF}System.Int64")
                 }
                 DotNetIlValueType.Float64 -> emitDoubleToString(expression)
                 DotNetIlValueType.Char -> {
@@ -100,7 +100,7 @@ internal class DotNetIlExpressionCodegen(
                     // overload for char (there is no static Int32::ToString(int32)), so the
                     // int32-shaped stack value is passed directly.
                     emitExpression(expression, DotNetIlValueType.Char)
-                    methodContext.emit("call string [mscorlib]System.Char::ToString(char)", pops = 1, pushes = 1)
+                    methodContext.emit("call string ${CORE_LIB_REF}System.Char::ToString(char)", pops = 1, pushes = 1)
                 }
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
@@ -144,11 +144,11 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit("box $boxedType", pops = 1, pushes = 1)
         methodContext.emit("ldnull", pushes = 1)
         methodContext.emit(
-            "call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()",
+            "call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()",
             pushes = 1,
         )
         methodContext.emit(
-            "callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)",
+            "callvirt instance string ${CORE_LIB_REF}System.IFormattable::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)",
             pops = 3,
             pushes = 1,
         )

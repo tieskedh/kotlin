@@ -91,25 +91,25 @@ internal enum class DotNetIlRuntimeHelper {
             |      [5] int32 'i'
             |    )
             |    ldarg.0
-            |    call bool [mscorlib]System.Double::IsNaN(float64)
+            |    call bool ${CORE_LIB_REF}System.Double::IsNaN(float64)
             |    brfalse IL_notNaN
             |    ldstr "NaN"
             |    ret
             |IL_notNaN:
             |    ldarg.0
-            |    call bool [mscorlib]System.Double::IsPositiveInfinity(float64)
+            |    call bool ${CORE_LIB_REF}System.Double::IsPositiveInfinity(float64)
             |    brfalse IL_notPositiveInfinity
             |    ldstr "Infinity"
             |    ret
             |IL_notPositiveInfinity:
             |    ldarg.0
-            |    call bool [mscorlib]System.Double::IsNegativeInfinity(float64)
+            |    call bool ${CORE_LIB_REF}System.Double::IsNegativeInfinity(float64)
             |    brfalse IL_notNegativeInfinity
             |    ldstr "-Infinity"
             |    ret
             |IL_notNegativeInfinity:
             |    ldarg.0
-            |    call int64 [mscorlib]System.BitConverter::DoubleToInt64Bits(float64)
+            |    call int64 ${CORE_LIB_REF}System.BitConverter::DoubleToInt64Bits(float64)
             |    ldc.i8 -9223372036854775808
             |    bne.un IL_finite
             |    ldstr "-0.0"
@@ -117,29 +117,29 @@ internal enum class DotNetIlRuntimeHelper {
             |IL_finite:
             |    ldarga.s 0
             |    ldstr "R"
-            |    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-            |    call instance string [mscorlib]System.Double::ToString(string, class [mscorlib]System.IFormatProvider)
+            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call instance string ${CORE_LIB_REF}System.Double::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)
             |    stloc.0
             |    ldarg.0
             |    ldc.r8 0.0
             |    beq IL_decimal
             |    ldarg.0
-            |    call float64 [mscorlib]System.Math::Abs(float64)
+            |    call float64 ${CORE_LIB_REF}System.Math::Abs(float64)
             |    ldc.r8 10000000.
             |    bge IL_scientific
             |    ldarg.0
-            |    call float64 [mscorlib]System.Math::Abs(float64)
+            |    call float64 ${CORE_LIB_REF}System.Math::Abs(float64)
             |    ldc.r8 0.001
             |    blt IL_scientific
             |IL_decimal:
             |    ldloc.0
             |    ldc.i4.s 46
-            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
             |    ldc.i4.0
             |    bge IL_decimalHasDot
             |    ldloc.0
             |    ldstr ".0"
-            |    call string [mscorlib]System.String::Concat(string, string)
+            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
             |    ret
             |IL_decimalHasDot:
             |    ldloc.0
@@ -147,14 +147,14 @@ internal enum class DotNetIlRuntimeHelper {
             |IL_scientific:
             |    ldloc.0
             |    ldc.i4.s 69
-            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
             |    stloc.1
             |    ldloc.1
             |    ldc.i4.0
             |    bge IL_scientificFromE
             |    ldloc.0
             |    ldc.i4.0
-            |    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+            |    callvirt instance char ${CORE_LIB_REF}System.String::get_Chars(int32)
             |    ldc.i4.s 45
             |    ceq
             |    stloc.s 'neg'
@@ -162,12 +162,12 @@ internal enum class DotNetIlRuntimeHelper {
             |    brfalse IL_signStripped
             |    ldloc.0
             |    ldc.i4.1
-            |    callvirt instance string [mscorlib]System.String::Substring(int32)
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32)
             |    stloc.0
             |IL_signStripped:
             |    ldloc.0
             |    ldc.i4.s 46
-            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
             |    stloc.1
             |    ldloc.1
             |    ldc.i4.0
@@ -175,14 +175,14 @@ internal enum class DotNetIlRuntimeHelper {
             |    ldloc.0
             |    stloc.2
             |    ldloc.0
-            |    callvirt instance int32 [mscorlib]System.String::get_Length()
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::get_Length()
             |    stloc.3
             |    br IL_dotRemoved
             |IL_removeDot:
             |    ldloc.0
             |    ldloc.1
             |    ldc.i4.1
-            |    callvirt instance string [mscorlib]System.String::Remove(int32, int32)
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Remove(int32, int32)
             |    stloc.2
             |    ldloc.1
             |    stloc.3
@@ -196,7 +196,7 @@ internal enum class DotNetIlRuntimeHelper {
             |IL_leadingZeroLoop:
             |    ldloc.2
             |    ldloc.s 'i'
-            |    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+            |    callvirt instance char ${CORE_LIB_REF}System.String::get_Chars(int32)
             |    ldc.i4.s 48
             |    bne.un IL_leadingZerosSkipped
             |    ldloc.s 'i'
@@ -211,10 +211,10 @@ internal enum class DotNetIlRuntimeHelper {
             |IL_leadingZerosSkipped:
             |    ldloc.2
             |    ldloc.s 'i'
-            |    callvirt instance string [mscorlib]System.String::Substring(int32)
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32)
             |    stloc.2
             |    ldloc.2
-            |    callvirt instance int32 [mscorlib]System.String::get_Length()
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::get_Length()
             |    stloc.s 'i'
             |IL_trailingZeroLoop:
             |    ldloc.s 'i'
@@ -224,7 +224,7 @@ internal enum class DotNetIlRuntimeHelper {
             |    ldloc.s 'i'
             |    ldc.i4.1
             |    sub
-            |    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+            |    callvirt instance char ${CORE_LIB_REF}System.String::get_Chars(int32)
             |    ldc.i4.s 48
             |    bne.un IL_trailingZerosTrimmed
             |    ldloc.s 'i'
@@ -236,64 +236,64 @@ internal enum class DotNetIlRuntimeHelper {
             |    ldloc.2
             |    ldc.i4.0
             |    ldloc.s 'i'
-            |    callvirt instance string [mscorlib]System.String::Substring(int32, int32)
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32, int32)
             |    stloc.2
             |    ldloc.2
-            |    callvirt instance int32 [mscorlib]System.String::get_Length()
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::get_Length()
             |    ldc.i4.1
             |    bne.un IL_insertDot
             |    ldloc.2
             |    ldstr "0"
-            |    call string [mscorlib]System.String::Concat(string, string)
+            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
             |    stloc.2
             |IL_insertDot:
             |    ldloc.2
             |    ldc.i4.1
             |    ldstr "."
-            |    callvirt instance string [mscorlib]System.String::Insert(int32, string)
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Insert(int32, string)
             |    stloc.2
             |    ldloc.s 'neg'
             |    brfalse IL_mantissaSigned
             |    ldstr "-"
             |    ldloc.2
-            |    call string [mscorlib]System.String::Concat(string, string)
+            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
             |    stloc.2
             |IL_mantissaSigned:
             |    ldloc.2
             |    ldstr "E"
             |    ldloc.3
-            |    box [mscorlib]System.Int32
+            |    box ${CORE_LIB_REF}System.Int32
             |    ldnull
-            |    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-            |    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-            |    call string [mscorlib]System.String::Concat(string, string, string)
+            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string ${CORE_LIB_REF}System.IFormattable::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)
+            |    call string ${CORE_LIB_REF}System.String::Concat(string, string, string)
             |    ret
             |IL_scientificFromE:
             |    ldloc.0
             |    ldc.i4.0
             |    ldloc.1
-            |    callvirt instance string [mscorlib]System.String::Substring(int32, int32)
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32, int32)
             |    dup
             |    ldc.i4.s 46
-            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
             |    ldc.i4.0
             |    bge IL_mantissaHasDot
             |    ldstr ".0"
-            |    call string [mscorlib]System.String::Concat(string, string)
+            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
             |IL_mantissaHasDot:
             |    ldstr "E"
             |    ldloc.0
             |    ldloc.1
             |    ldc.i4.1
             |    add
-            |    callvirt instance string [mscorlib]System.String::Substring(int32)
-            |    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-            |    call int32 [mscorlib]System.Int32::Parse(string, class [mscorlib]System.IFormatProvider)
-            |    box [mscorlib]System.Int32
+            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32)
+            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call int32 ${CORE_LIB_REF}System.Int32::Parse(string, class ${CORE_LIB_REF}System.IFormatProvider)
+            |    box ${CORE_LIB_REF}System.Int32
             |    ldnull
-            |    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-            |    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-            |    call string [mscorlib]System.String::Concat(string, string, string)
+            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string ${CORE_LIB_REF}System.IFormattable::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)
+            |    call string ${CORE_LIB_REF}System.String::Concat(string, string, string)
             |    ret
             |  }
             |
