@@ -61,10 +61,10 @@ internal class DotNetIlExpressionCodegen(
      * Emits [expression] as a non-null string suitable for printing or concatenation: constants
      * are rendered through their string representation, nullable strings are coalesced to the
      * `"null"` literal, and non-string values are converted with Kotlin `toString` semantics
-     * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`/
-     * `Char` values are boxed and converted through `Object::ToString`, which matches their
-     * Kotlin `toString()`; `Double` goes through [emitDoubleToString], the shared Kotlin-parity
-     * rendering helper).
+     * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`
+     * values are boxed and converted through `Object::ToString`, which matches their Kotlin
+     * `toString()`; `Char` uses the static culture-free `Char::ToString(char)`; `Double` goes
+     * through [emitDoubleToString], the shared Kotlin-parity rendering helper).
      */
     fun emitStringValueExpression(expression: IrExpression?) {
         when {
@@ -98,13 +98,13 @@ internal class DotNetIlExpressionCodegen(
                 }
                 DotNetIlValueType.Float64 -> emitDoubleToString(expression)
                 DotNetIlValueType.Char -> {
-                    // Char::ToString() is the single UTF-16 code unit, culture-independent;
-                    // identical to Kotlin's `Char.toString()`. Boxing an int32 stack value with
-                    // the System.Char token is the standard CLR shape (chars are int32 on the
-                    // evaluation stack).
+                    // The static Char::ToString(char) renders the single UTF-16 code unit,
+                    // culture-independent; identical to Kotlin's `Char.toString()`. Unlike
+                    // Int32/Int64 above, no box is needed: mscorlib has a static ToString
+                    // overload for char (there is no static Int32::ToString(int32)), so the
+                    // int32-shaped stack value is passed directly.
                     emitExpression(expression, DotNetIlValueType.Char)
-                    methodContext.emit("box [mscorlib]System.Char", pops = 1, pushes = 1)
-                    methodContext.emit("callvirt instance string [mscorlib]System.Object::ToString()", pops = 1, pushes = 1)
+                    methodContext.emit("call string [mscorlib]System.Char::ToString(char)", pops = 1, pushes = 1)
                 }
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
