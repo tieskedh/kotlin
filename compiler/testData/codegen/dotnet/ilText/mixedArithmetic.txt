@@ -1,0 +1,206 @@
+.assembly extern mscorlib {}
+.assembly 'mixedArithmetic' {}
+.module 'main-mixedArithmetic.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.mixedArithmeticKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int64 'intPlusLong'(int32 'a', int64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    conv.i8
+    ldarg.1
+    add
+    ret
+  }
+  .method public hidebysig static int64 'longPlusInt'(int64 'a', int32 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    conv.i8
+    add
+    ret
+  }
+  .method public hidebysig static float64 'intPlusDouble'(int32 'a', float64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    conv.r8
+    ldarg.1
+    add
+    ret
+  }
+  .method public hidebysig static float64 'doublePlusInt'(float64 'a', int32 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    conv.r8
+    add
+    ret
+  }
+  .method public hidebysig static float64 'longTimesDouble'(int64 'a', float64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    conv.r8
+    ldarg.1
+    mul
+    ret
+  }
+  .method public hidebysig static float64 'doubleMinusLong'(float64 'a', int64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    conv.r8
+    sub
+    ret
+  }
+  .method public hidebysig static int64 'intDivLong'(int32 'a', int64 'b') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    conv.i8
+    ldarg.1
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    ret
+  }
+  .method public hidebysig static int64 'longRemInt'(int64 'a', int32 'b') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    conv.i8
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_remNormal_0
+    pop
+    pop
+    ldc.i8 0
+    br IL_remEnd_1
+IL_remNormal_0:
+    rem
+IL_remEnd_1:
+    ret
+  }
+  .method public hidebysig static float64 'doubleDivInt'(float64 'a', int32 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    conv.r8
+    div
+    ret
+  }
+  .method public hidebysig static float64 'intRemDouble'(int32 'a', float64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    conv.r8
+    ldarg.1
+    rem
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] float64 'mixed'
+    )
+    ldc.i4 1
+    ldc.i8 2
+    call int64 'test.mixedArithmeticKt'::'intPlusLong'(int32, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 6000000000
+    ldc.i4 1
+    call int64 'test.mixedArithmeticKt'::'longPlusInt'(int64, int32)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i4 1
+    ldc.r8 2.5
+    call float64 'test.mixedArithmeticKt'::'intPlusDouble'(int32, float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 2.5
+    ldc.i4 1
+    call float64 'test.mixedArithmeticKt'::'doublePlusInt'(float64, int32)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 4
+    ldc.r8 2.5
+    call float64 'test.mixedArithmeticKt'::'longTimesDouble'(int64, float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 0.5
+    ldc.i8 2
+    call float64 'test.mixedArithmeticKt'::'doubleMinusLong'(float64, int64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 -7
+    ldc.i8 2
+    call int64 'test.mixedArithmeticKt'::'intDivLong'(int32, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 7
+    neg
+    ldc.i4 2
+    call int64 'test.mixedArithmeticKt'::'longRemInt'(int64, int32)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.r8 7.0
+    neg
+    ldc.i4 2
+    call float64 'test.mixedArithmeticKt'::'doubleDivInt'(float64, int32)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 -7
+    ldc.r8 2.5
+    call float64 'test.mixedArithmeticKt'::'intRemDouble'(int32, float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    conv.i8
+    ldc.i8 2
+    add
+    conv.r8
+    ldc.r8 0.5
+    add
+    stloc.0
+    ldloc.0
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
