@@ -53,12 +53,12 @@ fun main(args: Array<String>) {
 
             testClass<AbstractFirLightTreeDotNetBoxTest> {
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
-                model("box/strings", pattern = "^(kt50140)\\.kt$")
+                model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
             }
 
             testClass<AbstractFirPsiDotNetBoxTest> {
                 model("box/typealias", pattern = "^(incorrectTypeOfTypealiasForSuspendFunctionalType)\\.kt$")
-                model("box/strings", pattern = "^(kt50140)\\.kt$")
+                model("box/strings", pattern = "^(kt50140|stringPlusOverride)\\.kt$")
             }
 
             testClass<AbstractJvmLightTreeBlackBoxCodegenWithSeparateKmpCompilationTest> {

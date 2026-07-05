@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
@@ -48,6 +49,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             )
         }
 
+        // The injected fake stdlib source declares `package kotlin.io`, which is forbidden by default.
+        // TODO: this is loose — it also allows *user* code to declare packages in `kotlin.*`.
         configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, arguments.allowKotlinPackage || !arguments.noStdlib)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
 
@@ -64,8 +67,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         configuration.moduleName = assemblyName
         configuration.dotNetAssemblyName = assemblyName
 
-        if (!arguments.noStdlib && destination != null) {
-            configuration.addDotNetStdlibSourceRoot(File(destination))
+        if (!arguments.noStdlib) {
+            configuration.addDotNetStdlibSourceRoot()
         }
 
         for (path in arguments.classpath?.split(File.pathSeparatorChar).orEmpty()) {
@@ -81,10 +84,12 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
     }
 }
 
-private fun CompilerConfiguration.addDotNetStdlibSourceRoot(output: File) {
-    val stdlibSource = (output.parentFile ?: File("."))
-        .resolve(".kotlinc-dotnet")
-        .resolve("stdlib")
+private fun CompilerConfiguration.addDotNetStdlibSourceRoot() {
+    // A stable path (rewritten only when its content is outdated) rather than a fresh
+    // Files.createTempDirectory per invocation, so repeated compilations do not accumulate
+    // temp directories.
+    val stdlibSource = File(System.getProperty("java.io.tmpdir"))
+        .resolve("kotlinc-dotnet-stdlib")
         .resolve("DotNetStdlib.kt")
     if (!stdlibSource.isFile || stdlibSource.readText() != DOTNET_STDLIB_SOURCE) {
         stdlibSource.parentFile.mkdirs()
@@ -92,11 +97,3 @@ private fun CompilerConfiguration.addDotNetStdlibSourceRoot(output: File) {
     }
     addKotlinSourceRoot(stdlibSource.path)
 }
-
-private const val DOTNET_STDLIB_SOURCE = """@file:Suppress("UNUSED_PARAMETER")
-package kotlin.io
-
-public fun println() {}
-
-public fun println(message: String) {}
-"""
