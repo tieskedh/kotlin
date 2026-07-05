@@ -88,7 +88,7 @@ IL_remEnd_1:
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] int64 'min'
     )
@@ -101,42 +101,78 @@ IL_remEnd_1:
     ldc.i8 1
     neg
     call int64 'test.longMinValueDivisionKt'::'divide'(int64, int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     ldc.i8 1
     neg
     call int64 'test.longMinValueDivisionKt'::'remainder'(int64, int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     call int64 'test.longMinValueDivisionKt'::'divideByConstMinusOne'(int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
     call int64 'test.longMinValueDivisionKt'::'remainderByConstMinusOne'(int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i8 7
     neg
     call int64 'test.longMinValueDivisionKt'::'divideByConstTwo'(int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i8 7
     neg
     ldc.i8 2
     call int64 'test.longMinValueDivisionKt'::'divide'(int64, int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i8 7
     neg
     ldc.i8 2
     call int64 'test.longMinValueDivisionKt'::'remainder'(int64, int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i8 7
     ldc.i8 1
     neg
     call int64 'test.longMinValueDivisionKt'::'divide'(int64, int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i8 7
     ldc.i8 1
     neg
     call int64 'test.longMinValueDivisionKt'::'remainder'(int64, int64)
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
 }

@@ -62,17 +62,17 @@ internal class DotNetIlExpressionCodegen(
      * are rendered through their string representation, nullable strings are coalesced to the
      * `"null"` literal, and non-string values are converted with Kotlin `toString` semantics
      * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`
-     * values are boxed and converted through `Object::ToString`, which matches their Kotlin
-     * `toString()`; `Char` uses the static culture-free `Char::ToString(char)`; `Double` goes
-     * through [emitDoubleToString], the shared Kotlin-parity rendering helper).
+     * values go through [emitBoxedInvariantToString], the invariant-culture rendering; `Char`
+     * uses the static culture-free `Char::ToString(char)`; `Double` goes through
+     * [emitDoubleToString], the shared Kotlin-parity rendering helper).
      */
     fun emitStringValueExpression(expression: IrExpression?) {
         when {
             expression == null -> methodContext.emit("ldstr ${"null".toIlStringLiteral()}", pushes = 1)
             // Double constants deliberately skip the compile-time toString fast path: the host
             // Kotlin rendering can differ from what the DoubleToString runtime helper produces
-            // (notation-threshold and digit-count divergences documented on the helper), and
-            // constant vs. non-constant values must print identically.
+            // (digit-count divergences documented on the helper), and constant vs. non-constant
+            // values must print identically.
             // Float constants are excluded for the same reason, with the opposite outcome: Float
             // is a deferred type, so instead of silently printing the host rendering the constant
             // falls through to emitExpression below and fails as unsupported, exactly like every
@@ -86,15 +86,11 @@ internal class DotNetIlExpressionCodegen(
                 }
                 DotNetIlValueType.Int32 -> {
                     emitExpression(expression, DotNetIlValueType.Int32)
-                    methodContext.emit("box [mscorlib]System.Int32", pops = 1, pushes = 1)
-                    methodContext.emit("callvirt instance string [mscorlib]System.Object::ToString()", pops = 1, pushes = 1)
+                    emitBoxedInvariantToString("[mscorlib]System.Int32")
                 }
                 DotNetIlValueType.Int64 -> {
-                    // Same shape as Int32: Int64::ToString() with the default format has no
-                    // culture-dependent characters for integers, matching `Long.toString()`.
                     emitExpression(expression, DotNetIlValueType.Int64)
-                    methodContext.emit("box [mscorlib]System.Int64", pops = 1, pushes = 1)
-                    methodContext.emit("callvirt instance string [mscorlib]System.Object::ToString()", pops = 1, pushes = 1)
+                    emitBoxedInvariantToString("[mscorlib]System.Int64")
                 }
                 DotNetIlValueType.Float64 -> emitDoubleToString(expression)
                 DotNetIlValueType.Char -> {
@@ -132,6 +128,30 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitLabel(trueLabel)
         methodContext.emit("ldstr ${"true".toIlStringLiteral()}", pushes = 1)
         methodContext.emitLabel(endLabel)
+    }
+
+    /**
+     * Converts the integer on top of the stack to its Kotlin `toString()` rendering: box to
+     * [boxedType] and call `IFormattable::ToString(null, InvariantCulture)` (`null` format is
+     * the default `"G"` rendering). Plain `Object::ToString()` (and `Console::WriteLine(int32)`)
+     * must NOT be used here: integer default formatting honors the *current* culture's
+     * `NumberFormat.NegativeSign`, so `(-5).toString()` can render as `"!5"` on a machine whose
+     * regional settings customize the sign, while Kotlin's `toString` is culture-independent
+     * (verified on the targeted .NET Framework 4 runtime with a customized `NegativeSign`).
+     * Net stack effect: pop 1, push 1.
+     */
+    private fun emitBoxedInvariantToString(boxedType: String) {
+        methodContext.emit("box $boxedType", pops = 1, pushes = 1)
+        methodContext.emit("ldnull", pushes = 1)
+        methodContext.emit(
+            "call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()",
+            pushes = 1,
+        )
+        methodContext.emit(
+            "callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)",
+            pops = 3,
+            pushes = 1,
+        )
     }
 
     /**

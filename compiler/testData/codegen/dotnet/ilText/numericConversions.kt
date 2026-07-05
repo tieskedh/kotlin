@@ -16,8 +16,10 @@ fun doubleToInt(x: Double): Int = x.toInt()
 
 fun doubleToLong(x: Double): Long = x.toLong()
 
-// `Char.code` is a stdlib extension property and does not resolve against the fake test stdlib;
-// the deprecated member `Char.toInt()` (a warning, not an error) exercises the same conversion.
+// The deprecated member `Char.toInt()` (a warning, not an error) is exercised deliberately as
+// the second route to the Char -> Int conversion intrinsic; the primary route, the `Char.code`
+// extension property (resolvable since it was added to the fake test stdlib), is covered by
+// charOperations.kt.
 @Suppress("DEPRECATION")
 fun charToIntCode(c: Char): Int = c.toInt()
 

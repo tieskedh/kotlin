@@ -32,19 +32,30 @@ internal enum class DotNetIlRuntimeHelper {
      * 2. Negative zero is matched by raw bits (`BitConverter::DoubleToInt64Bits == Long.MIN_VALUE`)
      *    and answered with `"-0.0"`: .NET Framework's `"R"` format loses the sign and prints `"0"`
      *    (verified empirically on this runtime).
-     * 3. Finite values are formatted with `"R"` + `CultureInfo.InvariantCulture` and post-processed
-     *    to the Kotlin shape: a mantissa without `.` gets `".0"` appended (`"1"` -> `"1.0"`,
-     *    `"1E+20"` -> `"1.0E20"`), and the exponent suffix is normalized by parsing it back to an
-     *    `int32` (`Int32::Parse` accepts the `"+20"`/`"-05"` forms) and re-rendering it through
-     *    the invariant culture, which drops the `+` sign and the leading zeros while keeping `-`.
+     * 3. Finite values are formatted with `"R"` + `CultureInfo.InvariantCulture` to obtain the
+     *    round-trip digit string, then reshaped into the JVM notation. Crucially, the
+     *    decimal-vs-scientific choice does NOT follow .NET's own formatting decision: the JVM
+     *    uses plain decimal notation exactly for zero and `1e-3 <= |d| < 1e7` and scientific
+     *    notation outside, while .NET Framework's `"R"` stays decimal within `1e-4 <= |d| < 1e15`
+     *    (verified: `1e7` -> `"10000000"`, `1e15` -> `"1E+15"`, `1e-4` -> `"0.0001"`). The helper
+     *    therefore compares `Math::Abs(value)` against the JVM thresholds itself:
+     *    - Decimal notation: the JVM decimal range is strictly inside .NET's, so the `"R"` string
+     *      is already plain decimal; a mantissa without `.` gets `".0"` appended (`"1"` -> `"1.0"`).
+     *    - Scientific notation, `"R"` string already scientific (`|d| >= 1e15` or `< 1e-4`): the
+     *      mantissa gets `".0"` appended when it has no `.` (`"1E+20"` -> `"1.0E20"`), and the
+     *      exponent suffix is normalized by parsing it back to an `int32` (`Int32::Parse` accepts
+     *      the `"+20"`/`"-05"` forms) and re-rendering it through the invariant culture, which
+     *      drops the `+` sign and the leading zeros while keeping `-`.
+     *    - Scientific notation, `"R"` string plain decimal (`1e7 <= |d| < 1e15` or
+     *      `1e-4 <= |d| < 1e-3`): the digit string is rebuilt as `d1.d2..dnEexp` — sign stripped,
+     *      `.` removed, decimal exponent = (integer-digit count - 1) minus one per stripped
+     *      leading zero, trailing zeros trimmed (keeping one digit, `"10000000"` -> `"1.0E7"`,
+     *      `"0.0001"` -> `"1.0E-4"`, `"31415900000"` -> `"3.14159E10"`), single digits padded
+     *      with a `"0"` fraction, and the exponent rendered through the invariant culture.
      *
      * Residual divergences from the JVM rendering, consciously accepted because fixing them means
      * reimplementing `java.lang.Double.toString`'s digit generation in IL:
      *
-     * - Notation thresholds. The JVM uses plain decimal notation exactly for
-     *   `1e-3 <= |d| < 1e7` and scientific notation outside; .NET's `"R"` stays decimal roughly
-     *   within `1e-4 <= |d| < 1e15`. Values in the gap print as decimal where the JVM prints
-     *   scientific: `12345678.0` here vs `1.2345678E7` on the JVM, `1.0E-4` -> `0.0001`.
      * - Digit count. .NET Framework's `"R"` emits 15 or 17 significant digits (never 16), while
      *   the JVM emits the shortest digit string that identifies the value:
      *   `3.1415926535897931` here vs `3.141592653589793` on the JVM, and
@@ -73,7 +84,11 @@ internal enum class DotNetIlRuntimeHelper {
             |    .maxstack 5
             |    .locals init (
             |      [0] string 's',
-            |      [1] int32 'e'
+            |      [1] int32 'e',
+            |      [2] string 'digits',
+            |      [3] int32 'decExp',
+            |      [4] bool 'neg',
+            |      [5] int32 'i'
             |    )
             |    ldarg.0
             |    call bool [mscorlib]System.Double::IsNaN(float64)
@@ -105,13 +120,18 @@ internal enum class DotNetIlRuntimeHelper {
             |    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
             |    call instance string [mscorlib]System.Double::ToString(string, class [mscorlib]System.IFormatProvider)
             |    stloc.0
-            |    ldloc.0
-            |    ldc.i4.s 69
-            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
-            |    stloc.1
-            |    ldloc.1
-            |    ldc.i4.0
+            |    ldarg.0
+            |    ldc.r8 0.0
+            |    beq IL_decimal
+            |    ldarg.0
+            |    call float64 [mscorlib]System.Math::Abs(float64)
+            |    ldc.r8 10000000.
             |    bge IL_scientific
+            |    ldarg.0
+            |    call float64 [mscorlib]System.Math::Abs(float64)
+            |    ldc.r8 0.001
+            |    blt IL_scientific
+            |IL_decimal:
             |    ldloc.0
             |    ldc.i4.s 46
             |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
@@ -125,6 +145,130 @@ internal enum class DotNetIlRuntimeHelper {
             |    ldloc.0
             |    ret
             |IL_scientific:
+            |    ldloc.0
+            |    ldc.i4.s 69
+            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+            |    stloc.1
+            |    ldloc.1
+            |    ldc.i4.0
+            |    bge IL_scientificFromE
+            |    ldloc.0
+            |    ldc.i4.0
+            |    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+            |    ldc.i4.s 45
+            |    ceq
+            |    stloc.s 'neg'
+            |    ldloc.s 'neg'
+            |    brfalse IL_signStripped
+            |    ldloc.0
+            |    ldc.i4.1
+            |    callvirt instance string [mscorlib]System.String::Substring(int32)
+            |    stloc.0
+            |IL_signStripped:
+            |    ldloc.0
+            |    ldc.i4.s 46
+            |    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+            |    stloc.1
+            |    ldloc.1
+            |    ldc.i4.0
+            |    bge IL_removeDot
+            |    ldloc.0
+            |    stloc.2
+            |    ldloc.0
+            |    callvirt instance int32 [mscorlib]System.String::get_Length()
+            |    stloc.3
+            |    br IL_dotRemoved
+            |IL_removeDot:
+            |    ldloc.0
+            |    ldloc.1
+            |    ldc.i4.1
+            |    callvirt instance string [mscorlib]System.String::Remove(int32, int32)
+            |    stloc.2
+            |    ldloc.1
+            |    stloc.3
+            |IL_dotRemoved:
+            |    ldloc.3
+            |    ldc.i4.1
+            |    sub
+            |    stloc.3
+            |    ldc.i4.0
+            |    stloc.s 'i'
+            |IL_leadingZeroLoop:
+            |    ldloc.2
+            |    ldloc.s 'i'
+            |    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+            |    ldc.i4.s 48
+            |    bne.un IL_leadingZerosSkipped
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    add
+            |    stloc.s 'i'
+            |    ldloc.3
+            |    ldc.i4.1
+            |    sub
+            |    stloc.3
+            |    br IL_leadingZeroLoop
+            |IL_leadingZerosSkipped:
+            |    ldloc.2
+            |    ldloc.s 'i'
+            |    callvirt instance string [mscorlib]System.String::Substring(int32)
+            |    stloc.2
+            |    ldloc.2
+            |    callvirt instance int32 [mscorlib]System.String::get_Length()
+            |    stloc.s 'i'
+            |IL_trailingZeroLoop:
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    ble IL_trailingZerosTrimmed
+            |    ldloc.2
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    sub
+            |    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+            |    ldc.i4.s 48
+            |    bne.un IL_trailingZerosTrimmed
+            |    ldloc.s 'i'
+            |    ldc.i4.1
+            |    sub
+            |    stloc.s 'i'
+            |    br IL_trailingZeroLoop
+            |IL_trailingZerosTrimmed:
+            |    ldloc.2
+            |    ldc.i4.0
+            |    ldloc.s 'i'
+            |    callvirt instance string [mscorlib]System.String::Substring(int32, int32)
+            |    stloc.2
+            |    ldloc.2
+            |    callvirt instance int32 [mscorlib]System.String::get_Length()
+            |    ldc.i4.1
+            |    bne.un IL_insertDot
+            |    ldloc.2
+            |    ldstr "0"
+            |    call string [mscorlib]System.String::Concat(string, string)
+            |    stloc.2
+            |IL_insertDot:
+            |    ldloc.2
+            |    ldc.i4.1
+            |    ldstr "."
+            |    callvirt instance string [mscorlib]System.String::Insert(int32, string)
+            |    stloc.2
+            |    ldloc.s 'neg'
+            |    brfalse IL_mantissaSigned
+            |    ldstr "-"
+            |    ldloc.2
+            |    call string [mscorlib]System.String::Concat(string, string)
+            |    stloc.2
+            |IL_mantissaSigned:
+            |    ldloc.2
+            |    ldstr "E"
+            |    ldloc.3
+            |    box [mscorlib]System.Int32
+            |    ldnull
+            |    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+            |    call string [mscorlib]System.String::Concat(string, string, string)
+            |    ret
+            |IL_scientificFromE:
             |    ldloc.0
             |    ldc.i4.0
             |    ldloc.1
