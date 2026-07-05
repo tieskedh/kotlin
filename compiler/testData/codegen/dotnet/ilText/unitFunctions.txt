@@ -1,0 +1,57 @@
+.assembly extern mscorlib {}
+.assembly 'unitFunctions' {}
+.module 'main-unitFunctions.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.unitFunctionsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'printOk'() cil managed
+  {
+    .maxstack 1
+    ldstr "OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method public hidebysig static void 'printNullable'(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    dup
+    brtrue IL_stringValueNotNull_0
+    pop
+    ldstr "null"
+IL_stringValueNotNull_0:
+    ldstr ""
+    call string [mscorlib]System.String::Concat(string, string)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method public hidebysig static void 'callPrintOk'() cil managed
+  {
+    .maxstack 1
+    call void 'test.unitFunctionsKt'::'printOk'()
+    ret
+  }
+  .method public hidebysig static void 'ignoredIntCall'() cil managed
+  {
+    .maxstack 1
+    call int32 'test.unitFunctionsKt'::'intValue'()
+    pop
+    ret
+  }
+  .method public hidebysig static int32 'intValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 42
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    call void 'test.unitFunctionsKt'::'callPrintOk'()
+    ldnull
+    call void 'test.unitFunctionsKt'::'printNullable'(string)
+    ret
+  }
+}
