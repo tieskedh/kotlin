@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.test.runners.codegen
 
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -15,8 +16,11 @@ import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFrontendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.withNewDiagnosticCollector
+import org.jetbrains.kotlin.config.AnalysisFlag
+import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.LanguageVersion
 import org.jetbrains.kotlin.config.targetPlatform
 import org.jetbrains.kotlin.diagnostics.impl.DiagnosticsCollectorImpl
 import org.jetbrains.kotlin.platform.DotNetPlatforms
@@ -166,6 +170,20 @@ private class DotNetEnvironmentConfigurator(
     testServices: TestServices,
     private val outputExtension: String,
 ) : EnvironmentConfigurator(testServices) {
+    /**
+     * The injected fake stdlib source declares `package kotlin.io`, and besides permitting the
+     * package name, [AnalysisFlags.allowKotlinPackage] makes the default star imports
+     * (`kotlin.io.*`) look at source-declared symbols, so `println` resolves without an explicit
+     * import. Mirrors `K2DotNetCompilerArgumentsConfigurator` on the CLI side.
+     * (TODO: this also allows test code in `kotlin.*`.)
+     */
+    override fun provideAdditionalAnalysisFlags(
+        directives: RegisteredDirectives,
+        languageVersion: LanguageVersion,
+    ): Map<AnalysisFlag<*>, Any?> {
+        return mapOf(AnalysisFlags.allowKotlinPackage to true)
+    }
+
     override fun configureCompilerConfiguration(configuration: CompilerConfiguration, module: TestModule) {
         if (!module.targetPlatform(testServices).isDotNet()) return
 
@@ -199,7 +217,9 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
     private val multiModuleInfoDumper = MultiModuleInfoDumper()
 
     override fun processModule(module: TestModule, info: BinaryArtifacts.DotNet) {
-        multiModuleInfoDumper.builderForModule(module).append(info.outputFile.readText())
+        // The backend writes the .il file as UTF-8 with a BOM (required by ilasm); the BOM is an
+        // encoding artifact, not part of the IL text under test.
+        multiModuleInfoDumper.builderForModule(module).append(info.outputFile.readText().removePrefix("\uFEFF"))
     }
 
     override fun processAfterAllModules(someAssertionWasFailed: Boolean) {
@@ -288,11 +308,3 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         const val OUTPUT_EXTENSION = "box.txt"
     }
 }
-
-private const val DOTNET_STDLIB_SOURCE = """@file:Suppress("UNUSED_PARAMETER")
-package kotlin.io
-
-public fun println() {}
-
-public fun println(message: String) {}
-"""
