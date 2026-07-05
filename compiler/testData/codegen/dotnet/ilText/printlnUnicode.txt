@@ -1,0 +1,22 @@
+.assembly extern mscorlib {}
+.assembly 'printlnUnicode' {}
+.module 'main-printlnUnicode.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.printlnUnicodeKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "café"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "Ünïcødé ✓"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "control:\001end"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr bytearray (6E 00 75 00 6C 00 6C 00 20 00 63 00 68 00 61 00 72 00 3A 00 00 00 65 00 6E 00 64 00)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
