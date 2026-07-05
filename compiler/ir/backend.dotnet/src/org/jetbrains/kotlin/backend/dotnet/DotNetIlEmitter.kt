@@ -144,7 +144,7 @@ class DotNetIlEmitter(
         fqNameWhenAvailable?.asString() ?: name.asString()
 
     private fun StringBuilder.appendHeader() {
-        appendLine(".assembly extern mscorlib {}")
+        appendLine(".assembly extern $CORE_LIB {}")
         appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
         appendLine(".module ${moduleFileName.toIlIdentifier()}")
         appendLine()
