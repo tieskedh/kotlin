@@ -69,12 +69,19 @@ private fun IrType.isDotNetStringType(): Boolean {
  * Finite values use [Double.toString], the shortest decimal representation that round-trips
  * (same contract the JVM backend relies on for `.class` file constants); it always contains a
  * `.` or an exponent, and the exponent marker is lowercased to the ilasm-validated `1.0e300`
- * shape. NaN and the infinities have no decimal form, so they use ilasm's raw-bit
- * `float64(0x...)` operand syntax, which also pins the exact NaN payload.
+ * shape. ilasm's decimal parsing was verified bit-exact against the host down to the subnormal
+ * range (`4.9e-324`) and up to `Double.MAX_VALUE`; as a belt-and-braces guard the decimal text
+ * is still parsed back on the host and any value it does not reproduce bit-for-bit falls back
+ * to the raw form. NaN, the infinities and negative zero always use ilasm's raw-bit
+ * `float64(0x...)` operand syntax (also validated empirically): the first two have no decimal
+ * form at all — the raw form additionally pins the exact NaN payload — and `-0.0` is emitted
+ * raw so the constant's sign bit never depends on ilasm's handling of a `-0.0` literal.
  */
-internal fun Double.toIlFloat64Literal(): String = when {
-    isNaN() || isInfinite() -> "float64(0x%016X)".format(toRawBits())
-    else -> toString().lowercase()
+internal fun Double.toIlFloat64Literal(): String {
+    val rawBitsLiteral = "float64(0x%016X)".format(toRawBits())
+    if (isNaN() || isInfinite() || (this == 0.0 && toRawBits() != 0L)) return rawBitsLiteral
+    val decimalLiteral = toString().lowercase()
+    return if (decimalLiteral.toDouble().toRawBits() == toRawBits()) decimalLiteral else rawBitsLiteral
 }
 
 /**

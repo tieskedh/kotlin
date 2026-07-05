@@ -1,14 +1,18 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 /**
- * Assembles the file class wrapper around the already rendered methods of one Kotlin file.
+ * Assembles the class wrapper around already rendered methods: the file class of one Kotlin file
+ * (public, like the JVM's file facades), or, with [exported] = false, the module-private runtime
+ * helper class (see [DotNetIlRuntimeHelper]).
  */
 internal class DotNetIlClassCodegen(
     private val className: String,
     private val renderedMethods: List<String>,
+    private val exported: Boolean = true,
 ) {
     fun generate(builder: StringBuilder) {
-        builder.appendLine(".class public abstract sealed auto ansi beforefieldinit ${className.toIlIdentifier()}")
+        val visibility = if (exported) "public" else "private"
+        builder.appendLine(".class $visibility abstract sealed auto ansi beforefieldinit ${className.toIlIdentifier()}")
         builder.appendLine("       extends [mscorlib]System.Object")
         builder.appendLine("{")
         for (method in renderedMethods) {

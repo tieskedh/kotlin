@@ -23,6 +23,7 @@ internal class DotNetIlMethodContext(
     private val usedLocalNames = hashSetOf<String>()
     private val branchTargetStackDepths = hashMapOf<String, Int>()
     private val loopLabels = hashMapOf<IrLoop, DotNetIlLoopLabels>()
+    private val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
     private var labelCounter = 0
     private var stackDepth = 0
     private var maxStackDepth = 0
@@ -43,6 +44,19 @@ internal class DotNetIlMethodContext(
 
     val locals: List<DotNetIlSlot.Local>
         get() = localSlots
+
+    /** The [runtime helpers][DotNetIlRuntimeHelper] this method body called; see [requireRuntimeHelper]. */
+    val requiredRuntimeHelpers: Set<DotNetIlRuntimeHelper>
+        get() = requiredHelpers
+
+    /**
+     * Records that the body being rendered calls [helper], so that [DotNetIlEmitter] emits the
+     * shared runtime helper class into the module. The caller still emits the `call` instruction
+     * itself (via [DotNetIlRuntimeHelper.callInstruction]).
+     */
+    fun requireRuntimeHelper(helper: DotNetIlRuntimeHelper) {
+        requiredHelpers += helper
+    }
 
     /** The computed `.maxstack` value; ilasm requires at least 1. */
     val maxStack: Int

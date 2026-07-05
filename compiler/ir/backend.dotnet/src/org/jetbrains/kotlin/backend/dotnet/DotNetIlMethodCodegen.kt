@@ -24,6 +24,16 @@ import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
 
 /**
+ * A successfully rendered method: its IL text plus the [runtime helpers][DotNetIlRuntimeHelper]
+ * the body called, which [DotNetIlEmitter] aggregates to decide whether to emit the shared
+ * helper class.
+ */
+internal class DotNetIlRenderedMethod(
+    val ilText: String,
+    val requiredRuntimeHelpers: Set<DotNetIlRuntimeHelper>,
+)
+
+/**
  * Renders a single top-level function into IL text. The body is rendered into its own fresh
  * buffer first, so `.maxstack` and the `.locals init` block are computed from what was actually
  * emitted; any unsupported construct aborts the render with [DotNetIlUnsupportedException].
@@ -39,9 +49,9 @@ internal class DotNetIlMethodCodegen(
     private val methodContext = DotNetIlMethodContext(function.parameters, signature.parameterTypes)
     private val expressionCodegen = DotNetIlExpressionCodegen(methodContext, availableFunctions, intrinsicMethods)
 
-    fun render(): String {
+    fun render(): DotNetIlRenderedMethod {
         emitBody()
-        return buildString {
+        val ilText = buildString {
             val parameters = function.parameters.zip(signature.parameterTypes).joinToString(", ") { (parameter, type) ->
                 "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
             }
@@ -58,6 +68,7 @@ internal class DotNetIlMethodCodegen(
             append(methodContext.renderBody())
             appendLine("  }")
         }
+        return DotNetIlRenderedMethod(ilText, methodContext.requiredRuntimeHelpers)
     }
 
     private fun StringBuilder.appendLocals() {
