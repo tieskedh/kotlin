@@ -144,33 +144,21 @@ IL_whenEnd_0:
     ldc.r8 3.0
     ldc.r8 4.0
     call float64 'test.doubleArithmeticKt'::'nestedArithmetic'(float64, float64, float64)
-    box [mscorlib]System.Double
-    ldstr "G17"
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string '<KotlinIl>'::'DoubleToString'(float64)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.r8 7.5
     neg
     ldc.r8 2.0
     call float64 'test.doubleArithmeticKt'::'divRem'(float64, float64)
-    box [mscorlib]System.Double
-    ldstr "G17"
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string '<KotlinIl>'::'DoubleToString'(float64)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.r8 5.0
     call float64 'test.doubleArithmeticKt'::'negate'(float64)
-    box [mscorlib]System.Double
-    ldstr "G17"
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string '<KotlinIl>'::'DoubleToString'(float64)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.r8 10.0
     call float64 'test.doubleArithmeticKt'::'incrementDecrement'(float64)
-    box [mscorlib]System.Double
-    ldstr "G17"
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string '<KotlinIl>'::'DoubleToString'(float64)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.r8 1.0
     ldc.r8 2.0
@@ -290,6 +278,94 @@ IL_boolStrTrue_12:
     ldstr "true"
 IL_boolStrEnd_13:
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
+.class private abstract sealed auto ansi beforefieldinit '<KotlinIl>'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'DoubleToString'(float64 'value') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] string 's',
+      [1] int32 'e'
+    )
+    ldarg.0
+    call bool [mscorlib]System.Double::IsNaN(float64)
+    brfalse IL_notNaN
+    ldstr "NaN"
+    ret
+IL_notNaN:
+    ldarg.0
+    call bool [mscorlib]System.Double::IsPositiveInfinity(float64)
+    brfalse IL_notPositiveInfinity
+    ldstr "Infinity"
+    ret
+IL_notPositiveInfinity:
+    ldarg.0
+    call bool [mscorlib]System.Double::IsNegativeInfinity(float64)
+    brfalse IL_notNegativeInfinity
+    ldstr "-Infinity"
+    ret
+IL_notNegativeInfinity:
+    ldarg.0
+    call int64 [mscorlib]System.BitConverter::DoubleToInt64Bits(float64)
+    ldc.i8 -9223372036854775808
+    bne.un IL_finite
+    ldstr "-0.0"
+    ret
+IL_finite:
+    ldarga.s 0
+    ldstr "R"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    call instance string [mscorlib]System.Double::ToString(string, class [mscorlib]System.IFormatProvider)
+    stloc.0
+    ldloc.0
+    ldc.i4.s 69
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    stloc.1
+    ldloc.1
+    ldc.i4.0
+    bge IL_scientific
+    ldloc.0
+    ldc.i4.s 46
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    ldc.i4.0
+    bge IL_decimalHasDot
+    ldloc.0
+    ldstr ".0"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+IL_decimalHasDot:
+    ldloc.0
+    ret
+IL_scientific:
+    ldloc.0
+    ldc.i4.0
+    ldloc.1
+    callvirt instance string [mscorlib]System.String::Substring(int32, int32)
+    dup
+    ldc.i4.s 46
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    ldc.i4.0
+    bge IL_mantissaHasDot
+    ldstr ".0"
+    call string [mscorlib]System.String::Concat(string, string)
+IL_mantissaHasDot:
+    ldstr "E"
+    ldloc.0
+    ldloc.1
+    ldc.i4.1
+    add
+    callvirt instance string [mscorlib]System.String::Substring(int32)
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    call int32 [mscorlib]System.Int32::Parse(string, class [mscorlib]System.IFormatProvider)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string, string)
     ret
   }
 }

@@ -63,14 +63,16 @@ internal class DotNetIlExpressionCodegen(
      * `"null"` literal, and non-string values are converted with Kotlin `toString` semantics
      * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`/
      * `Char` values are boxed and converted through `Object::ToString`, which matches their
-     * Kotlin `toString()`; `Double` goes through [emitDoubleToString], a documented deviation).
+     * Kotlin `toString()`; `Double` goes through [emitDoubleToString], the shared Kotlin-parity
+     * rendering helper).
      */
     fun emitStringValueExpression(expression: IrExpression?) {
         when {
             expression == null -> methodContext.emit("ldstr ${"null".toIlStringLiteral()}", pushes = 1)
             // Double constants deliberately skip the compile-time toString fast path: the host
-            // Kotlin rendering ("1.0") differs from the CLR rendering emitDoubleToString produces
-            // at runtime ("1"), and constant vs. non-constant values must print identically.
+            // Kotlin rendering can differ from what the DoubleToString runtime helper produces
+            // (notation-threshold and digit-count divergences documented on the helper), and
+            // constant vs. non-constant values must print identically.
             // Float constants are excluded for the same reason, with the opposite outcome: Float
             // is a deferred type, so instead of silently printing the host rendering the constant
             // falls through to emitExpression below and fails as unsupported, exactly like every
@@ -133,33 +135,16 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Converts the `float64` value produced by [expression] to a string.
-     *
-     * Deviates from the JVM target's textual `Double.toString()` contract: the CLR has no API
-     * that reproduces Java's rendering (`1.0`, `1.0E300`), so this uses the closest CLR-native
-     * round-trip-safe equivalent — format `"G17"` with `CultureInfo.InvariantCulture` (`1`,
-     * and up to 17 significant digits where needed, e.g. `0.10000000000000001` for `0.1`).
-     * `"R"` must NOT be used even though it looks like the natural round-trip format: on
-     * .NET Framework x64 (the mscorlib runtime these assemblies target) `"R"` is documented
-     * as not round-trip-safe — it can drop digits so the text parses back to a different
-     * double; Microsoft's guidance for that runtime is `"G17"` (only .NET Core 3.0+ fixed `"R"`).
-     * The invariant culture is mandatory: the default `ToString()` honors the current culture
-     * and would print `1,5` in e.g. a German locale. The value is boxed and dispatched through
-     * `IFormattable` so no `ldloca`-addressable temporary local is needed.
+     * Converts the `float64` value produced by [expression] to a string with Kotlin
+     * `Double.toString()` shapes (`1.0`, `1.0E20`, `NaN`, `Infinity`, `-0.0`) by calling the
+     * shared [DotNetIlRuntimeHelper.DoubleToString] runtime helper, emitted once per module.
+     * See that helper's documentation for the rendering algorithm and the consciously accepted
+     * divergences from the JVM rendering.
      */
     private fun emitDoubleToString(expression: IrExpression) {
         emitExpression(expression, DotNetIlValueType.Float64)
-        methodContext.emit("box [mscorlib]System.Double", pops = 1, pushes = 1)
-        methodContext.emit("ldstr ${"G17".toIlStringLiteral()}", pushes = 1)
-        methodContext.emit(
-            "call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()",
-            pushes = 1,
-        )
-        methodContext.emit(
-            "callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)",
-            pops = 3,
-            pushes = 1,
-        )
+        methodContext.requireRuntimeHelper(DotNetIlRuntimeHelper.DoubleToString)
+        methodContext.emit(DotNetIlRuntimeHelper.DoubleToString.callInstruction, pops = 1, pushes = 1)
     }
 
     /**

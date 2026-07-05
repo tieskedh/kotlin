@@ -51,3 +51,9 @@ CLI tests in `compiler/testData/cli/dotnet/`. Box tests exist but executing gene
 - Generics stance: the type representation stays structural so that future generics can target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
+- Shared runtime code (e.g. the Kotlin-parity `Double.toString` rendering) is hand-written IL on the
+  synthetic module-private `'<KotlinIl>'` class (`DotNetIlRuntimeHelpers`) — the CLR-side stand-in
+  for the JVM's `kotlin.jvm.internal.Intrinsics` runtime until a real .NET stdlib exists. The class
+  is emitted at most once per module and only when a rendered method required one of its helpers.
+  Every mscorlib member signature used in helper IL must be verified by assembling and running an
+  ilasm probe before it lands in codegen.
