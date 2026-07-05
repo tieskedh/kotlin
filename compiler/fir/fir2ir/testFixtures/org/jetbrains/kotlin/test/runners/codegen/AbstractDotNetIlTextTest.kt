@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.test.runners.codegen
 
-import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -171,10 +171,11 @@ private class DotNetEnvironmentConfigurator(
     private val outputExtension: String,
 ) : EnvironmentConfigurator(testServices) {
     /**
-     * The injected fake stdlib source declares `package kotlin.io`, and besides permitting the
-     * package name, [AnalysisFlags.allowKotlinPackage] makes the default star imports
-     * (`kotlin.io.*`) look at source-declared symbols, so `println` resolves without an explicit
-     * import. Mirrors `K2DotNetCompilerArgumentsConfigurator` on the CLI side.
+     * The injected fake stdlib sources declare `package kotlin.io` and `package kotlin`, and
+     * besides permitting the package names, [AnalysisFlags.allowKotlinPackage] makes the default
+     * star imports (`kotlin.*`, `kotlin.io.*`) look at source-declared symbols, so `println` and
+     * `Char.code` resolve without an explicit import. Mirrors
+     * `K2DotNetCompilerArgumentsConfigurator` on the CLI side.
      * (TODO: this also allows test code in `kotlin.*`.)
      */
     override fun provideAdditionalAnalysisFlags(
@@ -194,7 +195,9 @@ private class DotNetEnvironmentConfigurator(
         configuration.dotNetAssemblyName = artifactName
         configuration.dotNetOutput = getOutputFile(module, artifactName)
         configuration.addSourcesForDependsOnClosure(module, testServices)
-        configuration.addKotlinSourceRoot(getOrCreateStdlibSource().canonicalPath)
+        for (stdlibSource in getOrCreateStdlibSources()) {
+            configuration.addKotlinSourceRoot(stdlibSource.canonicalPath)
+        }
     }
 
     private fun getArtifactName(module: TestModule): String {
@@ -205,10 +208,12 @@ private class DotNetEnvironmentConfigurator(
     private fun getOutputFile(module: TestModule, artifactName: String) =
         testServices.getOrCreateTempDirectory("dotnet").resolve("${module.name}-$artifactName.$outputExtension")
 
-    private fun getOrCreateStdlibSource() =
-        testServices.getOrCreateTempDirectory("dotnet-stdlib").resolve("DotNetStdlib.kt").also { file ->
-            if (!file.isFile || file.readText() != DOTNET_STDLIB_SOURCE) {
-                file.writeText(DOTNET_STDLIB_SOURCE)
+    private fun getOrCreateStdlibSources() =
+        DOTNET_STDLIB_SOURCES.map { (fileName, source) ->
+            testServices.getOrCreateTempDirectory("dotnet-stdlib").resolve(fileName).also { file ->
+                if (!file.isFile || file.readText() != source) {
+                    file.writeText(source)
+                }
             }
         }
 }

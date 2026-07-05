@@ -191,8 +191,9 @@ internal class DotNetIlIntrinsicMethods(
      * them precisely because their two-step truncation semantics surprise users, and this
      * backend has no legacy code to stay compatible with.
      *
-     * `Char.code` is `Char.toInt()` under an `@InlineOnly` extension-property hat; its getter is
-     * intercepted here because this backend does not run an IR inliner.
+     * `Char.code` is `Char.toInt()` under an extension-property hat (`@InlineOnly` in the real
+     * stdlib, a plain property in the fake .NET stdlib because this backend does not run an IR
+     * inliner); its getter call is intercepted here so no property access is ever emitted.
      */
     private fun conversionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         val conversionNamesToTargets = listOf(

@@ -46,8 +46,11 @@ CLI tests in `compiler/testData/cli/dotnet/`. Box tests exist but executing gene
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. Boxed/object equality fallback is
   deferred until the backend has an object/runtime model.
-- The fake `kotlin.io.println` stdlib source (`DotNetStdlibSource`) is filtered through the intrinsic
-  registry and is not emitted as a class of its own.
+- The fake stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package
+  (`kotlin.io` for `println`, `kotlin` for `Char.code`), filtered through the intrinsic registry and
+  never emitted as classes of their own. Injected declarations must compile without any diagnostics,
+  including warnings: the FIR test infrastructure maps every reported diagnostic back to a test
+  file and crashes on diagnostics in injected files (suppress e.g. deprecations locally).
 - Generics stance: the type representation stays structural so that future generics can target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
