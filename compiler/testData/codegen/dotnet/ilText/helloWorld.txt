@@ -1,14 +1,14 @@
 .assembly extern mscorlib {}
 .assembly 'helloWorld' {}
-.module 'helloWorld.exe'
+.module 'main-helloWorld.il'
 
-.class public abstract sealed auto ansi beforefieldinit helloWorldKt
+.class public abstract sealed auto ansi beforefieldinit 'test.helloWorldKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static void main() cil managed
+  .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 8
+    .maxstack 1
     ldstr "Hello!"
     call void [mscorlib]System.Console::WriteLine(string)
     ret

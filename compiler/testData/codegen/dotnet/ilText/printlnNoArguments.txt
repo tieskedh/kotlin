@@ -1,14 +1,14 @@
 .assembly extern mscorlib {}
 .assembly 'printlnNoArguments' {}
-.module 'printlnNoArguments.exe'
+.module 'main-printlnNoArguments.il'
 
-.class public abstract sealed auto ansi beforefieldinit printlnNoArgumentsKt
+.class public abstract sealed auto ansi beforefieldinit 'test.printlnNoArgumentsKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static void main() cil managed
+  .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 8
+    .maxstack 1
     call void [mscorlib]System.Console::WriteLine()
     ret
   }

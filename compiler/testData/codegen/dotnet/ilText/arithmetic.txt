@@ -1,0 +1,245 @@
+.assembly extern mscorlib {}
+.assembly 'arithmetic' {}
+.module 'main-arithmetic.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.arithmeticKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'nestedArithmetic'(int32 'a', int32 'b', int32 'c') cil managed
+  {
+    .maxstack 5
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    mul
+    add
+    ldarg.0
+    ldarg.1
+    sub
+    ldarg.2
+    dup
+    ldc.i4.m1
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    sub
+    ret
+  }
+  .method public hidebysig static int32 'divRem'(int32 'a', int32 'b') cil managed
+  {
+    .maxstack 5
+    ldarg.0
+    ldarg.1
+    dup
+    ldc.i4.m1
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    ldc.i4 1000
+    mul
+    ldarg.0
+    ldarg.1
+    dup
+    ldc.i4.m1
+    bne.un IL_remNormal_2
+    pop
+    pop
+    ldc.i4.0
+    br IL_remEnd_3
+IL_remNormal_2:
+    rem
+IL_remEnd_3:
+    add
+    ret
+  }
+  .method public hidebysig static int32 'negate'(int32 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    neg
+    ldarg.0
+    add
+    ret
+  }
+  .method public hidebysig static int32 'incrementDecrement'(int32 'start') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'counter',
+      [1] int32 '<unary>',
+      [2] int32 '<unary>@2',
+      [3] int32 '<unary>@3'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.1
+    ldc.i4.1
+    add
+    stloc.0
+    ldloc.0
+    stloc.2
+    ldloc.2
+    ldc.i4.1
+    add
+    stloc.0
+    ldloc.0
+    stloc.3
+    ldloc.3
+    ldc.i4.1
+    sub
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'compare'(int32 'a', int32 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    clt
+    brfalse IL_whenNext_1
+    ldstr "less"
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    cgt
+    brfalse IL_whenNext_3
+    ldstr "greater"
+    ret
+IL_whenNext_3:
+    ldstr "equal"
+    ret
+  }
+  .method public hidebysig static string 'describe'(int32 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 -1
+    cgt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "negative"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    ldc.i4 1
+    clt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldstr "positive"
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldstr "zero"
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] int32 'sum'
+    )
+    ldc.i4 2
+    ldc.i4 3
+    ldc.i4 4
+    call int32 'test.arithmeticKt'::'nestedArithmetic'(int32, int32, int32)
+    ldc.i4 14
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "arithmetic OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "arithmetic FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_0:
+    ldc.i4 -7
+    ldc.i4 2
+    call int32 'test.arithmeticKt'::'divRem'(int32, int32)
+    ldc.i4 -3001
+    ceq
+    brfalse IL_whenNext_3
+    ldstr "divRem OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldstr "divRem FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_2:
+    ldc.i4 5
+    call int32 'test.arithmeticKt'::'negate'(int32)
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_5
+    ldstr "negate OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_4
+IL_whenNext_5:
+    ldstr "negate FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_4:
+    ldc.i4 10
+    call int32 'test.arithmeticKt'::'incrementDecrement'(int32)
+    ldc.i4 11
+    ceq
+    brfalse IL_whenNext_7
+    ldstr "incDec OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldstr "incDec FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_6:
+    ldc.i4 1
+    ldc.i4 2
+    call string 'test.arithmeticKt'::'compare'(int32, int32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 3
+    ldc.i4 3
+    call string 'test.arithmeticKt'::'compare'(int32, int32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    ldc.i4 4
+    call string 'test.arithmeticKt'::'compare'(int32, int32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 -5
+    call string 'test.arithmeticKt'::'describe'(int32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 0
+    call string 'test.arithmeticKt'::'describe'(int32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    call string 'test.arithmeticKt'::'describe'(int32)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 6
+    ldc.i4 7
+    mul
+    stloc.0
+    ldloc.0
+    ldc.i4 42
+    ceq
+    brfalse IL_whenNext_9
+    ldstr "6 * 7 = 42"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_8
+IL_whenNext_9:
+    ldstr "6 * 7 = ?"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_8:
+    ret
+  }
+}

@@ -1,0 +1,78 @@
+.assembly extern mscorlib {}
+.assembly 'printlnTypes' {}
+.module 'main-printlnTypes.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.printlnTypesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'sum'(int32 'a', int32 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    .locals init (
+      [0] int32 'n',
+      [1] bool 'flag'
+    )
+    ldc.i4 42
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.i4 -1
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.i4 40
+    stloc.0
+    ldloc.0
+    ldc.i4 2
+    add
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.i4 19
+    ldc.i4 23
+    call int32 'test.printlnTypesKt'::'sum'(int32, int32)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldstr "true"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "false"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 10
+    cgt
+    stloc.1
+    ldloc.1
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 10
+    clt
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldc.i4.0
+    ceq
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "null"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
