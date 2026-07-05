@@ -789,12 +789,11 @@ private class DotNetIlUnsupportedIntrinsic(
  *   integer default formatting has no culture-dependent characters, and `WriteLine(char)` writes
  *   the single UTF-16 code unit — both identical to the Kotlin `toString()` renderings.
  * - `Double` must NOT use `WriteLine(float64)`: it formats with the *current* culture (e.g.
- *   `1,5` under a German locale) and, like the boxed `Object::ToString` path, would deviate
- *   per-machine. It funnels through [DotNetIlExpressionCodegen.emitStringValueExpression], whose
- *   Double branch formats with round-trip-safe `"G17"` + `CultureInfo.InvariantCulture` (not
- *   `"R"`, which is broken on .NET Framework x64; see `emitDoubleToString`) — a documented
- *   deviation from JVM's `Double.toString` text (CLR prints `1` where the JVM prints `1.0`;
- *   Kotlin/JS accepts the same class of platform-native rendering differences).
+ *   `1,5` under a German locale) and prints CLR shapes (`1`, `1E+20`) instead of Kotlin's
+ *   (`1.0`, `1.0E20`). It funnels through
+ *   [DotNetIlExpressionCodegen.emitStringValueExpression], whose Double branch calls the shared
+ *   [DotNetIlRuntimeHelper.DoubleToString] runtime helper — Kotlin-parity rendering, with the
+ *   divergences documented on that helper.
  * - `String`/`Boolean`/`Any?` funnel through the Kotlin string rendering of the value. In
  *   particular `Console.WriteLine(bool)` must NOT be used: it prints `"True"`/`"False"` while
  *   Kotlin prints `"true"`/`"false"`.

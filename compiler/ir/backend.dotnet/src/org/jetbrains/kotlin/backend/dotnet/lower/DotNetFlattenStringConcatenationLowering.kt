@@ -14,12 +14,13 @@ import org.jetbrains.kotlin.ir.expressions.IrConst
  * constants.
  *
  * The JVM target folds every constant with the host `toString`, which is correct there because
- * host and target renderings coincide. On the CLR they do not: `Double` is rendered at runtime
- * by `DotNetIlExpressionCodegen.emitDoubleToString` (`"G17"` + invariant culture, printing `1`
- * where the host prints `1.0`), so folding a constant `Double` with the host rendering would
- * make `"v=" + 1.0` and `"v=" + d` print differently for the same value. Keeping the constant
- * as a runtime concatenation argument routes it through the same emission as non-constant
- * values.
+ * host and target renderings coincide. On the CLR they do not always: `Double` is rendered at
+ * runtime by the `DotNetIlRuntimeHelper.DoubleToString` helper, which matches the host rendering
+ * on common values but diverges on the notation-threshold and digit-count classes documented on
+ * the helper (e.g. host `1.2345678E7` vs runtime `12345678.0`). Folding a constant `Double` with
+ * the host rendering would therefore make `"v=" + 1.2345678E7` and `"v=" + d` print differently
+ * for the same value. Keeping the constant as a runtime concatenation argument routes it through
+ * the same emission as non-constant values.
  *
  * `Float` is excluded for the fail-hard rule rather than for rendering: the type is deferred in
  * this backend, and folding would silently compile a `Float` constant with the host rendering
