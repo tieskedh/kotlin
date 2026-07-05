@@ -117,7 +117,7 @@ IL_whenNext_3:
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 2
+    .maxstack 3
     .locals init (
       [0] char 'c',
       [1] char 'newline'
@@ -131,11 +131,19 @@ IL_whenNext_3:
     ldc.i4 122
     ldc.i4 97
     call int32 'test.charOperationsKt'::'distance'(char, char)
-    call void [mscorlib]System.Console::WriteLine(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 97
     ldc.i4 122
     call int32 'test.charOperationsKt'::'distance'(char, char)
-    call void [mscorlib]System.Console::WriteLine(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 97
     call char 'test.charOperationsKt'::'incrementDecrement'(char)
     call void [mscorlib]System.Console::WriteLine(char)
@@ -188,13 +196,21 @@ IL_whenEnd_4:
     ldc.i4 1
     add
     conv.u2
-    call void [mscorlib]System.Console::WriteLine(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 1040
     call void [mscorlib]System.Console::WriteLine(char)
     ldc.i4 97
     ldc.i4 0
     call int32 'test.charOperationsKt'::'distance'(char, char)
-    call void [mscorlib]System.Console::WriteLine(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 10
     stloc.1
     ldloc.1
@@ -210,7 +226,11 @@ IL_boolStrTrue_6:
 IL_boolStrEnd_7:
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 65
-    call void [mscorlib]System.Console::WriteLine(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 66
     conv.u2
     call void [mscorlib]System.Console::WriteLine(char)
@@ -221,7 +241,11 @@ IL_boolStrEnd_7:
     call void [mscorlib]System.Console::WriteLine(char)
     ldc.i4 97
     conv.u2
-    call void [mscorlib]System.Console::WriteLine(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ldstr "q='end"
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "nl\ndone"

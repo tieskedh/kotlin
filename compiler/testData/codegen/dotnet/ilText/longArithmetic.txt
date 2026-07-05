@@ -237,7 +237,11 @@ IL_whenEnd_6:
     mul
     stloc.0
     ldloc.0
-    call void [mscorlib]System.Console::WriteLine(int64)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
 }
