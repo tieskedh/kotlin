@@ -13,7 +13,7 @@ internal class DotNetIlClassCodegen(
     fun generate(builder: StringBuilder) {
         val visibility = if (exported) "public" else "private"
         builder.appendLine(".class $visibility abstract sealed auto ansi beforefieldinit ${className.toIlIdentifier()}")
-        builder.appendLine("       extends [mscorlib]System.Object")
+        builder.appendLine("       extends ${CORE_LIB_REF}System.Object")
         builder.appendLine("{")
         for (method in renderedMethods) {
             builder.append(method)
