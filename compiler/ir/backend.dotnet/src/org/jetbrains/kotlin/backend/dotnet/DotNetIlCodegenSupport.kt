@@ -15,6 +15,17 @@ import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.render
 
 /**
+ * The core library assembly name declared in the module header (`.assembly extern`) and targeted
+ * by every emitted IL member reference. Kept as a single constant (with the derived
+ * [CORE_LIB_REF] prefix) so retargeting the backend to a different corelib — e.g. modern .NET's
+ * `System.Runtime` — is a one-line change instead of a scatter-shot edit.
+ */
+internal const val CORE_LIB = "mscorlib"
+
+/** The bracketed resolution-scope prefix of corelib type references in emitted IL. */
+internal const val CORE_LIB_REF = "[$CORE_LIB]"
+
+/**
  * Thrown while rendering a single function into IL when a construct the prototype .NET backend
  * cannot compile is encountered. The emitter catches it, discards the partial render, skips the
  * function, and reports [reason] as a diagnostic.

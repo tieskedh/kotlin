@@ -385,7 +385,7 @@ private class DotNetIlEqualityIntrinsic(
                 if (referenceEquality) {
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
-                    codegen.emit("call bool [mscorlib]System.String::op_Equality(string, string)", pops = 2, pushes = 1)
+                    codegen.emit("call bool ${CORE_LIB_REF}System.String::op_Equality(string, string)", pops = 2, pushes = 1)
                 }
             }
         }
@@ -824,7 +824,7 @@ private object DotNetIlPrintlnIntrinsic : DotNetIlIntrinsicMethod() {
     ): Boolean {
         return when (call.arguments.size) {
             0 -> {
-                codegen.emit("call void [mscorlib]System.Console::WriteLine()")
+                codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine()")
                 true
             }
             1 -> {
@@ -833,14 +833,14 @@ private object DotNetIlPrintlnIntrinsic : DotNetIlIntrinsicMethod() {
                 when (call.symbol.owner.parameters.singleOrNull()?.type?.toDotNetIlValueType()) {
                     DotNetIlValueType.Char -> {
                         codegen.emitExpression(argument, DotNetIlValueType.Char)
-                        codegen.emit("call void [mscorlib]System.Console::WriteLine(char)", pops = 1)
+                        codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine(char)", pops = 1)
                     }
                     else -> {
                         // Int, Long, Double, String, Boolean and Any? — see the class KDoc for
                         // why the direct WriteLine(int32)/WriteLine(int64)/WriteLine(float64)/
                         // WriteLine(bool) overloads must not be used.
                         codegen.emitStringValueExpression(argument)
-                        codegen.emit("call void [mscorlib]System.Console::WriteLine(string)", pops = 1)
+                        codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine(string)", pops = 1)
                     }
                 }
                 true
@@ -864,7 +864,7 @@ private object DotNetIlStringPlusIntrinsic : DotNetIlIntrinsicMethod() {
 
         codegen.emitStringValueExpression(receiver)
         codegen.emitStringValueExpression(argument)
-        codegen.emit("call string [mscorlib]System.String::Concat(string, string)", pops = 2, pushes = 1)
+        codegen.emit("call string ${CORE_LIB_REF}System.String::Concat(string, string)", pops = 2, pushes = 1)
         return true
     }
 }
