@@ -16,8 +16,8 @@ import org.jetbrains.kotlin.ir.expressions.IrConst
  * The JVM target folds every constant with the host `toString`, which is correct there because
  * host and target renderings coincide. On the CLR they do not always: `Double` is rendered at
  * runtime by the `DotNetIlRuntimeHelper.DoubleToString` helper, which matches the host rendering
- * on common values but diverges on the notation-threshold and digit-count classes documented on
- * the helper (e.g. host `1.2345678E7` vs runtime `12345678.0`). Folding a constant `Double` with
+ * on common values but diverges on the digit-count classes documented on the helper (e.g. host
+ * `3.141592653589793` vs runtime `3.1415926535897931`). Folding a constant `Double` with
  * the host rendering would therefore make `"v=" + 1.2345678E7` and `"v=" + d` print differently
  * for the same value. Keeping the constant as a runtime concatenation argument routes it through
  * the same emission as non-constant values.

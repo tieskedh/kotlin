@@ -28,4 +28,11 @@ fun main() {
     println("d = " + d)
     println("nan = " + nan)
     println("negZero = " + (-zero))
+
+    // A Double *constant* in a concatenation: must NOT be folded at compile time (the host
+    // rendering would print "1.2345678E7" even where the runtime helper diverges) and must go
+    // through the same '<KotlinIl>'::DoubleToString helper as the dynamic values above; the
+    // value sits in the JVM-scientific/.NET-decimal notation gap [1e7, 1e15) that the helper
+    // reshapes itself.
+    println("v = " + 1.2345678E7)
 }
