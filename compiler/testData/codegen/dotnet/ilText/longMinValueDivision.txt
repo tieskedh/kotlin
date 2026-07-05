@@ -1,0 +1,142 @@
+.assembly extern mscorlib {}
+.assembly 'longMinValueDivision' {}
+.module 'main-longMinValueDivision.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.longMinValueDivisionKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int64 'divide'(int64 'a', int64 'b') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    ret
+  }
+  .method public hidebysig static int64 'remainder'(int64 'a', int64 'b') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_remNormal_0
+    pop
+    pop
+    ldc.i8 0
+    br IL_remEnd_1
+IL_remNormal_0:
+    rem
+IL_remEnd_1:
+    ret
+  }
+  .method public hidebysig static int64 'divideByConstMinusOne'(int64 'a') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldc.i8 1
+    neg
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    ret
+  }
+  .method public hidebysig static int64 'remainderByConstMinusOne'(int64 'a') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldc.i8 1
+    neg
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_remNormal_0
+    pop
+    pop
+    ldc.i8 0
+    br IL_remEnd_1
+IL_remNormal_0:
+    rem
+IL_remEnd_1:
+    ret
+  }
+  .method public hidebysig static int64 'divideByConstTwo'(int64 'a') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i8 2
+    div
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    .locals init (
+      [0] int64 'min'
+    )
+    ldc.i8 9223372036854775807
+    neg
+    ldc.i8 1
+    sub
+    stloc.0
+    ldloc.0
+    ldc.i8 1
+    neg
+    call int64 'test.longMinValueDivisionKt'::'divide'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldloc.0
+    ldc.i8 1
+    neg
+    call int64 'test.longMinValueDivisionKt'::'remainder'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldloc.0
+    call int64 'test.longMinValueDivisionKt'::'divideByConstMinusOne'(int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldloc.0
+    call int64 'test.longMinValueDivisionKt'::'remainderByConstMinusOne'(int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 7
+    neg
+    call int64 'test.longMinValueDivisionKt'::'divideByConstTwo'(int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 7
+    neg
+    ldc.i8 2
+    call int64 'test.longMinValueDivisionKt'::'divide'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 7
+    neg
+    ldc.i8 2
+    call int64 'test.longMinValueDivisionKt'::'remainder'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 7
+    ldc.i8 1
+    neg
+    call int64 'test.longMinValueDivisionKt'::'divide'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i8 7
+    ldc.i8 1
+    neg
+    call int64 'test.longMinValueDivisionKt'::'remainder'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ret
+  }
+}

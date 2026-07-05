@@ -17,6 +17,12 @@ public fun println(message: String) {}
 
 public fun println(message: Int) {}
 
+public fun println(message: Long) {}
+
+public fun println(message: Double) {}
+
+public fun println(message: Char) {}
+
 public fun println(message: Boolean) {}
 
 public fun println(message: Any?) {}
