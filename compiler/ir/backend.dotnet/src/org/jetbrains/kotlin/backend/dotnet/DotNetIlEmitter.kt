@@ -2,322 +2,140 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
-import org.jetbrains.kotlin.ir.expressions.IrBlockBody
-import org.jetbrains.kotlin.ir.expressions.IrCall
-import org.jetbrains.kotlin.ir.expressions.IrConst
-import org.jetbrains.kotlin.ir.expressions.IrExpression
-import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
-import org.jetbrains.kotlin.ir.expressions.IrGetValue
-import org.jetbrains.kotlin.ir.expressions.IrReturn
-import org.jetbrains.kotlin.ir.expressions.IrStringConcatenation
-import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
-import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
-import org.jetbrains.kotlin.ir.types.IrSimpleType
-import org.jetbrains.kotlin.ir.types.IrType
-import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 
 class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
     private val assemblyName: String,
+    private val moduleFileName: String,
+    private val producesExecutable: Boolean,
+    private val irBuiltIns: IrBuiltIns,
 ) {
-    fun emit(moduleFragment: IrModuleFragment): String {
+    /**
+     * Renders the module to IL text.
+     *
+     * Every top-level function whose signature maps to IL types is a candidate; candidates are
+     * rendered to a fixpoint, so a function calling an unsupported function is itself skipped.
+     * Skipped functions are reported as warnings. Returns null after reporting an error when the
+     * module cannot be emitted at all (unsupported or ambiguous main, or an executable was
+     * requested without a main function).
+     */
+    fun emit(moduleFragment: IrModuleFragment): String? {
+        val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns)
         val files = moduleFragment.files.toList()
+        val fileClassNames = buildFileClassNames(files)
         val topLevelFunctionsByFile = files.associateWith { file ->
             file.declarations.filterIsInstance<IrSimpleFunction>()
         }
-        val mainFunction = topLevelFunctionsByFile.asSequence()
-            .flatMap { (file, functions) -> functions.asSequence().map { file to it } }
-            .firstOrNull { (_, function) -> function.name.asString() == "main" }
 
-        if (mainFunction == null) {
+        val mainFunctions = DotNetMainFunctionDetector().getMainFunctions(moduleFragment)
+        if (mainFunctions.size > 1) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "Ambiguous main: found ${mainFunctions.size} top-level main functions."
+            )
+            return null
+        }
+        val entryPoint = mainFunctions.singleOrNull()
+        if (entryPoint == null && producesExecutable) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "No top-level main function found; a .NET executable requires one."
+            )
+            return null
+        }
+
+        val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
+        val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
+        for ((file, functions) in topLevelFunctionsByFile) {
+            val className = fileClassNames.getValue(file)
+            for (function in functions) {
+                if (intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true) continue
+                try {
+                    availableFunctions[function] = DotNetIlFunctionInfo(className, function.dotNetSignature())
+                } catch (e: DotNetIlUnsupportedException) {
+                    skipReasons[function] = e.reason
+                }
+            }
+        }
+
+        val renderedMethods = LinkedHashMap<IrSimpleFunction, String>()
+        do {
+            renderedMethods.clear()
+            var anyFunctionRemoved = false
+            for (function in availableFunctions.keys.toList()) {
+                try {
+                    renderedMethods[function] = DotNetIlMethodCodegen(
+                        function = function,
+                        functionInfo = availableFunctions.getValue(function),
+                        isEntryPoint = function == entryPoint,
+                        availableFunctions = availableFunctions,
+                        intrinsicMethods = intrinsicMethods,
+                    ).render()
+                } catch (e: DotNetIlUnsupportedException) {
+                    availableFunctions.remove(function)
+                    skipReasons[function] = e.reason
+                    anyFunctionRemoved = true
+                }
+            }
+        } while (anyFunctionRemoved)
+
+        for ((function, reason) in skipReasons) {
+            if (function == entryPoint) continue
             messageCollector.report(
                 CompilerMessageSeverity.WARNING,
-                "No top-level main function found; generated .NET IL contains an empty entry point."
+                "Function '${function.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
+        }
+        if (entryPoint != null && entryPoint !in availableFunctions) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "The main function is not supported by the .NET backend: ${skipReasons[entryPoint]}"
+            )
+            return null
         }
 
         return buildString {
             appendHeader()
-            if (mainFunction == null) {
-                val className = files.firstOrNull()?.dotNetFileClassName() ?: "${assemblyName.toDotNetIdentifier()}Kt"
-                appendLine(".class public abstract sealed auto ansi beforefieldinit $className")
-                appendLine("       extends [mscorlib]System.Object")
-                appendLine("{")
-                appendMain(null, emptyMap())
-                appendLine("}")
-                return@buildString
-            }
-
-            val functionClassNames = buildMap {
-                for ((file, functions) in topLevelFunctionsByFile) {
-                    val className = file.dotNetFileClassName()
-                    for (function in functions) {
-                        if (function.isMain() || function.isSupportedStringFunction()) {
-                            put(function, className)
-                        }
-                    }
-                }
-            }
-
             for ((file, functions) in topLevelFunctionsByFile) {
-                val supportedFunctions = functions.filter { functionClassNames.containsKey(it) }
-                if (supportedFunctions.isEmpty()) continue
-
-                val className = file.dotNetFileClassName()
-                appendLine(".class public abstract sealed auto ansi beforefieldinit $className")
-                appendLine("       extends [mscorlib]System.Object")
-                appendLine("{")
-                for (function in supportedFunctions) {
-                    if (function.isMain()) {
-                        appendMain(function, functionClassNames)
-                    } else {
-                        appendStringFunction(function, functionClassNames)
-                    }
-                }
-                appendLine("}")
+                val methods = functions.mapNotNull { renderedMethods[it] }
+                if (methods.isEmpty()) continue
+                DotNetIlClassCodegen(fileClassNames.getValue(file), methods).generate(this)
             }
         }
     }
+
+    /**
+     * Precomputes the file class name for every file: the package-qualified dotted name
+     * (`pkg.fileKt`) rendered later as a single quoted identifier, with a numeric suffix
+     * deduplicating files that share both package and file name.
+     */
+    private fun buildFileClassNames(files: List<IrFile>): Map<IrFile, String> {
+        val usedNames = hashSetOf<String>()
+        return files.associateWith { file ->
+            val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
+            val packageFqName = file.packageFqName
+            val baseName = if (packageFqName.isRoot) "${fileName}Kt" else "${packageFqName.asString()}.${fileName}Kt"
+            var className = baseName
+            var suffix = 1
+            while (!usedNames.add(className)) {
+                className = "$baseName${suffix++}"
+            }
+            className
+        }
+    }
+
+    private fun IrSimpleFunction.diagnosticName(): String =
+        fqNameWhenAvailable?.asString() ?: name.asString()
 
     private fun StringBuilder.appendHeader() {
-        val escapedAssemblyName = assemblyName.escapeIlString()
         appendLine(".assembly extern mscorlib {}")
-        appendLine(".assembly '$escapedAssemblyName' {}")
-        appendLine(".module '$escapedAssemblyName.exe'")
+        appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
+        appendLine(".module ${moduleFileName.toIlIdentifier()}")
         appendLine()
-    }
-
-    private fun StringBuilder.appendMain(
-        function: IrSimpleFunction?,
-        functionClassNames: Map<IrSimpleFunction, String>,
-    ) {
-        appendLine("  .method public hidebysig static void main() cil managed")
-        appendLine("  {")
-        appendLine("    .entrypoint")
-        appendLine("    .maxstack 8")
-        if (function != null) {
-            emitBody(function, functionClassNames)
-        }
-        appendLine("    ret")
-        appendLine("  }")
-    }
-
-    private fun StringBuilder.appendStringFunction(
-        function: IrSimpleFunction,
-        functionClassNames: Map<IrSimpleFunction, String>,
-    ) {
-        val methodName = function.name.asString().toDotNetMethodName()
-        val parameterSymbols = function.parameters.map { it.symbol }
-        val parameters = function.parameters.joinToString(", ") { "string ${it.name.asString().toDotNetIdentifier()}" }
-        appendLine("  .method public hidebysig static string $methodName($parameters) cil managed")
-        appendLine("  {")
-        appendLine("    .maxstack 8")
-        emitStringExpression(function.stringReturnExpression(), functionClassNames, parameterSymbols)
-        appendLine("    ret")
-        appendLine("  }")
-    }
-
-    private fun StringBuilder.emitBody(
-        function: IrSimpleFunction,
-        functionClassNames: Map<IrSimpleFunction, String>,
-    ) {
-        val body = function.body as? IrBlockBody
-        if (body == null) {
-            appendLine("    // Unsupported main body shape: ${function.body?.javaClass?.simpleName ?: "null"}")
-            return
-        }
-
-        for (statement in body.statements) {
-            val expression = (statement as? IrReturn)?.value ?: statement as? IrExpression
-            when {
-                expression is IrCall && expression.isPrintlnCall() -> emitPrintln(
-                    expression,
-                    functionClassNames,
-                    emptyList(),
-                )
-                expression != null -> appendLine("    // Unsupported statement: ${expression.javaClass.simpleName}")
-            }
-        }
-    }
-
-    private fun StringBuilder.emitPrintln(
-        call: IrCall,
-        functionClassNames: Map<IrSimpleFunction, String>,
-        parameterSymbols: List<IrValueSymbol>,
-    ) {
-        when (val argument = call.arguments.firstOrNull()) {
-            is IrConst -> {
-                appendLine("    ldstr \"${argument.value.toString().escapeIlString()}\"")
-                appendLine("    call void [mscorlib]System.Console::WriteLine(string)")
-            }
-            is IrCall -> {
-                emitStringExpression(argument, functionClassNames, parameterSymbols)
-                appendLine("    call void [mscorlib]System.Console::WriteLine(string)")
-            }
-            is IrStringConcatenation -> {
-                emitStringExpression(argument, functionClassNames, parameterSymbols)
-                appendLine("    call void [mscorlib]System.Console::WriteLine(string)")
-            }
-            null -> {
-                appendLine("    call void [mscorlib]System.Console::WriteLine()")
-            }
-            else -> appendLine("    // Unsupported println argument: ${argument.javaClass.simpleName}")
-        }
-    }
-
-    private fun StringBuilder.emitStringExpression(
-        expression: IrExpression?,
-        functionClassNames: Map<IrSimpleFunction, String>,
-        parameterSymbols: List<IrValueSymbol>,
-    ) {
-        when (expression) {
-            is IrConst -> appendLine("    ldstr \"${expression.value.toString().escapeIlString()}\"")
-            is IrGetValue -> {
-                val parameterIndex = parameterSymbols.indexOf(expression.symbol)
-                if (parameterIndex >= 0) {
-                    appendLine("    ldarg.$parameterIndex")
-                } else {
-                    appendLine("    // Unsupported value reference: ${expression.symbol.owner.name.asString()}")
-                    appendLine("    ldstr \"\"")
-                }
-            }
-            is IrCall -> {
-                val callee = expression.symbol.owner
-                val className = functionClassNames[callee]
-                if (className != null) {
-                    for (argument in expression.arguments) {
-                        if (argument != null) {
-                            emitStringExpression(argument, functionClassNames, parameterSymbols)
-                        }
-                    }
-                    val methodName = callee.name.asString().toDotNetMethodName()
-                    appendLine("    call string $className::$methodName(${callee.stringParametersSignature()})")
-                } else {
-                    appendLine("    // Unsupported string call: ${callee.name.asString()}")
-                    appendLine("    ldstr \"\"")
-                }
-            }
-            is IrStringConcatenation -> {
-                emitStringConcatenation(expression, functionClassNames, parameterSymbols)
-            }
-            else -> {
-                appendLine("    // Unsupported string expression: ${expression?.javaClass?.simpleName ?: "null"}")
-                appendLine("    ldstr \"\"")
-            }
-        }
-    }
-
-    private fun StringBuilder.emitStringConcatenation(
-        expression: IrStringConcatenation,
-        functionClassNames: Map<IrSimpleFunction, String>,
-        parameterSymbols: List<IrValueSymbol>,
-    ) {
-        emitStringConcatenation(expression.arguments, functionClassNames, parameterSymbols)
-    }
-
-    private fun StringBuilder.emitStringConcatenation(
-        arguments: List<IrExpression>,
-        functionClassNames: Map<IrSimpleFunction, String>,
-        parameterSymbols: List<IrValueSymbol>,
-    ) {
-        if (arguments.isEmpty()) {
-            appendLine("    ldstr \"\"")
-            return
-        }
-
-        emitStringExpression(arguments.first(), functionClassNames, parameterSymbols)
-        for (argument in arguments.drop(1)) {
-            emitStringExpression(argument, functionClassNames, parameterSymbols)
-            appendLine("    call string [mscorlib]System.String::Concat(string, string)")
-        }
-    }
-
-    private fun IrSimpleFunction.isMain(): Boolean {
-        return name.asString() == "main"
-    }
-
-    private fun IrSimpleFunction.isSupportedStringFunction(): Boolean {
-        return returnType.isDotNetStringType() &&
-                parameters.all { it.type.isDotNetStringType() } &&
-                stringReturnExpression()?.isSupportedStringExpression() == true
-    }
-
-    private fun IrSimpleFunction.stringReturnExpression(): IrExpression? {
-        return when (val body = body) {
-            is IrExpressionBody -> body.expression
-            is IrBlockBody -> body.statements.asSequence()
-                .mapNotNull { (it as? IrReturn)?.value ?: it as? IrExpression }
-                .singleOrNull()
-            else -> null
-        }
-    }
-
-    private fun IrExpression.isSupportedStringExpression(): Boolean {
-        return when (this) {
-            is IrConst -> value is String
-            is IrGetValue -> type.isDotNetStringType()
-            is IrCall -> symbol.owner.isSupportedStringFunction() &&
-                    arguments.filterNotNull().all { it.isSupportedStringExpression() }
-            is IrStringConcatenation -> arguments.all { it.isSupportedStringExpression() }
-            else -> false
-        }
-    }
-
-    private fun IrSimpleFunction.stringParametersSignature(): String {
-        return parameters.joinToString(", ") { "string" }
-    }
-
-    private fun IrType.isDotNetStringType(): Boolean {
-        if (isString()) return true
-        val typeParameter = ((this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner ?: return false
-        return typeParameter.superTypes.any { it.isString() }
-    }
-
-    private fun IrCall.isPrintlnCall(): Boolean {
-        val functionName = symbol.owner.name.asString()
-        val fqName = symbol.owner.fqNameWhenAvailable?.asString()
-        return functionName == "println" && fqName?.startsWith("kotlin.io.") == true
-    }
-
-    private fun IrFile.dotNetFileClassName(): String {
-        val fileName = fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
-        return "${fileName.toDotNetIdentifier()}Kt"
-    }
-
-    private fun String.toDotNetIdentifier(): String {
-        val sanitized = buildString {
-            for (char in this@toDotNetIdentifier) {
-                append(if (char.isLetterOrDigit() || char == '_') char else '_')
-            }
-        }
-        return sanitized.ifEmpty { "KotlinModule" }.let {
-            if (it.first().isDigit()) "_$it" else it
-        }
-    }
-
-    private fun String.toDotNetMethodName(): String {
-        val identifier = toDotNetIdentifier()
-        return if (identifier in IL_RESERVED_METHOD_NAMES) "'$identifier'" else identifier
-    }
-
-    private fun String.escapeIlString(): String = buildString {
-        for (char in this@escapeIlString) {
-            when (char) {
-                '\\' -> append("\\\\")
-                '"' -> append("\\\"")
-                '\n' -> append("\\n")
-                '\r' -> append("\\r")
-                '\t' -> append("\\t")
-                else -> append(char)
-            }
-        }
-    }
-
-    private companion object {
-        val IL_RESERVED_METHOD_NAMES = setOf("box")
     }
 }

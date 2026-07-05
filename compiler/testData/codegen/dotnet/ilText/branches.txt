@@ -1,0 +1,74 @@
+.assembly extern mscorlib {}
+.assembly 'branches' {}
+.module 'main-branches.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.branchesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'chooseString'(bool 'flag') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    brfalse IL_whenNext_1
+    ldstr "OK"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "FAIL"
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static int32 'chooseInt'(bool 'flag') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] int32 'value'
+    )
+    ldarg.0
+    brfalse IL_whenNext_1
+    ldc.i4 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4 2
+IL_whenEnd_0:
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static bool 'chooseBoolean'(bool 'flag') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.1
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'printBranch'(bool 'flag') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    brfalse IL_whenNext_1
+    ldstr "OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldc.i4.1
+    call string 'test.branchesKt'::'chooseString'(bool)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4.0
+    call void 'test.branchesKt'::'printBranch'(bool)
+    ret
+  }
+}

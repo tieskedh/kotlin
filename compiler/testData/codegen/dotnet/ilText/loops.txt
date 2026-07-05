@@ -1,0 +1,381 @@
+.assembly extern mscorlib {}
+.assembly 'loops' {}
+.module 'main-loops.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.loopsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'sumOneToTen'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'sum',
+      [1] int32 'i',
+      [2] int32 '<unary>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldc.i4 1
+    stloc.1
+IL_whileCond_0:
+    ldloc.1
+    ldc.i4 10
+    cgt
+    ldc.i4.0
+    ceq
+    brfalse IL_whileEnd_1
+    ldloc.0
+    ldloc.1
+    add
+    stloc.0
+    ldloc.1
+    stloc.2
+    ldloc.2
+    ldc.i4.1
+    add
+    stloc.1
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'countDownDoWhile'(int32 'start') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'count',
+      [1] int32 'i',
+      [2] int32 '<unary>',
+      [3] int32 '<unary>@3'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+IL_doWhileBody_0:
+    ldloc.0
+    stloc.2
+    ldloc.2
+    ldc.i4.1
+    add
+    stloc.0
+    ldloc.1
+    stloc.3
+    ldloc.3
+    ldc.i4.1
+    sub
+    stloc.1
+    ldloc.1
+    ldc.i4 0
+    cgt
+    brtrue IL_doWhileBody_0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'doWhileWithBodyCondition'(int32 'limit') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'i',
+      [1] int32 'next'
+    )
+    ldc.i4 0
+    stloc.0
+IL_doWhileBody_0:
+    ldloc.0
+    ldc.i4 1
+    add
+    stloc.1
+    ldloc.1
+    stloc.0
+    ldloc.1
+    ldarg.0
+    clt
+    brtrue IL_doWhileBody_0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'firstMultipleAbove'(int32 'step', int32 'limit') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'candidate'
+    )
+    ldc.i4 0
+    stloc.0
+IL_whileCond_0:
+    ldc.i4.1
+    brfalse IL_whileEnd_1
+    ldloc.0
+    ldarg.0
+    add
+    stloc.0
+    ldloc.0
+    ldarg.1
+    cgt
+    brfalse IL_whenNext_3
+    br IL_whileEnd_1
+IL_whenNext_3:
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'sumOfOdds'(int32 'limit') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'sum',
+      [1] int32 'i',
+      [2] int32 '<unary>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+IL_whileCond_0:
+    ldloc.1
+    ldarg.0
+    clt
+    brfalse IL_whileEnd_1
+    ldloc.1
+    stloc.2
+    ldloc.2
+    ldc.i4.1
+    add
+    stloc.1
+    ldloc.1
+    ldc.i4 2
+    rem
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_3
+    br IL_whileCond_0
+IL_whenNext_3:
+    ldloc.0
+    ldloc.1
+    add
+    stloc.0
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'countInnerBreaks'(int32 'outer', int32 'inner') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'count',
+      [1] int32 'i',
+      [2] int32 'j',
+      [3] int32 '<unary>',
+      [4] int32 '<unary>@4',
+      [5] int32 '<unary>@5'
+    )
+    ldc.i4 0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+IL_whileCond_0:
+    ldloc.1
+    ldarg.0
+    clt
+    brfalse IL_whileEnd_1
+    ldc.i4 0
+    stloc.2
+IL_whileCond_2:
+    ldloc.2
+    ldarg.1
+    clt
+    brfalse IL_whileEnd_3
+    ldloc.2
+    ldc.i4 2
+    ceq
+    brfalse IL_whenNext_5
+    br IL_whileEnd_3
+IL_whenNext_5:
+    ldloc.0
+    stloc.3
+    ldloc.3
+    ldc.i4.1
+    add
+    stloc.0
+    ldloc.2
+    stloc 4
+    ldloc 4
+    ldc.i4.1
+    add
+    stloc.2
+    br IL_whileCond_2
+IL_whileEnd_3:
+    ldloc.1
+    stloc 5
+    ldloc 5
+    ldc.i4.1
+    add
+    stloc.1
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'shadowedSums'(bool 'flag') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'total',
+      [1] int32 'value',
+      [2] int32 'value@2',
+      [3] int32 'value@3'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    brfalse IL_whenNext_1
+    ldc.i4 10
+    stloc.1
+    ldloc.0
+    ldloc.1
+    add
+    stloc.0
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4 30
+    stloc.2
+    ldloc.0
+    ldloc.2
+    add
+    stloc.0
+IL_whenEnd_0:
+IL_whileCond_2:
+    ldloc.0
+    ldc.i4 100
+    clt
+    brfalse IL_whileEnd_3
+    ldloc.0
+    stloc.3
+    ldloc.0
+    ldloc.3
+    add
+    stloc.0
+    br IL_whileCond_2
+IL_whileEnd_3:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    call int32 'test.loopsKt'::'sumOneToTen'()
+    ldc.i4 55
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "while sum OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "while sum FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_0:
+    ldc.i4 3
+    call int32 'test.loopsKt'::'countDownDoWhile'(int32)
+    ldc.i4 3
+    ceq
+    brfalse IL_whenNext_3
+    ldstr "doWhile OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldstr "doWhile FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_2:
+    ldc.i4 0
+    call int32 'test.loopsKt'::'countDownDoWhile'(int32)
+    ldc.i4 1
+    ceq
+    brfalse IL_whenNext_5
+    ldstr "doWhile runs once OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_4
+IL_whenNext_5:
+    ldstr "doWhile runs once FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_4:
+    ldc.i4 5
+    call int32 'test.loopsKt'::'doWhileWithBodyCondition'(int32)
+    ldc.i4 5
+    ceq
+    brfalse IL_whenNext_7
+    ldstr "doWhile body condition OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldstr "doWhile body condition FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_6:
+    ldc.i4 7
+    ldc.i4 40
+    call int32 'test.loopsKt'::'firstMultipleAbove'(int32, int32)
+    ldc.i4 42
+    ceq
+    brfalse IL_whenNext_9
+    ldstr "break OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_8
+IL_whenNext_9:
+    ldstr "break FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_8:
+    ldc.i4 10
+    call int32 'test.loopsKt'::'sumOfOdds'(int32)
+    ldc.i4 25
+    ceq
+    brfalse IL_whenNext_11
+    ldstr "continue OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_10
+IL_whenNext_11:
+    ldstr "continue FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_10:
+    ldc.i4 3
+    ldc.i4 5
+    call int32 'test.loopsKt'::'countInnerBreaks'(int32, int32)
+    ldc.i4 6
+    ceq
+    brfalse IL_whenNext_13
+    ldstr "nested break OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_12
+IL_whenNext_13:
+    ldstr "nested break FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_12:
+    ldc.i4.1
+    call int32 'test.loopsKt'::'shadowedSums'(bool)
+    ldc.i4 160
+    ceq
+    brfalse IL_whenNext_15
+    ldstr "shadowing true OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_14
+IL_whenNext_15:
+    ldstr "shadowing true FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_14:
+    ldc.i4.0
+    call int32 'test.loopsKt'::'shadowedSums'(bool)
+    ldc.i4 120
+    ceq
+    brfalse IL_whenNext_17
+    ldstr "shadowing false OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_16
+IL_whenNext_17:
+    ldstr "shadowing false FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_16:
+    ret
+  }
+}
