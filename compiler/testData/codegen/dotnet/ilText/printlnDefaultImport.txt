@@ -1,0 +1,16 @@
+.assembly extern mscorlib {}
+.assembly 'printlnDefaultImport' {}
+.module 'main-printlnDefaultImport.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.printlnDefaultImportKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "resolved via default import"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
