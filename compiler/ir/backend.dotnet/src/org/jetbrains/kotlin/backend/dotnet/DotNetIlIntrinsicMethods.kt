@@ -97,6 +97,12 @@ internal class DotNetIlIntrinsicMethods(
      * NaN-correct scheme: `<=` negates `cgt.un` and `>=` negates `clt.un` — the `.un` forms are
      * true for unordered operands, so after negation any comparison with NaN stays false.
      * Negating the plain `cgt` instead would make `NaN <= x` evaluate to true.
+     *
+     * The `Char` entries are defensive registration only: fir2ir currently routes `Char`
+     * comparisons through `Char.compareTo(Char)` + the Int32 builtin (see
+     * [charOperatorIntrinsics]), not through the `Char`-keyed builtins. The emission would be
+     * correct if that routing ever changed, so the entries stay (registry-shape design rule)
+     * even though no golden exercises them.
      */
     private fun comparisonIntrinsics(irBuiltIns: IrBuiltIns): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         val comparableTypes = listOf(
@@ -424,6 +430,11 @@ private class DotNetIlNumericBinaryOperatorIntrinsic(
  * negation and does not overflow-check) and `a % -1` is `0`. The guard is emitted at runtime
  * unless the divisor is a constant that decides it statically; the `int64` guard compares
  * against `-1` widened with `conv.i8`.
+ *
+ * Known divergence (out of the supported subset until an exception model exists): a zero
+ * divisor raises `System.DivideByZeroException`, while Kotlin throws
+ * `kotlin.ArithmeticException("/ by zero")` — a different type and message. To be translated
+ * at the boundary once CLR exceptions are mapped to Kotlin ones.
  *
  * `float64` results need no guard: CIL float `div` is plain IEEE 754 division (`x / 0.0` is an
  * infinity, no exceptions) and CIL float `rem` is the remainder after truncated division — the
@@ -786,12 +797,17 @@ private class DotNetIlUnsupportedIntrinsic(
  * resolved by the frontend; here the fake-stdlib overload picks the `WriteLine` shape).
  *
  * Overload dispatch on the declared parameter type:
- * - `Int`/`Long`/`Char` call `WriteLine(int32)`/`WriteLine(int64)`/`WriteLine(char)` directly:
- *   integer default formatting has no culture-dependent characters, and `WriteLine(char)` writes
- *   the single UTF-16 code unit — both identical to the Kotlin `toString()` renderings.
- * - `Double` must NOT use `WriteLine(float64)`: it formats with the *current* culture (e.g.
- *   `1,5` under a German locale) and prints CLR shapes (`1`, `1E+20`) instead of Kotlin's
- *   (`1.0`, `1.0E20`). It funnels through
+ * - `Char` calls `WriteLine(char)` directly: it writes the single UTF-16 code unit without any
+ *   formatting, identical to Kotlin's `Char.toString()` rendering.
+ * - `Int`/`Long` must NOT use `WriteLine(int32)`/`WriteLine(int64)`: those format with the
+ *   *current* culture, whose `NumberFormat.NegativeSign` is user-customizable in the Windows
+ *   regional settings, so `println(-5)` could print `"!5"` where Kotlin prints `"-5"` (verified
+ *   on the targeted runtime). They funnel through
+ *   [DotNetIlExpressionCodegen.emitStringValueExpression], whose integer branches render via
+ *   `IFormattable::ToString(null, InvariantCulture)`.
+ * - `Double` must NOT use `WriteLine(float64)` for the same reason (e.g. `1,5` under a German
+ *   locale) and because it prints CLR shapes (`1`, `1E+20`) instead of Kotlin's (`1.0`,
+ *   `1.0E20`). It funnels through
  *   [DotNetIlExpressionCodegen.emitStringValueExpression], whose Double branch calls the shared
  *   [DotNetIlRuntimeHelper.DoubleToString] runtime helper — Kotlin-parity rendering, with the
  *   divergences documented on that helper.
@@ -815,21 +831,14 @@ private object DotNetIlPrintlnIntrinsic : DotNetIlIntrinsicMethod() {
                 val argument = call.arguments.single()
                     ?: dotNetUnsupported("missing argument in a call to 'println'")
                 when (call.symbol.owner.parameters.singleOrNull()?.type?.toDotNetIlValueType()) {
-                    DotNetIlValueType.Int32 -> {
-                        codegen.emitExpression(argument, DotNetIlValueType.Int32)
-                        codegen.emit("call void [mscorlib]System.Console::WriteLine(int32)", pops = 1)
-                    }
-                    DotNetIlValueType.Int64 -> {
-                        codegen.emitExpression(argument, DotNetIlValueType.Int64)
-                        codegen.emit("call void [mscorlib]System.Console::WriteLine(int64)", pops = 1)
-                    }
                     DotNetIlValueType.Char -> {
                         codegen.emitExpression(argument, DotNetIlValueType.Char)
                         codegen.emit("call void [mscorlib]System.Console::WriteLine(char)", pops = 1)
                     }
                     else -> {
-                        // Double, String, Boolean and Any? — see the class KDoc for why Double
-                        // and Boolean must not use their direct WriteLine overloads.
+                        // Int, Long, Double, String, Boolean and Any? — see the class KDoc for
+                        // why the direct WriteLine(int32)/WriteLine(int64)/WriteLine(float64)/
+                        // WriteLine(bool) overloads must not be used.
                         codegen.emitStringValueExpression(argument)
                         codegen.emit("call void [mscorlib]System.Console::WriteLine(string)", pops = 1)
                     }
