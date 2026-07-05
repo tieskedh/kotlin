@@ -1,6 +1,6 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
-import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCE
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
@@ -68,7 +68,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         configuration.dotNetAssemblyName = assemblyName
 
         if (!arguments.noStdlib) {
-            configuration.addDotNetStdlibSourceRoot()
+            configuration.addDotNetStdlibSourceRoots()
         }
 
         for (path in arguments.classpath?.split(File.pathSeparatorChar).orEmpty()) {
@@ -84,16 +84,17 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
     }
 }
 
-private fun CompilerConfiguration.addDotNetStdlibSourceRoot() {
-    // A stable path (rewritten only when its content is outdated) rather than a fresh
+private fun CompilerConfiguration.addDotNetStdlibSourceRoots() {
+    // Stable paths (rewritten only when their content is outdated) rather than a fresh
     // Files.createTempDirectory per invocation, so repeated compilations do not accumulate
     // temp directories.
-    val stdlibSource = File(System.getProperty("java.io.tmpdir"))
-        .resolve("kotlinc-dotnet-stdlib")
-        .resolve("DotNetStdlib.kt")
-    if (!stdlibSource.isFile || stdlibSource.readText() != DOTNET_STDLIB_SOURCE) {
-        stdlibSource.parentFile.mkdirs()
-        stdlibSource.writeText(DOTNET_STDLIB_SOURCE)
+    val stdlibDirectory = File(System.getProperty("java.io.tmpdir")).resolve("kotlinc-dotnet-stdlib")
+    for ((fileName, source) in DOTNET_STDLIB_SOURCES) {
+        val stdlibSource = stdlibDirectory.resolve(fileName)
+        if (!stdlibSource.isFile || stdlibSource.readText() != source) {
+            stdlibSource.parentFile.mkdirs()
+            stdlibSource.writeText(source)
+        }
+        addKotlinSourceRoot(stdlibSource.path)
     }
-    addKotlinSourceRoot(stdlibSource.path)
 }
