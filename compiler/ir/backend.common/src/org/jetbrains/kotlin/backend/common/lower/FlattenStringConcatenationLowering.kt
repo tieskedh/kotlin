@@ -69,7 +69,7 @@ import kotlin.math.min
  *     CONST Null type=kotlin.Nothing? value=null
  * ```
  */
-class FlattenStringConcatenationLowering(val context: CommonBackendContext) : FileLoweringPass, IrElementTransformerVoid() {
+open class FlattenStringConcatenationLowering(val context: CommonBackendContext) : FileLoweringPass, IrElementTransformerVoid() {
     companion object {
         // There are two versions of String.plus in the library. One for nullable and one for non-nullable strings.
         // The version for nullable strings has FqName kotlin.plus, the version for non-nullable strings
@@ -180,25 +180,41 @@ class FlattenStringConcatenationLowering(val context: CommonBackendContext) : Fi
         return transformedExpression
     }
 
+    /**
+     * Whether [const] may be converted to its string representation at compile time with the
+     * host [toString] rendering. `true` for all constants by default; backends whose runtime
+     * string rendering of some constant kinds differs from the host rendering (e.g. CLR `Double`
+     * formatting in the .NET backend) override this to keep such constants as runtime
+     * concatenation arguments, so that constant and non-constant values print identically.
+     */
+    protected open fun isFoldableConstant(const: IrConst): Boolean = true
+
     private fun IrStringConcatenation.tryToFold(): IrExpression {
         val folded = mutableListOf<IrExpression>()
         for (next in this.arguments) {
-            val last = folded.lastOrNull()
-            when {
-                next !is IrConst -> folded += next
-                last !is IrConst -> folded += IrConstImpl.string(
-                    next.startOffset, next.endOffset, context.irBuiltIns.stringType, constToString(next)
-                )
-                else -> folded[folded.size - 1] = IrConstImpl.string(
-                    // Inlined strings may have `last.startOffset > next.endOffset`
-                    min(last.startOffset, next.startOffset), max(last.endOffset, next.endOffset),
-                    context.irBuiltIns.stringType,
-                    constToString(last) + constToString(next)
-                )
+            if (next is IrConst && isFoldableConstant(next)) {
+                val last = folded.lastOrNull()
+                if (last is IrConst && isFoldableConstant(last)) {
+                    folded[folded.size - 1] = IrConstImpl.string(
+                        // Inlined strings may have `last.startOffset > next.endOffset`
+                        min(last.startOffset, next.startOffset), max(last.endOffset, next.endOffset),
+                        context.irBuiltIns.stringType,
+                        constToString(last) + constToString(next)
+                    )
+                } else {
+                    folded += IrConstImpl.string(
+                        next.startOffset, next.endOffset, context.irBuiltIns.stringType, constToString(next)
+                    )
+                }
+            } else {
+                folded += next
             }
         }
-        return folded.singleOrNull() as? IrConst
-            ?: IrStringConcatenationImpl(this.startOffset, this.endOffset, this.type, folded)
+        // A single leftover *unfoldable* constant must stay wrapped in the concatenation: it is
+        // not a string constant, so returning it directly would change the expression's type.
+        val single = folded.singleOrNull()
+        return if (single is IrConst && isFoldableConstant(single)) single
+        else IrStringConcatenationImpl(this.startOffset, this.endOffset, this.type, folded)
     }
 
     private fun constToString(const: IrConst): String {
