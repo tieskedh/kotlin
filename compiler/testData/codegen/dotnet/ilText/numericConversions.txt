@@ -1,0 +1,369 @@
+.assembly extern mscorlib {}
+.assembly 'numericConversions' {}
+.module 'main-numericConversions.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.numericConversionsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int64 'intToLong'(int32 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.i8
+    ret
+  }
+  .method public hidebysig static float64 'intToDouble'(int32 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.r8
+    ret
+  }
+  .method public hidebysig static char 'intToChar'(int32 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.u2
+    ret
+  }
+  .method public hidebysig static int32 'longToInt'(int64 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.i4
+    ret
+  }
+  .method public hidebysig static float64 'longToDouble'(int64 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.r8
+    ret
+  }
+  .method public hidebysig static int32 'doubleToInt'(float64 'x') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    dup
+    dup
+    bne.un IL_d2iNaN_0
+    dup
+    ldc.r8 2147483647.0
+    cgt
+    brtrue IL_d2iMax_1
+    dup
+    ldc.r8 -2147483648.0
+    clt
+    brtrue IL_d2iMin_2
+    conv.i4
+    br IL_d2iEnd_3
+IL_d2iMax_1:
+    pop
+    ldc.i4 2147483647
+    br IL_d2iEnd_3
+IL_d2iMin_2:
+    pop
+    ldc.i4 -2147483648
+    br IL_d2iEnd_3
+IL_d2iNaN_0:
+    pop
+    ldc.i4.0
+IL_d2iEnd_3:
+    ret
+  }
+  .method public hidebysig static int64 'doubleToLong'(float64 'x') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    dup
+    dup
+    bne.un IL_d2iNaN_0
+    dup
+    ldc.r8 float64(0x43E0000000000000)
+    clt
+    brfalse IL_d2iMax_1
+    dup
+    ldc.r8 float64(0xC3E0000000000000)
+    clt
+    brtrue IL_d2iMin_2
+    conv.i8
+    br IL_d2iEnd_3
+IL_d2iMax_1:
+    pop
+    ldc.i8 9223372036854775807
+    br IL_d2iEnd_3
+IL_d2iMin_2:
+    pop
+    ldc.i8 -9223372036854775808
+    br IL_d2iEnd_3
+IL_d2iNaN_0:
+    pop
+    ldc.i8 0
+IL_d2iEnd_3:
+    ret
+  }
+  .method public hidebysig static int32 'charToIntCode'(char 'c') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static int64 'charToLong'(char 'c') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.i8
+    ret
+  }
+  .method public hidebysig static float64 'charToDouble'(char 'c') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    conv.r8
+    ret
+  }
+  .method public hidebysig static int32 'identity'(int32 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] float64 'nan',
+      [1] float64 'big',
+      [2] float64 'small'
+    )
+    ldc.i4 42
+    call int64 'test.numericConversionsKt'::'intToLong'(int32)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i4 7
+    call float64 'test.numericConversionsKt'::'intToDouble'(int32)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 66
+    call char 'test.numericConversionsKt'::'intToChar'(int32)
+    call void [mscorlib]System.Console::WriteLine(char)
+    ldc.i8 4294967301
+    call int32 'test.numericConversionsKt'::'longToInt'(int64)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.i8 4611686018427387904
+    call float64 'test.numericConversionsKt'::'longToDouble'(int64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 12.9
+    call int32 'test.numericConversionsKt'::'doubleToInt'(float64)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.r8 12.9
+    neg
+    call int32 'test.numericConversionsKt'::'doubleToInt'(float64)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.r8 12.9
+    neg
+    call int64 'test.numericConversionsKt'::'doubleToLong'(float64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i4 66
+    call int32 'test.numericConversionsKt'::'charToIntCode'(char)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.i4 66
+    call int64 'test.numericConversionsKt'::'charToLong'(char)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldc.i4 66
+    call float64 'test.numericConversionsKt'::'charToDouble'(char)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 -1
+    call int32 'test.numericConversionsKt'::'identity'(int32)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldc.r8 0.0
+    ldc.r8 0.0
+    div
+    stloc.0
+    ldc.r8 1.0e300
+    stloc.1
+    ldc.r8 1.0e300
+    neg
+    stloc.2
+    ldloc.0
+    dup
+    dup
+    bne.un IL_d2iNaN_0
+    dup
+    ldc.r8 2147483647.0
+    cgt
+    brtrue IL_d2iMax_1
+    dup
+    ldc.r8 -2147483648.0
+    clt
+    brtrue IL_d2iMin_2
+    conv.i4
+    br IL_d2iEnd_3
+IL_d2iMax_1:
+    pop
+    ldc.i4 2147483647
+    br IL_d2iEnd_3
+IL_d2iMin_2:
+    pop
+    ldc.i4 -2147483648
+    br IL_d2iEnd_3
+IL_d2iNaN_0:
+    pop
+    ldc.i4.0
+IL_d2iEnd_3:
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldloc.0
+    dup
+    dup
+    bne.un IL_d2iNaN_4
+    dup
+    ldc.r8 float64(0x43E0000000000000)
+    clt
+    brfalse IL_d2iMax_5
+    dup
+    ldc.r8 float64(0xC3E0000000000000)
+    clt
+    brtrue IL_d2iMin_6
+    conv.i8
+    br IL_d2iEnd_7
+IL_d2iMax_5:
+    pop
+    ldc.i8 9223372036854775807
+    br IL_d2iEnd_7
+IL_d2iMin_6:
+    pop
+    ldc.i8 -9223372036854775808
+    br IL_d2iEnd_7
+IL_d2iNaN_4:
+    pop
+    ldc.i8 0
+IL_d2iEnd_7:
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldloc.1
+    dup
+    dup
+    bne.un IL_d2iNaN_8
+    dup
+    ldc.r8 2147483647.0
+    cgt
+    brtrue IL_d2iMax_9
+    dup
+    ldc.r8 -2147483648.0
+    clt
+    brtrue IL_d2iMin_10
+    conv.i4
+    br IL_d2iEnd_11
+IL_d2iMax_9:
+    pop
+    ldc.i4 2147483647
+    br IL_d2iEnd_11
+IL_d2iMin_10:
+    pop
+    ldc.i4 -2147483648
+    br IL_d2iEnd_11
+IL_d2iNaN_8:
+    pop
+    ldc.i4.0
+IL_d2iEnd_11:
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldloc.1
+    dup
+    dup
+    bne.un IL_d2iNaN_12
+    dup
+    ldc.r8 float64(0x43E0000000000000)
+    clt
+    brfalse IL_d2iMax_13
+    dup
+    ldc.r8 float64(0xC3E0000000000000)
+    clt
+    brtrue IL_d2iMin_14
+    conv.i8
+    br IL_d2iEnd_15
+IL_d2iMax_13:
+    pop
+    ldc.i8 9223372036854775807
+    br IL_d2iEnd_15
+IL_d2iMin_14:
+    pop
+    ldc.i8 -9223372036854775808
+    br IL_d2iEnd_15
+IL_d2iNaN_12:
+    pop
+    ldc.i8 0
+IL_d2iEnd_15:
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldloc.2
+    dup
+    dup
+    bne.un IL_d2iNaN_16
+    dup
+    ldc.r8 2147483647.0
+    cgt
+    brtrue IL_d2iMax_17
+    dup
+    ldc.r8 -2147483648.0
+    clt
+    brtrue IL_d2iMin_18
+    conv.i4
+    br IL_d2iEnd_19
+IL_d2iMax_17:
+    pop
+    ldc.i4 2147483647
+    br IL_d2iEnd_19
+IL_d2iMin_18:
+    pop
+    ldc.i4 -2147483648
+    br IL_d2iEnd_19
+IL_d2iNaN_16:
+    pop
+    ldc.i4.0
+IL_d2iEnd_19:
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldloc.2
+    dup
+    dup
+    bne.un IL_d2iNaN_20
+    dup
+    ldc.r8 float64(0x43E0000000000000)
+    clt
+    brfalse IL_d2iMax_21
+    dup
+    ldc.r8 float64(0xC3E0000000000000)
+    clt
+    brtrue IL_d2iMin_22
+    conv.i8
+    br IL_d2iEnd_23
+IL_d2iMax_21:
+    pop
+    ldc.i8 9223372036854775807
+    br IL_d2iEnd_23
+IL_d2iMin_22:
+    pop
+    ldc.i8 -9223372036854775808
+    br IL_d2iEnd_23
+IL_d2iNaN_20:
+    pop
+    ldc.i8 0
+IL_d2iEnd_23:
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ldloc.0
+    call int32 'test.numericConversionsKt'::'doubleToInt'(float64)
+    call void [mscorlib]System.Console::WriteLine(int32)
+    ldloc.1
+    call int64 'test.numericConversionsKt'::'doubleToLong'(float64)
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ret
+  }
+}

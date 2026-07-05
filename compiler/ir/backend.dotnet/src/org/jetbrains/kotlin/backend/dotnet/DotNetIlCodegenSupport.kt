@@ -5,7 +5,10 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.isBoolean
+import org.jetbrains.kotlin.ir.types.isChar
+import org.jetbrains.kotlin.ir.types.isDouble
 import org.jetbrains.kotlin.ir.types.isInt
+import org.jetbrains.kotlin.ir.types.isLong
 import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -40,6 +43,9 @@ internal fun IrType.toDotNetIlValueType(): DotNetIlValueType? {
     return when {
         isBoolean() -> DotNetIlValueType.Boolean
         isInt() -> DotNetIlValueType.Int32
+        isLong() -> DotNetIlValueType.Int64
+        isDouble() -> DotNetIlValueType.Float64
+        isChar() -> DotNetIlValueType.Char
         isDotNetStringType() -> DotNetIlValueType.String
         else -> null
     }
@@ -55,6 +61,20 @@ private fun IrType.isDotNetStringType(): Boolean {
     if (isString() || isNullableString()) return true
     val typeParameter = ((this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner ?: return false
     return typeParameter.superTypes.any { it.isString() || it.isNullableString() }
+}
+
+/**
+ * Renders a `kotlin.Double` constant as an `ldc.r8` operand.
+ *
+ * Finite values use [Double.toString], the shortest decimal representation that round-trips
+ * (same contract the JVM backend relies on for `.class` file constants); it always contains a
+ * `.` or an exponent, and the exponent marker is lowercased to the ilasm-validated `1.0e300`
+ * shape. NaN and the infinities have no decimal form, so they use ilasm's raw-bit
+ * `float64(0x...)` operand syntax, which also pins the exact NaN payload.
+ */
+internal fun Double.toIlFloat64Literal(): String = when {
+    isNaN() || isInfinite() -> "float64(0x%016X)".format(toRawBits())
+    else -> toString().lowercase()
 }
 
 /**

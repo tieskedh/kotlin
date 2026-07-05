@@ -61,13 +61,22 @@ internal class DotNetIlExpressionCodegen(
      * Emits [expression] as a non-null string suitable for printing or concatenation: constants
      * are rendered through their string representation, nullable strings are coalesced to the
      * `"null"` literal, and non-string values are converted with Kotlin `toString` semantics
-     * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int` values
-     * are boxed and converted through `Object::ToString`, which matches `Int.toString()`).
+     * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`/
+     * `Char` values are boxed and converted through `Object::ToString`, which matches their
+     * Kotlin `toString()`; `Double` goes through [emitDoubleToString], a documented deviation).
      */
     fun emitStringValueExpression(expression: IrExpression?) {
         when {
             expression == null -> methodContext.emit("ldstr ${"null".toIlStringLiteral()}", pushes = 1)
-            expression is IrConst -> methodContext.emit("ldstr ${expression.value.toString().toIlStringLiteral()}", pushes = 1)
+            // Double constants deliberately skip the compile-time toString fast path: the host
+            // Kotlin rendering ("1.0") differs from the CLR rendering emitDoubleToString produces
+            // at runtime ("1"), and constant vs. non-constant values must print identically.
+            // Float constants are excluded for the same reason, with the opposite outcome: Float
+            // is a deferred type, so instead of silently printing the host rendering the constant
+            // falls through to emitExpression below and fails as unsupported, exactly like every
+            // non-constant Float use (fail-hard design rule).
+            expression is IrConst && expression.value !is Double && expression.value !is Float ->
+                methodContext.emit("ldstr ${expression.value.toString().toIlStringLiteral()}", pushes = 1)
             else -> when (expression.type.toDotNetIlValueType()) {
                 DotNetIlValueType.Boolean -> {
                     emitExpression(expression, DotNetIlValueType.Boolean)
@@ -76,6 +85,23 @@ internal class DotNetIlExpressionCodegen(
                 DotNetIlValueType.Int32 -> {
                     emitExpression(expression, DotNetIlValueType.Int32)
                     methodContext.emit("box [mscorlib]System.Int32", pops = 1, pushes = 1)
+                    methodContext.emit("callvirt instance string [mscorlib]System.Object::ToString()", pops = 1, pushes = 1)
+                }
+                DotNetIlValueType.Int64 -> {
+                    // Same shape as Int32: Int64::ToString() with the default format has no
+                    // culture-dependent characters for integers, matching `Long.toString()`.
+                    emitExpression(expression, DotNetIlValueType.Int64)
+                    methodContext.emit("box [mscorlib]System.Int64", pops = 1, pushes = 1)
+                    methodContext.emit("callvirt instance string [mscorlib]System.Object::ToString()", pops = 1, pushes = 1)
+                }
+                DotNetIlValueType.Float64 -> emitDoubleToString(expression)
+                DotNetIlValueType.Char -> {
+                    // Char::ToString() is the single UTF-16 code unit, culture-independent;
+                    // identical to Kotlin's `Char.toString()`. Boxing an int32 stack value with
+                    // the System.Char token is the standard CLR shape (chars are int32 on the
+                    // evaluation stack).
+                    emitExpression(expression, DotNetIlValueType.Char)
+                    methodContext.emit("box [mscorlib]System.Char", pops = 1, pushes = 1)
                     methodContext.emit("callvirt instance string [mscorlib]System.Object::ToString()", pops = 1, pushes = 1)
                 }
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
@@ -104,6 +130,36 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitLabel(trueLabel)
         methodContext.emit("ldstr ${"true".toIlStringLiteral()}", pushes = 1)
         methodContext.emitLabel(endLabel)
+    }
+
+    /**
+     * Converts the `float64` value produced by [expression] to a string.
+     *
+     * Deviates from the JVM target's textual `Double.toString()` contract: the CLR has no API
+     * that reproduces Java's rendering (`1.0`, `1.0E300`), so this uses the closest CLR-native
+     * round-trip-safe equivalent — format `"G17"` with `CultureInfo.InvariantCulture` (`1`,
+     * and up to 17 significant digits where needed, e.g. `0.10000000000000001` for `0.1`).
+     * `"R"` must NOT be used even though it looks like the natural round-trip format: on
+     * .NET Framework x64 (the mscorlib runtime these assemblies target) `"R"` is documented
+     * as not round-trip-safe — it can drop digits so the text parses back to a different
+     * double; Microsoft's guidance for that runtime is `"G17"` (only .NET Core 3.0+ fixed `"R"`).
+     * The invariant culture is mandatory: the default `ToString()` honors the current culture
+     * and would print `1,5` in e.g. a German locale. The value is boxed and dispatched through
+     * `IFormattable` so no `ldloca`-addressable temporary local is needed.
+     */
+    private fun emitDoubleToString(expression: IrExpression) {
+        emitExpression(expression, DotNetIlValueType.Float64)
+        methodContext.emit("box [mscorlib]System.Double", pops = 1, pushes = 1)
+        methodContext.emit("ldstr ${"G17".toIlStringLiteral()}", pushes = 1)
+        methodContext.emit(
+            "call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()",
+            pushes = 1,
+        )
+        methodContext.emit(
+            "callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)",
+            pops = 3,
+            pushes = 1,
+        )
     }
 
     /**
@@ -154,6 +210,23 @@ internal class DotNetIlExpressionCodegen(
                 val value = expression.value as? Int
                     ?: dotNetUnsupported("unsupported int32 constant: ${expression.value}")
                 methodContext.emit("ldc.i4 $value", pushes = 1)
+            }
+            DotNetIlValueType.Int64 -> {
+                val value = expression.value as? Long
+                    ?: dotNetUnsupported("unsupported int64 constant: ${expression.value}")
+                // ilasm accepts the full signed range directly, including Long.MIN_VALUE.
+                methodContext.emit("ldc.i8 $value", pushes = 1)
+            }
+            DotNetIlValueType.Float64 -> {
+                val value = expression.value as? Double
+                    ?: dotNetUnsupported("unsupported float64 constant: ${expression.value}")
+                methodContext.emit("ldc.r8 ${value.toIlFloat64Literal()}", pushes = 1)
+            }
+            DotNetIlValueType.Char -> {
+                val value = expression.value as? Char
+                    ?: dotNetUnsupported("unsupported char constant: ${expression.value}")
+                // Like the JVM backend, a char constant is its UTF-16 code unit on the int stack.
+                methodContext.emit("ldc.i4 ${value.code}", pushes = 1)
             }
             DotNetIlValueType.String -> when (val value = expression.value) {
                 null -> methodContext.emit("ldnull", pushes = 1)

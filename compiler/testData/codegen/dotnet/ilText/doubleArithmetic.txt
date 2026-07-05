@@ -1,0 +1,295 @@
+.assembly extern mscorlib {}
+.assembly 'doubleArithmetic' {}
+.module 'main-doubleArithmetic.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.doubleArithmeticKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static float64 'nestedArithmetic'(float64 'a', float64 'b', float64 'c') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    mul
+    add
+    ldarg.0
+    ldarg.1
+    sub
+    ldarg.2
+    div
+    sub
+    ret
+  }
+  .method public hidebysig static float64 'divRem'(float64 'a', float64 'b') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    div
+    ldarg.0
+    ldarg.1
+    rem
+    add
+    ret
+  }
+  .method public hidebysig static float64 'negate'(float64 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    neg
+    ldarg.0
+    add
+    ret
+  }
+  .method public hidebysig static float64 'incrementDecrement'(float64 'start') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] float64 'counter',
+      [1] float64 '<unary>',
+      [2] float64 '<unary>@2',
+      [3] float64 '<unary>@3'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.1
+    ldc.r8 1.0
+    add
+    stloc.0
+    ldloc.0
+    stloc.2
+    ldloc.2
+    ldc.r8 1.0
+    add
+    stloc.0
+    ldloc.0
+    stloc.3
+    ldloc.3
+    ldc.r8 1.0
+    sub
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'compare'(float64 'a', float64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    clt
+    brfalse IL_whenNext_1
+    ldstr "less"
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    cgt
+    brfalse IL_whenNext_3
+    ldstr "greater"
+    ret
+IL_whenNext_3:
+    ldarg.0
+    ldarg.1
+    ceq
+    brfalse IL_whenNext_5
+    ldstr "equal"
+    ret
+IL_whenNext_5:
+    ldstr "unordered"
+    ret
+  }
+  .method public hidebysig static string 'describe'(float64 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.r8 1.0
+    neg
+    cgt.un
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "negative"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    ldc.r8 1.0
+    clt.un
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldstr "positive"
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldstr "small"
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] float64 'nan',
+      [1] bool 'less',
+      [2] bool 'lessOrEqual',
+      [3] bool 'greater',
+      [4] bool 'greaterOrEqual',
+      [5] bool 'equal',
+      [6] bool 'negativeZeroEqualsZero'
+    )
+    ldc.r8 2.0
+    ldc.r8 3.0
+    ldc.r8 4.0
+    call float64 'test.doubleArithmeticKt'::'nestedArithmetic'(float64, float64, float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 7.5
+    neg
+    ldc.r8 2.0
+    call float64 'test.doubleArithmeticKt'::'divRem'(float64, float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 5.0
+    call float64 'test.doubleArithmeticKt'::'negate'(float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 10.0
+    call float64 'test.doubleArithmeticKt'::'incrementDecrement'(float64)
+    box [mscorlib]System.Double
+    ldstr "G17"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 1.0
+    ldc.r8 2.0
+    call string 'test.doubleArithmeticKt'::'compare'(float64, float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 3.0
+    ldc.r8 3.0
+    call string 'test.doubleArithmeticKt'::'compare'(float64, float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 5.0
+    ldc.r8 4.0
+    call string 'test.doubleArithmeticKt'::'compare'(float64, float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 5.0
+    neg
+    call string 'test.doubleArithmeticKt'::'describe'(float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 0.5
+    call string 'test.doubleArithmeticKt'::'describe'(float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 7.0
+    call string 'test.doubleArithmeticKt'::'describe'(float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 0.0
+    ldc.r8 0.0
+    div
+    stloc.0
+    ldloc.0
+    ldc.r8 1.0
+    clt
+    stloc.1
+    ldloc.0
+    ldc.r8 1.0
+    cgt.un
+    ldc.i4.0
+    ceq
+    stloc.2
+    ldloc.0
+    ldc.r8 1.0
+    cgt
+    stloc.3
+    ldloc.0
+    ldc.r8 1.0
+    clt.un
+    ldc.i4.0
+    ceq
+    stloc 4
+    ldloc.0
+    ldloc.0
+    ceq
+    stloc 5
+    ldloc.1
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    brtrue IL_boolStrTrue_6
+    ldstr "false"
+    br IL_boolStrEnd_7
+IL_boolStrTrue_6:
+    ldstr "true"
+IL_boolStrEnd_7:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 5
+    brtrue IL_boolStrTrue_8
+    ldstr "false"
+    br IL_boolStrEnd_9
+IL_boolStrTrue_8:
+    ldstr "true"
+IL_boolStrEnd_9:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.r8 1.0
+    call string 'test.doubleArithmeticKt'::'compare'(float64, float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldloc.0
+    ceq
+    brfalse IL_whenNext_11
+    ldstr "NaN == NaN"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_10
+IL_whenNext_11:
+    ldstr "NaN != NaN"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_10:
+    ldc.r8 0.0
+    neg
+    ldc.r8 0.0
+    ceq
+    stloc 6
+    ldloc 6
+    brtrue IL_boolStrTrue_12
+    ldstr "false"
+    br IL_boolStrEnd_13
+IL_boolStrTrue_12:
+    ldstr "true"
+IL_boolStrEnd_13:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

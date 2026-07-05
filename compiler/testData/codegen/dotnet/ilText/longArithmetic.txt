@@ -1,0 +1,243 @@
+.assembly extern mscorlib {}
+.assembly 'longArithmetic' {}
+.module 'main-longArithmetic.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.longArithmeticKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int64 'nestedArithmetic'(int64 'a', int64 'b', int64 'c') cil managed
+  {
+    .maxstack 5
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    mul
+    add
+    ldarg.0
+    ldarg.1
+    sub
+    ldarg.2
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    sub
+    ret
+  }
+  .method public hidebysig static int64 'divRem'(int64 'a', int64 'b') cil managed
+  {
+    .maxstack 5
+    ldarg.0
+    ldarg.1
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_divNormal_0
+    pop
+    neg
+    br IL_divEnd_1
+IL_divNormal_0:
+    div
+IL_divEnd_1:
+    ldc.i8 1000
+    mul
+    ldarg.0
+    ldarg.1
+    dup
+    ldc.i4.m1
+    conv.i8
+    bne.un IL_remNormal_2
+    pop
+    pop
+    ldc.i8 0
+    br IL_remEnd_3
+IL_remNormal_2:
+    rem
+IL_remEnd_3:
+    add
+    ret
+  }
+  .method public hidebysig static int64 'negate'(int64 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    neg
+    ldarg.0
+    add
+    ret
+  }
+  .method public hidebysig static int64 'incrementDecrement'(int64 'start') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int64 'counter',
+      [1] int64 '<unary>',
+      [2] int64 '<unary>@2',
+      [3] int64 '<unary>@3'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.1
+    ldc.i8 1
+    add
+    stloc.0
+    ldloc.0
+    stloc.2
+    ldloc.2
+    ldc.i8 1
+    add
+    stloc.0
+    ldloc.0
+    stloc.3
+    ldloc.3
+    ldc.i8 1
+    sub
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'compare'(int64 'a', int64 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    clt
+    brfalse IL_whenNext_1
+    ldstr "less"
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    cgt
+    brfalse IL_whenNext_3
+    ldstr "greater"
+    ret
+IL_whenNext_3:
+    ldstr "equal"
+    ret
+  }
+  .method public hidebysig static string 'describe'(int64 'x') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i8 1
+    neg
+    cgt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "negative"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    ldc.i8 1
+    clt
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldstr "positive"
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldstr "zero"
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] int64 'sum'
+    )
+    ldc.i8 2
+    ldc.i8 3
+    ldc.i8 4
+    call int64 'test.longArithmeticKt'::'nestedArithmetic'(int64, int64, int64)
+    ldc.i8 14
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "arithmetic OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "arithmetic FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_0:
+    ldc.i8 7
+    neg
+    ldc.i8 2
+    call int64 'test.longArithmeticKt'::'divRem'(int64, int64)
+    ldc.i8 3001
+    neg
+    ceq
+    brfalse IL_whenNext_3
+    ldstr "divRem OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldstr "divRem FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_2:
+    ldc.i8 5
+    call int64 'test.longArithmeticKt'::'negate'(int64)
+    ldc.i8 0
+    ceq
+    brfalse IL_whenNext_5
+    ldstr "negate OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_4
+IL_whenNext_5:
+    ldstr "negate FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_4:
+    ldc.i8 10
+    call int64 'test.longArithmeticKt'::'incrementDecrement'(int64)
+    ldc.i8 11
+    ceq
+    brfalse IL_whenNext_7
+    ldstr "incDec OK"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldstr "incDec FAIL"
+    call void [mscorlib]System.Console::WriteLine(string)
+IL_whenEnd_6:
+    ldc.i8 1
+    ldc.i8 2
+    call string 'test.longArithmeticKt'::'compare'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 3
+    ldc.i8 3
+    call string 'test.longArithmeticKt'::'compare'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 5
+    ldc.i8 4
+    call string 'test.longArithmeticKt'::'compare'(int64, int64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 5
+    neg
+    call string 'test.longArithmeticKt'::'describe'(int64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 0
+    call string 'test.longArithmeticKt'::'describe'(int64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 7
+    call string 'test.longArithmeticKt'::'describe'(int64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 6000000000
+    ldc.i8 7
+    mul
+    stloc.0
+    ldloc.0
+    call void [mscorlib]System.Console::WriteLine(int64)
+    ret
+  }
+}
