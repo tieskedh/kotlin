@@ -84,6 +84,34 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   never emitted as classes of their own. Injected declarations must compile without any diagnostics,
   including warnings: the FIR test infrastructure maps every reported diagnostic back to a test
   file and crashes on diagnostics in injected files (suppress e.g. deprecations locally).
+- Exceptions follow the JVM model: `IrThrow` (and later `IrTry`) map 1:1 onto the platform's
+  exception machinery with NO lowering (no WASM/JS TryCatchCanonicalization or
+  MultipleCatchesLowering). Built-in exception classes are TYPE-MAPPED onto the CLR hierarchy
+  (JVM analogue: `JavaToKotlinClassMap`) via the curated `DotNetMappedExceptions` registry, so
+  exceptions thrown by other .NET code stay catchable: `kotlin.Throwable` AND `kotlin.Exception`
+  → `System.Exception` (the CLR has no Throwable/Exception split, so `catch (e: Exception)` ≡
+  `catch (e: Throwable)`); IllegalArgumentException → ArgumentException; IllegalStateException →
+  InvalidOperationException; UnsupportedOperationException → NotSupportedException;
+  ArithmeticException → ArithmeticException (closing the divide-by-zero catchability debt: the
+  CLR's DivideByZeroException IS-A System.ArithmeticException, probe-verified; its message
+  "Attempted to divide by zero." is kept verbatim — JVM precedent, "/ by zero" IS the JVM's
+  platform message); IndexOutOfBoundsException → IndexOutOfRangeException; NullPointerException
+  → NullReferenceException; ClassCastException → InvalidCastException. RuntimeException, Error
+  and NumberFormatException resolve (declared in the injected stdlib) but are REJECTED with
+  per-type reasons — mapping them would observably break catch semantics (see the registry KDoc).
+  Accepted deltas, documented on the registry: `message` keeps type `String?` but is never null
+  on mapped exceptions (no-arg `Exception()` yields the CLR default text); the constructor
+  whitelist is `()`/`(String?)` everywhere, `(String?, Throwable?)` only where the CLR overload
+  exists, and the cause-only `(Throwable?)` constructor is rejected (no CLR overload). `throw e`
+  inside a catch is a plain `ldloc`/`throw` preserving object identity; the IL `rethrow`
+  instruction is never emitted (Kotlin has no bare rethrow; stack-trace-restart delta is moot
+  until traces are surfaced). The injected exception declarations are excluded from codegen
+  entirely — the class-level parallel of an intrinsic's `excludesDeclarationFromCodegen` — and
+  user classes extending them are shape-gate-rejected until the inheritance model exists.
+  Finally handling (later slice) will use real CLR `leave`-driven finallys with NO JVM-style
+  finally inlining/duplication (CLR-forced deviation). Deferred: Roslyn-parity
+  `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws) until interop with
+  non-Exception-throwing code matters.
 - Generics stance: the type representation stays structural so that future generics can target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.

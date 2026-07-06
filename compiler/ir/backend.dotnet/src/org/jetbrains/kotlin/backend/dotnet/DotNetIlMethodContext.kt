@@ -91,6 +91,29 @@ internal class DotNetIlMethodContext(
         isTerminated = true
     }
 
+    /**
+     * Emits `throw`, which pops the exception reference and unconditionally leaves the current
+     * emission point (mirrors [emitReturn]; ECMA-335 `throw` never falls through).
+     */
+    fun emitThrow() {
+        emit("throw", pops = 1)
+        isTerminated = true
+    }
+
+    /**
+     * Records a phantom stack value after a `throw` in value position: `IrThrow` has type
+     * `kotlin.Nothing`, so a value-position consumer (a `stloc`, an argument list, a trailing
+     * `ret`) keeps emitting instructions that expect the value the throw never produces. Those
+     * instructions are unreachable — `throw` never falls through, and dead code after it
+     * assembles and executes fine (ilasm-probe-verified, including dead `stloc`/`br`/labels/`ret`)
+     * — but the stack tracker must stay balanced for them, so the depth is adjusted as if the
+     * expression had produced its value.
+     */
+    fun notePhantomValueAfterThrow() {
+        check(isTerminated) { "Internal .NET backend error: phantom stack value outside a terminated emission point" }
+        adjustStackDepth(pops = 0, pushes = 1)
+    }
+
     fun emitBranch(instruction: String, targetLabel: String, pops: Int = 0) {
         bodyBuilder.appendLine("    $instruction $targetLabel")
         adjustStackDepth(pops, pushes = 0)
