@@ -6,8 +6,11 @@
 package org.jetbrains.kotlin.test.runners.codegen
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
+import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
+import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetBackendPipelinePhase
@@ -63,6 +66,8 @@ import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBo
 import org.jetbrains.kotlin.test.utils.MultiModuleInfoDumper
 import org.jetbrains.kotlin.test.utils.withExtension
 import org.jetbrains.kotlin.utils.bind
+import org.junit.jupiter.api.Assumptions
+import org.opentest4j.TestAbortedException
 import java.io.File
 import java.util.concurrent.TimeUnit
 
@@ -87,11 +92,29 @@ abstract class AbstractDotNetBoxTestBase(
     private val parser: FirParser,
 ) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
     override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
-        configureDotNetBase(parser, outputExtension = "exe", additionalSourceProvider = ::DotNetBoxMainSourceProvider)
+        // The box suite targets modern .NET: the artifact is a dll launched via the signed
+        // `dotnet` host (`dotnet exec`), never a directly executed unsigned .exe (see
+        // compiler/ir/backend.dotnet/AGENTS.md).
+        configureDotNetBase(
+            parser,
+            outputExtension = "dll",
+            target = DotNetTarget.NET,
+            additionalSourceProvider = ::DotNetBoxMainSourceProvider,
+        )
 
         dotNetArtifactsHandlersStep {
             useHandlers(::DotNetBoxRunner)
         }
+    }
+
+    override fun runTest(filePath: String) {
+        // Skip (don't fail) before compilation when the modern toolchain is not provisioned.
+        Assumptions.assumeTrue(
+            DotNetIlAssembler.findModernIlasm() != null && DotNetIlAssembler.findModernDotNetHost() != null,
+            "Modern .NET toolchain (ilasm + dotnet host) not found; " +
+                    "provision with compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
+        )
+        super.runTest(filePath)
     }
 }
 
@@ -103,6 +126,9 @@ open class AbstractFirPsiDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.Psi
 private fun TestConfigurationBuilder.configureDotNetBase(
     parser: FirParser,
     outputExtension: String,
+    // NET_FRAMEWORK by default: the ilText goldens embed the `.module` directive naming the
+    // artifact file, so the ilText suite must keep its historical target/extension untouched.
+    target: DotNetTarget = DotNetTarget.NET_FRAMEWORK,
     additionalSourceProvider: Constructor<AdditionalSourceProvider>? = null,
 ) {
     with(this) {
@@ -118,7 +144,7 @@ private fun TestConfigurationBuilder.configureDotNetBase(
 
         useConfigurators(
             ::CommonEnvironmentConfigurator,
-            ::DotNetEnvironmentConfigurator.bind(outputExtension),
+            ::DotNetEnvironmentConfigurator.bind(outputExtension, target),
         )
 
         facadeStep(::FirCliDotNetFacade)
@@ -169,6 +195,7 @@ private class BackendCliDotNetFacade(
 private class DotNetEnvironmentConfigurator(
     testServices: TestServices,
     private val outputExtension: String,
+    private val target: DotNetTarget,
 ) : EnvironmentConfigurator(testServices) {
     /**
      * The injected fake stdlib sources declare `package kotlin.io` and `package kotlin`, and
@@ -194,6 +221,7 @@ private class DotNetEnvironmentConfigurator(
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
         configuration.dotNetAssemblyName = artifactName
         configuration.dotNetOutput = getOutputFile(module, artifactName)
+        configuration.dotNetTarget = target
         configuration.addSourcesForDependsOnClosure(module, testServices)
         for (stdlibSource in getOrCreateStdlibSources()) {
             configuration.addKotlinSourceRoot(stdlibSource.canonicalPath)
@@ -286,30 +314,77 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
 
     private fun runExecutable(file: File): String {
         if (!file.isFile) {
-            assertions.fail { "Expected .NET executable was not produced: ${file.path}" }
+            assertions.fail { "Expected .NET assembly was not produced: ${file.path}" }
         }
 
-        val process = ProcessBuilder(file.absolutePath)
-            .directory(file.parentFile)
+        // The box artifact is a dll (target `net`), launched via the signed `dotnet` host —
+        // see 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.
+        val dotnetHost = DotNetIlAssembler.findModernDotNetHost() ?: assertions.fail {
+            "No modern 'dotnet' host found even though the toolchain assumption passed; " +
+                    "provision with compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
+        }
+
+        // Windows Smart App Control makes a per-file cloud-reputation call the first time the CLR
+        // loads a freshly assembled (unsigned) dll and fails-closed on a negative verdict
+        // (FileLoadException, HRESULT 0x800711C7); the signed `dotnet` host only avoids SAC for
+        // direct .exe *execution*, not for *loading* an unsigned dll. Measured: the verdict is a
+        // function of the assembly CONTENT, not just its hash — reassembling the identical IL to a
+        // fresh hash is blocked again, so for an affected test program the block is deterministic
+        // and permanent on that machine, and re-running never clears it. We still retry briefly to
+        // absorb a genuinely in-flight verdict, then abort the test as SKIPPED with a diagnostic
+        // that names SAC: like a missing toolchain, a host that refuses to load the assembly is an
+        // environment that cannot execute the test — the test still runs everywhere SAC is not
+        // enforced. Skipping (visible in reports) is not a reputation bypass; rewriting the test
+        // or perturbing artifact hashes to dodge the classifier would be, and is out of bounds.
+        // See 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.
+        var lastBlockedMessage: String? = null
+        repeat(SAC_MAX_ATTEMPTS) {
+            val (exitCode, output) = execViaDotnetHost(dotnetHost, file)
+            if (exitCode == 0) return output
+            if (!isSmartAppControlBlock(output)) {
+                assertions.fail {
+                    ".NET executable failed with exit code $exitCode${output.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
+                }
+            }
+            lastBlockedMessage = output
+            Thread.sleep(SAC_RETRY_DELAY_MS)
+        }
+        throw TestAbortedException(
+            "Windows Smart App Control blocked loading the assembled test dll on all $SAC_MAX_ATTEMPTS " +
+                    "attempts: ${file.path}\n" +
+                    "The SmartScreen verdict is content-derived and can be deterministically negative for a " +
+                    "specific test program (measured: the same IL reassembled under a fresh hash is blocked " +
+                    "again), so re-running may not help. The test executes on hosts without Smart App Control; " +
+                    "to run it here, sign the test assemblies with a reputable certificate or turn SAC off " +
+                    "(SAC has no per-file/per-directory exclusions).\n" +
+                    "Last output: $lastBlockedMessage"
+        )
+    }
+
+    private fun execViaDotnetHost(dotnetHost: File, artifact: File): Pair<Int, String> {
+        val process = ProcessBuilder(dotnetHost.absolutePath, "exec", artifact.absolutePath)
+            .directory(artifact.parentFile)
             .redirectErrorStream(true)
             .start()
         if (!process.waitFor(3, TimeUnit.MINUTES)) {
             process.destroyForcibly()
-            assertions.fail { ".NET executable timed out: ${file.path}" }
+            assertions.fail { ".NET executable timed out: ${artifact.path}" }
         }
-
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.exitValue()
-        if (exitCode != 0) {
-            assertions.fail {
-                ".NET executable failed with exit code $exitCode${output.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
-            }
-        }
-        return output
+        return process.exitValue() to process.inputStream.bufferedReader().readText()
     }
+
+    /**
+     * `0x800711C7` is `ERROR_SYSTEM_INTEGRITY_POLICY_VIOLATION` as an HRESULT — the exact code the
+     * CLR's `System.IO.FileLoadException` carries when Code Integrity (Smart App Control) refuses
+     * to map the assembly. The prose is matched as a fallback for host-level block messages.
+     */
+    private fun isSmartAppControlBlock(output: String): Boolean =
+        output.contains("0x800711C7") || output.contains("Application Control policy has blocked this file")
 
     private companion object {
         const val DEFAULT_EXPECTED_RESULT = "OK"
         const val OUTPUT_EXTENSION = "box.txt"
+        const val SAC_MAX_ATTEMPTS = 3
+        const val SAC_RETRY_DELAY_MS = 1_000L
     }
 }
