@@ -7,37 +7,51 @@ package org.jetbrains.kotlin.fir.declarations
 
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.fir.FirSession
+import org.jetbrains.kotlin.fir.FirSessionComponent
 import org.jetbrains.kotlin.fir.declarations.utils.modality
 import org.jetbrains.kotlin.fir.isJavaNonAbstractSealed
 import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirRegularClassSymbol
 
-fun FirClassSymbol<*>.collectAllSubclasses(session: FirSession): Set<FirClassSymbol<*>> {
-    return mutableSetOf<FirClassSymbol<*>>().apply { collectAllSubclassesTo(this, session) }
+interface FirComplementarySymbolsCalculator : FirSessionComponent {
+    fun collectAllSubclassesFor(symbol: FirClassSymbol<*>, session: FirSession): Set<FirClassSymbol<*>>
 }
 
-private fun FirClassSymbol<*>.collectAllSubclassesTo(
-    destination: MutableSet<FirClassSymbol<*>>,
-    session: FirSession,
-    visited: MutableSet<FirRegularClassSymbol> = mutableSetOf(),
-) {
-    if (this !is FirRegularClassSymbol) {
-        destination.add(this)
-        return
-    }
-    if (!visited.add(this)) return
-    when {
-        fir.modality == Modality.SEALED -> {
-            if (fir.isJavaNonAbstractSealed == true) {
-                destination.add(this)
-            }
+object FirDefaultComplementarySymbolsCalculator : FirComplementarySymbolsCalculator {
+    private val allSubclassesCache = mutableMapOf<FirClassSymbol<*>, Set<FirClassSymbol<*>>>()
 
-            fir.getSealedClassInheritors(session).forEach {
-                val symbol = session.symbolProvider.getClassLikeSymbolByClassId(it) as? FirRegularClassSymbol
-                symbol?.collectAllSubclassesTo(destination, session, visited)
+    override fun collectAllSubclassesFor(symbol: FirClassSymbol<*>, session: FirSession): Set<FirClassSymbol<*>> =
+        collectAllSubclassesFor(symbol, session, visited = mutableSetOf())
+
+    private fun collectAllSubclassesFor(
+        symbol: FirClassSymbol<*>,
+        session: FirSession,
+        /**
+         * Only needed to break loops in code with cyclic inheritance.
+         * See: `inheritorNameClashesWithBase.kt`.
+         */
+        visited: MutableSet<FirClassSymbol<*>>,
+    ): Set<FirClassSymbol<*>> = allSubclassesCache.getOrPut(symbol) {
+        when {
+            !visited.add(symbol) -> emptySet()
+            symbol !is FirRegularClassSymbol -> setOf(symbol)
+            symbol.fir.modality == Modality.SEALED -> buildSet {
+                if (symbol.fir.isJavaNonAbstractSealed == true) {
+                    add(symbol)
+                }
+
+                symbol.fir.getSealedClassInheritors(session).forEach {
+                    val symbol = session.symbolProvider.getClassLikeSymbolByClassId(it) as? FirRegularClassSymbol ?: return@forEach
+                    this += collectAllSubclassesFor(symbol, session, visited)
+                }
             }
+            else -> setOf(symbol)
         }
-        else -> destination.add(this)
     }
 }
+
+val FirSession.complementarySymbolsCalculator: FirComplementarySymbolsCalculator by FirSession.sessionComponentAccessor()
+
+fun FirClassSymbol<*>.collectAllSubclasses(session: FirSession): Set<FirClassSymbol<*>> =
+    session.complementarySymbolsCalculator.collectAllSubclassesFor(this, session)
