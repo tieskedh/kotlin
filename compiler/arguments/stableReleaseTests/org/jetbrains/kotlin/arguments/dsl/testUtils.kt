@@ -19,6 +19,7 @@ private val temporaryExceptions: Set<String> = setOf(
     "Xverify-ir-nested-offsets",
     "Xvalue-classes",
     "Xsuppress-deprecated-jvm-target-warning",
+    "Xklib-normalize-absolute-path",
 )
 
 internal fun Set<StableKotlinCompilerArgument>.filterNonDeprecated() = filter {

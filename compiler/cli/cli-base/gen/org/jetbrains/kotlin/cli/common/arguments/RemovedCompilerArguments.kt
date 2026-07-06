@@ -186,6 +186,21 @@ class RemovedCompilerArguments {
         level = DeprecationLevel.ERROR,
     )
     @Argument(
+        value = "-Xklib-normalize-absolute-path",
+        description = "Normalize absolute paths in klibs.",
+        deprecatedVersion = "2.4.20",
+        removedVersion = "2.5.0",
+    )
+    var normalizeAbsolutePath: Boolean = false
+        set(value) {
+            field = value
+        }
+
+    @all:Deprecated(
+        message = "",
+        level = DeprecationLevel.ERROR,
+    )
+    @Argument(
         value = "-Xtyped-arrays",
         description = "This option does nothing and is left for compatibility with the legacy backend.",
         deprecatedVersion = "2.1.0",
