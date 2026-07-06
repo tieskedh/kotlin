@@ -31,9 +31,25 @@ internal class DotNetIlMethodContext(
     private val branchTargetStackDepths = hashMapOf<String, Int>()
     private val loopLabels = hashMapOf<IrLoop, DotNetIlLoopLabels>()
     private val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
+    private val ehRegions = ArrayDeque<EhRegion>()
     private var labelCounter = 0
-    private var stackDepth = 0
     private var maxStackDepth = 0
+
+    /**
+     * Current operand stack depth at the emission point. Exposed read-only so try-expression
+     * emission can reject a `try` with operands already on the evaluation stack: the CLR
+     * requires an empty stack at `.try` entry (ECMA-335 I.12.4.2).
+     */
+    var stackDepth = 0
+        private set
+
+    /**
+     * The number of exception-handling regions (`.try` bodies and `catch` handlers) enclosing
+     * the current emission point. `break`/`continue`/`return` compare it against the depth at
+     * their target to decide between a plain `br`/`ret` and the [emitLeave] discipline.
+     */
+    val ehDepth: Int
+        get() = ehRegions.size
 
     /**
      * Whether the last emitted instruction unconditionally leaves the current emission point
@@ -81,12 +97,15 @@ internal class DotNetIlMethodContext(
         get() = maxOf(maxStackDepth, 1)
 
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
-        bodyBuilder.appendLine("    $instruction")
+        appendIndentedLine(instruction)
         adjustStackDepth(pops, pushes)
         isTerminated = false
     }
 
     fun emitReturn(pops: Int = 0) {
+        // `ret` inside a protected region assembles silently but throws InvalidProgramException
+        // at runtime (probe-verified); returns crossing regions must go through emitLeave.
+        check(ehRegions.isEmpty()) { "Internal .NET backend error: 'ret' inside a protected region" }
         emit("ret", pops = pops)
         isTerminated = true
     }
@@ -115,7 +134,7 @@ internal class DotNetIlMethodContext(
     }
 
     fun emitBranch(instruction: String, targetLabel: String, pops: Int = 0) {
-        bodyBuilder.appendLine("    $instruction $targetLabel")
+        appendIndentedLine("$instruction $targetLabel")
         adjustStackDepth(pops, pushes = 0)
         isTerminated = false
         val previousDepth = branchTargetStackDepths.put(targetLabel, stackDepth)
@@ -137,6 +156,78 @@ internal class DotNetIlMethodContext(
         bodyBuilder.appendLine("$label:")
         stackDepth = branchTargetStackDepths[label] ?: stackDepth
         isTerminated = false
+    }
+
+    /**
+     * Opens a `.try {` block. The CLR requires an empty evaluation stack at `.try` entry
+     * (ECMA-335 I.12.4.2); callers reject or drain operands beforehand, so a non-empty stack
+     * here is an internal error. Body text inside exception-handling blocks is indented two
+     * extra spaces per region, matching the probe-verified rendered shape.
+     */
+    fun beginTry() {
+        check(stackDepth == 0) { "Internal .NET backend error: non-empty evaluation stack at '.try' entry" }
+        appendIndentedLine(".try {")
+        ehRegions.addLast(EhRegion.TRY_BODY)
+        isTerminated = false
+    }
+
+    /**
+     * Closes the currently open try body (or preceding handler) and opens a `catch <typeRef> {`
+     * handler on the same `.try` — consecutive `catch T {` blocks after one `.try {` are the
+     * probe-verified multi-catch shape, matched by the CLR strictly in declaration order.
+     * [catchTypeRef] is the bare corelib-qualified reference (the
+     * [MappedClass.ilTypeRef][DotNetIlValueType.MappedClass.ilTypeRef] form). At handler entry
+     * the CLR discards the evaluation stack and pushes exactly the exception object, so the
+     * tracked depth is set to 1 absolutely (also flushing any phantom depth a terminated
+     * branch left behind, see [notePhantomValueAfterThrow]).
+     */
+    fun beginCatch(catchTypeRef: String) {
+        check(ehRegions.isNotEmpty()) { "Internal .NET backend error: 'catch' without an open '.try'" }
+        ehRegions.removeLast()
+        appendIndentedLine("}")
+        appendIndentedLine("catch $catchTypeRef {")
+        ehRegions.addLast(EhRegion.CATCH_HANDLER)
+        stackDepth = 1
+        if (maxStackDepth < 1) maxStackDepth = 1
+        isTerminated = false
+    }
+
+    /**
+     * Closes the final block of a `.try`/`catch` construct. [isTerminated] is left as-is: every
+     * branch ended in `leave`/`throw`, so the point after the construct is reachable only
+     * through the join label the leaves target (whose [emitLabel] resets the flag).
+     */
+    fun endEhBlock() {
+        check(ehRegions.isNotEmpty()) { "Internal .NET backend error: closing an exception-handling block without one open" }
+        ehRegions.removeLast()
+        appendIndentedLine("}")
+    }
+
+    /**
+     * Emits `leave <targetLabel>`, the only legal exit from a protected region (ECMA-335;
+     * plain `br`/`ret` across a region boundary fail at runtime). `leave` discards the
+     * evaluation stack, so branch results are always drained to locals first — a non-empty
+     * stack here is an internal error. Terminates the emission point like [emitGoto].
+     */
+    fun emitLeave(targetLabel: String) {
+        check(stackDepth == 0) { "Internal .NET backend error: non-empty evaluation stack at 'leave'" }
+        emitBranch("leave", targetLabel)
+        isTerminated = true
+    }
+
+    /**
+     * Declares a compiler-synthesized local slot with no IR symbol behind it — the result local
+     * of a `try` expression or the return-value local of returns crossing protected regions.
+     * The name is deduplicated like every local name but never enters the symbol map.
+     */
+    fun declareSyntheticLocal(type: DotNetIlValueType, namePrefix: String): DotNetIlSlot.Local {
+        val slot = DotNetIlSlot.Local(
+            index = localSlots.size,
+            type = type,
+            name = uniqueLocalName(namePrefix),
+        )
+        localSlots += slot
+        return slot
     }
 
     fun declareLocal(variable: IrVariable): DotNetIlSlot.Local {
@@ -188,6 +279,13 @@ internal class DotNetIlMethodContext(
 
     fun renderBody(): String = bodyBuilder.toString()
 
+    /** One body line at the current exception-region indentation (labels stay at column 0). */
+    private fun appendIndentedLine(line: String) {
+        bodyBuilder.append("    ")
+        repeat(ehRegions.size) { bodyBuilder.append("  ") }
+        bodyBuilder.appendLine(line)
+    }
+
     private fun adjustStackDepth(pops: Int, pushes: Int) {
         if (stackDepth < pops) {
             error("Internal .NET backend error: IL operand stack underflow")
@@ -199,8 +297,16 @@ internal class DotNetIlMethodContext(
     }
 }
 
-/** Branch targets of a loop: `break` jumps to [breakLabel], `continue` to [continueLabel]. */
-internal class DotNetIlLoopLabels(val breakLabel: String, val continueLabel: String)
+/** The kind of exception-handling region currently being emitted; see [DotNetIlMethodContext.beginTry]. */
+private enum class EhRegion { TRY_BODY, CATCH_HANDLER }
+
+/**
+ * Branch targets of a loop: `break` jumps to [breakLabel], `continue` to [continueLabel].
+ * [ehDepth] is the exception-region depth at loop registration: a `break`/`continue` emitted at
+ * a deeper depth crosses protected regions and must use `leave` instead of `br` (a single
+ * `leave` legally crosses any number of nested regions in one hop, probe-verified).
+ */
+internal class DotNetIlLoopLabels(val breakLabel: String, val continueLabel: String, val ehDepth: Int)
 
 internal sealed class DotNetIlSlot {
     abstract val index: Int

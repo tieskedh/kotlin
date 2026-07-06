@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrBreak
 import org.jetbrains.kotlin.ir.expressions.IrBreakContinue
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrCatch
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
@@ -22,6 +23,7 @@ import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrThrow
+import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
@@ -33,6 +35,7 @@ import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
+import org.jetbrains.kotlin.ir.util.render
 
 /**
  * A successfully rendered method: its IL text plus the [runtime helpers][DotNetIlRuntimeHelper]
@@ -78,7 +81,15 @@ internal class DotNetIlMethodCodegen(
             )
         }
     }
-    private val expressionCodegen = DotNetIlExpressionCodegen(methodContext, availableFunctions, intrinsicMethods, typeMapper)
+    private val expressionCodegen =
+        DotNetIlExpressionCodegen(methodContext, availableFunctions, intrinsicMethods, typeMapper, ::emitTryExpression)
+
+    /**
+     * The join label of returns that crossed protected regions and its synthetic return-value
+     * local, both created lazily by the first such return; see [emitReturnAcrossRegions].
+     */
+    private var returnJoinLabel: String? = null
+    private var returnValueSlot: DotNetIlSlot.Local? = null
 
     fun render(): DotNetIlRenderedMethod {
         emitBody()
@@ -153,6 +164,25 @@ internal class DotNetIlMethodCodegen(
             null -> dotNetUnsupported("function has no body")
             else -> dotNetUnsupported("unsupported function body shape ${body.javaClass.simpleName}")
         }
+        emitReturnJoinEpilogue()
+    }
+
+    /**
+     * The join point of returns that crossed protected regions (see [emitReturnAcrossRegions]):
+     * reloads the drained return value and returns, once, after the rendered body (dead trailing
+     * instructions before the label are harmless, probe-verified). No epilogue exists when no
+     * return crossed a region.
+     */
+    private fun emitReturnJoinEpilogue() {
+        val label = returnJoinLabel ?: return
+        methodContext.emitLabel(label)
+        val slot = returnValueSlot
+        if (slot == null) {
+            methodContext.emitReturn()
+        } else {
+            methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+            methodContext.emitReturn(pops = 1)
+        }
     }
 
     private fun emitStatement(statement: IrStatement) {
@@ -184,6 +214,7 @@ internal class DotNetIlMethodCodegen(
             expression is IrInstanceInitializerCall ->
                 dotNetUnsupported("internal: IrInstanceInitializerCall survived InitializersLowering")
             expression is IrThrow -> expressionCodegen.emitThrow(expression)
+            expression is IrTry -> emitTryStatement(expression)
             expression is IrWhen -> emitWhenStatement(expression)
             expression is IrWhileLoop -> emitWhileLoop(expression)
             expression is IrDoWhileLoop -> emitDoWhileLoop(expression)
@@ -203,6 +234,10 @@ internal class DotNetIlMethodCodegen(
         if (expression.returnTargetSymbol != function.symbol) {
             dotNetUnsupported("non-local return is not supported")
         }
+        if (methodContext.ehDepth > 0) {
+            emitReturnAcrossRegions(expression)
+            return
+        }
         when (val returnType = signature.returnType) {
             is DotNetIlReturnType.Value -> {
                 expressionCodegen.emitExpression(expression.value, returnType.type)
@@ -213,6 +248,33 @@ internal class DotNetIlMethodCodegen(
                 methodContext.emitReturn()
             }
         }
+    }
+
+    /**
+     * A `return` inside a protected region: `ret` there assembles silently but throws
+     * `InvalidProgramException` at runtime, so the return value is drained into a lazily created
+     * synthetic local and control leaves to a shared return-join label whose epilogue reloads it
+     * and returns (`stloc`/`leave`/`ldloc`/`ret`, the probe-verified pattern — the same shape
+     * Roslyn emits for returns crossing protected regions). A single `leave` legally crosses any
+     * number of nested regions in one hop, so the depth never matters.
+     */
+    private fun emitReturnAcrossRegions(expression: IrReturn) {
+        when (val returnType = signature.returnType) {
+            is DotNetIlReturnType.Value -> {
+                expressionCodegen.emitExpression(expression.value, returnType.type)
+                if (methodContext.isTerminated) return // the value itself threw; nothing returns
+                val slot = returnValueSlot
+                    ?: methodContext.declareSyntheticLocal(returnType.type, "<return>").also { returnValueSlot = it }
+                methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+            }
+            DotNetIlReturnType.Void -> {
+                emitVoidExpression(expression.value)
+                if (methodContext.isTerminated) return
+            }
+        }
+        val label = returnJoinLabel
+            ?: methodContext.nextLabel("returnJoin").also { returnJoinLabel = it }
+        methodContext.emitLeave(label)
     }
 
     /**
@@ -295,7 +357,10 @@ internal class DotNetIlMethodCodegen(
     private fun emitWhileLoop(loop: IrWhileLoop) {
         val conditionLabel = methodContext.nextLabel("whileCond")
         val endLabel = methodContext.nextLabel("whileEnd")
-        methodContext.registerLoop(loop, DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel))
+        methodContext.registerLoop(
+            loop,
+            DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel, ehDepth = methodContext.ehDepth),
+        )
 
         methodContext.emitLabel(conditionLabel)
         expressionCodegen.emitBranchIfFalse(loop.condition, endLabel)
@@ -321,7 +386,10 @@ internal class DotNetIlMethodCodegen(
         val bodyLabel = methodContext.nextLabel("doWhileBody")
         val conditionLabel = methodContext.nextLabel("doWhileCond")
         val endLabel = methodContext.nextLabel("doWhileEnd")
-        methodContext.registerLoop(loop, DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel))
+        methodContext.registerLoop(
+            loop,
+            DotNetIlLoopLabels(breakLabel = endLabel, continueLabel = conditionLabel, ehDepth = methodContext.ehDepth),
+        )
 
         methodContext.emitLabel(bodyLabel)
         loop.body?.let { emitVoidExpression(it) }
@@ -345,7 +413,15 @@ internal class DotNetIlMethodCodegen(
             ?: dotNetUnsupported(
                 "'$keyword${jump.label?.let { "@$it" }.orEmpty()}' targets a loop outside the function being compiled"
             )
-        methodContext.emitGoto(if (jump is IrBreak) labels.breakLabel else labels.continueLabel)
+        val targetLabel = if (jump is IrBreak) labels.breakLabel else labels.continueLabel
+        // A break/continue at a deeper exception-region depth than its loop crosses protected
+        // regions and must exit via `leave` — legal toward any label of an enclosing scope,
+        // forward or backward, crossing nested regions in one hop (probe-verified).
+        when {
+            methodContext.ehDepth == labels.ehDepth -> methodContext.emitGoto(targetLabel)
+            methodContext.ehDepth > labels.ehDepth -> methodContext.emitLeave(targetLabel)
+            else -> error("Internal .NET backend error: '$keyword' at a shallower exception-region depth than its loop")
+        }
     }
 
     private fun emitDiscardableExpression(expression: IrExpression) {
@@ -355,6 +431,7 @@ internal class DotNetIlMethodCodegen(
             is IrBreakContinue -> emitBreakContinue(expression)
             // A discarded throw produces no value to pop: `throw` terminates the emission point.
             is IrThrow -> expressionCodegen.emitThrow(expression)
+            is IrTry -> emitDiscardedTry(expression)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic != null) {
@@ -384,6 +461,128 @@ internal class DotNetIlMethodCodegen(
     private fun emitCallStatement(call: IrCall) {
         if (expressionCodegen.emitCall(call) is DotNetIlReturnType.Value) {
             methodContext.emit("pop", pops = 1)
+        }
+    }
+
+    /**
+     * A `try`/`catch` in statement position — following the JVM backend, [IrTry] maps 1:1 onto
+     * the platform exception table (a `.try` block with consecutive typed `catch` handlers) with
+     * no lowering machinery. Every branch that completes normally exits with `leave` to the join
+     * label after the construct; the label is skipped when every branch terminated (returned or
+     * threw), exactly like [emitWhenStatement]'s end label.
+     */
+    private fun emitTryStatement(expression: IrTry) {
+        val endLabel = methodContext.nextLabel("tryEnd")
+        emitTryCatchRegions(expression) { branchResult ->
+            emitVoidExpression(branchResult)
+            if (!methodContext.isTerminated) {
+                methodContext.emitLeave(endLabel)
+            }
+        }
+        if (methodContext.isLabelReferenced(endLabel)) {
+            methodContext.emitLabel(endLabel)
+        }
+    }
+
+    /**
+     * A `try`/`catch` in value position (Kotlin's `IrTry` has a value): `leave` discards the
+     * evaluation stack (ECMA-335), so the branch results cannot cross the region boundary on the
+     * stack — each branch drains its value into a synthetic result local and the join label
+     * reloads it (probe-verified template). The CLR additionally requires an empty evaluation
+     * stack at `.try` entry, so a `try` expression with operands already on the stack (e.g. as a
+     * non-first call argument) is rejected — a stated deviation from the JVM backend, whose
+     * platform has no such restriction (operand spilling is deferred).
+     */
+    private fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType) {
+        if (methodContext.stackDepth != 0) {
+            dotNetUnsupported("'try' expression with operands already on the evaluation stack is not supported")
+        }
+        val endLabel = methodContext.nextLabel("tryEnd")
+        val resultSlot = methodContext.declareSyntheticLocal(expectedType, "<try>")
+        emitTryCatchRegions(expression) { branchResult ->
+            emitValueExpression(branchResult, expectedType)
+            if (!methodContext.isTerminated) {
+                methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+                methodContext.emitLeave(endLabel)
+            }
+        }
+        methodContext.emitLabel(endLabel)
+        methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+    }
+
+    /**
+     * A non-Unit `try` in statement position (it arrives under `IMPLICIT_COERCION_TO_UNIT`; a
+     * Unit-typed `try` statement arrives bare in [emitVoidExpression]). When the try's type
+     * maps, it is emitted in expression form and the reloaded result is popped — the branch
+     * values are expressions (e.g. a trailing constant) that statement emission cannot handle.
+     * A `Nothing`-typed (or otherwise unmapped) `try` uses statement form instead, whose
+     * branches are emitted as statements.
+     */
+    private fun emitDiscardedTry(expression: IrTry) {
+        val valueType = typeMapper.toDotNetIlValueType(expression.type)
+        if (valueType == null) {
+            emitTryStatement(expression)
+        } else {
+            emitTryExpression(expression, valueType)
+            methodContext.emit("pop", pops = 1)
+        }
+    }
+
+    /**
+     * The region structure shared by both `try` forms: `.try {` around the try branch, then one
+     * `catch <clrTypeRef> {` per Kotlin catch clause in source order — the CLR matches handlers
+     * strictly in declaration order (probe-verified), and Kotlin source order is authoritative
+     * (the frontend owns unreachable-catch diagnostics). Each handler first binds its catch
+     * parameter with a `stloc` of the exception object the CLR pushes at handler entry.
+     */
+    private fun emitTryCatchRegions(expression: IrTry, emitBranchResult: (IrExpression) -> Unit) {
+        if (expression.finallyExpression != null) {
+            dotNetUnsupported("'try' with a 'finally' block is not supported yet")
+        }
+        methodContext.beginTry()
+        emitBranchResult(expression.tryResult)
+        for (irCatch in expression.catches) {
+            methodContext.beginCatch(catchTypeRef(irCatch))
+            val slot = methodContext.declareLocal(irCatch.catchParameter)
+            methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+            emitBranchResult(irCatch.result)
+        }
+        methodContext.endEhBlock()
+    }
+
+    /**
+     * The `catch` clause operand: the bare corelib-qualified reference of the caught type, which
+     * must be a [mapped exception type][DotNetIlValueType.MappedClass] — `catch (e: Throwable)`
+     * becomes a `catch` of the corelib `System.Exception`, catching everything the CLR throws.
+     */
+    private fun catchTypeRef(irCatch: IrCatch): String {
+        val parameter = irCatch.catchParameter
+        val type = typeMapper.toDotNetIlValueType(parameter.type)
+        if (type !is DotNetIlValueType.MappedClass) {
+            dotNetUnsupported("catch of a non-exception-mapped type ${parameter.type.render()} is not supported")
+        }
+        return type.ilTypeRef
+    }
+
+    /**
+     * A value expression that may be a block: `try` branch bodies arrive as [IrContainerExpression]s
+     * whose trailing expression is the branch value, preceded by arbitrary statements. A trailing
+     * [IrReturn]/[IrBreakContinue] terminates the branch without producing a value (the caller's
+     * `isTerminated` check skips the drain); everything else is emitted against [expectedType].
+     */
+    private fun emitValueExpression(expression: IrExpression, expectedType: DotNetIlValueType) {
+        if (expression !is IrContainerExpression) {
+            expressionCodegen.emitExpression(expression, expectedType)
+            return
+        }
+        val last = expression.statements.lastOrNull()
+            ?: dotNetUnsupported("empty block in value position")
+        expression.statements.dropLast(1).forEach { emitStatement(it) }
+        when (last) {
+            is IrReturn -> emitReturn(last)
+            is IrBreakContinue -> emitBreakContinue(last)
+            is IrExpression -> emitValueExpression(last, expectedType)
+            else -> dotNetUnsupported("unsupported trailing statement ${last.javaClass.simpleName} in a block in value position")
         }
     }
 }

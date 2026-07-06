@@ -1,0 +1,59 @@
+.assembly extern mscorlib {}
+.assembly 'tryCatch' {}
+.module 'main-tryCatch.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.tryCatchKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'handle'(bool 'flag') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [mscorlib]System.ArgumentException 'e',
+      [1] class [mscorlib]System.Exception 'e@1'
+    )
+    .try {
+      ldarg.0
+      brfalse IL_whenNext_2
+      ldstr "bad argument"
+      newobj instance void [mscorlib]System.ArgumentException::.ctor(string)
+      throw
+IL_whenNext_2:
+      ldstr "ok"
+      call void [mscorlib]System.Console::WriteLine(string)
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.ArgumentException {
+      stloc.0
+      ldloc.0
+      callvirt instance string [mscorlib]System.Exception::get_Message()
+      dup
+      brtrue IL_stringValueNotNull_3
+      pop
+      ldstr "null"
+IL_stringValueNotNull_3:
+      call void [mscorlib]System.Console::WriteLine(string)
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.1
+      ldstr "other"
+      call void [mscorlib]System.Console::WriteLine(string)
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldstr "after"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldc.i4.0
+    call void 'test.tryCatchKt'::'handle'(bool)
+    ldc.i4.1
+    call void 'test.tryCatchKt'::'handle'(bool)
+    ret
+  }
+}
