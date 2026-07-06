@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrThrow
+import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.constructedClass
@@ -18,6 +19,16 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
+
+/**
+ * Emits an [IrTry] in value position. Implemented by [DotNetIlMethodCodegen]: a `try` branch
+ * body contains arbitrary statements, and statement emission lives on the method codegen, so a
+ * value-position `try` dispatches back through this hook — the reverse of the method codegen
+ * delegating value emission to [DotNetIlExpressionCodegen].
+ */
+internal fun interface DotNetIlTryExpressionEmitter {
+    fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType)
+}
 
 /**
  * Emits value-producing expressions into the method's [DotNetIlMethodContext]. Any construct
@@ -28,6 +39,7 @@ internal class DotNetIlExpressionCodegen(
     private val availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
+    private val tryExpressionEmitter: DotNetIlTryExpressionEmitter,
 ) {
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
@@ -68,6 +80,7 @@ internal class DotNetIlExpressionCodegen(
                 emitThrow(expression)
                 methodContext.notePhantomValueAfterThrow()
             }
+            is IrTry -> tryExpressionEmitter.emitTryExpression(expression, expectedType)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic == null || !intrinsic.tryEmitAsExpression(expression, this, expectedType)) {
