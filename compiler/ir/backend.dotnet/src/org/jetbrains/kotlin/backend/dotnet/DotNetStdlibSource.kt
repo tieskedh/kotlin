@@ -39,5 +39,80 @@ public fun println(message: Any?) {}
 public val Char.code: Int
     @Suppress("DEPRECATION")
     get() = this.toInt()
+
+// The built-in exception hierarchy, mirroring the constructor sets of the real stdlib's
+// ExceptionsH.kt (kotlin.Throwable itself is a FIR fallback builtin and needs no declaration).
+// The full Kotlin subtype hierarchy is declared so frontend catch/assignment subtyping matches
+// the real stdlib, but the backend never emits these classes: each concrete class is either
+// TYPE-MAPPED onto a CLR exception type or rejected with a per-type reason — see
+// DotNetMappedExceptions, which also documents why RuntimeException, Error and
+// NumberFormatException resolve here and then fail loudly at any codegen use.
+
+public open class Exception : Throwable {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class Error : Throwable {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class RuntimeException : Exception {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class IllegalArgumentException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class IllegalStateException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class UnsupportedOperationException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+    public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class IndexOutOfBoundsException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+}
+
+public open class ArithmeticException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+}
+
+public open class NumberFormatException : IllegalArgumentException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+}
+
+public open class NullPointerException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+}
+
+public open class ClassCastException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+}
 """,
 )

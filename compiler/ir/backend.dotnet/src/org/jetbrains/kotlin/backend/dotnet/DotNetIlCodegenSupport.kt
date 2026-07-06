@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isChar
 import org.jetbrains.kotlin.ir.types.isDouble
@@ -114,8 +115,22 @@ internal class DotNetIlTypeMapper(
         type.isDouble() -> DotNetIlValueType.Float64
         type.isChar() -> DotNetIlValueType.Char
         type.isDotNetStringType() -> DotNetIlValueType.String
-        else -> toUserClassTypeOrNull(type)
+        else -> toMappedExceptionTypeOrNull(type) ?: toUserClassTypeOrNull(type)
     }
+
+    /**
+     * A built-in exception type maps through the curated [DotNetMappedExceptions] registry —
+     * before the user-class lookup, because the injected exception declarations are excluded
+     * from the class model entirely. `T?` maps to the same reference type (like [UserClass][DotNetIlValueType.UserClass]
+     * and `string`). A [rejected][DotNetMappedExceptions.Entry.Rejected] entry fails loudly with
+     * its per-type reason instead of falling through to a generic diagnostic.
+     */
+    private fun toMappedExceptionTypeOrNull(type: IrType): DotNetIlValueType.MappedClass? =
+        when (val entry = type.classFqName?.let(DotNetMappedExceptions.entries::get)) {
+            is DotNetMappedExceptions.Entry.Mapped -> DotNetIlValueType.MappedClass(entry.clrTypeRef)
+            is DotNetMappedExceptions.Entry.Rejected -> dotNetUnsupported(entry.reason)
+            null -> null
+        }
 
     /**
      * A user-class type maps only while its class is available; `C?` maps to the same
