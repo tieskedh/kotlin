@@ -112,6 +112,19 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   finally inlining/duplication (CLR-forced deviation). Deferred: Roslyn-parity
   `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws) until interop with
   non-Exception-throwing code matters.
+- try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
+  block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
+  first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no
+  lowering machinery. Regions are exited only via `leave` (a `ret` or `br` crossing a region
+  boundary assembles but fails at runtime), and `leave` discards the evaluation stack, so a
+  `try` expression drains its branch values into a synthetic result local reloaded at the join
+  label; returns crossing protected regions drain into a synthetic return local and `leave` to a
+  shared return-join epilogue (the Roslyn shape), and `break`/`continue` crossing regions emit
+  `leave` straight to the loop labels — legal toward any enclosing-scope label, forward or
+  backward, crossing nested regions in one hop (all probe-verified, `excprobe_s2`). One stated
+  deviation from the JVM backend: the CLR requires an empty evaluation stack at `.try` entry
+  (ECMA-335 I.12.4.2), so a `try` expression with operands already on the evaluation stack
+  (e.g. a non-first call argument) is rejected rather than spilled.
 - Generics stance: the type representation stays structural so that future generics can target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
