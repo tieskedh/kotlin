@@ -23,6 +23,8 @@ enum class KlibAbiCompatibilityLevel(val major: Int, val minor: Int) {
         if (ordinal > 0) KlibAbiCompatibilityLevel.entries[ordinal - 1] else null
 
     companion object {
-        val LATEST_STABLE = ABI_LEVEL_2_4
+        val LATEST_STABLE = KlibAbiCompatibilityLevel.entries.single {
+            it.major == KotlinAbiVersion.CURRENT.major && it.minor == KotlinAbiVersion.CURRENT.minor
+        }
     }
 }
