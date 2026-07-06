@@ -1,13 +1,21 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
+import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrWhen
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
+import org.jetbrains.kotlin.ir.util.render
 
 /**
  * Emits value-producing expressions into the method's [DotNetIlMethodContext]. Any construct
@@ -17,10 +25,17 @@ internal class DotNetIlExpressionCodegen(
     private val methodContext: DotNetIlMethodContext,
     private val availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
+    private val typeMapper: DotNetIlTypeMapper,
 ) {
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
     }
+
+    /**
+     * Maps [type] through the emission-scoped [DotNetIlTypeMapper]; null when the type has no IL
+     * mapping. Exposed so intrinsics can dispatch on operand and parameter types.
+     */
+    fun toDotNetIlValueType(type: IrType): DotNetIlValueType? = typeMapper.toDotNetIlValueType(type)
 
     fun nextLabel(prefix: String): String = methodContext.nextLabel(prefix)
 
@@ -41,6 +56,8 @@ internal class DotNetIlExpressionCodegen(
             null -> dotNetUnsupported("missing ${expectedType.nameInSignature} expression value")
             is IrConst -> emitConstant(expression, expectedType)
             is IrGetValue -> emitGetValue(expression, expectedType)
+            is IrGetField -> emitGetField(expression, expectedType)
+            is IrConstructorCall -> emitConstructorCall(expression, expectedType)
             is IrWhen -> emitWhenExpression(expression, expectedType)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
@@ -79,7 +96,7 @@ internal class DotNetIlExpressionCodegen(
             // non-constant Float use (fail-hard design rule).
             expression is IrConst && expression.value !is Double && expression.value !is Float ->
                 methodContext.emit("ldstr ${expression.value.toString().toIlStringLiteral()}", pushes = 1)
-            else -> when (expression.type.toDotNetIlValueType()) {
+            else -> when (typeMapper.toDotNetIlValueType(expression.type)) {
                 DotNetIlValueType.Boolean -> {
                     emitExpression(expression, DotNetIlValueType.Boolean)
                     emitBooleanToString()
@@ -102,6 +119,8 @@ internal class DotNetIlExpressionCodegen(
                     emitExpression(expression, DotNetIlValueType.Char)
                     methodContext.emit("call string ${CORE_LIB_REF}System.Char::ToString(char)", pops = 1, pushes = 1)
                 }
+                is DotNetIlValueType.UserClass ->
+                    dotNetUnsupported("string conversion of class instances is not supported yet (no Any.toString model)")
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
                 DotNetIlValueType.String, null -> {
@@ -168,30 +187,130 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Emits the arguments and the `call` instruction for a call to a top-level Kotlin function.
-     * Throws [DotNetIlUnsupportedException] when the callee is not available (not compilable,
-     * already skipped, or not a top-level function of this module).
+     * Emits the arguments and the `call` instruction for a call to a top-level Kotlin function
+     * or to an instance member/accessor of a user class. For an instance callee
+     * `call.arguments[0]` is the receiver: it is emitted against the this-type kept at
+     * `parameterTypes[0]` and popped by the call like every other argument, so the plain
+     * argument zip covers both shapes. Throws [DotNetIlUnsupportedException] when the callee is
+     * not available (not compilable, already skipped, or not declared in this module).
      */
     fun emitCall(call: IrCall): DotNetIlReturnType {
         val callee = call.symbol.owner
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee]
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
-        if (call.arguments.size != info.signature.parameterTypes.size) {
-            dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
-        }
-        for ((argument, parameterType) in call.arguments.zip(info.signature.parameterTypes)) {
-            if (argument == null) {
-                dotNetUnsupported("call to '$calleeName' relies on default argument values")
-            }
-            emitExpression(argument, parameterType)
-        }
+        emitArguments(call.arguments, info.signature.parameterTypes, "'$calleeName'")
         methodContext.emit(
-            info.renderCallInstruction(calleeName),
+            info.renderCallInstruction(callee.dotNetIlMethodName()),
             pops = info.signature.parameterTypes.size,
             pushes = if (info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
         return info.signature.returnType
+    }
+
+    /**
+     * Emits the argument expressions of a call in order, each against its mapped parameter type.
+     * [calleeDescription] names the callee inside the diagnostics, matching the historical
+     * `call to 'f' ...` message shapes.
+     */
+    fun emitArguments(
+        arguments: List<IrExpression?>,
+        parameterTypes: List<DotNetIlValueType>,
+        calleeDescription: String,
+    ) {
+        if (arguments.size != parameterTypes.size) {
+            dotNetUnsupported("call to $calleeDescription has an unsupported argument shape")
+        }
+        for ((argument, parameterType) in arguments.zip(parameterTypes)) {
+            if (argument == null) {
+                dotNetUnsupported("call to $calleeDescription relies on default argument values")
+            }
+            emitExpression(argument, parameterType)
+        }
+    }
+
+    /**
+     * `Point(1, 2)` → arguments then `newobj instance void 'Point'::.ctor(int32, int32)`
+     * (probe-verified; `newobj` pops the arguments and pushes the new instance, calling the
+     * constructor with the freshly allocated `this` as argument 0). Generic instantiations are
+     * rejected loudly, never erased.
+     */
+    private fun emitConstructorCall(call: IrConstructorCall, expectedType: DotNetIlValueType) {
+        if (call.typeArguments.isNotEmpty()) {
+            dotNetUnsupported("generic class types are not supported yet")
+        }
+        val constructor = call.symbol.owner
+        val irClass = constructor.constructedClass
+        val classInfo = typeMapper.classInfoOrNull(irClass)
+            ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
+        val producedType = DotNetIlValueType.UserClass(classInfo.ilClassName)
+        if (producedType != expectedType) {
+            dotNetUnsupported(
+                "constructor call of '${irClass.name.asString()}' produces ${producedType.nameInSignature} " +
+                        "where ${expectedType.nameInSignature} is expected"
+            )
+        }
+        val parameterTypes = constructor.dotNetSignature(typeMapper).parameterTypes
+        emitArguments(call.arguments, parameterTypes, "constructor of '${irClass.name.asString()}'")
+        methodContext.emit(
+            "newobj ${classInfo.renderConstructorReference(parameterTypes)}",
+            pops = parameterTypes.size,
+            pushes = 1,
+        )
+    }
+
+    /** An instance field read: receiver, then `ldfld <type> 'C'::'name'` (probe-verified). */
+    private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
+        val field = expression.symbol.owner
+        val (classInfo, fieldType) = resolveFieldAccess(field)
+        if (fieldType != expectedType) {
+            dotNetUnsupported(
+                "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
+                        "where ${expectedType.nameInSignature} is expected"
+            )
+        }
+        emitFieldReceiver(expression.receiver, field, classInfo)
+        methodContext.emit(
+            "ldfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}",
+            pops = 1,
+            pushes = 1,
+        )
+    }
+
+    /**
+     * An instance field store: receiver, value, then `stfld <type> 'C'::'name'` (probe-verified).
+     * Reaches codegen from `DEFAULT_PROPERTY_ACCESSOR` setter bodies and from the field
+     * initializations [InitializersLowering][org.jetbrains.kotlin.backend.common.lower.InitializersLowering]
+     * merged into constructor bodies; user-written property writes are accessor calls instead.
+     */
+    fun emitSetField(expression: IrSetField) {
+        val field = expression.symbol.owner
+        val (classInfo, fieldType) = resolveFieldAccess(field)
+        emitFieldReceiver(expression.receiver, field, classInfo)
+        emitExpression(expression.value, fieldType)
+        methodContext.emit("stfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pops = 2)
+    }
+
+    /**
+     * Resolves the owning class and the IL type of an instance field. Both lookups go through
+     * the emission-scoped state, so field access to a class the emitter removed (or a field of a
+     * type outside the supported set) aborts the surrounding render.
+     */
+    private fun resolveFieldAccess(field: IrField): Pair<DotNetIlClassInfo, DotNetIlValueType> {
+        val irClass = field.parent as? IrClass
+            ?: dotNetUnsupported("access to non-member field '${field.name.asString()}' is not supported")
+        val classInfo = typeMapper.classInfoOrNull(irClass)
+            ?: dotNetUnsupported("access to a field of unsupported class '${irClass.name.asString()}'")
+        val fieldType = typeMapper.toDotNetIlValueType(field.type)
+            ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
+        return classInfo to fieldType
+    }
+
+    private fun emitFieldReceiver(receiver: IrExpression?, field: IrField, classInfo: DotNetIlClassInfo) {
+        if (receiver == null) {
+            dotNetUnsupported("static field '${field.name.asString()}' is not supported")
+        }
+        emitExpression(receiver, DotNetIlValueType.UserClass(classInfo.ilClassName))
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
@@ -237,6 +356,11 @@ internal class DotNetIlExpressionCodegen(
                 null -> methodContext.emit("ldnull", pushes = 1)
                 is String -> methodContext.emit("ldstr ${value.toIlStringLiteral()}", pushes = 1)
                 else -> dotNetUnsupported("unsupported string constant: $value")
+            }
+            // The only class-typed constant is `null` (class references have no other literals).
+            is DotNetIlValueType.UserClass -> when (expression.value) {
+                null -> methodContext.emit("ldnull", pushes = 1)
+                else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
             }
         }
     }

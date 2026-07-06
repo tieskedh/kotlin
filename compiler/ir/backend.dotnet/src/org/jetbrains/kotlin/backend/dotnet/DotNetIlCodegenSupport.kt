@@ -1,6 +1,12 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.util.isGetter
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
@@ -35,30 +41,96 @@ internal class DotNetIlUnsupportedException(val reason: String) : RuntimeExcepti
 internal fun dotNetUnsupported(reason: String): Nothing =
     throw DotNetIlUnsupportedException(reason)
 
-internal fun IrSimpleFunction.dotNetSignature(): DotNetIlMethodSignature {
-    val returnType = returnType.toDotNetIlReturnType()
+internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature {
+    val ilReturnType = typeMapper.toDotNetIlReturnType(returnType)
         ?: dotNetUnsupported("return type ${returnType.render()} is not supported")
-    val parameterTypes = parameters.map { parameter ->
-        parameter.type.toDotNetIlValueType()
+    // A member function's dispatch receiver is parameters[0]; its type (the owning user class)
+    // stays in the mapped parameter list so argument zipping and call-site pop counts stay
+    // uniform, while `hasThis` makes signature rendering and slot numbering treat it as the
+    // implicit CLR argument 0 (see DotNetIlMethodSignature).
+    val hasThis = parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver
+    return DotNetIlMethodSignature(ilReturnType, parameters.dotNetParameterTypes(typeMapper), hasThis)
+}
+
+/**
+ * The IL method name of a function: property accessors get the CLR-conventional `get_x`/`set_x`
+ * derived from the property name (the JVM backend derives `getX`/`setX` the same way in
+ * `MethodSignatureMapper`; the underscore spelling is what `.property` metadata conventionally
+ * binds to, probe-verified), everything else keeps its Kotlin name. The result is still rendered
+ * through [toIlIdentifier] wherever it is printed.
+ */
+internal fun IrSimpleFunction.dotNetIlMethodName(): String {
+    val property = correspondingPropertySymbol?.owner ?: return name.asString()
+    val prefix = if (isGetter) "get_" else "set_"
+    return prefix + property.name.asString()
+}
+
+/**
+ * The IL signature of a constructor: CLR constructors always return `void`, and an
+ * `IrConstructor.parameters` list carries no dispatch receiver, so the printed parameter list is
+ * exactly the declared one (the implicit `this` is argument slot 0 by CLR instance-method
+ * numbering, handled by [DotNetIlMethodContext]).
+ */
+internal fun IrConstructor.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature =
+    DotNetIlMethodSignature(DotNetIlReturnType.Void, parameters.dotNetParameterTypes(typeMapper))
+
+private fun List<IrValueParameter>.dotNetParameterTypes(typeMapper: DotNetIlTypeMapper): List<DotNetIlValueType> =
+    map { parameter ->
+        typeMapper.toDotNetIlValueType(parameter.type)
             ?: dotNetUnsupported("parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}")
     }
-    return DotNetIlMethodSignature(returnType, parameterTypes)
-}
 
-private fun IrType.toDotNetIlReturnType(): DotNetIlReturnType? {
-    if (isUnit()) return DotNetIlReturnType.Void
-    return DotNetIlReturnType.Value(toDotNetIlValueType() ?: return null)
-}
+/**
+ * Emission-scoped IR-to-IL type mapping. One instance is created per [DotNetIlEmitter.emit] call
+ * — the emitter is re-entrant, so there is no global class registry: a user-class type maps to
+ * IL only while its [IrClass] is present in [availableClasses], the emitter's live map, so
+ * removing an unsupported class during the emission fixpoint automatically cascades to every
+ * declaration whose types reference it.
+ */
+internal class DotNetIlTypeMapper(
+    private val availableClasses: Map<IrClass, DotNetIlClassInfo>,
+) {
+    /**
+     * The class info of [irClass] while it is still available, or null once (or if) the emitter
+     * removed it — member references (`newobj`, `this(...)` delegations, `ldfld`/`stfld`) go
+     * through this lookup so a removed class fails its users instead of leaving stale IL text.
+     */
+    fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? = availableClasses[irClass]
 
-internal fun IrType.toDotNetIlValueType(): DotNetIlValueType? {
-    return when {
-        isBoolean() -> DotNetIlValueType.Boolean
-        isInt() -> DotNetIlValueType.Int32
-        isLong() -> DotNetIlValueType.Int64
-        isDouble() -> DotNetIlValueType.Float64
-        isChar() -> DotNetIlValueType.Char
-        isDotNetStringType() -> DotNetIlValueType.String
-        else -> null
+    /** Maps [type] in return position; CLR `void` is the return encoding of Kotlin `Unit`. */
+    fun toDotNetIlReturnType(type: IrType): DotNetIlReturnType? {
+        if (type.isUnit()) return DotNetIlReturnType.Void
+        return DotNetIlReturnType.Value(toDotNetIlValueType(type) ?: return null)
+    }
+
+    /**
+     * Maps [type] in value position (parameter, local, field, evaluation stack), or null when
+     * the type has no IL mapping, so that callers report their own located diagnostic.
+     */
+    fun toDotNetIlValueType(type: IrType): DotNetIlValueType? = when {
+        type.isBoolean() -> DotNetIlValueType.Boolean
+        type.isInt() -> DotNetIlValueType.Int32
+        type.isLong() -> DotNetIlValueType.Int64
+        type.isDouble() -> DotNetIlValueType.Float64
+        type.isChar() -> DotNetIlValueType.Char
+        type.isDotNetStringType() -> DotNetIlValueType.String
+        else -> toUserClassTypeOrNull(type)
+    }
+
+    /**
+     * A user-class type maps only while its class is available; `C?` maps to the same
+     * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). Generic
+     * user-class types are rejected loudly — never erased — keeping the structural mapping
+     * ready for CLR reified generics.
+     */
+    private fun toUserClassTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
+        if (type !is IrSimpleType) return null
+        val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
+        val classInfo = availableClasses[irClass] ?: return null
+        if (type.arguments.isNotEmpty()) {
+            dotNetUnsupported("generic class types are not supported yet")
+        }
+        return DotNetIlValueType.UserClass(classInfo.ilClassName)
     }
 }
 

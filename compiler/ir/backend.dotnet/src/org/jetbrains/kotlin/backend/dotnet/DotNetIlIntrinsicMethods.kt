@@ -354,7 +354,11 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
  * `==`/`===`/`ieee754equals`. All value primitives use `ceq`: for `int32`-backed values
  * (Boolean/Int/Char) and `int64` it is bitwise equality, and for `float64` it is IEEE 754
  * equality (NaN != NaN, -0.0 == 0.0) — exactly the contract of `ieee754equals`, mirroring the
- * JVM backend's Ieee754Equals intrinsic.
+ * JVM backend's Ieee754Equals intrinsic. User-class instances support reference equality
+ * (`===`, a `ceq` on the object references) and `==` against the `null` literal, which Kotlin
+ * defines as a pure reference check that never calls `equals` (the JVM backend's `Equals`
+ * intrinsic special-cases `isNullConst` operands into an `ifnull` check the same way); general
+ * `==` between two instances is rejected until an Any.equals model exists.
  */
 private class DotNetIlEqualityIntrinsic(
     private val referenceEquality: Boolean,
@@ -365,7 +369,7 @@ private class DotNetIlEqualityIntrinsic(
         expectedType: DotNetIlValueType,
     ): Boolean {
         if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
-        val operandType = call.dotNetEqualityOperandType()
+        val operandType = call.dotNetEqualityOperandType(codegen)
             ?: dotNetUnsupported("equality comparison of unsupported operand types")
         val left = call.arguments[0]
             ?: dotNetUnsupported("missing left operand of an equality comparison")
@@ -386,6 +390,21 @@ private class DotNetIlEqualityIntrinsic(
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
                     codegen.emit("call bool ${CORE_LIB_REF}System.String::op_Equality(string, string)", pops = 2, pushes = 1)
+                }
+            }
+            is DotNetIlValueType.UserClass -> {
+                // Reference equality on object references is a plain `ceq` (probe-verified).
+                // `x == null` shares it: Kotlin defines a null-literal comparison as a pure
+                // reference check that never calls `equals` (JVM precedent: the Equals intrinsic
+                // rewrites `isNullConst` operands to an `ifnull` check), so no Any.equals model
+                // is involved. General instance `==` needs that model and is rejected loudly —
+                // never silently downgraded to a reference comparison.
+                if (referenceEquality || left.isNullConst() || right.isNullConst()) {
+                    codegen.emit("ceq", pops = 2, pushes = 1)
+                } else {
+                    dotNetUnsupported(
+                        "'==' between class instances is not supported yet (requires the Any.equals model); '===' compares references"
+                    )
                 }
             }
         }
@@ -549,6 +568,7 @@ private class DotNetIlNumericIncrementIntrinsic(
         val oneLoad = when (operandType) {
             DotNetIlValueType.Int64 -> "ldc.i8 1"
             DotNetIlValueType.Float64 -> "ldc.r8 1.0"
+            is DotNetIlValueType.UserClass -> dotNetUnsupported("numeric increment of a class instance is not supported")
             else -> "ldc.i4.1"
         }
         codegen.emit(oneLoad, pushes = 1)
@@ -830,7 +850,8 @@ private object DotNetIlPrintlnIntrinsic : DotNetIlIntrinsicMethod() {
             1 -> {
                 val argument = call.arguments.single()
                     ?: dotNetUnsupported("missing argument in a call to 'println'")
-                when (call.symbol.owner.parameters.singleOrNull()?.type?.toDotNetIlValueType()) {
+                val parameterType = call.symbol.owner.parameters.singleOrNull()?.type?.let(codegen::toDotNetIlValueType)
+                when (parameterType) {
                     DotNetIlValueType.Char -> {
                         codegen.emitExpression(argument, DotNetIlValueType.Char)
                         codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine(char)", pops = 1)
@@ -881,18 +902,23 @@ private object DotNetIlToStringIntrinsic : DotNetIlIntrinsicMethod() {
     }
 }
 
-private fun IrCall.dotNetEqualityOperandType(): DotNetIlValueType? {
+private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen): DotNetIlValueType? {
     val left = arguments.getOrNull(0) ?: return null
     val right = arguments.getOrNull(1) ?: return null
-    val leftType = left.type.toDotNetIlValueType()
-    val rightType = right.type.toDotNetIlValueType()
+    val leftType = codegen.toDotNetIlValueType(left.type)
+    val rightType = codegen.toDotNetIlValueType(right.type)
     return when {
         leftType != null && leftType == rightType -> leftType
-        left.isNullConst() && rightType == DotNetIlValueType.String -> DotNetIlValueType.String
-        right.isNullConst() && leftType == DotNetIlValueType.String -> DotNetIlValueType.String
+        // A `null` constant compared against a reference type (string or a user class) takes
+        // the reference type: `ldnull` satisfies any class-typed operand slot.
+        left.isNullConst() && rightType.isDotNetReferenceType() -> rightType
+        right.isNullConst() && leftType.isDotNetReferenceType() -> leftType
         else -> null
     }
 }
+
+private fun DotNetIlValueType?.isDotNetReferenceType(): Boolean =
+    this == DotNetIlValueType.String || this is DotNetIlValueType.UserClass
 
 private fun IrFunctionSymbol.toKey(): DotNetIlIntrinsicMethods.Key? =
     owner.toKey()
