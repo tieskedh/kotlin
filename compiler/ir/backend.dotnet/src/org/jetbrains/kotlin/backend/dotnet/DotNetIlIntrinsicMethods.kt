@@ -83,7 +83,27 @@ internal class DotNetIlIntrinsicMethods(
         Key(doubleFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(charFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
-    ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() + conversionIntrinsics()
+    ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
+            conversionIntrinsics() + exceptionMemberIntrinsics()
+
+    /**
+     * `Throwable.message`/`Throwable.cause` on every [mapped exception type][DotNetMappedExceptions],
+     * compiled to `System.Exception::get_Message()`/`get_InnerException()` (both callvirt
+     * signatures ilasm-probe-verified). A key is registered per mapped FqName because the
+     * accessor call site's owner is the static receiver class: on a subtype receiver
+     * (`e: IllegalStateException`) the getter arrives as a fake override owned by the subclass,
+     * not by `kotlin.Throwable` (the registration-per-FqName option of the JVM's
+     * resolve-fake-overrides-then-look-up precedent, chosen to leave [getIntrinsic] dispatch
+     * untouched). Rejected exception types need no keys: any receiver of such a type already
+     * fails signature mapping with the registry's per-type reason.
+     */
+    private fun exceptionMemberIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        for ((fqName, entry) in DotNetMappedExceptions.entries) {
+            if (entry !is DotNetMappedExceptions.Entry.Mapped) continue
+            add(Key(fqName, null, "<get-message>", emptyList()) to DotNetIlExceptionMessageIntrinsic)
+            add(Key(fqName, null, "<get-cause>", emptyList()) to DotNetIlExceptionCauseIntrinsic)
+        }
+    }
 
     /**
      * `<`, `<=`, `>`, `>=` over {Int, Long, Double, Char}. fir2ir converts `a < b` and friends
@@ -392,13 +412,14 @@ private class DotNetIlEqualityIntrinsic(
                     codegen.emit("call bool ${CORE_LIB_REF}System.String::op_Equality(string, string)", pops = 2, pushes = 1)
                 }
             }
-            is DotNetIlValueType.UserClass -> {
+            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass -> {
                 // Reference equality on object references is a plain `ceq` (probe-verified).
                 // `x == null` shares it: Kotlin defines a null-literal comparison as a pure
                 // reference check that never calls `equals` (JVM precedent: the Equals intrinsic
                 // rewrites `isNullConst` operands to an `ifnull` check), so no Any.equals model
                 // is involved. General instance `==` needs that model and is rejected loudly —
-                // never silently downgraded to a reference comparison.
+                // never silently downgraded to a reference comparison. Mapped exception types
+                // follow the same rules; `===` on them is what makes rethrow identity observable.
                 if (referenceEquality || left.isNullConst() || right.isNullConst()) {
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
@@ -568,7 +589,8 @@ private class DotNetIlNumericIncrementIntrinsic(
         val oneLoad = when (operandType) {
             DotNetIlValueType.Int64 -> "ldc.i8 1"
             DotNetIlValueType.Float64 -> "ldc.r8 1.0"
-            is DotNetIlValueType.UserClass -> dotNetUnsupported("numeric increment of a class instance is not supported")
+            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass ->
+                dotNetUnsupported("numeric increment of a class instance is not supported")
             else -> "ldc.i4.1"
         }
         codegen.emit(oneLoad, pushes = 1)
@@ -902,6 +924,68 @@ private object DotNetIlToStringIntrinsic : DotNetIlIntrinsicMethod() {
     }
 }
 
+/**
+ * `Throwable.message` -> a `callvirt` of the corelib `System.Exception::get_Message()`
+ * (probe-verified). Documented platform delta: Kotlin's `message` keeps its `String?` type, but
+ * the CLR `Message` property is never null for mapped exceptions — a no-arg `Exception()` yields
+ * the CLR default text `"Exception of type 'System.Exception' was thrown."` (probe-verified
+ * verbatim), where Kotlin/JVM would yield null.
+ */
+private object DotNetIlExceptionMessageIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.String || call.arguments.size != 1) return false
+        val receiver = call.dotNetMappedExceptionReceiver(codegen, "message")
+        codegen.emitExpression(receiver.first, receiver.second)
+        codegen.emit(
+            "callvirt instance string ${DotNetMappedExceptions.EXCEPTION_TYPE_REF}::get_Message()",
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/**
+ * `Throwable.cause` -> a `callvirt` of the corelib `System.Exception::get_InnerException()`
+ * (probe-verified, including the null result of a cause-less exception). The Kotlin result type
+ * `Throwable?` maps to the same `System.Exception` reference the getter returns.
+ */
+private object DotNetIlExceptionCauseIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val exceptionType = DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+        if (expectedType != exceptionType || call.arguments.size != 1) return false
+        val receiver = call.dotNetMappedExceptionReceiver(codegen, "cause")
+        codegen.emitExpression(receiver.first, receiver.second)
+        codegen.emit(
+            "callvirt instance ${exceptionType.nameInSignature} " +
+                    "${DotNetMappedExceptions.EXCEPTION_TYPE_REF}::get_InnerException()",
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** The dispatch receiver of an exception member access, together with its mapped IL type. */
+private fun IrCall.dotNetMappedExceptionReceiver(
+    codegen: DotNetIlExpressionCodegen,
+    memberName: String,
+): Pair<IrExpression, DotNetIlValueType.MappedClass> {
+    val receiver = arguments.single()
+        ?: dotNetUnsupported("missing receiver of 'Throwable.$memberName'")
+    val receiverType = codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.MappedClass
+        ?: dotNetUnsupported("reading '$memberName' of a non-exception-mapped receiver is not supported")
+    return receiver to receiverType
+}
+
 private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen): DotNetIlValueType? {
     val left = arguments.getOrNull(0) ?: return null
     val right = arguments.getOrNull(1) ?: return null
@@ -918,7 +1002,7 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
 }
 
 private fun DotNetIlValueType?.isDotNetReferenceType(): Boolean =
-    this == DotNetIlValueType.String || this is DotNetIlValueType.UserClass
+    this == DotNetIlValueType.String || this is DotNetIlValueType.UserClass || this is DotNetIlValueType.MappedClass
 
 private fun IrFunctionSymbol.toKey(): DotNetIlIntrinsicMethods.Key? =
     owner.toKey()
