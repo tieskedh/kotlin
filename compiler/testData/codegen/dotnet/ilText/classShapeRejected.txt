@@ -1,0 +1,16 @@
+.assembly extern mscorlib {}
+.assembly 'classShapeRejected' {}
+.module 'main-classShapeRejected.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'classShapeRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "rejected"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

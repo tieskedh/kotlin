@@ -44,8 +44,41 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - `if`/`when` follows JVM/WASM `IrWhen` handling: evaluate conditions, `brfalse` to next branch,
   `br` to the end label after a matched branch.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
-  `System.String::op_Equality`, `String ===` uses reference `ceq`. Boxed/object equality fallback is
-  deferred until the backend has an object/runtime model.
+  `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
+  and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
+  reference check that never calls `equals`; JVM precedent: the `Equals` intrinsic's `isNullConst`
+  special case). General `==` between two class instances stays rejected until an Any.equals
+  model exists.
+- Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
+  vtable/class lowering machinery): only top-level, final, non-generic plain classes whose sole
+  supertype is `kotlin.Any` pass the shape gate (`DotNetIlEmitter.checkClassShapeSupported`).
+  Rejection granularity is always the whole class — a failing member (signature, body, or IL
+  method-identity clash) removes the entire class from the module so no call site can resolve to
+  a partial class, and the removal cascades through the type mapper to every user of the class.
+- Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
+  `specialname` accessor methods, and a `.property` metadata block binding them (spellings
+  ilasm-probe-verified) — a stated deviation from the JVM's `PropertiesLowering`, which the CLR
+  makes unnecessary. Because of the accessor mangling, the member pre-pass rejects (whole-class)
+  IL method-identity clashes such as `val x` vs a user-declared `fun get_x(): Int` — ilasm fails
+  on the duplicate method declaration (probed on 10.0.9); the JVM analogue is the frontend
+  `PLATFORM_DECLARATION_CLASH` diagnostic for `val x` vs `fun getX()`.
+- Instance members of the final-class model are invoked with plain non-virtual `call`
+  (probe-verified) — a stated deviation from Roslyn, which emits `callvirt` purely for its
+  implicit null check.
+- Initializer merging is `DotNetInitializersLowering`/`DotNetInitializersCleanupLowering`, the
+  same one-line subclasses of the shared backend.common lowerings the JVM uses, plus a
+  .NET-specific guard that turns the shared lowering's local-class `AssertionError` into the
+  fail-loud diagnostic. The guard covers exactly what the shared lowering merges — non-static,
+  class-parented fields and `init {}` blocks — never top-level property initializers, which no
+  constructor merge can reach. The pair runs BEFORE `DotNetForLoopLowering` — a stated deviation
+  from the JVM phase order, because the loop rewrite's builder only exists inside functions, so a
+  `for` inside `init {}` must already have been inlined into a constructor.
+- User-class type mapping is emission-scoped: one `DotNetIlTypeMapper` over the emitter's live
+  `availableClasses` map per `DotNetIlEmitter.emit` call, no global class registry — removing a
+  class during the render fixpoint automatically fails every declaration whose types mention it.
+- File facade names are precomputed pre-gate (`DotNetIlEmitter.buildFileClassNames`): every
+  declared top-level class reserves its IL name even when it is later skipped, so facade naming
+  depends only on what the module declares, never on which classes survive support gates.
 - The fake stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package
   (`kotlin.io` for `println`, `kotlin` for `Char.code`), filtered through the intrinsic registry and
   never emitted as classes of their own. Injected declarations must compile without any diagnostics,

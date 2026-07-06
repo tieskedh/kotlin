@@ -49,8 +49,21 @@ object DotNetBackend {
         ilTarget.parentFile?.mkdirs()
 
         val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable)
-        configuration.perfManager.tryMeasurePhaseTime(PhaseType.IrLowering) {
-            DotNetLoweringPhases.lower(irModuleFragment, context)
+        try {
+            configuration.perfManager.tryMeasurePhaseTime(PhaseType.IrLowering) {
+                DotNetLoweringPhases.lower(irModuleFragment, context)
+            }
+        } catch (e: DotNetIlUnsupportedException) {
+            // A lowering rejected the module up front (e.g. the local-class guard of
+            // DotNetInitializersLowering). Unlike codegen-time rejections there is no function
+            // granularity to skip at, so the whole compilation fails with one loud diagnostic
+            // instead of an internal assertion crash further down.
+            configuration.messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "The module is not supported by the .NET backend: ${e.reason}"
+            )
+            ilTarget.delete()
+            return ilTarget
         }
 
         val emitter = DotNetIlEmitter(
