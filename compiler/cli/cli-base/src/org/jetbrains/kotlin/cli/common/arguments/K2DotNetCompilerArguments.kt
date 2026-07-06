@@ -41,6 +41,19 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
             field = value
         }
 
+    @Argument(
+        value = "-Xdotnet-target",
+        valueDescription = "{netframework|net}",
+        description = "The .NET runtime flavor of the produced executable: " +
+                "'netframework' assembles a .NET Framework .exe (default), " +
+                "'net' assembles a modern .NET .dll with a runtimeconfig.json for 'dotnet exec'."
+    )
+    var dotNetTarget: String? = null
+        set(value) {
+            checkFrozen()
+            field = if (value.isNullOrEmpty()) null else value
+        }
+
     override fun copyOf(): Freezable {
         val copy = K2DotNetCompilerArguments()
         copyCommonCompilerArguments(this, copy)
@@ -48,6 +61,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         copy.moduleName = moduleName
         copy.classpath = classpath
         copy.noStdlib = noStdlib
+        copy.dotNetTarget = dotNetTarget
         return copy
     }
 
