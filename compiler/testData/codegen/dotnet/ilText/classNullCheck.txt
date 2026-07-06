@@ -1,0 +1,89 @@
+.assembly extern mscorlib {}
+.assembly 'classNullCheck' {}
+.module 'main-classNullCheck.il'
+
+.class public auto ansi sealed beforefieldinit 'Handle'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'id'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'id') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Handle'::'id'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_id'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Handle'::'id'
+    ret
+  }
+  .property instance int32 'id'()
+  {
+    .get instance int32 'Handle'::'get_id'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'classNullCheckKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'describe'(class 'Handle' 'h') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldnull
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "missing"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldstr "present"
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    .locals init (
+      [0] class 'Handle' 'h'
+    )
+    ldnull
+    call string 'classNullCheckKt'::'describe'(class 'Handle')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newobj instance void 'Handle'::.ctor(int32)
+    call string 'classNullCheckKt'::'describe'(class 'Handle')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 2
+    newobj instance void 'Handle'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldnull
+    ldloc.0
+    ceq
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
