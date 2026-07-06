@@ -12,10 +12,17 @@ import org.jetbrains.kotlin.ir.util.render
  *
  * The body is buffered so that `.maxstack` and the `.locals init` block can be written into the
  * method header only after the whole body has been rendered.
+ *
+ * [firstArgumentIndex] is the CLR argument slot of `parameters[0]`: 0 for static methods and for
+ * instance member methods (whose `parameters[0]` IS the dispatch receiver, landing on the CLR
+ * `this` slot 0 naturally), 1 for constructors, whose parameter list carries no dispatch
+ * receiver — the implicit `this` occupies slot 0 and is registered separately via [registerThis].
  */
 internal class DotNetIlMethodContext(
     parameters: List<IrValueParameter>,
     parameterTypes: List<DotNetIlValueType>,
+    private val typeMapper: DotNetIlTypeMapper,
+    firstArgumentIndex: Int = 0,
 ) {
     private val bodyBuilder = StringBuilder()
     private val slots = hashMapOf<IrValueSymbol, DotNetIlSlot>()
@@ -38,8 +45,19 @@ internal class DotNetIlMethodContext(
 
     init {
         parameters.zip(parameterTypes).forEachIndexed { index, (parameter, type) ->
-            slots[parameter.symbol] = DotNetIlSlot.Parameter(index, type)
+            slots[parameter.symbol] = DotNetIlSlot.Parameter(firstArgumentIndex + index, type)
         }
+    }
+
+    /**
+     * Registers the implicit `this` of a constructor body as argument slot 0, so that every
+     * `IrGetValue` of the class's `thisReceiver` — including references inside initializer code
+     * that [InitializersLowering][org.jetbrains.kotlin.backend.common.lower.InitializersLowering]
+     * copied into the constructor, which `deepCopyWithSymbols` deliberately does not remap —
+     * emits a plain `ldarg.0` through the existing slot machinery.
+     */
+    fun registerThis(symbol: IrValueSymbol, type: DotNetIlValueType) {
+        slots[symbol] = DotNetIlSlot.Parameter(0, type)
     }
 
     val locals: List<DotNetIlSlot.Local>
@@ -104,7 +122,7 @@ internal class DotNetIlMethodContext(
                 ?: dotNetUnsupported("local '${variable.name.asString()}' shadows a parameter")
         }
 
-        val type = variable.type.toDotNetIlValueType()
+        val type = typeMapper.toDotNetIlValueType(variable.type)
             ?: dotNetUnsupported("local '${variable.name.asString()}' has unsupported type ${variable.type.render()}")
         val slot = DotNetIlSlot.Local(
             index = localSlots.size,

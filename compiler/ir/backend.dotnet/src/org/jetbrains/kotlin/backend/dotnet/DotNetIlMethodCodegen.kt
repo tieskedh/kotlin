@@ -1,25 +1,35 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.IrStatement
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrBreak
 import org.jetbrains.kotlin.ir.expressions.IrBreakContinue
 import org.jetbrains.kotlin.ir.expressions.IrCall
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
+import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrDoWhileLoop
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
 import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
+import org.jetbrains.kotlin.ir.expressions.IrInstanceInitializerCall
 import org.jetbrains.kotlin.ir.expressions.IrReturn
+import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
+import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isUnit
+import org.jetbrains.kotlin.ir.util.constructedClass
+import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.isAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
 
@@ -34,31 +44,68 @@ internal class DotNetIlRenderedMethod(
 )
 
 /**
- * Renders a single top-level function into IL text. The body is rendered into its own fresh
- * buffer first, so `.maxstack` and the `.locals init` block are computed from what was actually
- * emitted; any unsupported construct aborts the render with [DotNetIlUnsupportedException].
+ * Renders a single function — a top-level `static` one, a user-class constructor, or an instance
+ * member method/accessor — into IL text. The body is rendered into its own fresh buffer first, so
+ * `.maxstack` and the `.locals init` block are computed from what was actually emitted; any
+ * unsupported construct aborts the render with [DotNetIlUnsupportedException].
+ *
+ * For an [IrConstructor] the implicit `this` is CLR argument slot 0 and the declared parameters
+ * shift up by one ([DotNetIlMethodContext]'s `firstArgumentIndex`); the constructor's
+ * [functionInfo] carries the owning class's IL name as its class name and a `void` signature.
+ * An instance member method needs no offset at all: its dispatch receiver IS `parameters[0]`, so
+ * the plain zip already assigns it slot 0 (probe-confirmed CLR argument numbering).
  */
 internal class DotNetIlMethodCodegen(
-    private val function: IrSimpleFunction,
+    private val function: IrFunction,
     functionInfo: DotNetIlFunctionInfo,
     private val isEntryPoint: Boolean,
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
+    private val typeMapper: DotNetIlTypeMapper,
 ) {
     private val signature = functionInfo.signature
-    private val methodContext = DotNetIlMethodContext(function.parameters, signature.parameterTypes)
-    private val expressionCodegen = DotNetIlExpressionCodegen(methodContext, availableFunctions, intrinsicMethods)
+    private val methodContext = DotNetIlMethodContext(
+        function.parameters,
+        signature.parameterTypes,
+        typeMapper,
+        firstArgumentIndex = if (function is IrConstructor) 1 else 0,
+    ).apply {
+        if (function is IrConstructor) {
+            registerThis(
+                function.constructedClass.thisReceiver!!.symbol,
+                DotNetIlValueType.UserClass(functionInfo.className),
+            )
+        }
+    }
+    private val expressionCodegen = DotNetIlExpressionCodegen(methodContext, availableFunctions, intrinsicMethods, typeMapper)
 
     fun render(): DotNetIlRenderedMethod {
         emitBody()
         val ilText = buildString {
-            val parameters = function.parameters.zip(signature.parameterTypes).joinToString(", ") { (parameter, type) ->
-                "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
+            // The printed parameter list never contains the implicit `this` of an instance
+            // method: the dispatch-receiver pair of the zip is dropped (an IrConstructor's
+            // parameter list carries no dispatch receiver to begin with).
+            val parameters = function.parameters.zip(signature.parameterTypes)
+                .drop(if (signature.hasThis) 1 else 0)
+                .joinToString(", ") { (parameter, type) ->
+                    "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
+                }
+            if (function is IrConstructor) {
+                // `.ctor` is a bare keyword, not a quoted identifier; the spelling including the
+                // specialname/rtspecialname flags is ilasm-probe-verified.
+                appendLine("  .method public hidebysig specialname rtspecialname instance void .ctor($parameters) cil managed")
+            } else {
+                // Instance member methods differ from static ones only in the `instance` flag;
+                // property accessors additionally carry `specialname`, binding them to the
+                // `.property` metadata (both spellings are ilasm-probe-verified).
+                val specialname = if (function.isAccessor) "specialname " else ""
+                val dispatch = if (signature.hasThis) "instance" else "static"
+                val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
+                appendLine(
+                    "  .method public hidebysig $specialname$dispatch ${signature.returnType.nameInSignature} " +
+                            "${methodName.toIlIdentifier()}($parameters) cil managed"
+                )
             }
-            appendLine(
-                "  .method public hidebysig static ${signature.returnType.nameInSignature} " +
-                        "${function.name.asString().toIlIdentifier()}($parameters) cil managed"
-            )
             appendLine("  {")
             if (isEntryPoint) {
                 appendLine("    .entrypoint")
@@ -129,6 +176,12 @@ internal class DotNetIlMethodCodegen(
             // so intrinsic-only callees work identically in both shapes.
             expression is IrCall -> emitDiscardableExpression(expression)
             expression is IrSetValue -> emitSetValue(expression)
+            expression is IrSetField -> expressionCodegen.emitSetField(expression)
+            // An instantiation in statement position (`Point(5)`) is created and discarded.
+            expression is IrConstructorCall -> emitDiscardableExpression(expression)
+            expression is IrDelegatingConstructorCall -> emitDelegatingConstructorCall(expression)
+            expression is IrInstanceInitializerCall ->
+                dotNetUnsupported("internal: IrInstanceInitializerCall survived InitializersLowering")
             expression is IrWhen -> emitWhenStatement(expression)
             expression is IrWhileLoop -> emitWhileLoop(expression)
             expression is IrDoWhileLoop -> emitDoWhileLoop(expression)
@@ -158,6 +211,31 @@ internal class DotNetIlMethodCodegen(
                 methodContext.emitReturn()
             }
         }
+    }
+
+    /**
+     * The delegation statement of a constructor body: `ldarg.0`, the arguments, then a plain
+     * (non-virtual) `call` to either `System.Object::.ctor()` — the `kotlin.Any` supertype
+     * constructor, `kotlin.Any` having no IL class of its own — or the sibling constructor of a
+     * `this(...)` delegation. Both call shapes, including code before and after the delegation,
+     * are ilasm-probe-verified.
+     */
+    private fun emitDelegatingConstructorCall(call: IrDelegatingConstructorCall) {
+        if (function !is IrConstructor) {
+            dotNetUnsupported("delegating constructor call outside a constructor body")
+        }
+        val target = call.symbol.owner
+        val targetClass = target.constructedClass
+        methodContext.emit("ldarg.0", pushes = 1)
+        if (targetClass.defaultType.isAny()) {
+            methodContext.emit("call instance void ${CORE_LIB_REF}System.Object::.ctor()", pops = 1)
+            return
+        }
+        val classInfo = typeMapper.classInfoOrNull(targetClass)
+            ?: dotNetUnsupported("delegating call to a constructor of unsupported class '${targetClass.name.asString()}'")
+        val parameterTypes = target.dotNetSignature(typeMapper).parameterTypes
+        expressionCodegen.emitArguments(call.arguments, parameterTypes, "constructor of '${targetClass.name.asString()}'")
+        methodContext.emit("call ${classInfo.renderConstructorReference(parameterTypes)}", pops = 1 + parameterTypes.size)
     }
 
     private fun emitSetValue(expression: IrSetValue) {
@@ -277,7 +355,7 @@ internal class DotNetIlMethodCodegen(
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic != null) {
                     if (intrinsic.tryEmitAsStatement(expression, expressionCodegen)) return
-                    val valueType = expression.type.toDotNetIlValueType()
+                    val valueType = typeMapper.toDotNetIlValueType(expression.type)
                     if (valueType != null && intrinsic.tryEmitAsExpression(expression, expressionCodegen, valueType)) {
                         methodContext.emit("pop", pops = 1)
                         return
@@ -291,7 +369,7 @@ internal class DotNetIlMethodCodegen(
                 }
             }
             else -> {
-                val valueType = expression.type.toDotNetIlValueType()
+                val valueType = typeMapper.toDotNetIlValueType(expression.type)
                     ?: dotNetUnsupported("cannot discard value of unsupported type ${expression.javaClass.simpleName}")
                 expressionCodegen.emitExpression(expression, valueType)
                 methodContext.emit("pop", pops = 1)
