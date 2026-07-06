@@ -1,0 +1,2 @@
+error: unknown value 'nope' for -Xdotnet-target. Supported values: netframework, net
+COMPILATION_ERROR

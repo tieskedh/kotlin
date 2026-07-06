@@ -1,0 +1,2 @@
+// EXISTS: hello.il
+// CONTAINS: hello.il, ldstr "Hello!"
