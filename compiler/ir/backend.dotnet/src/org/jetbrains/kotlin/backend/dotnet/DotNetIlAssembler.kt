@@ -134,8 +134,11 @@ object DotNetIlAssembler {
      * per-user toolchain provisioned by [PROVISION_SCRIPT]. A system-wide .NET SDK/runtime install
      * is intentionally not probed here: it ships no ilasm (ilasm only comes from the NuGet package
      * the provision script downloads).
+     *
+     * Public because the box-test runner reuses this discovery contract to decide whether the
+     * modern toolchain is available (skipping the tests when it is not).
      */
-    private fun findModernIlasm(): File? {
+    fun findModernIlasm(): File? {
         System.getenv("KOTLIN_DOTNET_ILASM")?.let { path ->
             File(path).takeIf(File::isFile)?.let { return it }
         }
@@ -147,8 +150,11 @@ object DotNetIlAssembler {
     /**
      * The `dotnet` host used to derive the runtimeconfig framework version: toolchain roots first,
      * then a system-wide installation (PATH, then the default `C:/Program Files/dotnet`).
+     *
+     * Public because the box-test runner reuses this discovery contract to launch assembled dlls
+     * via `dotnet exec` (and to skip the tests when no host is available).
      */
-    private fun findModernDotNetHost(): File? {
+    fun findModernDotNetHost(): File? {
         modernToolchainRoots().firstNotNullOfOrNull { root ->
             listOf("dotnet/dotnet.exe", "dotnet/dotnet").map(root::resolve).firstOrNull(File::isFile)
         }?.let { return it }
