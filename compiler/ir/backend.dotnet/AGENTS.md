@@ -4,8 +4,8 @@ Prototype Kotlin → .NET CIL target. Code lives in `compiler/ir/backend.dotnet/
 `compiler/cli/cli-dotnet/` (CLI, K2 phased pipeline only). IL-text golden tests are the primary
 validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners generated from
 `compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt` (`./gradlew generateTests`).
-CLI tests in `compiler/testData/cli/dotnet/`. Box tests exist but executing generated unsigned
-`.exe` files may be blocked by local OS policy; "ilasm assembles cleanly" is the executable bar.
+CLI tests in `compiler/testData/cli/dotnet/`. Box tests compile with target `net` to a dll and
+execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below).
 
 ## Design rules
 
@@ -60,6 +60,51 @@ CLI tests in `compiler/testData/cli/dotnet/`. Box tests exist but executing gene
   is emitted at most once per module and only when a rendered method required one of its helpers.
   Every mscorlib member signature used in helper IL must be verified by assembling and running an
   ilasm probe before it lands in codegen.
+
+## Box tests
+
+- Like every mature target, box tests execute on the real runtime (JVM in-process, JS under Node,
+  Native via its runner): the box suite (`AbstractDotNetBoxTestBase` in `AbstractDotNetIlTextTest.kt`)
+  compiles with target `net` to `foo.dll` + `foo.runtimeconfig.json` and runs it via
+  `<dotnet> exec foo.dll`. The signed `dotnet` host sidesteps Smart App Control blocking of freshly
+  assembled unsigned exes; box never launches an `.exe` directly.
+- The signed `dotnet` host only avoids SAC for direct `.exe` *execution*; it does NOT stop SAC from
+  blocking the CLR from *loading* the freshly assembled unsigned dll. On a machine with Smart App
+  Control ON, SAC makes a per-file cloud-reputation call the first time each unsigned dll is loaded
+  and fails-closed on a negative verdict (`FileLoadException`, HRESULT `0x800711C7`, Code Integrity
+  policy `VerifiedAndReputableDesktop`). Measured behavior (2026-07, SAC-enforced Win 11 host): the
+  SmartScreen verdict is derived from the assembly CONTENT, not just its hash. The modern ilasm's
+  output is non-deterministic (same `.il` assembles to a different hash every time), yet the exact
+  IL of an affected test program reassembled under a fresh hash is blocked again, every time — the
+  block is deterministic and effectively permanent per affected program on that machine, and
+  re-running the suite does NOT clear it (an earlier "transient burst" theory is disproved).
+  Concretely, 2 of the 11 dotnet box programs (`booleanShortCircuit`, `forLoopEdges`) are always
+  blocked; the other 9 usually load but are occasionally blocked transiently too when a whole-suite
+  run loads many fresh dlls in a burst (e.g. `charOperations` blocked in one parser variant and
+  loaded in the other within the same run). The trigger is an opaque whole-file ML threshold, not a
+  specific instruction pattern: each half of the flagged `booleanShortCircuit` assembly (helpers
+  with the Int.MIN_VALUE-guarded `div` pattern alone, or the string-comparison half alone) passes
+  when assembled separately; only the complete program is flagged, and the equally div-guard-heavy
+  `intMinValueDivision` program passes.
+- `DotNetBoxRunner` retries a blocked load a few times with a short delay to absorb a genuinely
+  in-flight verdict, then aborts the test as SKIPPED (JUnit `TestAbortedException`) with a
+  diagnostic that names SAC (any other non-zero exit fails immediately). Rationale (user decision,
+  2026-07): a host whose OS refuses to load the assembly cannot execute the test — the same
+  environmental-inability contract as a missing toolchain — and the test still executes on hosts
+  without SAC. A block is never a silent pass, and never a test failure. Do NOT work around SAC by
+  perturbing the artifact's hash — and do NOT rewrite or restructure a test program's content to
+  dodge the classifier's false positive; both are reputation bypasses and out of bounds. SAC has no
+  per-file or per-directory exclusion mechanism (Defender exclusions do not apply to it) and can
+  only be turned off wholesale by the user, irreversibly. To execute the affected tests, the
+  legitimate options are: run the gate on a host without Smart App Control, sign the test
+  assemblies with a certificate SAC trusts, or have the user turn SAC off.
+- When the modern toolchain (ilasm + dotnet host, discovered per the contract below) is missing,
+  box tests SKIP via a JUnit 5 assumption before compiling; provision the toolchain with
+  `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1`. The ilText suite never skips
+  (it needs no toolchain) and stays on the NET_FRAMEWORK default so its goldens' `.module`
+  directives are unchanged.
+- The dotnet-owned box corpus lives in `compiler/testData/codegen/dotnet/box/`; a few borrowed JVM
+  box files are additionally registered by pattern in `TestGeneratorForFir2IrTests.kt`.
 
 ## Target selection (`-Xdotnet-target`)
 
