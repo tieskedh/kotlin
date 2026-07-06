@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.ir.expressions.IrInstanceInitializerCall
 import org.jetbrains.kotlin.ir.expressions.IrReturn
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrSetValue
+import org.jetbrains.kotlin.ir.expressions.IrThrow
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
@@ -182,6 +183,7 @@ internal class DotNetIlMethodCodegen(
             expression is IrDelegatingConstructorCall -> emitDelegatingConstructorCall(expression)
             expression is IrInstanceInitializerCall ->
                 dotNetUnsupported("internal: IrInstanceInitializerCall survived InitializersLowering")
+            expression is IrThrow -> expressionCodegen.emitThrow(expression)
             expression is IrWhen -> emitWhenStatement(expression)
             expression is IrWhileLoop -> emitWhileLoop(expression)
             expression is IrDoWhileLoop -> emitDoWhileLoop(expression)
@@ -351,6 +353,8 @@ internal class DotNetIlMethodCodegen(
             is IrContainerExpression -> emitBlockStatement(expression)
             is IrGetValue -> Unit
             is IrBreakContinue -> emitBreakContinue(expression)
+            // A discarded throw produces no value to pop: `throw` terminates the emission point.
+            is IrThrow -> expressionCodegen.emitThrow(expression)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic != null) {

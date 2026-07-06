@@ -10,9 +10,11 @@ import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
+import org.jetbrains.kotlin.ir.expressions.IrThrow
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.constructedClass
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
@@ -59,6 +61,13 @@ internal class DotNetIlExpressionCodegen(
             is IrGetField -> emitGetField(expression, expectedType)
             is IrConstructorCall -> emitConstructorCall(expression, expectedType)
             is IrWhen -> emitWhenExpression(expression, expectedType)
+            // `IrThrow` has type `kotlin.Nothing` and satisfies any expected type vacuously: the
+            // value never materializes. The phantom stack value keeps the tracker balanced for
+            // the dead instructions the caller emits after the throw (probe-verified legal).
+            is IrThrow -> {
+                emitThrow(expression)
+                methodContext.notePhantomValueAfterThrow()
+            }
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic == null || !intrinsic.tryEmitAsExpression(expression, this, expectedType)) {
@@ -121,6 +130,8 @@ internal class DotNetIlExpressionCodegen(
                 }
                 is DotNetIlValueType.UserClass ->
                     dotNetUnsupported("string conversion of class instances is not supported yet (no Any.toString model)")
+                is DotNetIlValueType.MappedClass ->
+                    dotNetUnsupported("string conversion of an exception type is not supported yet (no Any.toString model)")
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
                 DotNetIlValueType.String, null -> {
@@ -235,12 +246,40 @@ internal class DotNetIlExpressionCodegen(
      * constructor with the freshly allocated `this` as argument 0). Generic instantiations are
      * rejected loudly, never erased.
      */
+    /**
+     * `throw e` -> the exception reference, then IL `throw` (JVM precedent: `IrThrow` maps 1:1
+     * onto the platform throw instruction, no lowering). Only values of a
+     * [mapped exception type][DotNetIlValueType.MappedClass] can be thrown. A rethrow (`throw e`
+     * inside a catch handler) is the same shape — a load of the bound local followed by `throw`,
+     * which preserves object identity; the IL `rethrow` instruction is never emitted (Kotlin has
+     * no bare rethrow statement; the stack-trace-restart delta is irrelevant until stack traces
+     * are surfaced).
+     */
+    fun emitThrow(expression: IrThrow) {
+        val thrownType = typeMapper.toDotNetIlValueType(expression.value.type)
+        if (thrownType !is DotNetIlValueType.MappedClass) {
+            dotNetUnsupported(
+                "throw of a non-exception-mapped type ${expression.value.type.render()} is not supported"
+            )
+        }
+        emitExpression(expression.value, thrownType)
+        methodContext.emitThrow()
+    }
+
     private fun emitConstructorCall(call: IrConstructorCall, expectedType: DotNetIlValueType) {
         if (call.typeArguments.isNotEmpty()) {
             dotNetUnsupported("generic class types are not supported yet")
         }
         val constructor = call.symbol.owner
         val irClass = constructor.constructedClass
+        when (val entry = irClass.fqNameWhenAvailable?.let(DotNetMappedExceptions.entries::get)) {
+            is DotNetMappedExceptions.Entry.Mapped -> {
+                emitMappedExceptionConstructorCall(call, entry, expectedType)
+                return
+            }
+            is DotNetMappedExceptions.Entry.Rejected -> dotNetUnsupported(entry.reason)
+            null -> {}
+        }
         val classInfo = typeMapper.classInfoOrNull(irClass)
             ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
         val producedType = DotNetIlValueType.UserClass(classInfo.ilClassName)
@@ -259,11 +298,62 @@ internal class DotNetIlExpressionCodegen(
         )
     }
 
+    /**
+     * A constructor call of a [mapped exception type][DotNetMappedExceptions]:
+     * `IllegalStateException(msg)` -> arguments, then a `newobj` of the corelib
+     * `System.InvalidOperationException::.ctor(string)` — every emitted `.ctor` overload
+     * is ilasm-probe-verified (assembled and executed). The overload is
+     * checked against the registry's whitelist: `()` and `(String?)` exist on every mapped CLR
+     * type, `(String?, Throwable?)` only where
+     * [hasMessageCauseCtor][DotNetMappedExceptions.Entry.Mapped.hasMessageCauseCtor] records the
+     * CLR `(string, Exception)` overload, and the cause-only `(Throwable?)` constructor has no
+     * CLR overload on any target.
+     */
+    private fun emitMappedExceptionConstructorCall(
+        call: IrConstructorCall,
+        entry: DotNetMappedExceptions.Entry.Mapped,
+        expectedType: DotNetIlValueType,
+    ) {
+        val constructor = call.symbol.owner
+        val className = constructor.constructedClass.name.asString()
+        val producedType = DotNetIlValueType.MappedClass(entry.clrTypeRef)
+        if (!producedType.isDotNetAssignableTo(expectedType)) {
+            dotNetUnsupported(
+                "constructor call of '$className' produces ${producedType.nameInSignature} " +
+                        "where ${expectedType.nameInSignature} is expected"
+            )
+        }
+        val parameterTypes = constructor.parameters.map { parameter ->
+            typeMapper.toDotNetIlValueType(parameter.type)
+                ?: dotNetUnsupported(
+                    "parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}"
+                )
+        }
+        val causeType: DotNetIlValueType = DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+        when {
+            parameterTypes.isEmpty() -> {}
+            parameterTypes == listOf(DotNetIlValueType.String) -> {}
+            parameterTypes == listOf(DotNetIlValueType.String, causeType) && entry.hasMessageCauseCtor -> {}
+            parameterTypes == listOf(causeType) -> dotNetUnsupported(
+                "constructor '$className(cause)' has no CLR overload; construct with (message) or (message, cause)"
+            )
+            else -> dotNetUnsupported(
+                "constructor of '$className' has no matching overload on the mapped CLR type '${entry.clrTypeRef}'"
+            )
+        }
+        emitArguments(call.arguments, parameterTypes, "constructor of '$className'")
+        methodContext.emit(
+            "newobj instance void ${entry.clrTypeRef}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
+            pops = parameterTypes.size,
+            pushes = 1,
+        )
+    }
+
     /** An instance field read: receiver, then `ldfld <type> 'C'::'name'` (probe-verified). */
     private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
         val field = expression.symbol.owner
         val (classInfo, fieldType) = resolveFieldAccess(field)
-        if (fieldType != expectedType) {
+        if (!fieldType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
@@ -315,7 +405,7 @@ internal class DotNetIlExpressionCodegen(
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
         val returnType = emitCall(call)
-        if ((returnType as? DotNetIlReturnType.Value)?.type != expectedType) {
+        if ((returnType as? DotNetIlReturnType.Value)?.type?.isDotNetAssignableTo(expectedType) != true) {
             dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
@@ -362,12 +452,16 @@ internal class DotNetIlExpressionCodegen(
                 null -> methodContext.emit("ldnull", pushes = 1)
                 else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
             }
+            is DotNetIlValueType.MappedClass -> when (expression.value) {
+                null -> methodContext.emit("ldnull", pushes = 1)
+                else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
+            }
         }
     }
 
     private fun emitGetValue(expression: IrGetValue, expectedType: DotNetIlValueType) {
         val slot = methodContext.reference(expression.symbol)
-        if (slot.type != expectedType) {
+        if (!slot.type.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "value '${expression.symbol.owner.name.asString()}' has type ${slot.type.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"

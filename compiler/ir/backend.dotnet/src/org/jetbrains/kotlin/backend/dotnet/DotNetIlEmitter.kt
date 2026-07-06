@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.render
@@ -67,10 +68,14 @@ class DotNetIlEmitter(
         }
 
         // Class pre-pass: the shape gate. Everything outside the final-class model is rejected
-        // whole-class here, so the type mapper only ever sees supported classes.
+        // whole-class here, so the type mapper only ever sees supported classes. The injected
+        // exception declarations (see DotNetMappedExceptions) are excluded up front — the
+        // class-level parallel of an intrinsic's excludesDeclarationFromCodegen: they exist for
+        // frontend resolution only and must be neither emitted nor skip-warned.
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
         val classSkipReasons = LinkedHashMap<IrClass, String>()
         for (irClass in topLevelClassesByFile.values.flatten()) {
+            if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             try {
                 checkClassShapeSupported(irClass)
                 availableClasses[irClass] = DotNetIlClassInfo(irClass.fqNameWhenAvailable!!.asString())
@@ -262,6 +267,14 @@ class DotNetIlEmitter(
             dotNetUnsupported("generic class '$name' is not supported yet")
         }
         if (irClass.superTypes.any { !it.isAny() }) {
+            // Exception supertypes get a message naming the real gap: the supertype itself is
+            // supported (type-mapped, see DotNetMappedExceptions), subclassing it is not.
+            if (irClass.superTypes.any { it.classFqName in DotNetMappedExceptions.entries }) {
+                dotNetUnsupported(
+                    "class '$name' extends an exception class; " +
+                            "user-defined exception classes are not supported until the inheritance model exists"
+                )
+            }
             dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
         }
         for (declaration in irClass.declarations) {
@@ -450,7 +463,11 @@ class DotNetIlEmitter(
         topLevelClassesByFile: Map<IrFile, List<IrClass>>,
     ): Map<IrFile, String> {
         val usedNames = hashSetOf<String>()
-        topLevelClassesByFile.values.flatten().mapTo(usedNames) { it.fqNameWhenAvailable!!.asString() }
+        topLevelClassesByFile.values.flatten()
+            // The injected exception declarations never become IL classes (they are type-mapped
+            // to CLR types, see DotNetMappedExceptions), so they reserve no facade name either.
+            .filterNot(DotNetMappedExceptions::isExceptionStdlibDeclaration)
+            .mapTo(usedNames) { it.fqNameWhenAvailable!!.asString() }
         return files.associateWith { file ->
             val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
             val packageFqName = file.packageFqName
