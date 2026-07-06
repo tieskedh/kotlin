@@ -108,6 +108,7 @@ fun copyCommonCompilerArguments(from: CommonCompilerArguments, to: CommonCompile
     to.stdlibCompilation = from.stdlibCompilation
     to.suppressApiVersionGreaterThanLanguageVersionError = from.suppressApiVersionGreaterThanLanguageVersionError
     to.suppressVersionWarnings = from.suppressVersionWarnings
+    @Suppress("DEPRECATION")
     to.suppressedDiagnostics = from.suppressedDiagnostics.copyOf()
     to.unrestrictedBuilderInference = from.unrestrictedBuilderInference
     @Suppress("DEPRECATION")
