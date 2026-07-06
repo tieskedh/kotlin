@@ -1,8 +1,10 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
+import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
@@ -53,6 +55,20 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         // TODO: this is loose — it also allows *user* code to declare packages in `kotlin.*`.
         configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, arguments.allowKotlinPackage || !arguments.noStdlib)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
+
+        val requestedTarget = arguments.dotNetTarget
+        if (requestedTarget != null) {
+            val target = DotNetTarget.fromFlagValue(requestedTarget)
+            if (target == null) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Unknown value '$requestedTarget' for -Xdotnet-target. " +
+                            "Supported values: ${DotNetTarget.entries.joinToString(", ") { it.flagValue }}"
+                )
+            } else {
+                configuration.dotNetTarget = target
+            }
+        }
 
         val destination = arguments.destination
         if (destination == null) {

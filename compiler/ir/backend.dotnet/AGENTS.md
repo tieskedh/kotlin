@@ -61,6 +61,30 @@ CLI tests in `compiler/testData/cli/dotnet/`. Box tests exist but executing gene
   Every mscorlib member signature used in helper IL must be verified by assembling and running an
   ilasm probe before it lands in codegen.
 
+## Target selection (`-Xdotnet-target`)
+
+- `-Xdotnet-target={netframework|net}` (default `netframework`) selects the runtime flavor of the
+  produced executable, carried as the `DotNetTarget` enum in `DotNetConfigurationKeys.TARGET`.
+  Invalid values are a `COMPILER_ARGUMENTS_ERROR` from `DotNetConfigurationUpdater`.
+- The target changes ONLY output packaging and assembler discovery, never the IL text: the emitted
+  `.assembly extern mscorlib` is valid on both runtimes (verified), so ilText goldens are
+  target-independent (apart from the `.module` directive naming the actual artifact file).
+- `netframework`: `-d foo.exe` → Framework ilasm (`ILASM` env, PATH, then
+  `C:\Windows\Microsoft.NET\Framework*\v4.0.30319\ilasm.exe`) assembles a directly runnable `.exe`.
+- `net`: both `-d foo.exe` and `-d foo.dll` are executable requests; the artifact is always
+  `foo.dll` plus `foo.runtimeconfig.json` (an `.exe` request is remapped to `.dll` with an INFO
+  diagnostic naming the actual artifact — modern ilasm-produced exes have no self-hosting story,
+  the runnable form is `dotnet exec foo.dll`). The modern ilasm is discovered per the contract
+  below; when it is missing, a single ERROR names the provisioning script. The runtimeconfig
+  framework version is the `<major>.<minor>.0` family of the newest runtime under the discovered
+  dotnet root's `shared/Microsoft.NETCore.App` with `rollForward: LatestMinor` (fallback
+  `net10.0`/`10.0.0` when no host is found — the dll may be run on another machine).
+- Both ilasm flavors are invoked with the same legacy flag spelling
+  (`/nologo /quiet /exe|/dll /output:...`); the modern ilasm accepts it (probed on 10.0.9).
+- CLI tests for the flag only cover toolchain-independent behavior (invalid value error, `.il`
+  output with `target=net`); an assembled-artifact CLI golden would fail on machines without the
+  provisioned toolchain.
+
 ## Modern .NET toolchain
 
 - A durable, per-user (no admin) modern toolchain lives at `%LOCALAPPDATA%\kotlinc-dotnet\toolchain\`:
