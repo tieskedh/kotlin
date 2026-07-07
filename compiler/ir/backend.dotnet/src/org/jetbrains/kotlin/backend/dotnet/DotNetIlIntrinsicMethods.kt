@@ -250,8 +250,15 @@ internal class DotNetIlIntrinsicMethods(
                     to DotNetIlUnsupportedIntrinsic("'Double.toChar()' is deprecated in Kotlin; use 'toInt().toChar()'")
         )
         add(
+            // The injected `val Char.code` declaration (see DotNetStdlibSource) must not be
+            // emitted as a top-level property of a `kotlin.DotNetStdlibKotlinKt` facade: like
+            // `println`, the declaration exists for frontend resolution only, so its getter
+            // excludes the property from codegen and every call site is intercepted here.
             Key(kotlinFqn, charFqn, "<get-code>", emptyList())
-                    to DotNetIlNumberConversionIntrinsic(DotNetIlValueType.Char, DotNetIlValueType.Int32, emptyList())
+                    to DotNetIlNumberConversionIntrinsic(
+                DotNetIlValueType.Char, DotNetIlValueType.Int32, emptyList(),
+                excludesDeclarationFromCodegen = true,
+            )
         )
     }
 
@@ -722,6 +729,7 @@ private class DotNetIlNumberConversionIntrinsic(
     private val fromType: DotNetIlValueType,
     private val toType: DotNetIlValueType,
     private val instructions: List<String>,
+    override val excludesDeclarationFromCodegen: Boolean = false,
 ) : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
         call: IrCall,

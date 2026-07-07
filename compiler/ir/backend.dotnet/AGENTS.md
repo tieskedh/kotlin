@@ -65,6 +65,50 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Instance members of the final-class model are invoked with plain non-virtual `call`
   (probe-verified) — a stated deviation from Roslyn, which emits `callvirt` purely for its
   implicit null check.
+- Top-level properties follow the JVM facade-statics shape (`StaticInitializersLowering`'s
+  `<clinit>`): `DotNetStaticInitializersLowering` moves the backing-field initializers of each
+  file into one synthetic file-parented `<clinit>` function, in declaration order, which the
+  emitter renders as the facade's `.cctor`; the fields become `private static` facade fields
+  (accessed with `ldsfld`/`stsfld`) with static `get_x`/`set_x` accessors and static `.property`
+  blocks — all spellings probe-verified (`statprobe_s1`/`_s2`, including a user-class-typed
+  static field). Stated deviation from the JVM lowering: it is a `ClassLoweringPass` over the
+  facade class `FileClassLowering` created earlier, while this backend builds facades at
+  emission time, so the pass is per-`IrFile` and the `<clinit>` is file-parented. The `.cctor`
+  is lowered IR (not emission-time text) so initializer bodies pass through the later
+  `for`-loop/string-concat phases like any other body.
+- `beforefieldinit` is omitted exactly on classes that receive a `.cctor` and kept everywhere
+  else. Decider (probe): with the flag the CLR defers the `.cctor` past static method calls, so
+  calling only a top-level *function* of a facade would silently skip the file's
+  property-initializer side effects; without it the `.cctor` runs before the first active use
+  (`statprobe_s1`: `cctor-start` prints before `main-start`) = Kotlin/JVM first-active-use
+  class-initialization parity, pinned end-to-end by `box/topLevelPropertyInitOrder.kt`.
+  Accepted JVM-shared delta: a re-entrant initialization cycle observes default field values
+  (CLR `.cctor` re-entrancy = JVM `<clinit>` behavior) — documented, not enforced.
+- `const val` is a CLR `literal` field (`.field public static literal <t> 'C' = <literal>`) —
+  the ConstantValue-attribute analogue of the JVM's `constantValue()` exclusion from `<clinit>`
+  and `JvmPropertiesLowering`'s `!isConst` accessor suppression: no accessors, no `.property`
+  block, no `.cctor` entry; every read is inlined by the frontend (golden-verified), and an
+  exotic surviving accessor call fails loudly via the `availableFunctions` miss. All literal
+  spellings probe-verified (`statprobe_s1`/`_s3`: int32, string incl. the `bytearray` fallback,
+  bool, char, int64 incl. MIN_VALUE, float64 decimal and raw-bit forms). A `literal` field has
+  no storage, so codegen rejects any direct backing-field access.
+- Failing-initializer granularity is the whole per-file property group: declaration-order init
+  interleaving cannot be partially preserved, so a failure anywhere in a file's `<clinit>` (or
+  in any backing-field-bearing property) removes ALL backing-field-bearing top-level properties
+  of that file together — fields, accessors, `.property` blocks and the `.cctor` — each warned
+  with a shared reason carrying the original one. This is the facade-stateful analogue of the
+  whole-class rejection granularity. Accessor-only (custom-getter) properties fail per-function;
+  const `literal` fields are independent of the group.
+- Top-level extension properties emit their accessors as plain static methods with the receiver
+  as a regular parameter but NO `.property` block: a CLR property with parameters is an indexer,
+  which is out of scope.
+- No top-level declaration is dropped silently: after gathering (classes, functions, properties
+  — delegated and lateinit properties are rejected with specific messages), a closing sweep
+  warns about any remaining top-level declaration kind. Typealiases are deliberately ignored
+  WITHOUT a warning (the JVM backend emits no bytecode for typealiases either). The injected
+  stdlib declarations stay exempt: `println`/`val Char.code` are intrinsic-excluded
+  (`excludesDeclarationFromCodegen`, now also honored for property accessors) and the exception
+  classes are registry-excluded.
 - Initializer merging is `DotNetInitializersLowering`/`DotNetInitializersCleanupLowering`, the
   same one-line subclasses of the shared backend.common lowerings the JVM uses, plus a
   .NET-specific guard that turns the shared lowering's local-class `AssertionError` into the

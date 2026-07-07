@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenatio
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
 import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
@@ -20,6 +21,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // block must already have been inlined into a constructor before the loop rewrite runs.
     ::DotNetInitializersLowering,
     ::DotNetInitializersCleanupLowering,
+    // Top-level property initializers move into the synthetic per-file `<clinit>` before the
+    // loop/concat rewrites for the same reason the instance pair runs first: a `for` or a string
+    // concatenation inside a top-level initializer must sit inside a real function body before
+    // those function-scoped rewrites run.
+    ::DotNetStaticInitializersLowering,
     // For-loops next: the rewrite produces plain calls/whens the later phases treat like any
     // other code (string concatenations inside loop bodies are still ahead of their lowerings).
     ::DotNetForLoopLowering,

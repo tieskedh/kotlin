@@ -1,0 +1,116 @@
+.assembly extern mscorlib {}
+.assembly 'topLevelProperties' {}
+.module 'main-topLevelProperties.il'
+
+.class public abstract sealed auto ansi 'topLevelPropertiesKt'
+       extends [mscorlib]System.Object
+{
+  .field private static int32 'counter'
+  .field private static string 'name'
+  .field private static int32 'observed'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    ldc.i4 10
+    stsfld int32 'topLevelPropertiesKt'::'counter'
+    ldstr "kotlin"
+    stsfld string 'topLevelPropertiesKt'::'name'
+    ldc.i4 0
+    stsfld int32 'topLevelPropertiesKt'::'observed'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_counter'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32 'topLevelPropertiesKt'::'counter'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_counter'(int32 '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld int32 'topLevelPropertiesKt'::'counter'
+    ret
+  }
+  .method public hidebysig specialname static string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldsfld string 'topLevelPropertiesKt'::'name'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_custom'() cil managed
+  {
+    .maxstack 2
+    call int32 'topLevelPropertiesKt'::'get_counter'()
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_observed'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32 'topLevelPropertiesKt'::'observed'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_observed'(int32 'value') cil managed
+  {
+    .maxstack 2
+    call int32 'topLevelPropertiesKt'::'get_counter'()
+    ldc.i4 1
+    add
+    call void 'topLevelPropertiesKt'::'set_counter'(int32)
+    ldarg.0
+    stsfld int32 'topLevelPropertiesKt'::'observed'
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    call int32 'topLevelPropertiesKt'::'get_counter'()
+    ldc.i4 5
+    add
+    call void 'topLevelPropertiesKt'::'set_counter'(int32)
+    call int32 'topLevelPropertiesKt'::'get_counter'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call string 'topLevelPropertiesKt'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'topLevelPropertiesKt'::'get_custom'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    call void 'topLevelPropertiesKt'::'set_observed'(int32)
+    call int32 'topLevelPropertiesKt'::'get_observed'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .property int32 'counter'()
+  {
+    .get int32 'topLevelPropertiesKt'::'get_counter'()
+    .set void 'topLevelPropertiesKt'::'set_counter'(int32)
+  }
+  .property string 'name'()
+  {
+    .get string 'topLevelPropertiesKt'::'get_name'()
+  }
+  .property int32 'custom'()
+  {
+    .get int32 'topLevelPropertiesKt'::'get_custom'()
+  }
+  .property int32 'observed'()
+  {
+    .get int32 'topLevelPropertiesKt'::'get_observed'()
+    .set void 'topLevelPropertiesKt'::'set_observed'(int32)
+  }
+}
