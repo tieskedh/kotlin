@@ -1,7 +1,9 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrVariable
@@ -48,8 +50,9 @@ internal class DotNetIlRenderedMethod(
 )
 
 /**
- * Renders a single function — a top-level `static` one, a user-class constructor, or an instance
- * member method/accessor — into IL text. The body is rendered into its own fresh buffer first, so
+ * Renders a single function — a top-level `static` one, a user-class constructor, an instance
+ * member method/accessor, or a synthetic file `<clinit>` (rendered as the facade's `.cctor`,
+ * see [DOTNET_STATIC_INITIALIZER]) — into IL text. The body is rendered into its own fresh buffer first, so
  * `.maxstack` and the `.locals init` block are computed from what was actually emitted; any
  * unsupported construct aborts the render with [DotNetIlUnsupportedException].
  *
@@ -66,6 +69,7 @@ internal class DotNetIlMethodCodegen(
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
+    facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -82,7 +86,9 @@ internal class DotNetIlMethodCodegen(
         }
     }
     private val expressionCodegen =
-        DotNetIlExpressionCodegen(methodContext, availableFunctions, intrinsicMethods, typeMapper, ::emitTryExpression)
+        DotNetIlExpressionCodegen(
+            methodContext, availableFunctions, intrinsicMethods, typeMapper, facadeClassInfoByFile, ::emitTryExpression,
+        )
 
     /**
      * The join label of returns that crossed protected regions and its synthetic return-value
@@ -106,6 +112,12 @@ internal class DotNetIlMethodCodegen(
                 // `.ctor` is a bare keyword, not a quoted identifier; the spelling including the
                 // specialname/rtspecialname flags is ilasm-probe-verified.
                 appendLine("  .method public hidebysig specialname rtspecialname instance void .ctor($parameters) cil managed")
+            } else if (function.origin == DOTNET_STATIC_INITIALIZER) {
+                // The synthetic per-file `<clinit>` (see DotNetStaticInitializersLowering)
+                // renders as the CLR class initializer; like `.ctor`, `.cctor` is a bare keyword.
+                // The spelling is ilasm-probe-verified (statprobe_s1), including that the CLR
+                // runs it before the first active use of the non-beforefieldinit facade.
+                appendLine("  .method private hidebysig specialname rtspecialname static void .cctor() cil managed")
             } else {
                 // Instance member methods differ from static ones only in the `instance` flag;
                 // property accessors additionally carry `specialname`, binding them to the
