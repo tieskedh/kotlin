@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.gradle.abi.utils.abiValidation
 import org.jetbrains.kotlin.gradle.abi.utils.androidKmpLibraryProject
 import org.jetbrains.kotlin.gradle.abi.utils.referenceMixedAndroidDumpFile
 import org.jetbrains.kotlin.gradle.abi.utils.referenceMixedJvmDumpFile
+import org.jetbrains.kotlin.gradle.dsl.abi.BinariesSource
 import org.jetbrains.kotlin.gradle.testbase.AndroidGradlePluginTests
 import org.jetbrains.kotlin.gradle.testbase.AndroidTestVersions
 import org.jetbrains.kotlin.gradle.testbase.GradleAndroidTest
@@ -18,7 +19,10 @@ import org.jetbrains.kotlin.gradle.testbase.JdkVersions
 import org.jetbrains.kotlin.gradle.testbase.KGPBaseTest
 import org.jetbrains.kotlin.gradle.testbase.TestVersions
 import org.jetbrains.kotlin.gradle.testbase.assertFileExists
+import org.jetbrains.kotlin.gradle.testbase.assertOutputContains
+import org.jetbrains.kotlin.gradle.testbase.assertTasksFailed
 import org.jetbrains.kotlin.gradle.testbase.build
+import org.jetbrains.kotlin.gradle.testbase.buildAndFail
 import org.jetbrains.kotlin.gradle.testbase.buildScriptInjection
 import org.jetbrains.kotlin.gradle.testbase.source
 
@@ -111,6 +115,57 @@ class AbiValidationAndroidKmpIT : KGPBaseTest() {
 
             """.trimIndent()
             assertDumpsEqual(expectedJvmDump, jvmDumpFile)
+        }
+    }
+
+    @AndroidTestVersions(minVersion = TestVersions.AGP.AGP_88, additionalVersions = [TestVersions.AGP.AGP_811])
+    @GradleAndroidTest
+    fun testCheckFailsOnAndroidAbiChange(
+        gradleVersion: GradleVersion,
+        agpVersion: String,
+        jdkVersion: JdkVersions.ProvidedJdk,
+    ) {
+        androidKmpLibraryProject(gradleVersion, agpVersion, jdkVersion) {
+            abiValidation()
+
+            kotlinSourcesDir("commonMain").source("CommonClass.kt") { "class CommonClass" }
+            kotlinSourcesDir("androidMain").source("AndroidClass.kt") { "class AndroidClass" }
+
+            build("updateKotlinAbi")
+            assertFileExists(referenceMixedAndroidDumpFile())
+            build("checkKotlinAbi")
+
+            kotlinSourcesDir("androidMain").source("AndroidClass.kt") {
+                "class AndroidClass {\n    fun newApi(): Int = 42\n}"
+            }
+            buildAndFail("checkKotlinAbi") {
+                assertTasksFailed(":checkKotlinAbi")
+                assertOutputContains("public final fun newApi ()I")
+            }
+        }
+    }
+
+    @AndroidTestVersions(minVersion = TestVersions.AGP.AGP_88, additionalVersions = [TestVersions.AGP.AGP_811])
+    @GradleAndroidTest
+    fun testMavenPublicationsRejectedForAndroidTarget(
+        gradleVersion: GradleVersion,
+        agpVersion: String,
+        jdkVersion: JdkVersions.ProvidedJdk,
+    ) {
+        androidKmpLibraryProject(gradleVersion, agpVersion, jdkVersion) {
+            buildScriptInjection {
+                project.plugins.apply("maven-publish")
+            }
+            abiValidation {
+                binariesSource.set(BinariesSource.MAVEN_PUBLICATIONS)
+            }
+
+            kotlinSourcesDir("commonMain").source("CommonClass.kt") { "class CommonClass" }
+            kotlinSourcesDir("androidMain").source("AndroidClass.kt") { "class AndroidClass" }
+
+            buildAndFail("updateKotlinAbi") {
+                assertOutputContains("ABI Validation: Android target unsupported with Maven binary sources mode")
+            }
         }
     }
 
