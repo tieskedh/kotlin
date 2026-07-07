@@ -5,20 +5,20 @@
 
 package org.jetbrains.kotlin.ir.interpreter.proxy.reflection
 
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
-import org.jetbrains.kotlin.descriptors.DescriptorVisibility
+import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.descriptors.Visibility
 import org.jetbrains.kotlin.ir.interpreter.CallInterceptor
 import org.jetbrains.kotlin.ir.interpreter.proxy.Proxy
 import org.jetbrains.kotlin.ir.interpreter.state.reflection.*
 import kotlin.reflect.KVisibility
 
 internal interface ReflectionProxy : Proxy {
-    fun DescriptorVisibility.toKVisibility(): KVisibility? {
+    fun Visibility.toKVisibility(): KVisibility? {
         return when (this) {
-            DescriptorVisibilities.PUBLIC -> KVisibility.PUBLIC
-            DescriptorVisibilities.PROTECTED -> KVisibility.PROTECTED
-            DescriptorVisibilities.INTERNAL -> KVisibility.INTERNAL
-            DescriptorVisibilities.PRIVATE -> KVisibility.PRIVATE
+            Visibilities.Public -> KVisibility.PUBLIC
+            Visibilities.Protected -> KVisibility.PROTECTED
+            Visibilities.Internal -> KVisibility.INTERNAL
+            Visibilities.Private -> KVisibility.PRIVATE
             else -> null
         }
     }

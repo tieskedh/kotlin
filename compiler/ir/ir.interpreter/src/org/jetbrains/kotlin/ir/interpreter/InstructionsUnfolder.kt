@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.ir.interpreter
 
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
@@ -138,7 +138,7 @@ private fun unfoldValueParameters(expression: IrFunctionAccessExpression, enviro
         val actualParameters = MutableList<IrValueDeclaration?>(expression.arguments.size) { null }
         val ownerWithDefaults = expression.getFunctionThatContainsDefaults()
         val visibility = when (expression) {
-            is IrEnumConstructorCall, is IrDelegatingConstructorCall -> DescriptorVisibilities.LOCAL
+            is IrEnumConstructorCall, is IrDelegatingConstructorCall -> Visibilities.Local
             else -> ownerWithDefaults.visibility
         }
 

@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.ir.validation.checkers.context
 
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -39,7 +39,7 @@ class CheckerContext(
 
     fun withTypeParametersInScope(container: IrTypeParametersContainer, block: () -> Unit) {
         typeParameterScopeStack.withNewScope(
-            outerScopesAreInvisible = container is IrClass && !container.isInner && container.visibility != DescriptorVisibilities.LOCAL,
+            outerScopesAreInvisible = container is IrClass && !container.isInner && container.visibility != Visibilities.Local,
             populateScope = { container.typeParameters.forEach { add(it.symbol) } },
             block = block,
         )
@@ -48,7 +48,7 @@ class CheckerContext(
     fun withScopeOwner(owner: IrElement, block: () -> Unit, populateScope: MutableSet<IrValueSymbol>.() -> Unit = {}) {
         valueSymbolScopeStack.withNewScope(
             isGlobalScope = owner is IrScript,
-            outerScopesAreInvisible = owner is IrClass && !owner.isInner && owner.visibility != DescriptorVisibilities.LOCAL,
+            outerScopesAreInvisible = owner is IrClass && !owner.isInner && owner.visibility != Visibilities.Local,
             block = block,
             populateScope = populateScope
         )

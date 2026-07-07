@@ -10,8 +10,8 @@ import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.builtins.UnsignedType
 import org.jetbrains.kotlin.constant.*
 import org.jetbrains.kotlin.descriptors.ClassKind
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
-import org.jetbrains.kotlin.descriptors.DescriptorVisibility
+import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.descriptors.Visibility
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrElement
@@ -70,7 +70,7 @@ internal fun createTempFunction(
     name: Name,
     type: IrType,
     origin: IrDeclarationOrigin = TEMP_FUNCTION_FOR_INTERPRETER,
-    visibility: DescriptorVisibility = DescriptorVisibilities.PUBLIC
+    visibility: Visibility = Visibilities.Public
 ): IrSimpleFunction {
     return IrFactoryImpl.createSimpleFunction(
         startOffset = SYNTHETIC_OFFSET,
@@ -97,7 +97,7 @@ internal fun createTempClass(name: Name, origin: IrDeclarationOrigin = TEMP_CLAS
         endOffset = SYNTHETIC_OFFSET,
         origin = origin,
         name = name,
-        visibility = DescriptorVisibilities.PRIVATE,
+        visibility = Visibilities.Private,
         symbol = IrClassSymbolImpl(),
         kind = ClassKind.CLASS,
         modality = Modality.FINAL,
