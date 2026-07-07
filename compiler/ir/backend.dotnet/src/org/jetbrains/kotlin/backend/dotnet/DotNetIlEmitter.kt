@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -12,8 +13,11 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
+import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
@@ -29,15 +33,22 @@ class DotNetIlEmitter(
     /**
      * Renders the module to IL text.
      *
-     * Every top-level function whose signature maps to IL types and every top-level class that
-     * passes the [shape gate][checkClassShapeSupported] is a candidate; candidates are rendered
-     * to a fixpoint, so a function calling an unsupported function is itself skipped, and
-     * removing a class (any unrenderable member removes the whole class — a class with, say, an
-     * unrenderable constructor must not remain referenceable) cascades through the
-     * [DotNetIlTypeMapper] to every declaration whose types mention it. Skipped declarations are
-     * reported as warnings. Returns null after reporting an error when the module cannot be
-     * emitted at all (unsupported or ambiguous main, or an executable was requested without a
-     * main function).
+     * Every top-level function whose signature maps to IL types, every top-level property (as
+     * static facade fields plus accessors, with the initializers running in the facade's
+     * `.cctor` — see [DotNetStaticInitializersLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering])
+     * and every top-level class that passes the [shape gate][checkClassShapeSupported] is a
+     * candidate; candidates are rendered to a fixpoint, so a function calling an unsupported
+     * function is itself skipped, and removing a class (any unrenderable member removes the
+     * whole class — a class with, say, an unrenderable constructor must not remain
+     * referenceable) cascades through the [DotNetIlTypeMapper] to every declaration whose types
+     * mention it. A failing top-level property evicts the whole property, and a failure
+     * involving any backing-field-bearing property of a file evicts the file's whole property
+     * group (fields, accessors, `.property` blocks and the `.cctor`) — declaration-order
+     * initialization cannot be partially preserved. Skipped declarations are reported as
+     * warnings; remaining unsupported top-level declaration kinds are warned by a closing sweep
+     * (typealiases are deliberately ignored without a warning). Returns null after reporting an
+     * error when the module cannot be emitted at all (unsupported or ambiguous main, or an
+     * executable was requested without a main function).
      */
     fun emit(moduleFragment: IrModuleFragment): String? {
         val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns)
@@ -46,8 +57,19 @@ class DotNetIlEmitter(
             file.declarations.filterIsInstance<IrClass>()
         }
         val fileClassNames = buildFileClassNames(files, topLevelClassesByFile)
-        val topLevelFunctionsByFile = files.associateWith { file ->
+        val topLevelPropertiesByFile = files.associateWith { file ->
+            file.declarations.filterIsInstance<IrProperty>()
+        }
+        // The synthetic per-file `<clinit>` (see DotNetStaticInitializersLowering) is pulled out
+        // of the ordinary function surface: it must never be a call target, a main candidate, or
+        // a named method render — it is rendered separately as the facade's `.cctor`.
+        val staticInitializersByFile = files.mapNotNull { file ->
             file.declarations.filterIsInstance<IrSimpleFunction>()
+                .singleOrNull { it.origin == DOTNET_STATIC_INITIALIZER }
+                ?.let { file to it }
+        }.toMap()
+        val topLevelFunctionsByFile = files.associateWith { file ->
+            file.declarations.filterIsInstance<IrSimpleFunction>().filter { it.origin != DOTNET_STATIC_INITIALIZER }
         }
 
         val mainFunctions = DotNetMainFunctionDetector().getMainFunctions(moduleFragment)
@@ -84,6 +106,10 @@ class DotNetIlEmitter(
             }
         }
         val typeMapper = DotNetIlTypeMapper(availableClasses)
+        // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
+        // fields) resolve their owning IL class through this map, the facade counterpart of
+        // [DotNetIlTypeMapper.classInfoOrNull].
+        val facadeClassInfoByFile = files.associateWith { DotNetIlClassInfo(fileClassNames.getValue(it)) }
 
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
         val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
@@ -98,6 +124,44 @@ class DotNetIlEmitter(
                 }
             }
         }
+        // Top-level property pre-pass. Delegated and lateinit properties are rejected with
+        // specific reasons (out of scope). `const val` renders as a CLR `literal` field — the
+        // ConstantValue-attribute analogue of the JVM backend's `constantValue()` exclusion in
+        // StaticInitializersLowering — with no accessors and no `.cctor` entry; every read is
+        // inlined by the frontend, so an exotic surviving accessor call fails loudly via the
+        // availableFunctions miss. Everything else pre-registers its accessors so call sites
+        // resolve like any other top-level function (`dotNetSignature` already yields the static
+        // shape: a top-level accessor has no dispatch receiver). A property whose accessor has
+        // an intrinsic marked [DotNetIlIntrinsicMethod.excludesDeclarationFromCodegen] (the
+        // injected `val Char.code`) is excluded from codegen entirely, like `println`.
+        val propertySkipReasons = LinkedHashMap<IrProperty, String>()
+        val constFieldLines = LinkedHashMap<IrProperty, String>()
+        for ((file, properties) in topLevelPropertiesByFile) {
+            val className = fileClassNames.getValue(file)
+            for (property in properties) {
+                if (property.isExcludedFromCodegen(intrinsicMethods)) continue
+                val name = property.name.asString()
+                val accessors = listOfNotNull(property.getter, property.setter)
+                when {
+                    property.isDelegated -> propertySkipReasons[property] = "delegated property '$name' is not supported"
+                    property.isLateinit -> propertySkipReasons[property] = "lateinit property '$name' is not supported"
+                    property.isConst -> try {
+                        constFieldLines[property] = renderConstField(property, typeMapper)
+                    } catch (e: DotNetIlUnsupportedException) {
+                        propertySkipReasons[property] = e.reason
+                    }
+                    else -> try {
+                        for (accessor in accessors) {
+                            availableFunctions[accessor] = DotNetIlFunctionInfo(className, accessor.dotNetSignature(typeMapper))
+                        }
+                    } catch (e: DotNetIlUnsupportedException) {
+                        accessors.forEach(availableFunctions::remove)
+                        propertySkipReasons[property] = e.reason
+                    }
+                }
+            }
+        }
+
         // Member pre-pass: the instance methods and property accessors of every available class
         // become call-resolvable before any body is rendered, so that a round-one caller finds a
         // member of a class rendered later in the same round. A member signature failure removes
@@ -134,9 +198,44 @@ class DotNetIlEmitter(
 
         val renderedClasses = LinkedHashMap<IrClass, RenderedClass>()
         val renderedMethods = LinkedHashMap<IrSimpleFunction, DotNetIlRenderedMethod>()
+        val renderedStaticInitializers = LinkedHashMap<IrFile, DotNetIlRenderedMethod>()
+        val staticFieldLines = LinkedHashMap<IrFile, Map<IrProperty, String>>()
+        val failedInitializerFiles = hashSetOf<IrFile>()
+
+        // Evicts one top-level property: its accessors leave the callable surface (and the
+        // per-function skip channel — the property channel owns the warning) and the property is
+        // reported with [reason], unless an earlier, more specific reason already stands.
+        fun evictTopLevelProperty(property: IrProperty, reason: String) {
+            for (accessor in listOfNotNull(property.getter, property.setter)) {
+                availableFunctions.remove(accessor)
+                skipReasons.remove(accessor)
+            }
+            propertySkipReasons.putIfAbsent(property, reason)
+        }
+
+        // The failing-initializer granularity is the whole per-file property group: declaration
+        // -order init interleaving cannot be partially preserved, so a failure anywhere in a
+        // file's `<clinit>` (or in any backing-field-bearing property of the file) removes ALL
+        // backing-field-bearing top-level properties of that file together — fields, accessors,
+        // `.property` blocks and the `.cctor` — the facade-stateful analogue of the whole-class
+        // rejection granularity. Accessor-only properties are untouched: they fail per-function
+        // like any function.
+        fun failFilePropertyGroup(file: IrFile, originalReason: String) {
+            if (!failedInitializerFiles.add(file)) return
+            val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\')
+            val sharedReason = "top-level property initializers of file '$fileName' could not be compiled: $originalReason"
+            for (property in topLevelPropertiesByFile.getValue(file)) {
+                if (property.isConst || property.isExcludedFromCodegen(intrinsicMethods)) continue
+                if (property.backingField == null) continue
+                evictTopLevelProperty(property, sharedReason)
+            }
+        }
+
         do {
             renderedClasses.clear()
             renderedMethods.clear()
+            renderedStaticInitializers.clear()
+            staticFieldLines.clear()
             var anyDeclarationRemoved = false
             for (irClass in availableClasses.keys.toList()) {
                 try {
@@ -146,6 +245,7 @@ class DotNetIlEmitter(
                         availableFunctions = availableFunctions,
                         intrinsicMethods = intrinsicMethods,
                         typeMapper = typeMapper,
+                        facadeClassInfoByFile = facadeClassInfoByFile,
                     )
                 } catch (e: DotNetIlUnsupportedException) {
                     availableClasses.remove(irClass)
@@ -157,8 +257,9 @@ class DotNetIlEmitter(
                 }
             }
             for (function in availableFunctions.keys.toList()) {
-                // Member functions render inside renderUserClass above; this loop owns only the
-                // top-level functions of the file facades.
+                // Member functions render inside renderUserClass above; this loop owns the
+                // top-level functions of the file facades and the accessors of top-level
+                // properties (also file-parented).
                 if (function.parent !is IrFile) continue
                 try {
                     // The signature is re-derived so that a class removed in an earlier round
@@ -176,10 +277,62 @@ class DotNetIlEmitter(
                         availableFunctions = availableFunctions,
                         intrinsicMethods = intrinsicMethods,
                         typeMapper = typeMapper,
+                        facadeClassInfoByFile = facadeClassInfoByFile,
                     ).render()
                 } catch (e: DotNetIlUnsupportedException) {
                     availableFunctions.remove(function)
                     skipReasons[function] = e.reason
+                    anyDeclarationRemoved = true
+                }
+            }
+            // Property reconciliation: an accessor that failed in the loop above evicts its
+            // whole property (a property is never emitted partially), and when that property
+            // carries a backing field its initializer can no longer run, which fails the file's
+            // whole property group (see failFilePropertyGroup).
+            for ((file, properties) in topLevelPropertiesByFile) {
+                for (property in properties) {
+                    if (property in propertySkipReasons || property.isConst) continue
+                    if (property.isExcludedFromCodegen(intrinsicMethods)) continue
+                    val failedAccessor = listOfNotNull(property.getter, property.setter).firstOrNull { it in skipReasons }
+                        ?: continue
+                    val reason = skipReasons.getValue(failedAccessor)
+                    evictTopLevelProperty(property, reason)
+                    anyDeclarationRemoved = true
+                    if (property.backingField != null) {
+                        failFilePropertyGroup(file, reason)
+                    }
+                }
+            }
+            // Facade statics: the static backing fields and the `.cctor` of each file re-render
+            // every round like everything else — a class removed in round N can be referenced by
+            // a field type or an initializer, and must fail the group right here.
+            for (file in files) {
+                if (file in failedInitializerFiles) continue
+                val staticInitializer = staticInitializersByFile[file]
+                val fieldProperties = topLevelPropertiesByFile.getValue(file).filter { property ->
+                    property !in propertySkipReasons && !property.isConst &&
+                            !property.isExcludedFromCodegen(intrinsicMethods) && property.backingField != null
+                }
+                if (staticInitializer == null && fieldProperties.isEmpty()) continue
+                try {
+                    val fieldLines = fieldProperties.associateWith { property ->
+                        renderField(property.backingField!!, typeMapper, isStatic = true)
+                    }
+                    val renderedInitializer = staticInitializer?.let { initializer ->
+                        DotNetIlMethodCodegen(
+                            function = initializer,
+                            functionInfo = DotNetIlFunctionInfo(fileClassNames.getValue(file), initializer.dotNetSignature(typeMapper)),
+                            isEntryPoint = false,
+                            availableFunctions = availableFunctions,
+                            intrinsicMethods = intrinsicMethods,
+                            typeMapper = typeMapper,
+                            facadeClassInfoByFile = facadeClassInfoByFile,
+                        ).render()
+                    }
+                    staticFieldLines[file] = fieldLines
+                    renderedInitializer?.let { renderedStaticInitializers[file] = it }
+                } catch (e: DotNetIlUnsupportedException) {
+                    failFilePropertyGroup(file, e.reason)
                     anyDeclarationRemoved = true
                 }
             }
@@ -197,6 +350,34 @@ class DotNetIlEmitter(
                 CompilerMessageSeverity.WARNING,
                 "Function '${function.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
+        }
+        for ((property, reason) in propertySkipReasons) {
+            messageCollector.report(
+                CompilerMessageSeverity.WARNING,
+                "Property '${property.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
+            )
+        }
+        // Silent-drop closure: every top-level declaration kind is either gathered above
+        // (classes, functions, properties — including the intrinsic-excluded and the injected
+        // stdlib declarations, which this sweep therefore never warns about), a typealias
+        // (deliberately ignored WITHOUT a warning — the JVM backend emits no bytecode for
+        // typealiases either), or warned here by kind, so no declaration is ever dropped
+        // silently again.
+        for (file in files) {
+            for (declaration in file.declarations) {
+                when (declaration) {
+                    is IrClass, is IrSimpleFunction, is IrProperty, is IrTypeAlias -> {}
+                    else -> {
+                        val name = (declaration as? IrDeclarationWithName)?.diagnosticName()
+                            ?: declaration.javaClass.simpleName
+                        messageCollector.report(
+                            CompilerMessageSeverity.WARNING,
+                            "Declaration '$name' is not supported by the .NET backend and was skipped: " +
+                                    "unsupported top-level declaration kind ${declaration.javaClass.simpleName}"
+                        )
+                    }
+                }
+            }
         }
         if (entryPoint != null && entryPoint !in availableFunctions) {
             messageCollector.report(
@@ -218,10 +399,49 @@ class DotNetIlEmitter(
                         append(rendered.ilText)
                     }
                 }
-                val methods = topLevelFunctionsByFile.getValue(file).mapNotNull { renderedMethods[it] }
-                if (methods.isEmpty()) continue
-                methods.flatMapTo(requiredHelpers) { it.requiredRuntimeHelpers }
-                DotNetIlClassCodegen(fileClassNames.getValue(file), methods.map { it.ilText }).generate(this)
+                // Facade members in declaration order, the `.cctor` first: static backing
+                // fields (const `literal` fields interleaved in declaration order), then the
+                // methods — top-level functions and property accessors — then the static
+                // `.property` blocks (no block for an extension property: its accessors take a
+                // receiver parameter, and a CLR property with parameters is an indexer, which is
+                // out of scope — the accessors stay callable as plain static methods).
+                val facadeMethods = mutableListOf<DotNetIlRenderedMethod>()
+                renderedStaticInitializers[file]?.let { facadeMethods += it }
+                for (declaration in file.declarations) {
+                    when (declaration) {
+                        is IrSimpleFunction -> renderedMethods[declaration]?.let { facadeMethods += it }
+                        is IrProperty -> {
+                            declaration.getter?.let { getter -> renderedMethods[getter]?.let { facadeMethods += it } }
+                            declaration.setter?.let { setter -> renderedMethods[setter]?.let { facadeMethods += it } }
+                        }
+                        else -> {}
+                    }
+                }
+                val facadeFields = mutableListOf<String>()
+                val facadePropertyBlocks = mutableListOf<String>()
+                val fieldLines = staticFieldLines[file].orEmpty()
+                for (property in topLevelPropertiesByFile.getValue(file)) {
+                    if (property in propertySkipReasons || property.isExcludedFromCodegen(intrinsicMethods)) continue
+                    if (property.isConst) {
+                        constFieldLines[property]?.let { facadeFields += it }
+                        continue
+                    }
+                    fieldLines[property]?.let { facadeFields += it }
+                    val getter = property.getter
+                    val setter = property.setter
+                    if ((getter != null || setter != null) && !property.isDotNetExtensionProperty()) {
+                        facadePropertyBlocks += renderPropertyBlock(property, getter, setter, availableFunctions, isStatic = true)
+                    }
+                }
+                if (facadeMethods.isEmpty() && facadeFields.isEmpty() && facadePropertyBlocks.isEmpty()) continue
+                facadeMethods.flatMapTo(requiredHelpers) { it.requiredRuntimeHelpers }
+                DotNetIlClassCodegen(
+                    fileClassNames.getValue(file),
+                    facadeMethods.map { it.ilText },
+                    facadeFields,
+                    facadePropertyBlocks,
+                    hasClassInitializer = renderedStaticInitializers.containsKey(file),
+                ).generate(this)
             }
             // The shared runtime helper class (see DotNetIlRuntimeHelper) comes last, and only
             // when some emitted method actually called one of its helpers.
@@ -306,6 +526,7 @@ class DotNetIlEmitter(
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
         intrinsicMethods: DotNetIlIntrinsicMethods,
         typeMapper: DotNetIlTypeMapper,
+        facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
     ): RenderedClass {
         val name = irClass.diagnosticName()
         val renderedFields = mutableListOf<String>()
@@ -323,6 +544,7 @@ class DotNetIlEmitter(
                 availableFunctions = availableFunctions,
                 intrinsicMethods = intrinsicMethods,
                 typeMapper = typeMapper,
+                facadeClassInfoByFile = facadeClassInfoByFile,
             ).render()
             renderedMethods += rendered.ilText
             requiredHelpers += rendered.requiredRuntimeHelpers
@@ -338,6 +560,7 @@ class DotNetIlEmitter(
                         availableFunctions = availableFunctions,
                         intrinsicMethods = intrinsicMethods,
                         typeMapper = typeMapper,
+                        facadeClassInfoByFile = facadeClassInfoByFile,
                     ).render()
                     renderedMethods += rendered.ilText
                     requiredHelpers += rendered.requiredRuntimeHelpers
@@ -373,17 +596,19 @@ class DotNetIlEmitter(
     }
 
     /**
-     * The `.property` metadata block of one member property, binding its accessor methods so the
-     * CLR (reflection, debuggers, other .NET languages) sees a real property — the getter-only
-     * variant for `val`; all spellings ilasm-probe-verified. The property's IL type is its
-     * getter's return type (or the setter's value-parameter type for the theoretical
-     * setter-only shape).
+     * The `.property` metadata block of one property, binding its accessor methods so the CLR
+     * (reflection, debuggers, other .NET languages) sees a real property — the getter-only
+     * variant for `val`; all spellings ilasm-probe-verified. A member property is `instance`; a
+     * top-level property ([isStatic]) drops the keyword and binds static accessors
+     * (`statprobe_s1`). The property's IL type is its getter's return type (or the setter's
+     * value-parameter type for the theoretical setter-only shape).
      */
     private fun renderPropertyBlock(
         property: IrProperty,
         getter: IrSimpleFunction?,
         setter: IrSimpleFunction?,
         availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+        isStatic: Boolean = false,
     ): String {
         val getterInfo = getter?.let(availableFunctions::getValue)
         val setterInfo = setter?.let(availableFunctions::getValue)
@@ -394,7 +619,8 @@ class DotNetIlEmitter(
             else -> setterInfo!!.signature.parameterTypes.last()
         }
         return buildString {
-            appendLine("  .property instance ${propertyType.nameInSignature} ${propertyName.toIlIdentifier()}()")
+            val instance = if (isStatic) "" else "instance "
+            appendLine("  .property $instance${propertyType.nameInSignature} ${propertyName.toIlIdentifier()}()")
             appendLine("  {")
             if (getter != null && getterInfo != null) {
                 appendLine("    .get ${getterInfo.renderMethodReference(getter.dotNetIlMethodName())}")
@@ -407,16 +633,82 @@ class DotNetIlEmitter(
     }
 
     /**
-     * One `.field` line of a user class. Backing fields are always `private` (the JVM `final`
-     * analogue `initonly` is deliberately omitted — a pure metadata nicety with no semantic
-     * need); the spelling is ilasm-probe-verified, including private-field access from the
-     * declaring class's own methods.
+     * One `.field` line: the instance backing field of a member property, or, with [isStatic],
+     * the static backing field of a top-level property on its file facade. Backing fields are
+     * always `private` (the JVM `final` analogue `initonly` is deliberately omitted on both
+     * shapes — a pure metadata nicety with no semantic need, and a `var`'s `stsfld` from the
+     * static setter must stay legal); both spellings are ilasm-probe-verified
+     * (`statprobe_s1`/`_s2` for the static shape, including a user-class-typed static field).
      */
-    private fun renderField(field: IrField, typeMapper: DotNetIlTypeMapper): String {
+    private fun renderField(field: IrField, typeMapper: DotNetIlTypeMapper, isStatic: Boolean = false): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
-        return ".field private ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+        val static = if (isStatic) "static " else ""
+        return ".field private $static${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
     }
+
+    /**
+     * The CLR `literal` field of a `const val` — the ConstantValue-attribute analogue the JVM
+     * emits (JVM precedent: `StaticInitializersLowering` excludes fields with a `constantValue()`
+     * from `<clinit>`, and `JvmPropertiesLowering` generates no accessors for const properties).
+     * A `literal` field has no storage and never appears in the `.cctor`; every read of the
+     * property is inlined by the frontend. All literal spellings are ilasm-probe-verified
+     * (`statprobe_s1`/`_s3`: int32, int64 incl. MIN_VALUE, bool, char, float64 decimal and
+     * raw-bit forms, string incl. the `bytearray` fallback).
+     */
+    private fun renderConstField(property: IrProperty, typeMapper: DotNetIlTypeMapper): String {
+        val name = property.name.asString()
+        val field = property.backingField
+            ?: dotNetUnsupported("internal: const property '$name' has no backing field")
+        val fieldType = typeMapper.toDotNetIlValueType(field.type)
+            ?: dotNetUnsupported("const property '$name' has unsupported type ${field.type.render()}")
+        val constant = field.initializer?.expression as? IrConst
+            ?: dotNetUnsupported("internal: const property '$name' has no constant initializer")
+        return ".field public static literal ${fieldType.nameInSignature} " +
+                "${field.name.asString().toIlIdentifier()} = ${renderConstFieldInitializer(constant, fieldType, name)}"
+    }
+
+    /** The field-initializer literal of a [const field][renderConstField]; spellings probe-verified. */
+    private fun renderConstFieldInitializer(constant: IrConst, fieldType: DotNetIlValueType, propertyName: String): String {
+        fun unsupportedValue(): Nothing = dotNetUnsupported(
+            "const property '$propertyName' has an unsupported ${fieldType.nameInSignature} value: ${constant.value}"
+        )
+        return when (fieldType) {
+            DotNetIlValueType.Boolean -> "bool(${constant.value as? Boolean ?: unsupportedValue()})"
+            DotNetIlValueType.Int32 -> "int32(${constant.value as? Int ?: unsupportedValue()})"
+            DotNetIlValueType.Int64 -> "int64(${constant.value as? Long ?: unsupportedValue()})"
+            DotNetIlValueType.Char -> "char(0x%04X)".format((constant.value as? Char ?: unsupportedValue()).code)
+            DotNetIlValueType.Float64 -> {
+                // toIlFloat64Literal yields either a bare decimal (wrapped here) or the raw-bit
+                // `float64(0x...)` form, which doubles as a field-initializer spelling.
+                val literal = (constant.value as? Double ?: unsupportedValue()).toIlFloat64Literal()
+                if (literal.startsWith("float64(")) literal else "float64($literal)"
+            }
+            DotNetIlValueType.String -> (constant.value as? String ?: unsupportedValue()).toIlStringLiteral()
+            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass -> unsupportedValue()
+        }
+    }
+
+    /**
+     * Whether an accessor of [this] property is registered with an intrinsic that
+     * [excludes the declaration from codegen][DotNetIlIntrinsicMethod.excludesDeclarationFromCodegen]
+     * (the injected `val Char.code`): the property is then neither emitted nor warned about —
+     * every use site is intercepted by the intrinsic registry.
+     */
+    private fun IrProperty.isExcludedFromCodegen(intrinsicMethods: DotNetIlIntrinsicMethods): Boolean =
+        listOfNotNull(getter, setter).any { accessor ->
+            intrinsicMethods.getIntrinsic(accessor.symbol)?.excludesDeclarationFromCodegen == true
+        }
+
+    /**
+     * Whether [this] is an extension property: its accessors carry the extension receiver as a
+     * regular IL parameter, and a CLR `.property` block with parameters is an indexer — out of
+     * scope — so extension properties get plain static accessor methods and no `.property` block.
+     */
+    private fun IrProperty.isDotNetExtensionProperty(): Boolean =
+        listOfNotNull(getter, setter).any { accessor ->
+            accessor.parameters.any { it.kind == IrParameterKind.ExtensionReceiver }
+        }
 
     /**
      * The member functions of a user class that codegen renders and call sites resolve through

@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
+import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
@@ -39,6 +40,7 @@ internal class DotNetIlExpressionCodegen(
     private val availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
+    private val facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
     private val tryExpressionEmitter: DotNetIlTryExpressionEmitter,
 ) {
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
@@ -363,15 +365,23 @@ internal class DotNetIlExpressionCodegen(
         )
     }
 
-    /** An instance field read: receiver, then `ldfld <type> 'C'::'name'` (probe-verified). */
+    /**
+     * A field read: for an instance field the receiver, then `ldfld <type> 'C'::'name'`; for a
+     * static facade field (a top-level property's backing field, file-parented) a bare
+     * `ldsfld <type> 'FileKt'::'name'` — both spellings probe-verified (`statprobe_s1`/`_s2`).
+     */
     private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
         val field = expression.symbol.owner
-        val (classInfo, fieldType) = resolveFieldAccess(field)
+        val (classInfo, fieldType, isStatic) = resolveFieldAccess(field)
         if (!fieldType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
             )
+        }
+        if (isStatic) {
+            methodContext.emit("ldsfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pushes = 1)
+            return
         }
         emitFieldReceiver(expression.receiver, field, classInfo)
         methodContext.emit(
@@ -382,37 +392,65 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * An instance field store: receiver, value, then `stfld <type> 'C'::'name'` (probe-verified).
-     * Reaches codegen from `DEFAULT_PROPERTY_ACCESSOR` setter bodies and from the field
+     * A field store: receiver, value, then `stfld <type> 'C'::'name'` for instance fields, or
+     * value then `stsfld <type> 'FileKt'::'name'` for static facade fields (both probe-verified).
+     * Reaches codegen from `DEFAULT_PROPERTY_ACCESSOR` setter bodies, from the field
      * initializations [InitializersLowering][org.jetbrains.kotlin.backend.common.lower.InitializersLowering]
-     * merged into constructor bodies; user-written property writes are accessor calls instead.
+     * merged into constructor bodies, and from the top-level initializations
+     * [DotNetStaticInitializersLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering]
+     * moved into the file `<clinit>`; user-written property writes are accessor calls instead.
      */
     fun emitSetField(expression: IrSetField) {
         val field = expression.symbol.owner
-        val (classInfo, fieldType) = resolveFieldAccess(field)
+        val (classInfo, fieldType, isStatic) = resolveFieldAccess(field)
+        if (isStatic) {
+            emitExpression(expression.value, fieldType)
+            methodContext.emit("stsfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pops = 1)
+            return
+        }
         emitFieldReceiver(expression.receiver, field, classInfo)
         emitExpression(expression.value, fieldType)
         methodContext.emit("stfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pops = 2)
     }
 
     /**
-     * Resolves the owning class and the IL type of an instance field. Both lookups go through
-     * the emission-scoped state, so field access to a class the emitter removed (or a field of a
-     * type outside the supported set) aborts the surrounding render.
+     * Resolves the owning IL class, the IL type, and the staticness of a field access. A
+     * class-parented field is an instance field of a user class; a file-parented field is the
+     * static facade field of a top-level property. Every lookup goes through the emission-scoped
+     * state, so field access to a class the emitter removed (or a field of a type outside the
+     * supported set) aborts the surrounding render. The backing field of a `const val` is never
+     * accessed: it is a CLR `literal` field without storage (`ldsfld` would fail at runtime),
+     * and every read of the property is inlined by the frontend.
      */
-    private fun resolveFieldAccess(field: IrField): Pair<DotNetIlClassInfo, DotNetIlValueType> {
-        val irClass = field.parent as? IrClass
-            ?: dotNetUnsupported("access to non-member field '${field.name.asString()}' is not supported")
-        val classInfo = typeMapper.classInfoOrNull(irClass)
-            ?: dotNetUnsupported("access to a field of unsupported class '${irClass.name.asString()}'")
+    private fun resolveFieldAccess(field: IrField): Triple<DotNetIlClassInfo, DotNetIlValueType, Boolean> {
+        val fieldName = field.name.asString()
+        val (classInfo, isStatic) = when (val parent = field.parent) {
+            is IrClass -> {
+                val classInfo = typeMapper.classInfoOrNull(parent)
+                    ?: dotNetUnsupported("access to a field of unsupported class '${parent.name.asString()}'")
+                classInfo to false
+            }
+            is IrFile -> {
+                if (field.correspondingPropertySymbol?.owner?.isConst == true) {
+                    dotNetUnsupported(
+                        "access to the backing field of const property '$fieldName' is not supported " +
+                                "(const reads are inlined by the frontend)"
+                    )
+                }
+                val classInfo = facadeClassInfoByFile[parent]
+                    ?: dotNetUnsupported("access to top-level field '$fieldName' outside the compiled module is not supported")
+                classInfo to true
+            }
+            else -> dotNetUnsupported("access to non-member field '$fieldName' is not supported")
+        }
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
-            ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
-        return classInfo to fieldType
+            ?: dotNetUnsupported("field '$fieldName' has unsupported type ${field.type.render()}")
+        return Triple(classInfo, fieldType, isStatic)
     }
 
     private fun emitFieldReceiver(receiver: IrExpression?, field: IrField, classInfo: DotNetIlClassInfo) {
         if (receiver == null) {
-            dotNetUnsupported("static field '${field.name.asString()}' is not supported")
+            dotNetUnsupported("receiverless access to instance field '${field.name.asString()}' is not supported")
         }
         emitExpression(receiver, DotNetIlValueType.UserClass(classInfo.ilClassName))
     }
