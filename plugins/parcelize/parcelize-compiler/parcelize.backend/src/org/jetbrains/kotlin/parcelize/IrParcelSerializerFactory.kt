@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.inlineClassRepresentation
 import org.jetbrains.kotlin.ir.declarations.lazy.IrLazyClassBase
@@ -340,11 +341,17 @@ class IrParcelSerializerFactory(private val symbols: AndroidSymbols, private val
 
             classifier.isData && (inDataClass || irType.hasAnnotation(ParcelizeNames.DATA_CLASS_ANNOTATION_CLASS_ID)) -> {
                 val typeMapping = classifier.typeParameterMapping(irType)
-                val members = classifier.properties.mapNotNullTo(mutableListOf()) { property ->
-                    val field = property.backingField ?: return@mapNotNullTo null
-                    if (!field.isFromPrimaryConstructor) return@mapNotNullTo null
-                    property.symbol to getChild(field.type.substitute(typeMapping), allowDataClasses = true)
-                }
+                val primaryConstructor = classifier.primaryConstructor
+                    ?: throw IllegalArgumentException("Primary constructor of data class '${classifier.name}' is missing")
+
+                val members = primaryConstructor.parameters
+                    .filter { it.kind == IrParameterKind.Regular }
+                    .map { valueParameter ->
+                        val property = classifier.properties.singleOrNull { it.name == valueParameter.name }
+                            ?: error("Data class '${classifier.name}' must have exactly one property matching primary constructor parameter '${valueParameter.name}'")
+
+                        property.symbol to getChild(valueParameter.type.substitute(typeMapping), allowDataClasses = true)
+                    }
                 return wrapNullableSerializerIfNeeded(irType, IrDataClassParcelSerializer(irType, members))
             }
 
