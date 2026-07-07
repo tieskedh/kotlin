@@ -235,6 +235,11 @@ internal class DotNetIlMethodCodegen(
             dotNetUnsupported("non-local return is not supported")
         }
         if (methodContext.ehDepth > 0) {
+            // A return inside a `finally` body would have to leave the finally region, and the
+            // CLR's only legal exit from one is `endfinally` — even `leave` may not cross it.
+            if (methodContext.crossesFinallyRegion(0)) {
+                dotNetUnsupported("'return' inside a 'finally' block is not supported")
+            }
             emitReturnAcrossRegions(expression)
             return
         }
@@ -419,7 +424,14 @@ internal class DotNetIlMethodCodegen(
         // forward or backward, crossing nested regions in one hop (probe-verified).
         when {
             methodContext.ehDepth == labels.ehDepth -> methodContext.emitGoto(targetLabel)
-            methodContext.ehDepth > labels.ehDepth -> methodContext.emitLeave(targetLabel)
+            methodContext.ehDepth > labels.ehDepth -> {
+                // A `leave` may cross any number of `.try`/`catch` regions, but never a
+                // `finally` body: its only legal exit is `endfinally`.
+                if (methodContext.crossesFinallyRegion(labels.ehDepth)) {
+                    dotNetUnsupported("'$keyword' crossing out of a 'finally' block is not supported")
+                }
+                methodContext.emitLeave(targetLabel)
+            }
             else -> error("Internal .NET backend error: '$keyword' at a shallower exception-region depth than its loop")
         }
     }
@@ -529,16 +541,44 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * The region structure shared by both `try` forms: `.try {` around the try branch, then one
-     * `catch <clrTypeRef> {` per Kotlin catch clause in source order — the CLR matches handlers
-     * strictly in declaration order (probe-verified), and Kotlin source order is authoritative
-     * (the frontend owns unreachable-catch diagnostics). Each handler first binds its catch
-     * parameter with a `stloc` of the exception object the CLR pushes at handler entry.
+     * The region structure shared by both `try` forms. Without a `finally` this is `.try {`
+     * around the try branch, then one `catch <clrTypeRef> {` per Kotlin catch clause in source
+     * order — the CLR matches handlers strictly in declaration order (probe-verified), and
+     * Kotlin source order is authoritative (the frontend owns unreachable-catch diagnostics).
+     * Each handler first binds its catch parameter with a `stloc` of the exception object the
+     * CLR pushes at handler entry.
+     *
+     * A `finally` wraps that whole try/catch construct in an OUTER `.try { } finally { }`: a
+     * `.try` may carry either catch handlers or one `finally`, never both — combining them on
+     * one `.try` assembles silently but throws `InvalidProgramException` at runtime
+     * (probe-verified) — and with no catches the single `.try { } finally { }` region suffices.
+     * Branch `leave`s keep targeting the join label after the WHOLE construct; the CLR runs the
+     * finally automatically on every exit — normal leaves (including `break`/`continue` and
+     * return-join ones) and the exceptional path alike — with NO JVM-style finally
+     * inlining/duplication, a CLR-forced deviation from the JVM backend, whose platform has no
+     * finally handlers to delegate to. The finally body is emitted as void and exits through
+     * `endfinally`, its only legal exit.
      */
     private fun emitTryCatchRegions(expression: IrTry, emitBranchResult: (IrExpression) -> Unit) {
-        if (expression.finallyExpression != null) {
-            dotNetUnsupported("'try' with a 'finally' block is not supported yet")
+        val finallyExpression = expression.finallyExpression
+        if (finallyExpression == null) {
+            emitTryCatches(expression, emitBranchResult)
+            return
         }
+        methodContext.beginTry()
+        if (expression.catches.isEmpty()) {
+            emitBranchResult(expression.tryResult)
+        } else {
+            emitTryCatches(expression, emitBranchResult)
+        }
+        methodContext.beginFinally()
+        emitVoidExpression(finallyExpression)
+        methodContext.emitEndFinally()
+        methodContext.endEhBlock()
+    }
+
+    /** The `.try` block plus its consecutive `catch` handlers; see [emitTryCatchRegions]. */
+    private fun emitTryCatches(expression: IrTry, emitBranchResult: (IrExpression) -> Unit) {
         methodContext.beginTry()
         emitBranchResult(expression.tryResult)
         for (irCatch in expression.catches) {

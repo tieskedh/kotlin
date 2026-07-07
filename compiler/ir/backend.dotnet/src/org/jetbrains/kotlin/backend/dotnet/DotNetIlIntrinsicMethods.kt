@@ -469,12 +469,17 @@ private class DotNetIlNumericBinaryOperatorIntrinsic(
  * therefore bypasses `div`/`rem`: `a / -1` is `neg a` (IL `neg` is plain two's-complement
  * negation and does not overflow-check) and `a % -1` is `0`. The guard is emitted at runtime
  * unless the divisor is a constant that decides it statically; the `int64` guard compares
- * against `-1` widened with `conv.i8`.
+ * against `-1` widened with `conv.i8`. The guard stays load-bearing with the exception model in
+ * place: `System.OverflowException` IS-A `System.ArithmeticException` (probe-verified), so
+ * without it a `catch (e: ArithmeticException)` would observably catch an overflow Kotlin
+ * defines as a plain result.
  *
- * Known divergence (out of the supported subset until an exception model exists): a zero
- * divisor raises `System.DivideByZeroException`, while Kotlin throws
- * `kotlin.ArithmeticException("/ by zero")` — a different type and message. To be translated
- * at the boundary once CLR exceptions are mapped to Kotlin ones.
+ * A zero divisor raises the CLR's `System.DivideByZeroException`, which IS-A
+ * `System.ArithmeticException` (probe-verified) — the target of `kotlin.ArithmeticException` in
+ * [DotNetMappedExceptions] — so `catch (e: ArithmeticException)` catches it, matching the JVM at
+ * the type level. The remaining divergence is message text only: `"Attempted to divide by
+ * zero."` instead of the JVM's `"/ by zero"`, the platform message kept verbatim (JVM precedent:
+ * `"/ by zero"` IS the JVM's platform message).
  *
  * `float64` results need no guard: CIL float `div` is plain IEEE 754 division (`x / 0.0` is an
  * infinity, no exceptions) and CIL float `rem` is the remainder after truncated division — the
@@ -997,6 +1002,13 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         // the reference type: `ldnull` satisfies any class-typed operand slot.
         left.isNullConst() && rightType.isDotNetReferenceType() -> rightType
         right.isNullConst() && leftType.isDotNetReferenceType() -> leftType
+        // Two differently-mapped exception operands (e.g. `caught === original` where one side
+        // is typed `Throwable` and the other `IllegalStateException`) compare through their
+        // common CLR supertype: every mapped exception widens to `System.Exception`, and the
+        // reference `ceq` is type-agnostic. General `==` on that pair still lands in the
+        // MappedClass rejection arm below, exactly like same-typed instances.
+        leftType is DotNetIlValueType.MappedClass && rightType is DotNetIlValueType.MappedClass ->
+            DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
         else -> null
     }
 }
