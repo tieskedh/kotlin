@@ -385,7 +385,7 @@ open class IrBasedSimpleFunctionDescriptor(owner: IrSimpleFunction) : SimpleFunc
 
     override fun getModality() = owner.modality
     override fun getName() = owner.name
-    override fun getVisibility() = owner.visibility
+    override fun getVisibility() = DescriptorVisibilities.toDescriptorVisibility(owner.visibility)
     override fun getReturnType() = owner.returnType.toIrBasedKotlinType()
 
     override fun getDispatchReceiverParameter() = owner.dispatchReceiverParameter?.run {
@@ -500,7 +500,7 @@ open class IrBasedClassConstructorDescriptor(owner: IrConstructor) : ClassConstr
 
     override fun getInitialSignatureDescriptor(): FunctionDescriptor? = null
 
-    override fun getVisibility() = owner.visibility
+    override fun getVisibility() = DescriptorVisibilities.toDescriptorVisibility(owner.visibility)
 
     override fun isHiddenToOvercomeSignatureClash(): Boolean {
         unsupportedInIrBasedDescriptor()
@@ -583,7 +583,7 @@ open class IrBasedClassDescriptor(owner: IrClass) : ClassDescriptor, IrBasedDecl
     override fun getCompanionObjectDescriptor() =
         owner.declarations.findIsInstanceAnd<IrClass> { it.isCompanion }?.toIrBasedDescriptor()
 
-    override fun getVisibility() = owner.visibility
+    override fun getVisibility() = DescriptorVisibilities.toDescriptorVisibility(owner.visibility)
 
     override fun isCompanionObject() = owner.isCompanion
 
@@ -830,7 +830,7 @@ open class IrBasedPropertyDescriptor(owner: IrProperty) :
 
     override fun getTypeParameters(): List<TypeParameterDescriptor> = getter?.typeParameters.orEmpty()
 
-    override fun getVisibility() = owner.visibility
+    override fun getVisibility() = DescriptorVisibilities.toDescriptorVisibility(owner.visibility)
 
     override val setter: PropertySetterDescriptor? get() = owner.setter?.toIrBasedDescriptor() as? PropertySetterDescriptor
 
@@ -983,7 +983,7 @@ open class IrBasedTypeAliasDescriptor(owner: IrTypeAlias) : IrBasedDeclarationDe
 
     override fun getSource(): SourceElement = SourceElement.NO_SOURCE
 
-    override fun getVisibility(): DescriptorVisibility = owner.visibility
+    override fun getVisibility(): DescriptorVisibility = DescriptorVisibilities.toDescriptorVisibility(owner.visibility)
 
     override fun isExpect(): Boolean = false
 
@@ -1044,7 +1044,7 @@ open class IrBasedFieldDescriptor(owner: IrField) : PropertyDescriptor, IrBasedD
 
     override fun getTypeParameters(): List<TypeParameterDescriptor> = emptyList()
 
-    override fun getVisibility() = owner.visibility
+    override fun getVisibility() = DescriptorVisibilities.toDescriptorVisibility(owner.visibility)
 
     override val setter: PropertySetterDescriptor? get() = null
 
