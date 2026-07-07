@@ -466,7 +466,7 @@ private class BackendChecker(
         if (callee.isCFunctionOrGlobalAccessor())
             checkCanGenerateCFunctionCallOrGlobalAccess(expression, isInvoke = false)
 
-        when (val intrinsicType = tryGetIntrinsicTypeIgnoringUnknown(expression)) {
+        when (val intrinsicType = tryGetIntrinsicTypeIgnoringUnknown(callee)) {
             IntrinsicType.INTEROP_STATIC_C_FUNCTION -> {
                 (val target = function, val captures) = getUnboundReferencedFunction(expression.arguments[0]!!)
 
