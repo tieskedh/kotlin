@@ -11,7 +11,7 @@ import org.jetbrains.kotlin.backend.konan.*
 import org.jetbrains.kotlin.backend.konan.binaryTypeIsReference
 import org.jetbrains.kotlin.backend.konan.llvm.FieldStorageKind
 import org.jetbrains.kotlin.backend.konan.llvm.storageKind
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
@@ -222,7 +222,7 @@ internal class StaticInitializersLowering(val context: Context) : FileLoweringPa
         // which is a much less common case, because it doesn't work on jvm.
         // For classes, it's not necessary, as the class fqname would be added to the mangled function name anyway
         this.name = if (container is IrFile) Name.identifier(name + '$' + container.name) else Name.identifier(name)
-        visibility = DescriptorVisibilities.PRIVATE
+        visibility = Visibilities.Private
         returnType = context.irBuiltIns.unitType
     }.apply {
         parent = container
