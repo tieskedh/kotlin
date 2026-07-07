@@ -1,0 +1,20 @@
+.assembly extern mscorlib {}
+.assembly 'topLevelConstVal' {}
+.module 'main-topLevelConstVal.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'topLevelConstValKt'
+       extends [mscorlib]System.Object
+{
+  .field public static literal int32 'I' = int32(42)
+  .field public static literal string 'S' = "hi"
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "42"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "hi"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
