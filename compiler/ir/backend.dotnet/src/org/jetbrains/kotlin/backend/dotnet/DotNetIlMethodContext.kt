@@ -44,12 +44,26 @@ internal class DotNetIlMethodContext(
         private set
 
     /**
-     * The number of exception-handling regions (`.try` bodies and `catch` handlers) enclosing
-     * the current emission point. `break`/`continue`/`return` compare it against the depth at
-     * their target to decide between a plain `br`/`ret` and the [emitLeave] discipline.
+     * The number of exception-handling regions (`.try` bodies, `catch` handlers and `finally`
+     * bodies) enclosing the current emission point. `break`/`continue`/`return` compare it
+     * against the depth at their target to decide between a plain `br`/`ret` and the
+     * [emitLeave] discipline.
      */
     val ehDepth: Int
         get() = ehRegions.size
+
+    /**
+     * Whether a `finally` body lies between the current emission point and the region depth of
+     * a branch target (the loop's registration depth for `break`/`continue`, 0 for `return`).
+     * The CLR's only legal exit from a `finally` body is `endfinally` — even `leave` may not
+     * cross it — so callers reject such non-local exits instead of emitting an [emitLeave].
+     */
+    fun crossesFinallyRegion(targetDepth: Int): Boolean {
+        for (index in targetDepth until ehRegions.size) {
+            if (ehRegions[index] == EhRegion.FINALLY_BODY) return true
+        }
+        return false
+    }
 
     /**
      * Whether the last emitted instruction unconditionally leaves the current emission point
@@ -193,9 +207,43 @@ internal class DotNetIlMethodContext(
     }
 
     /**
-     * Closes the final block of a `.try`/`catch` construct. [isTerminated] is left as-is: every
-     * branch ended in `leave`/`throw`, so the point after the construct is reachable only
-     * through the join label the leaves target (whose [emitLabel] resets the flag).
+     * Closes the currently open try body and opens the `finally {` handler of the same `.try` —
+     * the probe-verified single-handler shape: a `.try` may carry EITHER catch handlers OR one
+     * `finally` (ECMA-335 I.12.4.2; combining them on one `.try` assembles silently but throws
+     * `InvalidProgramException` at runtime), so a Kotlin `try`/`catch`/`finally` nests the whole
+     * try/catch construct inside an outer `.try`/`finally`. At handler entry the CLR discards
+     * the evaluation stack and pushes nothing, so the tracked depth is set to 0 absolutely
+     * (also flushing any phantom depth a terminated branch left behind, see
+     * [notePhantomValueAfterThrow]).
+     */
+    fun beginFinally() {
+        check(ehRegions.isNotEmpty()) { "Internal .NET backend error: 'finally' without an open '.try'" }
+        ehRegions.removeLast()
+        appendIndentedLine("}")
+        appendIndentedLine("finally {")
+        ehRegions.addLast(EhRegion.FINALLY_BODY)
+        stackDepth = 0
+        isTerminated = false
+    }
+
+    /**
+     * Emits `endfinally`, the only legal exit from a `finally` body (ECMA-335). When the body
+     * itself terminated (ended in a `throw`), the `endfinally` is dead code, which assembles
+     * and executes fine (ilasm-probe-verified). Terminates the emission point: the CLR resumes
+     * at the `leave` target (or continues unwinding), never at the next instruction.
+     */
+    fun emitEndFinally() {
+        check(ehRegions.lastOrNull() == EhRegion.FINALLY_BODY) { "Internal .NET backend error: 'endfinally' outside a 'finally' body" }
+        check(stackDepth == 0) { "Internal .NET backend error: non-empty evaluation stack at 'endfinally'" }
+        appendIndentedLine("endfinally")
+        isTerminated = true
+    }
+
+    /**
+     * Closes the final block of a `.try`/`catch` or `.try`/`finally` construct. [isTerminated]
+     * is left as-is: every branch ended in `leave`/`throw`/`endfinally`, so the point after the
+     * construct is reachable only through the join label the leaves target (whose [emitLabel]
+     * resets the flag).
      */
     fun endEhBlock() {
         check(ehRegions.isNotEmpty()) { "Internal .NET backend error: closing an exception-handling block without one open" }
@@ -298,7 +346,7 @@ internal class DotNetIlMethodContext(
 }
 
 /** The kind of exception-handling region currently being emitted; see [DotNetIlMethodContext.beginTry]. */
-private enum class EhRegion { TRY_BODY, CATCH_HANDLER }
+private enum class EhRegion { TRY_BODY, CATCH_HANDLER, FINALLY_BODY }
 
 /**
  * Branch targets of a loop: `break` jumps to [breakLabel], `continue` to [continueLabel].

@@ -108,10 +108,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   until traces are surfaced). The injected exception declarations are excluded from codegen
   entirely — the class-level parallel of an intrinsic's `excludesDeclarationFromCodegen` — and
   user classes extending them are shape-gate-rejected until the inheritance model exists.
-  Finally handling (later slice) will use real CLR `leave`-driven finallys with NO JVM-style
-  finally inlining/duplication (CLR-forced deviation). Deferred: Roslyn-parity
-  `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws) until interop with
-  non-Exception-throwing code matters.
+  Deferred: Roslyn-parity `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws)
+  until interop with non-Exception-throwing code matters.
 - try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
   block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
   first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no
@@ -125,6 +123,18 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   deviation from the JVM backend: the CLR requires an empty evaluation stack at `.try` entry
   (ECMA-335 I.12.4.2), so a `try` expression with operands already on the evaluation stack
   (e.g. a non-first call argument) is rejected rather than spilled.
+- `finally` uses real CLR `leave`-driven finally handlers with NO JVM-style finally
+  inlining/duplication — a CLR-forced deviation from the JVM backend: the CLR runs the finally
+  automatically on every `leave` out of the region (normal completion, `break`/`continue`,
+  return-join leaves) and on the exceptional path, inner-then-outer for nested regions
+  (probe-verified, `excprobe_s3`). A `.try` carries either catch handlers or ONE `finally`,
+  never both — combining them assembles silently but throws `InvalidProgramException` at
+  runtime — so Kotlin `try`/`catch`/`finally` nests the try/catch construct inside an outer
+  `.try { } finally { }`; catch-less `try`/`finally` is a single region. The finally body is
+  emitted as void and exits only through `endfinally`, so `return`/`break`/`continue` crossing
+  OUT of a finally body are rejected (`dotNetUnsupported`) — even `leave` may not exit a
+  finally handler; exits within it (a loop or try/catch declared inside the finally body) work
+  normally.
 - Generics stance: the type representation stays structural so that future generics can target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
