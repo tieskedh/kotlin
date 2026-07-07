@@ -59,7 +59,6 @@ import org.jetbrains.kotlin.fir.analysis.diagnostics.FirErrors
 import org.jetbrains.kotlin.fir.analysis.diagnostics.toFirDiagnostics
 import org.jetbrains.kotlin.fir.backend.*
 import org.jetbrains.kotlin.fir.backend.jvm.FirJvmBackendExtension
-import org.jetbrains.kotlin.fir.backend.jvm.FirJvmVisibilityConverter
 import org.jetbrains.kotlin.fir.backend.jvm.JvmFir2IrExtensions
 import org.jetbrains.kotlin.fir.backend.utils.CodeFragmentConversionData
 import org.jetbrains.kotlin.fir.backend.utils.ConversionTypeOrigin
@@ -1090,7 +1089,6 @@ internal class KaFirCompilerFacility(
             fir2IrConfiguration = fir2IrConfiguration,
             irGeneratorExtensions = irGeneratorExtensions,
             irMangler = JvmIrMangler,
-            visibilityConverter = FirJvmVisibilityConverter,
             kotlinBuiltIns = DefaultBuiltIns.Instance,
             typeSystemContextProvider = ::JvmIrTypeSystemContext,
             specialAnnotationsProvider = JvmIrSpecialAnnotationSymbolProvider,
