@@ -41,9 +41,12 @@ import org.jetbrains.kotlin.name.FqName
  *   `ArgumentNullException`/`ArgumentOutOfRangeException`; `catch (IllegalStateException)` also
  *   catches `ObjectDisposedException`; a BCL `ArgumentOutOfRangeException` lands in
  *   `IllegalArgumentException`, not `IndexOutOfBoundsException`.
- * - Constructor whitelist: `()` and `(String?)` map on every entry; `(String?, Throwable?)` only
- *   where [Entry.Mapped.hasMessageCauseCtor] is set (probe-verified overloads); the cause-only
- *   `(Throwable?)` constructor has NO CLR overload anywhere and is rejected.
+ * - Constructor whitelist: `()` and `(String?)` map on every entry; `(String?, Throwable?)` maps
+ *   where [Entry.Mapped.hasMessageCauseCtor] is set. That flag mirrors the Kotlin stdlib's
+ *   declared constructor surface, NOT CLR availability — the CLR `(string, Exception)` overload
+ *   exists on every mapped type (probe-verified) — so it is `false` exactly for the Kotlin
+ *   classes that declare only `()`/`(String?)` and can never resolve a `(message, cause)` call.
+ *   The cause-only `(Throwable?)` constructor has NO CLR overload anywhere and is rejected.
  *
  * The injected stdlib declarations of these classes (see [DOTNET_STDLIB_SOURCES]) exist only so
  * the frontend resolves them; [DotNetIlEmitter] excludes them from codegen entirely — the
@@ -58,8 +61,12 @@ internal object DotNetMappedExceptions {
     internal sealed class Entry {
         /**
          * A Kotlin exception class mapped onto the CLR type [clrTypeRef] (a corelib-qualified IL
-         * type reference). [hasMessageCauseCtor] gates the `(String?, Throwable?)` constructor:
-         * only some CLR targets have the `(string, Exception)` overload.
+         * type reference). [hasMessageCauseCtor] gates the `(String?, Throwable?)` constructor
+         * and mirrors the Kotlin stdlib's declared constructor surface: every mapped CLR type
+         * has the `(string, Exception)` overload (probe-verified), but the classes flagged
+         * `false` declare only `()`/`(String?)` in the Kotlin stdlib (and in the injected
+         * declarations), so the gate can never fire for them — it is a defensive mirror of the
+         * Kotlin surface, not a record of CLR overload availability.
          */
         class Mapped(val clrTypeRef: String, val hasMessageCauseCtor: Boolean) : Entry()
 

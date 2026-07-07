@@ -147,6 +147,23 @@ internal class DotNetIlMethodContext(
         adjustStackDepth(pops = 0, pushes = 1)
     }
 
+    /**
+     * Records the phantom result of a value-position `try`/`catch` construct none of whose
+     * branches reached its join label: every branch terminated (threw or left toward an outer
+     * target such as the return join), so nothing was drained into the result local and the
+     * label plus its reload are skipped. Like [notePhantomValueAfterThrow], the consumer's dead
+     * instructions still need the tracker to show the value the construct never produces;
+     * unlike after a plain `throw`, the depth left behind by the last terminated branch varies
+     * (a value-position `throw` leaves its own phantom, a return/break/continue `leave` drains
+     * to 0), so the depth is set absolutely — the construct entered at depth 0 (checked at
+     * `.try` entry) and its net effect is exactly the one phantom result.
+     */
+    fun notePhantomValueAtTerminatedTryJoin() {
+        check(isTerminated) { "Internal .NET backend error: phantom stack value outside a terminated emission point" }
+        stackDepth = 1
+        if (maxStackDepth < 1) maxStackDepth = 1
+    }
+
     fun emitBranch(instruction: String, targetLabel: String, pops: Int = 0) {
         appendIndentedLine("$instruction $targetLabel")
         adjustStackDepth(pops, pushes = 0)
