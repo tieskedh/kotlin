@@ -122,7 +122,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
                 endOffset = if (isSynthetic) SYNTHETIC_OFFSET else endOffset,
                 origin = updatedOrigin,
                 name = name,
-                visibility = c.visibilityConverter.convertToDescriptorVisibility(visibility),
+                visibility = visibility,
                 isInline = namedFunction?.isInline == true,
                 isExpect = namedFunction?.isExpect == true,
                 returnType = function.returnTypeRef.toIrType(),
@@ -196,7 +196,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
                 endOffset = endOffset,
                 origin = origin,
                 name = SpecialNames.INIT,
-                visibility = c.visibilityConverter.convertToDescriptorVisibility(visibility),
+                visibility = visibility,
                 isInline = false,
                 isExpect = constructor.isExpect,
                 returnType = constructor.returnTypeRef.toIrType(),
@@ -255,7 +255,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
                 endOffset = if (origin == IrDeclarationOrigin.ENUM_CLASS_SPECIAL_MEMBER) SYNTHETIC_OFFSET else endOffset,
                 origin = origin,
                 name = property.name,
-                visibility = c.visibilityConverter.convertToDescriptorVisibility(property.visibility),
+                visibility = property.visibility,
                 modality = property.modality!!,
                 symbol = symbols.propertySymbol,
                 isVar = property.isVar,
@@ -286,7 +286,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
                                 firProperty = property,
                                 origin = IrDeclarationOrigin.PROPERTY_DELEGATE,
                                 symbol = symbols.backingFieldSymbol!!,
-                                visibility = c.visibilityConverter.convertToDescriptorVisibility(property.fieldVisibility),
+                                visibility = property.fieldVisibility,
                                 name = NameUtils.propertyDelegateName(property.name),
                                 isFinal = true,
                                 firInitializerExpression = delegate.takeIf { property.isReplSnippetDeclaration != true },
@@ -306,7 +306,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
                                 property,
                                 IrDeclarationOrigin.PROPERTY_BACKING_FIELD,
                                 symbols.backingFieldSymbol!!,
-                                c.visibilityConverter.convertToDescriptorVisibility(property.fieldVisibility),
+                                property.fieldVisibility,
                                 property.name,
                                 property.isVal,
                                 initializer,
@@ -403,7 +403,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
             endOffset = UNDEFINED_OFFSET,
             origin = IrDeclarationOrigin.SYNTHETIC_JAVA_PROPERTY_DELEGATE,
             name = property.name,
-            visibility = visibilityConverter.convertToDescriptorVisibility(property.visibility),
+            visibility = property.visibility,
             modality = property.modality ?: Modality.FINAL,
             symbol = IrPropertySymbolImpl(),
             isVar = property.isVar,
@@ -436,7 +436,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
         val containerSource = (correspondingProperty as? IrProperty)?.containerSource
         val accessorReturnType = if (isSetter) builtins.unitType else propertyType
         val visibility = propertyAccessor?.visibility?.let {
-            c.visibilityConverter.convertToDescriptorVisibility(it)
+            it
         }
         return IrFactoryImpl.createSimpleFunction(
             startOffset = startOffset,
@@ -493,7 +493,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
         firProperty: FirProperty,
         origin: IrDeclarationOrigin,
         symbol: IrFieldSymbol,
-        visibility: DescriptorVisibility,
+        visibility: Visibility,
         name: Name,
         isFinal: Boolean,
         firInitializerExpression: FirExpression?,
@@ -560,7 +560,7 @@ class Fir2IrCallableDeclarationsGenerator(private val c: Fir2IrComponents) : Fir
                 endOffset = endOffset,
                 origin = origin,
                 name = field.name,
-                visibility = c.visibilityConverter.convertToDescriptorVisibility(field.visibility),
+                visibility = field.visibility,
                 symbol = symbol,
                 type = irType,
                 isFinal = field.modality == Modality.FINAL,

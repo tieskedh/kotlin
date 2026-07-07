@@ -1415,7 +1415,7 @@ class Fir2IrDeclarationStorage(
                         symbol = IrClassSymbolImpl(),
                         name = facadeShortName,
                         kind = ClassKind.CLASS,
-                        visibility = DescriptorVisibilities.PUBLIC,
+                        visibility = Visibilities.Public,
                         modality = Modality.FINAL,
                         source = containerSource
                     ).apply {
