@@ -254,12 +254,6 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * `Point(1, 2)` → arguments then `newobj instance void 'Point'::.ctor(int32, int32)`
-     * (probe-verified; `newobj` pops the arguments and pushes the new instance, calling the
-     * constructor with the freshly allocated `this` as argument 0). Generic instantiations are
-     * rejected loudly, never erased.
-     */
-    /**
      * `throw e` -> the exception reference, then IL `throw` (JVM precedent: `IrThrow` maps 1:1
      * onto the platform throw instruction, no lowering). Only values of a
      * [mapped exception type][DotNetIlValueType.MappedClass] can be thrown. A rethrow (`throw e`
@@ -279,6 +273,12 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitThrow()
     }
 
+    /**
+     * `Point(1, 2)` → arguments then `newobj instance void 'Point'::.ctor(int32, int32)`
+     * (probe-verified; `newobj` pops the arguments and pushes the new instance, calling the
+     * constructor with the freshly allocated `this` as argument 0). Generic instantiations are
+     * rejected loudly, never erased.
+     */
     private fun emitConstructorCall(call: IrConstructorCall, expectedType: DotNetIlValueType) {
         if (call.typeArguments.isNotEmpty()) {
             dotNetUnsupported("generic class types are not supported yet")
@@ -317,10 +317,11 @@ internal class DotNetIlExpressionCodegen(
      * `System.InvalidOperationException::.ctor(string)` — every emitted `.ctor` overload
      * is ilasm-probe-verified (assembled and executed). The overload is
      * checked against the registry's whitelist: `()` and `(String?)` exist on every mapped CLR
-     * type, `(String?, Throwable?)` only where
-     * [hasMessageCauseCtor][DotNetMappedExceptions.Entry.Mapped.hasMessageCauseCtor] records the
-     * CLR `(string, Exception)` overload, and the cause-only `(Throwable?)` constructor has no
-     * CLR overload on any target.
+     * type, `(String?, Throwable?)` maps where
+     * [hasMessageCauseCtor][DotNetMappedExceptions.Entry.Mapped.hasMessageCauseCtor] is set (a
+     * mirror of the Kotlin stdlib's declared constructor surface — the CLR `(string, Exception)`
+     * overload itself exists on every mapped type, probe-verified), and the cause-only
+     * `(Throwable?)` constructor has no CLR overload on any target.
      */
     private fun emitMappedExceptionConstructorCall(
         call: IrConstructorCall,

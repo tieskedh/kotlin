@@ -500,10 +500,13 @@ internal class DotNetIlMethodCodegen(
      * A `try`/`catch` in value position (Kotlin's `IrTry` has a value): `leave` discards the
      * evaluation stack (ECMA-335), so the branch results cannot cross the region boundary on the
      * stack — each branch drains its value into a synthetic result local and the join label
-     * reloads it (probe-verified template). The CLR additionally requires an empty evaluation
-     * stack at `.try` entry, so a `try` expression with operands already on the stack (e.g. as a
-     * non-first call argument) is rejected — a stated deviation from the JVM backend, whose
-     * platform has no such restriction (operand spilling is deferred).
+     * reloads it (probe-verified template). The join is skipped entirely when every branch
+     * terminated (threw or left toward an outer target), exactly like [emitTryStatement]'s end
+     * label: the construct is then `Nothing`-like and only a phantom result keeps the tracker
+     * balanced for the consumer's dead instructions. The CLR additionally requires an empty
+     * evaluation stack at `.try` entry, so a `try` expression with operands already on the
+     * stack (e.g. as a non-first call argument) is rejected — a stated deviation from the JVM
+     * backend, whose platform has no such restriction (operand spilling is deferred).
      */
     private fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType) {
         if (methodContext.stackDepth != 0) {
@@ -518,8 +521,16 @@ internal class DotNetIlMethodCodegen(
                 methodContext.emitLeave(endLabel)
             }
         }
-        methodContext.emitLabel(endLabel)
-        methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+        if (methodContext.isLabelReferenced(endLabel)) {
+            methodContext.emitLabel(endLabel)
+            methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+        } else {
+            // No branch ever emitted `leave` to the join: nothing was drained into the result
+            // local, and emitting the label plus the reload would resurrect whatever phantom
+            // depth the last terminated branch left behind (emitLabel keeps the current depth
+            // for an unreferenced label), permanently unbalancing the stack tracker.
+            methodContext.notePhantomValueAtTerminatedTryJoin()
+        }
     }
 
     /**
