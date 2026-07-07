@@ -79,12 +79,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - File facade names are precomputed pre-gate (`DotNetIlEmitter.buildFileClassNames`): every
   declared top-level class reserves its IL name even when it is later skipped, so facade naming
   depends only on what the module declares, never on which classes survive support gates.
+  Injected stdlib declarations are excepted — they are not module declarations and reserve no
+  facade name (`DotNetMappedExceptions.isExceptionStdlibDeclaration` filters them out).
 - The fake stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package
   (`kotlin.io` for `println`, `kotlin` for `Char.code`), filtered through the intrinsic registry and
   never emitted as classes of their own. Injected declarations must compile without any diagnostics,
   including warnings: the FIR test infrastructure maps every reported diagnostic back to a test
   file and crashes on diagnostics in injected files (suppress e.g. deprecations locally).
-- Exceptions follow the JVM model: `IrThrow` (and later `IrTry`) map 1:1 onto the platform's
+- Exceptions follow the JVM model: `IrThrow` and `IrTry` map 1:1 onto the platform's
   exception machinery with NO lowering (no WASM/JS TryCatchCanonicalization or
   MultipleCatchesLowering). Built-in exception classes are TYPE-MAPPED onto the CLR hierarchy
   (JVM analogue: `JavaToKotlinClassMap`) via the curated `DotNetMappedExceptions` registry, so
@@ -101,11 +103,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   per-type reasons — mapping them would observably break catch semantics (see the registry KDoc).
   Accepted deltas, documented on the registry: `message` keeps type `String?` but is never null
   on mapped exceptions (no-arg `Exception()` yields the CLR default text); the constructor
-  whitelist is `()`/`(String?)` everywhere, `(String?, Throwable?)` only where the CLR overload
-  exists, and the cause-only `(Throwable?)` constructor is rejected (no CLR overload). `throw e`
-  inside a catch is a plain `ldloc`/`throw` preserving object identity; the IL `rethrow`
-  instruction is never emitted (Kotlin has no bare rethrow; stack-trace-restart delta is moot
-  until traces are surfaced). The injected exception declarations are excluded from codegen
+  whitelist is `()`/`(String?)` everywhere and `(String?, Throwable?)` where the registry's
+  `hasMessageCauseCtor` flag is set — the flag mirrors the Kotlin stdlib's declared constructor
+  surface, not CLR availability (the CLR `(string, Exception)` overload exists on every mapped
+  type, probe-verified) — and the cause-only `(Throwable?)` constructor is rejected (no CLR
+  overload). `throw e` inside a catch is a plain `ldloc`/`throw` preserving object identity; the
+  IL `rethrow` instruction is never emitted (Kotlin has no bare rethrow; stack-trace-restart
+  delta is moot until traces are surfaced). The injected exception declarations are excluded from codegen
   entirely — the class-level parallel of an intrinsic's `excludesDeclarationFromCodegen` — and
   user classes extending them are shape-gate-rejected until the inheritance model exists.
   Deferred: Roslyn-parity `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws)
@@ -162,13 +166,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   IL of an affected test program reassembled under a fresh hash is blocked again, every time — the
   block is deterministic and effectively permanent per affected program on that machine, and
   re-running the suite does NOT clear it (an earlier "transient burst" theory is disproved).
-  Concretely, 2 of the 11 dotnet box programs (`booleanShortCircuit`, `forLoopEdges`) are always
-  blocked; the other 9 usually load but are occasionally blocked transiently too when a whole-suite
-  run loads many fresh dlls in a burst (e.g. `charOperations` blocked in one parser variant and
-  loaded in the other within the same run). The trigger is an opaque whole-file ML threshold, not a
-  specific instruction pattern: each half of the flagged `booleanShortCircuit` assembly (helpers
-  with the Int.MIN_VALUE-guarded `div` pattern alone, or the string-comparison half alone) passes
-  when assembled separately; only the complete program is flagged, and the equally div-guard-heavy
+  Concretely, of the 11 dotnet box programs existing at measurement time, 2 (`booleanShortCircuit`,
+  `forLoopEdges`) were always blocked; the other 9 usually loaded but were occasionally blocked
+  transiently too when a whole-suite run loads many fresh dlls in a burst (e.g. `charOperations`
+  blocked in one parser variant and loaded in the other within the same run). The corpus has since
+  grown well past those 11 programs; the newer programs have no measured SAC verdicts. The trigger
+  is an opaque whole-file ML threshold, not a specific instruction pattern: each half of the
+  flagged `booleanShortCircuit` assembly (helpers with the Int.MIN_VALUE-guarded `div` pattern
+  alone, or the string-comparison half alone) passes when assembled separately; only the
+  complete program is flagged, and the equally div-guard-heavy
   `intMinValueDivision` program passes.
 - `DotNetBoxRunner` retries a blocked load a few times with a short delay to absorb a genuinely
   in-flight verdict, then aborts the test as SKIPPED (JUnit `TestAbortedException`) with a
