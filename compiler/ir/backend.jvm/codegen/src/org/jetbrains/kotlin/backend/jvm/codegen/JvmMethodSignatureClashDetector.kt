@@ -10,7 +10,7 @@ import org.jetbrains.kotlin.backend.common.linkage.issues.SignatureClashDetector
 import org.jetbrains.kotlin.backend.common.lower.ANNOTATION_IMPLEMENTATION
 import org.jetbrains.kotlin.backend.jvm.JvmBackendErrors
 import org.jetbrains.kotlin.backend.jvm.JvmLoweredDeclarationOrigin
-import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.diagnostics.KtDiagnosticFactory1
 import org.jetbrains.kotlin.diagnostics.rendering.CommonRenderers
 import org.jetbrains.kotlin.diagnostics.rendering.Renderers
@@ -94,7 +94,7 @@ class JvmMethodSignatureClashDetector(
                 // In IFoo$DefaultImpls we should report errors only if there are private methods among conflicting ones
                 // (otherwise such errors would be reported twice: once for IFoo and once for IFoo$DefaultImpls).
                 if (classCodegen.irClass.origin != JvmLoweredDeclarationOrigin.DEFAULT_IMPLS ||
-                    declarations.any { DescriptorVisibilities.isPrivate(it.visibility) }
+                    declarations.any { Visibilities.isPrivate(it.visibility) }
                 ) {
                     reportJvmSignatureClash(
                         diagnosticReporter,
