@@ -13,7 +13,6 @@ import org.jetbrains.kotlin.fir.references.FirControlFlowGraphReference
 import org.jetbrains.kotlin.fir.render
 import org.jetbrains.kotlin.fir.resolve.dfa.*
 import org.jetbrains.kotlin.fir.visitors.FirVisitorVoid
-import org.jetbrains.kotlin.utils.DFS
 import org.jetbrains.kotlin.utils.Printer
 
 private class ControlFlowGraphRenderer(
@@ -52,7 +51,7 @@ private class ControlFlowGraphRenderer(
     }
 
     fun renderPartialGraph(controlFlowGraph: ControlFlowGraph) {
-        val nodes = DFS.topologicalOrder(listOf(controlFlowGraph.enterNode)) { it.followingNodes }
+        val nodes = controlFlowGraph.topological()
             .associateWithTo(linkedMapOf()) { nodeCounter++ }
         printer.renderNodes(nodes.filterKeys { it.level >= controlFlowGraph.enterNode.level })
         printer.renderEdges(nodes)

@@ -558,8 +558,9 @@ private class FirPartialBodyExpressionResolveTransformer(
  *   to be resolved before the file to build correct [CFG][ControlFlowGraph].
  * - [FirScript] – All members which [isUsedInControlFlowGraphBuilderForScript] have
  *   to be resolved before the script to build correct [CFG][ControlFlowGraph].
- * - [FirRegularClass] – All members which [isUsedInControlFlowGraphBuilderForClass] have
- *   to be resolved before the class to build correct [CFG][ControlFlowGraph].
+ * - [FirRegularClass] – All declarations which [isUsedInControlFlowGraphBuilderForClass]
+ *   or [isUsedInControlFlowGraphBuilderForStatic] have to be resolved before the
+ *   class to build correct [CFG][ControlFlowGraph].
  *
  * @see BodyStateKeepers
  * @see FirBodyResolveTransformer
@@ -616,7 +617,7 @@ private class LLFirBodyTargetResolver(target: LLFirResolveTarget) : LLFirAbstrac
                     declarationWithMembers = target,
                     withDeclaration = this::withRegularClass,
                     declarationsProvider = FirRegularClass::declarations,
-                    isUsedInControlFlowBuilder = FirDeclaration::isUsedInClassControlFlowGraphBuilder,
+                    isUsedInControlFlowBuilder = FirDeclaration::isUsedInClassOrStaticControlFlowGraphBuilder,
                 )
 
                 performCustomResolveUnderLock(target) {
@@ -686,12 +687,15 @@ private class LLFirBodyTargetResolver(target: LLFirResolveTarget) : LLFirAbstrac
 
         val dataFlowAnalyzer = transformer.declarationsTransformer.dataFlowAnalyzer
         dataFlowAnalyzer.enterClass(target, buildGraph = true)
-        val controlFlowGraph = dataFlowAnalyzer.exitClass()
-            ?: errorWithAttachment("CFG should not be 'null' as 'buildGraph' is specified") {
-                withFirEntry("firClass", target)
-            }
+        val [controlFlowGraph, staticControlFlowGraph] = dataFlowAnalyzer.exitClass()
+        controlFlowGraph ?: errorWithAttachment("CFG should not be 'null' as 'buildGraph' is specified") {
+            withFirEntry("firClass", target)
+        }
 
         target.replaceControlFlowGraphReference(FirControlFlowGraphReferenceImpl(controlFlowGraph))
+        if (staticControlFlowGraph != null) {
+            target.replaceStaticControlFlowGraphReference(FirControlFlowGraphReferenceImpl(staticControlFlowGraph))
+        }
     }
 
     private inline fun <T : FirElementWithResolveState> resolveMembersForControlFlowGraph(
@@ -1119,5 +1123,6 @@ private val FirDeclaration.isUsedInFileControlFlowGraphBuilder: Boolean
 private val FirDeclaration.isUsedInScriptControlFlowGraphBuilder: Boolean
     get() = this is FirControlFlowGraphOwner && isUsedInControlFlowGraphBuilderForScript
 
-private val FirDeclaration.isUsedInClassControlFlowGraphBuilder: Boolean
-    get() = this is FirControlFlowGraphOwner && isUsedInControlFlowGraphBuilderForClass
+private val FirDeclaration.isUsedInClassOrStaticControlFlowGraphBuilder: Boolean
+    get() = this is FirControlFlowGraphOwner &&
+            (isUsedInControlFlowGraphBuilderForClass || isUsedInControlFlowGraphBuilderForStatic)

@@ -97,7 +97,9 @@ class ControlFlowGraph(val declaration: FirDeclaration?, val name: String, val k
 
     enum class Kind {
         File,
+        Static,
         Class,
+        EnumEntry,
         Constructor,
         Function,
         Script,
@@ -222,3 +224,54 @@ enum class EdgeKind(
 
 private val CFGNode<*>.previousNodeCount
     get() = previousNodes.count { it.owner == owner && !edgeFrom(it).kind.isBack }
+
+private enum class VisitState {
+    VISITING,
+    VISITED,
+}
+
+/**
+ * Return a list of all [nodes][CFGNode] contained within this graph and its subgraphs in topological order.
+ * Implemented using a non-recursive DFS, to avoid issues because of long paths through the graph.
+ */
+fun ControlFlowGraph.topological(): List<CFGNode<*>> {
+    val states = mutableMapOf<CFGNode<*>, VisitState>()
+    val stack = ArrayDeque<CFGNode<*>>().apply {
+        add(enterNode)
+    }
+
+    return buildList {
+        while (stack.isNotEmpty()) {
+            val node = stack.last()
+            when (states[node]) {
+                // First time encountering node on the stack.
+                null -> {
+                    states[node] = VisitState.VISITING
+                    for (next in node.followingNodes.asReversed()) {
+                        when (states[next]) {
+                            null -> stack.addLast(next) // First time, add to the stack.
+                            VisitState.VISITING -> Unit // Cycle... ...skip!
+                            VisitState.VISITED -> Unit // Already visited, skip!
+                        }
+                    }
+                }
+
+                // Returning to node on the stack, add node to the list.
+                VisitState.VISITING -> {
+                    states[node] = VisitState.VISITED
+                    stack.removeLast()
+                    add(node)
+                }
+
+                // Already visited, skip!
+                VisitState.VISITED -> {
+                    stack.removeLast()
+                }
+            }
+        }
+
+        // Nodes were added in reverse-topological order,
+        // so reverse to get the correct order.
+        reverse()
+    }
+}
