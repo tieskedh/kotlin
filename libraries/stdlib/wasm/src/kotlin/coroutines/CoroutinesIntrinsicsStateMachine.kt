@@ -8,7 +8,6 @@
 package kotlin.coroutines.intrinsics
 
 import kotlin.coroutines.Continuation
-import kotlin.coroutines.CoroutineImpl
 import kotlin.coroutines.CoroutineImplStateMachine
 import kotlin.internal.UsedFromCompilerGeneratedCode
 import kotlin.wasm.internal.WasmCoroutineMode
@@ -47,12 +46,11 @@ private inline fun <T> createCoroutineFromSuspendFunction(
 }
 
 // Is not used by Stack Switching implementation
-@PublishedApi
 @Suppress("UNCHECKED_CAST")
 @UsedFromCompilerGeneratedCode
-internal fun <T> createSimpleCoroutineFromSuspendFunction(
-    completion: Continuation<T>
-): CoroutineImpl<Any?, Any?> = object : CoroutineImplStateMachine(completion as Continuation<Any?>) {
+internal fun createSimpleCoroutineFromSuspendFunction(
+    completion: Continuation<Any?>
+) = object : CoroutineImplStateMachine(completion) {
     override fun doResume(): Any? {
         if (exception != null) throw exception as Throwable
         return result

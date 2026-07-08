@@ -61,4 +61,14 @@ internal abstract class CoroutineImplStateMachine(resultContinuation: Continuati
             }
         }
     }
+
+    protected abstract fun doResume(): Any?
+
+    public open fun create(completion: Continuation<*>): Continuation<Unit> {
+        throw UnsupportedOperationException("create(Continuation) has not been overridden")
+    }
+
+    public open fun create(value: Any?, completion: Continuation<*>): Continuation<Unit> {
+        throw UnsupportedOperationException("create(Any?;Continuation) has not been overridden")
+    }
 }

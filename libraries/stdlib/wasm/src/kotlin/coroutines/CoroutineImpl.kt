@@ -5,7 +5,6 @@
 
 package kotlin.coroutines
 
-import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
 import kotlin.internal.UsedFromCompilerGeneratedCode
 
 @SinceKotlin("1.3")
@@ -28,73 +27,12 @@ internal abstract class CoroutineImpl<T, R>(protected val resultContinuation: Co
         ?: (context[ContinuationInterceptor]?.interceptContinuation(this) ?: this)
             .also { intercepted_ = it }
 
-    // Remove after bootstrap.
-    // By now bootstrap uses older symbols resolver that does not
-    // resolve CoroutineImpl to CoroutineImplStateMachine/StackSwitching
-    @Suppress("UNCHECKED_CAST")
-    override fun resumeWith(result: Result<T>) {
-
-        var current = this
-        var currentResult: Any? = result.getOrNull()
-        var currentException: Throwable? = result.exceptionOrNull()
-
-        // This loop unrolls recursion in current.resumeWith(param) to make saner and shorter stack traces on resume
-        while (true) {
-            with(current) {
-                // Set result and exception fields in the current continuation
-                if (currentException == null) {
-                    this.result = currentResult
-                } else {
-                    state = exceptionState
-                    exception = currentException
-                }
-
-                try {
-                    val outcome = doResume()
-                    if (outcome === COROUTINE_SUSPENDED) return
-                    currentResult = outcome
-                    currentException = null
-                } catch (exception: Throwable) { // Catch all exceptions
-                    currentResult = null
-                    currentException = exception
-                }
-
-                releaseIntercepted() // this instance is terminating
-
-                val completion = resultContinuation!!
-
-                if (completion is CoroutineImpl<*, *>) {
-                    // unrolling recursion via loop
-                    current = completion as CoroutineImpl<T, R>
-                } else {
-                    // top-level completion reached -- invoke and return
-                    if (currentException != null) {
-                        completion.resumeWithException(currentException)
-                    } else {
-                        completion.resume(currentResult as R)
-                    }
-                    return
-                }
-            }
-        }
-    }
-
     protected fun releaseIntercepted() {
         val intercepted = intercepted_
         if (intercepted != null && intercepted !== this) {
             context[ContinuationInterceptor]!!.releaseInterceptedContinuation(intercepted)
         }
         this.intercepted_ = CompletedContinuation // just in case
-    }
-
-    protected abstract fun doResume(): Any?
-
-    public open fun create(completion: Continuation<*>): Continuation<Unit> {
-        throw UnsupportedOperationException("create(Continuation) has not been overridden")
-    }
-
-    public open fun create(value: Any?, completion: Continuation<*>): Continuation<Unit> {
-        throw UnsupportedOperationException("create(Any?;Continuation) has not been overridden")
     }
 }
 
