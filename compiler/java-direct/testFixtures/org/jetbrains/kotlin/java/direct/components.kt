@@ -5,10 +5,9 @@
 
 package org.jetbrains.kotlin.java.direct
 
-import org.jetbrains.kotlin.config.AnalysisFlag
-import org.jetbrains.kotlin.config.JvmAnalysisFlags
-import org.jetbrains.kotlin.config.LanguageVersion
-import org.jetbrains.kotlin.test.directives.model.RegisteredDirectives
+import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.JVMConfigurationKeys
+import org.jetbrains.kotlin.test.model.TestModule
 import org.jetbrains.kotlin.test.services.*
 
 /**
@@ -20,10 +19,14 @@ import org.jetbrains.kotlin.test.services.*
  * unset → PSI-backed `FirJavaFacade`.
  */
 internal class JavaDirectConfigurator(testServices: TestServices) : EnvironmentConfigurator(testServices) {
-    override fun provideAdditionalAnalysisFlags(
-        directives: RegisteredDirectives,
-        languageVersion: LanguageVersion,
-    ): Map<AnalysisFlag<*>, Any?> = mapOf(JvmAnalysisFlags.useJavaDirect to true)
+    override fun configureCompilerConfiguration(
+        configuration: CompilerConfiguration,
+        module: TestModule,
+    ) {
+        super.configureCompilerConfiguration(configuration, module)
+
+        configuration.put(JVMConfigurationKeys.USE_JAVA_DIRECT, true)
+    }
 }
 
 private val javaFileRegex = Regex("""^\s*//\s* FILE:\s* .*\.java\s*$""")
