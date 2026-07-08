@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.gradle.api.DefaultTask
@@ -69,7 +70,7 @@ internal abstract class FingerprintSyntheticPackage : DefaultTask() {
     abstract val packageResolvedSynchronizationFingerprint: Property<PackageResolvedSynchronization>
 
     @get:OutputFile
-    val syntheticPackageFingerprint: Provider<RegularFile> =
+    val syntheticPackageFingerprintFile: Provider<RegularFile> =
         project.objects.fileProperty().convention(
             project.layout.buildDirectory.file(
                 SYNTHETIC_PACKAGE_FINGERPRINT_PATH
@@ -96,7 +97,15 @@ internal abstract class FingerprintSyntheticPackage : DefaultTask() {
             fingerprintedDependencyGraph = withoutVersions
         )
 
-        dumpFingerprint(calculatedSyntheticPackageFingerprintWithVersions + "\n" + calculatedSyntheticPackageFingerprintWithoutVersions, syntheticPackageFingerprint.get().asFile)
+        val syntheticPackageFingerprint = SwiftImportFingerprint(
+            taskInvalidationFingerprint = calculatedSyntheticPackageFingerprintWithVersions,
+            incrementalFingerprint = calculatedSyntheticPackageFingerprintWithoutVersions
+        )
+
+        dumpFingerprint(
+            fingerprintJson.encodeToString(syntheticPackageFingerprint),
+            syntheticPackageFingerprintFile.get().asFile
+        )
     }
 
     companion object {
@@ -106,7 +115,15 @@ internal abstract class FingerprintSyntheticPackage : DefaultTask() {
             allowStructuredMapKeys = true
         }
     }
+
 }
+
+@Serializable
+internal data class SwiftImportFingerprint(
+    val taskInvalidationFingerprint: String,
+    val incrementalFingerprint: String,
+)
+
 
 /**
  * Prepares the execution-time sharing keys for [DumpXcodeBuildArgs].
@@ -128,12 +145,12 @@ internal abstract class FingerprintXcodeBuild : DefaultTask() {
 
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val syntheticPackageFingerprint: RegularFileProperty
+    abstract val syntheticPackageFingerprintFile: RegularFileProperty
 
     private val layout = project.layout
 
     @get:OutputFile
-    val xcodebuildFingerprint: Provider<RegularFile> =
+    val xcodebuildFingerprintFile: Provider<RegularFile> =
         xcodebuildSdk.map { sdk ->
             layout.buildDirectory.file(
                 xcodebuildFingerprintPathForSdk(sdk)
@@ -145,23 +162,30 @@ internal abstract class FingerprintXcodeBuild : DefaultTask() {
 
     @TaskAction
     fun fingerprint() {
-        val packageFingerprint = syntheticPackageFingerprint.get().asFile.readText().trim().split("\n")
-        val withVersion = packageFingerprint[0]
-        val withoutVersion = packageFingerprint[1]
+        val packageFingerprint = fingerprintJson.decodeFromString<SwiftImportFingerprint>(
+            syntheticPackageFingerprintFile.get().asFile.readText()
+        )
 
         val fingerprintWithVersion = fingerprintXcodebuildFingerprintInput(
             architectures = architectures.get(),
             additionalXcodeArgs = additionalXcodeArgs.get(),
-            syntheticPackageFingerprint = withVersion,
+            syntheticPackageFingerprint = packageFingerprint.taskInvalidationFingerprint,
         )
         val fingerprintWithoutVersion = fingerprintXcodebuildFingerprintInput(
             architectures = architectures.get(),
             additionalXcodeArgs = additionalXcodeArgs.get(),
-            syntheticPackageFingerprint = withoutVersion,
+            syntheticPackageFingerprint = packageFingerprint.incrementalFingerprint,
+        )
+
+        val xcodebuildFingerprint = SwiftImportFingerprint(
+            taskInvalidationFingerprint = fingerprintWithVersion,
+            incrementalFingerprint = fingerprintWithoutVersion,
         )
 
         // The dump task reads this hash during its own execution and performs the build-service claim/join step.
-        dumpFingerprint(fingerprintWithVersion + "\n" + fingerprintWithoutVersion, xcodebuildFingerprint.get().asFile)
+        dumpFingerprint(
+            fingerprintJson.encodeToString(xcodebuildFingerprint), xcodebuildFingerprintFile.get().asFile
+        )
     }
 
     companion object {
@@ -176,7 +200,7 @@ internal fun fingerprintXcodebuildFingerprintInput(
     additionalXcodeArgs: List<String>,
     syntheticPackageFingerprint: String,
 ): String {
-    val payload = dumpTaskFingerprintJson.encodeToString(
+    val payload = fingerprintJson.encodeToString(
         XcodebuildFingerprintInput(
             architectures = architectures.map { it.name }.sorted(),
             syntheticPackageFingerprint = syntheticPackageFingerprint,
@@ -194,7 +218,6 @@ private fun dumpFingerprint(fingerprint: String, outputFile: File) {
 
 @Serializable
 private data class XcodebuildFingerprintInput(
-//    val packageResolvedSynchronization: String,
     val architectures: List<String>,
     val syntheticPackageFingerprint: String,
     val additionalXcodeArgs: List<String>,
@@ -210,7 +233,7 @@ internal fun fingerprintSyntheticPackage(
     packageResolvedSynchronizationFingerprint: SerializablePackageResolvedSynchronization,
     fingerprintedDependencyGraph: TransitiveSwiftPMMetadata,
 ): String {
-    val payload = dumpTaskFingerprintJson.encodeToString(
+    val payload = fingerprintJson.encodeToString(
         SyntheticPackageFingerprintInput(
             packageResolvedSynchronizationFingerprint = packageResolvedSynchronizationFingerprint,
             dependencyGraphFingerprints = fingerprintedDependencyGraph.metadataByDependencyIdentifier.keys
@@ -262,7 +285,7 @@ internal fun fingerprintSwiftPMImportMetadata(
     metadata: SwiftPMImportMetadata,
     normalizeVersions: Boolean,
 ): String {
-    val payload = dumpTaskFingerprintJson.encodeToString(
+    val payload = fingerprintJson.encodeToString(
         SwiftPMImportMetadataFingerprintInput(
             konanTargets = metadata.konanTargets.sorted(),
             iosDeploymentVersion = metadata.iosDeploymentVersion,
@@ -293,38 +316,9 @@ private fun sha256(bytes: ByteArray): String {
 private fun ByteArray.toHexString(): String =
     joinToString("") { "%02x".format(it) }
 
-private val dumpTaskFingerprintJson = Json {
+internal val fingerprintJson = Json {
     encodeDefaults = true
     ignoreUnknownKeys = true
-}
-
-
-internal fun fingerprintLocalPackageSources(
-    files: List<File>,
-): String {
-    val digest = MessageDigest.getInstance(SWIFT_IMPORT_HASH_ALGORITHM)
-    files
-        // The tracking file can contain both individual files and source directories. Directories are expanded here so
-        // source edits, additions, and removals change the dump sharing key.
-        .flatMap { trackedFile ->
-            when {
-                trackedFile.isFile -> listOf(trackedFile to trackedFile.name)
-                trackedFile.isDirectory -> trackedFile.walkTopDown().filter { it.isFile }
-                    .map { file -> file to file.relativeTo(trackedFile).invariantSeparatorsPath }.toList()
-                else -> emptyList()
-            }
-        }
-        // Stable ordering keeps the hash independent of filesystem traversal order.
-        .sortedBy { (_, relativePath) -> relativePath }.forEach { (file, relativePath) ->
-            // Include both relative path and content. The zero byte separators avoid accidental concatenation
-            // collisions between neighboring entries.
-            digest.update(relativePath.toByteArray())
-            digest.update(0.toByte())
-            digest.update(file.readBytes())
-            digest.update(0.toByte())
-        }
-
-    return digest.digest().toHexString()
 }
 
 @Serializable
@@ -336,15 +330,6 @@ private data class SwiftPMImportMetadataFingerprintInput(
     val tvosDeploymentVersion: String?,
     val isModulesDiscoveryEnabled: Boolean,
     val dependencies: List<SwiftPMDependency>,
-)
-
-
-internal fun fingerprintPackageResolvedSynchronization(
-    packageResolvedSynchronization: SerializablePackageResolvedSynchronization,
-): String = sha256(
-    dumpTaskFingerprintJson.encodeToString(
-        packageResolvedSynchronization
-    )
 )
 
 private fun SwiftPMDependency.normalizedForFingerprint(normalizeVersions: Boolean): SwiftPMDependency = when (this) {

@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
+import kotlinx.serialization.decodeFromString
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.Directory
@@ -48,7 +49,7 @@ internal abstract class DumpXcodeBuildArgs : DefaultTask() {
     @get:InputFiles
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val xcodebuildFingerprint: RegularFileProperty
+    abstract val xcodebuildFingerprintFile: RegularFileProperty
 
     /**
      * Additional arguments to pass to `xcodebuild` when resolving SwiftPM dependencies.
@@ -67,7 +68,7 @@ internal abstract class DumpXcodeBuildArgs : DefaultTask() {
 
     /** Checkout path passed to xcodebuild when this task owns the shared dump. */
     @get:Internal
-    abstract val syntheticPackageFingerprint: RegularFileProperty
+    abstract val syntheticPackageFingerprintFile: RegularFileProperty
 
     @get:Inject
     protected abstract val workerExecutor: WorkerExecutor
@@ -124,17 +125,27 @@ internal abstract class DumpXcodeBuildArgs : DefaultTask() {
                 return localDerivedDataDir().resolve(markerName)
             } else {
                 return fingerprintCoordinationService.get().sharedXcodeDerivedDataDir(
-                    xcodebuildExecutionHash = readXcodebuildFingerprint(),
+                    xcodebuildExecutionHash = readXcodebuildFingerprint().incrementalFingerprint,
                     xcodebuildSdk = xcodebuildSdk.get(),
                 ).resolve(markerName)
             }
         }
 
-    private fun readXcodebuildFingerprint() = xcodebuildFingerprint.asFile.get().readText().trim().split("\n")[1]
+    private fun readXcodebuildFingerprint(): SwiftImportFingerprint =
+        xcodebuildFingerprintFile.get()
+            .asFile
+            .let { fingerprintJson.decodeFromString<SwiftImportFingerprint>(it.readText()) }
+
+    private fun readSyntheticPackageFingerprint(): SwiftImportFingerprint =
+        syntheticPackageFingerprintFile.get()
+            .asFile
+            .let { fingerprintJson.decodeFromString<SwiftImportFingerprint>(it.readText()) }
+
     private fun localDerivedDataDir() = syntheticImportDd.get().asFile.resolve("dd_${xcodebuildSdk.get()}")
 
     @Suppress("SENSELESS_COMPARISON")
-    private fun isCoordinationDisabled() = xcodebuildFingerprint.asFile.orNull == null || syntheticPackageFingerprint.asFile.orNull == null
+    private fun isCoordinationDisabled() =
+        xcodebuildFingerprintFile.asFile.orNull == null || syntheticPackageFingerprintFile.asFile.orNull == null
 
     // ./gradlew clean
     init {
@@ -162,14 +173,12 @@ internal abstract class DumpXcodeBuildArgs : DefaultTask() {
             return
         }
 
-        val syntheticPackageFingerprintFile = syntheticPackageFingerprint.asFile.get()
-
         val coordinationService = fingerprintCoordinationService.get()
 
-        val syntheticPackageFingerprint = syntheticPackageFingerprintFile.readText().trim().split("\n")[1]
+        val syntheticPackageFingerprint = readSyntheticPackageFingerprint()
 
         val claim = fingerprintCoordinationService.get().claimOrJoinXcodeDump(
-            xcodebuildExecutionHash = readXcodebuildFingerprint(),
+            xcodebuildExecutionHash = readXcodebuildFingerprint().incrementalFingerprint,
             xcodebuildSdk = xcodebuildSdk.get(),
         )
         when (claim) {
@@ -177,8 +186,8 @@ internal abstract class DumpXcodeBuildArgs : DefaultTask() {
                 runOwnerXcodeDump(
                     dumpDir = claim.bucket.ownerDumpDir,
                     derivedDataDir = claim.bucket.ownerDerivedDataDir,
-                    syntheticImportProjectRoot = coordinationService.sharedPackageGenerationRoot(syntheticPackageFingerprint),
-                    swiftPMDependenciesCheckout = coordinationService.sharedCheckoutDir(syntheticPackageFingerprint),
+                    syntheticImportProjectRoot = coordinationService.sharedPackageGenerationRoot(syntheticPackageFingerprint.incrementalFingerprint),
+                    swiftPMDependenciesCheckout = coordinationService.sharedCheckoutDir(syntheticPackageFingerprint.incrementalFingerprint),
                     xcodebuildExecutionHash = claim.bucket.key,
                 )
             }

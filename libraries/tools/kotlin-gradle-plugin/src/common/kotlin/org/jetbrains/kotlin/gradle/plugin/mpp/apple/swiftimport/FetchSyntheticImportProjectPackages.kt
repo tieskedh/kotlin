@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
+import kotlinx.serialization.decodeFromString
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -72,7 +73,7 @@ internal abstract class FetchSyntheticImportProjectPackages : DefaultTask() {
     }
 
     @get:Input
-    val gitIgnoreCheckoutDir : Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
+    val gitIgnoreCheckoutDir: Property<Boolean> = project.objects.property(Boolean::class.java).convention(false)
 
     /**
      * When `true` (project is being imported by the IDE) a failure of `swift package resolve` is
@@ -106,7 +107,7 @@ internal abstract class FetchSyntheticImportProjectPackages : DefaultTask() {
     @get:Optional
     @get:InputFile
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val syntheticPackageFingerprint: RegularFileProperty
+    abstract val syntheticPackageFingerprintFile: RegularFileProperty
 
     @get:Internal
     abstract val coordinationService: Property<SwiftImportFingerprintedCoordinationService>
@@ -122,7 +123,7 @@ internal abstract class FetchSyntheticImportProjectPackages : DefaultTask() {
         val errorFile = ideImportError.get().asFile
         errorFile.delete()
 
-        if (!syntheticPackageFingerprint.isPresent) {
+        if (!syntheticPackageFingerprintFile.isPresent) {
             submitSwiftResolveWorkAction(
                 ownerSyntheticImportProjectRoot = syntheticImportProjectRoot.get().asFile,
                 ownerSwiftPMDependenciesCheckout = swiftPMDependenciesCheckout.get().asFile,
@@ -131,10 +132,14 @@ internal abstract class FetchSyntheticImportProjectPackages : DefaultTask() {
             return
         }
 
-        val ownerHash = syntheticPackageFingerprint.asFile.get().readText().trim().split("\n")[1]
-        val claim = coordinationService.get().claimOrJoinSwiftResolve(
-            packageHash = ownerHash,
+        val syntheticPackageFingerprint = fingerprintJson.decodeFromString<SwiftImportFingerprint>(
+            syntheticPackageFingerprintFile.get().asFile.readText()
         )
+
+        val claim = coordinationService.get().claimOrJoinSwiftResolve(
+            packageHash = syntheticPackageFingerprint.incrementalFingerprint,
+        )
+
         when (claim) {
             is CoordinationClaim.Existing -> {
                 workerExecutor.noIsolation().submit(SwiftResolveAwaitWorkAction::class.java) {

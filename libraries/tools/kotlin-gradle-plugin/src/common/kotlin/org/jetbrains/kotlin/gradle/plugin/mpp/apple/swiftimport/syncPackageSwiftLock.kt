@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
+import kotlinx.serialization.decodeFromString
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.file.DirectoryProperty
@@ -15,18 +16,13 @@ import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
-import org.gradle.api.provider.Property
-import org.gradle.api.tasks.Input
 
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
-import org.gradle.api.tasks.*
 import org.gradle.work.DisableCachingByDefault
-import org.jetbrains.kotlin.gradle.utils.contentEquals
-import org.jetbrains.kotlin.gradle.utils.`is`
 
 import org.jetbrains.kotlin.gradle.utils.contentEqualsIgnoringLineEndings
 import java.io.File
@@ -50,7 +46,7 @@ internal abstract class SyncPackageResolvedTask : DefaultTask() {
     @get:Optional
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val packageFingerprint: RegularFileProperty
+    abstract val packageFingerprintFile: RegularFileProperty
 
 
     @get:Inject
@@ -58,12 +54,11 @@ internal abstract class SyncPackageResolvedTask : DefaultTask() {
 
     @TaskAction
     fun sync() {
-        val fingerprintedPackageResolved = packageFingerprint.orNull?.asFile
-            ?.readText()
-            ?.trim()
+        val fingerprintedPackageResolved = packageFingerprintFile.orNull?.asFile
+            ?.let { file -> fingerprintJson.decodeFromString<SwiftImportFingerprint>(file.readText()) }
             ?.let { fingerprint ->
                 syntheticPackagesRoot.get().asFile
-                    .resolve(fingerprint.split("\n")[1])
+                    .resolve(fingerprint.incrementalFingerprint)
                     .resolve("Package.resolved")
             }
 
@@ -82,6 +77,7 @@ internal abstract class SyncPackageResolvedTask : DefaultTask() {
 
         copySwiftLockFile(fs, src, dest)
     }
+
     companion object {
         const val TASK_NAME = "syncPersistedPackageResolved"
         const val SYNC_SYNTHETIC_PACKAGE_RESOLVED_TO_PERSISTED_TASK_NAME = "syncSyntheticPackageResolvedToPersisted"

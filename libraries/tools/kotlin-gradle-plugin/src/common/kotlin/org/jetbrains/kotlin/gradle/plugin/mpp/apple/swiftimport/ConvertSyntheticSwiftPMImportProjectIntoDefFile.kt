@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
+import kotlinx.serialization.decodeFromString
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
@@ -87,7 +88,7 @@ internal abstract class ConvertSyntheticSwiftPMImportProjectIntoDefFile : Defaul
     @get:InputFiles
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val xcodebuildFingerprint: RegularFileProperty
+    abstract val xcodebuildFingerprintFile: RegularFileProperty
 
     @get:Inject
     protected abstract val workerExecutor: WorkerExecutor
@@ -136,7 +137,7 @@ internal abstract class ConvertSyntheticSwiftPMImportProjectIntoDefFile : Defaul
             return
         }
 
-        val dumpedXcodeBuildArgsDir = if (xcodebuildFingerprint.isPresent) {
+        val dumpedXcodeBuildArgsDir = if (xcodebuildFingerprintFile.isPresent) {
             resolveDumpedXcodeBuildArgsDir()
         } else {
             syntheticDumpDir.get().asFile
@@ -190,11 +191,13 @@ internal abstract class ConvertSyntheticSwiftPMImportProjectIntoDefFile : Defaul
     }
 
     class MoreThanOneLinkerCallDiscovered(
-        linkerCalls: List<File>
+        linkerCalls: List<File>,
     ) : MoreThanOneCallDiscovered(linkerCalls, "linker")
+
     class MoreThanOneClangCallDiscovered(
-        clangCalls: List<File>
+        clangCalls: List<File>,
     ) : MoreThanOneCallDiscovered(clangCalls, "clang")
+
     abstract class MoreThanOneCallDiscovered(
         calls: List<File>,
         name: String,
@@ -285,10 +288,16 @@ internal abstract class ConvertSyntheticSwiftPMImportProjectIntoDefFile : Defaul
         }
     }
 
-    private fun resolveDumpedXcodeBuildArgsDir(): File {
-        val hash = xcodebuildFingerprint.get().asFile.readText().trim().split("\n")[1]
 
-        return fingerprintsXcodeDumpsDir.get().asFile.resolve("$hash/swiftImportClangDump/${xcodebuildSdk.get()}")
+    private fun readXcodebuildFingerprint(): SwiftImportFingerprint =
+        xcodebuildFingerprintFile.get()
+            .asFile
+            .let { fingerprintJson.decodeFromString<SwiftImportFingerprint>(it.readText()) }
+
+    private fun resolveDumpedXcodeBuildArgsDir(): File {
+
+
+        return fingerprintsXcodeDumpsDir.get().asFile.resolve("${readXcodebuildFingerprint().incrementalFingerprint}/swiftImportClangDump/${xcodebuildSdk.get()}")
     }
 
     fun defFilePath(architecture: AppleArchitecture): Provider<RegularFile> =

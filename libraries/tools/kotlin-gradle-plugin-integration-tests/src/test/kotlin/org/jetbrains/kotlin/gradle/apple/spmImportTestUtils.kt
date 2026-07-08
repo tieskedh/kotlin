@@ -72,7 +72,7 @@ const val SYNTHETIC_IMPORT_DYLIB =
 fun createLocalSwiftPackage(
     localPackageDir: Path,
     packageName: String = "LocalSwiftPackage",
-    products : List<String> = listOf(packageName),
+    products: List<String> = listOf(packageName),
     sourceLanguage: SwiftPackageSourceLanguage = SwiftPackageSourceLanguage.SWIFT_WITH_OBJC,
 ) {
     localPackageDir.createDirectories()
@@ -117,7 +117,11 @@ fun createLocalSwiftPackageWithResources(
 
             @objc public class ResourceAccessor: NSObject {
                 @objc public static func resourceContent() -> String {
-                    guard let url = Bundle.module.url(forResource: "${resourceFileName.substringBeforeLast(".")}", withExtension: "${resourceFileName.substringAfterLast(".")}") else {
+                    guard let url = Bundle.module.url(forResource: "${resourceFileName.substringBeforeLast(".")}", withExtension: "${
+            resourceFileName.substringAfterLast(
+                "."
+            )
+        }") else {
                         return "RESOURCE_NOT_FOUND"
                     }
                     return (try? String(contentsOf: url)) ?? "RESOURCE_READ_ERROR"
@@ -327,14 +331,14 @@ internal fun createSwiftPmGitRepoWithTags(
 
     writePackageManifest(repoDir, packageName, products = products)
 
-    if(source != null){
+    if (source != null) {
         products.forEach { product ->
             repoDir.resolve("Sources/$product").createDirectories()
             repoDir.resolve("Sources/$product/$product.swift").writeText(
                 source
             )
         }
-    }else{
+    } else {
         products.forEach { product ->
             repoDir.resolve("Sources/$product").createDirectories()
             repoDir.resolve("Sources/$product/$product.swift").writeText(
@@ -438,8 +442,18 @@ internal fun TestProject.initDefaultKmp(
 internal val materializedDumpEntries = listOf("clangDump.sh", "ldDump.sh", "clang_args_dump", "ld_args_dump")
 
 
-internal fun parseSwiftPMFingerprint(fingerprintFile: Path): String =
-    fingerprintFile.toFile().readText().trim().split("\n")[1]
+@Serializable
+internal data class SwiftImportFingerprint(
+    val taskInvalidationFingerprint: String,
+    val incrementalFingerprint: String,
+)
+
+
+internal fun parseSwiftPMFingerprint(fingerprintFile : Path) : SwiftImportFingerprint =
+    JsonHolder.fingerprintJson.decodeFromString<SwiftImportFingerprint>(fingerprintFile.readText())
+
+internal fun parseSwiftPMIncrementalFingerprint(fingerprintFile: Path): String =
+    parseSwiftPMFingerprint(fingerprintFile).incrementalFingerprint
 
 internal fun swiftPMXcodeBuildFingerprint(
     projectDir: Path,
@@ -453,10 +467,10 @@ internal fun swiftPMPackageFingerprint(
     projectDir.resolve("build").resolve(FingerprintSyntheticPackage.SYNTHETIC_PACKAGE_FINGERPRINT_PATH)
 
 internal fun swiftPMFingerprintCheckoutDir(
-    projectDir : Path,
+    projectDir: Path,
     rootProject: Path,
 ): Path {
-    val packageFingerprint = parseSwiftPMFingerprint(swiftPMSyntheticPackageFingerprint(projectDir))
+    val packageFingerprint = parseSwiftPMIncrementalFingerprint(swiftPMSyntheticPackageFingerprint(projectDir))
     return rootProject.resolve(SHARED_CHECKOUT_DIR).resolve(packageFingerprint)
 
 }
@@ -470,7 +484,7 @@ private fun swiftPMXcodeDumpRoot(
     rootDir: Path,
     fingerprintFile: Path,
 ): Path =
-    rootDir.resolve(SHARED_XCODE_DUMP_DIR).resolve(parseSwiftPMFingerprint(fingerprintFile))
+    rootDir.resolve(SHARED_XCODE_DUMP_DIR).resolve(parseSwiftPMIncrementalFingerprint(fingerprintFile))
 
 private fun swiftPMXcodeDumpPath(
     rootDir: Path,
@@ -501,7 +515,7 @@ internal fun swiftPMXcodebuildDerivedDataPath(
         "swiftImportDd/dd_$sdk",
     )
 
-internal fun TestProject.localXcodebuildFingerprint(
+internal fun TestProject.localXcodebuildFingerprintFile(
     projectName: String? = null,
     sdk: String,
 ): Path =
@@ -510,7 +524,7 @@ internal fun TestProject.localXcodebuildFingerprint(
         sdk = sdk,
     )
 
-internal fun TestProject.localPackageFingerprint(
+internal fun TestProject.localPackageFingerprintFile(
     projectName: String? = null,
 ): Path =
     swiftPMPackageFingerprint(
@@ -523,7 +537,7 @@ internal fun TestProject.localDumpDir(
 ): Path =
     swiftPMXcodebuildClangDumpPath(
         rootDir = projectPath,
-        hashFile = localXcodebuildFingerprint(projectName, sdk),
+        hashFile = localXcodebuildFingerprintFile(projectName, sdk),
         sdk = sdk,
     )
 
@@ -533,19 +547,19 @@ internal fun TestProject.localDerivedDataDir(
 ): Path =
     swiftPMXcodebuildDerivedDataPath(
         rootDir = projectPath,
-        hashFile = localXcodebuildFingerprint(projectName, sdk),
+        hashFile = localXcodebuildFingerprintFile(projectName, sdk),
         sdk = sdk,
     )
 
 internal fun TestProject.localIphoneosDumpFingerprintFile(
     projectName: String? = null,
 ): Path =
-    localXcodebuildFingerprint(projectName, "iphoneos")
+    localXcodebuildFingerprintFile(projectName, "iphoneos")
 
 internal fun TestProject.localIphonesimulatorDumpFingerprintFile(
     projectName: String? = null,
 ): Path =
-    localXcodebuildFingerprint(projectName, "iphonesimulator")
+    localXcodebuildFingerprintFile(projectName, "iphonesimulator")
 
 internal fun TestProject.localIphoneosDumpDir(
     projectName: String? = null,
@@ -569,9 +583,6 @@ internal fun TestProject.localIphonesimulatorDerivedDataDir(
 
 internal fun sharedRootBucketDir(dumpDir: Path): Path =
     dumpDir.parent.parent
-
-internal fun xcodeDumpFingerprintStamp(dumpDir: Path): Path =
-    dumpDir.resolve("xcode-dump-fingerprint.json")
 
 internal fun assertDumpDirectoryContainsXcodebuildArgsDump(dumpDir: Path) {
     assertDirectoryExists(dumpDir)
@@ -728,7 +739,7 @@ internal fun TestProject.dumpTaskGraph(
     return taskGraph
 }
 
-internal fun Set<String>.assertExactSwiftImportTasksInGraph(vararg tasks : String) {
+internal fun Set<String>.assertExactSwiftImportTasksInGraph(vararg tasks: String) {
     val taskToExclude = setOf(
         ":kmpPartiallyResolvedDependenciesChecker",
         ":downloadKotlinNativeDistribution",
@@ -743,7 +754,7 @@ internal fun Set<String>.assertExactSwiftImportTasksInGraph(vararg tasks : Strin
     filteredGraph.assertExactTaskGraph(*tasks)
 }
 
-internal fun Set<String>.assertExactTaskGraph(vararg tasks : String) {
+internal fun Set<String>.assertExactTaskGraph(vararg tasks: String) {
     val expected = tasks.toSet()
 
     val difference = (this - expected + (expected - this)).toSet()
@@ -838,7 +849,7 @@ private fun assertCheckoutVersion(checkoutRepoDir: Path, repoRef: RepoRef, versi
 
 internal fun assertGitIgnoreEquals(
     gitIgnorePath: Path,
-    expectedGitIgnoreContent: String
+    expectedGitIgnoreContent: String,
 ) {
     val actualGitIgnoreContent = gitIgnorePath.toFile().readText()
 
@@ -991,6 +1002,12 @@ data class SwiftPackageTarget(
 private object JsonHolder {
     val json = Json {
         ignoreUnknownKeys = true
+    }
+
+    val fingerprintJson = Json {
+        encodeDefaults = true
+        ignoreUnknownKeys = true
+
     }
 }
 

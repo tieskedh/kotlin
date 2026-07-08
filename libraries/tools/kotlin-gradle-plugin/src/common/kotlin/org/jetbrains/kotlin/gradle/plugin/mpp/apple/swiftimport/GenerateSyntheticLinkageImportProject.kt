@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
+import kotlinx.serialization.decodeFromString
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.FileSystemOperations
@@ -47,7 +48,7 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
     @get:InputFile
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val syntheticPackageFingerprint: RegularFileProperty
+    abstract val syntheticPackageFingerprintFile: RegularFileProperty
 
     @get:Internal
     abstract val coordinationService: Property<SwiftImportFingerprintedCoordinationService>
@@ -129,31 +130,36 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
             )
         }
 
-        if (!syntheticPackageFingerprint.isPresent) {
+        if (!syntheticPackageFingerprintFile.isPresent) {
             runPackageGeneration(
                 syntheticImportProjectRoot.get().asFile
             )
             return
-        } else {
-            val claim = coordinationService.get().claimOrJoinPackageGeneration(
-                packageHash = syntheticPackageFingerprint.get().asFile.readText().trim().split("\n")[1]
-            )
-
-            when (claim) {
-                is CoordinationClaim.Existing -> {
-                    coordinationService.get().awaitPackageGeneration(claim.bucket)
-                }
-
-                is CoordinationClaim.Owner -> runOwnerPackageGeneration(
-                    claim.bucket
-                )
-            }
-            syncFromOwner(
-                claim.bucket.ownerSyntheticPackageRoot,
-                syntheticImportProjectRoot.get().asFile,
-            )
-
         }
+
+        val syntheticPackageFingerprint = fingerprintJson.decodeFromString<SwiftImportFingerprint>(
+            syntheticPackageFingerprintFile.get().asFile.readText()
+        )
+
+        val claim = coordinationService.get().claimOrJoinPackageGeneration(
+            packageHash = syntheticPackageFingerprint.incrementalFingerprint
+        )
+
+        when (claim) {
+            is CoordinationClaim.Existing -> {
+                coordinationService.get().awaitPackageGeneration(claim.bucket)
+            }
+
+            is CoordinationClaim.Owner -> runOwnerPackageGeneration(
+                claim.bucket
+            )
+        }
+        syncFromOwner(
+            claim.bucket.ownerSyntheticPackageRoot,
+            syntheticImportProjectRoot.get().asFile,
+        )
+
+
     }
 
     private fun syncFromOwner(
@@ -467,6 +473,7 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
             DYNAMIC,
             INFERRED,
         }
+
         const val TASK_NAME = "generateSyntheticLinkageSwiftPMImportProject"
         const val SYNTHETIC_IMPORT_TARGET_MAGIC_NAME = "KotlinMultiplatformLinkedPackage"
         const val SYNTHETIC_IMPORT_DYLIB = "KotlinMultiplatformLinkedPackageDylib"

@@ -46,7 +46,6 @@ import org.jetbrains.kotlin.incremental.testingUtils.assertEqualDirectories
 import org.jetbrains.kotlin.konan.target.KonanTarget
 import org.junit.jupiter.api.condition.OS
 import kotlin.io.path.deleteRecursively
-import kotlin.io.path.readText
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 
@@ -186,7 +185,8 @@ class FetchSyntheticImportProjectPackagesTests : KGPBaseTest() {
                 build(
                     ":${FetchSyntheticImportProjectPackages.TASK_NAME}"
                 ) {
-                    val rootSyntheticPackageHash = projectPath.resolve(SYNTHETIC_PACKAGE_FINGERPRINT_BUILD_DIR_PATH).readText().trim().split("\n")[1]
+                    val rootSyntheticPackageHash =
+                        parseSwiftPMIncrementalFingerprint(projectPath.resolve(SYNTHETIC_PACKAGE_FINGERPRINT_BUILD_DIR_PATH))
 
                     val syntheticPackage = projectPath.resolve(SHARED_SYNTHETIC_PACKAGE_DIR).resolve(rootSyntheticPackageHash)
                         .resolve("Package.resolved")
@@ -267,9 +267,9 @@ class FetchSyntheticImportProjectPackagesTests : KGPBaseTest() {
                     ":kmpMapsConsumer:${FetchSyntheticImportProjectPackages.TASK_NAME}"
                 ) {
 
-                    val rootSyntheticPackageHash = rootSyntheticPackageFingerprintFile.readText().trim().split("\n")[1]
+                    val rootSyntheticPackageHash = parseSwiftPMIncrementalFingerprint(rootSyntheticPackageFingerprintFile)
                     val consumerSyntheticPackageHash =
-                        consumerSyntheticPackageFingerprintFile.readText().trim().split("\n")[1]
+                        parseSwiftPMIncrementalFingerprint(consumerSyntheticPackageFingerprintFile)
 
                     assertNotEquals(
                         rootSyntheticPackageHash, consumerSyntheticPackageHash, "Different dependency graph should produce different hash"
@@ -323,9 +323,9 @@ class FetchSyntheticImportProjectPackagesTests : KGPBaseTest() {
                     "-P${useMapsRepo}=true",
                     ":kmpMapsConsumer:${FetchSyntheticImportProjectPackages.TASK_NAME}"
                 ) {
-                    val rootSyntheticPackageHash = rootSyntheticPackageFingerprintFile.readText().trim().split("\n")[1]
+                    val rootSyntheticPackageHash = parseSwiftPMIncrementalFingerprint(rootSyntheticPackageFingerprintFile)
                     val consumerSyntheticPackageHash =
-                        consumerSyntheticPackageFingerprintFile.readText().trim().split("\n")[1]
+                        parseSwiftPMIncrementalFingerprint(consumerSyntheticPackageFingerprintFile)
 
                     assertEquals(
                         rootSyntheticPackageHash, consumerSyntheticPackageHash, "Same dependency graph should produce same hash"
@@ -400,8 +400,9 @@ class FetchSyntheticImportProjectPackagesTests : KGPBaseTest() {
                     ":kmpMapsConsumer:${FetchSyntheticImportProjectPackages.TASK_NAME}"
                 ) {
 
-                    val rootSyntheticPackageHash = rootSyntheticPackageFingerprintFile.readText().trim().split("\n")[1]
-                    val consumerSyntheticPackageHash = consumerSyntheticPackageFingerprintFile.readText().trim().split("\n")[1]
+                    val rootSyntheticPackageHash = parseSwiftPMIncrementalFingerprint(rootSyntheticPackageFingerprintFile)
+                    val consumerSyntheticPackageHash =
+                        parseSwiftPMIncrementalFingerprint(consumerSyntheticPackageFingerprintFile)
 
                     assertNotEquals(
                         rootSyntheticPackageHash, consumerSyntheticPackageHash, "Different dependency graph should produce different hash"
@@ -432,4 +433,3 @@ class FetchSyntheticImportProjectPackagesTests : KGPBaseTest() {
         }
     }
 }
-

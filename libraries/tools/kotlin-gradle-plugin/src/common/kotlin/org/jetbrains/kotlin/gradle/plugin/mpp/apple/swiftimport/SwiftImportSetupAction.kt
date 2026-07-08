@@ -342,7 +342,7 @@ internal val SwiftImportSetupAction = KotlinProjectSetupAction {
             )
         ) { fingerprintTask ->
             fingerprintTask.onlyIf("SwiftPM import doesn't support non macOS hosts") { isMacOSHost }
-            fingerprintTask.syntheticPackageFingerprint.set(fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprint.get() })
+            fingerprintTask.syntheticPackageFingerprintFile.set(fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprintFile.get() })
             fingerprintTask.xcodebuildSdk.set(targetSdk)
         }
 
@@ -382,15 +382,15 @@ internal val SwiftImportSetupAction = KotlinProjectSetupAction {
                 is PackageResolvedSynchronization.Identifier -> {
                     xcodebuildDumpTask.configure {
                         it.fingerprintCoordinationService.set(fingerprintCoordinationService)
-                        it.syntheticPackageFingerprint.set(
-                            fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprint.get() }
+                        it.syntheticPackageFingerprintFile.set(
+                            fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprintFile.get() }
                         )
-                        it.xcodebuildFingerprint.set(fingerprintXcode.map { it.xcodebuildFingerprint.get() })
+                        it.xcodebuildFingerprintFile.set(fingerprintXcode.map { it.xcodebuildFingerprintFile.get() })
                     }
 
                     defFilesAndLdDumpGenerationTask.configure { defFileTask ->
-                        defFileTask.xcodebuildFingerprint.set(
-                            xcodebuildDumpTask.map { it.xcodebuildFingerprint.get() }
+                        defFileTask.xcodebuildFingerprintFile.set(
+                            xcodebuildDumpTask.map { it.xcodebuildFingerprintFile.get() }
                         )
                         defFileTask.fingerprintsXcodeDumpsDir.set(provideXcodeDumpsDir())
                     }
@@ -630,9 +630,9 @@ private fun Project.enableFingerprintCoordination(
         it.syntheticPackagesRoot.set(
             provideSyntheticPackageDir()
         )
-        it.packageFingerprint.set(
+        it.packageFingerprintFile.set(
             fingerprintSyntheticPackageTask.map {
-                it.syntheticPackageFingerprint.get()
+                it.syntheticPackageFingerprintFile.get()
             }
         )
         it.dependsOn(fingerprintSyntheticPackageTask)
@@ -642,9 +642,9 @@ private fun Project.enableFingerprintCoordination(
         it.syntheticPackagesRoot.set(
             provideSyntheticPackageDir()
         )
-        it.packageFingerprint.set(
+        it.packageFingerprintFile.set(
             fingerprintSyntheticPackageTask.map {
-                it.syntheticPackageFingerprint.get()
+                it.syntheticPackageFingerprintFile.get()
             }
         )
     }
@@ -652,15 +652,15 @@ private fun Project.enableFingerprintCoordination(
     generateSyntheticPackageTask.configure {
         it.useOnlyTransitiveImportedDependencies()
         it.coordinationService.set(fingerprintCoordinationService)
-        it.syntheticPackageFingerprint.set(
-            fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprint.get() }
+        it.syntheticPackageFingerprintFile.set(
+            fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprintFile.get() }
         )
         it.transitiveSwiftPMMetadata.set(fingerprintedSwiftPMDependencyGraph)
     }
 
     fetchSyntheticImportProjectPackages.configure {
-        it.syntheticPackageFingerprint.set(
-            fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprint.get() }
+        it.syntheticPackageFingerprintFile.set(
+            fingerprintSyntheticPackageTask.map { it.syntheticPackageFingerprintFile.get() }
         )
         it.coordinationService.set(fingerprintCoordinationService)
     }
