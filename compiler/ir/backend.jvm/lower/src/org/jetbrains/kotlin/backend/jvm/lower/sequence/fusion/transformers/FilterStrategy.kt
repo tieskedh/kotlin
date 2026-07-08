@@ -5,45 +5,37 @@
 
 package org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.transformers
 
-import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParent
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceReplacement
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceTransformer
-import org.jetbrains.kotlin.ir.builders.irIfThen
-import org.jetbrains.kotlin.ir.builders.irReturnableBlock
+import org.jetbrains.kotlin.ir.builders.irBlock
+import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irIfThenElse
+import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.builders.irTrue
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
-import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 
-internal class FilterReplacementCreator(val filter: SequenceTransformer.Filter) : TransformerReplacementCreator() {
+internal class FilterStrategy(val filter: SequenceTransformer.Filter, builderWithParent: IrBuilderWithParent) :
+    TransformerStrategy(builderWithParent) {
     override fun addTransformerToBodyBuilder(
         sequenceReplacement: SequenceReplacement,
-        shouldCheckShortCircuit: Boolean,
-        builderWithParent: IrBuilderWithParent
     ): SequenceReplacement {
         val builder = builderWithParent.first
         val mainBodyBuilder = { sequenceVariable: IrValueDeclaration ->
             with(builder) {
-                val block = irReturnableBlock(context.irBuiltIns.booleanType) {
-                    +irIfThen(
-                        context.irBuiltIns.unitType,
-                        irNot(filter.predicateCall(builderWithParent)(sequenceVariable)),
-                        IrReturnImpl(
-                            startOffset = startOffset,
-                            endOffset = endOffset,
-                            type = context.irBuiltIns.nothingType,
-                            returnTargetSymbol = returnableBlockSymbol,
-                            value = irTrue()
-                        ),
+                irBlock {
+                    val filterResultVariable = irTemporary(filter.predicateCall(builderWithParent)(sequenceVariable))
+                    +irIfThenElse(
+                        context.irBuiltIns.booleanType,
+                        irGet(filterResultVariable),
+                        sequenceReplacement.mainBodyBuilder(sequenceVariable),
+                        irTrue()
                     )
                 }
-                addShortCircuitCheck(sequenceReplacement, shouldCheckShortCircuit, block, sequenceVariable, builder)
             }
         }
         val initialDeclarations = sequenceReplacement.initialDeclarations
         val finalExpression = sequenceReplacement.finalExpression
         return SequenceReplacement(initialDeclarations, mainBodyBuilder, finalExpression)
     }
-
-    override val doesShortCircuit: Boolean = true
 }

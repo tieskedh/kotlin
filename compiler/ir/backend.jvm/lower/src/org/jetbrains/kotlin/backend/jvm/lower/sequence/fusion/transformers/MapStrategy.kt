@@ -9,30 +9,29 @@ import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.IrBuilderWithParen
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.MapPredicateCall
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceReplacement
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.SequenceTransformer
+import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irGet
-import org.jetbrains.kotlin.ir.builders.irIfThen
+import org.jetbrains.kotlin.ir.builders.irIfThenElse
 import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irNull
-import org.jetbrains.kotlin.ir.builders.irReturnableBlock
 import org.jetbrains.kotlin.ir.builders.irSet
 import org.jetbrains.kotlin.ir.builders.irTrue
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
-import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 
-internal class MapReplacementCreator(val map: SequenceTransformer.Map) :
-    TransformerReplacementCreator() {
+internal class MapStrategy(val map: SequenceTransformer.Map, builderWithParent: IrBuilderWithParent) :
+    TransformerStrategy(builderWithParent) {
     override fun addTransformerToBodyBuilder(
         sequenceReplacement: SequenceReplacement,
-        shouldCheckShortCircuit: Boolean,
-        builderWithParent: IrBuilderWithParent
     ): SequenceReplacement {
         val builder = builderWithParent.first
         val mapIndexedVariable = builder.scope.createTemporaryVariable(
             builder.irInt(0),
             isMutable = true,
-            nameHint = "mapIndexedVariable"
+            nameHint = "mapIndexedVariable",
+            startOffset = map.startOffset,
+            endOffset = map.endOffset,
         )
         val mainBodyBuilder = { sequenceVariable: IrValueDeclaration ->
             with(builder) {
@@ -41,7 +40,7 @@ internal class MapReplacementCreator(val map: SequenceTransformer.Map) :
                     is MapPredicateCall.NonIndexed -> map.predicateCall.predicate(builderWithParent)(sequenceVariable)
                 }
                 val mapResultVariable = scope.createTemporaryVariable(mappedFunctionCall, nameHint = "mapResult")
-                val block = irReturnableBlock(context.irBuiltIns.booleanType) {
+                irBlock {
                     +mapResultVariable
                     if (map.isIndexed) {
                         +irSet(mapIndexedVariable, irCall(context.irBuiltIns.intPlusSymbol).apply {
@@ -53,21 +52,17 @@ internal class MapReplacementCreator(val map: SequenceTransformer.Map) :
                         val filterResult =
                             scope.createTemporaryVariable(irEquals(irGet(mapResultVariable), irNull()), nameHint = "filterResult")
                         +filterResult
-                        // if (mapResult == null) return true, which is equivalent to continue
-                        +irIfThen(
-                            context.irBuiltIns.unitType,
+                        // if (mapResult == null) return true, otherwise consume
+                        +irIfThenElse(
+                            context.irBuiltIns.booleanType,
                             irGet(filterResult),
-                            IrReturnImpl(
-                                startOffset = startOffset,
-                                endOffset = endOffset,
-                                type = context.irBuiltIns.nothingType,
-                                returnTargetSymbol = returnableBlockSymbol,
-                                value = irTrue()
-                            )
+                            irTrue(),
+                            sequenceReplacement.mainBodyBuilder(mapResultVariable),
                         )
+                    } else {
+                        +sequenceReplacement.mainBodyBuilder(mapResultVariable)
                     }
                 }
-                addShortCircuitCheck(sequenceReplacement, shouldCheckShortCircuit, block, mapResultVariable, builder)
             }
         }
         val initialDeclarations =
@@ -76,6 +71,4 @@ internal class MapReplacementCreator(val map: SequenceTransformer.Map) :
         val finalExpression = sequenceReplacement.finalExpression
         return SequenceReplacement(initialDeclarations, mainBodyBuilder, finalExpression)
     }
-
-    override val doesShortCircuit: Boolean = false
 }

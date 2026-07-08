@@ -11,12 +11,11 @@ import org.jetbrains.kotlin.backend.common.IrElementTransformerVoidWithContext
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
 import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.consumers.*
-import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.transformers.TransformerReplacementCreator
+import org.jetbrains.kotlin.backend.jvm.lower.sequence.fusion.transformers.TransformerStrategy
 import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
-import org.jetbrains.kotlin.ir.builders.irBlock
 import org.jetbrains.kotlin.ir.builders.irCall
-import org.jetbrains.kotlin.ir.builders.irTemporary
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrVariable
@@ -30,12 +29,15 @@ import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.typeOrNull
+import org.jetbrains.kotlin.ir.util.dump
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.ir.util.getPackageFragment
 import org.jetbrains.kotlin.utils.addToStdlib.assignFrom
@@ -74,7 +76,7 @@ import org.jetbrains.kotlin.utils.addToStdlib.assignFrom
 internal typealias ConsumerBodyBuilder = (IrValueDeclaration) -> IrContainerExpression
 
 internal data class SequenceReplacement(
-    val initialDeclarations: List<IrVariable>,
+    val initialDeclarations: List<IrStatement>,
     val mainBodyBuilder: ConsumerBodyBuilder,
     val finalExpression: IrExpression,
 )
@@ -101,19 +103,6 @@ internal fun isCallFromKotlinSequences(expression: IrCall): Boolean {
     return packageFqName == "kotlin.sequences"
 }
 
-internal fun isSequenceTransformer(expression: IrExpression): Boolean {
-    return when (expression) {
-        is IrCall -> {
-            val name = expression.symbol.owner.name.asString()
-            when (name) {
-                MAP, MAP_INDEXED, MAP_NOT_NULL, MAP_NOT_NULL_INDEXED, FILTER, FILTER_NOT, FILTER_NOT_NULL, TAKE -> true
-                else -> false
-            }
-        }
-        else -> false
-    }
-}
-
 internal fun getGenericTypeFromExpression(sequence: IrExpression): IrType? =
     (sequence.type as? IrSimpleType)?.arguments?.getOrNull(0)?.typeOrNull
 
@@ -130,6 +119,28 @@ internal fun IrBuilderWithScope.callRichFunctionReference(
     val returnType = functionType?.arguments?.lastOrNull()?.typeOrNull ?: freshRef.overriddenFunctionSymbol.owner.returnType
     return irCall(freshRef.overriddenFunctionSymbol, returnType).apply {
         arguments.assignFrom(listOf(freshRef) + args)
+    }
+}
+
+internal fun IrBuilderWithScope.callPredicate(
+    predicate: IrExpression,
+    parent: IrDeclarationParent,
+    vararg args: IrExpression,
+): IrExpression {
+    return when (predicate) {
+        is IrRichFunctionReference -> callRichFunctionReference(predicate, parent, *args)
+        else -> {
+            val invokeSymbol = predicate.type.classOrNull?.owner?.declarations
+                ?.filterIsInstance<IrSimpleFunction>()
+                ?.firstOrNull { it.name.asString() == "invoke" }?.symbol
+                ?: error("Didn't find invoke for the predicate: ${predicate.dump()}")
+            irCall(invokeSymbol).apply {
+                dispatchReceiver = predicate
+                args.forEachIndexed { index, arg ->
+                    arguments[index + 1] = arg
+                }
+            }
+        }
     }
 }
 
@@ -231,15 +242,8 @@ private class SequenceFusionTransformer(val context: JvmBackendContext) : IrElem
             ) ?: return visitedExpression
         val producerStrategy = sequenceData.sequenceSource.createProducerStrategy(builder, context)
         val sequenceReplacement = deployStrategies(consumerStrategy, sequenceData, builder to parent) ?: return visitedExpression
-        val newExpression =
-            producerStrategy.fuseConsumer(builder to parent, sequenceData, sequenceReplacement)
-                ?: return visitedExpression
-        return if (isSequenceTransformer(receiver)) {
-            builder.irBlock {
-                irTemporary(receiver.deepCopyWithSymbols(parent))
-                +newExpression
-            }
-        } else newExpression
+        return producerStrategy.fuseConsumer(builder to parent, sequenceData, sequenceReplacement)
+            ?: visitedExpression
     }
 }
 
@@ -249,12 +253,10 @@ private fun deployStrategies(
     builderWithParent: IrBuilderWithParent,
 ): SequenceReplacement? {
     var sequenceReplacement = consumerStrategy.createSequenceReplacement() ?: return null
-    var doesShortCircuit = true
-    for (replacement in sequenceData.transformers) {
-        val transformerReplacementCreator = TransformerReplacementCreator.create(replacement)
+    for (transformer in sequenceData.transformers) {
+        val transformerStrategy = TransformerStrategy.create(transformer, builderWithParent)
         sequenceReplacement =
-            transformerReplacementCreator.addTransformerToBodyBuilder(sequenceReplacement, doesShortCircuit, builderWithParent)
-        doesShortCircuit = transformerReplacementCreator.doesShortCircuit
+            transformerStrategy.addTransformerToBodyBuilder(sequenceReplacement)
     }
     return sequenceReplacement
 }

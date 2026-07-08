@@ -18,11 +18,10 @@ import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrLoop
 import org.jetbrains.kotlin.ir.expressions.impl.IrReturnImpl
 
-internal class ForLoopConsumerStrategy(data: ConsumerData, val loopData: LoopData, expression: IrBlock) :
+internal class ForLoopStrategy(data: ConsumerData, val loopData: LoopData, expression: IrBlock) :
     ConsumerStrategy(data, expression) {
-    override val returnsElement: Boolean = false
     var loop: IrLoop? = null
-    override fun initializeState(): List<IrVariable> = emptyList()
+    override fun initialDeclarations(): List<IrVariable> = emptyList()
 
     override fun getConsumerBuilder(): ConsumerBodyBuilder {
         return { sequenceElement ->
@@ -48,5 +47,5 @@ internal class ForLoopConsumerStrategy(data: ConsumerData, val loopData: LoopDat
         }
     }
 
-    override fun finalizeResult(): IrExpression = data.builder.irUnit()
+    override fun createResult(): IrExpression = data.builder.irUnit()
 }
