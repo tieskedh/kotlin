@@ -255,7 +255,7 @@ class BackendWasmSymbols(
             CoroutinesStateMachineIntrinsics()
         else null
 
-    val coroutineImplId =
+    private val coroutineImplId =
         if (!configuration.wasmUseStackSwitchingProposal)
             ClassIds.coroutineImplStateMachine
         else
