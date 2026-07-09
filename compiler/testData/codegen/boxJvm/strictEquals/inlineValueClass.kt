@@ -1,6 +1,5 @@
 // LANGUAGE: +StrictEquals
 // API_VERSION: 2.5
-// TARGET_BACKEND: JVM_IR
 // WITH_STDLIB
 
 @JvmInline
