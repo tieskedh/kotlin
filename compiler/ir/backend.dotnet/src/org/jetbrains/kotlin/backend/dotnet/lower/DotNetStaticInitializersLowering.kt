@@ -10,10 +10,14 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
+import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createBlockBody
 import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.impl.IrSetFieldImpl
@@ -21,8 +25,10 @@ import org.jetbrains.kotlin.ir.util.patchDeclarationParents
 import org.jetbrains.kotlin.name.Name
 
 /**
- * The origin of the synthetic per-file `<clinit>` function produced by
- * [DotNetStaticInitializersLowering]. [DotNetIlEmitter][org.jetbrains.kotlin.backend.dotnet.DotNetIlEmitter]
+ * The origin of the synthetic `<clinit>` functions produced by
+ * [DotNetStaticInitializersLowering] — file-parented for the facade statics, class-parented for
+ * the static fields of top-level classes (the `INSTANCE` field of an `object`).
+ * [DotNetIlEmitter][org.jetbrains.kotlin.backend.dotnet.DotNetIlEmitter]
  * keys on it to keep the function out of the callable surface (never a call target, a main
  * candidate, or a named method) and
  * [DotNetIlMethodCodegen][org.jetbrains.kotlin.backend.dotnet.DotNetIlMethodCodegen] keys on it
@@ -31,16 +37,23 @@ import org.jetbrains.kotlin.name.Name
 internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOriginImpl("DOTNET_STATIC_INITIALIZER")
 
 /**
- * Collects the backing-field initializers of top-level properties of each file into one
- * synthetic file-level `<clinit>` function, in declaration order, and nulls the field
- * initializers — the JVM precedent is `StaticInitializersLowering`, which moves static field
- * initializers of a facade class into a `<clinit>` the same way. Stated deviation from the JVM
- * shape: that lowering is a `ClassLoweringPass` over the facade `IrClass` that
- * `FileClassLowering` created earlier, while this backend builds file facades at emission time,
- * so the pass runs per [IrFile] and parents the `<clinit>` to the file. The function is rendered
- * as the facade's `.cctor` by the emitter; giving the initializers a real function body here
- * (instead of rendering them at emission time) lets the later phases — the `for`-loop rewrite
- * and the string-concatenation lowerings — treat initializer code like any other body.
+ * Collects static-field initializers into synthetic `<clinit>` functions, in declaration order,
+ * and nulls the field initializers — the JVM precedent is `StaticInitializersLowering`, which
+ * moves static field initializers of a class into a `<clinit>` the same way. Two owner shapes
+ * are handled:
+ * - the backing fields of top-level properties of each file become one file-parented `<clinit>`,
+ *   rendered as the file facade's `.cctor`. Stated deviation from the JVM shape: that lowering
+ *   is a `ClassLoweringPass` over the facade `IrClass` that `FileClassLowering` created earlier,
+ *   while this backend builds file facades at emission time, so this slice runs per [IrFile] and
+ *   parents the `<clinit>` to the file.
+ * - the static fields of each top-level class (today exactly the `INSTANCE` field
+ *   [DotNetObjectClassLowering] synthesized on an `object` class) become one class-parented
+ *   `<clinit>`, appended to the class's declarations and rendered as the class's `.cctor` —
+ *   this slice matches the JVM `ClassLoweringPass` precedent directly.
+ *
+ * Giving the initializers a real function body here (instead of rendering them at emission time)
+ * lets the later phases — the `for`-loop rewrite and the string-concatenation lowerings — treat
+ * initializer code like any other body.
  *
  * Excluded properties, mirroring the JVM exclusions:
  * - `const val` (JVM: the `constantValue()` exclusion): the
@@ -53,35 +66,64 @@ internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOrigi
  */
 internal class DotNetStaticInitializersLowering(private val context: DotNetBackendContext) : FileLoweringPass {
     override fun lower(irFile: IrFile) {
+        for (declaration in irFile.declarations) {
+            if (declaration is IrClass) lowerClassStatics(declaration)
+        }
+        lowerFileStatics(irFile)
+    }
+
+    private fun lowerFileStatics(irFile: IrFile) {
         val statements = mutableListOf<IrStatement>()
         for (declaration in irFile.declarations) {
             if (declaration !is IrProperty || declaration.isConst || declaration.isDelegated) continue
             val field = declaration.backingField ?: continue
-            val initializer = field.initializer ?: continue
-            statements += IrSetFieldImpl(
-                initializer.startOffset,
-                initializer.endOffset,
-                field.symbol,
-                null,
-                initializer.expression,
-                context.irBuiltIns.unitType,
-                IrStatementOrigin.INITIALIZE_FIELD,
-            )
-            field.initializer = null
+            statements += moveFieldInitializerOrNull(field) ?: continue
         }
         if (statements.isEmpty()) return
+        irFile.declarations += buildStaticInitializer(irFile, statements)
+    }
 
+    private fun lowerClassStatics(irClass: IrClass) {
+        val statements = mutableListOf<IrStatement>()
+        for (declaration in irClass.declarations) {
+            val field = when (declaration) {
+                is IrField -> declaration
+                is IrProperty -> if (declaration.isConst || declaration.isDelegated) null else declaration.backingField
+                else -> null
+            } ?: continue
+            if (!field.isStatic) continue
+            statements += moveFieldInitializerOrNull(field) ?: continue
+        }
+        if (statements.isEmpty()) return
+        irClass.declarations += buildStaticInitializer(irClass, statements)
+    }
+
+    private fun moveFieldInitializerOrNull(field: IrField): IrStatement? {
+        val initializer = field.initializer ?: return null
+        field.initializer = null
+        return IrSetFieldImpl(
+            initializer.startOffset,
+            initializer.endOffset,
+            field.symbol,
+            null,
+            initializer.expression,
+            context.irBuiltIns.unitType,
+            IrStatementOrigin.INITIALIZE_FIELD,
+        )
+    }
+
+    private fun buildStaticInitializer(parent: IrDeclarationParent, statements: List<IrStatement>): IrSimpleFunction {
         val staticInitializer = context.irFactory.buildFun {
             name = CLINIT_NAME
             returnType = context.irBuiltIns.unitType
             visibility = DescriptorVisibilities.PRIVATE
             origin = DOTNET_STATIC_INITIALIZER
         }
-        staticInitializer.parent = irFile
+        staticInitializer.parent = parent
         staticInitializer.body = context.irFactory
             .createBlockBody(staticInitializer.startOffset, staticInitializer.endOffset, statements)
             .patchDeclarationParents(staticInitializer)
-        irFile.declarations += staticInitializer
+        return staticInitializer
     }
 
     private companion object {

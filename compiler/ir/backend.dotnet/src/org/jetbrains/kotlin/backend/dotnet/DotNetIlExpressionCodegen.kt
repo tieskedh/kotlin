@@ -367,8 +367,10 @@ internal class DotNetIlExpressionCodegen(
 
     /**
      * A field read: for an instance field the receiver, then `ldfld <type> 'C'::'name'`; for a
-     * static facade field (a top-level property's backing field, file-parented) a bare
-     * `ldsfld <type> 'FileKt'::'name'` — both spellings probe-verified (`statprobe_s1`/`_s2`).
+     * static field — the facade field of a top-level property, or the `INSTANCE` field of an
+     * `object` class — a bare `ldsfld <type> 'C'::'name'`; all spellings probe-verified
+     * (`statprobe_s1`/`_s2`, `objprobe_s1`/`_s2` — the bare `ldsfld` of INSTANCE is also the
+     * first-active-use `.cctor` trigger).
      */
     private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
         val field = expression.symbol.owner
@@ -415,28 +417,30 @@ internal class DotNetIlExpressionCodegen(
 
     /**
      * Resolves the owning IL class, the IL type, and the staticness of a field access. A
-     * class-parented field is an instance field of a user class; a file-parented field is the
-     * static facade field of a top-level property. Every lookup goes through the emission-scoped
-     * state, so field access to a class the emitter removed (or a field of a type outside the
-     * supported set) aborts the surrounding render. The backing field of a `const val` is never
-     * accessed: it is a CLR `literal` field without storage (`ldsfld` would fail at runtime),
-     * and every read of the property is inlined by the frontend.
+     * class-parented field is an instance field of a user class or a static field of one (the
+     * `INSTANCE` field of an `object`), following [IrField.isStatic]; a file-parented field is
+     * the static facade field of a top-level property. Every lookup goes through the
+     * emission-scoped state, so field access to a class the emitter removed (or a field of a
+     * type outside the supported set) aborts the surrounding render. The backing field of a
+     * `const val` is never accessed on either owner shape: it is a CLR `literal` field without
+     * storage (`ldsfld` would fail at runtime), and every read of the property is inlined by
+     * the frontend.
      */
     private fun resolveFieldAccess(field: IrField): Triple<DotNetIlClassInfo, DotNetIlValueType, Boolean> {
         val fieldName = field.name.asString()
+        if (field.correspondingPropertySymbol?.owner?.isConst == true) {
+            dotNetUnsupported(
+                "access to the backing field of const property '$fieldName' is not supported " +
+                        "(const reads are inlined by the frontend)"
+            )
+        }
         val (classInfo, isStatic) = when (val parent = field.parent) {
             is IrClass -> {
                 val classInfo = typeMapper.classInfoOrNull(parent)
                     ?: dotNetUnsupported("access to a field of unsupported class '${parent.name.asString()}'")
-                classInfo to false
+                classInfo to field.isStatic
             }
             is IrFile -> {
-                if (field.correspondingPropertySymbol?.owner?.isConst == true) {
-                    dotNetUnsupported(
-                        "access to the backing field of const property '$fieldName' is not supported " +
-                                "(const reads are inlined by the frontend)"
-                    )
-                }
                 val classInfo = facadeClassInfoByFile[parent]
                     ?: dotNetUnsupported("access to top-level field '$fieldName' outside the compiled module is not supported")
                 classInfo to true
