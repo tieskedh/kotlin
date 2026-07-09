@@ -80,158 +80,152 @@ FirSession stored in the class finder. Then the resulting Fir is wrapped to the 
 
 #### Main resolution scenarios
 
-##### Scenario A — Classifier for a type reference
+### Scenario A — Classifier for a type reference (model entry dispatcher)
 
-Entry: `JavaClassifierTypeOverAst.classifier`
+Entry: `JavaTypeOverAst.computeClassifier`
 
-1.  Split the reference into `rawTypeNameParts` (identifiers only; annotations / `<...>` dropped).
-2.  If single-part, try in priority order and return the first hit:
-    1.  own type parameter — `JavaScopeResolver.findTypeParameter` (high priority).
-    2.  in-scope class — `JavaScopeResolver.findClassInCurrentScope` (Scenario C).
-    3.  inherited (outer) type parameter — `findInheritedTypeParameter` (low priority, shadowed by 2).
-3.  Resolve `parts[0]` via `findClassInCurrentScope`. If it is an AST `JavaClass`, navigate each  
-    remaining part with `declaredOrSameFileInherited` and return the final inner class (same-file  
-    AST path).
-4.  Otherwise (cross-file) resolve the whole name to a `ClassId` via `JavaTypeResolver.resolve`  
-    (Scenarios B/D) and wrap it in a `FirBackedJavaClassAdapter` (`classifierAdapterFor`).
-5.  If nothing matched, return `null` (FIR's `findClassId` fallback then runs).
+1. Split the reference into `rawTypeNameParts` (identifiers only; annotations / `<...>` dropped).
+2. If single-part, try in priority order and return the first hit:
+    1. own type parameter — `JavaScopeResolver.findTypeParameter` (high priority).
+    2. in-scope class — `JavaScopeResolver.findClassInCurrentScope` (Scenario C).
+    3. inherited (outer) type parameter — `findInheritedTypeParameter` (low priority, shadowed by 2).
+3. Resolve `parts[0]` via `findClassInCurrentScope`. If it is an AST `JavaClass`, navigate each
+   remaining part with `declaredOrSameFileInherited` and return the final inner class (same-file
+   AST path).
+4. Otherwise (cross-file) resolve the whole name to a `ClassId` via `JavaTypeResolver.resolve`
+   (Scenarios B/D) and wrap it in a `FirBackedJavaClassAdapter` (`classifierAdapterFor`).
+5. If nothing matched, return `null` (FIR's `findClassId` fallback then runs).
 
-Corner cases: type-parameter-vs-inner-class shadowing (2 before 3); same-file multi-segment  
+Corner cases: type-parameter-vs-inner-class shadowing (2 before 3); same-file multi-segment
 navigation handled purely on AST without touching the symbol provider.
 
-##### Scenario B — Simple name to `ClassId` (JLS 6.4.1 shadowing ladder)
+### Scenario B — Simple name to `ClassId` (JLS 6.4.1 shadowing ladder)
 
-Entry: `JavaTypeResolver.resolve` → `resolveSimpleNameToClassIdImpl`. A flat ordered ladder; each  
-step probes candidate `ClassId`s through `tryResolve` and returns the first hit. `tryResolve` is  
-builtins-filtered (`origin != FirDeclarationOrigin.BuiltIns`): a `ClassId` counts as present only  
-when the session's symbol provider resolves it to a non-builtin symbol, keeping parity with PSI's  
-file-backed class finder (otherwise `kotlin.*` builtins would resolve spuriously).
+Entry: `JavaTypeResolver.resolve` → `resolveSimpleNameToClassIdImpl`. A flat ordered ladder; each
+step probes candidate `ClassId`s through `tryResolve` and returns the first hit.
 
-1.  **Local scope** (`resolveFromLocalScope`) — member types declared *and* inherited by the  
-    containing-class chain, walked innermost→outermost, interleaving declared and inherited per  
-    level (Scenario E for the inherited part). *(skipped in the reentrance-safe flavor)*
-2.  **Same-file top-level** (`resolveFromSameFile`) — via `sameFileTopLevelClassProvider`.
-3.  **Single-type import** (`resolveFromExplicitImport`) — `import a.b.C;`, rank 4.
-4.  **Single-static import, type arm** (`resolveFromStaticSingleImport`) — `import static a.b.C.X;`,  
-    rank 4, probed after step 3.
-5.  **Same-package, other file** (`resolveFromSamePackage`) — `ClassId(package, name)`.
-6.  **`java.lang.*`** (`resolveFromJavaLang`) — implicit import; also accepts a  
-    `JavaToKotlinClassMap` hit.
-7.  **Type-import-on-demand** (`resolveFromTypeStarImports`) — `import a.b.*;`, rank 6; falls back to  
-    member types of an imported *class* (`import a.D.*`).
-8.  **Static-import-on-demand** (`resolveFromStaticStarImports`) — `import static a.b.C.*;`, rank 7.
+1. **Local scope** (`resolveFromLocalScope`) — member types declared *and* inherited by the
+   containing-class chain, walked innermost→outermost, interleaving declared and inherited per
+   level (Scenario D for the inherited part). *(skipped in the reentrance-safe flavor)*
+2. **Same-file top-level** (`resolveFromSameFile`) — via `sameFileTopLevelClassProvider`.
+3. **Single-type import** (`resolveFromExplicitImport`) — `import a.b.C;`, rank 4.
+4. **Single-static import, type arm** (`resolveFromStaticSingleImport`) — `import static a.b.C.X;`,
+   rank 4, probed after step 3.
+5. **Same-package, other file** (`resolveFromSamePackage`) — `ClassId(package, name)`.
+6. **`java.lang.*`** (`resolveFromJavaLang`) — implicit import; also accepts a
+   `JavaToKotlinClassMap` hit.
+7. **Type-import-on-demand** (`resolveFromTypeStarImports`) — `import a.b.*;`, rank 6; falls back to
+   member types of an imported *class* (`import a.D.*`).
+8. **Static-import-on-demand** (`resolveFromStaticStarImports`) — `import static a.b.C.*;`, rank 7.
 
-Corner cases: rank-4 type import probed before rank-4 static import; star-import ambiguity →  
+Corner cases: rank-4 type import probed before rank-4 static import; star-import ambiguity →
 `null`; the class-as-`PackageOrTypeName` fallback in steps 7–8.
 
-##### Scenario C — In-scope (AST) classifier lookup
+### Scenario C — In-scope (AST) classifier lookup
 
-Entry: `JavaScopeResolver.findClassInCurrentScope`. AST-only; produces a structural `JavaClass`  
+Entry: `JavaScopeResolver.findClassInCurrentScope`. AST-only; produces a structural `JavaClass`
 with its full outer chain (needed for navigation and outer-arg substitution).
 
-1.  Inner class **declared or same-file-inherited** by the containing class  
-    (`declaredOrSameFileInherited` → `findInnerClassInSameFileSupertypes`).
-2.  Inner class **inherited from supertypes** of the containing class  
-    (`JavaInheritedMemberResolver.findInnerClassFromSupertypes`) — runs before step 3 because an  
-    inherited member type shadows a merely lexically-enclosing one (JLS 6.4.1).
-3.  Sibling inner class of the immediate outer class.
-4.  Inner class of each further outer class up the containing chain.
-5.  Same-file top-level class (`sameFileTopLevelClassProvider`).
+1. Inner class **declared or same-file-inherited** by the containing class
+   (`declaredOrSameFileInherited` → `findInnerClassInSameFileSupertypes`).
+2. Inner class **inherited from supertypes** of the containing class
+   (`JavaInheritedMemberResolver.findInnerClassFromSupertypes`) — runs before step 3 because an
+   inherited member type shadows a merely lexically-enclosing one (JLS 6.4.1).
+3. Sibling inner class of the immediate outer class.
+4. Inner class of each further outer class up the containing chain.
+5. Same-file top-level class (`sameFileTopLevelClassProvider`).
 
-Corner case: the same-file supertype walk works on **raw AST text**  
-(`directSupertypeRefNames`), deliberately distinct from the resolved-classifier walk in  
-`JavaInheritedMemberResolver`, to avoid re-entering type construction; package-qualified  
+Corner case: the same-file supertype walk works on **raw AST text**
+(`directSupertypeRefNames`), deliberately distinct from the resolved-classifier walk in
+`JavaInheritedMemberResolver`, to avoid re-entering type construction; package-qualified
 supertypes are declined here and handed to the `ClassId` path.
 
-##### Scenario D — Qualified / nested name to `ClassId` (JLS 6.5.2)
+### Scenario D — Qualified / nested name to `ClassId` (JLS 6.5.2)
 
-Entry: `JavaTypeResolver.resolve` (dotted name) → `resolveQualifiedNameToClassIdFromParts`.  
-Outer-class-first interpretation, with a memoized `tryResolve` cache for the recursive prefix  
+Entry: `JavaTypeResolver.resolve` (dotted name) → `resolveQualifiedNameToClassIdFromParts`.
+Outer-class-first interpretation, with a memoized `tryResolve` cache for the recursive prefix
 probes.
 
-1.  For each split point `i`, resolve the `outerParts` prefix (recursively / as a simple name,  
-    Scenario B) to an `outerClassId`.
-2.  Form `outerClassId + nestedParts` and probe it; return on hit (direct nested class).
-3.  On miss for a single nested segment, search supertypes of `outerClassId` for the inherited  
-    nested class (`findInheritedNestedClass`, supertype walk + finder).
-4.  Re-entrance-safe `Outer.Inner` finder fallback: when step 3 was short-circuited by the cycle  
-    guard, re-probe `collectInheritedInnerClasses(outerClassId)[inner]` without the guard.
-5.  Fallback to plain package/class splits longest-package-first (`probeFqnSplits`) — this is the  
-    path fully-qualified names (`java.util.Map`) take.
+1. For each split point `i`, resolve the `outerParts` prefix (recursively / as a simple name,
+   Scenario B) to an `outerClassId`.
+2. Form `outerClassId + nestedParts` and probe it; return on hit (direct nested class).
+3. On miss for a single nested segment, search supertypes of `outerClassId` for the inherited
+   nested class (`findInheritedNestedClass`, supertype walk + finder).
+4. Re-entrance-safe `Outer.Inner` finder fallback: when step 3 was short-circuited by the cycle
+   guard, re-probe `collectInheritedInnerClasses(outerClassId)[inner]` without the guard.
+5. Fallback to plain package/class splits longest-package-first (`probeFqnSplits`) — this is the
+   path fully-qualified names (`java.util.Map`) take.
 
-Corner cases: `Map.Entry`\-style inherited nested classes; cycle-guard short-circuit recovery  
+Corner cases: `Map.Entry`-style inherited nested classes; cycle-guard short-circuit recovery
 (step 4) limited to two-segment shape; FQN split order mirrors FIR's `findClassId`.
 
-##### Scenario E — Inherited member type via supertypes
+### Scenario E — Inherited member type via supertypes
 
 Entry: `JavaInheritedMemberResolver`. Two complementary outputs:
 
-- `findInnerClassFromSupertypes` → a `JavaClass` with AST outer chain (for the AST pipeline /  
-  outer-arg substitution); uses same-file supertypes plus the `LeanJavaClassFinder` for cross-file  
+- `findInnerClassFromSupertypes` → a `JavaClass` with AST outer chain (for the AST pipeline /
+  outer-arg substitution); uses same-file supertypes plus the `LeanJavaClassFinder` for cross-file
   Java source.
 - `resolveInheritedInnerClassToClassId` → a bare `ClassId` via a two-pass BFS:
-    1.  **`walkJavaSourceSupertypes`** — Java-source supertypes through the finder's source index,  
-        resolving each level against *that file's* imports; independent of FIR lazy phases.
-    2.  **`walkBinarySupertypes`** — Kotlin / binary supertypes through the per-origin  
-        `directSupertypeClassIds` dispatcher (Scenario F).
+    1. **`walkJavaSourceSupertypes`** — Java-source supertypes through the finder's source index,
+       resolving each level against *that file's* imports; independent of FIR lazy phases.
+    2. **`walkBinarySupertypes`** — Kotlin / binary supertypes through the per-origin
+       `directSupertypeClassIds` dispatcher (Scenario F).
 
-Both passes share a `visited` set, detect cross-pass ambiguity (→ `null`), and are bounded by  
+Both passes share a `visited` set, detect cross-pass ambiguity (→ `null`), and are bounded by
 `MAX_SUPERTYPE_DEPTH = 5`.
 
-##### Scenario F — Direct-supertype `ClassId` graph
+### Scenario F — Direct-supertype `ClassId` graph
 
-Entry: `JavaTypeResolver.directSupertypeClassIds`, guarded by `cycleGuardedSupertypeWalk`.  
+Entry: `JavaTypeResolver.directSupertypeClassIds`, guarded by `cycleGuardedSupertypeWalk`.
 Per-origin dispatch:
 
-1.  **Source Java** — finder has the class in its index: walk `JavaClass.supertypes` and read each  
-    `classifier.classId` (no FIR phase).
-2.  **Binary Java** — symbol is a `FirJavaClass`: read the pre-resolved  
-    `directSupertypeClassIds()` cache (never triggers enhancement).
-3.  **Kotlin / built-in / deserialized** — `lazyResolveToPhase(SUPER_TYPES)` then read  
-    `superTypeRefs` cone class ids.
+1. **Source Java** — finder has the class in its index: walk `JavaClass.supertypes` and read each
+   `classifier.classId` (no FIR phase).
+2. **Binary Java** — symbol is a `FirJavaClass`: read the pre-resolved
+   `directSupertypeClassIds()` cache (never triggers enhancement).
+3. **Kotlin / built-in / deserialized** — `lazyResolveToPhase(SUPER_TYPES)` then read
+   `superTypeRefs` cone class ids.
 
-Corner case: `Java.Source` (lazy `superTypeRefs`) must be distinguished from `Java.Library`  
-(pre-populated) to avoid premature-resolution cycles — handled by routing source Java through  
+Corner case: `Java.Source` (lazy `superTypeRefs`) must be distinguished from `Java.Library`
+(pre-populated) to avoid premature-resolution cycles — handled by routing source Java through
 the finder arm, not the FIR arm.
 
-##### Scenario G — Implicit outer-class type-argument recovery
+### Scenario G — Implicit outer-class type-argument recovery
 
-Entry: `JavaTypeResolver.recoverInheritedOuterTypeArguments`, used by  
-`JavaTypeOverAst.computeTypeArguments` for a bare inherited inner-class reference whose outer args  
+Entry: `JavaTypeResolver.recoverInheritedOuterTypeArguments`, used by
+`JavaTypeOverAst.computeTypeArguments` for a bare inherited inner-class reference whose outer args
 are neither written nor lexically in scope.
 
-1.  From the lexical containing class, walk **outward** (its outer classes already have supertypes  
-    resolved).
-2.  Stop the walk at the first `static` class along the chain (a static nested class severs the  
-    enclosing-instance chain — JLS).
-3.  For each outer, descend its `FirBackedJavaClassAdapter.supertypes` looking for the inner  
-    class's outer `ClassId`, substituting type args down each intermediate class  
-    (`findTypeArgsForClassInHierarchy` / `substituteTypeArgs`).
-4.  Return the recovered args as FIR-backed `JavaType`s, or `null` (top-level inner, no containing  
-    class, static break, or not found).
+1. From the lexical containing class, walk **outward** (its outer classes already have supertypes
+   resolved).
+2. Stop the walk at the first `static` class along the chain (a static nested class severs the
+   enclosing-instance chain — JLS).
+3. For each outer, descend its `FirBackedJavaClassAdapter.supertypes` looking for the inner
+   class's outer `ClassId`, substituting type args down each intermediate class
+   (`findTypeArgsForClassInHierarchy` / `substituteTypeArgs`).
+4. Return the recovered args as FIR-backed `JavaType`s, or `null` (top-level inner, no containing
+   class, static break, or not found).
 
-##### Scenario H — Annotation reference resolution
+### Scenario H — Annotation reference resolution
 
-Entry: `JavaAnnotationOverAst`. Reuses the type pipeline: `JavaTypeResolver.resolve` on the  
-annotation's written name (same import/scope rules as Scenario B/D), yielding the annotation's  
-`ClassId`. The no-symbol-provider fixtures (where `resolve` returns `null`) fall back to an  
-import / top-level-FQN split (`getSimpleImport`, else `ClassId.topLevel`), not a package prefix —  
-the package+name heuristic lives instead on the enum-argument path  
-(`JavaEnumValueAnnotationArgumentOverAst.enumClassId`). TYPE_USE-ness for  
-filtering is answered by `JavaModelSessionAccess.isTypeUseAnnotationClass` (cached per session,  
+Entry: `JavaAnnotationOverAst`. Reuses the type pipeline: `JavaTypeResolver.resolve` on the
+annotation's written name (same import/scope rules as Scenario B/D), yielding the annotation's
+`ClassId`. The no-symbol-provider fixtures fall back to a package+name heuristic. TYPE_USE-ness for
+filtering is answered by `JavaModelSessionAccess.isTypeUseAnnotationClass` (cached per session,
 inspects the annotation class's own `@Target`).
 
-##### Scenario I — Cross-language constant value resolution
+### Scenario I — Cross-language constant value resolution
 
-Entry: `JavaExternalConstResolver`, used by `JavaFieldOverAst.initializerValue` and the  
+Entry: `JavaExternalConstResolver`, used by `JavaFieldOverAst.initializerValue` and the
 enum-entry-vs-`const val` disambiguation in annotation arguments.
 
-- `resolveExternalFieldValue(qualifier, field)` — tries, in order: top-level property via JVM  
+- `resolveExternalFieldValue(qualifier, field)` — tries, in order: top-level property via JVM
   facade (`MainKt.FOO`), class member, companion-object member; returns the evaluated literal.
-- `resolveConstFieldValue(classId, field)` — enum class → companion only; otherwise class member  
+- `resolveConstFieldValue(classId, field)` — enum class → companion only; otherwise class member
   then companion then top-level facade fallback.
 
-Const values are read via `FirExpressionEvaluator` / already-evaluated initializers; unqualified  
+Const values are read via `FirExpressionEvaluator` / already-evaluated initializers; unqualified
 cross-language references are unsupported (return `null`).
 
 ### Integration
