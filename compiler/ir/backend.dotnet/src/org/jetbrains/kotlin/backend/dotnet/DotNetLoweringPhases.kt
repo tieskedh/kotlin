@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenatio
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
 import org.jetbrains.kotlin.config.phaseConfig
@@ -21,8 +22,15 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // block must already have been inlined into a constructor before the loop rewrite runs.
     ::DotNetInitializersLowering,
     ::DotNetInitializersCleanupLowering,
-    // Top-level property initializers move into the synthetic per-file `<clinit>` before the
-    // loop/concat rewrites for the same reason the instance pair runs first: a `for` or a string
+    // Object singletons after the initializer merge — the object's private `.ctor` must be
+    // merged/complete before the `.cctor` calls it — and before the static-initializer sweep,
+    // so the synthesized INSTANCE initializer exists when the sweep moves it into the class
+    // `<clinit>`. Matches the JVM phase order (the singleton passes run before
+    // StaticInitializersLowering).
+    ::DotNetObjectClassLowering,
+    // Top-level property initializers move into the synthetic per-file `<clinit>` (and static
+    // class fields — the object INSTANCE — into the per-class one) before the loop/concat
+    // rewrites for the same reason the instance pair runs first: a `for` or a string
     // concatenation inside a top-level initializer must sit inside a real function body before
     // those function-scoped rewrites run.
     ::DotNetStaticInitializersLowering,
