@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.ir.util.companionObject
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.render
 
@@ -101,7 +102,16 @@ class DotNetIlEmitter(
             if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             try {
                 checkClassShapeSupported(irClass)
-                availableClasses[irClass] = DotNetIlClassInfo(irClass.fqNameWhenAvailable!!.asString())
+                val classInfo = DotNetIlClassInfo(irClass.fqNameWhenAvailable!!.asString())
+                availableClasses[irClass] = classInfo
+                // The companion object (validated by the shape gate above) is a separate
+                // availableClasses entry — it needs its own identity for type mapping and member
+                // resolution — carrying the nested IL name (see DotNetIlClassInfo.ilTypeRef).
+                // Registration is strictly paired with eviction: every site that removes one
+                // half of the (class, companion) pair removes the other too (evictClassPair).
+                irClass.companionObject()?.let { companion ->
+                    availableClasses[companion] = DotNetIlClassInfo(companion.name.asString(), enclosingClass = classInfo)
+                }
             } catch (e: DotNetIlUnsupportedException) {
                 classSkipReasons[irClass] = e.reason
             }
@@ -115,11 +125,11 @@ class DotNetIlEmitter(
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
         val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
         for ((file, functions) in topLevelFunctionsByFile) {
-            val className = fileClassNames.getValue(file)
+            val facadeClassInfo = facadeClassInfoByFile.getValue(file)
             for (function in functions) {
                 if (intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true) continue
                 try {
-                    availableFunctions[function] = DotNetIlFunctionInfo(className, function.dotNetSignature(typeMapper))
+                    availableFunctions[function] = DotNetIlFunctionInfo(facadeClassInfo, function.dotNetSignature(typeMapper))
                 } catch (e: DotNetIlUnsupportedException) {
                     skipReasons[function] = e.reason
                 }
@@ -138,7 +148,7 @@ class DotNetIlEmitter(
         val propertySkipReasons = LinkedHashMap<IrProperty, String>()
         val constFieldLines = LinkedHashMap<IrProperty, String>()
         for ((file, properties) in topLevelPropertiesByFile) {
-            val className = fileClassNames.getValue(file)
+            val facadeClassInfo = facadeClassInfoByFile.getValue(file)
             for (property in properties) {
                 if (property.isExcludedFromCodegen(intrinsicMethods)) continue
                 val name = property.name.asString()
@@ -153,13 +163,40 @@ class DotNetIlEmitter(
                     }
                     else -> try {
                         for (accessor in accessors) {
-                            availableFunctions[accessor] = DotNetIlFunctionInfo(className, accessor.dotNetSignature(typeMapper))
+                            availableFunctions[accessor] = DotNetIlFunctionInfo(facadeClassInfo, accessor.dotNetSignature(typeMapper))
                         }
                     } catch (e: DotNetIlUnsupportedException) {
                         accessors.forEach(availableFunctions::remove)
                         propertySkipReasons[property] = e.reason
                     }
                 }
+            }
+        }
+
+        // Linked whole-pair eviction, the companion extension of the whole-class rejection rule:
+        // a top-level class and its companion object are separate availableClasses entries, but
+        // a PARTIAL pair would violate the whole-class rule in both directions — the singleton
+        // field on the enclosing class is typed as the companion and the enclosing `.cctor`
+        // `newobj`s it, while companion members resolve through the pair's nested IL name — so
+        // every eviction site removes both entries and both member sets, each warned with a
+        // reason carrying the original one. [failedClass] must be the half whose member or
+        // shape actually failed — the partner's warning points at it — so the render fixpoint
+        // re-tags a failure surfacing out of the companion's recursive render with the
+        // companion (see DotNetIlUnsupportedClassException).
+        fun evictClassPair(failedClass: IrClass, reason: String) {
+            val enclosing = failedClass.parent as? IrClass ?: failedClass
+            for (partner in listOfNotNull(enclosing, enclosing.companionObject())) {
+                availableClasses.remove(partner)
+                // The members go with the class: a call site must not resolve to a member of a
+                // class that no longer exists in the module.
+                partner.dotNetMemberFunctions().forEach(availableFunctions::remove)
+                val partnerReason = when {
+                    partner === failedClass -> reason
+                    partner === enclosing ->
+                        "its companion object '${failedClass.diagnosticName()}' could not be compiled: $reason"
+                    else -> "its enclosing class '${enclosing.diagnosticName()}' could not be compiled: $reason"
+                }
+                classSkipReasons.putIfAbsent(partner, partnerReason)
             }
         }
 
@@ -187,8 +224,13 @@ class DotNetIlEmitter(
         // supported, so the identity key is name plus mapped IL type. Stated deviation from the
         // JVM backend, which RENAMES the clashing private backing field (`RenameFieldsLowering`
         // yields `INSTANCE$1`): this backend has no field-renaming machinery, so the clash is
-        // rejected whole-class like the method-identity clash above.
+        // rejected whole-class like the method-identity clash above. The companion's singleton
+        // field participates in the ENCLOSING class's gate the same way (the lowering parents
+        // it there): a user field named after the companion whose type maps to the companion
+        // clashes, evicting the whole (class, companion) pair.
         for ((irClass, classInfo) in availableClasses.entries.toList()) {
+            // Already evicted as the partner of an earlier pair failure in this snapshot.
+            if (irClass !in availableClasses) continue
             try {
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions()) {
@@ -200,7 +242,7 @@ class DotNetIlEmitter(
                                     "both map to the same IL method '$ilIdentity'"
                         )
                     }
-                    availableFunctions[member] = DotNetIlFunctionInfo(classInfo.ilClassName, signature)
+                    availableFunctions[member] = DotNetIlFunctionInfo(classInfo, signature)
                 }
                 val fieldsByIlIdentity = hashMapOf<String, IrField>()
                 for (field in irClass.dotNetMemberFields()) {
@@ -216,9 +258,7 @@ class DotNetIlEmitter(
                     }
                 }
             } catch (e: DotNetIlUnsupportedException) {
-                availableClasses.remove(irClass)
-                classSkipReasons[irClass] = e.reason
-                irClass.dotNetMemberFunctions().forEach(availableFunctions::remove)
+                evictClassPair(irClass, e.reason)
             }
         }
 
@@ -264,6 +304,11 @@ class DotNetIlEmitter(
             staticFieldLines.clear()
             var anyDeclarationRemoved = false
             for (irClass in availableClasses.keys.toList()) {
+                // Already evicted as the partner of an earlier pair failure in this round.
+                if (irClass !in availableClasses) continue
+                // A companion renders recursively INSIDE its enclosing class's render (as a
+                // nested `.class` block), never as a top-level class of its own.
+                if (irClass.isCompanion) continue
                 try {
                     renderedClasses[irClass] = renderUserClass(
                         classInfo = availableClasses.getValue(irClass),
@@ -274,11 +319,13 @@ class DotNetIlEmitter(
                         facadeClassInfoByFile = facadeClassInfoByFile,
                     )
                 } catch (e: DotNetIlUnsupportedException) {
-                    availableClasses.remove(irClass)
-                    // The members go with the class: a call site must not resolve to a member
-                    // of a class that no longer exists in the module.
-                    irClass.dotNetMemberFunctions().forEach(availableFunctions::remove)
-                    classSkipReasons[irClass] = e.reason
+                    // A companion failure surfaces from INSIDE the enclosing class's render
+                    // (the companion renders only recursively), tagged with the companion so
+                    // the pair warnings name the half that actually failed — the same
+                    // attribution the member pre-pass gets for free by iterating the
+                    // companion as its own entry.
+                    val failedClass = (e as? DotNetIlUnsupportedClassException)?.irClass ?: irClass
+                    evictClassPair(failedClass, e.reason)
                     anyDeclarationRemoved = true
                 }
             }
@@ -292,7 +339,7 @@ class DotNetIlEmitter(
                     // fails this function right here, before any stale `class 'C'` reference of
                     // a nonexistent class could reach the emitted signature text.
                     val functionInfo = DotNetIlFunctionInfo(
-                        availableFunctions.getValue(function).className,
+                        availableFunctions.getValue(function).owner,
                         function.dotNetSignature(typeMapper),
                     )
                     availableFunctions[function] = functionInfo
@@ -345,9 +392,10 @@ class DotNetIlEmitter(
                         renderField(property.backingField!!, typeMapper, isStatic = true)
                     }
                     val renderedInitializer = staticInitializer?.let { initializer ->
+                        val facadeClassInfo = facadeClassInfoByFile.getValue(file)
                         DotNetIlMethodCodegen(
                             function = initializer,
-                            functionInfo = DotNetIlFunctionInfo(fileClassNames.getValue(file), initializer.dotNetSignature(typeMapper)),
+                            functionInfo = DotNetIlFunctionInfo(facadeClassInfo, initializer.dotNetSignature(typeMapper)),
                             isEntryPoint = false,
                             availableFunctions = availableFunctions,
                             intrinsicMethods = intrinsicMethods,
@@ -487,10 +535,14 @@ class DotNetIlEmitter(
      * only top-level, final, non-generic plain classes and plain `object` declarations whose
      * sole supertype is `kotlin.Any` are compilable (an `object` goes through the same
      * constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
-     * already turned its singleton nature into ordinary class machinery). Each violation throws
-     * [DotNetIlUnsupportedException]; the granularity is always the whole class.
+     * already turned its singleton nature into ordinary class machinery). The single supported
+     * NESTED shape is the companion object of a top-level class ([isValidatedCompanion] marks
+     * the recursive call): it is emitted as a real CLR nested type and validated with the same
+     * constraint chain — sole supertype `kotlin.Any`, final, non-generic, no nested classes of
+     * its own, not data. Each violation throws [DotNetIlUnsupportedException]; the granularity
+     * is always the whole class — for a class with a companion, always the whole PAIR.
      */
-    private fun checkClassShapeSupported(irClass: IrClass) {
+    private fun checkClassShapeSupported(irClass: IrClass, isValidatedCompanion: Boolean = false) {
         val name = irClass.diagnosticName()
         when (irClass.kind) {
             ClassKind.INTERFACE ->
@@ -500,7 +552,7 @@ class DotNetIlEmitter(
             ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
         }
-        if (irClass.parent !is IrFile) {
+        if (!isValidatedCompanion && irClass.parent !is IrFile) {
             dotNetUnsupported("class '$name' is not top-level; nested/inner/local classes are not supported")
         }
         if (irClass.isData) {
@@ -531,7 +583,15 @@ class DotNetIlEmitter(
         }
         for (declaration in irClass.declarations) {
             if (declaration is IrClass) {
-                if (declaration.isCompanion) dotNetUnsupported("companion object in class '$name' is not supported")
+                // The companion object of a top-level class (Kotlin allows at most one) is the
+                // single supported nested shape, recursively validated with the same constraint
+                // chain; the recursion is depth-one because a companion cannot itself contain a
+                // companion (the frontend rejects it). Every other nested class — including any
+                // nested class of the companion — stays rejected, whole-class.
+                if (!isValidatedCompanion && declaration.isCompanion && declaration.kind == ClassKind.OBJECT) {
+                    checkClassShapeSupported(declaration, isValidatedCompanion = true)
+                    continue
+                }
                 val kindWord = if (declaration.kind == ClassKind.OBJECT) "object" else "class"
                 dotNetUnsupported("$kindWord '${declaration.diagnosticName()}' is not top-level; nested/inner/local classes are not supported")
             }
@@ -554,12 +614,21 @@ class DotNetIlEmitter(
      * rejected.
      *
      * An `object` class renders through the same path with three additions: its `INSTANCE`
-     * field (the only loose [IrField] a supported class can carry) renders public-static, its
-     * class-parented `<clinit>` renders as the class's `.cctor` — first among the methods for
-     * deterministic goldens, never registered in [availableFunctions] — and sets
-     * `hasClassInitializer` (dropping `beforefieldinit`, the same first-active-use parity
-     * argument as the facades), and a member `const val` renders as a `literal` field on the
-     * class with no accessors, exactly like the facade const shape.
+     * field (a loose [IrField] with origin [IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE])
+     * renders public-static, its class-parented `<clinit>` renders as the class's `.cctor` —
+     * first among the methods for deterministic goldens, never registered in
+     * [availableFunctions] — and sets `hasClassInitializer` (dropping `beforefieldinit`, the
+     * same first-active-use parity argument as the facades), and a member `const val` renders
+     * as a `literal` field on the class with no accessors, exactly like the facade const shape.
+     *
+     * A class WITH A COMPANION renders its companion recursively through this same function as
+     * a real CLR nested `.class` block inside its own body (spelling probe-verified,
+     * objprobe_s6), while carrying the companion's pieces of the object machinery itself: the
+     * singleton field [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
+     * parented HERE (named after the companion, typed as the companion) and the class-parented
+     * `<clinit>` doing the `newobj`/`stsfld` — so the ENCLOSING class drops `beforefieldinit`
+     * and touching the companion initializes the enclosing class (Kotlin/JVM parity,
+     * objprobe_s8), while the companion itself has no `.cctor` and keeps `beforefieldinit`.
      */
     private fun renderUserClass(
         classInfo: DotNetIlClassInfo,
@@ -570,6 +639,7 @@ class DotNetIlEmitter(
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
     ): RenderedClass {
         val name = irClass.diagnosticName()
+        val renderedNestedClasses = mutableListOf<String>()
         val renderedFields = mutableListOf<String>()
         val renderedMethods = mutableListOf<String>()
         val renderedProperties = mutableListOf<String>()
@@ -577,7 +647,7 @@ class DotNetIlEmitter(
         var hasClassInitializer = false
 
         fun renderMemberFunction(member: IrSimpleFunction) {
-            val memberInfo = DotNetIlFunctionInfo(classInfo.ilClassName, member.dotNetSignature(typeMapper))
+            val memberInfo = DotNetIlFunctionInfo(classInfo, member.dotNetSignature(typeMapper))
             availableFunctions[member] = memberInfo
             val rendered = DotNetIlMethodCodegen(
                 function = member,
@@ -597,7 +667,7 @@ class DotNetIlEmitter(
                 is IrConstructor -> {
                     val rendered = DotNetIlMethodCodegen(
                         function = declaration,
-                        functionInfo = DotNetIlFunctionInfo(classInfo.ilClassName, declaration.dotNetSignature(typeMapper)),
+                        functionInfo = DotNetIlFunctionInfo(classInfo, declaration.dotNetSignature(typeMapper)),
                         isEntryPoint = false,
                         availableFunctions = availableFunctions,
                         intrinsicMethods = intrinsicMethods,
@@ -609,10 +679,40 @@ class DotNetIlEmitter(
                 }
                 is IrAnonymousInitializer ->
                     dotNetUnsupported("internal: init block of class '$name' survived InitializersLowering")
+                is IrClass -> {
+                    // Only the companion object reaches here: the shape gate rejected every
+                    // other nested class, and registration is paired, so a missing class info
+                    // is an internal inconsistency rather than a reachable user shape. The
+                    // companion renders recursively as a real CLR nested `.class` block inside
+                    // this class's body (probe-verified, objprobe_s6), indented two columns
+                    // like every other member.
+                    val companionInfo = typeMapper.classInfoOrNull(declaration)
+                        ?: dotNetUnsupported("internal: nested class '${declaration.name.asString()}' of class '$name' has no registered class info")
+                    val rendered = try {
+                        renderUserClass(
+                            classInfo = companionInfo,
+                            irClass = declaration,
+                            availableFunctions = availableFunctions,
+                            intrinsicMethods = intrinsicMethods,
+                            typeMapper = typeMapper,
+                            facadeClassInfoByFile = facadeClassInfoByFile,
+                        )
+                    } catch (e: DotNetIlUnsupportedException) {
+                        // Attribute the failure to the companion itself: this render is the
+                        // companion's ONLY render (it never renders as a top-level class), so
+                        // without the tag the fixpoint catch would see the enclosing class as
+                        // the failing half of the pair and invert the two eviction warnings.
+                        throw DotNetIlUnsupportedClassException(declaration, e.reason)
+                    }
+                    renderedNestedClasses += rendered.ilText.trimEnd('\n').prependIndent("  ") + "\n"
+                    requiredHelpers += rendered.requiredRuntimeHelpers
+                }
                 is IrField -> {
-                    // The only loose field of a supported class is the INSTANCE field
-                    // DotNetObjectClassLowering synthesized on an `object`; anything else has
-                    // no defined render and must fail the class rather than emit guesswork.
+                    // The only loose fields of a supported class are the singleton fields
+                    // DotNetObjectClassLowering synthesized: INSTANCE on an `object`, or the
+                    // field named after the companion on a companion-bearing class; anything
+                    // else has no defined render and must fail the class rather than emit
+                    // guesswork.
                     if (declaration.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) {
                         dotNetUnsupported(
                             "internal: unexpected propertyless field '${declaration.name.asString()}' in class '$name'"
@@ -628,7 +728,7 @@ class DotNetIlEmitter(
                         // `.cctor`, it must not be a call target or a named method.
                         val rendered = DotNetIlMethodCodegen(
                             function = declaration,
-                            functionInfo = DotNetIlFunctionInfo(classInfo.ilClassName, declaration.dotNetSignature(typeMapper)),
+                            functionInfo = DotNetIlFunctionInfo(classInfo, declaration.dotNetSignature(typeMapper)),
                             isEntryPoint = false,
                             availableFunctions = availableFunctions,
                             intrinsicMethods = intrinsicMethods,
@@ -672,6 +772,8 @@ class DotNetIlEmitter(
                 renderedProperties,
                 isStaticHolder = false,
                 hasClassInitializer = hasClassInitializer,
+                isNested = classInfo.isNested,
+                renderedNestedClasses = renderedNestedClasses,
             ).generate(this)
         }
         return RenderedClass(ilText, requiredHelpers)
@@ -733,10 +835,14 @@ class DotNetIlEmitter(
      * The `.field public static initonly class 'C' 'INSTANCE'` line of an `object` class — the
      * CLR spelling of the JVM's `public static final INSTANCE` (the one public field of the
      * model; spelling probe-verified, `objprobe_s1`, including the `newobj` of the private
-     * `.ctor` from the same class's `.cctor`). Unlike [renderField]'s backing fields, `initonly`
-     * is kept here for JVM-`final` parity of intent — nothing ever stores to INSTANCE outside
-     * the `.cctor` — even though CoreCLR 10 does not enforce it at runtime (an outside `stsfld`
-     * succeeded, `objprobe_s3`: `initonly` is declarative metadata only).
+     * `.ctor` from the same class's `.cctor`) — or, on a companion-bearing class, the
+     * `.field public static initonly class 'C'/'Companion' 'Companion'` singleton field of its
+     * companion (nested type-ref spelling in field position probe-verified, `objprobe_s6`,
+     * including a same-named FIELD coexisting with the nested TYPE). Unlike [renderField]'s
+     * backing fields, `initonly` is kept here for JVM-`final` parity of intent — nothing ever
+     * stores to the singleton field outside the `.cctor` — even though CoreCLR 10 does not
+     * enforce it at runtime (an outside `stsfld` succeeded, `objprobe_s3`: `initonly` is
+     * declarative metadata only).
      */
     private fun renderObjectInstanceField(field: IrField, typeMapper: DotNetIlTypeMapper): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
@@ -833,10 +939,12 @@ class DotNetIlEmitter(
 
     /**
      * The IL fields a user class renders, in declaration order, for the member pre-pass's
-     * field-identity clash gate: the loose `INSTANCE` field of an `object` (the only loose
-     * [IrField] a supported class can carry) plus the backing fields of the declared properties
-     * — including `const val`s, whose `literal` fields share the class's field namespace like
-     * any other field.
+     * field-identity clash gate: the loose singleton field — `INSTANCE` on an `object`, or the
+     * field named after the companion that [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
+     * parents to a companion-bearing class (so a user field named `Companion` with the
+     * companion's type clashes, whole-pair) — plus the backing fields of the declared
+     * properties, including `const val`s, whose `literal` fields share the class's field
+     * namespace like any other field.
      */
     private fun IrClass.dotNetMemberFields(): List<IrField> =
         declarations.flatMap { declaration ->
@@ -855,7 +963,7 @@ class DotNetIlEmitter(
      * attributed to its property.
      */
     private fun IrField.dotNetFieldDescription(): String = when {
-        origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE -> "the object's synthesized INSTANCE singleton field"
+        origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE -> "the synthesized '${name.asString()}' singleton field"
         correspondingPropertySymbol != null -> "the backing field of property '${name.asString()}'"
         else -> "field '${name.asString()}'"
     }
@@ -868,6 +976,19 @@ class DotNetIlEmitter(
         val ilText: String,
         val requiredRuntimeHelpers: Set<DotNetIlRuntimeHelper>,
     )
+
+    /**
+     * A [DotNetIlUnsupportedException] tagged with the class whose render actually failed. A
+     * companion object renders only recursively INSIDE its enclosing class's [renderUserClass],
+     * so a companion member failure would otherwise surface at the render-fixpoint catch as a
+     * failure of the ENCLOSING class and invert the attribution of the two pair-eviction
+     * warnings (the shape gate and the member pre-pass need no tag — they iterate the companion
+     * as its own entry).
+     */
+    private class DotNetIlUnsupportedClassException(
+        val irClass: IrClass,
+        reason: String,
+    ) : DotNetIlUnsupportedException(reason)
 
     /**
      * Precomputes the file class name for every file: the package-qualified dotted name

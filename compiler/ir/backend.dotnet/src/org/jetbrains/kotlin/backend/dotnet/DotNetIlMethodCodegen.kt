@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrStatement
+import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrFunction
@@ -82,7 +83,7 @@ internal class DotNetIlMethodCodegen(
         if (function is IrConstructor) {
             registerThis(
                 function.constructedClass.thisReceiver!!.symbol,
-                DotNetIlValueType.UserClass(functionInfo.className),
+                DotNetIlValueType.UserClass(functionInfo.owner.ilTypeRef),
             )
         }
     }
@@ -115,8 +116,10 @@ internal class DotNetIlMethodCodegen(
                 // the Kotlin declaration: an object's primary constructor is private from the
                 // frontend, and a public `.ctor` would let any other .NET code mint a second
                 // instance of the singleton (the `newobj` of a private `.ctor` from the same
-                // class's `.cctor` is probe-verified, objprobe_s1).
-                val visibility = if (function.visibility == DescriptorVisibilities.PRIVATE) "private" else "public"
+                // class's `.cctor` is probe-verified, objprobe_s1). A COMPANION's Kotlin-private
+                // constructor is the one exception, emitted as IL `assembly` instead — see
+                // [dotNetMemberVisibility].
+                val visibility = function.dotNetMemberVisibility() ?: "public"
                 appendLine("  .method $visibility hidebysig specialname rtspecialname instance void .ctor($parameters) cil managed")
             } else if (function.origin == DOTNET_STATIC_INITIALIZER) {
                 // The synthetic `<clinit>` (see DotNetStaticInitializersLowering) — file-parented
@@ -128,12 +131,15 @@ internal class DotNetIlMethodCodegen(
             } else {
                 // Instance member methods differ from static ones only in the `instance` flag;
                 // property accessors additionally carry `specialname`, binding them to the
-                // `.property` metadata (both spellings are ilasm-probe-verified).
+                // `.property` metadata (both spellings are ilasm-probe-verified). Kotlin-private
+                // members of a COMPANION are `assembly` instead of the historical `public` — see
+                // [dotNetMemberVisibility].
+                val visibility = function.dotNetMemberVisibility() ?: "public"
                 val specialname = if (function.isAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
                 appendLine(
-                    "  .method public hidebysig $specialname$dispatch ${signature.returnType.nameInSignature} " +
+                    "  .method $visibility hidebysig $specialname$dispatch ${signature.returnType.nameInSignature} " +
                             "${methodName.toIlIdentifier()}($parameters) cil managed"
                 )
             }
@@ -147,6 +153,32 @@ internal class DotNetIlMethodCodegen(
             appendLine("  }")
         }
         return DotNetIlRenderedMethod(ilText, methodContext.requiredRuntimeHelpers)
+    }
+
+    /**
+     * The non-default IL visibility of a Kotlin-`private` member, or null for the historical
+     * default (`public` for methods and accessors; constructors map Kotlin `private` to IL
+     * `private`, the singleton guarantee — see the `.ctor` render):
+     * - Every Kotlin-private member OF A COMPANION is IL `assembly` (uniform rule). The CLR
+     *   grants nested→enclosing private access but NOT the reverse (objprobe_s7a/objprobe_s7b):
+     *   the enclosing class's `.cctor` must `newobj` the companion's Kotlin-private constructor
+     *   — IL `private` there throws at runtime (TypeInitializationException wrapping
+     *   MethodAccessException, objprobe_s7b; and a throwing `.cctor` permanently poisons the
+     *   type) — and enclosing-class code may call companion-private members through the
+     *   singleton field. The `.method assembly ... .ctor()` spelling `newobj`'d from the
+     *   enclosing `.cctor` is probe-verified (objprobe_s7c). Stated deviation from the JVM
+     *   backend, whose analogue is the synthetic `access$` bridge it generates for
+     *   outer→companion-private access. The reverse direction needs nothing: Kotlin-private
+     *   members of the ENCLOSING class reached from companion code are fine at their current
+     *   IL visibility (nested→enclosing access is granted, objprobe_s7a).
+     */
+    private fun IrFunction.dotNetMemberVisibility(): String? {
+        if (visibility != DescriptorVisibilities.PRIVATE) return null
+        return when {
+            (parent as? IrClass)?.isCompanion == true -> "assembly"
+            this is IrConstructor -> "private"
+            else -> null
+        }
     }
 
     private fun StringBuilder.appendLocals() {
