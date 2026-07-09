@@ -29,6 +29,9 @@ import org.jetbrains.kotlin.fir.EqualsOverrideContract.*
 import org.jetbrains.kotlin.fir.declarations.utils.equalityBoundType
 import org.jetbrains.kotlin.fir.declarations.utils.isInterface
 import org.jetbrains.kotlin.fir.scopes.CallableCopyTypeCalculator
+import org.jetbrains.kotlin.fir.types.canBeNull
+import org.jetbrains.kotlin.fir.types.typeContext
+import org.jetbrains.kotlin.fir.types.withNullability
 
 /**
  * The entries are ordered from least trustworthy to most trustworthy.
@@ -187,7 +190,8 @@ class FirEqualsOverrideContractCalculator(
                 }
             }
         }
-        return result
+        // currently, flexible LHS results in nullable RHS
+        return result?.withNullability(type.canBeNull(), session.typeContext)
     }
 }
 
