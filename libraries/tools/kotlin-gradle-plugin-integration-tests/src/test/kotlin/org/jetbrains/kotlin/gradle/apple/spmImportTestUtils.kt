@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.PackageResolvedS
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.FingerprintXcodeBuild
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SHARED_CHECKOUT_DIR
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SHARED_XCODE_DUMP_DIR
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.noSyncIdentifier
 import org.jetbrains.kotlin.gradle.testbase.TestProject
 import org.jetbrains.kotlin.gradle.testbase.XCTestHelpers
 import org.jetbrains.kotlin.gradle.testbase.assertDirectoryExists
@@ -47,6 +48,7 @@ import kotlin.io.path.createFile
 import kotlin.io.path.readText
 import kotlin.io.path.isDirectory
 import kotlin.io.path.listDirectoryEntries
+import kotlin.io.path.name
 import kotlin.io.path.writeText
 import kotlin.io.readText
 import kotlin.test.assertEquals
@@ -72,7 +74,7 @@ const val SYNTHETIC_IMPORT_DYLIB =
 fun createLocalSwiftPackage(
     localPackageDir: Path,
     packageName: String = "LocalSwiftPackage",
-    products : List<String> = listOf(packageName),
+    products: List<String> = listOf(packageName),
     sourceLanguage: SwiftPackageSourceLanguage = SwiftPackageSourceLanguage.SWIFT_WITH_OBJC,
 ) {
     localPackageDir.createDirectories()
@@ -117,7 +119,11 @@ fun createLocalSwiftPackageWithResources(
 
             @objc public class ResourceAccessor: NSObject {
                 @objc public static func resourceContent() -> String {
-                    guard let url = Bundle.module.url(forResource: "${resourceFileName.substringBeforeLast(".")}", withExtension: "${resourceFileName.substringAfterLast(".")}") else {
+                    guard let url = Bundle.module.url(forResource: "${resourceFileName.substringBeforeLast(".")}", withExtension: "${
+            resourceFileName.substringAfterLast(
+                "."
+            )
+        }") else {
                         return "RESOURCE_NOT_FOUND"
                     }
                     return (try? String(contentsOf: url)) ?? "RESOURCE_READ_ERROR"
@@ -327,14 +333,14 @@ internal fun createSwiftPmGitRepoWithTags(
 
     writePackageManifest(repoDir, packageName, products = products)
 
-    if(source != null){
+    if (source != null) {
         products.forEach { product ->
             repoDir.resolve("Sources/$product").createDirectories()
             repoDir.resolve("Sources/$product/$product.swift").writeText(
                 source
             )
         }
-    }else{
+    } else {
         products.forEach { product ->
             repoDir.resolve("Sources/$product").createDirectories()
             repoDir.resolve("Sources/$product/$product.swift").writeText(
@@ -453,7 +459,7 @@ internal fun swiftPMPackageFingerprint(
     projectDir.resolve("build").resolve(FingerprintSyntheticPackage.SYNTHETIC_PACKAGE_FINGERPRINT_PATH)
 
 internal fun swiftPMFingerprintCheckoutDir(
-    projectDir : Path,
+    projectDir: Path,
     rootProject: Path,
 ): Path {
     val packageFingerprint = parseSwiftPMFingerprint(swiftPMSyntheticPackageFingerprint(projectDir))
@@ -570,8 +576,11 @@ internal fun TestProject.localIphonesimulatorDerivedDataDir(
 internal fun sharedRootBucketDir(dumpDir: Path): Path =
     dumpDir.parent.parent
 
-internal fun xcodeDumpFingerprintStamp(dumpDir: Path): Path =
-    dumpDir.resolve("xcode-dump-fingerprint.json")
+internal fun TestProject.noSynchronization(): PackageResolvedSynchronization {
+    return PackageResolvedSynchronization.Identifier(
+        noSyncIdentifier(this.projectName)
+    )
+}
 
 internal fun assertDumpDirectoryContainsXcodebuildArgsDump(dumpDir: Path) {
     assertDirectoryExists(dumpDir)
@@ -659,9 +668,6 @@ internal fun TestProject.selectedPersistedPackageResolvedPath(
     when (sync) {
         is PackageResolvedSynchronization.Identifier ->
             projectPath.resolve(".swiftpm-locks/${sync.identifier}/swiftImport/Package.resolved")
-
-        PackageResolvedSynchronization.None ->
-            projectPath.resolve("Package.resolved")
     }
 
 internal fun TestProject.initSwiftPmProject(
@@ -728,7 +734,7 @@ internal fun TestProject.dumpTaskGraph(
     return taskGraph
 }
 
-internal fun Set<String>.assertExactSwiftImportTasksInGraph(vararg tasks : String) {
+internal fun Set<String>.assertExactSwiftImportTasksInGraph(vararg tasks: String) {
     val taskToExclude = setOf(
         ":kmpPartiallyResolvedDependenciesChecker",
         ":downloadKotlinNativeDistribution",
@@ -743,7 +749,7 @@ internal fun Set<String>.assertExactSwiftImportTasksInGraph(vararg tasks : Strin
     filteredGraph.assertExactTaskGraph(*tasks)
 }
 
-internal fun Set<String>.assertExactTaskGraph(vararg tasks : String) {
+internal fun Set<String>.assertExactTaskGraph(vararg tasks: String) {
     val expected = tasks.toSet()
 
     val difference = (this - expected + (expected - this)).toSet()
@@ -838,7 +844,7 @@ private fun assertCheckoutVersion(checkoutRepoDir: Path, repoRef: RepoRef, versi
 
 internal fun assertGitIgnoreEquals(
     gitIgnorePath: Path,
-    expectedGitIgnoreContent: String
+    expectedGitIgnoreContent: String,
 ) {
     val actualGitIgnoreContent = gitIgnorePath.toFile().readText()
 

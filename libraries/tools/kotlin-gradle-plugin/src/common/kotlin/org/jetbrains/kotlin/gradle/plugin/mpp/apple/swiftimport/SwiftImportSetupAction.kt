@@ -1055,9 +1055,6 @@ private fun Project.providePersistedPackageResolved(): RegularFile {
                 }
             ).get()
         }
-        else -> {
-            layout.projectDirectory.file("Package.resolved")
-        }
     }
 }
 

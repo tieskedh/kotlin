@@ -24,11 +24,13 @@ import org.jetbrains.kotlin.gradle.plugin.diagnostics.reportDiagnostic
 import org.jetbrains.kotlin.gradle.plugin.getExtension
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SwiftPMDependency.Remote.Repository
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SwiftPMDependency.Remote.Version
+import org.jetbrains.kotlin.gradle.utils.lowerCamelCaseName
 import org.jetbrains.kotlin.gradle.utils.normalizedAbsoluteFile
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.Serializable
+import java.security.MessageDigest
 import javax.inject.Inject
 
 internal fun Project.locateOrRegisterSwiftPMDependenciesExtension(): SwiftPMImportExtension {
@@ -382,7 +384,9 @@ abstract class SwiftPMImportExtension @Inject constructor(
 
     /** Disables cross-project lock-file synchronization and resolves this project's SwiftPM graph independently. */
     fun noSynchronization(): PackageResolvedSynchronization =
-        PackageResolvedSynchronization.None
+        PackageResolvedSynchronization.Identifier(
+            noSyncIdentifier(project.name)
+        )
 
     // FIXME: KT-84695 Check and test if this is actually correct
     private fun inferPackageName(url: String) = url.split("/").last().split(".git").first()
@@ -396,6 +400,9 @@ abstract class SwiftPMImportExtension @Inject constructor(
         const val EXTENSION_NAME = "swiftPMDependencies"
     }
 }
+
+internal fun noSyncIdentifier(projectName: String): String =
+    lowerCamelCaseName("noSync", projectName)
 
 /** Represents a SwiftPM dependency declared through [SwiftPMImportExtension]. */
 @kotlinx.serialization.Serializable
@@ -429,7 +436,8 @@ sealed class SwiftPMDependency : Serializable {
         tvOS,
         watchOS;
 
-        val swiftEnumName: String get() = when (this) {
+        val swiftEnumName: String
+            get() = when (this) {
                 iOS -> "iOS"
                 macOS -> "macOS"
                 tvOS -> "tvOS"
@@ -518,16 +526,10 @@ sealed class SwiftPMDependency : Serializable {
 sealed class PackageResolvedSynchronization : Serializable {
     /** Shares one persisted lock file bucket between all projects with the same identifier. */
     data class Identifier(val identifier: String) : PackageResolvedSynchronization()
-
-    /** Disables persisted lock-file synchronization. */
-    object None : PackageResolvedSynchronization() {
-        private fun readResolve(): Any = None
-    }
 }
 
 internal fun PackageResolvedSynchronization.toKotlinxSerializable(): SerializablePackageResolvedSynchronization = when (this) {
     is PackageResolvedSynchronization.Identifier -> SerializablePackageResolvedSynchronization.Identifier(identifier)
-    PackageResolvedSynchronization.None -> SerializablePackageResolvedSynchronization.None
 }
 
 @kotlinx.serialization.Serializable
@@ -549,7 +551,7 @@ internal data class SwiftPMImportMetadata(
     val tvosDeploymentVersion: String?,
     @Suppress("unused")
     val isModulesDiscoveryEnabled: Boolean,
-    val dependencies: Set<SwiftPMDependency>
+    val dependencies: Set<SwiftPMDependency>,
 ) : Serializable
 
 private val swiftPMMetadataJson = Json {
