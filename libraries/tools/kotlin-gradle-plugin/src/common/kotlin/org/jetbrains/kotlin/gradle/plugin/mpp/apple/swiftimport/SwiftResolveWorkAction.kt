@@ -13,6 +13,7 @@ import org.gradle.api.provider.Property
 import org.gradle.process.ExecOperations
 import org.gradle.workers.WorkAction
 import org.gradle.workers.WorkParameters
+import org.jetbrains.kotlin.gradle.utils.contentEqualsIgnoringLineEndings
 import java.io.File
 import javax.inject.Inject
 
@@ -25,7 +26,8 @@ internal interface SwiftResolveAwaitWorkParameters : WorkParameters {
     val destinationWorkspaceStateFile: Property<File>
 }
 
-internal abstract class SwiftResolveAwaitWorkAction @Inject constructor(val fs: FileSystemOperations) : WorkAction<SwiftResolveAwaitWorkParameters> {
+internal abstract class SwiftResolveAwaitWorkAction @Inject constructor(val fs: FileSystemOperations) :
+    WorkAction<SwiftResolveAwaitWorkParameters> {
     override fun execute() {
         parameters.coordinationService.get().awaitSwiftResolved(parameters.syntheticPackageHash.get())
         finalizeFetchTask(
@@ -47,6 +49,7 @@ internal interface SwiftResolveWorkParameters : WorkParameters {
     val syntheticPackageHash: Property<SwiftResolveBucketMapKey>
     val coordinationEnabled: Property<Boolean>
     val syntheticLockFile: RegularFileProperty
+    val persistedPackageResolved: RegularFileProperty
     val workspaceStateJson: RegularFileProperty
     val ideaSyncEnabled: Property<Boolean>
     val errorFile: RegularFileProperty
@@ -56,7 +59,7 @@ internal interface SwiftResolveWorkParameters : WorkParameters {
 internal abstract class SwiftResolveWorkAction @Inject constructor(
     private val execOps: ExecOperations,
     private val fs: FileSystemOperations,
-) : WorkAction<SwiftResolveWorkParameters> {
+    ) : WorkAction<SwiftResolveWorkParameters> {
 
     private val logger = Logging.getLogger(SwiftResolveWorkAction::class.java)
 
@@ -64,14 +67,10 @@ internal abstract class SwiftResolveWorkAction @Inject constructor(
         val errorFile = parameters.errorFile.get().asFile
         errorFile.delete()
         try {
-            // Copy lock file from persisted
-            // - In identifier this is .swiftpm-locks
-            // - In None this is buildscript/Package.resolved
-
+            // Seed the synthetic project from the persisted lock, then resolve, then optionally write back.
+            syncFromPersisted()
             doExecute()
-
-            // Return lock file to the persisted location
-            // - In None this is buildscript/Package.resolved
+            syncToPersisted()
             if (parameters.coordinationEnabled.get()) {
                 finalizeFetchTask(
                     fs,
@@ -98,6 +97,38 @@ internal abstract class SwiftResolveWorkAction @Inject constructor(
             throw failure
         }
     }
+
+    /**
+     * Sync Package.resolved before and after running `swift package resolve`.
+     */
+    private fun syncFromPersisted() {
+        if (isUmbrellaFetch()) return
+
+        val source = parameters.persistedPackageResolved.get().asFile
+        val destination = when (isInFingerprintedSharedPackage()) {
+            true -> {
+                /**
+                 * if in fingerprinted shared package, we need to sync umbrella Package.resolved to fingerprinted Package.resolved
+                 */
+                syntheticPackageResolvedFile()
+            }
+            false -> parameters.syntheticLockFile.get().asFile
+        }
+
+        syncSwiftLockFile(fs, source, destination)
+    }
+
+    private fun syncToPersisted() {
+        if (isUmbrellaFetch() || isInFingerprintedSharedPackage()) return
+        syncSwiftLockFile(fs, syntheticPackageResolvedFile(), parameters.persistedPackageResolved.get().asFile)
+    }
+
+    private fun isUmbrellaFetch(): Boolean = !parameters.persistedPackageResolved.isPresent
+
+    private fun isInFingerprintedSharedPackage(): Boolean = parameters.coordinationEnabled.get()
+
+    private fun syntheticPackageResolvedFile(): File =
+        parameters.syntheticImportProjectRoot.get().asFile.resolve("Package.resolved")
 
     private fun doExecute() {
         execOps.exec { exec ->
@@ -146,6 +177,9 @@ internal abstract class SwiftResolveWorkAction @Inject constructor(
     }
 }
 
+private fun hasSameContent(dest: File, src: File): Boolean = dest.exists() && src.exists() && contentEqualsIgnoringLineEndings(src, dest)
+
+
 internal fun finalizeFetchTask(
     fs: FileSystemOperations,
     sourcePackageResolvedFile: File,
@@ -153,14 +187,35 @@ internal fun finalizeFetchTask(
     sourceWorkspaceStateFile: File,
     destinationWorkspaceStateFile: File,
 ) {
-    copySwiftLockFile(
+    syncSwiftLockFile(
         fs,
         sourcePackageResolvedFile,
         destinationPackageResolved,
     )
-    copySwiftLockFile(
+    syncSwiftLockFile(
         fs,
         sourceWorkspaceStateFile,
         destinationWorkspaceStateFile
     )
+}
+
+internal fun syncSwiftLockFile(
+    fs: FileSystemOperations,
+    sourcePackageResolvedFile: File,
+    destinationPackageResolved: File,
+) {
+    if (!sourcePackageResolvedFile.exists()) {
+        if (destinationPackageResolved.exists()) destinationPackageResolved.delete()
+        return
+    }
+
+    if (hasSameContent(sourcePackageResolvedFile, destinationPackageResolved)) return
+
+    if (!destinationPackageResolved.parentFile.exists()) destinationPackageResolved.parentFile.mkdirs()
+
+    fs.copy { spec ->
+        spec.from(sourcePackageResolvedFile)
+        spec.into(destinationPackageResolved.parentFile)
+        spec.rename { destinationPackageResolved.name }
+    }
 }
