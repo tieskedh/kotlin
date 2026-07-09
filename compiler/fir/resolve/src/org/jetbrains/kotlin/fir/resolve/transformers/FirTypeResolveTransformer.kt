@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget.*
 import org.jetbrains.kotlin.fir.*
 import org.jetbrains.kotlin.fir.declarations.*
 import org.jetbrains.kotlin.fir.declarations.utils.*
+import org.jetbrains.kotlin.fir.diagnostics.ConeCannotResolveEqualityBoundType
 import org.jetbrains.kotlin.fir.expressions.*
 import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationCallCopy
 import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationCopy
@@ -26,6 +27,7 @@ import org.jetbrains.kotlin.fir.expressions.builder.buildExpressionStub
 import org.jetbrains.kotlin.fir.extensions.replSnippetResolveExtension
 import org.jetbrains.kotlin.fir.resolve.ScopeSession
 import org.jetbrains.kotlin.fir.resolve.TypeResolutionConfiguration
+import org.jetbrains.kotlin.fir.resolve.typeResolver
 import org.jetbrains.kotlin.fir.resolve.diagnostics.ConeAmbiguouslyResolvedAnnotationFromPlugin
 import org.jetbrains.kotlin.fir.resolve.diagnostics.ConeCyclicTypeBound
 import org.jetbrains.kotlin.fir.resolve.lookupSuperTypes
@@ -376,6 +378,19 @@ open class FirTypeResolveTransformer(
         )
     }
 
+    private fun FirValueParameter.setEqualityBoundType() {
+        val equalityBoundAnnotation = annotations.find {
+            it.toAnnotationClassId(session) == StandardClassIds.Annotations.EqualityBound
+        } ?: return
+        val boundArgument = equalityBoundAnnotation.findArgumentByName(StandardClassIds.Annotations.ParameterNames.equalityBound)
+        val getClassLhs = (boundArgument as? FirGetClassCall)?.argument
+        val configuration = TypeResolutionConfiguration(scopes.asReversed(), classDeclarationsStack, currentFile)
+        val resolvedType = getClassLhs?.let {
+            session.typeResolver.resolveEqualityBoundTypeOrNull(it, configuration)
+        }
+        equalityBoundType = resolvedType ?: ConeErrorType(ConeCannotResolveEqualityBoundType)
+    }
+
     override fun transformValueParameter(
         valueParameter: FirValueParameter,
         data: Any?,
@@ -384,6 +399,9 @@ open class FirTypeResolveTransformer(
             valueParameter.transformReturnTypeRef(this, data)
             valueParameter.transformAnnotations(this, data)
             valueParameter.transformVarargTypeToArrayType(session)
+            if (LanguageFeature.StrictEquals.isEnabled()) {
+                valueParameter.setEqualityBoundType()
+            }
             valueParameter
         }
     }
