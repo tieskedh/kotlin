@@ -857,6 +857,16 @@ abstract class FirDataFlowAnalyzer(
         }
     }
 
+    private fun processDirectEqualsCall(flow: MutableFlow, expression: FirFunctionCall, callee: FirNamedFunction) {
+        val argument = expression.arguments.singleOrNull() ?: return
+        val argumentVariable = flow.getVariableIfUsedOrReal(argument)
+        if (argumentVariable !is RealVariable) return
+        val expressionVariable = SyntheticVariable(expression)
+        callee.valueParameters.singleOrNull()?.equalityBoundType?.let {
+            flow.addImplication((expressionVariable eq true) implies (argumentVariable typeEq it))
+        }
+    }
+
     private inner class ProcessEqContext(
         val flow: MutableFlow,
         val leftOperand: FirExpression,
@@ -1293,6 +1303,14 @@ abstract class FirDataFlowAnalyzer(
             //   returns(true) implies (this == false)
             //   returns(false) implies (this == true)
             return exitBooleanNot(flow, qualifiedAccess as FirFunctionCall)
+        }
+
+        if (qualifiedAccess is FirFunctionCall &&
+            callee is FirNamedFunction &&
+            callee.symbol.isEquals(session) &&
+            LanguageFeature.StrictEquals.isEnabled()
+        ) {
+            processDirectEqualsCall(flow, qualifiedAccess, callee)
         }
 
         val originalFunction = callee.originalIfFakeOverride()
