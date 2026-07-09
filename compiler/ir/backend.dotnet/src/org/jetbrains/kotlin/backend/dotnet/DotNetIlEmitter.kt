@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -175,6 +176,18 @@ class DotNetIlEmitter(
         // whole-class. The return type is deliberately not part of the identity key:
         // return-type-only overloads are CLS-forbidden and unverified against ilasm, so they are
         // conservatively treated as the same clash.
+        //
+        // The same pass gates CLR FIELD-identity clashes: DotNetObjectClassLowering synthesizes
+        // the static `INSTANCE` singleton field with the object's own type, so the backing field
+        // of a user property named `INSTANCE` mapping to the same IL type (`val INSTANCE: A? =
+        // null` — nullability erases) collides in both name and field signature — staticness and
+        // visibility are attribute flags, not part of the identity — which ilasm rejects as a
+        // duplicate field declaration (probe-verified on the modern ilasm 10.0.9, fieldprobe). A
+        // differently-typed field of the same name is a legal CLR shape (same probe) and stays
+        // supported, so the identity key is name plus mapped IL type. Stated deviation from the
+        // JVM backend, which RENAMES the clashing private backing field (`RenameFieldsLowering`
+        // yields `INSTANCE$1`): this backend has no field-renaming machinery, so the clash is
+        // rejected whole-class like the method-identity clash above.
         for ((irClass, classInfo) in availableClasses.entries.toList()) {
             try {
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
@@ -188,6 +201,19 @@ class DotNetIlEmitter(
                         )
                     }
                     availableFunctions[member] = DotNetIlFunctionInfo(classInfo.ilClassName, signature)
+                }
+                val fieldsByIlIdentity = hashMapOf<String, IrField>()
+                for (field in irClass.dotNetMemberFields()) {
+                    // An unmappable field type is not this gate's failure: the render path
+                    // rejects the class with its specific unsupported-type message.
+                    val fieldType = typeMapper.toDotNetIlValueType(field.type) ?: continue
+                    val ilIdentity = "${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+                    fieldsByIlIdentity.put(ilIdentity, field)?.let { clashing ->
+                        dotNetUnsupported(
+                            "${field.dotNetFieldDescription()} clashes with ${clashing.dotNetFieldDescription()}: " +
+                                    "both map to the same IL field '$ilIdentity'"
+                        )
+                    }
                 }
             } catch (e: DotNetIlUnsupportedException) {
                 availableClasses.remove(irClass)
@@ -458,9 +484,11 @@ class DotNetIlEmitter(
     /**
      * The shape gate of the final-class model (JVM precedent: the runtime has real classes, so
      * there is no vtable/class lowering machinery and unsupported shapes are simply rejected):
-     * only top-level, final, non-generic plain classes whose sole supertype is `kotlin.Any` are
-     * compilable. Each violation throws [DotNetIlUnsupportedException]; the granularity is
-     * always the whole class.
+     * only top-level, final, non-generic plain classes and plain `object` declarations whose
+     * sole supertype is `kotlin.Any` are compilable (an `object` goes through the same
+     * constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
+     * already turned its singleton nature into ordinary class machinery). Each violation throws
+     * [DotNetIlUnsupportedException]; the granularity is always the whole class.
      */
     private fun checkClassShapeSupported(irClass: IrClass) {
         val name = irClass.diagnosticName()
@@ -468,15 +496,19 @@ class DotNetIlEmitter(
             ClassKind.INTERFACE ->
                 if (irClass.isFun) dotNetUnsupported("fun interface '$name' is not supported")
                 else dotNetUnsupported("interface '$name' is not supported")
-            ClassKind.OBJECT -> dotNetUnsupported("object declaration '$name' is not supported")
             ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY -> dotNetUnsupported("enum class '$name' is not supported")
             ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
-            ClassKind.CLASS -> Unit
+            ClassKind.CLASS, ClassKind.OBJECT -> Unit
         }
         if (irClass.parent !is IrFile) {
             dotNetUnsupported("class '$name' is not top-level; nested/inner/local classes are not supported")
         }
-        if (irClass.isData) dotNetUnsupported("data class '$name' is not supported")
+        if (irClass.isData) {
+            // `data object` lands here too: its generated toString/equals/hashCode overrides
+            // need an Any model just like a data class's members.
+            val kindWord = if (irClass.kind == ClassKind.OBJECT) "data object" else "data class"
+            dotNetUnsupported("$kindWord '$name' is not supported")
+        }
         if (irClass.isInner) dotNetUnsupported("inner class '$name' is not supported")
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
@@ -500,7 +532,8 @@ class DotNetIlEmitter(
         for (declaration in irClass.declarations) {
             if (declaration is IrClass) {
                 if (declaration.isCompanion) dotNetUnsupported("companion object in class '$name' is not supported")
-                dotNetUnsupported("class '${declaration.diagnosticName()}' is not top-level; nested/inner/local classes are not supported")
+                val kindWord = if (declaration.kind == ClassKind.OBJECT) "object" else "class"
+                dotNetUnsupported("$kindWord '${declaration.diagnosticName()}' is not top-level; nested/inner/local classes are not supported")
             }
         }
     }
@@ -519,6 +552,14 @@ class DotNetIlEmitter(
      * whole class from the module (fail-loud, never partial emission). Fake overrides (the `Any`
      * members `equals`/`hashCode`/`toString`) are skipped like on the JVM; calls to them stay
      * rejected.
+     *
+     * An `object` class renders through the same path with three additions: its `INSTANCE`
+     * field (the only loose [IrField] a supported class can carry) renders public-static, its
+     * class-parented `<clinit>` renders as the class's `.cctor` — first among the methods for
+     * deterministic goldens, never registered in [availableFunctions] — and sets
+     * `hasClassInitializer` (dropping `beforefieldinit`, the same first-active-use parity
+     * argument as the facades), and a member `const val` renders as a `literal` field on the
+     * class with no accessors, exactly like the facade const shape.
      */
     private fun renderUserClass(
         classInfo: DotNetIlClassInfo,
@@ -533,6 +574,7 @@ class DotNetIlEmitter(
         val renderedMethods = mutableListOf<String>()
         val renderedProperties = mutableListOf<String>()
         val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
+        var hasClassInitializer = false
 
         fun renderMemberFunction(member: IrSimpleFunction) {
             val memberInfo = DotNetIlFunctionInfo(classInfo.ilClassName, member.dotNetSignature(typeMapper))
@@ -567,17 +609,56 @@ class DotNetIlEmitter(
                 }
                 is IrAnonymousInitializer ->
                     dotNetUnsupported("internal: init block of class '$name' survived InitializersLowering")
-                is IrSimpleFunction -> if (!declaration.isFakeOverride) {
-                    renderMemberFunction(declaration)
+                is IrField -> {
+                    // The only loose field of a supported class is the INSTANCE field
+                    // DotNetObjectClassLowering synthesized on an `object`; anything else has
+                    // no defined render and must fail the class rather than emit guesswork.
+                    if (declaration.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) {
+                        dotNetUnsupported(
+                            "internal: unexpected propertyless field '${declaration.name.asString()}' in class '$name'"
+                        )
+                    }
+                    renderedFields += renderObjectInstanceField(declaration, typeMapper)
+                }
+                is IrSimpleFunction -> when {
+                    declaration.origin == DOTNET_STATIC_INITIALIZER -> {
+                        // The class-parented `<clinit>` renders as the class's `.cctor`, first
+                        // among the methods (the sweep appended it last) so goldens stay
+                        // deterministic; it never enters availableFunctions — like the facade
+                        // `.cctor`, it must not be a call target or a named method.
+                        val rendered = DotNetIlMethodCodegen(
+                            function = declaration,
+                            functionInfo = DotNetIlFunctionInfo(classInfo.ilClassName, declaration.dotNetSignature(typeMapper)),
+                            isEntryPoint = false,
+                            availableFunctions = availableFunctions,
+                            intrinsicMethods = intrinsicMethods,
+                            typeMapper = typeMapper,
+                            facadeClassInfoByFile = facadeClassInfoByFile,
+                        ).render()
+                        renderedMethods.add(0, rendered.ilText)
+                        requiredHelpers += rendered.requiredRuntimeHelpers
+                        hasClassInitializer = true
+                    }
+                    !declaration.isFakeOverride -> renderMemberFunction(declaration)
+                    else -> {}
                 }
                 is IrProperty -> if (!declaration.isFakeOverride) {
-                    declaration.backingField?.let { renderedFields += renderField(it, typeMapper) }
-                    val getter = declaration.getter?.takeUnless { it.isFakeOverride }
-                    val setter = declaration.setter?.takeUnless { it.isFakeOverride }
-                    getter?.let(::renderMemberFunction)
-                    setter?.let(::renderMemberFunction)
-                    if (getter != null || setter != null) {
-                        renderedProperties += renderPropertyBlock(declaration, getter, setter, availableFunctions)
+                    if (declaration.isConst) {
+                        // A member `const val` is the same CLR `literal` field as the facade
+                        // shape: no accessors, no `.property` block, no `.cctor` entry
+                        // (coexistence with a `.cctor` and `initonly` probe-verified,
+                        // objprobe_s9a); an exotic surviving accessor call fails loudly via
+                        // the availableFunctions miss.
+                        renderedFields += renderConstField(declaration, typeMapper)
+                    } else {
+                        declaration.backingField?.let { renderedFields += renderField(it, typeMapper) }
+                        val getter = declaration.getter?.takeUnless { it.isFakeOverride }
+                        val setter = declaration.setter?.takeUnless { it.isFakeOverride }
+                        getter?.let(::renderMemberFunction)
+                        setter?.let(::renderMemberFunction)
+                        if (getter != null || setter != null) {
+                            renderedProperties += renderPropertyBlock(declaration, getter, setter, availableFunctions)
+                        }
                     }
                 }
                 else -> dotNetUnsupported("unsupported member of class '$name': ${declaration.javaClass.simpleName}")
@@ -590,6 +671,7 @@ class DotNetIlEmitter(
                 renderedFields,
                 renderedProperties,
                 isStaticHolder = false,
+                hasClassInitializer = hasClassInitializer,
             ).generate(this)
         }
         return RenderedClass(ilText, requiredHelpers)
@@ -645,6 +727,21 @@ class DotNetIlEmitter(
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
         val static = if (isStatic) "static " else ""
         return ".field private $static${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+    }
+
+    /**
+     * The `.field public static initonly class 'C' 'INSTANCE'` line of an `object` class — the
+     * CLR spelling of the JVM's `public static final INSTANCE` (the one public field of the
+     * model; spelling probe-verified, `objprobe_s1`, including the `newobj` of the private
+     * `.ctor` from the same class's `.cctor`). Unlike [renderField]'s backing fields, `initonly`
+     * is kept here for JVM-`final` parity of intent — nothing ever stores to INSTANCE outside
+     * the `.cctor` — even though CoreCLR 10 does not enforce it at runtime (an outside `stsfld`
+     * succeeded, `objprobe_s3`: `initonly` is declarative metadata only).
+     */
+    private fun renderObjectInstanceField(field: IrField, typeMapper: DotNetIlTypeMapper): String {
+        val fieldType = typeMapper.toDotNetIlValueType(field.type)
+            ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
+        return ".field public static initonly ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
     }
 
     /**
@@ -714,18 +811,54 @@ class DotNetIlEmitter(
      * The member functions of a user class that codegen renders and call sites resolve through
      * [DotNetIlFunctionInfo]: declared instance methods plus property accessors, minus fake
      * overrides (JVM precedent; calls to them stay rejected). Constructors are not functions in
-     * this sense — they resolve through [DotNetIlClassInfo] instead.
+     * this sense — they resolve through [DotNetIlClassInfo] instead. Two synthetic-surface
+     * exclusions mirror the facade side: the class-parented `<clinit>` (origin
+     * [DOTNET_STATIC_INITIALIZER]) renders as the `.cctor` and must never be call-resolvable or
+     * clash-checked, and the accessors of a `const val` are never emitted (the property is a
+     * `literal` field; every read is inlined by the frontend, and an exotic surviving accessor
+     * call fails loudly via the availableFunctions miss).
      */
     private fun IrClass.dotNetMemberFunctions(): List<IrSimpleFunction> =
         declarations.flatMap { declaration ->
             when (declaration) {
-                is IrSimpleFunction -> if (declaration.isFakeOverride) emptyList() else listOf(declaration)
+                is IrSimpleFunction ->
+                    if (declaration.isFakeOverride || declaration.origin == DOTNET_STATIC_INITIALIZER) emptyList()
+                    else listOf(declaration)
                 is IrProperty ->
-                    if (declaration.isFakeOverride) emptyList()
+                    if (declaration.isFakeOverride || declaration.isConst) emptyList()
                     else listOfNotNull(declaration.getter, declaration.setter).filterNot { it.isFakeOverride }
                 else -> emptyList()
             }
         }
+
+    /**
+     * The IL fields a user class renders, in declaration order, for the member pre-pass's
+     * field-identity clash gate: the loose `INSTANCE` field of an `object` (the only loose
+     * [IrField] a supported class can carry) plus the backing fields of the declared properties
+     * — including `const val`s, whose `literal` fields share the class's field namespace like
+     * any other field.
+     */
+    private fun IrClass.dotNetMemberFields(): List<IrField> =
+        declarations.flatMap { declaration ->
+            when (declaration) {
+                is IrField -> listOf(declaration)
+                is IrProperty ->
+                    if (declaration.isFakeOverride) emptyList()
+                    else listOfNotNull(declaration.backingField)
+                else -> emptyList()
+            }
+        }
+
+    /**
+     * How one IL field is described in the field-identity clash diagnostic: the synthesized
+     * singleton field is named as such — the user never declared it — while a backing field is
+     * attributed to its property.
+     */
+    private fun IrField.dotNetFieldDescription(): String = when {
+        origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE -> "the object's synthesized INSTANCE singleton field"
+        correspondingPropertySymbol != null -> "the backing field of property '${name.asString()}'"
+        else -> "field '${name.asString()}'"
+    }
 
     /**
      * A successfully rendered user class: its IL text plus the [runtime helpers][DotNetIlRuntimeHelper]

@@ -1,0 +1,102 @@
+.assembly extern mscorlib {}
+.assembly 'objectDeclaration' {}
+.module 'main-objectDeclaration.il'
+
+.class public auto ansi sealed 'Counter'
+       extends [mscorlib]System.Object
+{
+  .field public static initonly class 'Counter' 'INSTANCE'
+  .field private int32 'base'
+  .field private int32 'count'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'Counter'::.ctor()
+    stsfld class 'Counter' 'Counter'::'INSTANCE'
+    ret
+  }
+  .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldc.i4 10
+    stfld int32 'Counter'::'base'
+    ldarg.0
+    ldc.i4 0
+    stfld int32 'Counter'::'count'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_base'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Counter'::'base'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_count'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Counter'::'count'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_count'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'Counter'::'count'
+    ret
+  }
+  .method public hidebysig instance int32 'next'() cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.0
+    call instance int32 'Counter'::'get_count'()
+    ldc.i4 1
+    add
+    call instance void 'Counter'::'set_count'(int32)
+    ldarg.0
+    call instance int32 'Counter'::'get_base'()
+    ldarg.0
+    call instance int32 'Counter'::'get_count'()
+    add
+    ret
+  }
+  .property instance int32 'base'()
+  {
+    .get instance int32 'Counter'::'get_base'()
+  }
+  .property instance int32 'count'()
+  {
+    .get instance int32 'Counter'::'get_count'()
+    .set instance void 'Counter'::'set_count'(int32)
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'objectDeclarationKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldsfld class 'Counter' 'Counter'::'INSTANCE'
+    call instance int32 'Counter'::'next'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'Counter' 'Counter'::'INSTANCE'
+    call instance int32 'Counter'::'get_count'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

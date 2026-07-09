@@ -53,8 +53,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   vtable/class lowering machinery): only top-level, final, non-generic plain classes whose sole
   supertype is `kotlin.Any` pass the shape gate (`DotNetIlEmitter.checkClassShapeSupported`).
   Rejection granularity is always the whole class — a failing member (signature, body, or IL
-  method-identity clash) removes the entire class from the module so no call site can resolve to
-  a partial class, and the removal cascades through the type mapper to every user of the class.
+  method- or field-identity clash) removes the entire class from the module so no call site can
+  resolve to a partial class, and the removal cascades through the type mapper to every user of
+  the class.
 - Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
   `specialname` accessor methods, and a `.property` metadata block binding them (spellings
   ilasm-probe-verified) — a stated deviation from the JVM's `PropertiesLowering`, which the CLR
@@ -99,6 +100,62 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   with a shared reason carrying the original one. This is the facade-stateful analogue of the
   whole-class rejection granularity. Accessor-only (custom-getter) properties fail per-function;
   const `literal` fields are independent of the group.
+- Plain top-level `object` declarations follow the JVM singleton model: `DotNetObjectClassLowering`
+  synthesizes a static `INSTANCE` field on every module-declared non-companion object (origin
+  `FIELD_FOR_OBJECT_INSTANCE`, the object's own type, initializer = a call to the primary
+  constructor, which is private from the frontend) and rewrites every `IrGetObjectValue`
+  targeting a module-declared object into an `IrGetField(INSTANCE)`; `kotlin.Unit` is guarded
+  FIRST (the existing no-op/rejection paths stay authoritative) and out-of-module objects stay
+  untouched for the existing loud failures. Stated packaging deviation: the JVM's three
+  cooperating pieces (`ObjectClassLowering`, `SingletonReferencesLowering`, and the
+  field-creation slice of `CachedFieldsForObjectInstances`) are merged into this one module pass
+  — no intermediate producers of singleton references exist in this backend.
+  `DotNetStaticInitializersLowering` sweeps static class fields (today exactly `INSTANCE`) into
+  a class-parented `<clinit>` rendered as the class's `.cctor` — that slice matches the JVM
+  `ClassLoweringPass` precedent even more directly than the facade slice. The IL shape is
+  probe-verified (objprobe_s1): `.field public static initonly class 'C' 'INSTANCE'`, a private
+  `.ctor` (`.ctor` visibility now follows the Kotlin declaration; a public one would let other
+  .NET code mint second instances) `newobj`'d from the same class's own `.cctor`, and use sites
+  are a bare `ldsfld` + the existing plain `call instance`. A bare object reference in statement
+  position is `ldsfld` + `pop`, never a no-op — Kotlin makes it a first-active-use trigger, and
+  the `.cctor` fires on a bare cross-class `ldsfld` (objprobe_s2). `beforefieldinit` is dropped
+  on object classes by the existing decider, and the parity argument is exact here: every object
+  use is an `ldsfld`, so CLR first-active-use semantics equal Kotlin/JVM object initialization
+  (`box/objectInitOrder.kt` pins laziness + declaration order end-to-end). Non-const object
+  state stays on the instance, initialized by the merged private constructor — a stated
+  deviation from the JVM's static-state hoist (`MoveOrCopyCompanionObjectFieldsLowering` makes
+  every object-parented property field static), which the CLR-side real singleton makes
+  unnecessary. Rejections ride the existing gates, whole-class: `data object` (the same
+  Any-model gap as data classes — the gate message names both), nested/local/anonymous objects,
+  and IL accessor-identity clashes; `==` between objects stays rejected while `===` works via
+  the existing reference `ceq`. The member pre-pass additionally gates IL FIELD-identity
+  clashes, whole-class: the backing field of a user property named `INSTANCE` whose type maps to
+  the object's own class (`val INSTANCE: A? = null` — nullability erases) collides with the
+  synthesized singleton field in both name and field signature (staticness/visibility are flags,
+  not identity), which ilasm rejects as a duplicate field declaration (probed on 10.0.9,
+  fieldprobe); the identity key is name + mapped IL type, so a differently-typed `INSTANCE`
+  property is a legal CLR shape and stays supported (same probe; pinned by
+  `ilText/objectInstanceFieldClash.kt`). Stated deviation from the JVM backend, which RENAMES
+  the clashing private backing field (`RenameFieldsLowering` → `INSTANCE$1`): this backend has
+  no field-renaming machinery, so the clash is rejected like the accessor-identity clash.
+- `const val` in an `object` is the same CLR `literal` field as on a facade, emitted on the
+  object class (coexistence of `literal` fields with a `.cctor` and an `initonly` field on one
+  class is probe-verified, objprobe_s9a): no accessors, no `.property` block, no `.cctor` entry,
+  reads inlined by the frontend, exotic surviving accessor calls fail via the availableFunctions
+  miss. One JVM-precedented slice of the static-state hoist IS needed for this:
+  `DotNetInitializersLowering` marks object-parented const backing fields static before the
+  shared initializer merge (the JVM does it in `MoveOrCopyCompanionObjectFieldsLowering` /
+  `JvmCachedDeclarations.getStaticBackingField`), because the shared merge's `!isStatic` filter
+  would otherwise copy the const initializer into the constructor as a write to a storage-less
+  `literal` field.
+- Object probe deltas, documented not enforced: CoreCLR 10 did NOT enforce `initonly` — an
+  outside `stsfld` to the INSTANCE field succeeded at runtime (objprobe_s3), so `initonly` is
+  declarative metadata only, kept for JVM-`final` parity of intent; self-reference during
+  initialization observes a null INSTANCE (objprobe_s4 — the same `.cctor` re-entrancy delta the
+  JVM shares, see the `beforefieldinit` bullet); a mutual A↔B object cycle resolves without
+  deadlock, the first-touched object's constructor sees the other fully initialized while the
+  other sees null (objprobe_s5 — exact JVM parity; only the acyclic shape is box-tested,
+  `box/objectCrossReference.kt`).
 - Top-level extension properties emit their accessors as plain static methods with the receiver
   as a regular parameter but NO `.property` block: a CLR property with parameters is an indexer,
   which is out of scope.

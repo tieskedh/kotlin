@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -51,8 +52,8 @@ internal class DotNetIlRenderedMethod(
 
 /**
  * Renders a single function — a top-level `static` one, a user-class constructor, an instance
- * member method/accessor, or a synthetic file `<clinit>` (rendered as the facade's `.cctor`,
- * see [DOTNET_STATIC_INITIALIZER]) — into IL text. The body is rendered into its own fresh buffer first, so
+ * member method/accessor, or a synthetic `<clinit>` (file- or class-parented, rendered as the
+ * owning class's `.cctor`, see [DOTNET_STATIC_INITIALIZER]) — into IL text. The body is rendered into its own fresh buffer first, so
  * `.maxstack` and the `.locals init` block are computed from what was actually emitted; any
  * unsupported construct aborts the render with [DotNetIlUnsupportedException].
  *
@@ -110,13 +111,19 @@ internal class DotNetIlMethodCodegen(
                 }
             if (function is IrConstructor) {
                 // `.ctor` is a bare keyword, not a quoted identifier; the spelling including the
-                // specialname/rtspecialname flags is ilasm-probe-verified.
-                appendLine("  .method public hidebysig specialname rtspecialname instance void .ctor($parameters) cil managed")
+                // specialname/rtspecialname flags is ilasm-probe-verified. The visibility follows
+                // the Kotlin declaration: an object's primary constructor is private from the
+                // frontend, and a public `.ctor` would let any other .NET code mint a second
+                // instance of the singleton (the `newobj` of a private `.ctor` from the same
+                // class's `.cctor` is probe-verified, objprobe_s1).
+                val visibility = if (function.visibility == DescriptorVisibilities.PRIVATE) "private" else "public"
+                appendLine("  .method $visibility hidebysig specialname rtspecialname instance void .ctor($parameters) cil managed")
             } else if (function.origin == DOTNET_STATIC_INITIALIZER) {
-                // The synthetic per-file `<clinit>` (see DotNetStaticInitializersLowering)
-                // renders as the CLR class initializer; like `.ctor`, `.cctor` is a bare keyword.
-                // The spelling is ilasm-probe-verified (statprobe_s1), including that the CLR
-                // runs it before the first active use of the non-beforefieldinit facade.
+                // The synthetic `<clinit>` (see DotNetStaticInitializersLowering) — file-parented
+                // for a facade, class-parented for an object class — renders as the CLR class
+                // initializer; like `.ctor`, `.cctor` is a bare keyword. The spelling is
+                // ilasm-probe-verified (statprobe_s1, objprobe_s1), including that the CLR runs
+                // it before the first active use of the non-beforefieldinit class.
                 appendLine("  .method private hidebysig specialname rtspecialname static void .cctor() cil managed")
             } else {
                 // Instance member methods differ from static ones only in the `instance` flag;
