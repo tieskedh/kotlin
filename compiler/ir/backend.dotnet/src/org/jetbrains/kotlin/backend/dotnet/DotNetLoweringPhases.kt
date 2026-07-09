@@ -24,12 +24,12 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInitializersCleanupLowering,
     // Object singletons after the initializer merge — the object's private `.ctor` must be
     // merged/complete before the `.cctor` calls it — and before the static-initializer sweep,
-    // so the synthesized INSTANCE initializer exists when the sweep moves it into the class
-    // `<clinit>`. Matches the JVM phase order (the singleton passes run before
-    // StaticInitializersLowering).
+    // so the synthesized singleton-field initializer (INSTANCE, or the companion field on the
+    // enclosing class) exists when the sweep moves it into the owning class's `<clinit>`.
+    // Matches the JVM phase order (the singleton passes run before StaticInitializersLowering).
     ::DotNetObjectClassLowering,
     // Top-level property initializers move into the synthetic per-file `<clinit>` (and static
-    // class fields — the object INSTANCE — into the per-class one) before the loop/concat
+    // class fields — the object INSTANCE, the companion field — into the per-class one) before the loop/concat
     // rewrites for the same reason the instance pair runs first: a `for` or a string
     // concatenation inside a top-level initializer must sit inside a real function body before
     // those function-scoped rewrites run.

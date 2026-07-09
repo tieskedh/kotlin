@@ -1,0 +1,16 @@
+.assembly extern mscorlib {}
+.assembly 'companionFixpointEviction' {}
+.module 'main-companionFixpointEviction.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'companionFixpointEvictionKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "fixpoint eviction"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
