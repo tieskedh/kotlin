@@ -37,7 +37,7 @@ internal const val CORE_LIB_REF = "[$CORE_LIB]"
  * cannot compile is encountered. The emitter catches it, discards the partial render, skips the
  * function, and reports [reason] as a diagnostic.
  */
-internal class DotNetIlUnsupportedException(val reason: String) : RuntimeException(reason)
+internal open class DotNetIlUnsupportedException(val reason: String) : RuntimeException(reason)
 
 internal fun dotNetUnsupported(reason: String): Nothing =
     throw DotNetIlUnsupportedException(reason)
@@ -145,7 +145,7 @@ internal class DotNetIlTypeMapper(
         if (type.arguments.isNotEmpty()) {
             dotNetUnsupported("generic class types are not supported yet")
         }
-        return DotNetIlValueType.UserClass(classInfo.ilClassName)
+        return DotNetIlValueType.UserClass(classInfo.ilTypeRef)
     }
 }
 

@@ -156,6 +156,66 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   deadlock, the first-touched object's constructor sees the other fully initialized while the
   other sees null (objprobe_s5 — exact JVM parity; only the acyclic shape is box-tested,
   `box/objectCrossReference.kt`).
+- `companion object`s are real CLR nested types: `.class nested public auto ansi sealed` inside
+  the enclosing class's body (spelling probe-verified in every operand position — field type,
+  `newobj`, `ldsfld`/`stsfld`, `call`, method param/return signatures, `.locals` — as
+  `'demo.Outer'/'Companion'`, slash OUTSIDE the quoted identifiers, enclosing name first;
+  objprobe_s6; the spelling lives in exactly one place, `DotNetIlClassInfo.ilTypeRef`). The
+  singleton field lives on the ENCLOSING class, named after the companion (default `Companion`;
+  NAMED companions keep their own name — JVM precedent:
+  `CachedFieldsForObjectInstances.getFieldForObjectInstance`'s not-mapped-companion branch
+  parents the field to `singleton.parent`), and the enclosing class's `.cctor` does the
+  `newobj`/`stsfld` — so the enclosing class drops `beforefieldinit` while the companion itself
+  has NO `.cctor` and keeps it. Init-order parity is preserved: every companion access goes
+  through the field on the enclosing class and triggers ITS `.cctor` (touching a companion
+  initializes the enclosing class, like the JVM), and the enclosing `.cctor` runs exactly once
+  before the first `newobj` of the enclosing class or first companion access (objprobe_s8,
+  pinned end-to-end by `box/companionInitOrder.kt`). Stated deviation from the JVM's
+  `MoveOrCopyCompanionObjectFieldsLowering`: companion backing fields and `init {}` blocks are
+  NOT hoisted to the enclosing class — they stay on the companion instance, compiled by the
+  unchanged existing machinery (`DotNetInitializersLowering` merges them into the companion's
+  constructor), and no `RemapObjectFieldAccesses` analogue exists; the JVM hoist serves
+  JVM-ABI/interop needs that the CLR's real nested type makes moot. Accepted delta (documented,
+  not enforced): companion state initializes in the companion constructor invoked FROM the
+  enclosing `.cctor` rather than as enclosing-class statics — indistinguishable except under
+  initialization re-entrancy, the already-documented delta. VISIBILITY (probe-decided): the CLR
+  grants nested→enclosing private access (objprobe_s7a) but NOT enclosing→nested — an IL-private
+  companion `.ctor` `newobj`'d from the enclosing `.cctor` throws TypeInitializationException
+  wrapping MethodAccessException, and a throwing `.cctor` permanently poisons the type
+  (objprobe_s7b); an isolated enclosing→nested private field read throws FieldAccessException
+  (objprobe_s7c). Therefore every Kotlin-private member OF A COMPANION — the `.ctor` (private
+  from the frontend) and any private method/accessor — is emitted with IL `assembly` visibility,
+  uniformly (`.method assembly hidebysig specialname rtspecialname instance void .ctor()`
+  probe-verified working when `newobj`'d from the enclosing `.cctor`, objprobe_s7c); stated
+  deviation from the JVM backend, whose analogue is the synthetic `access$` bridges for
+  outer→companion-private access (pinned end-to-end by `box/companionPrivateAccess.kt`, both
+  directions and every member-kind slice — the private method and BOTH accessors of a private
+  property are called across the enclosing→nested boundary; the accessor
+  `.method assembly hidebysig specialname` spelling is golden-pinned by
+  `ilText/companionObject.kt`). `const val` in a companion is a `literal` field on the NESTED class (literal
+  fields on a nested class probe-verified, objprobe_s9b), the same no-copy-to-enclosing
+  deviation as objects. Rejection granularity is the linked WHOLE PAIR: the enclosing class and
+  its companion are separate `availableClasses` entries (the companion needs its own identity
+  for type mapping and member resolution), but every eviction site removes both entries and
+  both member sets — a partial pair violates the whole-class rule in both directions (the
+  singleton field on the enclosing class is typed as the companion and the enclosing `.cctor`
+  news it). The pair warnings attribute the failure to the half that actually failed: a
+  companion failure surfaces out of the enclosing class's render (the companion renders only
+  recursively inside it), so the render fixpoint re-tags it with the companion
+  (`DotNetIlUnsupportedClassException`) before evicting. Pair eviction is pinned in both
+  phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
+  companion member body failing only after its callee's round-one eviction, plus the extra
+  round that re-fails an already-rendered user of the evicted pair) by
+  `ilText/companionFixpointEviction.kt`. The gate allows exactly one nested `IrClass` iff it `isCompanion` with kind OBJECT,
+  recursively validated with the same constraint chain (sole supertype `Any`, final,
+  non-generic, no nested classes of its own, not data); non-companion nested classes/objects
+  stay rejected, and a companion inside an `object` cannot reach the gate (frontend-rejected).
+  The companion singleton field participates in the ENCLOSING class's field-identity gate, but
+  the colliding source shape (a user property named after the companion) is itself a frontend
+  REDECLARATION — a companion also occupies the value namespace — so that slice is
+  defense-in-depth; a same-named FIELD legally coexists with the nested TYPE (objprobe_s6,
+  pinned by `ilText/companionObject.kt`). Companions are nested, not top-level, so they reserve
+  no file-facade name (`buildFileClassNames` only seeds top-level classes — verified unchanged).
 - Top-level extension properties emit their accessors as plain static methods with the receiver
   as a regular parameter but NO `.property` block: a CLR property with parameters is an indexer,
   which is out of scope.

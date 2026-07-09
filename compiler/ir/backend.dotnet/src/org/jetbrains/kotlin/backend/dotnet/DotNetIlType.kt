@@ -26,13 +26,14 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     object String : DotNetIlValueType("string")
 
     /**
-     * A top-level user class emitted into this module, referenced assembly-locally — no
-     * bracketed resolution-scope prefix (see [CORE_LIB_REF]) — as the dotted FqName inside one quoted
-     * identifier (`class 'demo.Point'`), the same convention the file facades use. A nullable
-     * `C?` maps to the same reference type (CLR reference types are structurally nullable,
-     * exactly like `string`).
+     * A user class emitted into this module, referenced assembly-locally — no bracketed
+     * resolution-scope prefix (see [CORE_LIB_REF]) — through its already-rendered
+     * [type reference][DotNetIlClassInfo.ilTypeRef] (`class 'demo.Point'`, or the nested
+     * `class 'demo.Outer'/'Companion'` for a companion), the same convention the file facades
+     * use. A nullable `C?` maps to the same reference type (CLR reference types are
+     * structurally nullable, exactly like `string`).
      */
-    data class UserClass(val ilClassName: kotlin.String) : DotNetIlValueType("class ${ilClassName.toIlIdentifier()}")
+    data class UserClass(val ilTypeRef: kotlin.String) : DotNetIlValueType("class $ilTypeRef")
 
     /**
      * A Kotlin exception class type-mapped onto a CLR exception type (see
@@ -74,11 +75,11 @@ internal data class DotNetIlMethodSignature(
 
 /**
  * A function currently considered compilable to .NET IL — a top-level function of a file facade
- * or a member function/accessor of a user class: the IL class it belongs to and its mapped IL
- * signature.
+ * or a member function/accessor of a user class: the [owner] IL class it belongs to and its
+ * mapped IL signature.
  */
 internal class DotNetIlFunctionInfo(
-    val className: String,
+    val owner: DotNetIlClassInfo,
     val signature: DotNetIlMethodSignature,
 ) {
     /** Whether this is an instance method of a user class (see [DotNetIlMethodSignature.hasThis]). */
@@ -96,7 +97,7 @@ internal class DotNetIlFunctionInfo(
     fun renderMethodReference(methodName: String): String {
         val instancePrefix = if (isInstance) "instance " else ""
         return "$instancePrefix${signature.returnType.nameInSignature} " +
-                "${className.toIlIdentifier()}::${methodName.toIlIdentifier()}(${signature.renderParameterTypes()})"
+                "${owner.ilTypeRef}::${methodName.toIlIdentifier()}(${signature.renderParameterTypes()})"
     }
 
     fun renderCallInstruction(methodName: String): String =
@@ -104,23 +105,41 @@ internal class DotNetIlFunctionInfo(
 }
 
 /**
- * A top-level user class currently considered compilable to .NET IL. The counterpart of
- * [DotNetIlFunctionInfo] for classes; it carries the IL class name and renders the member
- * references of the class model (constructors and fields so far — methods and accessors follow
- * with the member-function slice).
+ * A user class currently considered compilable to .NET IL — top-level, or, with [enclosingClass]
+ * set, the companion object nested inside a top-level class. The counterpart of
+ * [DotNetIlFunctionInfo] for classes; it carries the IL class name ([ilClassName] — the dotted
+ * FqName for a top-level class, the simple name for a nested one, i.e. what the `.class`
+ * directive declares) and renders the member references of the class model.
  */
 internal class DotNetIlClassInfo(
     val ilClassName: String,
+    private val enclosingClass: DotNetIlClassInfo? = null,
 ) {
+    /** Whether this is a nested class (a companion object) rather than a top-level one. */
+    val isNested: Boolean
+        get() = enclosingClass != null
+
+    /**
+     * The rendered IL type reference of this class — `'demo.Outer'` for a top-level class,
+     * `'demo.Outer'/'Companion'` for a nested one: the slash sits OUTSIDE the quoted
+     * identifiers, enclosing name first (probe-verified in every operand position —
+     * field types, `newobj`, `ldsfld`/`stsfld`, `call`, method parameter/return signatures
+     * and `.locals`; objprobe_s6). Every member-reference renderer and every
+     * [UserClass][DotNetIlValueType.UserClass] signature name routes through this single
+     * property, so the nested spelling exists in exactly one place.
+     */
+    val ilTypeRef: String =
+        enclosingClass?.let { "${it.ilTypeRef}/${ilClassName.toIlIdentifier()}" } ?: ilClassName.toIlIdentifier()
+
     /**
      * The `instance void 'C'::.ctor(<params>)` member reference shared by every constructor use:
      * prefixed with `newobj` at instantiation sites and with `call` in `this(...)` delegations
      * (`.ctor` is a bare keyword, not a quoted identifier; both spellings are probe-verified).
      */
     fun renderConstructorReference(parameterTypes: List<DotNetIlValueType>): String =
-        "instance void ${ilClassName.toIlIdentifier()}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})"
+        "instance void ${ilTypeRef}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})"
 
     /** The `<type> 'C'::'name'` field reference `ldfld`/`stfld` instructions take as operand. */
     fun renderFieldReference(fieldType: DotNetIlValueType, fieldName: String): String =
-        "${fieldType.nameInSignature} ${ilClassName.toIlIdentifier()}::${fieldName.toIlIdentifier()}"
+        "${fieldType.nameInSignature} ${ilTypeRef}::${fieldName.toIlIdentifier()}"
 }

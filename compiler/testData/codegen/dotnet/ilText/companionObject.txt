@@ -1,0 +1,222 @@
+.assembly extern mscorlib {}
+.assembly 'companionObject' {}
+.module 'main-companionObject.il'
+
+.class public auto ansi sealed 'test.C'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'base'
+    .field private int32 'offset'
+    .field private int32 'secret'
+    .field public static literal string 'TAG' = "c"
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldc.i4 10
+      stfld int32 'test.C'/'Companion'::'base'
+      ldarg.0
+      ldc.i4 0
+      stfld int32 'test.C'/'Companion'::'offset'
+      ldarg.0
+      ldc.i4 1
+      stfld int32 'test.C'/'Companion'::'secret'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_base'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'test.C'/'Companion'::'base'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_offset'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'test.C'/'Companion'::'offset'
+      ret
+    }
+    .method public hidebysig specialname instance void 'set_offset'(int32 '<set-?>') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld int32 'test.C'/'Companion'::'offset'
+      ret
+    }
+    .method assembly hidebysig specialname instance int32 'get_secret'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'test.C'/'Companion'::'secret'
+      ret
+    }
+    .method assembly hidebysig specialname instance void 'set_secret'(int32 '<set-?>') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld int32 'test.C'/'Companion'::'secret'
+      ret
+    }
+    .method public hidebysig instance int32 'bump'() cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.0
+      call instance int32 'test.C'/'Companion'::'get_offset'()
+      ldc.i4 1
+      add
+      call instance void 'test.C'/'Companion'::'set_offset'(int32)
+      ldarg.0
+      call instance int32 'test.C'/'Companion'::'get_offset'()
+      ret
+    }
+    .property instance int32 'base'()
+    {
+      .get instance int32 'test.C'/'Companion'::'get_base'()
+    }
+    .property instance int32 'offset'()
+    {
+      .get instance int32 'test.C'/'Companion'::'get_offset'()
+      .set instance void 'test.C'/'Companion'::'set_offset'(int32)
+    }
+    .property instance int32 'secret'()
+    {
+      .get instance int32 'test.C'/'Companion'::'get_secret'()
+      .set instance void 'test.C'/'Companion'::'set_secret'(int32)
+    }
+  }
+  .field public static initonly class 'test.C'/'Companion' 'Companion'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'test.C'/'Companion'::.ctor()
+    stsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'sum'() cil managed
+  {
+    .maxstack 2
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    call instance int32 'test.C'/'Companion'::'get_base'()
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    call instance int32 'test.C'/'Companion'::'get_offset'()
+    add
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    call instance int32 'test.C'/'Companion'::'get_secret'()
+    add
+    ret
+  }
+  .method public hidebysig instance void 'hide'(int32 'n') cil managed
+  {
+    .maxstack 2
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    ldarg.1
+    call instance void 'test.C'/'Companion'::'set_secret'(int32)
+    ret
+  }
+}
+.class public auto ansi sealed 'test.Named'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Factory'
+         extends [mscorlib]System.Object
+  {
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'make'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 7
+      ret
+    }
+  }
+  .field public static initonly class 'test.Named'/'Factory' 'Factory'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'test.Named'/'Factory'::.ctor()
+    stsfld class 'test.Named'/'Factory' 'test.Named'::'Factory'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.companionObjectKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    call instance int32 'test.C'/'Companion'::'get_base'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    call instance int32 'test.C'/'Companion'::'get_base'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
+    call instance int32 'test.C'/'Companion'::'bump'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'test.C'::.ctor()
+    call instance int32 'test.C'::'sum'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "c"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'test.Named'/'Factory' 'test.Named'::'Factory'
+    call instance int32 'test.Named'/'Factory'::'make'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'test.Named'/'Factory' 'test.Named'::'Factory'
+    call instance int32 'test.Named'/'Factory'::'make'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

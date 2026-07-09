@@ -27,7 +27,8 @@ import org.jetbrains.kotlin.name.Name
 /**
  * The origin of the synthetic `<clinit>` functions produced by
  * [DotNetStaticInitializersLowering] — file-parented for the facade statics, class-parented for
- * the static fields of top-level classes (the `INSTANCE` field of an `object`).
+ * the static fields of top-level classes (the `INSTANCE` field of an `object`, the companion
+ * singleton field of a companion-bearing class).
  * [DotNetIlEmitter][org.jetbrains.kotlin.backend.dotnet.DotNetIlEmitter]
  * keys on it to keep the function out of the callable surface (never a call target, a main
  * candidate, or a named method) and
@@ -46,10 +47,13 @@ internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOrigi
  *   is a `ClassLoweringPass` over the facade `IrClass` that `FileClassLowering` created earlier,
  *   while this backend builds file facades at emission time, so this slice runs per [IrFile] and
  *   parents the `<clinit>` to the file.
- * - the static fields of each top-level class (today exactly the `INSTANCE` field
- *   [DotNetObjectClassLowering] synthesized on an `object` class) become one class-parented
+ * - the static fields of each top-level class (today exactly the singleton fields
+ *   [DotNetObjectClassLowering] synthesizes: `INSTANCE` on an `object` class, or the field
+ *   named after the companion on a companion-bearing class) become one class-parented
  *   `<clinit>`, appended to the class's declarations and rendered as the class's `.cctor` —
- *   this slice matches the JVM `ClassLoweringPass` precedent directly.
+ *   this slice matches the JVM `ClassLoweringPass` precedent directly. For a companion this
+ *   `newobj`/`stsfld` in the ENCLOSING class's `.cctor` is what ties companion initialization
+ *   to the enclosing class (objprobe_s8).
  *
  * Giving the initializers a real function body here (instead of rendering them at emission time)
  * lets the later phases — the `for`-loop rewrite and the string-concatenation lowerings — treat
