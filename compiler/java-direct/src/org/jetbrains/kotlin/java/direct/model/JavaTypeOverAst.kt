@@ -26,7 +26,7 @@ import org.jetbrains.kotlin.java.direct.parse.JavaLightTree
 import org.jetbrains.kotlin.java.direct.resolution.FirBackedJavaClassAdapter
 import org.jetbrains.kotlin.java.direct.resolution.JavaResolutionContext
 import org.jetbrains.kotlin.java.direct.resolution.classifierAdapterFor
-import org.jetbrains.kotlin.java.direct.resolution.declaredOrSameFileInherited
+import org.jetbrains.kotlin.java.direct.resolution.declaredOrFullyInherited
 import org.jetbrains.kotlin.java.direct.resolution.findClassInCurrentScope
 import org.jetbrains.kotlin.java.direct.resolution.findInheritedTypeParameter
 import org.jetbrains.kotlin.java.direct.resolution.findTypeParameter
@@ -128,6 +128,15 @@ class JavaClassifierTypeOverAst(
             if (parts.size == 1) {
                 // Resolution order for simple names (matches Java scoping rules):
                 // 1. OWN type parameters (method/class own — high priority, win over inner class names)
+                //
+                // Known, accepted javac divergence (compiler-wide, not java-direct-specific): javac
+                // resolves a same-named nested class over the class's own type parameter in one
+                // narrow JLS-scoping edge case (`T` used both as an own type parameter and as the
+                // name of a same-named nested class), which this priority order — own type params
+                // before inner classes — does not match. This mirrors PSI's existing behavior
+                // (parity is the target here, not independently re-deriving JLS), so it is
+                // intentionally left as-is; tracked separately as a pre-existing PSI/javac
+                // inconsistency, not fixed in this module alone.
                 findTypeParameter(parts[0])?.let { return it }
                 // 2. Inner/local class names (shadow INHERITED outer type params)
                 val localClass = findClassInCurrentScope(Name.identifier(parts[0]))
@@ -136,15 +145,15 @@ class JavaClassifierTypeOverAst(
                 findInheritedTypeParameter(parts[0])?.let { return it }
             }
 
-            // Multi-part names: navigate from base class through inner classes. Each hop resolves
-            // declared members plus same-file inherited member types (findInnerClass is declared-only),
-            // so an intermediate segment inherited from a supertype still navigates correctly.
+            // Multi-part names: navigate from base class through inner classes. Each hop uses
+            // [declaredOrFullyInherited] so an intermediate segment inherited from any supertype
+            // representation still navigates correctly.
             var current: JavaClassifier? = findClassInCurrentScope(Name.identifier(parts[0]))
 
             if (current is JavaClass) {
                 for (i in 1 until parts.size) {
                     val part = Name.identifier(parts[i])
-                    current = (current as JavaClass).declaredOrSameFileInherited(part)
+                    current = declaredOrFullyInherited(current as JavaClass, part)
                         ?: return null
                 }
                 return current

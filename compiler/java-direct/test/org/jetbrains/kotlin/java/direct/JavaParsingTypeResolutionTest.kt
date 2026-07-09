@@ -9,7 +9,7 @@ package org.jetbrains.kotlin.java.direct
 
 import com.intellij.java.syntax.element.JavaSyntaxTokenType
 import org.jetbrains.kotlin.java.direct.model.JavaClassOverAst
-import org.jetbrains.kotlin.java.direct.resolution.JavaInheritedMemberResolver
+import org.jetbrains.kotlin.java.direct.resolution.findInnerClassFromSupertypes
 import org.jetbrains.kotlin.load.java.structure.JavaClass
 import org.jetbrains.kotlin.load.java.structure.JavaClassifierType
 import org.jetbrains.kotlin.name.Name
@@ -55,12 +55,9 @@ class JavaParsingTypeResolutionTest : JavaParsingTestBase() {
 
         val derived = topLevelClasses.getValue("Derived")
 
-        val resolver = JavaInheritedMemberResolver(
-            classFinder = null,
-            sameFileTopLevelClassProvider = { name -> topLevelClasses[name.asString()] },
-        )
-
-        val found = resolver.findInnerClassFromSupertypes(Name.identifier("Target"), derived, mutableSetOf())
+        val found = with(context) {
+            findInnerClassFromSupertypes(Name.identifier("Target"), derived)
+        }
         assert(found != null) {
             "Expected to resolve inherited inner class 'Target' through nested generic supertype " +
                     "Outer<String>.Inner, but resolution returned null"

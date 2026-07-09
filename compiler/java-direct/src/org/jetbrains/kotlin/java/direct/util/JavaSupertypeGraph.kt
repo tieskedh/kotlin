@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.java.direct.resolution.JavaImports
 import org.jetbrains.kotlin.java.direct.resolution.JavaResolutionContext
 import org.jetbrains.kotlin.java.direct.resolution.getImports
 import org.jetbrains.kotlin.load.java.structure.JavaClass
+import org.jetbrains.kotlin.load.java.structure.impl.splitCanonicalFqName
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
@@ -69,8 +70,8 @@ internal class JavaSupertypeGraph(
 
             // Fast path: use the cached JavaClassOverAst's AST node directly.
             // IMPORTANT: we read raw JAVA_CODE_REFERENCE text from the node, NOT classifierQualifiedName,
-            // because the latter triggers resolution which can circle back into getDirectSupertypes
-            // via findInnerClassFromSupertypes → collectInheritedInnerClasses.
+            // because the latter triggers full classifier resolution, which could recurse back into
+            // this same computation for another class in the hierarchy.
             val cachedClass = classCacheLookup(classId)
             if (cachedClass is JavaClassOverAst) {
                 val imports = with(cachedClass.resolutionContext) { getImports() }
@@ -218,23 +219,25 @@ internal class JavaSupertypeGraph(
     /**
      * Returns one or more candidate [ClassId]s for a supertype reference in extends/implements.
      *
-     * Each candidate is a *potential* supertype — the caller (the inherited-inner-class walker
-     * in [JavaInheritedMemberResolver] and [JavaResolutionContext.directSupertypeClassIds]) is
-     * expected to filter via `tryResolve` / per-origin dispatch and discard candidates whose
-     * symbol the FIR session does not know.
-     *
-     * Multiple candidates are returned only for star-imported supertypes (JLS 7.5.2) where the
-     * binary classpath cannot be scanned at this layer; one candidate per star-import package is
-     * emitted. Source/explicit-import paths return a single candidate (or none).
+     * Each candidate is a *potential* supertype — this class's own callers ([getDirectSupertypes],
+     * [collectInheritedInnerClasses]) do not filter candidates against a FIR session themselves;
+     * multiple candidates are only produced for star-imported supertypes (JLS 7.5.2), where the
+     * binary classpath cannot be scanned at this layer, and are left for the caller of
+     * `LeanJavaClassFinder`'s methods to disambiguate. Source/explicit-import paths return a
+     * single candidate (or none).
      */
     private fun resolveSupertypeReference(
         ref: String,
         packageFqName: FqName,
         imports: JavaImports = JavaImports.EMPTY,
     ): List<ClassId> {
-        val simpleName = ref.substringBefore('<').trim()
+        // splitCanonicalFqName treats a '.' inside a generic argument list as part of that
+        // segment, not a separator, so a reference with type arguments on a non-final segment
+        // (`a.B<String>.C`) is correctly recognised as dotted and delegated below.
+        val segments = ref.splitCanonicalFqName()
+        val simpleName = segments.singleOrNull()?.substringBefore('<')?.trim()
 
-        if (!simpleName.contains('.')) {
+        if (simpleName != null) {
             // Same-package source class — resolves to the in-module ClassId.
             if (sameClassInSameFilePackage(packageFqName, simpleName)) {
                 return listOf(ClassId(packageFqName, Name.identifier(simpleName)))

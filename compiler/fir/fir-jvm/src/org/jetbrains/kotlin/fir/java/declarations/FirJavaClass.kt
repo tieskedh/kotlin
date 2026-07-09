@@ -64,7 +64,7 @@ class FirJavaClass @FirImplementationDetail internal constructor(
      * @see javaTypeParameterStack
      */
     val classJavaTypeParameterStack: MutableJavaTypeParameterStack,
-    internal val existingNestedClassifierNames: List<Name>,
+    val existingNestedClassifierNames: List<Name>,
     internal val containingClassSymbol: FirClassSymbol<*>?,
 ) : FirRegularClass() {
     init {

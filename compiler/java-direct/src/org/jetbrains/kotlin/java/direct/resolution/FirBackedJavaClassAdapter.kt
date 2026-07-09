@@ -8,6 +8,8 @@ package org.jetbrains.kotlin.java.direct.resolution
 import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.descriptors.Visibility
 import org.jetbrains.kotlin.fir.FirSession
+import org.jetbrains.kotlin.fir.declarations.DirectDeclarationsAccess
+import org.jetbrains.kotlin.fir.declarations.FirClassLikeDeclaration
 import org.jetbrains.kotlin.fir.declarations.FirOuterClassTypeParameterRef
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
 import org.jetbrains.kotlin.fir.declarations.FirTypeParameterRef
@@ -103,18 +105,15 @@ internal class FirBackedJavaClassAdapter(
 
     /**
      * Own type parameters as [FirBackedJavaTypeParameter] wrappers carrying their
-     * `FirTypeParameterSymbol`s. Outer-class type params (encoded as
-     * [FirOuterClassTypeParameterRef] entries on `FirJavaClass.nonEnhancedTypeParameters`) are
-     * filtered out — the model's `JavaClassifierTypeOverAst.computeTypeArguments` walks
-     * [outerClass] recursively and adds them via the outer chain.
+     * `FirTypeParameterSymbol`s. Outer-class type params ([FirOuterClassTypeParameterRef] entries
+     * on `FirJavaClass.nonEnhancedTypeParameters`) are filtered out — [outerClass] is walked
+     * recursively by `JavaClassifierTypeOverAst.computeTypeArguments` to add them instead.
      *
-     * Reading [FirJavaClass.nonEnhancedTypeParameters] (rather than `typeParameters`) avoids the
-     * `FirSignatureEnhancement` cycle through `JavaTypeConversion.isRaw`.
+     * Reading `nonEnhancedTypeParameters` (rather than `typeParameters`) avoids the
+     * `FirSignatureEnhancement` cycle through `JavaTypeConversion.isRaw`. Cached (`lazy`) because
+     * FIR matches Java type parameters by object identity, and the qualified-form-raw walk in
+     * `JavaTypeOverAst.computeIsRaw` reads outer type parameters across files.
      */
-    // Cached so cross-file outer-type-parameter identity is preserved: the qualified-form-raw walk
-    // in JavaTypeOverAst.computeIsRaw reads outer.typeParameters per outer hop, and FIR matches
-    // Java type parameters by object identity. Re-allocating wrappers on every read would defeat
-    // that contract whenever an outer class lives in another file.
     override val typeParameters: List<JavaTypeParameter> by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         val fir = firRegularClass ?: return@lazy emptyList()
         val refs: List<FirTypeParameterRef> =
@@ -167,10 +166,51 @@ internal class FirBackedJavaClassAdapter(
                 .map { FirBackedJavaClassifierType(it, session) }
         }
     }
-    override val innerClassNames: Collection<Name>
-        get() = emptyList()
 
-    override fun findInnerClass(name: Name): JavaClass? = null
+    /**
+     * Enumeration of directly declared nested-classifier simple names, sourced from the same
+     * enhancement-free primitives as [findInnerClass]:
+     *  - For a [FirJavaClass] target, [FirJavaClass.existingNestedClassifierNames] — populated
+     *    structurally at [org.jetbrains.kotlin.fir.java.FirJavaFacade] conversion time from
+     *    `JavaClass.innerClassNames`, never touching `declarations`/enhancement.
+     *  - For any other [FirRegularClass] (Kotlin source / deserialized), [nestedClassifierNames]
+     *    reads `declarations` directly — see its KDoc for why that's safe here.
+     *
+     * Terminal-lookup only: results returned by [findInnerClass] are themselves fresh
+     * [FirBackedJavaClassAdapter] instances (see its KDoc for the identity caveat).
+     */
+    override val innerClassNames: Collection<Name>
+        get() {
+            val fir = firRegularClass ?: return emptyList()
+            return if (fir is FirJavaClass) {
+                fir.existingNestedClassifierNames
+            } else {
+                nestedClassifierNames(fir)
+            }
+        }
+
+    /**
+     * Resolves a directly declared nested class of this class by [name], without forcing FIR
+     * enhancement or [FirRegularClass.declarations] on a [FirJavaClass] target.
+     *
+     * The candidate `ClassId` is probed for existence via [cycleSafeClassLikeSymbol] — the same
+     * KT-74097-safe existence probe [tryResolve] wraps elsewhere in this module, minus the
+     * builtins filter (irrelevant here: a nested class of a real class is never a Kotlin builtin).
+     *
+     * A found result is wrapped in another [FirBackedJavaClassAdapter] — chaining further through
+     * it loses same-file object identity if navigation ever loops back into source, but none of
+     * this adapter's own nested classes can be same-file source (a Kotlin/binary class's body
+     * cannot declare a class from a different, source-only compilation unit), so this is safe.
+     */
+    override fun findInnerClass(name: Name): JavaClass? {
+        firRegularClass ?: return null
+        val candidateId = resolvedClassId.createNestedClassId(name)
+        return if (session.cycleSafeClassLikeSymbol(candidateId) != null) {
+            FirBackedJavaClassAdapter(candidateId, session)
+        } else {
+            null
+        }
+    }
 
     override val isInterface: Boolean
         get() = false
@@ -250,3 +290,14 @@ private fun FirRegularClass.resolveSupertypesOnAir(session: FirSession): List<Fi
         visitor.resolveSpecificClassLikeSupertypes(this, superTypeRefs, resolveRecursively = true)
     }
 }
+
+/**
+ * Directly declared nested-classifier simple names of a non-[FirJavaClass] [FirRegularClass]
+ * (Kotlin source or deserialized). Reading [FirRegularClass.declarations] is deliberately opted
+ * into here rather than routed through a scope: the KT-74097 publication-lazy hazard this module
+ * otherwise avoids is specific to [FirJavaClass]; for any other [FirRegularClass] the list is
+ * populated eagerly at parse/deserialization time and reading it triggers no further resolution.
+ */
+@OptIn(DirectDeclarationsAccess::class)
+private fun nestedClassifierNames(fir: FirRegularClass): List<Name> =
+    fir.declarations.filterIsInstance<FirClassLikeDeclaration>().map { it.symbol.classId.shortClassName }
