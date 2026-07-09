@@ -17,7 +17,7 @@ import org.jetbrains.kotlin.analysis.test.framework.services.expressionMarkerPro
 import org.jetbrains.kotlin.analysis.test.framework.test.configurators.AnalysisApiTestConfigurator
 import org.jetbrains.kotlin.fir.declarations.FirResolvedImport
 import org.jetbrains.kotlin.fir.declarations.FirTowerDataContext
-import org.jetbrains.kotlin.fir.renderer.FirDeclarationRendererWithAttributes
+import org.jetbrains.kotlin.fir.renderer.FirDeclarationRendererWithSpecificAttributes
 import org.jetbrains.kotlin.fir.renderer.FirRenderer
 import org.jetbrains.kotlin.fir.renderer.FirResolvePhaseRenderer
 import org.jetbrains.kotlin.fir.scopes.*
@@ -84,11 +84,8 @@ abstract class AbstractContextCollectorTest : AbstractAnalysisApiBasedTest() {
     }
 }
 
-private class FirDeclarationRendererWithPartialBodyResolveState : FirDeclarationRendererWithAttributes() {
-    override fun attributeTypesToIds(): List<Pair<String, Int>> {
-        return super.attributeTypesToIds().filter { it.first == "PartialBodyAnalysisStateKey" }
-    }
-}
+private class FirDeclarationRendererWithPartialBodyResolveState :
+    FirDeclarationRendererWithSpecificAttributes(setOf("PartialBodyAnalysisStateKey"))
 
 internal object ElementContextRenderer {
     fun render(context: ContextCollector.Context, builder: StringBuilder) = with(builder) {
