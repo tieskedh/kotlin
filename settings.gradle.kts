@@ -104,11 +104,20 @@ dependencyResolutionManagement {
         }
     }
     repositories {
+        val composeSnapshotId = file("plugins/compose/compose-runtime-snapshot-versions.toml")
+            .readLines()
+            .first { it.startsWith("snapshot-id =") }
+            .substringAfter("=")
+            .trim()
+            .trim('"')
+
         intellijRepository(buildProperties.versionsProperty("intellijSdk").get())
         intellijDependencies()
         kotlinDependencies()
         teamcityRepository()
         googleAndroidRepository()
+        google()
+        androidxSnapshotRepository(composeSnapshotId)
         gradleLibsReleases()
         gradlePluginPortalRepository()
         litmuskt()
