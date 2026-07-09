@@ -758,6 +758,7 @@ abstract class FirDataFlowAnalyzer(
 
         context.processEqNotNullContracts()
         context.processEqContractsBasedOnPrimitiveEquals()
+        context.processEqContractBasedOnEqualityBound()
         context.processEqContractsForExhaustiveness()
     }
 
@@ -846,6 +847,14 @@ abstract class FirDataFlowAnalyzer(
 
         addEqualityImplications(leftOperandVariable, rightOperand)
         addEqualityImplications(rightOperandVariable, leftOperand)
+    }
+
+    private fun ProcessEqContext.processEqContractBasedOnEqualityBound() {
+        if (rightOperandVariable !is RealVariable) return
+        val boundForRhs = components.equalsOverrideContractCalculator.computeTypeForEqualityBoundBasedContract(leftOperand.resolvedType)
+        if (boundForRhs != null) {
+            flow.addImplication((expressionVariable eq isEq) implies (rightOperandVariable typeEq boundForRhs))
+        }
     }
 
     private inner class ProcessEqContext(
