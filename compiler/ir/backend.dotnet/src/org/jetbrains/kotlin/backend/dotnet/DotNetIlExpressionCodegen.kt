@@ -297,7 +297,7 @@ internal class DotNetIlExpressionCodegen(
         }
         val classInfo = typeMapper.classInfoOrNull(irClass)
             ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
-        val producedType = DotNetIlValueType.UserClass(classInfo.ilClassName)
+        val producedType = DotNetIlValueType.UserClass(classInfo.ilTypeRef)
         if (producedType != expectedType) {
             dotNetUnsupported(
                 "constructor call of '${irClass.name.asString()}' produces ${producedType.nameInSignature} " +
@@ -456,7 +456,7 @@ internal class DotNetIlExpressionCodegen(
         if (receiver == null) {
             dotNetUnsupported("receiverless access to instance field '${field.name.asString()}' is not supported")
         }
-        emitExpression(receiver, DotNetIlValueType.UserClass(classInfo.ilClassName))
+        emitExpression(receiver, DotNetIlValueType.UserClass(classInfo.ilTypeRef))
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
