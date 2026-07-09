@@ -48,9 +48,9 @@ private inline fun <T> createCoroutineFromSuspendFunction(
 // Is not used by Stack Switching implementation
 @Suppress("UNCHECKED_CAST")
 @UsedFromCompilerGeneratedCode
-internal fun createSimpleCoroutineFromSuspendFunction(
-    completion: Continuation<Any?>
-) = object : CoroutineImplStateMachine(completion) {
+internal fun <T> createSimpleCoroutineFromSuspendFunction(
+    completion: Continuation<T>
+) = object : CoroutineImplStateMachine(completion as Continuation<Any?>) {
     override fun doResume(): Any? {
         if (exception != null) throw exception as Throwable
         return result
