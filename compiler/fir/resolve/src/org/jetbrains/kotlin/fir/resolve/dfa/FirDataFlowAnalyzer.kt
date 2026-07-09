@@ -862,7 +862,7 @@ abstract class FirDataFlowAnalyzer(
         val argumentVariable = flow.getVariableIfUsedOrReal(argument)
         if (argumentVariable !is RealVariable) return
         val expressionVariable = SyntheticVariable(expression)
-        callee.valueParameters.singleOrNull()?.equalityBoundType?.let {
+        callee.equalityBoundType?.let {
             flow.addImplication((expressionVariable eq true) implies (argumentVariable typeEq it))
         }
     }
@@ -1307,7 +1307,7 @@ abstract class FirDataFlowAnalyzer(
 
         if (qualifiedAccess is FirFunctionCall &&
             callee is FirNamedFunction &&
-            callee.symbol.isEquals(session) &&
+            callee.isEquals(session) &&
             LanguageFeature.StrictEquals.isEnabled()
         ) {
             processDirectEqualsCall(flow, qualifiedAccess, callee)

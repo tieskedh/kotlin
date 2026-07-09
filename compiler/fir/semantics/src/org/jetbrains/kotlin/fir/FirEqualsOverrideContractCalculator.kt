@@ -185,7 +185,7 @@ class FirEqualsOverrideContractCalculator(
         ) { function ->
             // should only be a single such function
             if (function.isEquals(session)) {
-                function.valueParameterSymbols.singleOrNull()?.equalityBoundType?.let {
+                function.equalityBoundType?.let {
                     result = it
                 }
             }
