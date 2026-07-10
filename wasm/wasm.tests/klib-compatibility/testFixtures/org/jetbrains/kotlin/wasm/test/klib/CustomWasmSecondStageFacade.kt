@@ -27,142 +27,31 @@ import org.jetbrains.kotlin.test.klib.CustomKlibCompilerSecondStageFacade
 import org.jetbrains.kotlin.test.model.BinaryArtifacts
 import org.jetbrains.kotlin.test.model.TestModule
 import org.jetbrains.kotlin.test.model.WasmFolderBinaryArtifact
-import org.jetbrains.kotlin.test.services.sourceFileProvider
-import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
-import org.jetbrains.kotlin.test.services.BatchingPackageInserter
-import org.jetbrains.kotlin.test.services.CompilationStage
-import org.jetbrains.kotlin.test.services.TestServices
+import org.jetbrains.kotlin.test.services.*
 import org.jetbrains.kotlin.test.services.configuration.WasmEnvironmentConfigurator.Companion.WASM_BASE_FILE_NAME
-import org.jetbrains.kotlin.test.services.moduleStructure
-import org.jetbrains.kotlin.test.services.standardLibrariesPathProvider
-import org.jetbrains.kotlin.test.services.targetPlatform
-import org.jetbrains.kotlin.test.services.temporaryDirectoryManager
+import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
 import org.jetbrains.kotlin.test.util.parseLanguageFeature
 import org.jetbrains.kotlin.utils.addToStdlib.runIf
 import org.jetbrains.kotlin.utils.mapToSetOrEmpty
 import org.jetbrains.kotlin.wasm.test.WasmCoroutineHelpersModuleTransformer
 import org.jetbrains.kotlin.wasm.test.converters.WasmFirstStageInvoker
-import org.jetbrains.kotlin.wasm.test.handlers.AbstractWasmGroupingStageBoxRunner
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.PrintStream
 
 /**
- * An implementation of [CustomKlibCompilerSecondStageFacade] for WasmJs and WasmWasi, to invoke current version of K/Wasm backend
+ * An implementation of [CustomKlibCompilerSecondStageFacade] for WasmJs and WasmWasi, invoking the current version of the K/Wasm backend.
  *
- * ## Overall approach
+ * Many independent tests are batched into a single WASM executable (instead of one executable per test) for throughput, using
+ * separate `@kotlin.test.Test`-annotated functions. This is the **second stage** of a two-stage pipeline:
+ * Stage 1 (`NonGroupingStage`) compiles each test independently into a per-test KLIB;
+ * then this facade ([Grouping.transform]) links a *batch* of those KLIBs into one [BinaryArtifacts.Wasm] executable.
  *
- * Unlike the classic K/Wasm test approach with separate WASM executable per testcase, each verifying a single `box()` function return value,
- * multiple tests are grouped here into a single WASM executable using separate test functions annotated with @kotlin.test.Test.
- * The implementation is bulky, which is caused by the CLI restriction of a single "-Xinclude" argument, unlike K/Native
- * (which supports multiple "-Xinclude" arguments).
+ * [Grouping.transform] dispatches to one of two linking strategies depending on the batch's structure:
+ * - `groupedBatch` for non-isolated (regular) batches,
+ * - `doIsolated` for isolated batches (with or without `box()`).
+ * The strategy split exists since JS/Wasm allows only **one** `-Xinclude` library per link.
  *
- * The facade is invoked as the **second stage** of a two-stage test compilation pipeline:
- *
- * 1. **Stage 1 (`NonGroupingStage`)** compiles each individual test independently into a per-test KLIB.
- *    Each per-test KLIB contains the test sources (with their package optionally patched by
- *    [BatchingPackageInserter] to avoid name collisions between batched tests) plus the per-test
- *    `Launcher_<hash>` class synthesized by `WasmJsLauncherAdditionalSourceProvider` (a small `@Test`-annotated
- *    class that calls the test's `box()` and asserts the result equals `"OK"`).
- * 2. **Stage 2 (this facade, [Grouping.transform])** consumes a grouped *batch* of those per-test KLIBs and
- *    links them into one WASM executable, then ultimately into a [BinaryArtifacts.Wasm] folder containing
- *    `index.wasm`, `index.mjs`, etc. A custom `ProxyBatchLauncher.kt` is synthesized to provide the test
- *    entry point(s) used to drive the batched tests.
- *
- * The key constraint at the linker level is structural: on JS/Wasm, exactly **one** library can be passed as
- * `-Xinclude` (the "main" module whose IR is fed to second-stage lowerings such as `GenerateWasmTests`,
- * `WasmExport` lowering, DCE, etc.). All other KLIBs are loaded as ordinary `-libraries` and are *not*
- * re-lowered. This constraint shapes the three execution paths below.
- *
- * ## The three Stage-2 paths
- *
- * For each batch coming from the grouping engine, [Grouping.transform] dispatches to one of three paths,
- * depending on the batch's structure (isolated vs grouped; with or without `box()`). The paths are listed
- * in the order they appear in the code.
- *
- * ### groupedBatch — Non-isolated grouped batch (the common case)
- *
- * Triggered when [isIsolatedBatch] is `false`. This handles the bulk of WASM codegen-box tests, where many
- * independent tests are linked together into a single WASM executable for throughput. It is the path that
- * makes batching pay off: the structurally cheapest possible Stage 2 — only the synthetic launcher source
- * is compiled fresh; everything else (per-test sources) is reused as-is from the Stage 1 KLIB outputs.
- *
- *  - A single `ProxyBatchLauncher.kt` is synthesized containing one `ProxyLauncher_<hash>` `@Test` class per
- *    test in the batch (each calling its `box()` via the per-test FQN computed from
- *    [BatchingPackageInserter.computePackage] + [MainFunctionForBlackBoxTestsSourceProvider.detectPackage]),
- *    plus (on WASI) a `@WasmExport fun startTest()` that drives every `ProxyLauncher_*.runTest()` sequentially.
- *  - That launcher source is compiled into a small `launcher.klib` and linked as `-Xinclude` with all
- *    per-test KLIBs passed as ordinary `-libraries`. Per-test KLIBs are deduplicated against shared
- *    `helpers.klib` artifacts produced by [WasmCoroutineHelpersModuleTransformer] (all helper KLIBs in a
- *    batch declare the same `unique_name=helpers`, so only one copy can be passed to the linker).
- *  - In this path, `WasmJsLauncherAdditionalSourceProvider.produceAdditionalFiles()` short-circuits to an
- *    empty list — the per-test `Launcher_<hash>` is unused since `GenerateWasmTests` only visits the
- *    `launcher.klib` main module.
- *  - Aggregated batch settings (max `LANGUAGE_VERSION`, union of `LANGUAGE` features, union of `OPT_IN`s,
- *    `ALLOW_KOTLIN_PACKAGE` if any test requests it) are applied to both the launcher KLIB compilation and
- *    the final link, since all of these tests share one compiler invocation.
- *
- * ### isolatedWithBox — Isolated batch, has `box()`
- *
- * Triggered when [isIsolatedBatch] is `true` and `batchLauncherFile != null`. This unified path handles
- * both isolated tests with or without `-Xfriend-modules` declarations such as `// MODULE: main()(lib1)`).
- *
- * Historically this was split into "Path B" (no friend dependencies, launcher KLIB used as `-Xinclude`)
- * and "Path C" (with friend dependencies, per-test KLIB used as `-Xinclude`). The two are now folded
- * into a single mechanism, because Path B's "launcher.klib as the included main module" approach
- * **breaks** for tests that declare friend modules: `-Xfriend-modules` declares friendship only with the
- * *included* module, so once the launcher KLIB takes that role the friend relation between the per-test
- * `main.klib` and its `lib*.klib` siblings is lost. Virtual dispatch of `internal open` declarations
- * crossing the friend boundary would then resolve to the base implementation instead of the override
- * (e.g. `WasmJsCodegenBoxTestGenerated$Box$Bridges.testInternalMethodOverrideInFriendModule` returns
- * the wrong value with the Path B layout). Routing every isolatedWithBox test through the friend-safe mechanism
- * removes that footgun once and for all, at the price of keeping `WasmJsLauncherAdditionalSourceProvider`
- * structurally required for isolated tests.
- *
- * Concretely:
- *
- *  - The per-test main KLIB is kept as `mainLibraries.first()` (i.e. the `-Xinclude` main module). This
- *    preserves any `-Xfriend-modules` friendship between sibling KLIBs of the same multi-module test.
- *  - The synthetic `ProxyBatchLauncher.kt` is still generated and passed as an additional free-arg source
- *    (`isAdditional = true`). It is silently dropped by the linking pipeline (`WasmCliPipeline` only runs
- *    `WasmConfigurationPhase + WasmBackendPipelinePhase` when `-Xinclude` is set — no
- *    `WebFrontendPipelinePhase` / `Fir2IrPhase` to compile sources), so its `ProxyLauncher_<hash>` class
- *    has no runtime effect here. It is retained as a diagnostic artifact (visible alongside the
- *    `launcher.klib` and per-test outputs in the temp folder) and to keep the sanity check's
- *    expected-suite-name set aligned with groupedBatch.
- *  - The per-test KLIB's own `Launcher_<hash>` class (added by `WasmJsLauncherAdditionalSourceProvider`
- *    during Stage 1) is what `GenerateWasmTests` actually picks up — it lives in the included main module
- *    and gets registered as the `@Test` test suite emitted by the runtime.
- *  - On WASI, the per-test KLIB also carries `wasiBoxTestRun.startTest()` (added by
- *    `WasmWasiBoxTestHelperSourceProvider`) — an `@WasmExport fun startTest()` that calls `box()` and
- *    is exported because the per-test KLIB is the included main module. This is the entry point that
- *    WasmEdge / Wasmtime invoke.
- *  - Therefore `WasmJsLauncherAdditionalSourceProvider` is structurally required for isolatedWithBox to work,
- *    even though groupedBatch does not need it.
- *
- * ### isolatedWithoutBox — Isolated batch, no `box()` anywhere (custom JS-driven tests)
- *
- * Triggered when [isIsolatedBatch] is `true` and `batchLauncherFile == null` (e.g. `Box$Size$Add`,
- * `Box$Size$HelloWorldPromise` — tests driven entirely by a custom `entry.mjs`/`index.mjs`).
- *
- *  - No `ProxyBatchLauncher.kt` is generated.
- *  - One of the per-test KLIBs is included as `-Xinclude` so any incidental lowerings still apply.
- *  - All `.mjs`/`.js` files from the test sources are copied into the executable folder, where they form the
- *    actual entry point that the VM invokes.
- *  - The post-run sanity check in [AbstractWasmGroupingStageBoxRunner] is skipped for these tests
- *    (`hasBoxMethod(input) == false`) — pass/fail is determined entirely by the VM exit code.
- *
- * ## Failure reporting
- *
- * After the VM run, [AbstractWasmGroupingStageBoxRunner] parses TeamCity-formatted output to attribute
- * failures to individual tests. A post-run sanity check verifies
- * that every test in the batch produced a matching `##teamcity[testSuiteFinished name='ProxyLauncher_<hash>'`
- * (or `Launcher_<hash>` for isolatedWithBox) line — guarding against silent test skips.
- *
- * @see WasmCoroutineHelpersModuleTransformer for how synthetic `helpers` files are extracted into a shared module.
- * @see BatchingPackageInserter for per-test package patching that enables batching without name collisions.
- * @see org.jetbrains.kotlin.wasm.test.providers.WasmJsLauncherAdditionalSourceProvider for the Stage-1 launcher
- *      that is essential to isolatedWithBox and structurally redundant in groupedBatch.
  * @see org.jetbrains.kotlin.wasm.test.handlers.AbstractWasmGroupingStageBoxRunner for the run/verify side
  *      of the pipeline that consumes the [BinaryArtifacts.Wasm] produced here.
  */
@@ -224,11 +113,21 @@ class CustomWasmSecondStageFacade internal constructor(
         }
 
         /**
-         * groupedBatch — Non-isolated grouped batch (see the class-level KDoc for the full description).
+         * groupedBatch — Non-isolated grouped batch: the common case, and the path that makes batching pay off.
          *
-         * Generates a small `ProxyBatchLauncher.kt` covering all tests in the batch, compiles only
-         * that file into a `launcher.klib`, and then links the launcher KLIB (as the `-Xinclude`
-         * main module) together with all per-test KLIBs (passed as ordinary `-libraries`).
+         * Generates a small `ProxyBatchLauncher.kt` containing one `ProxyLauncher_<hash>` `@Test` class per test in
+         * the batch (each calling its `box()` via the per-test FQN, computed from [BatchingPackageInserter.computePackage]
+         * + [MainFunctionForBlackBoxTestsSourceProvider.detectPackage]), plus (on WASI) a `@WasmExport fun startTest()`
+         * driving every `ProxyLauncher_*.runTest()` sequentially. Only that launcher source is compiled fresh, into a
+         * small `launcher.klib`, which is then linked as `-Xinclude` together with all per-test KLIBs passed as ordinary
+         * `-libraries` (deduplicated against shared `helpers.klib` artifacts from [WasmCoroutineHelpersModuleTransformer],
+         * since all helper KLIBs in a batch share `unique_name=helpers`) — everything else is reused as-is from Stage 1.
+         *
+         * Since `GenerateWasmTests` only visits the `launcher.klib` main module here, the per-test `Launcher_<hash>`
+         * class is unused, so `WasmJsLauncherAdditionalSourceProvider.produceAdditionalFiles()` short-circuits to an
+         * empty list for this path. Aggregated batch settings (max `LANGUAGE_VERSION`, union of `LANGUAGE` features and
+         * `OPT_IN`s, `ALLOW_KOTLIN_PACKAGE` if requested by any test) are applied to both the launcher KLIB compilation
+         * and the final link, since all tests in the batch share one compiler invocation.
          */
         private fun groupedBatch(
             inputArtifact: GroupingStageInputArtifact,
@@ -265,13 +164,11 @@ class CustomWasmSecondStageFacade internal constructor(
                 firstStageSettings.friendDependencies,
             )
 
-            // Step 2: Link the launcher KLIB (as the included "main" module) together with all per-test
-            // KLIBs (passed as ordinary -libraries) into a WASM executable, using the SECOND-stage
-            // (custom/previously-released) standard libraries.
-            val moduleNameHash = someModule.name.hashCode().toHexString()
+            // Step 2: Link the launcher KLIB (as the included "main" module) together with all per-test KLIBs (passed as ordinary -libraries)
+            // into a WASM executable, using the SECOND-stage (custom/previously-released) standard libraries.
             val executableFolder = facade.runCli(
-                someModule.copy(files = emptyList()),
-                moduleNameHash,
+                module = someModule.copy(files = emptyList()),
+                dirName = someModule.name.hashCode().toHexString(),
                 customLanguageFeatures = secondStageSettings.allLanguageFeatures,
                 customOptIns = secondStageSettings.allOptIns,
                 allowKotlinPackage = secondStageSettings.allAllowKotlinPackage,
@@ -310,96 +207,12 @@ class CustomWasmSecondStageFacade internal constructor(
                 }
             }
 
-            return if (fileWithBox != null) {
-                // For isolated tests, `BatchingPackageInserter.processModule()` skips patching when
-                //   - the target is Native, OR
-                //   - `WITH_REFLECT` is among the global directives, OR
-                //   - any source file contains one of the `GroupingTestIsolator.ISOLATION_SOURCE_REGEXES`
-                //     patterns (e.g., `::class.qualifiedName`, `import kotlin.reflect.`).
-                // Mirror exactly that decision here so the FQN of `box()` in the generated launcher matches
-                // what `BatchingPackageInserter` actually produced for the per-test KLIB.
-
-                isolatedWithBox(
-                    facade,
-                    mainModule,
-                    perTestKlibPathsIsolated,
-                    regularDependencies,
-                    friendDependencies,
-                    testModules,
-                    services
-                )
-            } else {
-                isolatedWithoutBox(facade, mainModule, perTestKlibPathsIsolated, regularDependencies, friendDependencies, testModules, services)
-            }
-        }
-
-        private fun isolatedWithoutBox(
-            facade: CustomWasmSecondStageFacade,
-            mainModule: TestModule,
-            perTestKlibPathsIsolated: List<String>,
-            regularDependencies: Set<String>,
-            friendDependencies: Set<String>,
-            testModules: List<TestModule>,
-            services: TestServices,
-        ): WasmFolderBinaryArtifact {
-            // isolatedWithoutBox: No box() in any module of the isolated test: keep one of the per-test KLIBs
-            // as the main module so that lowerings can still process whatever @Test classes
-            // were generated for the per-test sources. These tests are driven by custom JS
-            // entry points (e.g. `entry.mjs`), not by the unit-test runner.
+            // The per-test main KLIB is used as `-Xinclude`, preserving any `-Xfriend-modules` friendship with sibling KLIBs.
+            // Sources files are removed from mainModule in case no `box()` was found, since a custom `.mjs`/`.js` entry point drives the test instead
+            val module = if (fileWithBox != null) mainModule else mainModule.copy(files = emptyList())
             val executableFolder = facade.runCli(
-                mainModule.copy(files = emptyList()),
-                mainModule.name.hashCode().toHexString(),
-                customLanguageFeatures = mainModule.directives[LanguageSettingsDirectives.LANGUAGE],
-                customOptIns = mainModule.directives[LanguageSettingsDirectives.OPT_IN],
-                allowKotlinPackage = LanguageSettingsDirectives.ALLOW_KOTLIN_PACKAGE in mainModule.directives,
-                includedLibrary = perTestKlibPathsIsolated.first(),
-                libraries = perTestKlibPathsIsolated.drop(1),
-                regularDependencies = regularDependencies,
-                friendDependencies = friendDependencies,
-            )
-            // Copy all additional files to the executable folder
-            copyJsFilesToOutputDir(testModules.map { services to it }, executableFolder)
-            return WasmFolderBinaryArtifact(executableFolder)
-        }
-
-        private fun isolatedWithBox(
-            facade: CustomWasmSecondStageFacade,
-            mainModule: TestModule,
-            perTestKlibPathsIsolated: List<String>,
-            regularDependencies: Set<String>,
-            friendDependencies: Set<String>,
-            testModules: List<TestModule>,
-            services: TestServices,
-        ): WasmFolderBinaryArtifact {
-            // isolatedWithBox (isolated, has `box()`) — unified path that handles both the formerly-separate Path B (no friend dependencies)
-            // and Path C (with friend dependencies) using a single mechanism:
-            //
-            //  - The per-test main KLIB is used as `mainLibraries.first()` (i.e. the
-            //    `-Xinclude` main module). This preserves the friend relation declared by
-            //    `-Xfriend-modules` between `main.klib` and any `lib*.klib` siblings of a
-            //    multi-module test (which would otherwise be lost if the launcher KLIB were
-            //    the included module — virtual dispatch of `internal open` declarations
-            //    crossing the friend boundary would break).
-            //  - The synthetic `ProxyBatchLauncher.kt` is passed as a free-arg source file
-            //    (`isAdditional = true`). It is silently dropped by the linking pipeline
-            //    (`WasmCliPipeline` only runs `WasmConfigurationPhase + WasmBackendPipelinePhase`
-            //    when `-Xinclude` is set — no `WebFrontendPipelinePhase` / `Fir2IrPhase` to
-            //    compile sources). That's fine: the per-test KLIB's `Launcher_<hash>` class
-            //    (added by `WasmJsLauncherAdditionalSourceProvider` during Stage 1) is what
-            //    `GenerateWasmTests` picks up, and on WASI the per-test KLIB's
-            //    `wasiBoxTestRun.startTest()` (added by `WasmWasiBoxTestHelperSourceProvider`)
-            //    is what becomes the entry point invoked by WasmEdge/Wasmtime.
-            //  - Therefore `WasmJsLauncherAdditionalSourceProvider` is structurally required
-            //    for this unified path to work — even though groupedBatch (non-isolated grouped
-            //    batch) does not need it.
-            //  - The `ProxyBatchLauncher.kt` content is still synthesized so it can serve as
-            //    diagnostic output, and so the sanity check in
-            //    `AbstractWasmGroupingStageBoxRunner.computeExpectedSuiteNames()`
-            //    continues to accept the `Launcher_<hash>` suite name actually emitted at
-            //    runtime.
-            val executableFolder = facade.runCli(
-                mainModule,
-                mainModule.name.hashCode().toHexString(),
+                module,
+                dirName = module.name.hashCode().toHexString(),
                 customLanguageFeatures = mainModule.directives[LanguageSettingsDirectives.LANGUAGE],
                 customOptIns = mainModule.directives[LanguageSettingsDirectives.OPT_IN],
                 allowKotlinPackage = LanguageSettingsDirectives.ALLOW_KOTLIN_PACKAGE in mainModule.directives,
