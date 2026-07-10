@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
@@ -11,6 +12,7 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classFqName
+import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
 import org.jetbrains.kotlin.ir.types.isChar
 import org.jetbrains.kotlin.ir.types.isDouble
@@ -145,8 +147,38 @@ internal class DotNetIlTypeMapper(
         if (type.arguments.isNotEmpty()) {
             dotNetUnsupported("generic class types are not supported yet")
         }
-        return DotNetIlValueType.UserClass(classInfo.ilTypeRef)
+        return DotNetIlValueType.UserClass(classInfo)
     }
+}
+
+/**
+ * The base class of [this] class within the inheritance model, or null when the sole supertype
+ * is `kotlin.Any`. Only meaningful on classes that passed the shape gate, which guarantees at
+ * most one non-`Any` supertype and that it is a proper class (never an interface).
+ */
+internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
+    superTypes.firstNotNullOfOrNull { superType ->
+        if (superType.isAny()) null
+        else ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+    }
+
+/**
+ * Whether [this] member occupies (or introduces) a CLR virtual slot, i.e. whether its
+ * declaration carries `virtual` flags and non-`super` call sites use `callvirt` — the two must
+ * agree, so both consult this single predicate. True exactly for instance members that override
+ * something (every Kotlin `override` is virtual in IL, including a `final override`, which keeps
+ * dispatching correctly under `callvirt` — probe-verified, `inheritprobe_s2`) and for `open`
+ * members of `open` classes (which introduce a fresh `newslot` slot). An `open` member of a
+ * FINAL class is deliberately NOT virtual: nothing can ever override it, so it keeps the
+ * final-class model's plain non-virtual `call` (the JVM has no such distinction — everything
+ * non-private is virtual bytecode-side and the JIT devirtualizes; the CLR makes virtualness a
+ * declaration-site property, so the backend decides it here, following what Roslyn emits for
+ * C# `virtual`/`override` members).
+ */
+internal fun IrSimpleFunction.isDotNetVirtual(): Boolean {
+    if (parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver) return false
+    if (overriddenSymbols.isNotEmpty()) return true
+    return modality == Modality.OPEN && (parent as? IrClass)?.modality == Modality.OPEN
 }
 
 internal fun IrType.isDotNetNullableStringType(): Boolean {

@@ -1,0 +1,16 @@
+.assembly extern mscorlib {}
+.assembly 'inheritanceAnyOverride' {}
+.module 'main-inheritanceAnyOverride.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'inheritanceAnyOverrideKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "any-override"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

@@ -19,9 +19,13 @@ import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.expressions.IrConst
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.companionObject
+import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.render
 
@@ -98,10 +102,11 @@ class DotNetIlEmitter(
         // frontend resolution only and must be neither emitted nor skip-warned.
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
         val classSkipReasons = LinkedHashMap<IrClass, String>()
+        val moduleTopLevelClasses = topLevelClassesByFile.values.flatten().toHashSet()
         for (irClass in topLevelClassesByFile.values.flatten()) {
             if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             try {
-                checkClassShapeSupported(irClass)
+                checkClassShapeSupported(irClass, moduleTopLevelClasses)
                 val classInfo = DotNetIlClassInfo(irClass.fqNameWhenAvailable!!.asString())
                 availableClasses[irClass] = classInfo
                 // The companion object (validated by the shape gate above) is a separate
@@ -115,6 +120,18 @@ class DotNetIlEmitter(
             } catch (e: DotNetIlUnsupportedException) {
                 classSkipReasons[irClass] = e.reason
             }
+        }
+        // Base-chain linking pass, deliberately AFTER every registration: a base class may be
+        // declared after its derived class (forward references are legal IL — probe-verified,
+        // inheritprobe_s1 — and legal Kotlin), so the links cannot be built inside the gate
+        // loop. The link feeds [isDotNetAssignableTo]'s upcast walk only; the `extends` line is
+        // re-resolved from the LIVE map every render round (see [renderUserClass]), so a base
+        // that failed the gate (its entry is absent here, leaving the link null) or is evicted
+        // later evicts its derived classes through the fixpoint rather than through this link.
+        for ((irClass, classInfo) in availableClasses) {
+            if (irClass.isCompanion) continue
+            val baseClass = irClass.dotNetBaseClassOrNull() ?: continue
+            classInfo.baseClass = availableClasses[baseClass]
         }
         val typeMapper = DotNetIlTypeMapper(availableClasses)
         // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
@@ -235,6 +252,7 @@ class DotNetIlEmitter(
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions()) {
                     val signature = member.dotNetSignature(typeMapper)
+                    checkOverrideKeepsIlReturnType(member, signature, typeMapper)
                     val ilIdentity = "${member.dotNetIlMethodName()}(${signature.renderParameterTypes()})"
                     membersByIlIdentity.put(ilIdentity, member)?.let { clashing ->
                         dotNetUnsupported(
@@ -317,6 +335,7 @@ class DotNetIlEmitter(
                         intrinsicMethods = intrinsicMethods,
                         typeMapper = typeMapper,
                         facadeClassInfoByFile = facadeClassInfoByFile,
+                        classSkipReasons = classSkipReasons,
                     )
                 } catch (e: DotNetIlUnsupportedException) {
                     // A companion failure surfaces from INSIDE the enclosing class's render
@@ -530,19 +549,31 @@ class DotNetIlEmitter(
     }
 
     /**
-     * The shape gate of the final-class model (JVM precedent: the runtime has real classes, so
+     * The shape gate of the class model (JVM precedent: the runtime has real classes, so
      * there is no vtable/class lowering machinery and unsupported shapes are simply rejected):
-     * only top-level, final, non-generic plain classes and plain `object` declarations whose
-     * sole supertype is `kotlin.Any` are compilable (an `object` goes through the same
-     * constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
-     * already turned its singleton nature into ordinary class machinery). The single supported
+     * top-level, non-generic plain classes — `final` or, since the inheritance model, `open` —
+     * and plain (always final) `object` declarations are compilable (an `object` goes through
+     * the same constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
+     * already turned its singleton nature into ordinary class machinery). A plain class may
+     * have EXACTLY ONE class supertype when it resolves to another top-level class of
+     * [moduleTopLevelClasses] (real CLR inheritance; whether that base itself compiles is
+     * deliberately NOT checked here — the render re-resolves it every fixpoint round, so a
+     * failing base cascades to its derived classes with a carried reason, see
+     * [renderUserClass]); `abstract`/`sealed` classes, interface supertypes, exception
+     * supertypes, out-of-module or non-top-level bases, and overrides of `kotlin.Any` members
+     * stay rejected. Objects and companions stay on the sole-supertype-`kotlin.Any`,
+     * final-only model. The single supported
      * NESTED shape is the companion object of a top-level class ([isValidatedCompanion] marks
      * the recursive call): it is emitted as a real CLR nested type and validated with the same
      * constraint chain — sole supertype `kotlin.Any`, final, non-generic, no nested classes of
      * its own, not data. Each violation throws [DotNetIlUnsupportedException]; the granularity
      * is always the whole class — for a class with a companion, always the whole PAIR.
      */
-    private fun checkClassShapeSupported(irClass: IrClass, isValidatedCompanion: Boolean = false) {
+    private fun checkClassShapeSupported(
+        irClass: IrClass,
+        moduleTopLevelClasses: Set<IrClass>,
+        isValidatedCompanion: Boolean = false,
+    ) {
         val name = irClass.diagnosticName()
         when (irClass.kind) {
             ClassKind.INTERFACE ->
@@ -564,22 +595,75 @@ class DotNetIlEmitter(
         if (irClass.isInner) dotNetUnsupported("inner class '$name' is not supported")
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
-        if (irClass.modality != Modality.FINAL) {
-            dotNetUnsupported("non-final class '$name' is not supported (inheritance model not implemented)")
+        // Modality maps 1:1 onto CLR metadata like the JVM's ACC_FINAL: FINAL keeps `sealed`,
+        // OPEN drops it (probe-verified, inheritprobe_s1). ABSTRACT and SEALED classes need an
+        // abstract-member/instantiability model that does not exist yet. The singleton shapes
+        // are final in Kotlin anyway; the branch is defensive.
+        when (irClass.modality) {
+            Modality.FINAL -> {}
+            Modality.OPEN ->
+                if (isValidatedCompanion || irClass.kind == ClassKind.OBJECT) {
+                    dotNetUnsupported("non-final object '$name' is not supported")
+                }
+            Modality.ABSTRACT ->
+                dotNetUnsupported("abstract class '$name' is not supported (no abstract-class model)")
+            Modality.SEALED ->
+                dotNetUnsupported("sealed class '$name' is not supported (no abstract-class model)")
         }
         if (irClass.typeParameters.isNotEmpty()) {
             dotNetUnsupported("generic class '$name' is not supported yet")
         }
-        if (irClass.superTypes.any { !it.isAny() }) {
+        val superTypesExceptAny = irClass.superTypes.filterNot { it.isAny() }
+        if (superTypesExceptAny.isNotEmpty()) {
             // Exception supertypes get a message naming the real gap: the supertype itself is
-            // supported (type-mapped, see DotNetMappedExceptions), subclassing it is not.
+            // supported (type-mapped, see DotNetMappedExceptions), subclassing it is not — a
+            // mapped exception is a corelib type, not a module class the inheritance model can
+            // extend.
             if (irClass.superTypes.any { it.classFqName in DotNetMappedExceptions.entries }) {
                 dotNetUnsupported(
                     "class '$name' extends an exception class; " +
                             "user-defined exception classes are not supported until the inheritance model exists"
                 )
             }
-            dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
+            // The singleton shapes stay on the sole-supertype-Any model: `object O : Base()` is
+            // legal Kotlin, but chaining the singleton machinery to a base class is out of the
+            // inheritance slice's scope.
+            if (isValidatedCompanion || irClass.kind == ClassKind.OBJECT) {
+                val kindWord = if (isValidatedCompanion) "companion object" else "object"
+                dotNetUnsupported("$kindWord '$name' with a supertype other than kotlin.Any is not supported")
+            }
+            val superClasses = superTypesExceptAny.map { superType ->
+                ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                    ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
+            }
+            if (superClasses.any { it.kind == ClassKind.INTERFACE }) {
+                dotNetUnsupported("class '$name' implements an interface; interface supertypes are not supported")
+            }
+            val superClass = superClasses.singleOrNull()
+                ?: dotNetUnsupported("internal: class '$name' has more than one class supertype")
+            if (superClass !in moduleTopLevelClasses) {
+                dotNetUnsupported(
+                    "class '$name' extends '${superClass.diagnosticName()}', which is not a top-level class " +
+                            "of the compiled module; only module-local base classes are supported"
+                )
+            }
+        }
+        // Overriding a kotlin.Any member (toString/equals/hashCode) needs a virtual-slot
+        // relationship with System.Object's members — an Any model that does not exist yet
+        // (the same gap that keeps data classes and general `==` rejected). Declared overrides
+        // are rejected whole-class; fake overrides stay exempt — they are skipped at render and
+        // calls to them stay rejected at the availableFunctions miss. The override chain is
+        // walked with the TYPE-based isAny (an FqName comparison, like the supertype checks
+        // above): the ir.util findOverriddenMethodOfAny shortcut relies on IrClass.isAny,
+        // an IdSignature comparison, and this pipeline's symbols carry no signatures, so
+        // it never matches here.
+        for (member in irClass.dotNetMemberFunctions()) {
+            if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
+                dotNetUnsupported(
+                    "member '${member.name.asString()}' of class '$name' overrides a member of kotlin.Any; " +
+                            "kotlin.Any member overrides are not supported (no Any model)"
+                )
+            }
         }
         for (declaration in irClass.declarations) {
             if (declaration is IrClass) {
@@ -589,11 +673,47 @@ class DotNetIlEmitter(
                 // companion (the frontend rejects it). Every other nested class — including any
                 // nested class of the companion — stays rejected, whole-class.
                 if (!isValidatedCompanion && declaration.isCompanion && declaration.kind == ClassKind.OBJECT) {
-                    checkClassShapeSupported(declaration, isValidatedCompanion = true)
+                    checkClassShapeSupported(declaration, moduleTopLevelClasses, isValidatedCompanion = true)
                     continue
                 }
                 val kindWord = if (declaration.kind == ClassKind.OBJECT) "object" else "class"
                 dotNetUnsupported("$kindWord '${declaration.diagnosticName()}' is not top-level; nested/inner/local classes are not supported")
+            }
+        }
+    }
+
+    /**
+     * Rejects a covariant-return override, whole-class via the member pre-pass: ECMA-335
+     * implicit slot matching (II.15.4.2.3) includes the RETURN type, so an override whose
+     * mapped return differs from the overridden slot's — `virtual` without `newslot` binds by
+     * name-and-signature, not by intent — would silently land in a FRESH slot and base-typed
+     * `callvirt` would run the BASE implementation (probe-verified: the exact emitted shape
+     * assembles without any ilasm diagnostic and misdispatches on CoreCLR). Roslyn supports C#
+     * covariant returns only through explicit `.override` + `PreserveBaseOverrides` machinery
+     * this backend does not emit, so the shape is rejected loudly instead — never wrong IL.
+     * Kotlin covariance that maps to the SAME IL type (`String?` overridden by `String`, both
+     * `string`) keeps the slot and stays supported, which is why the comparison runs on MAPPED
+     * types; the whole [allOverridden] chain is compared so a leaf-vs-root mismatch is caught
+     * even when the intermediate class matches one side. An overridden declaration whose own
+     * return does not map is skipped here: its class fails its own pre-pass, and the eviction
+     * reaches this class through the render's base re-resolution with a carried reason.
+     */
+    private fun checkOverrideKeepsIlReturnType(
+        member: IrSimpleFunction,
+        signature: DotNetIlMethodSignature,
+        typeMapper: DotNetIlTypeMapper,
+    ) {
+        if (member.overriddenSymbols.isEmpty()) return
+        for (overridden in member.allOverridden()) {
+            val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
+            if (overriddenReturnType != signature.returnType) {
+                val overriddenOwner = (overridden.parent as? IrClass)?.diagnosticName() ?: "?"
+                dotNetUnsupported(
+                    "member '${member.name.asString()}' overrides '$overriddenOwner.${overridden.name.asString()}' " +
+                            "with a different IL return type (${signature.returnType.nameInSignature} vs " +
+                            "${overriddenReturnType.nameInSignature}); covariant-return overrides are not supported " +
+                            "(the override would not reuse the base virtual slot)"
+                )
             }
         }
     }
@@ -609,9 +729,18 @@ class DotNetIlEmitter(
      * is re-derived into [availableFunctions] every fixpoint round for the same reason the
      * top-level loop re-derives: a class removed in an earlier round must fail its users here
      * rather than leave stale IL text. Any member failure aborts the render, which removes the
-     * whole class from the module (fail-loud, never partial emission). Fake overrides (the `Any`
-     * members `equals`/`hashCode`/`toString`) are skipped like on the JVM; calls to them stay
-     * rejected.
+     * whole class from the module (fail-loud, never partial emission). Fake overrides are
+     * skipped like on the JVM: calls through an INHERITED member resolve to the declaring
+     * class's real declaration at the call site
+     * ([DotNetIlExpressionCodegen.emitCall][DotNetIlExpressionCodegen.emitCall]), while the
+     * `kotlin.Any` fake overrides (`equals`/`hashCode`/`toString`) resolve to nothing emitted
+     * and stay rejected.
+     *
+     * A class of the INHERITANCE model renders `extends <base>` instead of `System.Object` and,
+     * when `open`, drops `sealed` (both probe-verified, `inheritprobe_s1`); its `open` members
+     * and overrides carry virtual flags (see
+     * [DotNetIlMethodCodegen]'s `dotNetVirtualFlags`). The base is re-resolved from the live
+     * class map at the top of every render, so an evicted base cascades down the chain.
      *
      * An `object` class renders through the same path with three additions: its `INSTANCE`
      * field (a loose [IrField] with origin [IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE])
@@ -637,8 +766,21 @@ class DotNetIlEmitter(
         intrinsicMethods: DotNetIlIntrinsicMethods,
         typeMapper: DotNetIlTypeMapper,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
+        classSkipReasons: Map<IrClass, String>,
     ): RenderedClass {
         val name = irClass.diagnosticName()
+        // The base class of the inheritance model is re-resolved through the LIVE map every
+        // fixpoint round: a base that failed its own shape gate or was evicted (member
+        // pre-pass or an earlier render round) must take every derived class down the chain
+        // with it — a derived class whose base does not exist cannot keep its `extends` line —
+        // each warned with a reason carrying the base's own reason, the inheritance
+        // counterpart of the companion pair warnings.
+        val baseClassInfo = irClass.dotNetBaseClassOrNull()?.let { baseClass ->
+            typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
+                "its base class '${baseClass.diagnosticName()}' could not be compiled: " +
+                        (classSkipReasons[baseClass] ?: "the base class is not available in this module")
+            )
+        }
         val renderedNestedClasses = mutableListOf<String>()
         val renderedFields = mutableListOf<String>()
         val renderedMethods = mutableListOf<String>()
@@ -696,6 +838,7 @@ class DotNetIlEmitter(
                             intrinsicMethods = intrinsicMethods,
                             typeMapper = typeMapper,
                             facadeClassInfoByFile = facadeClassInfoByFile,
+                            classSkipReasons = classSkipReasons,
                         )
                     } catch (e: DotNetIlUnsupportedException) {
                         // Attribute the failure to the companion itself: this render is the
@@ -774,6 +917,11 @@ class DotNetIlEmitter(
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
                 renderedNestedClasses = renderedNestedClasses,
+                // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
+                // the JVM's ACC_FINAL); companions and objects never reach here as open — the
+                // shape gate keeps them final-only.
+                isOpen = irClass.modality == Modality.OPEN,
+                baseClassRef = baseClassInfo?.ilTypeRef,
             ).generate(this)
         }
         return RenderedClass(ilText, requiredHelpers)

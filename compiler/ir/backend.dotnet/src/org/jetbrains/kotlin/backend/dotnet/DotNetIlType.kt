@@ -32,8 +32,21 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * `class 'demo.Outer'/'Companion'` for a companion), the same convention the file facades
      * use. A nullable `C?` maps to the same reference type (CLR reference types are
      * structurally nullable, exactly like `string`).
+     *
+     * The value type carries the whole [classInfo] rather than just the rendered reference so
+     * that [isDotNetAssignableTo] can walk the [base-class chain][DotNetIlClassInfo.baseClass]
+     * for reference upcasts (`Derived` used where `Base` is expected). Equality stays what the
+     * old data class had — the rendered type reference, unique per class within one emission —
+     * so two infos for the same class compare equal regardless of the base link's state.
      */
-    data class UserClass(val ilTypeRef: kotlin.String) : DotNetIlValueType("class $ilTypeRef")
+    class UserClass(val classInfo: DotNetIlClassInfo) : DotNetIlValueType("class ${classInfo.ilTypeRef}") {
+        val ilTypeRef: kotlin.String
+            get() = classInfo.ilTypeRef
+
+        override fun equals(other: Any?): kotlin.Boolean = other is UserClass && other.ilTypeRef == ilTypeRef
+        override fun hashCode(): Int = ilTypeRef.hashCode()
+        override fun toString(): kotlin.String = "UserClass(ilTypeRef=$ilTypeRef)"
+    }
 
     /**
      * A Kotlin exception class type-mapped onto a CLR exception type (see
@@ -88,7 +101,7 @@ internal class DotNetIlFunctionInfo(
 
     /**
      * The `<ret> 'C'::'name'(<params>)` member reference, prefixed with `instance` for instance
-     * methods: the operand of `call`
+     * methods: the operand of `call`/`callvirt`
      * instructions and of the `.get`/`.set` lines inside a `.property` block. Instance methods of
      * final classes on non-null Kotlin receivers are called with plain (non-virtual) `call`
      * (probe-verified) — a stated deviation from Roslyn, which emits `callvirt` purely for its
@@ -100,8 +113,19 @@ internal class DotNetIlFunctionInfo(
                 "${owner.ilTypeRef}::${methodName.toIlIdentifier()}(${signature.renderParameterTypes()})"
     }
 
-    fun renderCallInstruction(methodName: String): String =
-        "call ${renderMethodReference(methodName)}"
+    /**
+     * The call instruction of one call site. [virtual] selects `callvirt` — used exactly for
+     * [virtual callees][isDotNetVirtual] outside a `super` qualifier, so an overridden member
+     * dispatches on the runtime type (probe-verified, `inheritprobe_s1`/`_s2`: `callvirt` with
+     * the operand token naming the DECLARING class dispatches to the override even through a
+     * base-typed local, including to a `final` override). Everything else — final members
+     * (the stated call-not-callvirt deviation from Roslyn documented on
+     * [renderMethodReference]), static facade functions, and `super`-qualified calls, whose
+     * non-virtual `call` to a virtual method with the `this` receiver runs the BASE
+     * implementation (probe-verified, `inheritprobe_s1`) — keeps the plain `call`.
+     */
+    fun renderCallInstruction(methodName: String, virtual: Boolean = false): String =
+        "${if (virtual) "callvirt" else "call"} ${renderMethodReference(methodName)}"
 }
 
 /**
@@ -118,6 +142,19 @@ internal class DotNetIlClassInfo(
     /** Whether this is a nested class (a companion object) rather than a top-level one. */
     val isNested: Boolean
         get() = enclosingClass != null
+
+    /**
+     * The class info of this class's base class, or null when the class extends `kotlin.Any`
+     * (IL `System.Object`). Linked by [DotNetIlEmitter]'s pre-pass after ALL gate-passing
+     * classes are registered (a base may be declared after its derived class — forward
+     * references are legal IL, probe-verified `inheritprobe_s1`) and consumed by
+     * [isDotNetAssignableTo]'s upcast walk. Deliberately NOT consulted for the `extends` line:
+     * the render re-resolves the base through the LIVE availableClasses map every fixpoint
+     * round, so a base evicted mid-emission fails its derived classes instead of leaving a
+     * stale link in emitted IL (the link itself is then unreachable — the derived class is
+     * evicted with it).
+     */
+    var baseClass: DotNetIlClassInfo? = null
 
     /**
      * The rendered IL type reference of this class — `'demo.Outer'` for a top-level class,

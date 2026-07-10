@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
@@ -83,7 +84,7 @@ internal class DotNetIlMethodCodegen(
         if (function is IrConstructor) {
             registerThis(
                 function.constructedClass.thisReceiver!!.symbol,
-                DotNetIlValueType.UserClass(functionInfo.owner.ilTypeRef),
+                DotNetIlValueType.UserClass(functionInfo.owner),
             )
         }
     }
@@ -133,13 +134,15 @@ internal class DotNetIlMethodCodegen(
                 // property accessors additionally carry `specialname`, binding them to the
                 // `.property` metadata (both spellings are ilasm-probe-verified). Kotlin-private
                 // members of a COMPANION are `assembly` instead of the historical `public` — see
-                // [dotNetMemberVisibility].
+                // [dotNetMemberVisibility]. Members of the inheritance model additionally carry
+                // virtual flags — see [dotNetVirtualFlags].
                 val visibility = function.dotNetMemberVisibility() ?: "public"
                 val specialname = if (function.isAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
                 appendLine(
-                    "  .method $visibility hidebysig $specialname$dispatch ${signature.returnType.nameInSignature} " +
+                    "  .method $visibility hidebysig $specialname${function.dotNetVirtualFlags()}$dispatch " +
+                            "${signature.returnType.nameInSignature} " +
                             "${methodName.toIlIdentifier()}($parameters) cil managed"
                 )
             }
@@ -178,6 +181,32 @@ internal class DotNetIlMethodCodegen(
             (parent as? IrClass)?.isCompanion == true -> "assembly"
             this is IrConstructor -> "private"
             else -> null
+        }
+    }
+
+    /**
+     * The virtual-slot flags of a member method's header, agreeing by construction with the
+     * call-site dispatch predicate [isDotNetVirtual] (declaring a slot virtual and calling it
+     * with plain `call` — or vice versa — must never diverge). All spellings and their flag
+     * order are ilasm-probe-verified (`inheritprobe_s1`/`_s2`/`_s3`; `_s3` additionally showed
+     * ilasm treats the flags as an unordered keyword set, so the emitter standardizes on the
+     * s2-verified order):
+     * - an `open` member that overrides nothing introduces a fresh slot: `newslot virtual`
+     *   (`specialname newslot virtual` for accessors);
+     * - a Kotlin `override` REUSES the base slot: `virtual` with NO `newslot` — adding `newslot`
+     *   would silently detach it from base-typed dispatch;
+     * - a `final override` adds `final`: it still occupies the virtual slot (and still
+     *   dispatches under `callvirt`) but seals it, the exact Roslyn shape for C# `sealed
+     *   override`;
+     * - everything else (final members of the final-class model, static facade methods) carries
+     *   no virtual flags — the established plain-`call` model.
+     */
+    private fun IrFunction.dotNetVirtualFlags(): String {
+        if (this !is IrSimpleFunction || !signature.hasThis) return ""
+        return when {
+            overriddenSymbols.isNotEmpty() -> if (modality == Modality.FINAL) "virtual final " else "virtual "
+            isDotNetVirtual() -> "newslot virtual "
+            else -> ""
         }
     }
 
@@ -336,9 +365,13 @@ internal class DotNetIlMethodCodegen(
     /**
      * The delegation statement of a constructor body: `ldarg.0`, the arguments, then a plain
      * (non-virtual) `call` to either `System.Object::.ctor()` — the `kotlin.Any` supertype
-     * constructor, `kotlin.Any` having no IL class of its own — or the sibling constructor of a
-     * `this(...)` delegation. Both call shapes, including code before and after the delegation,
-     * are ilasm-probe-verified.
+     * constructor, `kotlin.Any` having no IL class of its own — or the constructor of another
+     * user class: the sibling constructor of a `this(...)` delegation and the BASE-class
+     * constructor of the inheritance model share the exact same IL shape,
+     * `call instance void 'C'::.ctor(...)` (the CLR has one delegation form for both, unlike
+     * the JVM where both are also just `invokespecial <init>`). All call shapes, including code
+     * before and after the delegation, are ilasm-probe-verified (base chaining with arguments
+     * and a constructor body after the chain: `inheritprobe_s1`).
      */
     private fun emitDelegatingConstructorCall(call: IrDelegatingConstructorCall) {
         if (function !is IrConstructor) {
