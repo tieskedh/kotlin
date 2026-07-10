@@ -20,7 +20,7 @@ class A {
 
 class RemovedBlock {
     //companion {
-        //fun sameFun() = "block"
+    //fun sameFun() = "block"
     //}
 
     companion object {
@@ -37,3 +37,17 @@ class NewBlock {
         fun sameFun() = "object"
     }
 }
+
+open class BaseClass {
+    companion {
+        fun movedToParentClassFun() = "moved"
+        val movedToParentClassProp = 42
+    }
+}
+interface Interface {
+    companion {
+        fun movedToParentInterfaceFun() = "moved"
+        val movedToParentInterfaceProp = 42
+    }
+}
+class Derived : BaseClass(), Interface {}
