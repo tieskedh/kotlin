@@ -3,8 +3,6 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-@file:Suppress("UnstableApiUsage")
-
 package org.jetbrains.kotlin.java.direct.model
 
 import com.intellij.java.syntax.element.JavaSyntaxElementType
@@ -108,16 +106,12 @@ class JavaFieldOverAst(
         return null
     }
 
-    /**
-     * Effective modifier list: own if present, otherwise inherited from the leading field
-     * in a multi-field declaration.
-     */
-    private val effectiveModifierList: JavaLightNode?
+    override val modifierList: JavaLightNode?
         get() = tree.findChildByType(node, JavaSyntaxElementType.MODIFIER_LIST)
             ?: leadingFieldNode?.let { tree.findChildByType(it, JavaSyntaxElementType.MODIFIER_LIST) }
 
     private fun hasFieldModifier(modifier: SyntaxElementType): Boolean {
-        return effectiveModifierList?.let { tree.hasChildOfType(it, modifier) } ?: false
+        return modifierList?.let { tree.hasChildOfType(it, modifier) } ?: false
     }
 
     // Enum constants are implicitly public (JLS 8.9.3).
@@ -137,7 +131,7 @@ class JavaFieldOverAst(
         }
 
     override val annotations: Collection<JavaAnnotation>
-        get() = parseAnnotationsFromModifierList(effectiveModifierList, tree, resolutionContext)
+        get() = parseAnnotationsFromModifierList(modifierList, tree, resolutionContext)
 
     override val type: JavaType
         get() = computeType()

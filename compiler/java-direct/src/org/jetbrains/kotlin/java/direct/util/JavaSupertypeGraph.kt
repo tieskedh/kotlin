@@ -127,7 +127,7 @@ internal class JavaSupertypeGraph(
             }
 
             collectRecursive(classId, emptySet())
-            result.mapValues { it.value.toSet() }
+            result
         }
     }
 

@@ -30,7 +30,6 @@ import org.jetbrains.kotlin.name.FqName
  * `FirJvmSessionFactory.createLibrarySession`. `JvmFrontendPipelinePhase.prepareJvmSessions`
  * populates the builder when the `JvmAnalysisFlags.useJavaDirect` flag is set.
  */
-@OptIn(K1Deprecation::class)
 fun createJavaDirectSourceJavaFacadeBuilder(
     configuration: CompilerConfiguration,
     projectEnvironment: VfsBasedProjectEnvironment,
@@ -43,9 +42,10 @@ fun createJavaDirectSourceJavaFacadeBuilder(
             localFs = localFs,
             session = session,
             binaryFinderProvider = {
+                @OptIn(K1Deprecation::class)
                 projectEnvironment.project.createJavaClassFinder(scope.asPsiSearchScope(), session.javaAnnotationProvider)
             },
-        ) ?: projectEnvironment.project.createJavaClassFinder(scope.asPsiSearchScope(), session.javaAnnotationProvider)
+        )
         FirJavaFacadeForSource(session, moduleData, finder)
     }
 }
@@ -54,8 +54,8 @@ private fun buildJavaDirectClassFinder(
     configuration: CompilerConfiguration,
     localFs: VirtualFileSystem,
     session: FirSession,
-    binaryFinderProvider: () -> JavaClassFinder?,
-): JavaClassFinder? {
+    binaryFinderProvider: () -> JavaClassFinder,
+): JavaClassFinder {
     val sourceRootEntries: List<JavaSourceRootEntry> =
         configuration.getList(CLIConfigurationKeys.CONTENT_ROOTS).asSequence()
             .filterIsInstance<JavaSourceRoot>()
@@ -68,11 +68,10 @@ private fun buildJavaDirectClassFinder(
             }
             .toList()
 
-    val binaryFinder: JavaClassFinder? = binaryFinderProvider()
+    val binaryFinder: JavaClassFinder = binaryFinderProvider()
 
     if (sourceRootEntries.isEmpty()) return binaryFinder
 
     val sourceFinder = JavaClassFinderOverAstImpl(session, sourceRootEntries)
-    if (binaryFinder == null) return sourceFinder
     return CombinedJavaClassFinder(sourceFinder, binaryFinder)
 }

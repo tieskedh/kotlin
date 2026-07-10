@@ -3,8 +3,6 @@
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
-@file:Suppress("UnstableApiUsage")
-
 package org.jetbrains.kotlin.java.direct.model
 
 import com.intellij.java.syntax.element.JavaSyntaxElementType
@@ -117,7 +115,7 @@ class JavaClassifierTypeOverAst(
                 // were reordered after the nested-class lookup below.
                 findTypeParameter(parts[0])?.let { return it }
                 // 2. Inner/local class names (shadow INHERITED outer type params)
-                val localClass = findClassInCurrentScope(Name.identifier(parts[0]))
+                val localClass = findClassInCurrentScope(parts[0])
                 if (localClass != null) return localClass
                 // 3. INHERITED type parameters from outer class (low priority — shadowed by inner classes)
                 findInheritedTypeParameter(parts[0])?.let { return it }
@@ -126,7 +124,7 @@ class JavaClassifierTypeOverAst(
             // Multi-part names: navigate from base class through inner classes. Each hop uses
             // [declaredOrFullyInherited] so an intermediate segment inherited from any supertype
             // representation still navigates correctly.
-            var current: JavaClassifier? = findClassInCurrentScope(Name.identifier(parts[0]))
+            var current: JavaClassifier? = findClassInCurrentScope(parts[0])
 
             if (current is JavaClass) {
                 for (i in 1 until parts.size) {
