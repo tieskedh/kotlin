@@ -11,7 +11,6 @@ import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.K2NativeCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.cliArgument
-import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.konan.config.konanTarget
 import org.jetbrains.kotlin.konan.test.blackbox.support.AssertionsMode
 import org.jetbrains.kotlin.konan.test.blackbox.support.TestDirectives.ASSERTIONS_MODE
@@ -33,6 +32,7 @@ import org.jetbrains.kotlin.test.model.*
 import org.jetbrains.kotlin.test.services.*
 import org.jetbrains.kotlin.test.services.configuration.NativeEnvironmentConfigurator
 import org.jetbrains.kotlin.test.testInfraError
+import org.jetbrains.kotlin.test.util.parseLanguageFeature
 import org.jetbrains.kotlin.utils.addToStdlib.ifNotEmpty
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -240,7 +240,7 @@ class NativeCompilerSecondStageFacade private constructor(
                 },
                 listOf(K2NativeCompilerArguments::friendModules.cliArgument, friendModules).takeIf { friendModules.isNotEmpty() },
                 customLanguageFeatures
-                    .filterNot { LanguageFeature.valueOf(it.removePrefix("+").removePrefix("-")).testOnly }
+                    .filterNot { it.parseLanguageFeature().first.testOnly }
                     .map { CommonCompilerArguments::manuallyConfiguredFeatures.cliArgument + ":$it" },
                 freeArgs,
                 fileCheckStage?.let {
