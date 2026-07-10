@@ -1,10 +1,5 @@
 // TARGET_BACKEND: JVM_IR
 
-// Multi-part navigation through an *intermediate* segment inherited from a Kotlin (or binary) supertype must resolve. `Local` is
-// a same-file declared class, while `Local.Deeper` can only be found via the binary/Kotlin tail of `findInnerClassFromSupertypes` /
-// `resolveInheritedInnerClassToClassId` plus `FirBackedJavaClassAdapter`'s `findInnerClass`; `Local.Deeper.EvenDeeper` additionally
-// requires chaining a further hop through that same inherited-nested lookup on the already-resolved `Deeper`.
-
 // FILE: KotlinBase.kt
 open class KotlinBase {
     open class Deeper {
