@@ -1,6 +1,6 @@
 // RUN_PIPELINE_TILL: FRONTEND
-// ISSUE: green-code divergence — outer type parameter shadowing an imported class
-// inside a STATIC nested type.
+
+// javac divergence — outer type parameter shadowing an imported class inside a STATIC nested type.
 //
 // Per JLS 6.5.5/8.1.3 the outer class's type parameter `E` is NOT in scope inside the
 // static nested type `Outer.Inner`, so for javac the simple name `E` in `Inner.get()`
@@ -23,8 +23,6 @@ import pkg.E;
 
 public class Outer<E> {
     public static class Inner {
-        // javac: returns pkg.E (Outer's E is not in scope in a static nested type).
-        // Kotlin (PSI & java-direct): returns Outer's type parameter E.
         public E get() { return null; }
     }
 }
@@ -35,8 +33,6 @@ package main
 import outer.Outer
 
 fun test(inner: Outer.Inner) {
-    // javac compiles this (Inner.get() returns pkg.E); Kotlin rejects it because
-    // Inner.get() is seen as returning Outer's type parameter E instead of pkg.E.
     inner.get().<!UNRESOLVED_REFERENCE!>onlyOnImportedE<!>()
 }
 
