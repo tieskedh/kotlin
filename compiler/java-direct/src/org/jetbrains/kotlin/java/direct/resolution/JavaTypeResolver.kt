@@ -323,7 +323,7 @@ private fun findInheritedNestedClass(
  *    Java reference could wrongly resolve to a `typealias`.
  */
 context(c: JavaResolutionContext)
-internal fun tryResolve(classId: ClassId): Boolean {
+private fun tryResolve(classId: ClassId): Boolean {
     val symbol = c.fileContext.session.cycleSafeClassLikeSymbol(classId) ?: return false
     if (symbol is FirTypeAliasSymbol) return false
     return symbol.origin != FirDeclarationOrigin.BuiltIns
