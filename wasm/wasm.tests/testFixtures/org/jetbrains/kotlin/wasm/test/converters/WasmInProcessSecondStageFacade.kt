@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.js.config.includes
 import org.jetbrains.kotlin.js.config.libraries
 import org.jetbrains.kotlin.platform.wasm.WasmPlatformWithTarget
 import org.jetbrains.kotlin.test.frontend.fir.getTransitivesAndFriends
+import org.jetbrains.kotlin.test.isSingleTestBatch
 import org.jetbrains.kotlin.test.testInfraError
 import org.jetbrains.kotlin.utils.mapToSetOrEmpty
 import org.jetbrains.kotlin.wasm.test.blackbox.AbstractWasmSecondStageGroupingFacade
@@ -49,31 +50,15 @@ class WasmInProcessSecondStageFacade {
             val tempDir = testServices.temporaryDirectoryManager.getOrCreateTempDirectory("combined-sources")
             val context = buildBatchExecutionContext(inputArtifact, CompilationStage.SECOND)
 
-            // === Why this facade dispatches on `isSingleTestBatch`, NOT `isIsolatedBatch` ===
-            //
-            // A batch of a single test is always compiled as a standalone box-export test (see
-            // AbstractWasmSecondStageGroupingFacade.isSingleTestBatch), whether it ended up alone
-            // because it was isolated (`BatchToken.Isolated`) or merely because it carried a unique
-            // batch token (e.g. `BatchToken.Custom` from a one-off `// LANGUAGE:` feature). Only
-            // batches with two or more tests go through the grouped path, where a synthetic proxy
-            // launcher reaches each `box()` via its FQN so no per-test `box` export is needed.
-            //
-            // This deliberately DIFFERS from the CLI counterpart
-            // (`CustomWasmSecondStageFacade.Grouping`, which dispatches on `isIsolatedBatch`). The CLI
-            // pipeline cannot use `isSingleTestBatch` because there `box()` is exported as `@JsExport`
-            // by `WasmJsExportBoxPreprocessor` at FIRST-stage compile time, gated only on the isolation
-            // decision — before the final batch size is known. A non-isolated test that merely ends up
-            // alone is therefore compiled without `@JsExport box`, so the CLI facade must keep using
-            // `isIsolatedBatch` (see that facade's counterpart comment for the full reasoning).
-            //
-            // The in-process pipeline has no such constraint: it does NOT rely on first-stage
-            // `@JsExport` gating. Instead `WasmLoweringFacade.transform()` sets
-            // `wasmTestBoxFunctionToExport` per compilation, so `box` availability is decided at the
-            // actual (second-stage) compilation and is independent of the early isolation decision.
-            // That makes `isSingleTestBatch` the correct, more precise criterion here: any single-test
-            // batch — isolated or not — can safely take the standalone box-export path, and it also
-            // avoids the WASI empty-output sanity-check failure that the box-export path prevents.
-            return if (isSingleTestBatch(inputArtifact)) {
+            // Dispatch on `isSingleTestBatch`, not `isIsolatedBatch`:
+            //   a single-test batch must always be compiled as a standalone box-export test, since
+            //   GenerateWasmTests.lower() never emits a grouped/unit-test-runner JUnit case for a single test,
+            //   no matter it either was isolated or merely got a unique batch token.
+            // `CustomWasmSecondStageFacade.Grouping` must use `isIsolatedBatch()`,
+            //    since there `box()` is `@JsExport`-gated at first-stage compile time, before batch size is known.
+            // But here, the in-process pipeline decides `box` export at the actual second-stage compilation (`wasmTestBoxFunctionToExport`),
+            // so `isSingleTestBatch` is the correct, more precise criterion here.
+            return if (inputArtifact.nonGroupingStageOutputs.isSingleTestBatch()) {
                 doIsolated(context)
             } else {
                 groupedBatch(inputArtifact, context, tempDir)

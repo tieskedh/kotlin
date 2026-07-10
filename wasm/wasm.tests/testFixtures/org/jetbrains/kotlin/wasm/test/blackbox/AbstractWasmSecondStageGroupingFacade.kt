@@ -49,20 +49,6 @@ abstract class AbstractWasmSecondStageGroupingFacade(
 ) : AbstractGroupingStageTestFacade<GroupingStageInputArtifact, BinaryArtifacts.Wasm>() {
 
     /**
-     * Global invariant: a batch that contains exactly one test must always be compiled and executed as a standalone box-export test
-     * (like `FirWasmJsCodegenBoxTestGenerated/WasmBoxRunner`), *regardless of why* it ended up alone in the batch
-     * — whether because it was isolated (`BatchToken.Isolated`) or
-     * — merely because it carried a unique batch token (e.g. `BatchToken.Custom` derived from a one-off `// LANGUAGE:` feature).
-     * Such a batch is therefore routed to the "isolated" (box-export) compilation path instead of the groupedBatch path:
-     * the synthesized `@Test`/`ProxyLauncher` machinery and the corresponding TeamCity-marker-based sanity check
-     * make sense only for a *real* multi-test batch driven by the JUnit/unit-test runner.
-     * A single-test batch run via the unit-test runner would otherwise produce no TeamCity `testSuiteFinished` markers on the WASI VMs
-     * (WasmEdge/Wasmtime invoke the `startTest` export directly), failing the sanity check on empty output.
-     */
-    protected fun isSingleTestBatch(inputArtifact: GroupingStageInputArtifact): Boolean =
-        inputArtifact.nonGroupingStageOutputs.isSingleTestBatch()
-
-    /**
      * Returns `true` when the batch consists of a test that the grouping engine deliberately isolates
      * (`BatchToken.Isolated` — e.g. friend-module, DCE-size, custom-JS-entry, `IGNORE_BACKEND`, or
      * `IGNORE_KLIB_*_WITH_CUSTOM_SECOND_STAGE` tests).
