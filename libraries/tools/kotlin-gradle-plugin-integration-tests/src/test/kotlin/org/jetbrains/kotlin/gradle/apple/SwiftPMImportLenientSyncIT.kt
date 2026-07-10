@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.FetchSyntheticIm
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.DumpXcodeBuildArgs
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.GenerateSyntheticLinkageImportProject
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SerializeSwiftPMDependenciesMetadataForLockFiles
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.SwiftPMImportExtension
 import org.jetbrains.kotlin.gradle.testbase.*
 import org.jetbrains.kotlin.gradle.uklibs.include
 import org.junit.jupiter.api.DisplayName
@@ -46,25 +47,26 @@ class SwiftPMImportLenientSyncIT : KGPBaseTest() {
     fun `resolve failure is lenient during IDE sync`(version: GradleVersion) {
         project("empty", version) {
             val cacheDirFile = projectPath.resolve("customXcodePackageCache").toFile()
+
+            // Also test for KT-87630
+            val samePackage: SwiftPMImportExtension.() -> Unit = {
+                swiftPackage(
+                    url = "https://example.invalid/NonExistentPackage.git",
+                    version = "1.0.0",
+                    products = listOf("NonExistent"),
+                )
+            }
             val left = project("empty", version) {
                 initSwiftPmProject(cacheDirFile) {
                     swiftPMDependencies {
-                        swiftPackage(
-                            url = "https://example.invalid/NonExistentPackage.git",
-                            version = "1.0.0",
-                            products = listOf("NonExistent"),
-                        )
+                        samePackage()
                     }
                 }
             }
             val right = project("empty", version) {
                 initSwiftPmProject(cacheDirFile) {
                     swiftPMDependencies {
-                        swiftPackage(
-                            url = "https://example.invalid/NonExistentPackage.git",
-                            version = "1.0.0",
-                            products = listOf("NonExistent"),
-                        )
+                        samePackage()
                     }
                 }
             }
