@@ -47,15 +47,71 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
   reference check that never calls `equals`; JVM precedent: the `Equals` intrinsic's `isNullConst`
-  special case). General `==` between two class instances stays rejected until an Any.equals
-  model exists.
+  special case); base/derived-typed operand pairs of the inheritance model widen to the
+  ancestor type — the reference `ceq` is type-agnostic, the user-class analogue of the
+  mapped-exception common-supertype arm. General `==` between two class instances stays
+  rejected until an Any.equals model exists.
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
-  vtable/class lowering machinery): only top-level, final, non-generic plain classes whose sole
-  supertype is `kotlin.Any` pass the shape gate (`DotNetIlEmitter.checkClassShapeSupported`).
+  vtable/class lowering machinery): only top-level, non-generic plain classes — final or, since
+  the inheritance model (below), open — pass the shape gate
+  (`DotNetIlEmitter.checkClassShapeSupported`); objects and companions stay final-only with sole
+  supertype `kotlin.Any`.
   Rejection granularity is always the whole class — a failing member (signature, body, or IL
   method- or field-identity clash) removes the entire class from the module so no call site can
   resolve to a partial class, and the removal cascades through the type mapper to every user of
   the class.
+- Inheritance model (probe series `inheritprobe_s1`–`_s3`; JVM precedent: real CLR classes =
+  real platform inheritance, no vtable lowering — the same argument as the class-model bullet):
+  a top-level plain class may be `open` (drops `sealed` from the `.class` flags) and may extend
+  EXACTLY ONE base class when the supertype resolves to another top-level class of the compiled
+  module. The gate checks only the structural shape; whether the base itself compiles is
+  re-resolved from the live class map at the top of every render round, so a failing base
+  cascades whole-class down the chain, each derived class warned with a reason carrying the
+  base's reason (the chain analogue of the companion pair warnings) — pinned by
+  `ilText/inheritanceBaseEvicted.kt`. Member flags (order probe-verified; ilasm treats them as
+  an unordered keyword set, the emitter standardizes on the s2 spellings): an `open` member
+  introducing a slot is `hidebysig newslot virtual` (`specialname newslot virtual` for
+  accessors), a Kotlin `override` REUSES the base slot — `virtual` with NO `newslot` — and a
+  `final override` is `virtual final` (still dispatching under `callvirt`, the Roslyn `sealed
+  override` shape). An `open` member of a FINAL class stays non-virtual (nothing can override
+  it; `isDotNetVirtual` is the single predicate both the declaration flags and the call sites
+  consult). CALL SITES: virtual callees use `callvirt` — a stated widening of the established
+  call-for-final deviation from Roslyn: final members keep the plain null-check-free `call`,
+  but virtual dispatch has no non-virtual substitute, and `callvirt` with the operand token
+  naming the DECLARING class dispatches correctly even through base-typed values and to final
+  overrides (probe-verified). Calls through fake overrides (inherited members referenced via
+  the derived class) resolve to the real declaration first (`resolveFakeOverride`, the
+  `findSuperDeclaration` analogue), so the operand names the declaring class — valid for both
+  `call` (inherited final member, derived receiver) and `callvirt`. A `super.f()` call
+  (`IrCall.superQualifierSymbol != null`) is a plain non-virtual `call` on the resolved target
+  — the CLR runs the base implementation with the `this` receiver, exactly the JVM's
+  invokevirtual/invokespecial split (probe-verified from inside both plain and final
+  overrides). Constructor chaining to the base reuses the delegating-call shape (`ldarg.0`,
+  args, `call instance void 'Base'::.ctor(...)`) — identical IL for `this(...)` and base
+  delegation. UPCASTS are pure reference widenings needing NO instruction (probe-verified:
+  base-typed locals, parameters, returns): `isDotNetAssignableTo` walks the
+  `DotNetIlClassInfo.baseClass` chain (linked in a pre-pass AFTER all registrations — forward
+  references are legal IL and legal Kotlin), and expression-position `IMPLICIT_CAST` that is
+  such an upcast emits just its operand; every other type operator (CAST, SAFE_CAST,
+  INSTANCEOF, IMPLICIT_NOTNULL, non-upcast IMPLICIT_CAST) stays rejected loudly. STAYS
+  REJECTED, whole-class: `abstract` and `sealed` classes (no abstract-member/instantiability
+  model), interface supertypes, exception supertypes (existing message), out-of-module or
+  non-top-level bases, objects/companions with any supertype, covariant-return overrides
+  (ECMA-335 II.15.4.2.3 slot matching includes the RETURN type, so the override would land in
+  a fresh slot and base-typed `callvirt` would silently run the BASE body — probe-verified;
+  Roslyn's fix is `.override` + `PreserveBaseOverrides` machinery this backend does not emit;
+  compared on MAPPED types in the member pre-pass, so `String?`-to-`String` covariance — same
+  IL `string` — stays supported; pinned by `ilText/inheritanceCovariantReturnRejected.kt`),
+  and overrides of `kotlin.Any`
+  members (`toString`/`equals`/`hashCode` — no Any model; pinned by
+  `ilText/inheritanceAnyOverride.kt`; detected by walking `allOverridden()` against the
+  TYPE-based `isAny`, because `IrClass.isAny`/`findOverriddenMethodOfAny` compare IdSignatures
+  and this pipeline's symbols carry none). `protected` visibility is untouched (renders with
+  the historical default like before). End-to-end: `box/inheritanceBasic.kt` (three-level
+  chain: polymorphic dispatch through base-typed values, super chains, final override,
+  inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
+  before derived init; `beforefieldinit` semantics unchanged — instance init order is a
+  constructor-chain property, not a `.cctor` one).
 - Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
   `specialname` accessor methods, and a `.property` metadata block binding them (spellings
   ilasm-probe-verified) — a stated deviation from the JVM's `PropertiesLowering`, which the CLR

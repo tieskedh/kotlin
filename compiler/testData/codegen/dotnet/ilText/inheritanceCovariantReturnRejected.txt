@@ -1,0 +1,93 @@
+.assembly extern mscorlib {}
+.assembly 'inheritanceCovariantReturnRejected' {}
+.module 'main-inheritanceCovariantReturnRejected.il'
+
+.class public auto ansi beforefieldinit 'Base'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'tag'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Base'::'tag'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_tag'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Base'::'tag'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Base' 'self'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'Base' 'get_partner'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'text'() cil managed
+  {
+    .maxstack 1
+    ldnull
+    ret
+  }
+  .property instance int32 'tag'()
+  {
+    .get instance int32 'Base'::'get_tag'()
+  }
+  .property instance class 'Base' 'partner'()
+  {
+    .get instance class 'Base' 'Base'::'get_partner'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SameIl'
+       extends 'Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig virtual instance string 'text'() cil managed
+  {
+    .maxstack 1
+    ldstr "leaf-text"
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'inheritanceCovariantReturnRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldc.i4 1
+    newobj instance void 'Base'::.ctor(int32)
+    callvirt instance class 'Base' 'Base'::'self'()
+    call instance int32 'Base'::'get_tag'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 2
+    newobj instance void 'SameIl'::.ctor(int32)
+    callvirt instance string 'SameIl'::'text'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

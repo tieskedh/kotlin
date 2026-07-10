@@ -119,12 +119,24 @@ internal object DotNetMappedExceptions {
 
 /**
  * Whether a value of this IL type can be used where [expected] is required. Beyond exact
- * equality this admits exactly one widening: every [DotNetIlValueType.MappedClass] is assignable
- * to the `System.Exception` reference type — the CLR-verified common supertype of all mapped
- * exception types, and the target of both Kotlin supertypes (`Throwable`, `Exception`) that can
- * appear as the expected type of a mapped-exception value inside the supported subset.
+ * equality this admits exactly two widenings:
+ * - every [DotNetIlValueType.MappedClass] is assignable to the `System.Exception` reference
+ *   type — the CLR-verified common supertype of all mapped exception types, and the target of
+ *   both Kotlin supertypes (`Throwable`, `Exception`) that can appear as the expected type of a
+ *   mapped-exception value inside the supported subset;
+ * - a [DotNetIlValueType.UserClass] is assignable to every ancestor on its
+ *   [base-class chain][DotNetIlClassInfo.baseClass] — the pure reference upcast of the
+ *   inheritance model, which needs no IL instruction at all (probe-verified,
+ *   `inheritprobe_s1`: `stloc` into a base-typed local and a base-typed call argument both
+ *   accept a derived reference without `castclass`). The JVM backend never performs this check
+ *   itself — the JVM verifier's assignability subsumes it — while this backend verifies emitted
+ *   stack types structurally, so the widening is spelled out here.
  */
-internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean =
-    this == expected ||
-            (this is DotNetIlValueType.MappedClass &&
-                    expected == DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF))
+internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
+    this == expected -> true
+    this is DotNetIlValueType.MappedClass ->
+        expected == DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+    this is DotNetIlValueType.UserClass && expected is DotNetIlValueType.UserClass ->
+        generateSequence(classInfo.baseClass) { it.baseClass }.any { it.ilTypeRef == expected.ilTypeRef }
+    else -> false
+}

@@ -13,6 +13,8 @@ import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
 import org.jetbrains.kotlin.ir.expressions.IrThrow
 import org.jetbrains.kotlin.ir.expressions.IrTry
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
+import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.constructedClass
@@ -20,6 +22,7 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
+import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 
 /**
  * Emits an [IrTry] in value position. Implemented by [DotNetIlMethodCodegen]: a `try` branch
@@ -83,6 +86,7 @@ internal class DotNetIlExpressionCodegen(
                 methodContext.notePhantomValueAfterThrow()
             }
             is IrTry -> tryExpressionEmitter.emitTryExpression(expression, expectedType)
+            is IrTypeOperatorCall -> emitTypeOperatorCall(expression, expectedType)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
                 if (intrinsic == null || !intrinsic.tryEmitAsExpression(expression, this, expectedType)) {
@@ -96,6 +100,42 @@ internal class DotNetIlExpressionCodegen(
     fun emitBranchIfFalse(condition: IrExpression, targetLabel: String) {
         emitExpression(condition, DotNetIlValueType.Boolean)
         methodContext.emitBranch("brfalse", targetLabel, pops = 1)
+    }
+
+    /**
+     * A type operator in value position. The only supported operator is [IrTypeOperator.IMPLICIT_CAST]
+     * when it is a pure reference upcast — the operand's mapped type is
+     * [assignable][isDotNetAssignableTo] to the mapped cast type (`Derived` where a base-chain
+     * ancestor is expected, or the trivial same-type cast) — which compiles to the bare operand
+     * with NO instruction: CLR reference widening needs no `castclass` (probe-verified,
+     * `inheritprobe_s1`: base-typed local stores and base-typed call arguments accept a derived
+     * reference directly). The JVM backend's analogue is `IrTypeOperatorLowering`/codegen
+     * dropping implicit casts between reference types — only CHECKCAST-requiring operators emit
+     * code there. Everything else — `as` (CAST), `as?` (SAFE_CAST), `is` (INSTANCEOF),
+     * IMPLICIT_NOTNULL, and any IMPLICIT_CAST that is not an upcast of mapped types — stays
+     * rejected loudly until a downcast/type-test model exists.
+     */
+    private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
+        if (expression.operator != IrTypeOperator.IMPLICIT_CAST) {
+            dotNetUnsupported("type operator ${expression.operator} is not supported")
+        }
+        val operandType = typeMapper.toDotNetIlValueType(expression.argument.type)
+            ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
+        val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
+            ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (!operandType.isDotNetAssignableTo(castType)) {
+            dotNetUnsupported(
+                "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
+                        "is not a reference upcast and is not supported"
+            )
+        }
+        if (!castType.isDotNetAssignableTo(expectedType)) {
+            dotNetUnsupported(
+                "implicit cast produces ${castType.nameInSignature} " +
+                        "where ${expectedType.nameInSignature} is expected"
+            )
+        }
+        emitExpression(expression.argument, operandType)
     }
 
     /**
@@ -213,21 +253,34 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Emits the arguments and the `call` instruction for a call to a top-level Kotlin function
-     * or to an instance member/accessor of a user class. For an instance callee
+     * Emits the arguments and the `call`/`callvirt` instruction for a call to a top-level
+     * Kotlin function or to an instance member/accessor of a user class. For an instance callee
      * `call.arguments[0]` is the receiver: it is emitted against the this-type kept at
      * `parameterTypes[0]` and popped by the call like every other argument, so the plain
      * argument zip covers both shapes. Throws [DotNetIlUnsupportedException] when the callee is
      * not available (not compilable, already skipped, or not declared in this module).
+     *
+     * A call through a FAKE OVERRIDE (an inherited member referenced via the derived class) is
+     * resolved to the real declaration first (JVM precedent: `MethodSignatureMapper` maps calls
+     * through `findSuperDeclaration`), so the emitted member reference names the DECLARING
+     * class; the CLR accepts that operand token with a derived-typed receiver for both `call`
+     * and `callvirt` (probe-verified, `inheritprobe_s1`). Dispatch: a
+     * [virtual callee][isDotNetVirtual] uses `callvirt` — runtime dispatch on the receiver's
+     * class — unless the call is `super`-qualified, which is exactly the JVM's
+     * invokevirtual/invokespecial split; a `super` call and every final member keep the plain
+     * non-virtual `call` (see [DotNetIlFunctionInfo.renderCallInstruction]).
      */
     fun emitCall(call: IrCall): DotNetIlReturnType {
-        val callee = call.symbol.owner
+        val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it }
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee]
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
         emitArguments(call.arguments, info.signature.parameterTypes, "'$calleeName'")
         methodContext.emit(
-            info.renderCallInstruction(callee.dotNetIlMethodName()),
+            info.renderCallInstruction(
+                callee.dotNetIlMethodName(),
+                virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual(),
+            ),
             pops = info.signature.parameterTypes.size,
             pushes = if (info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
@@ -297,8 +350,11 @@ internal class DotNetIlExpressionCodegen(
         }
         val classInfo = typeMapper.classInfoOrNull(irClass)
             ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
-        val producedType = DotNetIlValueType.UserClass(classInfo.ilTypeRef)
-        if (producedType != expectedType) {
+        val producedType = DotNetIlValueType.UserClass(classInfo)
+        // Assignability, not equality: `val b: Base = Derived(...)` is a pure reference upcast
+        // needing no IL instruction (probe-verified, inheritprobe_s1), the same widening every
+        // other value producer already goes through.
+        if (!producedType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "constructor call of '${irClass.name.asString()}' produces ${producedType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
@@ -456,7 +512,7 @@ internal class DotNetIlExpressionCodegen(
         if (receiver == null) {
             dotNetUnsupported("receiverless access to instance field '${field.name.asString()}' is not supported")
         }
-        emitExpression(receiver, DotNetIlValueType.UserClass(classInfo.ilTypeRef))
+        emitExpression(receiver, DotNetIlValueType.UserClass(classInfo))
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
