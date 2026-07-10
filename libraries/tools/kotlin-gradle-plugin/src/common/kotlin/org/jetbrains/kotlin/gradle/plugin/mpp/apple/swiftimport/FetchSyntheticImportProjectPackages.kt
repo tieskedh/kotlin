@@ -190,12 +190,12 @@ internal abstract class FetchSyntheticImportProjectPackages : DefaultTask() {
             params.ideaSyncEnabled.set(ideaSyncEnabled)
             params.errorFile.set(ideImportError)
             params.persistedPackageResolved.set(persistedPackageResolved)
+            params.syntheticLockFile.set(syntheticLockFile)
+            params.workspaceStateJson.set(workspaceStateJson)
 
             if (isCoordinationEnabled) {
                 params.coordinationService.set(coordinationService)
                 params.syntheticPackageHash.set(syntheticPackageHash!!)
-                params.syntheticLockFile.set(syntheticLockFile)
-                params.workspaceStateJson.set(workspaceStateJson)
             }
         }
     }
