@@ -138,5 +138,13 @@ public interface JsDtsGenerationOperation : BuildOperation<CompilationResult> {
          */
         @JvmField
         public val EXPORT_SUSPEND_LAMBDAS: Option<Boolean> = Option("EXPORT_SUSPEND_LAMBDAS", KotlinReleaseVersion(2, 5, 0))
+
+        /**
+         * Whether the generated `copy` of a data class respects the visibility of its primary constructor
+         * (corresponds to the `DataClassCopyRespectsConstructorVisibility` language feature).
+         */
+        @JvmField
+        public val DATA_CLASS_COPY_RESPECTS_CONSTRUCTOR_VISIBILITY: Option<Boolean> =
+            Option("DATA_CLASS_COPY_RESPECTS_CONSTRUCTOR_VISIBILITY", KotlinReleaseVersion(2, 5, 0))
     }
 }
