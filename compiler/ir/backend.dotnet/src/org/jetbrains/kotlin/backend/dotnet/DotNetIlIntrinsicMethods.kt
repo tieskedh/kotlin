@@ -1017,6 +1017,16 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         // MappedClass rejection arm below, exactly like same-typed instances.
         leftType is DotNetIlValueType.MappedClass && rightType is DotNetIlValueType.MappedClass ->
             DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+        // Base/derived-typed user-class operands (expressible since the inheritance model)
+        // compare through the ancestor type: the reference `ceq` is type-agnostic and the
+        // derived-typed side widens by the established no-instruction upcast, so the wider
+        // static type is the operand slot's type — the user-class analogue of the mapped
+        // exception arm above. General `==` on such a pair still lands in the UserClass
+        // rejection arm of the intrinsic, exactly like same-typed instances.
+        leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass &&
+                leftType.isDotNetAssignableTo(rightType) -> rightType
+        leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass &&
+                rightType.isDotNetAssignableTo(leftType) -> leftType
         else -> null
     }
 }

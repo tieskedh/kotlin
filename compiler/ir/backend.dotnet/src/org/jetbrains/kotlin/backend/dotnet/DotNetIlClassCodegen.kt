@@ -3,10 +3,16 @@ package org.jetbrains.kotlin.backend.dotnet
 /**
  * Assembles the class wrapper around already rendered members: the file class of one Kotlin file
  * (public and static — `abstract sealed` — like the JVM's file facades), a top-level user class
- * ([isStaticHolder] = false: instantiable, and `sealed` because only final classes are
- * supported), a companion object ([isNested] = true: a real CLR nested type declared inside the
+ * ([isStaticHolder] = false: instantiable, `sealed` for a final Kotlin class and non-`sealed`
+ * with [isOpen] — the CLR expresses Kotlin's final-by-default directly in metadata, unlike the
+ * JVM's ACC_FINAL which the JVM backend sets from the same modality), a companion object
+ * ([isNested] = true: a real CLR nested type declared inside the
  * enclosing class's body), or, with [exported] = false, the module-private runtime helper class
- * (see [DotNetIlRuntimeHelper]). [renderedNestedClasses] are complete, already indented `.class`
+ * (see [DotNetIlRuntimeHelper]). [baseClassRef] is the already-rendered IL type reference of the
+ * base class of the inheritance model (`extends 'demo.Base'`; assembly-local, forward references
+ * legal — probe-verified, `inheritprobe_s1`); without one the class extends the corelib
+ * `System.Object`, the IL spelling of `kotlin.Any`. [renderedNestedClasses] are complete,
+ * already indented `.class`
  * blocks (a top-level user class carries at most its companion) emitted first in the body;
  * [renderedFields] are single `.field` lines emitted before the methods and
  * [renderedProperties] are `.property` blocks emitted after them (ilasm accepts any member order
@@ -32,22 +38,26 @@ internal class DotNetIlClassCodegen(
     private val hasClassInitializer: Boolean = false,
     private val isNested: Boolean = false,
     private val renderedNestedClasses: List<String> = emptyList(),
+    private val isOpen: Boolean = false,
+    private val baseClassRef: String? = null,
 ) {
     fun generate(builder: StringBuilder) {
         val visibility = if (exported) "public" else "private"
         // All flag spellings (including their order, with and without beforefieldinit) are
-        // ilasm-probe-verified (the nested one by objprobe_s6); the static-holder one is
-        // additionally frozen by the goldens.
+        // ilasm-probe-verified (the nested one by objprobe_s6, the non-sealed open-class one by
+        // inheritprobe_s1); the static-holder one is additionally frozen by the goldens.
         val beforeFieldInit = if (hasClassInitializer) "" else " beforefieldinit"
+        val sealed = if (isOpen) "" else " sealed"
         val flags = when {
             // A nested class is never a static holder here: the only nested shape emitted is
-            // the companion object, an instantiable singleton.
+            // the companion object, an instantiable singleton (and always final: isOpen never
+            // applies to the nested shape — the gate keeps companions final-only).
             isNested -> "nested $visibility auto ansi sealed$beforeFieldInit"
             isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"
-            else -> "$visibility auto ansi sealed$beforeFieldInit"
+            else -> "$visibility auto ansi$sealed$beforeFieldInit"
         }
         builder.appendLine(".class $flags ${className.toIlIdentifier()}")
-        builder.appendLine("       extends ${CORE_LIB_REF}System.Object")
+        builder.appendLine("       extends ${baseClassRef ?: "${CORE_LIB_REF}System.Object"}")
         builder.appendLine("{")
         for (nestedClass in renderedNestedClasses) {
             builder.append(nestedClass)
