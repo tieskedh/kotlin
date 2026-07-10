@@ -93,7 +93,7 @@ class BatchingPackageInserter(testServices: TestServices) : ReversibleSourceFile
     override fun processModule(module: TestModule, filesContent: MutableMap<TestFile, String>) {
         val isNative = testServices.targetPlatformProvider.getTargetPlatform(module).isNative()
         if (testServices.shouldIsolateTestInGroupingConfiguration(fileGenerationPhase = true)) {
-            return
+            return // Without grouping, packages are not altered, since no clashes can happen.
         }
         // At this point we can't get `project` from `compilerConfigurationProvider`, as it will cause infinite recursion.
         val psiFactory = createPsiFactory()
