@@ -105,14 +105,6 @@ class WasiBoxRunner(
             }
 
             val testFileText = originalFile.readText()
-
-            // Determine the exception-handling proposal directly from the test directives instead of
-            // building a second-stage compiler configuration. The latter is not possible when this
-            // runner is driven by the grouping stage (`modulesToArtifact` is empty), because creating
-            // a SECOND-stage configuration eagerly requires a registered `KLib` artifact for the
-            // queried module — absent for the `common`/metadata module of HMPP tests. This mirrors the
-            // logic in `WasmSecondStageEnvironmentConfigurator` (defaulting to `true` for the WASI
-            // target).
             val useNewExceptionProposal = testServices.useNewExceptionHandling(WasmTarget.WASI)
 
             val exceptions = vmsToCheck.mapNotNull { vm ->

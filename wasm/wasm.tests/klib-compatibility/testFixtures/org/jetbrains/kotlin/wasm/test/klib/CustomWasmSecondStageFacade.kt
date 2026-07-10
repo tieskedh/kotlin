@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.test.model.WasmFolderBinaryArtifact
 import org.jetbrains.kotlin.test.services.*
 import org.jetbrains.kotlin.test.services.configuration.WasmEnvironmentConfigurator.Companion.WASM_BASE_FILE_NAME
 import org.jetbrains.kotlin.test.services.sourceProviders.MainFunctionForBlackBoxTestsSourceProvider
+import org.jetbrains.kotlin.test.testInfraError
 import org.jetbrains.kotlin.test.util.parseLanguageFeature
 import org.jetbrains.kotlin.utils.addToStdlib.runIf
 import org.jetbrains.kotlin.utils.mapToSetOrEmpty
@@ -243,7 +244,7 @@ class CustomWasmSecondStageFacade internal constructor(
                             add(customWasmJsCompilerSettings.stdlib.absolutePath)
                             add(customWasmJsCompilerSettings.kotlinTest.absolutePath)
                         }
-                        WasmTarget.WASI -> error("WASI target is not supported yet")
+                        WasmTarget.WASI -> testInfraError("WASI target is not supported yet")
                     }
                 }
                 transitiveLibraries.mapTo(this) { it.absolutePath }
@@ -310,10 +311,7 @@ class CustomWasmSecondStageFacade internal constructor(
                     }
                 ),
                 runIf(regularAndFriendDependencies.isNotEmpty()) {
-                    listOf(
-                        CommonJsAndWasmCompilerArguments::libraries.cliArgument,
-                        regularAndFriendDependencies.joinToString(File.pathSeparator),
-                    )
+                    listOf(CommonJsAndWasmCompilerArguments::libraries.cliArgument(regularAndFriendDependencies.joinToString(File.pathSeparator)))
                 },
                 runIf(friendDependencies.isNotEmpty()) {
                     listOf(CommonJsAndWasmCompilerArguments::friendModules.cliArgument(friendDependencies.joinToString(File.pathSeparator)))

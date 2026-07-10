@@ -75,10 +75,7 @@ class WasmFirstStageInvoker(
                 ),
                 sources.filter { it.name.endsWith(".kt") }.map { it.absolutePath },
                 runIf(regularAndFriendDependencies.isNotEmpty()) {
-                    listOf(
-                        CommonJsAndWasmCompilerArguments::libraries.cliArgument,
-                        regularAndFriendDependencies.joinToString(File.pathSeparator),
-                    )
+                    listOf(CommonJsAndWasmCompilerArguments::libraries.cliArgument(regularAndFriendDependencies.joinToString(File.pathSeparator)))
                 },
                 runIf(friendDependencies.isNotEmpty()) {
                     listOf(CommonJsAndWasmCompilerArguments::friendModules.cliArgument(friendDependencies.joinToString(File.pathSeparator)))

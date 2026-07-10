@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.wasm.test.handlers
 
 import org.jetbrains.kotlin.test.NonGroupingStageOutput
 import org.jetbrains.kotlin.test.WrappedException
+import org.jetbrains.kotlin.test.checkTestInfrastructure
 import org.jetbrains.kotlin.test.groupingStageInputs
 import org.jetbrains.kotlin.test.isSingleTestBatch
 import org.jetbrains.kotlin.test.model.ArtifactKinds
@@ -133,26 +134,25 @@ abstract class AbstractWasmGroupingStageBoxRunner(
             return
 
         for (input in testServices.groupingStageInputs) {
-            // Skip tests that have no `box()` function in any of their modules. Such tests are
-            // driven by a custom JS entry point (e.g. `entry.mjs`) rather than by the unit-test
-            // runner, so they do not produce `##teamcity[testSuiteFinished` lines. Their pass /
-            // fail status is determined entirely by whether the VM throws when executing the
-            // custom entry script (handled separately by the failure path above).
-            if (!hasBoxMethod(input)) continue
-
+            // Make sure all grouped tests have `box()` function in any of their modules.
+            // Otherwise, tests must be driven by a custom JS entry point (e.g. `entry.mjs`) rather than by the unit-test runner, so must be isolated,
+            // since they do not produce `##teamcity[testSuiteFinished` lines and their pass / fail status is determined entirely
+            // by whether the VM throws when executing the custom entry script.
+            checkTestInfrastructure(hasBoxMethod(input)) {
+                "Test ${input.testInfo} does not have box() method, so its execution status cannot be verified via '##teamcity' output lines. " +
+                        "Please isolate this test using either existing ways in WasmGroupingTestIsolator or add a new rule there."
+            }
             val expectedSuiteNames = computeExpectedSuiteNames(input)
             if (expectedSuiteNames.any { it in unionFinished }) continue
 
             input.catchingExecutor.executeWithCatching({ WrappedException.FromGroupingHandler(it, this) }) {
-                throw AssertionError(
-                    "Sanity check failed: none of the expected '##teamcity[testSuiteFinished " +
-                            "name=<...>' lines were found in the VM output of the grouped batch. " +
-                            "Expected one of: $expectedSuiteNames. The test was " +
-                            "expected to run as part of the batch, but its TeamCity suite was " +
-                            "not finished. This typically indicates the test was silently " +
-                            "skipped by the unit test runner (e.g. due to a missing @Test " +
-                            "annotation, a stripped ProxyLauncher class, or a runtime error " +
-                            "before this test's class was reached). Collected outputs:\n" + collectedOutputs
+                throw AssertionError("""
+                    Sanity check failed: none of the expected '##teamcity[testSuiteFinished name=<...>' lines were found in the VM output of the grouped batch.
+                    Expected one of: $expectedSuiteNames. The test was expected to run as part of the batch, but its TeamCity suite was not finished.
+                    This typically indicates the test was silently skipped by the unit test runner (e.g. due to a missing @Test annotation,
+                    a stripped ProxyLauncher class, or a runtime error before this test's class was reached).
+                    Collected outputs:
+                    """.trimIndent() + collectedOutputs
                 )
             }
         }

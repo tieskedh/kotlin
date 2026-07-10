@@ -35,25 +35,19 @@ class WasmGroupingTestIsolator(testServices: TestServices) : GroupingTestIsolato
 
     override fun computeBatchToken(moduleStructure: TestModuleStructure): BatchToken {
         val isolationDirectives = listOf(
+            // some test failures can bring down an entire batch, so where those failures are expected, tests need to be run in isolated mode"
             CodegenTestDirectives.IGNORE_BACKEND,
             CodegenTestDirectives.IGNORE_BACKEND_K2,
-            WasmEnvironmentConfigurationDirectives.WASM_STANDALONE,
-            WasmEnvironmentConfigurationDirectives.RUN_THIRD_PARTY_OPTIMIZER,
-            WasmEnvironmentConfigurationDirectives.WASM_IGNORE_FOR,
-            WasmEnvironmentConfigurationDirectives.RUN_UNIT_TESTS,
-            JvmEnvironmentConfigurationDirectives.WITH_REFLECT,
-            JsEnvironmentConfigurationDirectives.CALL_MAIN,
-            // Tests carrying an `IGNORE_KLIB_*_WITH_CUSTOM_SECOND_STAGE` directive expect a specific stage
-            // (backend/frontend/runtime) to fail when compiled/run with the custom (previously released)
-            // second-stage compiler. Such an expected failure cannot be safely grouped: a backend error
-            // would abort the single shared `-Xinclude` link of the whole batch, and a runtime trap (e.g.
-            // KT-86478 `array element access out of bounds`) crashes the shared VM process, taking down
-            // every sibling test in the batch. Isolating these tests routes them through the per-test
-            // (box-export) path, so the expected failure is contained and attributed to this test alone
-            // (and then suppressed by `CustomKlibCompilerSecondStageTestSuppressor`).
             CustomKlibCompilerTestDirectives.IGNORE_KLIB_BACKEND_ERRORS_WITH_CUSTOM_SECOND_STAGE,
             CustomKlibCompilerTestDirectives.IGNORE_KLIB_FRONTEND_ERRORS_WITH_CUSTOM_SECOND_STAGE,
             CustomKlibCompilerTestDirectives.IGNORE_KLIB_RUNTIME_ERRORS_WITH_CUSTOM_SECOND_STAGE,
+            WasmEnvironmentConfigurationDirectives.WASM_IGNORE_FOR,
+            // other isolation reasons
+            WasmEnvironmentConfigurationDirectives.WASM_STANDALONE,
+            WasmEnvironmentConfigurationDirectives.RUN_THIRD_PARTY_OPTIMIZER,
+            WasmEnvironmentConfigurationDirectives.RUN_UNIT_TESTS,
+            JvmEnvironmentConfigurationDirectives.WITH_REFLECT,
+            JsEnvironmentConfigurationDirectives.CALL_MAIN,
         )
         if (isolationDirectives.any { it in moduleStructure.allDirectives })
             return BatchToken.Isolated
@@ -61,26 +55,19 @@ class WasmGroupingTestIsolator(testServices: TestServices) : GroupingTestIsolato
         if (moduleStructure.modules.any { module ->
                 // Isolate tests having non-Kotlin files
                 module.files.any { !it.name.endsWith(".kt") }
-                        // Multi-module tests with friend dependencies between their own modules (e.g.
-                        // `// MODULE: lib1` + `// MODULE: main()(lib1)`) cannot be safely grouped with other
-                        // tests. The Wasm grouping facade synthesizes a single `-Xinclude` launcher KLIB and
-                        // passes all per-test KLIBs as ordinary `-libraries`. The JS/Wasm compiler can express
-                        // friend-module relationships only for the included main module — there is no CLI to
-                        // declare friendship between two `-libraries`. As a result, friend visibility between
-                        // `main` and `lib1` of the same test is lost at IR link time, which manifests as e.g.
-                        // `kotlin.internal.IrLinkageError` or wrong override resolution for `internal open`
-                        // declarations crossing module boundaries. Isolating such tests routes them through
-                        // the isolated-batch path which preserves per-test friend dependencies.
+                        // Tests with friend dependencies between their own modules cannot be safely grouped with other tests
+                        // (e.g. `// MODULE: lib1` + `// MODULE: main()(lib1)`).
+                        // The Wasm grouping facade synthesizes a single `-Xinclude` launcher KLIB and passes all per-test KLIBs
+                        // as ordinary `-libraries`. The JS/Wasm compiler can express friend-module relationships only for the included main module:
+                        // there is no CLI to declare friendship between two `-libraries`. As a result, friend visibility between `main` and `lib1`
+                        // of the same test is lost at IR link time, which manifests as e.g. `kotlin.internal.IrLinkageError`
+                        // or wrong override resolution for `internal open` declarations crossing module boundaries.
+                        // Isolating such tests routes them through the isolated-batch path which preserves per-test friend dependencies.
                         || module.allDependencies.any { it.relation == DependencyRelation.FriendDependency }
             })
             return BatchToken.Isolated
 
-        // Tests with companion `.js`/`.mjs` files on disk (e.g. `class.js` next to `class.kt` for
-        // `@JsInterop` / `native` tests) have side effects at load time: `.mjs` companions are
-        // imported as ES modules by the glue, while `.js` companions are executed as plain scripts.
-        // When multiple such tests are batched together, their module/script side effects and
-        // global symbols can clash (e.g. two tests both define `function A(c)`), causing wrong
-        // results. Isolate them so each runs in its own VM.
+        // Tests with companion .js/.mjs files on disk are highly likely to break in grouped execution
         val hasCompanionJsFile = moduleStructure.originalTestDataFiles.any { file ->
             file.parentFile.resolve(file.nameWithoutExtension + ".js").exists() ||
             file.parentFile.resolve(file.nameWithoutExtension + ".mjs").exists() ||
