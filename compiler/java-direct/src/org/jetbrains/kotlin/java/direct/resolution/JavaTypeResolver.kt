@@ -67,6 +67,7 @@ internal fun resolveQualifiedNameToClassIdFromParts(
     // nested chain. Each candidate outer prefix is resolved with the same rules (recursively for
     // multi-part prefixes), so JLS 6.5.2 is respected — a nested-class interpretation wins as soon
     // as the outer prefix resolves to a class in scope.
+    require(parts.size > 1)
     for (i in 1 until parts.size) {
         val outerParts = parts.subList(0, i)
         val nestedParts = parts.subList(i, parts.size)

@@ -120,23 +120,6 @@ class JavaClassifierTypeOverAst(
                 // 3. INHERITED type parameters from outer class (low priority — shadowed by inner classes)
                 findInheritedTypeParameter(parts[0])?.let { return it }
             }
-
-            // Multi-part names: navigate from base class through inner classes. Each hop uses
-            // [declaredOrFullyInherited] so an intermediate segment inherited from any supertype
-            // representation still navigates correctly.
-            var current: JavaClassifier? = findClassInCurrentScope(parts[0])
-
-            if (current is JavaClass) {
-                for (i in 1 until parts.size) {
-                    val part = Name.identifier(parts[i])
-                    current = declaredOrFullyInherited(current as JavaClass, part)
-                        ?: return null
-                }
-                return current
-            }
-
-            // Cross-file branch: resolve to a `ClassId` and wrap it in a `FirBackedJavaClassAdapter`
-            // (null on sessions without a symbol provider).
             resolve(rawTypeName)?.let { return classifierAdapterFor(it) }
         }
         return null
