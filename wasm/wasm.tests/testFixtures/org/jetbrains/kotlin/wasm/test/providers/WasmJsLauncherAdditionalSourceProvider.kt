@@ -57,6 +57,7 @@ class WasmJsLauncherAdditionalSourceProvider(testServices: TestServices) : Abstr
          *   - `AbstractWasmGroupingStageBoxRunner.computeExpectedSuiteNames` consumes it
          *     as one of the expected `##teamcity[testSuiteFinished name='Launcher_<hash>'`
          *     markers when verifying that an isolated test from a grouped batch actually ran.
+         *  Should hash collisions ever happen here, please improve the logic
          */
         fun computeLauncherClassName(file: TestFile): String =
             "Launcher_${file.relativePath.hashCode().toUInt().toString(36)}"
