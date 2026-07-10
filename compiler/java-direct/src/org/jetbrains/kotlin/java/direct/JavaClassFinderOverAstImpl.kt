@@ -7,15 +7,9 @@
 
 package org.jetbrains.kotlin.java.direct
 
-import com.intellij.openapi.vfs.VirtualFile
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.java.direct.model.JavaPackageOverAst
-import org.jetbrains.kotlin.java.direct.resolution.JavaResolutionContext
-import org.jetbrains.kotlin.java.direct.resolution.LeanJavaClassFinder
-import org.jetbrains.kotlin.java.direct.resolution.registerJavaModelDirectSupertypeCacheIfAbsent
-import org.jetbrains.kotlin.java.direct.resolution.registerJavaModelInFlightResolutionsIfAbsent
-import org.jetbrains.kotlin.java.direct.resolution.registerJavaModelSupertypeWalkGuardIfAbsent
-import org.jetbrains.kotlin.java.direct.resolution.registerJavaModelTypeUseCacheIfAbsent
+import org.jetbrains.kotlin.java.direct.resolution.*
 import org.jetbrains.kotlin.java.direct.util.DefaultJavaSourceFileReader
 import org.jetbrains.kotlin.java.direct.util.JavaSourceFileReader
 import org.jetbrains.kotlin.java.direct.util.JavaSupertypeGraph
@@ -76,9 +70,8 @@ class JavaClassFinderOverAstImpl internal constructor(
     )
 
     private val supertypeGraph = JavaSupertypeGraph(
-        classCacheLookup = { classCache[it] },
-        filesForClassLookup = { classId -> packageIndexer.findFilesForClass(classId).map { it.file } },
-        sameClassInSameFilePackage = { pkg, name -> packageIndexer.ensurePackageIndexed(pkg).containsKey(name) },
+        packageIndexer = packageIndexer,
+        classCache = classCache,
         sourceFileReader = sourceFileReader,
     )
 

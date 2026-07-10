@@ -27,36 +27,21 @@ import org.jetbrains.kotlin.name.StandardClassIds
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Nullable variant of [org.jetbrains.kotlin.fir.resolve.providers.symbolProvider]: returns `null`
- * when the session has no [FirSymbolProvider] registered. Parsing-level unit fixtures build a
- * bare-bones [FirSession] without one and must short-circuit instead of throwing.
+ * Nullable variant of [org.jetbrains.kotlin.fir.resolve.providers.symbolProvider].
+ * Needed for parsing-level unit tests that use barely initialized sessions.
  */
 internal val FirSession.nullableSymbolProvider: FirSymbolProvider? by FirSession.nullableSessionComponentAccessor()
 
 /**
  * Per-session set of [ClassId]s currently being resolved by [cycleSafeClassLikeSymbol].
- *
  * Re-entrant probes for an in-flight [ClassId] return `null`/`false` to break the
  * `FirJavaClass.declarations` PUBLICATION-lazy cycle (KT-74097): symbol-provider lookup
  * materialises declarations, which calls back into model resolution, which probes here again.
+ * See [JavaCycleBreakerTest].
  *
- * Concretely, this fires when an annotation on a member of a Java class `C` has a simple name
- * that resolves to a candidate [ClassId] nested in `C`, and that candidate is probed through a
- * symbol provider that builds `C`'s nested-classifier scope by forcing `FirJavaClass.declarations`.
- * Materialising those declarations re-converts the same annotated member, which re-probes the same
- * candidate [ClassId]; the in-flight set short-circuits the second probe so resolution falls back
- * (e.g. to the top-level [ClassId] for that simple name) instead of recursing.
- *
- * See [JavaCycleBreakerTest] for more details.
- *
- * The marker is keyed per session: a re-entrant probe can arrive through a
- * different per-file context that wraps the same session, so the in-flight set must be shared
- * across them. It is a concurrent set, so the guard stays correct should resolution ever run on
- * more than one thread.
- *
- * Registered by [registerJavaModelInFlightResolutionsIfAbsent]; sessions without it skip the
- * guard but cannot enter the cycle anyway — [cycleSafeClassLikeSymbol] short-circuits at the
- * missing [FirSymbolProvider] before any recursion.
+ * Tied to session (a re-entrant probe can arrive through a different per-file context wrapping
+ * the same session) and concurrent. Sessions without it skip the guard but cannot enter the
+ * cycle anyway — [cycleSafeClassLikeSymbol] short-circuits at the missing [FirSymbolProvider].
  */
 internal class JavaModelInFlightResolutions : FirSessionComponent {
     val classIds: MutableSet<ClassId> = ConcurrentHashMap.newKeySet()
@@ -93,24 +78,13 @@ internal fun FirSession.cycleSafeClassLikeSymbol(classId: ClassId): FirClassLike
 
 /**
  * Per-session set of [ClassId]s whose Java supertype graph is currently being walked by
- * [cycleGuardedSupertypeWalk].
+ * [cycleGuardedSupertypeWalk]. Reentry returns the caller-supplied default without recursing,
+ * bounding direct (`A extends A`) and indirect (`A -> B -> A`) Java inheritance cycles — only
+ * possible in malformed source, but recursing on them would end in a `StackOverflowError`.
+ * See [JavaCycleBreakerTest].
  *
- * Re-entry to a [ClassId] already on the set returns the caller-supplied default without
- * recursing, which bounds direct (`A extends A`) and indirect (`A -> B -> A`) Java inheritance
- * cycles. Such cycles can only come from malformed Java source during error recovery; without this
- * guard, [directSupertypeClassIds] re-entering itself for the same `ClassId` (e.g. via a
- * supertype's own `.classifier` resolution looping back) would otherwise recurse until a
- * `StackOverflowError`.
- *
- * See [JavaCycleBreakerTest] for more details.
- *
- * Keyed per session for the same reason as [JavaModelInFlightResolutions]: a re-entrant walk can
- * arrive through a different per-file context that wraps the same session, so the active set must
- * be shared across them. It is a concurrent set, so the guard stays correct should resolution ever
- * run on more than one thread.
- *
- * Registered by [registerJavaModelSupertypeWalkGuardIfAbsent]; sessions without it run the walk
- * unguarded (parsing-level fixtures never build the cyclic supertype graphs that need bounding).
+ * Tied to session and concurrent, for the same reasons as [JavaModelInFlightResolutions].
+ * Sessions without it run the walk unguarded.
  */
 internal class JavaModelSupertypeWalkGuard : FirSessionComponent {
     val classIds: MutableSet<ClassId> = ConcurrentHashMap.newKeySet()
@@ -119,7 +93,6 @@ internal class JavaModelSupertypeWalkGuard : FirSessionComponent {
 private val FirSession.javaModelSupertypeWalkGuard: JavaModelSupertypeWalkGuard?
         by FirSession.nullableSessionComponentAccessor()
 
-/** Registers a [JavaModelSupertypeWalkGuard] on this session if one is not already present. */
 @OptIn(SessionConfiguration::class)
 internal fun FirSession.registerJavaModelSupertypeWalkGuardIfAbsent() {
     if (javaModelSupertypeWalkGuard == null) {
@@ -128,9 +101,7 @@ internal fun FirSession.registerJavaModelSupertypeWalkGuardIfAbsent() {
 }
 
 /**
- * Runs [block] guarded against re-entry on [classId]'s supertype walk: if [classId] is already
- * being walked on this session, returns [default] without invoking [block]; otherwise marks
- * [classId] in-flight, runs [block], and clears the mark in a `finally`.
+ * Runs [block] guarded against re-entry on [classId]'s supertype walk.
  *
  * Mirrors [cycleSafeClassLikeSymbol], but bounds the Java inheritance-graph cycle rather than the
  * KT-74097 PUBLICATION-lazy cycle. Sessions without [JavaModelSupertypeWalkGuard] run [block]
@@ -148,18 +119,10 @@ internal fun <R> FirSession.cycleGuardedSupertypeWalk(classId: ClassId, default:
 
 /**
  * Per-session `ClassId -> List<ClassId>` cache of resolved direct-supertype `ClassId`s for
- * [directSupertypeClassIds].
- *
- * A class's direct supertypes are a pure function of the class and the session, so memoizing them
- * turns the transitive supertype-closure walk that inherited-inner-class resolution performs from
- * repeated re-resolution — each source-arm `.classifier` read re-descends the hierarchy, so an
- * un-cached walk is exponential in the hierarchy depth — into a single computation per class.
- * Without it, resolving inherited inner classes over deep Java source hierarchies re-walks the
- * whole closure for every name at every level, which makes large mixed Kotlin/Java compilations
- * effectively hang.
- *
- * Registered by [registerJavaModelDirectSupertypeCacheIfAbsent]; sessions without it fall back to
- * the un-cached walk inside [directSupertypeClassIds].
+ * [directSupertypeClassIds]. A class's direct supertypes are a pure function of the class and
+ * the session; without this cache the transitive supertype-closure walks of
+ * inherited-inner-class resolution are exponential in the hierarchy depth and effectively hang
+ * large mixed Kotlin/Java compilations. Sessions without it fall back to the un-cached walk.
  */
 internal class JavaModelDirectSupertypeCache : FirSessionComponent {
     val classIdToSupertypes: ConcurrentHashMap<ClassId, List<ClassId>> = ConcurrentHashMap()
@@ -177,15 +140,9 @@ internal fun FirSession.registerJavaModelDirectSupertypeCacheIfAbsent() {
 }
 
 /**
- * Memoizes [compute] (the per-origin direct-supertype walk of [directSupertypeClassIds]) per
- * [classId] on the session, so each class's direct supertypes are resolved at most once.
- *
- * Only non-empty results are cached. An empty result is never authoritative here: it is what both
- * [cycleGuardedSupertypeWalk] and [cycleSafeClassLikeSymbol] return for a re-entrant / in-flight
- * [classId] (cycle break), so caching it could pin a transient empty over a class that does have
- * supertypes. Recomputing an empty result is cheap — a class with no cached supertypes either has
- * none (a root interface) or is mid-cycle — and the exponential re-resolution this cache exists to
- * prevent is driven entirely by classes that *do* have supertypes, which are cached.
+ * Memoizes [compute] per [classId] on the session. Only non-empty results are cached: an empty
+ * result is what the cycle guards return for an in-flight [classId], so caching it could pin a
+ * transient empty over a class that does have supertypes; recomputing an empty result is cheap.
  */
 internal fun FirSession.memoizedDirectSupertypeClassIds(
     classId: ClassId,
@@ -203,9 +160,6 @@ internal fun FirSession.memoizedDirectSupertypeClassIds(
  *
  * Populated by [isTypeUseAnnotationClass]; the predicate is a static property of the annotation
  * class, so the cache key is just the [ClassId] and entries never need invalidation.
- *
- * Registered by [registerJavaModelTypeUseCacheIfAbsent]; sessions without it fall back to the
- * un-cached path inside [isTypeUseAnnotationClass].
  */
 internal class JavaModelTypeUseClassIdCache : FirSessionComponent {
     val classIdToIsTypeUse: ConcurrentHashMap<ClassId, Boolean> = ConcurrentHashMap()
@@ -214,7 +168,6 @@ internal class JavaModelTypeUseClassIdCache : FirSessionComponent {
 private val FirSession.javaModelTypeUseClassIdCache: JavaModelTypeUseClassIdCache?
         by FirSession.nullableSessionComponentAccessor()
 
-/** Registers a [JavaModelTypeUseClassIdCache] on this session if one is not already present. */
 @OptIn(SessionConfiguration::class)
 internal fun FirSession.registerJavaModelTypeUseCacheIfAbsent() {
     if (javaModelTypeUseClassIdCache == null) {
@@ -227,8 +180,7 @@ internal fun FirSession.registerJavaModelTypeUseCacheIfAbsent() {
  * (Java) or `@Target(AnnotationTarget.TYPE)` (Kotlin), using [FirSession.symbolProvider] for the
  * `@Target` lookup.
  *
- * Result is cached on the session via [JavaModelTypeUseClassIdCache] so each annotation class
- * is probed at most once per build.
+ * Result is cached on the session via [JavaModelTypeUseClassIdCache].
  */
 internal fun FirSession.isTypeUseAnnotationClass(classId: ClassId): Boolean {
     val cache = javaModelTypeUseClassIdCache?.classIdToIsTypeUse
