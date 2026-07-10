@@ -142,7 +142,7 @@ internal class JsDtsGenerationOperationImpl private constructor(
                             false
                         )
                     } ?: throw CompilerArgumentsParseException("Unknown -module-kind value: $it")
-                } ?: JsModuleKind.PLAIN // todo: should it be a fallback to PLAIN?
+                } ?: JsModuleKind.UMD
         )
         val COMPILE_LONG_AS_BIG_INT: Option<Boolean> = Option("COMPILE_LONG_AS_BIG_INT", defaultArgsReference.compileLongAsBigInt ?: false) // todo should it be a fallback to false?
         val IMPLEMENT_INTERFACES: Option<Boolean> = Option("IMPLEMENT_INTERFACES", defaultArgsReference.allowImplementableInterfacesExporting)
