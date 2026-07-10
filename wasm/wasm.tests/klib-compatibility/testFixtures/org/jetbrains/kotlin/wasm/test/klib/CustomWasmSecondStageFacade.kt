@@ -105,8 +105,7 @@ import java.io.PrintStream
  * ### isolatedWithBox — Isolated batch, has `box()`
  *
  * Triggered when [isIsolatedBatch] is `true` and `batchLauncherFile != null`. This unified path handles
- * both single-module isolated tests and multi-module isolated tests (with or without `-Xfriend-modules`
- * declarations such as `// MODULE: main()(lib1)`).
+ * both isolated tests with or without `-Xfriend-modules` declarations such as `// MODULE: main()(lib1)`).
  *
  * Historically this was split into "Path B" (no friend dependencies, launcher KLIB used as `-Xinclude`)
  * and "Path C" (with friend dependencies, per-test KLIB used as `-Xinclude`). The two are now folded
