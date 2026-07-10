@@ -91,10 +91,10 @@ class WasmGroupingTestIsolator(testServices: TestServices) : GroupingTestIsolato
 
         if (moduleStructure.allDirectives[LanguageSettingsDirectives.LANGUAGE].any {
                 val feature = LanguageFeature.valueOf(it.removePrefix("+").removePrefix("-"))
-                feature == LanguageFeature.MultiPlatformProjects
-                        // Avoid batch-grouping path in presence of `testOnly` language features, since WasmFirstStageInvoker uses 1st stage CLI compiler
-                        // which does not accept testOnly language features, see `LanguageSettingsParser.parseLanguageFeature`
-                        || feature.testOnly
+                // Avoid batch-grouping path in presence of `testOnly` language features, since WasmFirstStageInvoker uses 1st stage CLI compiler
+                // which does not accept testOnly language features, see `LanguageSettingsParser.parseLanguageFeature`
+                //||
+                feature.testOnly
             }
         ) return BatchToken.Isolated
 
