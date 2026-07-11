@@ -20,6 +20,21 @@ import org.jetbrains.kotlin.test.services.moduleStructure
 import org.jetbrains.kotlin.wasm.test.tools.WasmVM
 import java.io.File
 
+/**
+ * The `test.mjs` launcher script for running the WASI unit-test runner (`startUnitTests()`):
+ * imports the compiled module and starts unit tests, exiting with code 1 on any uncaught exception.
+ */
+private fun startUnitTestsWasiScript(): String = """
+    try {
+        let jsModule = await import('./$WASM_BASE_FILE_NAME.mjs');
+        jsModule.startUnitTests();
+    } catch(e) {
+        console.log('Failed with exception!');
+        console.log(e);
+        process.exit(1);
+    }
+    """.trimIndent()
+
 // TODO reduce amount of duplicated code between this class and WasmBoxRunner
 class WasiBoxRunner(
     testServices: TestServices,
@@ -58,16 +73,7 @@ class WasiBoxRunner(
         val debugMode = DebugMode.fromSystemProperty("kotlin.wasm.debugMode")
         val startUnitTests = useUnitTestRunnerOnly || RUN_UNIT_TESTS in testServices.moduleStructure.allDirectives
 
-        val testWasiQuiet = if (useUnitTestRunnerOnly) """
-            try {
-                let jsModule = await import('./$WASM_BASE_FILE_NAME.mjs');
-                jsModule.startUnitTests();
-            } catch(e) {
-                console.log('Failed with exception!');
-                console.log(e);
-                process.exit(1);
-            }
-            """.trimIndent()
+        val testWasiQuiet = if (useUnitTestRunnerOnly) startUnitTestsWasiScript()
         else """
             let boxTestPassed = false;
             try {
@@ -165,16 +171,7 @@ open class WasmWasiFolderGroupingStageBoxRunner(
     private fun runOnFolder(folder: File): RunResult {
         val debugMode = DebugMode.fromSystemProperty("kotlin.wasm.debugMode")
 
-        val testWasi = """
-            try {
-                let jsModule = await import('./$WASM_BASE_FILE_NAME.mjs');
-                jsModule.startUnitTests();
-            } catch(e) {
-                console.log('Failed with exception!');
-                console.log(e);
-                process.exit(1);
-            }
-        """.trimIndent()
+        val testWasi = startUnitTestsWasiScript()
 
         File(folder, "test.mjs").writeText(testWasi)
 
