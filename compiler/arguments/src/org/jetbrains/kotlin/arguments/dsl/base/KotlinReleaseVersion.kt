@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.arguments.dsl.base
 
 import kotlinx.serialization.Serializable
 import org.jetbrains.kotlin.arguments.serialization.json.KotlinReleaseVersionAsNameSerializer
+import kotlin.collections.buildMap
 
 /**
  * Defines all Kotlin release versions.

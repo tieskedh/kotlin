@@ -8,6 +8,7 @@
 package org.jetbrains.kotlin.arguments.dsl
 
 import org.jetbrains.kotlin.arguments.dsl.base.ExperimentalArgumentApi
+import org.jetbrains.kotlin.arguments.dsl.base.KotlinReleaseVersion
 import org.jetbrains.kotlin.arguments.dsl.base.asReleaseDependent
 import org.jetbrains.kotlin.arguments.dsl.types.*
 
@@ -51,3 +52,29 @@ val SearchPathType.Companion.defaultNull: SearchPathType
 
 val PathListType.Companion.defaultEmpty: PathListType
     get() = PathListType()
+
+private val previousVersions: Map<KotlinReleaseVersion, KotlinReleaseVersion?> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    buildMap {
+        var previousVersion: KotlinReleaseVersion? = null
+        for (version in KotlinReleaseVersion.entries) {
+            this[version] = previousVersion
+            previousVersion = version
+        }
+    }
+}
+
+private val nextVersions: Map<KotlinReleaseVersion, KotlinReleaseVersion?> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    buildMap {
+        var nextVersion: KotlinReleaseVersion? = null
+        for (version in KotlinReleaseVersion.entries.reversed()) {
+            this[version] = nextVersion
+            nextVersion = version
+        }
+    }
+}
+
+val KotlinReleaseVersion.previous: KotlinReleaseVersion?
+    get() = previousVersions[this]
+
+val KotlinReleaseVersion.next: KotlinReleaseVersion?
+    get() = nextVersions[this]
