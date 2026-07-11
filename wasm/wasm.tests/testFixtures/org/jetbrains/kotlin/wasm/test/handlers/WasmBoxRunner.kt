@@ -138,45 +138,36 @@ open class WasmFolderGroupingStageBoxRunner(
         val folder = (artifact as WasmFolderBinaryArtifact).folder
 
         val inputs = testServices.groupingStageInputs
-        // An isolated test is compiled without the `@Test` launcher and with `box()` exported as
-        // `@JsExport` (see `WasmJsLauncherAdditionalSourceProvider` and `WasmJsExportBoxPreprocessor`),
-        // so it must be executed the same way `WasmBoxRunner` runs `FirWasmJsCodegenBoxTestGenerated`:
-        // call `jsModule.box()` and assert `"OK"`, rather than driving the unit-test runner and
-        // verifying TeamCity suite markers. Non-isolated batches (real multi-test batches and tests that
-        // merely carry a unique batch token) are linked with a `ProxyBatchLauncher` and keep using the
-        // unit-test runner, because their `box()` is reached internally via FQN and is not exported.
+        // Determine execution mode based on test isolation and configuration:
+        // - Box export mode: Isolated tests call box() directly and expect "OK"
+        // - Unit test mode: Batched tests use the unit-test runner with TeamCity markers
         val useBoxExport =
             firstNonGroupingTestServices.shouldIsolateTestInGroupingConfiguration(fileGenerationPhase = true) &&
                     RUN_UNIT_TESTS !in firstNonGroupingTestServices.moduleStructure.allDirectives &&
                     hasBoxMethod(inputs.first())
+
         if (useBoxExport) {
             val input = inputs.first()
             val exceptions = wasmFolderBoxRunner.saveAdditionalFilesAndRun(
                 folder, "dev", mutableSetOf(),
-                useUnitTestRunnerOnly = false,
-                outputCollector = null,
+                useUnitTestRunnerOnly = false, // Call box() directly
+                outputCollector = null, // No TeamCity output collection
             )
             if (exceptions.isNotEmpty()) {
                 input.catchingExecutor.executeWithCatching({ WrappedException.FromGroupingHandler(it, this) }) {
                     throw exceptions.first()
                 }
             }
-            return
+        } else {
+            val collectedOutputs = mutableListOf<String>()
+            val throwables = wasmFolderBoxRunner.saveAdditionalFilesAndRun(
+                folder, "dev", mutableSetOf(),
+                useUnitTestRunnerOnly = true, // Use unit-test runner
+                outputCollector = collectedOutputs, // Collect TeamCity markers
+            )
+            val runResult = RunResult(collectedOutputs, throwables)
+            handleRunResult(runResult)
         }
-
-        val runResult = runOnFolder(folder)
-        handleRunResult(runResult)
-    }
-
-    private fun runOnFolder(folder: File): RunResult {
-        val collectedOutputs = mutableListOf<String>()
-        val throwables = wasmFolderBoxRunner.saveAdditionalFilesAndRun(
-            folder, "dev", mutableSetOf(),
-            useUnitTestRunnerOnly = true,
-            outputCollector = collectedOutputs,
-        )
-        // There's no need for `processExceptions(exceptions)` here, since after return, `handleRunResult(runResult)` will do the exception processing
-        return RunResult(collectedOutputs, throwables)
     }
 }
 
