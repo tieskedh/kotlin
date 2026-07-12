@@ -162,21 +162,24 @@ open class WasmWasiFolderGroupingStageBoxRunner(
         get() = testServices.groupingStageInputs.first().testServices
     private val vmsToCheck: List<WasmVM> = listOf(WasmVM.NodeJs, WasmVM.WasmEdge, WasmVM.Wasmtime)
 
-    override fun processArtifact(artifact: BinaryArtifacts.Wasm) {
-        val folder = (artifact as WasmFolderBinaryArtifact).folder
-        val runResult = runOnFolder(folder)
-        handleRunResult(runResult)
+    override fun shouldUseBoxExportMode(): Boolean {
+        // WASI tests always use the unit-test runner, never box export mode
+        return false
     }
 
-    private fun runOnFolder(folder: File): RunResult {
+    override fun runTestCode(
+        artifact: BinaryArtifacts.Wasm,
+        useUnitTestRunnerOnly: Boolean,
+        outputCollector: MutableList<String>?,
+    ): List<Throwable> {
+        val folder = (artifact as WasmFolderBinaryArtifact).folder
         val debugMode = DebugMode.fromSystemProperty("kotlin.wasm.debugMode")
 
         val testWasi = startUnitTestsWasiScript()
-
         File(folder, "test.mjs").writeText(testWasi)
 
-        val collectedOutputs = mutableListOf<String>()
-        val exceptions = vmsToCheck.mapNotNull { vm ->
+        val collectedOutputs = outputCollector ?: mutableListOf()
+        return vmsToCheck.mapNotNull { vm ->
             vm.runWithCaughtExceptions(
                 debugMode = debugMode,
                 firstNonGroupingTestServices.useNewExceptionHandling(WasmTarget.WASI),
@@ -187,7 +190,5 @@ open class WasmWasiFolderGroupingStageBoxRunner(
                 outputCollector = collectedOutputs,
             )
         }
-        // There's no need for `processExceptions(exceptions)` here, since after return, `handleRunResult(runResult)` will do the exception processing
-        return RunResult(collectedOutputs, exceptions)
     }
 }

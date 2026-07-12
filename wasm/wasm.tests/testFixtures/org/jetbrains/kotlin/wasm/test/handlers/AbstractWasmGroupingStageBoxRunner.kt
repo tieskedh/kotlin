@@ -52,6 +52,55 @@ abstract class AbstractWasmGroupingStageBoxRunner(
         val exceptions: List<Throwable>,
     )
 
+    /**
+     * Determines whether to use
+     * - box-export mode: call `box()` directly and expect "OK" return value or
+     * - unit-test mode: use the unit-test runner with TeamCity markers.
+     */
+    protected abstract fun shouldUseBoxExportMode(): Boolean
+
+    /**
+     * Runs the test code for the given artifact and returns any exceptions that occurred.
+     *
+     * @param artifact the compiled WASM artifact to execute
+     * @param useUnitTestRunnerOnly if true, use the unit-test runner; if false, call `box()` directly
+     * @param outputCollector if non-null, collects stdout from VM executions (for TeamCity marker parsing)
+     * @return list of exceptions thrown during test execution
+     */
+    protected abstract fun runTestCode(
+        artifact: BinaryArtifacts.Wasm,
+        useUnitTestRunnerOnly: Boolean,
+        outputCollector: MutableList<String>?,
+    ): List<Throwable>
+
+    override fun processArtifact(artifact: BinaryArtifacts.Wasm) {
+        val inputs = testServices.groupingStageInputs
+
+        if (shouldUseBoxExportMode()) {
+            // Box export mode: call box() directly and expect "OK"
+            val input = inputs.first()
+            val exceptions = runTestCode(
+                artifact,
+                useUnitTestRunnerOnly = false,
+                outputCollector = null,
+            )
+            if (exceptions.isNotEmpty()) {
+                input.catchingExecutor.executeWithCatching({ WrappedException.FromGroupingHandler(it, this) }) {
+                    throw exceptions.first()
+                }
+            }
+        } else {
+            // Unit test mode: use unit-test runner with TeamCity markers
+            val collectedOutputs = mutableListOf<String>()
+            val exceptions = runTestCode(
+                artifact,
+                useUnitTestRunnerOnly = true,
+                outputCollector = collectedOutputs,
+            )
+            handleRunResult(RunResult(collectedOutputs, exceptions))
+        }
+    }
+
     protected fun handleRunResult(runResult: RunResult) {
         val (collectedOutputs, exceptions) = runResult
 

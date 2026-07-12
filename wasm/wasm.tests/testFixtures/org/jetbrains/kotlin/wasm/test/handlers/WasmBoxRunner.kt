@@ -8,7 +8,6 @@ package org.jetbrains.kotlin.wasm.test.handlers
 import org.jetbrains.kotlin.backend.wasm.WasmCompilerResult
 import org.jetbrains.kotlin.backend.wasm.writeCompilationResult
 import org.jetbrains.kotlin.test.DebugMode
-import org.jetbrains.kotlin.test.WrappedException
 import org.jetbrains.kotlin.test.directives.WasmEnvironmentConfigurationDirectives.RUN_UNIT_TESTS
 import org.jetbrains.kotlin.test.groupingStageInputs
 import org.jetbrains.kotlin.test.impl.shouldIsolateTestInGroupingConfiguration
@@ -134,40 +133,22 @@ open class WasmFolderGroupingStageBoxRunner(
     private val wasmFolderBoxRunner: WasmFolderBoxRunner
         get() = WasmFolderBoxRunner(firstNonGroupingTestServices, executeWithV8Only = executeWithV8Only)
 
-    override fun processArtifact(artifact: BinaryArtifacts.Wasm) {
+    override fun shouldUseBoxExportMode(): Boolean =
+        firstNonGroupingTestServices.shouldIsolateTestInGroupingConfiguration(fileGenerationPhase = true) &&
+                RUN_UNIT_TESTS !in firstNonGroupingTestServices.moduleStructure.allDirectives &&
+                hasBoxMethod(testServices.groupingStageInputs.first())
+
+    override fun runTestCode(
+        artifact: BinaryArtifacts.Wasm,
+        useUnitTestRunnerOnly: Boolean,
+        outputCollector: MutableList<String>?,
+    ): List<Throwable> {
         val folder = (artifact as WasmFolderBinaryArtifact).folder
-
-        val inputs = testServices.groupingStageInputs
-        // Determine execution mode based on test isolation and configuration:
-        // - Box export mode: Isolated tests call box() directly and expect "OK"
-        // - Unit test mode: Batched tests use the unit-test runner with TeamCity markers
-        val useBoxExport =
-            firstNonGroupingTestServices.shouldIsolateTestInGroupingConfiguration(fileGenerationPhase = true) &&
-                    RUN_UNIT_TESTS !in firstNonGroupingTestServices.moduleStructure.allDirectives &&
-                    hasBoxMethod(inputs.first())
-
-        if (useBoxExport) {
-            val input = inputs.first()
-            val exceptions = wasmFolderBoxRunner.saveAdditionalFilesAndRun(
-                folder, "dev", mutableSetOf(),
-                useUnitTestRunnerOnly = false, // Call box() directly
-                outputCollector = null, // No TeamCity output collection
-            )
-            if (exceptions.isNotEmpty()) {
-                input.catchingExecutor.executeWithCatching({ WrappedException.FromGroupingHandler(it, this) }) {
-                    throw exceptions.first()
-                }
-            }
-        } else {
-            val collectedOutputs = mutableListOf<String>()
-            val throwables = wasmFolderBoxRunner.saveAdditionalFilesAndRun(
-                folder, "dev", mutableSetOf(),
-                useUnitTestRunnerOnly = true, // Use unit-test runner
-                outputCollector = collectedOutputs, // Collect TeamCity markers
-            )
-            val runResult = RunResult(collectedOutputs, throwables)
-            handleRunResult(runResult)
-        }
+        return wasmFolderBoxRunner.saveAdditionalFilesAndRun(
+            folder, "dev", mutableSetOf(),
+            useUnitTestRunnerOnly = useUnitTestRunnerOnly,
+            outputCollector = outputCollector,
+        )
     }
 }
 

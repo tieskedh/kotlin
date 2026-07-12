@@ -46,58 +46,32 @@ open class WasmCompilationSetsGroupingStageBoxRunner(
             firstNonGroupingTestServices.targetPlatformProvider.getTargetPlatform(it).isWasmWasi()
         }
 
-    private fun runWasmCode(
-        artifact: WasmCompilationSetsBinaryArtifact,
-        useUnitTestRunnerOnly: Boolean,
-        throwOnExceptions: Boolean,
-        outputCollector: MutableList<String>?,
-    ): List<Throwable> = if (isWasiTarget) {
-        wasiBoxRunner.runWasmCode(artifact, useUnitTestRunnerOnly, outputCollector, throwOnExceptions)
-    } else {
-        wasmBoxRunner.runWasmCode(artifact, useUnitTestRunnerOnly, outputCollector, throwOnExceptions)
-    }
-
-    override fun processArtifact(artifact: BinaryArtifacts.Wasm) {
-        check(artifact is WasmCompilationSetsBinaryArtifact) {
-            "Unexpected artifact type: ${artifact::class}"
-        }
-
+    override fun shouldUseBoxExportMode(): Boolean {
         val inputs = testServices.groupingStageInputs
         // Global invariant: a batch of a single test is always run as a standalone box-export test,
         // regardless of why it ended up alone in the batch (isolated, or merely a unique batch token).
+        // Single-test box tests without RUN_UNIT_TESTS are compiled without the `@Test` launcher
+        // (see `WasmJsLauncherAdditionalSourceProvider`), so they must be executed by calling
+        // `jsModule.box()` and asserting "OK", rather than driving the unit-test runner.
         val isSingleTestBatch = testServices.isSingleTestBatch()
+        return isSingleTestBatch &&
+                RUN_UNIT_TESTS !in firstNonGroupingTestServices.moduleStructure.allDirectives &&
+                hasBoxMethod(inputs.first())
+    }
 
-        // A single-test box test that does not exercise the unit-test runner is compiled without the
-        // `@Test` launcher (see `WasmJsLauncherAdditionalSourceProvider`), so it must be executed the
-        // same way `WasmBoxRunner` runs `FirWasmJsCodegenBoxTestGenerated`: call `jsModule.box()` and
-        // assert `"OK"`, rather than driving the unit-test runner and verifying TeamCity suite markers.
-        if (isSingleTestBatch &&
-            RUN_UNIT_TESTS !in firstNonGroupingTestServices.moduleStructure.allDirectives &&
-            hasBoxMethod(inputs.first())
-        ) {
-            val input = inputs.first()
-            val exceptions = runWasmCode(
-                artifact,
-                useUnitTestRunnerOnly = false,
-                throwOnExceptions = false,
-                outputCollector = null,
-            )
-            if (exceptions.isNotEmpty()) {
-                input.catchingExecutor.executeWithCatching({ WrappedException.FromGroupingHandler(it, this) }) {
-                    throw exceptions.first()
-                }
-            }
-            return
+    override fun runTestCode(
+        artifact: BinaryArtifacts.Wasm,
+        useUnitTestRunnerOnly: Boolean,
+        outputCollector: MutableList<String>?,
+    ): List<Throwable> {
+        check(artifact is WasmCompilationSetsBinaryArtifact) {
+            "Unexpected artifact type: ${artifact::class}"
         }
-
-        val collectedOutputs = mutableListOf<String>()
-        val exceptions = runWasmCode(
-            artifact,
-            useUnitTestRunnerOnly = true,
-            throwOnExceptions = false,
-            outputCollector = collectedOutputs,
-        )
-        handleRunResult(RunResult(collectedOutputs, exceptions))
+        return if (isWasiTarget) {
+            wasiBoxRunner.runWasmCode(artifact, useUnitTestRunnerOnly, outputCollector, throwOnExceptions = false)
+        } else {
+            wasmBoxRunner.runWasmCode(artifact, useUnitTestRunnerOnly, outputCollector, throwOnExceptions = false)
+        }
     }
 }
 
