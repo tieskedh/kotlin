@@ -37,12 +37,6 @@ open class WasmCompilationSetsGroupingStageBoxRunner(
     private val wasiBoxRunner: WasiBoxRunner
         get() = WasiBoxRunner(firstNonGroupingTestServices)
 
-    // WASI box tests cannot be executed on the JS engines (V8/SpiderMonkey/JSC) used by
-    // [WasmBoxRunner]: the emitted `index.mjs` does `import { WASI } from 'wasi'`, which only the
-    // WASI VMs (NodeJs/WasmEdge/Wasmtime) driven by [WasiBoxRunner] can resolve. So for the WASI
-    // target we delegate to [WasiBoxRunner], mirroring how the CLI path uses
-    // [WasmWasiFolderGroupingStageBoxRunner] instead of [WasmFolderGroupingStageBoxRunner].
-    //
     // The target is detected from the module target platforms rather than from a compiler
     // configuration: building a second-stage configuration eagerly requires a registered `KLib`
     // artifact for the queried module, which is absent for the `common`/metadata module of HMPP
