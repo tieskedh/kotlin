@@ -56,7 +56,7 @@ class WasmAdditionalSourceProvider(testServices: TestServices) : AdditionalSourc
         testModuleStructure: TestModuleStructure
     ): List<TestFile> {
         if (WasmEnvironmentConfigurationDirectives.NO_COMMON_FILES in module.directives) return emptyList()
-        // Add the files only to modules with no dependencies to avoid duplicates in multi-module tests.
+        // Add the files only to modules with no dependencies to avoid duplicates in case of multiple `// MODULE` test directives.
         if (module.allDependencies.isNotEmpty()) {
             return emptyList()
         }
