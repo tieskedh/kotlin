@@ -1,0 +1,3 @@
+// EXISTS: empty.il
+// CONTAINS: empty.il, .entrypoint
+// NOT_CONTAINS: empty.il, System.Console::WriteLine

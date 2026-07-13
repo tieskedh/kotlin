@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.fir.session
 
+import org.jetbrains.kotlin.analyzer.common.CommonDefaultImportsProvider
 import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.LanguageVersionSettings
@@ -19,6 +20,7 @@ import org.jetbrains.kotlin.fir.languageVersionSettings
 import org.jetbrains.kotlin.fir.resolve.providers.FirSymbolProvider
 import org.jetbrains.kotlin.fir.resolve.providers.impl.FirCloneableSymbolProvider
 import org.jetbrains.kotlin.fir.resolve.providers.impl.FirFallbackBuiltinSymbolProvider
+import org.jetbrains.kotlin.fir.scopes.FirDefaultImportsProviderHolder
 import org.jetbrains.kotlin.fir.scopes.FirKotlinScopeProvider
 import org.jetbrains.kotlin.fir.scopes.impl.FirEnumEntriesSupport
 import org.jetbrains.kotlin.fir.session.environment.AbstractProjectEnvironment
@@ -161,6 +163,7 @@ abstract class AbstractFirMetadataSessionFactory(
             onWasmWasiPlatform = { registerLibrarySessionComponents(c = null) },
             onNativePlatform = { registerLibrarySessionComponents(c = null) },
         )
+        registerDotNetMetadataComponentsIfNeeded()
     }
 
     // ==================================== Platform session ====================================
@@ -257,6 +260,7 @@ abstract class AbstractFirMetadataSessionFactory(
             onWasmWasiPlatform = { registerSourceSessionComponents(c = null) },
             onNativePlatform = { registerSourceSessionComponents(c = null) },
         )
+        registerDotNetMetadataComponentsIfNeeded()
     }
 
     override val requiresSpecialSetupOfSourceProvidersInHmppCompilation: Boolean
@@ -321,6 +325,12 @@ abstract class AbstractFirMetadataSessionFactory(
             with(FirNativeSessionFactory.ForMetadata) {
                 onNativePlatform()
             }
+        }
+    }
+
+    private fun FirSession.registerDotNetMetadataComponentsIfNeeded() {
+        if (targetPlatform.has<DotNetPlatform>()) {
+            register(FirDefaultImportsProviderHolder.of(CommonDefaultImportsProvider))
         }
     }
 }
