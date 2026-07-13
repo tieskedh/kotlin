@@ -312,6 +312,7 @@ public abstract class AbstractCliTest extends TestCaseWithTmpdir {
                 .replace(TESTDATA_DIR, testDataDir.getAbsolutePath());
 
         str = replaceIfNeeded(str, "$STDLIB_COMMON_PATH$", () -> ForTestCompileRuntime.stdlibCommonForTests().getAbsolutePath());
+        str = replaceIfNeeded(str, "$STDLIB_JVM_PATH$", () -> ForTestCompileRuntime.runtimeJarForTests().getAbsolutePath());
         str = replaceIfNeeded(str, "$FOREIGN_ANNOTATIONS_DIR$", () -> ForTestCompileRuntime.thirdPartyAnnotations().getAbsolutePath());
         str = replaceIfNeeded(str, "$JSR_305_DECLARATIONS$", () -> ForTestCompileRuntime.thirdPartyJsr305ForTests().getAbsolutePath());
         str = replaceIfNeeded(str, "$FOREIGN_JAVA8_ANNOTATIONS_DIR$", () -> ForTestCompileRuntime.thirdPartyJava8AnnotationsForTests().getAbsolutePath());
