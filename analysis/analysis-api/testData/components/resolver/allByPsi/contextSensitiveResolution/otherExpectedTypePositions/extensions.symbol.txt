@@ -46,7 +46,7 @@ KtUserType(129,136): 'MyClass'
 KtNameReferenceExpression(129,136): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -55,7 +55,7 @@ KtNameReferenceExpression(129,136): 'MyClass'
 KtNameReferenceExpression(137,146): 'Companion'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.Companion
@@ -76,7 +76,7 @@ KtUserType(152,159): 'MyClass'
 KtNameReferenceExpression(152,159): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -97,7 +97,7 @@ KtCallExpression(168,177): 'MyClass()'
 KtNameReferenceExpression(168,175): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -130,7 +130,7 @@ KtUserType(198,205): 'MyClass'
 KtNameReferenceExpression(198,205): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -158,7 +158,7 @@ KtCallExpression(228,244): 'foo(MyClass.bar)'
 KtNameReferenceExpression(228,231): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /foo(a: MyClass): kotlin.Unit
@@ -181,7 +181,7 @@ KtDotQualifiedExpression(232,243): 'MyClass.bar'
 KtNameReferenceExpression(232,239): 'MyClass'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.Companion
@@ -190,7 +190,7 @@ KtNameReferenceExpression(232,239): 'MyClass'
 KtNameReferenceExpression(240,243): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       val bar: MyClass2
@@ -206,7 +206,7 @@ KtCallExpression(249,257): 'foo(bar)'
 KtNameReferenceExpression(249,252): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /foo(a: MyClass): kotlin.Unit
@@ -221,7 +221,7 @@ KtValueArgument(253,256): 'bar'
 KtNameReferenceExpression(253,256): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'bar'.>
@@ -262,7 +262,7 @@ KtUserType(306,314): 'MyClass2'
 KtNameReferenceExpression(306,314): 'MyClass2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass2
@@ -271,7 +271,7 @@ KtNameReferenceExpression(306,314): 'MyClass2'
 KtNameReferenceExpression(315,324): 'Companion'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass2.Companion
@@ -292,7 +292,7 @@ KtUserType(330,338): 'MyClass2'
 KtNameReferenceExpression(330,338): 'MyClass2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass2
@@ -313,7 +313,7 @@ KtCallExpression(347,357): 'MyClass2()'
 KtNameReferenceExpression(347,355): 'MyClass2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass2
@@ -346,7 +346,7 @@ KtUserType(371,379): 'MyClass2'
 KtNameReferenceExpression(371,379): 'MyClass2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass2
@@ -373,7 +373,7 @@ KtCallExpression(403,421): 'foo2(MyClass2.bar)'
 KtNameReferenceExpression(403,407): 'foo2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /foo2(a: MyClass2): kotlin.Unit
@@ -394,7 +394,7 @@ KtDotQualifiedExpression(408,420): 'MyClass2.bar'
 KtNameReferenceExpression(408,416): 'MyClass2'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass2.Companion
@@ -403,7 +403,7 @@ KtNameReferenceExpression(408,416): 'MyClass2'
 KtNameReferenceExpression(417,420): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val bar: MyClass2
@@ -418,7 +418,7 @@ KtCallExpression(426,435): 'foo2(bar)'
 KtNameReferenceExpression(426,430): 'foo2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /foo2(a: MyClass2): kotlin.Unit
@@ -433,7 +433,7 @@ KtValueArgument(431,434): 'bar'
 KtNameReferenceExpression(431,434): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val bar: MyClass2

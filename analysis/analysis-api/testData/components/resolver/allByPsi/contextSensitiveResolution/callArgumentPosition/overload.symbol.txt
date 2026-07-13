@@ -49,7 +49,7 @@ KtUserType(143,150): 'MyClass'
 KtNameReferenceExpression(143,150): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -94,7 +94,7 @@ KtUserType(211,217): 'MyEnum'
 KtNameReferenceExpression(211,217): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -103,7 +103,7 @@ KtNameReferenceExpression(211,217): 'MyEnum'
 KtNameReferenceExpression(223,226): 'arg'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       arg: MyEnum
@@ -133,7 +133,7 @@ KtUserType(245,252): 'MyClass'
 KtNameReferenceExpression(245,252): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -142,7 +142,7 @@ KtNameReferenceExpression(245,252): 'MyClass'
 KtNameReferenceExpression(256,259): 'arg'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       arg: MyClass
@@ -168,7 +168,7 @@ KtCallExpression(277,297): 'overload(EnumValue1)'
 KtNameReferenceExpression(277,285): 'overload'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /overload(arg: MyClass): MyClass,
@@ -185,7 +185,7 @@ KtValueArgument(286,296): 'EnumValue1'
 KtNameReferenceExpression(286,296): 'EnumValue1'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'EnumValue1'.>
@@ -208,7 +208,7 @@ KtUserType(311,317): 'MyEnum'
 KtNameReferenceExpression(311,317): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -225,7 +225,7 @@ KtCallExpression(320,340): 'overload(EnumValue1)'
 KtNameReferenceExpression(320,328): 'overload'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /overload(arg: MyClass): MyClass,
@@ -242,7 +242,7 @@ KtValueArgument(329,339): 'EnumValue1'
 KtNameReferenceExpression(329,339): 'EnumValue1'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'EnumValue1'.>
@@ -258,7 +258,7 @@ KtCallExpression(346,371): 'overload(InheritorObject)'
 KtNameReferenceExpression(346,354): 'overload'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /overload(arg: MyClass): MyClass,
@@ -275,7 +275,7 @@ KtValueArgument(355,370): 'InheritorObject'
 KtNameReferenceExpression(355,370): 'InheritorObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'InheritorObject'.>
@@ -304,7 +304,7 @@ KtUserType(394,400): 'MyEnum'
 KtNameReferenceExpression(394,400): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -322,7 +322,7 @@ KtCallExpression(404,427): 'println("Enum version")'
 KtNameReferenceExpression(404,411): 'println'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/io/println(message: kotlin.Any?): kotlin.Unit
@@ -358,7 +358,7 @@ KtCallExpression(448,484): 'println("Without arguments version")'
 KtNameReferenceExpression(448,455): 'println'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/io/println(message: kotlin.Any?): kotlin.Unit
@@ -394,7 +394,7 @@ KtCallExpression(506,527): 'overload2(EnumValue1)'
 KtNameReferenceExpression(506,515): 'overload2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /overload2(arg: MyEnum): kotlin.Unit
@@ -409,7 +409,7 @@ KtValueArgument(516,526): 'EnumValue1'
 KtNameReferenceExpression(516,526): 'EnumValue1'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum.EnumValue1
@@ -439,7 +439,7 @@ KtUserType(549,555): 'MyEnum'
 KtNameReferenceExpression(549,555): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -457,7 +457,7 @@ KtCallExpression(559,582): 'println("Enum version")'
 KtNameReferenceExpression(559,566): 'println'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/io/println(message: kotlin.Any?): kotlin.Unit
@@ -499,7 +499,7 @@ KtUserType(604,610): 'MyEnum'
 KtNameReferenceExpression(604,610): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -523,7 +523,7 @@ KtUserType(615,621): 'String'
 KtNameReferenceExpression(615,621): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -544,7 +544,7 @@ KtCallExpression(630,657): 'println("With 2 arguments")'
 KtNameReferenceExpression(630,637): 'println'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/io/println(message: kotlin.Any?): kotlin.Unit
@@ -580,7 +580,7 @@ KtCallExpression(679,700): 'overload3(EnumValue1)'
 KtNameReferenceExpression(679,688): 'overload3'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /overload3(arg: MyEnum): kotlin.Unit
@@ -595,7 +595,7 @@ KtValueArgument(689,699): 'EnumValue1'
 KtNameReferenceExpression(689,699): 'EnumValue1'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum.EnumValue1

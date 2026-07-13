@@ -7,7 +7,7 @@ KtPackageDirective(0,9): 'package r'
 KtNameReferenceExpression(8,9): 'r'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       r
@@ -49,7 +49,7 @@ KtUserType(40,43): 'Int'
 KtNameReferenceExpression(40,43): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int

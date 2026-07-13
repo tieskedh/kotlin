@@ -1,7 +1,7 @@
 KtNameReferenceExpression(61,68): 'Generic'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       test/Generic

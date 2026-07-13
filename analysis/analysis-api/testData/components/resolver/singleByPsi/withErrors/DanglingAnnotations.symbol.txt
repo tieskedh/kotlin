@@ -1,7 +1,7 @@
 KtNameReferenceExpression(63,67): 'Ann0'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<OTHER_ERROR: Unresolved name: Ann0>

@@ -7,7 +7,7 @@ KtPackageDirective(16,27): 'package one'
 KtNameReferenceExpression(24,27): 'one'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one
@@ -28,7 +28,7 @@ KtDotQualifiedExpression(36,50): 'kotlin.reflect'
 KtNameReferenceExpression(36,42): 'kotlin'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin
@@ -37,7 +37,7 @@ KtNameReferenceExpression(36,42): 'kotlin'
 KtNameReferenceExpression(43,50): 'reflect'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin.reflect
@@ -46,7 +46,7 @@ KtNameReferenceExpression(43,50): 'reflect'
 KtNameReferenceExpression(51,57): 'KClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/reflect/KClass
@@ -85,7 +85,7 @@ KtUserType(60,70): 'Repeatable'
 KtNameReferenceExpression(60,70): 'Repeatable'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/annotation/Repeatable
@@ -115,7 +115,7 @@ KtUserType(111,119): 'IntArray'
 KtNameReferenceExpression(111,119): 'IntArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/IntArray
@@ -154,7 +154,7 @@ KtUserType(123,133): 'Repeatable'
 KtNameReferenceExpression(123,133): 'Repeatable'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/annotation/Repeatable
@@ -184,7 +184,7 @@ KtUserType(173,182): 'KClass<*>'
 KtNameReferenceExpression(173,179): 'KClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/reflect/KClass
@@ -229,7 +229,7 @@ KtUserType(186,196): 'Repeatable'
 KtNameReferenceExpression(186,196): 'Repeatable'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/annotation/Repeatable
@@ -259,7 +259,7 @@ KtUserType(243,259): 'Array<KClass<*>>'
 KtNameReferenceExpression(243,248): 'Array'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Array
@@ -286,7 +286,7 @@ KtUserType(249,258): 'KClass<*>'
 KtNameReferenceExpression(249,255): 'KClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/reflect/KClass
@@ -328,7 +328,7 @@ KtUserType(318,338): 'Array<AnnoWithArray>'
 KtNameReferenceExpression(318,323): 'Array'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Array
@@ -355,7 +355,7 @@ KtUserType(324,337): 'AnnoWithArray'
 KtNameReferenceExpression(324,337): 'AnnoWithArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArray
@@ -391,7 +391,7 @@ KtUserType(382,388): 'String'
 KtNameReferenceExpression(382,388): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -442,7 +442,7 @@ KtUserType(424,437): 'AnnoWithArray'
 KtNameReferenceExpression(424,437): 'AnnoWithArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArray
@@ -496,7 +496,7 @@ KtUserType(450,463): 'AnnoWithArray'
 KtNameReferenceExpression(450,463): 'AnnoWithArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArray
@@ -514,7 +514,7 @@ KtValueArgumentName(464,467): 'arr'
 KtNameReferenceExpression(464,467): 'arr'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       arr: kotlin.IntArray
@@ -562,7 +562,7 @@ KtUserType(482,495): 'AnnoWithArray'
 KtNameReferenceExpression(482,495): 'AnnoWithArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArray
@@ -583,7 +583,7 @@ KtCallExpression(496,515): 'intArrayOf(7, 8, 9)'
 KtNameReferenceExpression(496,506): 'intArrayOf'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/intArrayOf(vararg elements: kotlin.Int): kotlin.IntArray
@@ -637,7 +637,7 @@ KtUserType(518,532): 'AnnoWithKClass'
 KtNameReferenceExpression(518,532): 'AnnoWithKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithKClass
@@ -658,7 +658,7 @@ KtClassLiteralExpression(533,554): 'AnnoWithKClass::class'
 KtNameReferenceExpression(533,547): 'AnnoWithKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithKClass
@@ -694,7 +694,7 @@ KtUserType(558,572): 'AnnoWithKClass'
 KtNameReferenceExpression(558,572): 'AnnoWithKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithKClass
@@ -715,7 +715,7 @@ KtDotQualifiedExpression(573,591): 'one.AnnoWithKClass'
 KtNameReferenceExpression(573,576): 'one'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one
@@ -724,7 +724,7 @@ KtNameReferenceExpression(573,576): 'one'
 KtNameReferenceExpression(577,591): 'AnnoWithKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithKClass
@@ -757,7 +757,7 @@ KtUserType(602,623): 'AnnoWithArrayOfKClass'
 KtNameReferenceExpression(602,623): 'AnnoWithArrayOfKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArrayOfKClass
@@ -784,7 +784,7 @@ KtClassLiteralExpression(625,646): 'AnnoWithKClass::class'
 KtNameReferenceExpression(625,639): 'AnnoWithKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithKClass
@@ -799,7 +799,7 @@ KtDotQualifiedExpression(648,666): 'one.AnnoWithKClass'
 KtNameReferenceExpression(648,651): 'one'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one
@@ -808,7 +808,7 @@ KtNameReferenceExpression(648,651): 'one'
 KtNameReferenceExpression(652,666): 'AnnoWithKClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithKClass
@@ -841,7 +841,7 @@ KtUserType(677,702): 'AnnoWithAnotherAnnotation'
 KtNameReferenceExpression(677,702): 'AnnoWithAnotherAnnotation'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithAnotherAnnotation
@@ -862,7 +862,7 @@ KtCallExpression(703,782): 'arrayOf(one.AnnoWithArray([10, 11, 12]), AnnoWithArr
 KtNameReferenceExpression(703,710): 'arrayOf'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/arrayOf(vararg elements: T): kotlin.Array<T>
@@ -883,7 +883,7 @@ KtDotQualifiedExpression(711,742): 'one.AnnoWithArray([10, 11, 12])'
 KtNameReferenceExpression(711,714): 'one'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one
@@ -898,7 +898,7 @@ KtCallExpression(715,742): 'AnnoWithArray([10, 11, 12])'
 KtNameReferenceExpression(715,728): 'AnnoWithArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArray
@@ -937,7 +937,7 @@ KtCallExpression(744,781): 'AnnoWithArray(intArrayOf(13, 14, 15))'
 KtNameReferenceExpression(744,757): 'AnnoWithArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithArray
@@ -958,7 +958,7 @@ KtCallExpression(758,780): 'intArrayOf(13, 14, 15)'
 KtNameReferenceExpression(758,768): 'intArrayOf'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/intArrayOf(vararg elements: kotlin.Int): kotlin.IntArray
@@ -1012,7 +1012,7 @@ KtUserType(785,799): 'AnnoWithString'
 KtNameReferenceExpression(785,799): 'AnnoWithString'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       one/AnnoWithString
@@ -1033,7 +1033,7 @@ KtBinaryExpression(800,825): 'stringConstant + " 1.2.3"'
 KtNameReferenceExpression(800,814): 'stringConstant'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val stringConstant: kotlin.String
@@ -1042,7 +1042,7 @@ KtNameReferenceExpression(800,814): 'stringConstant'
 KtOperationReferenceExpression(815,816): '+'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String.plus(<dispatch receiver>: kotlin.String, other: kotlin.Any?): kotlin.String

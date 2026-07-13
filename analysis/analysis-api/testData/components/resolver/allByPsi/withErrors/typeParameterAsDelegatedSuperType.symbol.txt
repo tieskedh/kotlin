@@ -7,7 +7,7 @@ KtPackageDirective(0,11): 'package bar'
 KtNameReferenceExpression(8,11): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       bar
@@ -43,7 +43,7 @@ KtUserType(54,65): 'MyInterface'
 KtNameReferenceExpression(54,65): 'MyInterface'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       bar/MyInterface
@@ -73,7 +73,7 @@ KtUserType(74,75): 'T'
 KtNameReferenceExpression(74,75): 'T'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       T
@@ -115,7 +115,7 @@ KtUserType(102,103): 'T'
 KtNameReferenceExpression(102,103): 'T'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       T
@@ -125,7 +125,7 @@ KtNameReferenceExpression(102,103): 'T'
 KtNameReferenceExpression(107,108): 'i'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val i: T

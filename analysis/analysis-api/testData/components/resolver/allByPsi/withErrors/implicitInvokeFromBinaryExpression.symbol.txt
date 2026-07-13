@@ -34,7 +34,7 @@ KtUserType(20,23): 'Int'
 KtNameReferenceExpression(20,23): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -73,7 +73,7 @@ KtUserType(30,33): 'Int'
 KtNameReferenceExpression(30,33): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -100,7 +100,7 @@ KtUserType(35,38): 'Int'
 KtNameReferenceExpression(35,38): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -121,7 +121,7 @@ KtUserType(43,46): 'Int'
 KtNameReferenceExpression(43,46): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -142,7 +142,7 @@ KtUserType(49,52): 'Int'
 KtNameReferenceExpression(49,52): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -167,7 +167,7 @@ KtBinaryExpression(66,79): 'n bar (n + 1)'
 KtNameReferenceExpression(66,67): 'n'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       n: kotlin.Int
@@ -176,7 +176,7 @@ KtNameReferenceExpression(66,67): 'n'
 KtOperationReferenceExpression(68,71): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       kotlin/Function2.invoke(<dispatch receiver>: (P1, P2) -> R, p1: P1, p2: P2): R
@@ -195,7 +195,7 @@ KtBinaryExpression(73,78): 'n + 1'
 KtNameReferenceExpression(73,74): 'n'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       n: kotlin.Int
@@ -204,7 +204,7 @@ KtNameReferenceExpression(73,74): 'n'
 KtOperationReferenceExpression(75,76): '+'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int.plus(<dispatch receiver>: kotlin.Int, other: kotlin.Int): kotlin.Int

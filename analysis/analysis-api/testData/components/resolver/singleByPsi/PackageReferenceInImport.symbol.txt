@@ -1,7 +1,7 @@
 KtNameReferenceExpression(45,56): 'testPackage'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       testPackage

@@ -1,7 +1,7 @@
 KtNameReferenceExpression(29,45): 'MyJavaAnnotation'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyJavaAnnotation

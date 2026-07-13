@@ -7,7 +7,7 @@ KtPackageDirective(103,115): 'package main'
 KtNameReferenceExpression(111,115): 'main'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       main
@@ -28,7 +28,7 @@ KtDotQualifiedExpression(124,140): 'kotlin.contracts'
 KtNameReferenceExpression(124,130): 'kotlin'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin
@@ -37,7 +37,7 @@ KtNameReferenceExpression(124,130): 'kotlin'
 KtNameReferenceExpression(131,140): 'contracts'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin.contracts
@@ -46,7 +46,7 @@ KtNameReferenceExpression(131,140): 'contracts'
 KtNameReferenceExpression(141,162): 'ExperimentalContracts'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/ExperimentalContracts
@@ -64,7 +64,7 @@ KtDotQualifiedExpression(170,186): 'kotlin.contracts'
 KtNameReferenceExpression(170,176): 'kotlin'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin
@@ -73,7 +73,7 @@ KtNameReferenceExpression(170,176): 'kotlin'
 KtNameReferenceExpression(177,186): 'contracts'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin.contracts
@@ -82,7 +82,7 @@ KtNameReferenceExpression(177,186): 'contracts'
 KtNameReferenceExpression(187,201): 'InvocationKind'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/InvocationKind
@@ -100,7 +100,7 @@ KtDotQualifiedExpression(209,225): 'kotlin.contracts'
 KtNameReferenceExpression(209,215): 'kotlin'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin
@@ -109,7 +109,7 @@ KtNameReferenceExpression(209,215): 'kotlin'
 KtNameReferenceExpression(216,225): 'contracts'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin.contracts
@@ -118,7 +118,7 @@ KtNameReferenceExpression(216,225): 'contracts'
 KtNameReferenceExpression(226,234): 'contract'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/contract(builder: kotlin.contracts.ContractBuilder.() -> kotlin.Unit): kotlin.Unit
@@ -157,7 +157,7 @@ KtUserType(237,242): 'OptIn'
 KtNameReferenceExpression(237,242): 'OptIn'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/OptIn
@@ -178,7 +178,7 @@ KtClassLiteralExpression(243,271): 'ExperimentalContracts::class'
 KtNameReferenceExpression(243,264): 'ExperimentalContracts'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/ExperimentalContracts
@@ -220,7 +220,7 @@ KtUserType(297,301): 'Unit'
 KtNameReferenceExpression(297,301): 'Unit'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Unit
@@ -259,7 +259,7 @@ KtUserType(317,321): 'Unit'
 KtNameReferenceExpression(317,321): 'Unit'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Unit
@@ -277,7 +277,7 @@ KtCallExpression(329,478): 'contract {'
 KtNameReferenceExpression(329,337): 'contract'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/contract(builder: kotlin.contracts.ContractBuilder.() -> kotlin.Unit): kotlin.Unit
@@ -304,7 +304,7 @@ KtCallExpression(348,397): 'callsInPlace(block1, InvocationKind.EXACTLY_ONCE)'
 KtNameReferenceExpression(348,360): 'callsInPlace'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/ContractBuilder.callsInPlace(<dispatch receiver>: kotlin.contracts.ContractBuilder, lambda: kotlin.Function<R>, kind: kotlin.contracts.InvocationKind): kotlin.contracts.CallsInPlace
@@ -319,7 +319,7 @@ KtValueArgument(361,367): 'block1'
 KtNameReferenceExpression(361,367): 'block1'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       block1: () -> kotlin.Unit
@@ -337,7 +337,7 @@ KtDotQualifiedExpression(369,396): 'InvocationKind.EXACTLY_ONCE'
 KtNameReferenceExpression(369,383): 'InvocationKind'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/InvocationKind
@@ -346,7 +346,7 @@ KtNameReferenceExpression(369,383): 'InvocationKind'
 KtNameReferenceExpression(384,396): 'EXACTLY_ONCE'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/InvocationKind.EXACTLY_ONCE
@@ -361,7 +361,7 @@ KtCallExpression(406,472): 'callsInPlace(block2, kotlin.contracts.InvocationKind
 KtNameReferenceExpression(406,418): 'callsInPlace'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/ContractBuilder.callsInPlace(<dispatch receiver>: kotlin.contracts.ContractBuilder, lambda: kotlin.Function<R>, kind: kotlin.contracts.InvocationKind): kotlin.contracts.CallsInPlace
@@ -376,7 +376,7 @@ KtValueArgument(419,425): 'block2'
 KtNameReferenceExpression(419,425): 'block2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       block2: () -> kotlin.Unit
@@ -400,7 +400,7 @@ KtDotQualifiedExpression(427,443): 'kotlin.contracts'
 KtNameReferenceExpression(427,433): 'kotlin'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin
@@ -409,7 +409,7 @@ KtNameReferenceExpression(427,433): 'kotlin'
 KtNameReferenceExpression(434,443): 'contracts'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin.contracts
@@ -418,7 +418,7 @@ KtNameReferenceExpression(434,443): 'contracts'
 KtNameReferenceExpression(444,458): 'InvocationKind'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/InvocationKind
@@ -427,7 +427,7 @@ KtNameReferenceExpression(444,458): 'InvocationKind'
 KtNameReferenceExpression(459,471): 'EXACTLY_ONCE'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/contracts/InvocationKind.EXACTLY_ONCE
@@ -442,7 +442,7 @@ KtCallExpression(484,492): 'block1()'
 KtNameReferenceExpression(484,490): 'block1'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       block1: () -> kotlin.Unit
@@ -460,7 +460,7 @@ KtCallExpression(497,505): 'block2()'
 KtNameReferenceExpression(497,503): 'block2'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       block2: () -> kotlin.Unit

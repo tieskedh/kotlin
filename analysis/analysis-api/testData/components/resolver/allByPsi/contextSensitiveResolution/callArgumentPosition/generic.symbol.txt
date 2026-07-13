@@ -34,7 +34,7 @@ KtUserType(133,139): 'String'
 KtNameReferenceExpression(133,139): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -85,7 +85,7 @@ KtUserType(197,204): 'MyClass'
 KtNameReferenceExpression(197,204): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -130,7 +130,7 @@ KtUserType(237,244): 'MyClass'
 KtNameReferenceExpression(237,244): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -181,7 +181,7 @@ KtUserType(298,305): 'MySuper'
 KtNameReferenceExpression(298,305): 'MySuper'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MySuper
@@ -211,7 +211,7 @@ KtUserType(335,342): 'MyClass'
 KtNameReferenceExpression(335,342): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -226,7 +226,7 @@ KtCallExpression(345,351): 'TODO()'
 KtNameReferenceExpression(345,349): 'TODO'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/TODO(): kotlin.Nothing
@@ -253,7 +253,7 @@ KtUserType(384,398): 'InheritorClass'
 KtNameReferenceExpression(384,398): 'InheritorClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.InheritorClass
@@ -268,7 +268,7 @@ KtCallExpression(401,417): 'InheritorClass()'
 KtNameReferenceExpression(401,415): 'InheritorClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.InheritorClass
@@ -295,7 +295,7 @@ KtUserType(451,466): 'InheritorObject'
 KtNameReferenceExpression(451,466): 'InheritorObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.InheritorObject
@@ -304,7 +304,7 @@ KtNameReferenceExpression(451,466): 'InheritorObject'
 KtNameReferenceExpression(469,484): 'InheritorObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.InheritorObject
@@ -328,7 +328,7 @@ KtUserType(503,509): 'String'
 KtNameReferenceExpression(503,509): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -358,7 +358,7 @@ KtUserType(535,542): 'MyClass'
 KtNameReferenceExpression(535,542): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -373,7 +373,7 @@ KtCallExpression(545,551): 'TODO()'
 KtNameReferenceExpression(545,549): 'TODO'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/TODO(): kotlin.Nothing
@@ -400,7 +400,7 @@ KtUserType(574,580): 'String'
 KtNameReferenceExpression(574,580): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -421,7 +421,7 @@ KtCallExpression(584,593): 'lazy {""}'
 KtNameReferenceExpression(584,588): 'lazy'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/lazy(initializer: () -> T): kotlin.Lazy<T>
@@ -457,7 +457,7 @@ KtBlockExpression(620,635): 'InheritorObject'
 KtNameReferenceExpression(620,635): 'InheritorObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.InheritorObject
@@ -487,7 +487,7 @@ KtUserType(670,677): 'MyClass'
 KtNameReferenceExpression(670,677): 'MyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass
@@ -526,7 +526,7 @@ KtUserType(701,702): 'T'
 KtNameReferenceExpression(701,702): 'T'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       T
@@ -547,7 +547,7 @@ KtUserType(705,706): 'T'
 KtNameReferenceExpression(705,706): 'T'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       T
@@ -556,7 +556,7 @@ KtNameReferenceExpression(705,706): 'T'
 KtNameReferenceExpression(709,712): 'arg'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       arg: T
@@ -580,7 +580,7 @@ KtCallExpression(738,775): 'consumeMyClass(test(InheritorObject))'
 KtNameReferenceExpression(738,752): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -601,7 +601,7 @@ KtCallExpression(753,774): 'test(InheritorObject)'
 KtNameReferenceExpression(753,757): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -616,7 +616,7 @@ KtValueArgument(758,773): 'InheritorObject'
 KtNameReferenceExpression(758,773): 'InheritorObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.InheritorObject
@@ -631,7 +631,7 @@ KtCallExpression(781,814): 'consumeMyClass(test(propMyClass))'
 KtNameReferenceExpression(781,795): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -652,7 +652,7 @@ KtCallExpression(796,813): 'test(propMyClass)'
 KtNameReferenceExpression(796,800): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -667,7 +667,7 @@ KtValueArgument(801,812): 'propMyClass'
 KtNameReferenceExpression(801,812): 'propMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val propMyClass: MyClass
@@ -682,7 +682,7 @@ KtCallExpression(819,859): 'consumeMyClass(test(propInheritorClass))'
 KtNameReferenceExpression(819,833): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -703,7 +703,7 @@ KtCallExpression(834,858): 'test(propInheritorClass)'
 KtNameReferenceExpression(834,838): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -718,7 +718,7 @@ KtValueArgument(839,857): 'propInheritorClass'
 KtNameReferenceExpression(839,857): 'propInheritorClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val propInheritorClass: MyClass.InheritorClass
@@ -733,7 +733,7 @@ KtCallExpression(864,905): 'consumeMyClass(test(propInheritorObject))'
 KtNameReferenceExpression(864,878): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -754,7 +754,7 @@ KtCallExpression(879,904): 'test(propInheritorObject)'
 KtNameReferenceExpression(879,883): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -769,7 +769,7 @@ KtValueArgument(884,903): 'propInheritorObject'
 KtNameReferenceExpression(884,903): 'propInheritorObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val propInheritorObject: MyClass.InheritorObject
@@ -785,7 +785,7 @@ KtCallExpression(911,945): 'consumeMyClass(test(NestedObject))'
 KtNameReferenceExpression(911,925): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -807,7 +807,7 @@ KtCallExpression(926,944): 'test(NestedObject)'
 KtNameReferenceExpression(926,930): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -822,7 +822,7 @@ KtValueArgument(931,943): 'NestedObject'
 KtNameReferenceExpression(931,943): 'NestedObject'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyClass.NestedObject
@@ -838,7 +838,7 @@ KtCallExpression(950,976): 'consumeMyClass(test(prop))'
 KtNameReferenceExpression(950,964): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -860,7 +860,7 @@ KtCallExpression(965,975): 'test(prop)'
 KtNameReferenceExpression(965,969): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -875,7 +875,7 @@ KtValueArgument(970,974): 'prop'
 KtNameReferenceExpression(970,974): 'prop'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val prop: kotlin.String
@@ -891,7 +891,7 @@ KtCallExpression(981,1012): 'consumeMyClass(test(superProp))'
 KtNameReferenceExpression(981,995): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -913,7 +913,7 @@ KtCallExpression(996,1011): 'test(superProp)'
 KtNameReferenceExpression(996,1000): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -928,7 +928,7 @@ KtValueArgument(1001,1010): 'superProp'
 KtNameReferenceExpression(1001,1010): 'superProp'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val superProp: kotlin.String
@@ -944,7 +944,7 @@ KtCallExpression(1017,1047): 'consumeMyClass(test(lazyProp))'
 KtNameReferenceExpression(1017,1031): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -966,7 +966,7 @@ KtCallExpression(1032,1046): 'test(lazyProp)'
 KtNameReferenceExpression(1032,1036): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -981,7 +981,7 @@ KtValueArgument(1037,1045): 'lazyProp'
 KtNameReferenceExpression(1037,1045): 'lazyProp'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val lazyProp: kotlin.String
@@ -997,7 +997,7 @@ KtCallExpression(1052,1084): 'consumeMyClass(test(lambdaProp))'
 KtNameReferenceExpression(1052,1066): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -1019,7 +1019,7 @@ KtCallExpression(1067,1083): 'test(lambdaProp)'
 KtNameReferenceExpression(1067,1071): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /test(arg: T): T
@@ -1034,7 +1034,7 @@ KtValueArgument(1072,1082): 'lambdaProp'
 KtNameReferenceExpression(1072,1082): 'lambdaProp'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val lambdaProp: () -> MyClass.InheritorObject
@@ -1049,7 +1049,7 @@ KtCallExpression(1090,1128): 'consumeMyClass(test(InheritorClass()))'
 KtNameReferenceExpression(1090,1104): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -1071,7 +1071,7 @@ KtCallExpression(1105,1127): 'test(InheritorClass())'
 KtNameReferenceExpression(1105,1109): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /test(arg: T): T
@@ -1092,7 +1092,7 @@ KtCallExpression(1110,1126): 'InheritorClass()'
 KtNameReferenceExpression(1110,1124): 'InheritorClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'InheritorClass'.>
@@ -1109,7 +1109,7 @@ KtCallExpression(1133,1161): 'consumeMyClass(test(func()))'
 KtNameReferenceExpression(1133,1147): 'consumeMyClass'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /consumeMyClass(arg: MyClass): kotlin.Unit
@@ -1131,7 +1131,7 @@ KtCallExpression(1148,1160): 'test(func())'
 KtNameReferenceExpression(1148,1152): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /test(arg: T): T
@@ -1152,7 +1152,7 @@ KtCallExpression(1153,1159): 'func()'
 KtNameReferenceExpression(1153,1157): 'func'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'func'.>

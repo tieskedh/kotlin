@@ -33,7 +33,7 @@ KtUserType(27,33): 'Hidden'
 KtNameReferenceExpression(27,33): 'Hidden'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Hidden
@@ -42,7 +42,7 @@ KtNameReferenceExpression(27,33): 'Hidden'
 KtNameReferenceExpression(34,40): 'Nested'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /Hidden.Nested
@@ -58,5 +58,5 @@ KtConstantExpression(43,47): 'null'
 KtOperationReferenceExpression(47,49): '!!'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   null

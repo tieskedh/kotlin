@@ -7,7 +7,7 @@ KtPackageDirective(70,82): 'package test'
 KtNameReferenceExpression(78,82): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test
@@ -52,7 +52,7 @@ KtUserType(128,131): 'Foo'
 KtNameReferenceExpression(128,131): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/Foo
@@ -82,7 +82,7 @@ KtUserType(150,153): 'Foo'
 KtNameReferenceExpression(150,153): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/Foo
@@ -100,7 +100,7 @@ KtCallExpression(160,179): 'expectsFoo(Foo.BAR)'
 KtNameReferenceExpression(160,170): 'expectsFoo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/expectsFoo(foo: test.Foo): kotlin.Unit
@@ -121,7 +121,7 @@ KtDotQualifiedExpression(171,178): 'Foo.BAR'
 KtNameReferenceExpression(171,174): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/Foo
@@ -130,7 +130,7 @@ KtNameReferenceExpression(171,174): 'Foo'
 KtNameReferenceExpression(175,178): 'BAR'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: QualifierCanBeRemoved
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/Foo.BAR
@@ -151,7 +151,7 @@ KtDotQualifiedExpression(191,198): 'Foo.BAR'
 KtNameReferenceExpression(191,194): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/Foo
@@ -160,7 +160,7 @@ KtNameReferenceExpression(191,194): 'Foo'
 KtNameReferenceExpression(195,198): 'BAR'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: QualifierCanBeRemoved
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/Foo.BAR

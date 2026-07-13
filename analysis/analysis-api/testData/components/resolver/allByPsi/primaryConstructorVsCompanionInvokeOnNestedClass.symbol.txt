@@ -10,7 +10,7 @@ KtDotQualifiedExpression(8,19): 'com.example'
 KtNameReferenceExpression(8,11): 'com'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com
@@ -19,7 +19,7 @@ KtNameReferenceExpression(8,11): 'com'
 KtNameReferenceExpression(12,19): 'example'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com.example
@@ -43,7 +43,7 @@ KtDotQualifiedExpression(28,39): 'com.example'
 KtNameReferenceExpression(28,31): 'com'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com
@@ -52,7 +52,7 @@ KtNameReferenceExpression(28,31): 'com'
 KtNameReferenceExpression(32,39): 'example'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com.example
@@ -61,7 +61,7 @@ KtNameReferenceExpression(32,39): 'example'
 KtNameReferenceExpression(40,43): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo
@@ -70,7 +70,7 @@ KtNameReferenceExpression(40,43): 'Foo'
 KtNameReferenceExpression(44,50): 'Nested'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested
@@ -109,7 +109,7 @@ KtUserType(83,89): 'String'
 KtNameReferenceExpression(83,89): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -154,7 +154,7 @@ KtUserType(154,157): 'Int'
 KtNameReferenceExpression(154,157): 'Int'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Int
@@ -169,7 +169,7 @@ KtCallExpression(161,174): 'Nested("str")'
 KtNameReferenceExpression(161,167): 'Nested'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested
@@ -205,7 +205,7 @@ KtCallExpression(222,231): 'Nested(1)'
 KtNameReferenceExpression(222,228): 'Nested'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested.Companion
@@ -229,7 +229,7 @@ KtDotQualifiedExpression(235,248): 'Foo.Nested(2)'
 KtNameReferenceExpression(235,238): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo
@@ -244,7 +244,7 @@ KtCallExpression(239,248): 'Nested(2)'
 KtNameReferenceExpression(239,245): 'Nested'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested.Companion
@@ -274,7 +274,7 @@ KtDotQualifiedExpression(252,263): 'com.example'
 KtNameReferenceExpression(252,255): 'com'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com
@@ -283,7 +283,7 @@ KtNameReferenceExpression(252,255): 'com'
 KtNameReferenceExpression(256,263): 'example'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com.example
@@ -292,7 +292,7 @@ KtNameReferenceExpression(256,263): 'example'
 KtNameReferenceExpression(264,267): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo
@@ -307,7 +307,7 @@ KtCallExpression(268,277): 'Nested(3)'
 KtNameReferenceExpression(268,274): 'Nested'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested.Companion
@@ -331,7 +331,7 @@ KtDotQualifiedExpression(282,301): 'Nested.Companion(4)'
 KtNameReferenceExpression(282,288): 'Nested'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested
@@ -346,7 +346,7 @@ KtCallExpression(289,301): 'Companion(4)'
 KtNameReferenceExpression(289,298): 'Companion'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested.Companion
@@ -373,7 +373,7 @@ KtDotQualifiedExpression(305,315): 'Foo.Nested'
 KtNameReferenceExpression(305,308): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo
@@ -382,7 +382,7 @@ KtNameReferenceExpression(305,308): 'Foo'
 KtNameReferenceExpression(309,315): 'Nested'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested
@@ -397,7 +397,7 @@ KtCallExpression(316,328): 'Companion(5)'
 KtNameReferenceExpression(316,325): 'Companion'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested.Companion
@@ -430,7 +430,7 @@ KtDotQualifiedExpression(332,343): 'com.example'
 KtNameReferenceExpression(332,335): 'com'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com
@@ -439,7 +439,7 @@ KtNameReferenceExpression(332,335): 'com'
 KtNameReferenceExpression(336,343): 'example'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com.example
@@ -448,7 +448,7 @@ KtNameReferenceExpression(336,343): 'example'
 KtNameReferenceExpression(344,347): 'Foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo
@@ -457,7 +457,7 @@ KtNameReferenceExpression(344,347): 'Foo'
 KtNameReferenceExpression(348,354): 'Nested'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested
@@ -472,7 +472,7 @@ KtCallExpression(355,367): 'Companion(6)'
 KtNameReferenceExpression(355,364): 'Companion'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       com/example/Foo.Nested.Companion

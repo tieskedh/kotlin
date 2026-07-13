@@ -1,7 +1,7 @@
 KtNameReferenceExpression(116,119): 'Foo'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Foo.Companion

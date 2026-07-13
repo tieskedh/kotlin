@@ -61,7 +61,7 @@ KtUserType(156,162): 'MyEnum'
 KtNameReferenceExpression(156,162): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -88,7 +88,7 @@ KtCallExpression(184,190): 'foo(X)'
 KtNameReferenceExpression(184,187): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /foo(a: MyEnum): kotlin.Unit
@@ -103,7 +103,7 @@ KtValueArgument(188,189): 'X'
 KtNameReferenceExpression(188,189): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum.X
@@ -118,7 +118,7 @@ KtCallExpression(195,211): 'foo(WrongEnum.X)'
 KtNameReferenceExpression(195,198): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /foo(a: MyEnum): kotlin.Unit
@@ -138,7 +138,7 @@ KtDotQualifiedExpression(199,210): 'WrongEnum.X'
 KtNameReferenceExpression(199,208): 'WrongEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /WrongEnum
@@ -147,7 +147,7 @@ KtNameReferenceExpression(199,208): 'WrongEnum'
 KtNameReferenceExpression(209,210): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'X'.>
@@ -185,7 +185,7 @@ KtUserType(216,225): 'DslMarker'
 KtNameReferenceExpression(216,225): 'DslMarker'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/DslMarker
@@ -224,7 +224,7 @@ KtUserType(251,256): 'MyDsl'
 KtNameReferenceExpression(251,256): 'MyDsl'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyDsl
@@ -263,7 +263,7 @@ KtUserType(267,272): 'MyDsl'
 KtNameReferenceExpression(267,272): 'MyDsl'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyDsl
@@ -287,7 +287,7 @@ KtUserType(286,287): 'A'
 KtNameReferenceExpression(286,287): 'A'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /A
@@ -308,7 +308,7 @@ KtUserType(291,297): 'String'
 KtNameReferenceExpression(291,297): 'String'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/String
@@ -341,7 +341,7 @@ KtUserType(314,315): 'A'
 KtNameReferenceExpression(314,315): 'A'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /A
@@ -371,7 +371,7 @@ KtUserType(332,333): 'B'
 KtNameReferenceExpression(332,333): 'B'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /B
@@ -393,7 +393,7 @@ KtCallExpression(350,356): 'foo(X)'
 KtNameReferenceExpression(350,353): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /foo(a: MyEnum): kotlin.Unit
@@ -409,7 +409,7 @@ KtValueArgument(354,355): 'X'
 KtNameReferenceExpression(354,355): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       val X: kotlin.String

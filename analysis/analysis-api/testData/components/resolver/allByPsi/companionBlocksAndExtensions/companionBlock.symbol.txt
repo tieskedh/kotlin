@@ -7,7 +7,7 @@ KtPackageDirective(43,55): 'package test'
 KtNameReferenceExpression(51,55): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test
@@ -76,7 +76,7 @@ KtCallExpression(184,189): 'foo()'
 KtNameReferenceExpression(184,187): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C.foo(): kotlin.Unit
@@ -88,7 +88,7 @@ KtValueArgumentList(187,189): '()'
 KtNameReferenceExpression(198,201): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val bar: kotlin.Int
@@ -97,7 +97,7 @@ KtNameReferenceExpression(198,201): 'bar'
 KtNameReferenceExpression(210,213): 'baz'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val baz: kotlin.Int
@@ -121,7 +121,7 @@ KtDotQualifiedExpression(241,248): 'C.foo()'
 KtNameReferenceExpression(241,242): 'C'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C
@@ -136,7 +136,7 @@ KtCallExpression(243,248): 'foo()'
 KtNameReferenceExpression(243,246): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C.foo(): kotlin.Unit
@@ -154,7 +154,7 @@ KtDotQualifiedExpression(253,258): 'C.bar'
 KtNameReferenceExpression(253,254): 'C'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C
@@ -163,7 +163,7 @@ KtNameReferenceExpression(253,254): 'C'
 KtNameReferenceExpression(255,258): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val bar: kotlin.Int
@@ -178,7 +178,7 @@ KtDotQualifiedExpression(263,268): 'C.baz'
 KtNameReferenceExpression(263,264): 'C'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C
@@ -187,7 +187,7 @@ KtNameReferenceExpression(263,264): 'C'
 KtNameReferenceExpression(265,268): 'baz'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val baz: kotlin.Int
@@ -202,7 +202,7 @@ KtCallableReferenceExpression(274,280): 'C::foo'
 KtNameReferenceExpression(274,275): 'C'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C
@@ -211,7 +211,7 @@ KtNameReferenceExpression(274,275): 'C'
 KtNameReferenceExpression(277,280): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C.foo(): kotlin.Unit
@@ -226,7 +226,7 @@ KtCallableReferenceExpression(285,291): 'C::bar'
 KtNameReferenceExpression(285,286): 'C'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C
@@ -235,7 +235,7 @@ KtNameReferenceExpression(285,286): 'C'
 KtNameReferenceExpression(288,291): 'bar'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       val bar: kotlin.Int
@@ -253,7 +253,7 @@ KtDotQualifiedExpression(297,303): 'test.C'
 KtNameReferenceExpression(297,301): 'test'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test
@@ -262,7 +262,7 @@ KtNameReferenceExpression(297,301): 'test'
 KtNameReferenceExpression(302,303): 'C'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C
@@ -277,7 +277,7 @@ KtCallExpression(304,309): 'foo()'
 KtNameReferenceExpression(304,307): 'foo'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       test/C.foo(): kotlin.Unit

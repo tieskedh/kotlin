@@ -1,7 +1,7 @@
 KtNameReferenceExpression(71,73): 'TA'
   isImplicitReferenceToCompanion: true
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /TA

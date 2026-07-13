@@ -1,5 +1,5 @@
 KtOperationReferenceExpression(195,196): '='
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   null

@@ -1,7 +1,7 @@
 KtNameReferenceExpression(46,56): 'emptyArray'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/emptyArray(): kotlin.Array<T>

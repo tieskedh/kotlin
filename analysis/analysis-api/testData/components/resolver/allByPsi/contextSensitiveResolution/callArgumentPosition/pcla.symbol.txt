@@ -58,7 +58,7 @@ KtUserType(162,163): 'T'
 KtNameReferenceExpression(162,163): 'T'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       T
@@ -79,7 +79,7 @@ KtUserType(166,173): 'Boolean'
 KtNameReferenceExpression(166,173): 'Boolean'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Boolean
@@ -136,7 +136,7 @@ KtUserType(212,225): 'Controller<S>'
 KtNameReferenceExpression(212,222): 'Controller'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller
@@ -163,7 +163,7 @@ KtUserType(223,224): 'S'
 KtNameReferenceExpression(223,224): 'S'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       S
@@ -187,7 +187,7 @@ KtUserType(232,236): 'Unit'
 KtNameReferenceExpression(232,236): 'Unit'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Unit
@@ -208,7 +208,7 @@ KtUserType(239,240): 'S'
 KtNameReferenceExpression(239,240): 'S'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       S
@@ -223,7 +223,7 @@ KtCallExpression(243,249): 'TODO()'
 KtNameReferenceExpression(243,247): 'TODO'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/TODO(): kotlin.Nothing
@@ -256,7 +256,7 @@ KtUserType(262,268): 'MyEnum'
 KtNameReferenceExpression(262,268): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -274,7 +274,7 @@ KtCallExpression(276,326): 'generate {'
 KtNameReferenceExpression(276,284): 'generate'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /generate(g: suspend Controller<S>.() -> kotlin.Unit): S
@@ -301,7 +301,7 @@ KtCallExpression(295,303): 'yield(m)'
 KtNameReferenceExpression(295,300): 'yield'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller.yield(<dispatch receiver>: Controller<T>, t: T): kotlin.Boolean
@@ -316,7 +316,7 @@ KtValueArgument(301,302): 'm'
 KtNameReferenceExpression(301,302): 'm'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       m: MyEnum
@@ -331,7 +331,7 @@ KtCallExpression(312,320): 'yield(X)'
 KtNameReferenceExpression(312,317): 'yield'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller.yield(<dispatch receiver>: Controller<T>, t: T): kotlin.Boolean
@@ -346,7 +346,7 @@ KtValueArgument(318,319): 'X'
 KtNameReferenceExpression(318,319): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum.X
@@ -361,7 +361,7 @@ KtCallExpression(332,382): 'generate {'
 KtNameReferenceExpression(332,340): 'generate'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /generate(g: suspend Controller<S>.() -> kotlin.Unit): S
@@ -388,7 +388,7 @@ KtCallExpression(351,359): 'yield(X)'
 KtNameReferenceExpression(351,356): 'yield'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller.yield(<dispatch receiver>: Controller<T>, t: T): kotlin.Boolean
@@ -403,7 +403,7 @@ KtValueArgument(357,358): 'X'
 KtNameReferenceExpression(357,358): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum.X
@@ -418,7 +418,7 @@ KtCallExpression(368,376): 'yield(m)'
 KtNameReferenceExpression(368,373): 'yield'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller.yield(<dispatch receiver>: Controller<T>, t: T): kotlin.Boolean
@@ -433,7 +433,7 @@ KtValueArgument(374,375): 'm'
 KtNameReferenceExpression(374,375): 'm'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       m: MyEnum
@@ -457,7 +457,7 @@ KtUserType(395,401): 'MyEnum'
 KtNameReferenceExpression(395,401): 'MyEnum'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum
@@ -472,7 +472,7 @@ KtCallExpression(404,437): 'generate {'
 KtNameReferenceExpression(404,412): 'generate'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /generate(g: suspend Controller<S>.() -> kotlin.Unit): S
@@ -499,7 +499,7 @@ KtCallExpression(423,431): 'yield(X)'
 KtNameReferenceExpression(423,428): 'yield'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller.yield(<dispatch receiver>: Controller<T>, t: T): kotlin.Boolean
@@ -514,7 +514,7 @@ KtValueArgument(429,430): 'X'
 KtNameReferenceExpression(429,430): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: Used
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /MyEnum.X
@@ -530,7 +530,7 @@ KtCallExpression(443,476): 'generate {'
 KtNameReferenceExpression(443,451): 'generate'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = [
       /generate(g: suspend Controller<S>.() -> kotlin.Unit): S
@@ -558,7 +558,7 @@ KtCallExpression(462,470): 'yield(X)'
 KtNameReferenceExpression(462,467): 'yield'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /Controller.yield(<dispatch receiver>: Controller<T>, t: T): kotlin.Boolean
@@ -573,7 +573,7 @@ KtValueArgument(468,469): 'X'
 KtNameReferenceExpression(468,469): 'X'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionError:
     candidateSymbols = []
     diagnostic = ERROR<UNRESOLVED_REFERENCE: Unresolved reference 'X'.>

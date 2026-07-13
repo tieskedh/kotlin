@@ -46,7 +46,7 @@ KtUserType(41,44): 'Any'
 KtNameReferenceExpression(41,44): 'Any'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Any
@@ -67,7 +67,7 @@ KtUserType(48,55): 'Boolean'
 KtNameReferenceExpression(48,55): 'Boolean'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       kotlin/Boolean
@@ -97,7 +97,7 @@ KtCallExpression(91,94): 'A()'
 KtNameReferenceExpression(91,92): 'A'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /A
@@ -118,7 +118,7 @@ KtCallExpression(107,110): 'A()'
 KtNameReferenceExpression(107,108): 'A'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /A
@@ -136,7 +136,7 @@ KtBinaryExpression(115,121): 'a == b'
 KtNameReferenceExpression(115,116): 'a'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val a: A
@@ -145,7 +145,7 @@ KtNameReferenceExpression(115,116): 'a'
 KtOperationReferenceExpression(117,119): '=='
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /A.equals(<dispatch receiver>: A, other: kotlin.Any?): kotlin.Boolean
@@ -154,7 +154,7 @@ KtOperationReferenceExpression(117,119): '=='
 KtNameReferenceExpression(120,121): 'b'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val b: A
@@ -169,7 +169,7 @@ KtBinaryExpression(126,132): 'a != b'
 KtNameReferenceExpression(126,127): 'a'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val a: A
@@ -178,7 +178,7 @@ KtNameReferenceExpression(126,127): 'a'
 KtOperationReferenceExpression(128,130): '!='
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   KaSymbolResolutionSuccess:
     symbols = [
       /A.equals(<dispatch receiver>: A, other: kotlin.Any?): kotlin.Boolean
@@ -187,7 +187,7 @@ KtOperationReferenceExpression(128,130): '!='
 KtNameReferenceExpression(131,132): 'b'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val b: A
@@ -199,7 +199,7 @@ KtBinaryExpression(137,144): 'a === b'
 KtNameReferenceExpression(137,138): 'a'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val a: A
@@ -208,13 +208,13 @@ KtNameReferenceExpression(137,138): 'a'
 KtOperationReferenceExpression(139,142): '==='
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   null
 
 KtNameReferenceExpression(143,144): 'b'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val b: A
@@ -226,7 +226,7 @@ KtBinaryExpression(149,156): 'a !== b'
 KtNameReferenceExpression(149,150): 'a'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val a: A
@@ -235,13 +235,13 @@ KtNameReferenceExpression(149,150): 'a'
 KtOperationReferenceExpression(151,154): '!=='
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: false
+  lookupLocally: false
   null
 
 KtNameReferenceExpression(155,156): 'b'
   isImplicitReferenceToCompanion: false
   contextSensitiveResolutionStatus: NotAvailable
-  managedLocalResolve: true
+  lookupLocally: true
   KaSymbolResolutionSuccess:
     symbols = [
       val b: A
