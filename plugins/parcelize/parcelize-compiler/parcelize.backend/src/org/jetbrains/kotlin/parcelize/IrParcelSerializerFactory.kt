@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.descriptors.ValueClassBackendAgnosticApi
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrValueDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.inlineClassRepresentation
@@ -345,7 +346,7 @@ class IrParcelSerializerFactory(private val symbols: AndroidSymbols, private val
                     ?: throw IllegalArgumentException("Primary constructor of data class '${classifier.name}' is missing")
 
                 val members = primaryConstructor.parameters.map { valueParameter ->
-                    val property = classifier.findCorrespondingProperty(valueParameter)
+                    val property = classifier.findCorrespondingDataClassProperty(valueParameter)
                     property.symbol to getChild(valueParameter.type.substitute(typeMapping), allowDataClasses = true)
                 }
                 return wrapNullableSerializerIfNeeded(irType, IrDataClassParcelSerializer(irType, members))
@@ -362,12 +363,15 @@ class IrParcelSerializerFactory(private val symbols: AndroidSymbols, private val
         }
     }
 
-    private fun IrClass.findCorrespondingProperty(primaryConstructorValueParameter: IrValueParameter) =
-        properties.singleOrNull { it.name == primaryConstructorValueParameter.name }
+    private fun IrClass.findCorrespondingDataClassProperty(primaryConstructorValueParameter: IrValueParameter): IrProperty {
+        require(this.isData) { "This function is to be used for data classes only" }
+
+        return properties.singleOrNull { it.name == primaryConstructorValueParameter.name }
             ?: throw IllegalArgumentException(
                 "Data class '${primaryConstructorValueParameter.name}' must have exactly one property " +
                         "matching primary constructor parameter '${primaryConstructorValueParameter.name}'"
             )
+    }
 
     private fun wrapNullableSerializerIfNeeded(irType: IrType, serializer: IrParcelSerializer) =
         if (irType.isNullable()) IrNullAwareParcelSerializer(serializer) else serializer
