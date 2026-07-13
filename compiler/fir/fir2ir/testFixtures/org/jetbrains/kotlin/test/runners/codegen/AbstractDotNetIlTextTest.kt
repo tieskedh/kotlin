@@ -237,7 +237,7 @@ private class DotNetEnvironmentConfigurator(
         testServices.getOrCreateTempDirectory("dotnet").resolve("${module.name}-$artifactName.$outputExtension")
 
     private fun getOrCreateStdlibSources() =
-        DOTNET_STDLIB_SOURCES.map { (fileName, source) ->
+        DOTNET_STDLIB_SOURCES.map { [fileName, source] ->
             testServices.getOrCreateTempDirectory("dotnet-stdlib").resolve(fileName).also { file ->
                 if (!file.isFile || file.readText() != source) {
                     file.writeText(source)
@@ -339,7 +339,7 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         // See 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.
         var lastBlockedMessage: String? = null
         repeat(SAC_MAX_ATTEMPTS) {
-            val (exitCode, output) = execViaDotnetHost(dotnetHost, file)
+            val [exitCode, output] = execViaDotnetHost(dotnetHost, file)
             if (exitCode == 0) return output
             if (!isSmartAppControlBlock(output)) {
                 assertions.fail {

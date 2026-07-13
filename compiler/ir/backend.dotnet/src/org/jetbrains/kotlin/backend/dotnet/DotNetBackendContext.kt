@@ -1,12 +1,18 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.CommonBackendContext
+import org.jetbrains.kotlin.backend.common.InlineClassesUtils
 import org.jetbrains.kotlin.backend.common.ir.BackendSymbols
 import org.jetbrains.kotlin.backend.common.ir.SharedVariablesManager
 import org.jetbrains.kotlin.backend.common.lower.InnerClassesSupport
+import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.ir.InternalSymbolFinderAPI
 import org.jetbrains.kotlin.ir.IrBuiltIns
+import org.jetbrains.kotlin.ir.IrDiagnosticReporter
+import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
+import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrFactory
 import org.jetbrains.kotlin.ir.declarations.IrField
@@ -33,7 +39,18 @@ internal class DotNetBackendContext(
     override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns)
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport
+    override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
+        configuration.diagnosticsCollector,
+        configuration.languageVersionSettings,
+    )
+    override val inlineClassesUtils: InlineClassesUtils = DotNetInlineClassesUtils
     override var inVerbosePhase: Boolean = false
+}
+
+private object DotNetInlineClassesUtils : InlineClassesUtils {
+    // No inline/value class model exists in the .NET backend yet; unsupported shapes are rejected
+    // by the shape gates instead of being treated as inline-like.
+    override fun isClassInlineLike(klass: IrClass): Boolean = false
 }
 
 @OptIn(InternalSymbolFinderAPI::class)

@@ -84,7 +84,7 @@ inline fun TestConfigurationBuilder.nativeArtifactsHandlersStep(
 }
 
 inline fun TestConfigurationBuilder.dotNetArtifactsHandlersStep(
-    init: TestStepBuilder.HandlersStepBuilder.NonGroupingPhase<BinaryArtifacts.DotNet, ArtifactKinds.DotNet>.() -> Unit = {}
+    init: TestStepBuilder.HandlersStepBuilder.NonGroupingStage<BinaryArtifacts.DotNet, ArtifactKinds.DotNet>.() -> Unit = {}
 ) {
     namedHandlersStep(DOTNET_ARTIFACTS_HANDLERS_STEP_NAME, ArtifactKinds.DotNet, CompilationStage.FIRST, init)
 }
@@ -138,7 +138,7 @@ inline fun TestConfigurationBuilder.configureJsArtifactsHandlersStep(
 }
 
 inline fun TestConfigurationBuilder.configureDotNetArtifactsHandlersStep(
-    init: TestStepBuilder.HandlersStepBuilder.NonGroupingPhase<BinaryArtifacts.DotNet, ArtifactKinds.DotNet>.() -> Unit = {}
+    init: TestStepBuilder.HandlersStepBuilder.NonGroupingStage<BinaryArtifacts.DotNet, ArtifactKinds.DotNet>.() -> Unit = {}
 ) {
     configureNamedHandlersStep(DOTNET_ARTIFACTS_HANDLERS_STEP_NAME, ArtifactKinds.DotNet, skipMissingStep = false, init)
 }

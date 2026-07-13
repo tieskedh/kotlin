@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.MessageCollectorAccess
 import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.ir.IrBuiltIns
@@ -18,6 +19,10 @@ object DotNetBackend {
         symbolTable: SymbolTable,
         configuration: CompilerConfiguration,
     ): File {
+        // The .NET backend has no IrDiagnosticReporter-based reporting yet; it deliberately talks
+        // to the message collector directly, like DotNetIlEmitter and DotNetIlAssembler.
+        @OptIn(MessageCollectorAccess::class)
+        val messageCollector = configuration.messageCollector
         val output = configuration.dotNetOutput ?: error("Missing .NET output")
         val target = configuration.dotNetTarget
         val assemblyName = configuration.dotNetAssemblyName ?: output.nameWithoutExtension
@@ -33,7 +38,7 @@ object DotNetBackend {
             // Renaming silently would leave the user looking for a file that never appears, so the
             // actual artifact is reported explicitly.
             output.siblingWithExtension("dll").also {
-                configuration.messageCollector.report(
+                messageCollector.report(
                     CompilerMessageSeverity.INFO,
                     "The 'net' target produces a .dll started via 'dotnet exec' instead of a standalone .exe; writing '${it.path}'."
                 )
@@ -58,7 +63,7 @@ object DotNetBackend {
             // DotNetInitializersLowering). Unlike codegen-time rejections there is no function
             // granularity to skip at, so the whole compilation fails with one loud diagnostic
             // instead of an internal assertion crash further down.
-            configuration.messageCollector.report(
+            messageCollector.report(
                 CompilerMessageSeverity.ERROR,
                 "The module is not supported by the .NET backend: ${e.reason}"
             )
@@ -67,7 +72,7 @@ object DotNetBackend {
         }
 
         val emitter = DotNetIlEmitter(
-            messageCollector = configuration.messageCollector,
+            messageCollector = messageCollector,
             assemblyName = assemblyName,
             moduleFileName = if (emitsExecutable) binaryOutput.name else ilTarget.name,
             producesExecutable = emitsExecutable,
@@ -85,7 +90,7 @@ object DotNetBackend {
         ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
 
         if (emitsExecutable) {
-            DotNetIlAssembler.assembleExecutable(ilTarget, binaryOutput, target, configuration.messageCollector)
+            DotNetIlAssembler.assembleExecutable(ilTarget, binaryOutput, target, messageCollector)
             return binaryOutput
         }
 
