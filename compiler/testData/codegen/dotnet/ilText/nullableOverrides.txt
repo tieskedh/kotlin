@@ -1,0 +1,142 @@
+.assembly extern mscorlib {}
+.assembly 'nullableOverrides' {}
+.module 'main-nullableOverrides.il'
+
+.class public auto ansi beforefieldinit 'Producer'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance valuetype [mscorlib]System.Nullable`1<int32> 'value'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Overloads'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'f'(int32 'x') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .method public hidebysig instance int32 'f'(valuetype [mscorlib]System.Nullable`1<int32> 'x') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>'
+    )
+    ldarg.1
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 -1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_0:
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'nullableOverridesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
+      [3] class 'Overloads' 'o',
+      [4] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    newobj instance void 'Producer'::.ctor()
+    callvirt instance valuetype [mscorlib]System.Nullable`1<int32> 'Producer'::'value'()
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 -5
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_0:
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'Overloads'::.ctor()
+    stloc.3
+    ldloc.3
+    ldc.i4 2
+    call instance int32 'Overloads'::'f'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    ldloca 4
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc 4
+    call instance int32 'Overloads'::'f'(valuetype [mscorlib]System.Nullable`1<int32>)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
+import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
@@ -27,13 +28,17 @@ import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 
 /**
- * Emits an [IrTry] in value position. Implemented by [DotNetIlMethodCodegen]: a `try` branch
- * body contains arbitrary statements, and statement emission lives on the method codegen, so a
- * value-position `try` dispatches back through this hook — the reverse of the method codegen
- * delegating value emission to [DotNetIlExpressionCodegen].
+ * Emits statement-bearing constructs in value position. Implemented by [DotNetIlMethodCodegen]:
+ * a `try` branch body and the leading statements of a value-position block (the safe-call/elvis
+ * shape fir2ir emits: `IrBlock { val tmp = ...; IrWhen }`) contain arbitrary statements, and
+ * statement emission lives on the method codegen, so both dispatch back through this hook — the
+ * reverse of the method codegen delegating value emission to [DotNetIlExpressionCodegen].
  */
-internal fun interface DotNetIlTryExpressionEmitter {
+internal interface DotNetIlStatementScopeEmitter {
     fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType)
+
+    /** A block in value position: leading statements, then the trailing expression as the value. */
+    fun emitBlockExpression(block: IrContainerExpression, expectedType: DotNetIlValueType)
 }
 
 /**
@@ -46,7 +51,7 @@ internal class DotNetIlExpressionCodegen(
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
     private val facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
-    private val tryExpressionEmitter: DotNetIlTryExpressionEmitter,
+    private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
@@ -73,6 +78,32 @@ internal class DotNetIlExpressionCodegen(
     }
 
     fun emitExpression(expression: IrExpression?, expectedType: DotNetIlValueType) {
+        // Widening-coercion interception, the hybrid nullability model's conversion layer (JVM
+        // precedent: the JVM backend coerces at codegen time through StackValue — boxing is
+        // never an IR node — and Roslyn converts `T -> T?` / `-> object` at every use site the
+        // same way). When the expression's own mapped type differs from the expected one, it is
+        // emitted AT ITS OWN TYPE first and then, when needed, a single conversion instruction
+        // widens it: `newobj Nullable<T>::.ctor` for `T -> T?`, `box` for `T -> Any?` and
+        // `T? -> Any?` (the CLR collapses the latter to boxed-T-or-null, probe-verified,
+        // boxprobe_s3). Instruction-free reference widenings just recurse at the natural type.
+        // Narrowings never coerce here — they exist only as explicit IMPLICIT_CAST/`!!` shapes
+        // (see emitTypeOperatorCall) — so anything else falls through to the per-producer
+        // assignability rejections below.
+        if (expression != null) {
+            val naturalType = typeMapper.toDotNetIlValueType(expression.type)
+            if (naturalType != null && naturalType != expectedType) {
+                if (naturalType.isDotNetAssignableTo(expectedType)) {
+                    emitExpression(expression, naturalType)
+                    return
+                }
+                val coercion = dotNetWideningCoercionOrNull(naturalType, expectedType)
+                if (coercion != null) {
+                    emitExpression(expression, naturalType)
+                    methodContext.emit(coercion, pops = 1, pushes = 1)
+                    return
+                }
+            }
+        }
         when (expression) {
             null -> dotNetUnsupported("missing ${expectedType.nameInSignature} expression value")
             is IrConst -> emitConstant(expression, expectedType)
@@ -87,7 +118,7 @@ internal class DotNetIlExpressionCodegen(
                 emitThrow(expression)
                 methodContext.notePhantomValueAfterThrow()
             }
-            is IrTry -> tryExpressionEmitter.emitTryExpression(expression, expectedType)
+            is IrTry -> statementScopeEmitter.emitTryExpression(expression, expectedType)
             is IrTypeOperatorCall -> emitTypeOperatorCall(expression, expectedType)
             is IrCall -> {
                 val intrinsic = intrinsicMethods.getIntrinsic(expression.symbol)
@@ -95,8 +126,87 @@ internal class DotNetIlExpressionCodegen(
                     emitCallExpression(expression, expectedType)
                 }
             }
+            // The safe-call/elvis desugaring: `IrBlock { val tmp = <receiver>; IrWhen }`.
+            // Statement emission lives on the method codegen, hence the hook (like IrTry above).
+            is IrContainerExpression -> statementScopeEmitter.emitBlockExpression(expression, expectedType)
             else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} expression ${expression.javaClass.simpleName}")
         }
+    }
+
+    /**
+     * Spills the [type]-typed value on top of the evaluation stack into a fresh synthetic local
+     * and returns its slot. The nullable-primitive emission shapes use it to obtain the HOME
+     * ADDRESS every `Nullable<T>` instance-member call requires: calling `get_HasValue`/
+     * `GetValueOrDefault` on an unspilled stack value assembles cleanly but is a FATAL,
+     * uncatchable CLR error (0x80131506, probe-verified `boxprobe_s2`) — the spill is
+     * unconditional by design and costs no extra stack depth (value 1 slot → address 1 slot).
+     */
+    fun spillToSyntheticLocal(type: DotNetIlValueType, namePrefix: String): DotNetIlSlot.Local {
+        val slot = methodContext.declareSyntheticLocal(type, namePrefix)
+        methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+        return slot
+    }
+
+    /**
+     * `!!`/IMPLICIT_NOTNULL on a [nullable primitive][DotNetIlValueType.NullableValue] value on
+     * top of the stack: spill (mandatory home address, see [spillToSyntheticLocal]), branch past
+     * the throw on `get_HasValue`, throw the mapped Kotlin NPE (`System.NullReferenceException`,
+     * see [DotNetMappedExceptions] — parameterless ctor, JVM parity: `Intrinsics.checkNotNull`'s
+     * NPE carries no message), then extract with `GetValueOrDefault` — never `get_Value`, whose
+     * InvalidOperationException would surface as the WRONG Kotlin exception (ClassCastException
+     * territory via the InvalidCastException mapping is wrong too; hence branch-first). Also the
+     * unwrap shape of a `T? -> T` smartcast IMPLICIT_CAST — JVM precedent: the JVM emits
+     * CHECKCAST + `intValue()`, whose null receiver throws the same NPE. Net effect: pop the
+     * `Nullable<T>`, push the plain `T`.
+     */
+    fun emitNullableUnwrapOrThrowNpe(type: DotNetIlValueType.NullableValue) {
+        val slot = spillToSyntheticLocal(type, "<notNull>")
+        val okLabel = methodContext.nextLabel("notNull")
+        methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+        methodContext.emit(type.hasValueInstruction, pops = 1, pushes = 1)
+        methodContext.emitBranch("brtrue", okLabel, pops = 1)
+        emitThrowNullPointerException()
+        methodContext.emitLabel(okLabel)
+        methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+        methodContext.emit(type.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+    }
+
+    /**
+     * `!!`/IMPLICIT_NOTNULL on a reference value on top of the stack: `dup`/`brtrue` past a
+     * throw of the mapped Kotlin NPE; the non-null value flows through unchanged (JVM precedent:
+     * the checkNotNull intrinsic shape). Works with operands already below on the stack — no
+     * protected region is involved.
+     */
+    fun emitReferenceNotNullOrThrowNpe() {
+        val okLabel = methodContext.nextLabel("notNull")
+        methodContext.emit("dup", pops = 1, pushes = 2)
+        methodContext.emitBranch("brtrue", okLabel, pops = 1)
+        methodContext.emit("pop", pops = 1)
+        emitThrowNullPointerException()
+        methodContext.emitLabel(okLabel)
+    }
+
+    /**
+     * Throws the CLR type `kotlin.NullPointerException` maps to (probe-verified spelling and
+     * catchability, `boxprobe_s4`), so a failing `!!` stays catchable as
+     * `catch (e: NullPointerException)` through the existing exception registry.
+     */
+    private fun emitThrowNullPointerException() {
+        methodContext.emit("newobj instance void ${CORE_LIB_REF}System.NullReferenceException::.ctor()", pushes = 1)
+        methodContext.emitThrow()
+    }
+
+    /**
+     * Produces the empty (`null`) `Nullable<T>` value on the stack: `initobj` through the
+     * address of a fresh synthetic local, then a load of the zero-initialized value — the
+     * probe-verified empty-value producer for every position, incl. returns and arguments
+     * (`boxprobe_s1`). A value type has no `ldnull`.
+     */
+    private fun emitEmptyNullable(type: DotNetIlValueType.NullableValue) {
+        val slot = methodContext.declareSyntheticLocal(type, "<null>")
+        methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+        methodContext.emit(type.initInstruction, pops = 1)
+        methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
     }
 
     fun emitBranchIfFalse(condition: IrExpression, targetLabel: String) {
@@ -105,39 +215,79 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * A type operator in value position. The only supported operator is [IrTypeOperator.IMPLICIT_CAST]
-     * when it is a pure reference upcast — the operand's mapped type is
-     * [assignable][isDotNetAssignableTo] to the mapped cast type (`Derived` where a base-chain
-     * ancestor is expected, or the trivial same-type cast) — which compiles to the bare operand
-     * with NO instruction: CLR reference widening needs no `castclass` (probe-verified,
-     * `inheritprobe_s1`: base-typed local stores and base-typed call arguments accept a derived
-     * reference directly). The JVM backend's analogue is `IrTypeOperatorLowering`/codegen
-     * dropping implicit casts between reference types — only CHECKCAST-requiring operators emit
-     * code there. Everything else — `as` (CAST), `as?` (SAFE_CAST), `is` (INSTANCEOF),
-     * IMPLICIT_NOTNULL, and any IMPLICIT_CAST that is not an upcast of mapped types — stays
-     * rejected loudly until a downcast/type-test model exists.
+     * A type operator in value position. Supported operators:
+     * - [IrTypeOperator.IMPLICIT_CAST] as a pure reference upcast — the operand's mapped type is
+     *   [assignable][isDotNetAssignableTo] to the mapped cast type (`Derived` where a base-chain
+     *   ancestor is expected, the trivial same-type cast — which covers every reference
+     *   nullability change, `C?`/`C` mapping to the same IL type — or a reference widening to
+     *   `object`) — the bare operand with NO instruction: CLR reference widening needs no
+     *   `castclass` (probe-verified, `inheritprobe_s1`, `nullprobe_s8`). The JVM backend's
+     *   analogue is `IrTypeOperatorLowering`/codegen dropping implicit casts between reference
+     *   types — only CHECKCAST-requiring operators emit code there.
+     * - IMPLICIT_CAST as a [widening coercion][dotNetWideningCoercionOrNull] of the hybrid
+     *   nullability model: `T -> T?` (`newobj Nullable<T>`), `T -> Any?` (`box T`) and
+     *   `T? -> Any?` (`box Nullable<T>`, CLR-collapsed to boxed-T-or-null, boxprobe_s3) —
+     *   the operand plus one conversion instruction, exactly like the coercion interception in
+     *   [emitExpression] (Roslyn precedent: C# converts `int?` at `object` boundaries with the
+     *   same single instruction).
+     * - IMPLICIT_CAST as the `T? -> T` smartcast unwrap: [emitNullableUnwrapOrThrowNpe] — JVM
+     *   precedent: the same cast emits CHECKCAST + `intValue()` there, throwing NPE on a null
+     *   that an unsound smartcast let through.
+     * - [IrTypeOperator.IMPLICIT_NOTNULL]: the `!!` shape — a HasValue-branch + mapped-NPE throw
+     *   on nullable primitives, a `dup`/`brtrue` null check on references (JVM precedent: the
+     *   checkNotNull intrinsic shape).
+     * Everything else — `as` (CAST), `as?` (SAFE_CAST), `is` (INSTANCEOF), and any IMPLICIT_CAST
+     * outside the shapes above (e.g. the `Any? -> C` downcast a positive `is` smartcast would
+     * produce) — stays rejected loudly until a downcast/type-test model exists.
      */
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
-        if (expression.operator != IrTypeOperator.IMPLICIT_CAST) {
+        if (expression.operator != IrTypeOperator.IMPLICIT_CAST && expression.operator != IrTypeOperator.IMPLICIT_NOTNULL) {
             dotNetUnsupported("type operator ${expression.operator} is not supported")
         }
         val operandType = typeMapper.toDotNetIlValueType(expression.argument.type)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
-        if (!operandType.isDotNetAssignableTo(castType)) {
-            dotNetUnsupported(
-                "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
-                        "is not a reference upcast and is not supported"
-            )
+        if (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL) {
+            emitExpression(expression.argument, operandType)
+            when {
+                operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType ->
+                    emitNullableUnwrapOrThrowNpe(operandType)
+                operandType.isDotNetReferenceShaped() && operandType.isDotNetAssignableTo(castType) ->
+                    emitReferenceNotNullOrThrowNpe()
+                else -> dotNetUnsupported(
+                    "implicit not-null assertion from ${operandType.nameInSignature} " +
+                            "to ${castType.nameInSignature} is not supported"
+                )
+            }
+        } else when {
+            operandType.isDotNetAssignableTo(castType) -> emitExpression(expression.argument, operandType)
+            else -> {
+                val coercion = dotNetWideningCoercionOrNull(operandType, castType)
+                when {
+                    coercion != null -> {
+                        emitExpression(expression.argument, operandType)
+                        methodContext.emit(coercion, pops = 1, pushes = 1)
+                    }
+                    operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType -> {
+                        emitExpression(expression.argument, operandType)
+                        emitNullableUnwrapOrThrowNpe(operandType)
+                    }
+                    else -> dotNetUnsupported(
+                        "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
+                                "is not a reference upcast and is not supported"
+                    )
+                }
+            }
         }
         if (!castType.isDotNetAssignableTo(expectedType)) {
-            dotNetUnsupported(
-                "implicit cast produces ${castType.nameInSignature} " +
-                        "where ${expectedType.nameInSignature} is expected"
-            )
+            val outerCoercion = dotNetWideningCoercionOrNull(castType, expectedType)
+                ?: dotNetUnsupported(
+                    "implicit cast produces ${castType.nameInSignature} " +
+                            "where ${expectedType.nameInSignature} is expected"
+                )
+            methodContext.emit(outerCoercion, pops = 1, pushes = 1)
         }
-        emitExpression(expression.argument, operandType)
     }
 
     /**
@@ -147,7 +297,7 @@ internal class DotNetIlExpressionCodegen(
      * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`
      * values go through [emitBoxedInvariantToString], the invariant-culture rendering; `Char`
      * uses the static culture-free `Char::ToString(char)`; `Double` goes through
-     * [emitDoubleToString], the shared Kotlin-parity rendering helper).
+     * [emitDoubleValueToString], the shared Kotlin-parity rendering helper).
      */
     fun emitStringValueExpression(expression: IrExpression?) {
         when {
@@ -162,29 +312,39 @@ internal class DotNetIlExpressionCodegen(
             // non-constant Float use (fail-hard design rule).
             expression is IrConst && expression.value !is Double && expression.value !is Float ->
                 methodContext.emit("ldstr ${expression.value.toString().toIlStringLiteral()}", pushes = 1)
-            else -> when (typeMapper.toDotNetIlValueType(expression.type)) {
-                DotNetIlValueType.Boolean -> {
-                    emitExpression(expression, DotNetIlValueType.Boolean)
-                    emitBooleanToString()
+            else -> when (val valueType = typeMapper.toDotNetIlValueType(expression.type)) {
+                DotNetIlValueType.Boolean,
+                DotNetIlValueType.Int32,
+                DotNetIlValueType.Int64,
+                DotNetIlValueType.Float64,
+                DotNetIlValueType.Char,
+                    -> {
+                    emitExpression(expression, valueType)
+                    emitPrimitiveValueToString(valueType)
                 }
-                DotNetIlValueType.Int32 -> {
-                    emitExpression(expression, DotNetIlValueType.Int32)
-                    emitBoxedInvariantToString("${CORE_LIB_REF}System.Int32")
+                // A nullable primitive renders through a HasValue branch selecting the "null"
+                // literal or the existing per-type rendering of the extracted value (Kotlin
+                // semantics: `null` prints as "null"). The spill-then-address discipline is
+                // mandatory (boxprobe_s2); the composed shape is probe-verified per type
+                // (boxprobe_s7).
+                is DotNetIlValueType.NullableValue -> {
+                    emitExpression(expression, valueType)
+                    val slot = spillToSyntheticLocal(valueType, "<str>")
+                    val notNullLabel = methodContext.nextLabel("strValueNotNull")
+                    val endLabel = methodContext.nextLabel("strValueEnd")
+                    methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                    methodContext.emit(valueType.hasValueInstruction, pops = 1, pushes = 1)
+                    methodContext.emitBranch("brtrue", notNullLabel, pops = 1)
+                    methodContext.emit("ldstr ${"null".toIlStringLiteral()}", pushes = 1)
+                    methodContext.emitBranch("br", endLabel)
+                    methodContext.emitLabel(notNullLabel)
+                    methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                    methodContext.emit(valueType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                    emitPrimitiveValueToString(valueType.elementType)
+                    methodContext.emitLabel(endLabel)
                 }
-                DotNetIlValueType.Int64 -> {
-                    emitExpression(expression, DotNetIlValueType.Int64)
-                    emitBoxedInvariantToString("${CORE_LIB_REF}System.Int64")
-                }
-                DotNetIlValueType.Float64 -> emitDoubleToString(expression)
-                DotNetIlValueType.Char -> {
-                    // The static Char::ToString(char) renders the single UTF-16 code unit,
-                    // culture-independent; identical to Kotlin's `Char.toString()`. Unlike
-                    // Int32/Int64 above, no box is needed: mscorlib has a static ToString
-                    // overload for char (there is no static Int32::ToString(int32)), so the
-                    // int32-shaped stack value is passed directly.
-                    emitExpression(expression, DotNetIlValueType.Char)
-                    methodContext.emit("call string ${CORE_LIB_REF}System.Char::ToString(char)", pops = 1, pushes = 1)
-                }
+                DotNetIlValueType.Object ->
+                    dotNetUnsupported("string conversion of Any-typed values is not supported yet (no Any.toString model)")
                 is DotNetIlValueType.UserClass ->
                     dotNetUnsupported("string conversion of class instances is not supported yet (no Any.toString model)")
                 is DotNetIlValueType.MappedClass ->
@@ -198,6 +358,26 @@ internal class DotNetIlExpressionCodegen(
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Converts the plain primitive value of [valueType] on top of the stack to its Kotlin
+     * `toString()` rendering: the per-type shapes documented on [emitBooleanToString],
+     * [emitBoxedInvariantToString] and [emitDoubleValueToString]; `Char` uses the static,
+     * culture-free `Char::ToString(char)` — unlike Int32/Int64 no box is needed, mscorlib has a
+     * static ToString overload for char (there is no static `Int32::ToString(int32)`), so the
+     * int32-shaped stack value is passed directly. Net stack effect: pop 1, push 1.
+     */
+    private fun emitPrimitiveValueToString(valueType: DotNetIlValueType) {
+        when (valueType) {
+            DotNetIlValueType.Boolean -> emitBooleanToString()
+            DotNetIlValueType.Int32 -> emitBoxedInvariantToString("${CORE_LIB_REF}System.Int32")
+            DotNetIlValueType.Int64 -> emitBoxedInvariantToString("${CORE_LIB_REF}System.Int64")
+            DotNetIlValueType.Float64 -> emitDoubleValueToString()
+            DotNetIlValueType.Char ->
+                methodContext.emit("call string ${CORE_LIB_REF}System.Char::ToString(char)", pops = 1, pushes = 1)
+            else -> error("Internal .NET backend error: no primitive string rendering for ${valueType.nameInSignature}")
         }
     }
 
@@ -242,14 +422,13 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Converts the `float64` value produced by [expression] to a string with Kotlin
+     * Converts the `float64` value on top of the stack to a string with Kotlin
      * `Double.toString()` shapes (`1.0`, `1.0E20`, `NaN`, `Infinity`, `-0.0`) by calling the
      * shared [DotNetIlRuntimeHelper.DoubleToString] runtime helper, emitted once per module.
      * See that helper's documentation for the rendering algorithm and the consciously accepted
      * divergences from the JVM rendering.
      */
-    private fun emitDoubleToString(expression: IrExpression) {
-        emitExpression(expression, DotNetIlValueType.Float64)
+    private fun emitDoubleValueToString() {
         methodContext.requireRuntimeHelper(DotNetIlRuntimeHelper.DoubleToString)
         methodContext.emit(DotNetIlRuntimeHelper.DoubleToString.callInstruction, pops = 1, pushes = 1)
     }
@@ -591,17 +770,55 @@ internal class DotNetIlExpressionCodegen(
                 null -> methodContext.emit("ldnull", pushes = 1)
                 else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
             }
+            // A constant in a Nullable<T> position: `null` is the empty value (`initobj` through
+            // an addressed temp — a value type has no ldnull); any other constant is the element
+            // constant wrapped by the Nullable ctor (both spellings probe-verified, boxprobe_s1).
+            // Non-null constants normally arrive pre-wrapped by the coercion interception in
+            // emitExpression (the constant's own type is the plain primitive); this arm covers
+            // constants whose IR type is already the nullable one.
+            is DotNetIlValueType.NullableValue -> when (expression.value) {
+                null -> emitEmptyNullable(expectedType)
+                else -> {
+                    emitConstant(expression, expectedType.elementType)
+                    methodContext.emit(expectedType.ctorInstruction, pops = 1, pushes = 1)
+                }
+            }
+            // An object-typed (`Any?`) constant: only `null` lands here — reference constants
+            // (strings) are emitted at their own type by the interception in emitExpression
+            // (free widening), and primitive constants arrive boxed by the same interception.
+            DotNetIlValueType.Object -> when (expression.value) {
+                null -> methodContext.emit("ldnull", pushes = 1)
+                else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
+            }
         }
     }
 
     private fun emitGetValue(expression: IrGetValue, expectedType: DotNetIlValueType) {
         val slot = methodContext.reference(expression.symbol)
-        if (!slot.type.isDotNetAssignableTo(expectedType)) {
+        val slotType = slot.type
+        if (!slotType.isDotNetAssignableTo(expectedType)) {
+            // A NARROWED read of a nullable-primitive slot: the frontend types a null-test-
+            // narrowed access at the element type WITHOUT a cast node — the elvis/safe-call
+            // temporary in its non-null branch is the canonical shape (`tmp0_elvis_lhs` read as
+            // `Int` from an `Int?` slot). The value is loaded as the Nullable it is and unwrapped
+            // with the same checked extraction as the IMPLICIT_CAST smartcast unwrap (JVM
+            // precedent: the narrowed read is an unboxing `intValue()` there, NPE on null).
+            if (slotType is DotNetIlValueType.NullableValue &&
+                slotType.elementType.isDotNetAssignableTo(expectedType)
+            ) {
+                emitLoadSlot(slot)
+                emitNullableUnwrapOrThrowNpe(slotType)
+                return
+            }
             dotNetUnsupported(
-                "value '${expression.symbol.owner.name.asString()}' has type ${slot.type.nameInSignature} " +
+                "value '${expression.symbol.owner.name.asString()}' has type ${slotType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
+        emitLoadSlot(slot)
+    }
+
+    private fun emitLoadSlot(slot: DotNetIlSlot) {
         when (slot) {
             is DotNetIlSlot.Parameter -> methodContext.emit(loadArgumentInstruction(slot.index), pushes = 1)
             is DotNetIlSlot.Local -> methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
@@ -651,5 +868,30 @@ internal fun loadArgumentInstruction(index: Int): String =
 internal fun loadLocalInstruction(index: Int): String =
     if (index in 0..3) "ldloc.$index" else "ldloc $index"
 
+/**
+ * Loads the ADDRESS of a local slot — the home address a `Nullable<T>` instance-member call
+ * requires (see [DotNetIlValueType.NullableValue]). `ldloca` has no short `.N` forms; the plain
+ * numeric-operand spelling is probe-verified (`nullprobe_s8`).
+ */
+internal fun loadLocalAddressInstruction(index: Int): String = "ldloca $index"
+
 internal fun storeLocalInstruction(index: Int): String =
     if (index in 0..3) "stloc.$index" else "stloc $index"
+
+/**
+ * The single IL instruction of a WIDENING conversion of the hybrid nullability model, or null
+ * when no such conversion exists (instruction-free widenings live in [isDotNetAssignableTo];
+ * narrowings only exist as explicit cast/`!!` shapes). Each pops 1, pushes 1:
+ * - `T -> T?`: `newobj Nullable<T>::.ctor(!0)` (boxprobe_s1);
+ * - `T? -> Any?`: `box Nullable<T>` — the CLR collapses the result to boxed-`T`-or-null
+ *   (boxprobe_s3, all five instantiations incl. the empty->null case nullprobe_s8);
+ * - `T -> Any?` for plain primitives: `box <boxed T>` (nullprobe_s8).
+ * Roslyn precedent: C# performs exactly these conversions implicitly at typed/object boundaries;
+ * JVM precedent: the JVM backend's StackValue boxing coercions.
+ */
+internal fun dotNetWideningCoercionOrNull(from: DotNetIlValueType, to: DotNetIlValueType): String? = when {
+    to is DotNetIlValueType.NullableValue && from == to.elementType -> to.ctorInstruction
+    to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
+    to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull()?.let { "box $it" }
+    else -> null
+}

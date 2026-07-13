@@ -1,0 +1,317 @@
+.assembly extern mscorlib {}
+.assembly 'nullableEquality' {}
+.module 'main-nullableEquality.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'nullableEqualityKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static bool 'eqNN'(valuetype [mscorlib]System.Nullable`1<int32> 'a', valuetype [mscorlib]System.Nullable`1<int32> 'b') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<eqLeft>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eqRight>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ceq
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ceq
+    and
+    ret
+  }
+  .method public hidebysig static bool 'eqNP'(valuetype [mscorlib]System.Nullable`1<int32> 'a', int32 'b') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<eq>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ldarg.1
+    ceq
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    and
+    ret
+  }
+  .method public hidebysig static bool 'eqPN'(int32 'a', valuetype [mscorlib]System.Nullable`1<int32> 'b') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 '<eqLeft>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eqRight>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ceq
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    and
+    ret
+  }
+  .method public hidebysig static bool 'eqNull'(valuetype [mscorlib]System.Nullable`1<int32> 'a') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<eq>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    ret
+  }
+  .method public hidebysig static bool 'neNull'(valuetype [mscorlib]System.Nullable`1<int32> 'a') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<eq>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    ldc.i4.0
+    ceq
+    ret
+  }
+  .method public hidebysig static bool 'eqLong'(valuetype [mscorlib]System.Nullable`1<int64> 'a', valuetype [mscorlib]System.Nullable`1<int64> 'b') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int64> '<eqLeft>',
+      [1] valuetype [mscorlib]System.Nullable`1<int64> '<eqRight>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int64>::GetValueOrDefault()
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int64>::GetValueOrDefault()
+    ceq
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int64>::get_HasValue()
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int64>::get_HasValue()
+    ceq
+    and
+    ret
+  }
+  .method public hidebysig static bool 'eqDouble'(valuetype [mscorlib]System.Nullable`1<float64> 'a', valuetype [mscorlib]System.Nullable`1<float64> 'b') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<float64> '<eqLeft>',
+      [1] valuetype [mscorlib]System.Nullable`1<float64> '<eqRight>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<float64>::GetValueOrDefault()
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<float64>::GetValueOrDefault()
+    ceq
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<float64>::get_HasValue()
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<float64>::get_HasValue()
+    ceq
+    and
+    ret
+  }
+  .method public hidebysig static bool 'eqBool'(valuetype [mscorlib]System.Nullable`1<bool> 'a', bool 'b') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<bool> '<eq>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<bool>::GetValueOrDefault()
+    ldarg.1
+    ceq
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<bool>::get_HasValue()
+    and
+    ret
+  }
+  .method public hidebysig static bool 'eqChar'(valuetype [mscorlib]System.Nullable`1<char> 'a', valuetype [mscorlib]System.Nullable`1<char> 'b') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<char> '<eqLeft>',
+      [1] valuetype [mscorlib]System.Nullable`1<char> '<eqRight>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<char>::GetValueOrDefault()
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<char>::GetValueOrDefault()
+    ceq
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<char>::get_HasValue()
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<char>::get_HasValue()
+    ceq
+    and
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<null>@1',
+      [2] valuetype [mscorlib]System.Nullable`1<int32> '<null>@2',
+      [3] valuetype [mscorlib]System.Nullable`1<bool> '<null>@3'
+    )
+    ldc.i4 1
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    ldc.i4 1
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call bool 'nullableEqualityKt'::'eqNN'(valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>)
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    ldc.i4 0
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call bool 'nullableEqualityKt'::'eqNN'(valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>)
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    ldc.i4 5
+    call bool 'nullableEqualityKt'::'eqNP'(valuetype [mscorlib]System.Nullable`1<int32>, int32)
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    ldloca 1
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.1
+    call bool 'nullableEqualityKt'::'eqPN'(int32, valuetype [mscorlib]System.Nullable`1<int32>)
+    brtrue IL_boolStrTrue_6
+    ldstr "false"
+    br IL_boolStrEnd_7
+IL_boolStrTrue_6:
+    ldstr "true"
+IL_boolStrEnd_7:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 2
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.2
+    call bool 'nullableEqualityKt'::'eqNull'(valuetype [mscorlib]System.Nullable`1<int32>)
+    brtrue IL_boolStrTrue_8
+    ldstr "false"
+    br IL_boolStrEnd_9
+IL_boolStrTrue_8:
+    ldstr "true"
+IL_boolStrEnd_9:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 3
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call bool 'nullableEqualityKt'::'neNull'(valuetype [mscorlib]System.Nullable`1<int32>)
+    brtrue IL_boolStrTrue_10
+    ldstr "false"
+    br IL_boolStrEnd_11
+IL_boolStrTrue_10:
+    ldstr "true"
+IL_boolStrEnd_11:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i8 7
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int64>::.ctor(!0)
+    ldc.i8 7
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int64>::.ctor(!0)
+    call bool 'nullableEqualityKt'::'eqLong'(valuetype [mscorlib]System.Nullable`1<int64>, valuetype [mscorlib]System.Nullable`1<int64>)
+    brtrue IL_boolStrTrue_12
+    ldstr "false"
+    br IL_boolStrEnd_13
+IL_boolStrTrue_12:
+    ldstr "true"
+IL_boolStrEnd_13:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.r8 2.5
+    newobj instance void valuetype [mscorlib]System.Nullable`1<float64>::.ctor(!0)
+    ldc.r8 2.5
+    newobj instance void valuetype [mscorlib]System.Nullable`1<float64>::.ctor(!0)
+    call bool 'nullableEqualityKt'::'eqDouble'(valuetype [mscorlib]System.Nullable`1<float64>, valuetype [mscorlib]System.Nullable`1<float64>)
+    brtrue IL_boolStrTrue_14
+    ldstr "false"
+    br IL_boolStrEnd_15
+IL_boolStrTrue_14:
+    ldstr "true"
+IL_boolStrEnd_15:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 3
+    initobj valuetype [mscorlib]System.Nullable`1<bool>
+    ldloc.3
+    ldc.i4.0
+    call bool 'nullableEqualityKt'::'eqBool'(valuetype [mscorlib]System.Nullable`1<bool>, bool)
+    brtrue IL_boolStrTrue_16
+    ldstr "false"
+    br IL_boolStrEnd_17
+IL_boolStrTrue_16:
+    ldstr "true"
+IL_boolStrEnd_17:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 97
+    newobj instance void valuetype [mscorlib]System.Nullable`1<char>::.ctor(!0)
+    ldc.i4 97
+    newobj instance void valuetype [mscorlib]System.Nullable`1<char>::.ctor(!0)
+    call bool 'nullableEqualityKt'::'eqChar'(valuetype [mscorlib]System.Nullable`1<char>, valuetype [mscorlib]System.Nullable`1<char>)
+    brtrue IL_boolStrTrue_18
+    ldstr "false"
+    br IL_boolStrEnd_19
+IL_boolStrTrue_18:
+    ldstr "true"
+IL_boolStrEnd_19:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
