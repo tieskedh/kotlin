@@ -133,7 +133,7 @@ class DotNetIlEmitter(
         // absent here, leaving the link out) or is evicted later evicts its derived
         // classes/implementers/sub-interfaces through the fixpoint rather than through these
         // links.
-        for ((irClass, classInfo) in availableClasses) {
+        for ([irClass, classInfo] in availableClasses) {
             if (irClass.isCompanion) continue
             irClass.dotNetBaseClassOrNull()?.let { baseClass ->
                 classInfo.baseClass = availableClasses[baseClass]
@@ -148,7 +148,7 @@ class DotNetIlEmitter(
 
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
         val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
-        for ((file, functions) in topLevelFunctionsByFile) {
+        for ([file, functions] in topLevelFunctionsByFile) {
             val facadeClassInfo = facadeClassInfoByFile.getValue(file)
             for (function in functions) {
                 if (intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true) continue
@@ -171,7 +171,7 @@ class DotNetIlEmitter(
         // injected `val Char.code`) is excluded from codegen entirely, like `println`.
         val propertySkipReasons = LinkedHashMap<IrProperty, String>()
         val constFieldLines = LinkedHashMap<IrProperty, String>()
-        for ((file, properties) in topLevelPropertiesByFile) {
+        for ([file, properties] in topLevelPropertiesByFile) {
             val facadeClassInfo = facadeClassInfoByFile.getValue(file)
             for (property in properties) {
                 if (property.isExcludedFromCodegen(intrinsicMethods)) continue
@@ -252,7 +252,7 @@ class DotNetIlEmitter(
         // field participates in the ENCLOSING class's gate the same way (the lowering parents
         // it there): a user field named after the companion whose type maps to the companion
         // clashes, evicting the whole (class, companion) pair.
-        for ((irClass, classInfo) in availableClasses.entries.toList()) {
+        for ([irClass, classInfo] in availableClasses.entries.toList()) {
             // Already evicted as the partner of an earlier pair failure in this snapshot.
             if (irClass !in availableClasses) continue
             try {
@@ -391,7 +391,7 @@ class DotNetIlEmitter(
             // whole property (a property is never emitted partially), and when that property
             // carries a backing field its initializer can no longer run, which fails the file's
             // whole property group (see failFilePropertyGroup).
-            for ((file, properties) in topLevelPropertiesByFile) {
+            for ([file, properties] in topLevelPropertiesByFile) {
                 for (property in properties) {
                     if (property in propertySkipReasons || property.isConst) continue
                     if (property.isExcludedFromCodegen(intrinsicMethods)) continue
@@ -441,20 +441,20 @@ class DotNetIlEmitter(
             }
         } while (anyDeclarationRemoved)
 
-        for ((irClass, reason) in classSkipReasons) {
+        for ([irClass, reason] in classSkipReasons) {
             messageCollector.report(
                 CompilerMessageSeverity.WARNING,
                 "Class '${irClass.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
         }
-        for ((function, reason) in skipReasons) {
+        for ([function, reason] in skipReasons) {
             if (function == entryPoint) continue
             messageCollector.report(
                 CompilerMessageSeverity.WARNING,
                 "Function '${function.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
         }
-        for ((property, reason) in propertySkipReasons) {
+        for ([property, reason] in propertySkipReasons) {
             messageCollector.report(
                 CompilerMessageSeverity.WARNING,
                 "Property '${property.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"

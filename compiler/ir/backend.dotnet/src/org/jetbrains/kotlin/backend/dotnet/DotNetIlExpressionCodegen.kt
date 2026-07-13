@@ -323,7 +323,7 @@ internal class DotNetIlExpressionCodegen(
         if (arguments.size != parameterTypes.size) {
             dotNetUnsupported("call to $calleeDescription has an unsupported argument shape")
         }
-        for ((argument, parameterType) in arguments.zip(parameterTypes)) {
+        for ([argument, parameterType] in arguments.zip(parameterTypes)) {
             if (argument == null) {
                 dotNetUnsupported("call to $calleeDescription relies on default argument values")
             }
@@ -453,7 +453,7 @@ internal class DotNetIlExpressionCodegen(
      */
     private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
         val field = expression.symbol.owner
-        val (classInfo, fieldType, isStatic) = resolveFieldAccess(field)
+        val [classInfo, fieldType, isStatic] = resolveFieldAccess(field)
         if (!fieldType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
@@ -483,7 +483,7 @@ internal class DotNetIlExpressionCodegen(
      */
     fun emitSetField(expression: IrSetField) {
         val field = expression.symbol.owner
-        val (classInfo, fieldType, isStatic) = resolveFieldAccess(field)
+        val [classInfo, fieldType, isStatic] = resolveFieldAccess(field)
         if (isStatic) {
             emitExpression(expression.value, fieldType)
             methodContext.emit("stsfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pops = 1)
@@ -513,7 +513,7 @@ internal class DotNetIlExpressionCodegen(
                         "(const reads are inlined by the frontend)"
             )
         }
-        val (classInfo, isStatic) = when (val parent = field.parent) {
+        val [classInfo, isStatic] = when (val parent = field.parent) {
             is IrClass -> {
                 val classInfo = typeMapper.classInfoOrNull(parent)
                     ?: dotNetUnsupported("access to a field of unsupported class '${parent.name.asString()}'")

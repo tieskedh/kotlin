@@ -116,7 +116,7 @@ internal class DotNetIlMethodCodegen(
             // parameter list carries no dispatch receiver to begin with).
             val parameters = function.parameters.zip(signature.parameterTypes)
                 .drop(if (signature.hasThis) 1 else 0)
-                .joinToString(", ") { (parameter, type) ->
+                .joinToString(", ") { [parameter, type] ->
                     "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
                 }
             if (function is IrConstructor) {
@@ -242,7 +242,7 @@ internal class DotNetIlMethodCodegen(
         if (locals.isEmpty()) return
 
         appendLine("    .locals init (")
-        for ((index, local) in locals.withIndex()) {
+        for ([index, local] in locals.withIndex()) {
             val separator = if (index == locals.lastIndex) "" else ","
             appendLine("      [${local.index}] ${local.type.nameInSignature} ${local.name.toIlIdentifier()}$separator")
         }

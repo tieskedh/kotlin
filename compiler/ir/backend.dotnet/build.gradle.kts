@@ -1,4 +1,7 @@
 plugins {
+    id("common-configuration")
+    id("test-federation-convention")
+    id("com.autonomousapps.dependency-analysis")
     kotlin("jvm")
 }
 
@@ -8,6 +11,7 @@ dependencies {
     api(project(":compiler:ir.backend.common"))
     api(project(":compiler:ir.serialization.common"))
     implementation(project(":compiler:util"))
+    implementation(project(":core:descriptors"))
 
     compileOnly(intellijCore())
 }
