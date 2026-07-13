@@ -113,7 +113,6 @@ internal object ConeTypeCompatibilityChecker {
             is ConeStubType,
             is ConeTypeParameterType,
             is ConeIntegerLiteralType,
-            is ConeLookupTagBasedType
                 -> false
         }
     }
