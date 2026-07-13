@@ -5,6 +5,10 @@
 
 package org.jetbrains.kotlin.fir.analysis.checkers.declaration.crv
 
+import org.jetbrains.kotlin.config.AnalysisFlags
+import org.jetbrains.kotlin.config.LanguageVersion
+import org.jetbrains.kotlin.config.LanguageVersionSettings
+import org.jetbrains.kotlin.config.ReturnValueCheckerMode
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.analysis.checkers.context.CheckerContext
 import org.jetbrains.kotlin.fir.contracts.description.ConeReturnsResultOfDeclaration
@@ -38,3 +42,5 @@ internal fun FirCallableSymbol<*>.indicesOfPropagatingFunctionalParameters(): Li
 
 internal fun ConeKotlinType.isFunctionalTypeThatReturnsUnit(session: FirSession): Boolean =
     functionTypeKind(session) != null && typeArguments.last().type?.isUnit == true
+
+fun LanguageVersionSettings.rvcEnabledOrStable(): Boolean = this.languageVersion >= LanguageVersion.KOTLIN_2_5 || this.getFlag(AnalysisFlags.returnValueCheckerMode) != ReturnValueCheckerMode.DISABLED

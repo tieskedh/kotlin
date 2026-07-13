@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.fir.resolve.diagnostics.ConeContractDescriptionError
 import org.jetbrains.kotlin.fir.resolve.fullyExpandedType
 import org.jetbrains.kotlin.fir.resolve.getContainingClass
 import org.jetbrains.kotlin.fir.resolve.referencedMemberSymbol
+import org.jetbrains.kotlin.fir.resolve.rvcEnabledOrStable
 import org.jetbrains.kotlin.fir.resolve.toTypeParameterSymbol
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.coneType
@@ -123,7 +124,7 @@ class ConeEffectExtractor(
             }
 
             ContractsDslNames.RETURNS_RESULT_OF -> {
-                if (session.languageVersionSettings.getFlag(AnalysisFlags.returnValueCheckerMode) != ReturnValueCheckerMode.DISABLED
+                if (session.languageVersionSettings.rvcEnabledOrStable()
                     && LanguageFeature.AllowReturnsResultOfContract.isEnabled()
                 ) {
                     val reference = functionCall.arguments.getOrNull(0).asContractValueExpression(LAMBDA_ARGUMENT_NAME)

@@ -11,6 +11,9 @@ import org.jetbrains.kotlin.KtSourceElement
 import org.jetbrains.kotlin.builtins.functions.FunctionTypeKind
 import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.config.LanguageVersion
+import org.jetbrains.kotlin.config.LanguageVersionSettings
+import org.jetbrains.kotlin.config.ReturnValueCheckerMode
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.fakeElement
 import org.jetbrains.kotlin.fir.*
@@ -900,3 +903,5 @@ private fun FirFunctionCall.getOriginalFunction(): FirNamedFunctionSymbol? {
     }
     return symbol as? FirNamedFunctionSymbol
 }
+
+fun LanguageVersionSettings.rvcEnabledOrStable(): Boolean = this.languageVersion >= LanguageVersion.KOTLIN_2_5 || this.getFlag(AnalysisFlags.returnValueCheckerMode) != ReturnValueCheckerMode.DISABLED

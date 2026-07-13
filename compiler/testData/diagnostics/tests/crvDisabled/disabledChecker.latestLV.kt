@@ -6,16 +6,16 @@
 // This test can be deleted when 2.4 is obsolete
 // LATEST_LV_DIFFERENCE
 
-<!IGNORABILITY_ANNOTATIONS_WITH_CHECKER_DISABLED!>@file:MustUseReturnValues<!>
+@file:MustUseReturnValues
 
 fun foo(): String = ""
 
-<!IGNORABILITY_ANNOTATIONS_WITH_CHECKER_DISABLED!>@IgnorableReturnValue<!>
+@IgnorableReturnValue
 fun bar(): Int = 42
 
-<!IGNORABILITY_ANNOTATIONS_WITH_CHECKER_DISABLED!>@MustUseReturnValues<!>
+@MustUseReturnValues
 class Test {
-    <!IGNORABILITY_ANNOTATIONS_WITH_CHECKER_DISABLED!>@IgnorableReturnValue<!>
+    @IgnorableReturnValue
     fun method(): Double = 0.0
 }
 

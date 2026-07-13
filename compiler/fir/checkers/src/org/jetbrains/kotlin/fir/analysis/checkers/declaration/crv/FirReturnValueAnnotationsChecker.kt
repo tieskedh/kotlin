@@ -34,7 +34,7 @@ object FirReturnValueAnnotationsChecker : FirBasicDeclarationChecker(MppCheckerK
 
     context(context: CheckerContext, reporter: DiagnosticReporter)
     override fun check(declaration: FirDeclaration) {
-        if (context.languageVersionSettings.getFlag(AnalysisFlags.returnValueCheckerMode) != ReturnValueCheckerMode.DISABLED) return
+        if (context.languageVersionSettings.rvcEnabledOrStable()) return
 
         val session = context.session
         declaration.annotations.forEach { annotation ->
