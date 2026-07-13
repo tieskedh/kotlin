@@ -343,7 +343,8 @@ internal abstract class GenerateSyntheticLinkageImportProject : DefaultTask(), U
                 dependencyArguments += "  name: \"${dependency.first.name}\""
                 dependencyArguments += "  package: \"${dependency.second}\""
                 val effectiveConstraint: Set<SwiftPMDependency.Platform>? = run {
-                    val explicit = dependency.first.platformConstraints
+                    // An empty set would emit `.when(platforms: [])` and void the implicit constraint, so treat it as unset.
+                    val explicit = dependency.first.platformConstraints?.takeIf { it.isNotEmpty() }
                     when {
                         // Both present: intersect. An empty intersection (e.g. explicit={macOS} ∩ implicit={iOS})
                         // means no valid platform — omit the condition and let SwiftPM report the conflict.
