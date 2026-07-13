@@ -124,7 +124,7 @@ private class LightContextLookupUtil(val element: KtSimpleNameExpression, val co
         element is KtNamedFunction || (element is KtProperty && !element.isLocal)
 
     private fun shouldStopBeforeProcessing(element: KtElement): Boolean =
-        element is KtClassOrObject
+        element is KtClassOrObject && lastDirectionIs(LastDirection.PARENT)
 
     private fun next(element: KtElement): KtElement? {
         if (isStopElement(element)) return null
@@ -223,6 +223,14 @@ private class LightContextLookupUtil(val element: KtSimpleNameExpression, val co
         if (lastDirectionIs(LastDirection.PARENT)) {
             element.contextParameters.processingMany(::processParameter)
         }
+    }
+
+    override fun visitClass(klass: KtClass) {
+        foundIfNameMatches(klass)
+    }
+
+    override fun visitObjectDeclaration(declaration: KtObjectDeclaration) {
+        foundIfNameMatches(declaration)
     }
 
     override fun visitNamedFunction(element: KtNamedFunction) {
