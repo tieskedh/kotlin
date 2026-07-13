@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.ir.expressions.IrBreak
 import org.jetbrains.kotlin.ir.expressions.IrBreakContinue
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrCatch
+import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
@@ -91,7 +92,14 @@ internal class DotNetIlMethodCodegen(
     }
     private val expressionCodegen =
         DotNetIlExpressionCodegen(
-            methodContext, availableFunctions, intrinsicMethods, typeMapper, facadeClassInfoByFile, ::emitTryExpression,
+            methodContext, availableFunctions, intrinsicMethods, typeMapper, facadeClassInfoByFile,
+            object : DotNetIlStatementScopeEmitter {
+                override fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType) =
+                    this@DotNetIlMethodCodegen.emitTryExpression(expression, expectedType)
+
+                override fun emitBlockExpression(block: IrContainerExpression, expectedType: DotNetIlValueType) =
+                    emitValueExpression(block, expectedType)
+            },
         )
 
     /**
@@ -333,6 +341,10 @@ internal class DotNetIlMethodCodegen(
             // A side-effect-free value read in statement position (e.g. the trailing `<unary>`
             // read of a desugared `x++` block) compiles to nothing.
             expression is IrGetValue -> Unit
+            // A side-effect-free constant in statement position compiles to nothing — the
+            // canonical shape is the `null` result branch of a Unit-typed safe call
+            // (`obj?.method()` desugars to a when whose null branch is a bare `null` constant).
+            expression is IrConst -> Unit
             else -> dotNetUnsupported("unsupported statement expression ${expression.javaClass.simpleName}")
         }
     }
@@ -651,10 +663,20 @@ internal class DotNetIlMethodCodegen(
      * values are expressions (e.g. a trailing constant) that statement emission cannot handle.
      * A `Nothing`-typed (or otherwise unmapped) `try` uses statement form instead, whose
      * branches are emitted as statements.
+     *
+     * An `object`-typed `try` ALSO uses statement form: since `kotlin.Any` maps to CLR `object`
+     * (the hybrid nullability model's storage type), a `try` whose branch types merely LUB to
+     * `Any` reaches here — the routine `try { intCall() } catch (e: Exception) { flag = true }`
+     * statement shape, whose catch branch is Unit-typed and ends in an assignment that value
+     * emission cannot handle. A discarded `Any`-typed value is never materialized, so the
+     * statement path (the exact pre-hybrid behavior, when `Any` was unmapped) is kept; mapped
+     * NON-`object` types imply every branch result is value-shaped (a statement-shaped branch
+     * would have pushed the LUB to `Any`), so the expression form stays correct for them.
+     * Pinned by `box/tryDiscardedValue.kt`.
      */
     private fun emitDiscardedTry(expression: IrTry) {
         val valueType = typeMapper.toDotNetIlValueType(expression.type)
-        if (valueType == null) {
+        if (valueType == null || valueType == DotNetIlValueType.Object) {
             emitTryStatement(expression)
         } else {
             emitTryExpression(expression, valueType)

@@ -19,6 +19,10 @@ import org.jetbrains.kotlin.ir.types.isChar
 import org.jetbrains.kotlin.ir.types.isDouble
 import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.types.isLong
+import org.jetbrains.kotlin.builtins.StandardNames
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.isNullableAny
+import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -110,6 +114,17 @@ internal class DotNetIlTypeMapper(
     /**
      * Maps [type] in value position (parameter, local, field, evaluation stack), or null when
      * the type has no IL mapping, so that callers report their own located diagnostic.
+     *
+     * Nullability follows the HYBRID representation (see AGENTS.md "Nullability model"): a
+     * nullable REFERENCE type maps to the same IL type as its non-null flavor (CLR reference
+     * types are structurally nullable — the `String?`/`C?`/exception arms below are shared with
+     * the non-null lookups), while a concrete nullable PRIMITIVE (`Int?` etc.) maps to
+     * `System.Nullable<T>` ([DotNetIlValueType.NullableValue], Roslyn precedent). The `is*`
+     * primitive predicates are NOT-NULL-only by construction, so the nullable-primitive arm is
+     * separate. `kotlin.Any`/`Any?` map to CLR `object` as a storage type
+     * ([DotNetIlValueType.Object]). Generic `T?` (a nullable type-parameter type) deliberately
+     * stays unmapped: its ABI is a future generics problem and must not force concrete nullable
+     * primitives into `object` (the whole point of the hybrid split).
      */
     fun toDotNetIlValueType(type: IrType): DotNetIlValueType? = when {
         type.isBoolean() -> DotNetIlValueType.Boolean
@@ -118,7 +133,34 @@ internal class DotNetIlTypeMapper(
         type.isDouble() -> DotNetIlValueType.Float64
         type.isChar() -> DotNetIlValueType.Char
         type.isDotNetStringType() -> DotNetIlValueType.String
-        else -> toMappedExceptionTypeOrNull(type) ?: toUserClassTypeOrNull(type)
+        type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
+        // `Nothing?` — the type of the null literal, and of values the frontend narrowed to
+        // definitely-null (e.g. a when-subject temporary initialized from a known-null value) —
+        // is reference-shaped storage whose only value is `ldnull`. Plain `Nothing` (no values
+        // at all) deliberately stays unmapped.
+        type.isNullableNothing() -> DotNetIlValueType.Object
+        else -> toNullablePrimitiveTypeOrNull(type)
+            ?: toMappedExceptionTypeOrNull(type)
+            ?: toUserClassTypeOrNull(type)
+    }
+
+    /**
+     * The [NullableValue][DotNetIlValueType.NullableValue] mapping of a concrete nullable
+     * primitive type, or null when [type] is not one. Matches by classifier FqName plus the
+     * nullability marker — the positive-space complement of the not-null `isInt()` family used
+     * above (`Int?` fails `isInt()` because `isNotNullClassType` requires `!isMarkedNullable`).
+     */
+    private fun toNullablePrimitiveTypeOrNull(type: IrType): DotNetIlValueType.NullableValue? {
+        if (type !is IrSimpleType || !type.isMarkedNullable()) return null
+        val elementType = when (type.classFqName) {
+            StandardNames.FqNames._boolean.toSafe() -> DotNetIlValueType.Boolean
+            StandardNames.FqNames._int.toSafe() -> DotNetIlValueType.Int32
+            StandardNames.FqNames._long.toSafe() -> DotNetIlValueType.Int64
+            StandardNames.FqNames._double.toSafe() -> DotNetIlValueType.Float64
+            StandardNames.FqNames._char.toSafe() -> DotNetIlValueType.Char
+            else -> return null
+        }
+        return DotNetIlValueType.NullableValue(elementType)
     }
 
     /**

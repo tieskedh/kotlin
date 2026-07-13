@@ -14,9 +14,11 @@ import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.types.classifierOrNull
+import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFileClass
 import org.jetbrains.kotlin.ir.util.isNullConst
+import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.name.FqName
 
 /**
@@ -66,6 +68,10 @@ internal class DotNetIlIntrinsicMethods(
         irBuiltIns.ieee754equalsFunByOperandType.getValue(irBuiltIns.floatClass).toKey()!!
                 to DotNetIlEqualityIntrinsic(referenceEquality = false),
         irBuiltIns.booleanNotSymbol.toKey()!! to DotNetIlBooleanNotIntrinsic,
+        // `a!!` arrives as a call to the CHECK_NOT_NULL builtin (`kotlin.internal.ir`), exactly
+        // like on the JVM, whose backend intrinsifies it as checkNotNull (Intrinsics.checkNotNull
+        // at runtime); here the null test + throw is emitted inline (see the intrinsic's KDoc).
+        irBuiltIns.checkNotNullSymbol.toKey()!! to DotNetIlCheckNotNullIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
@@ -386,6 +392,26 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
  * defines as a pure reference check that never calls `equals` (the JVM backend's `Equals`
  * intrinsic special-cases `isNullConst` operands into an `ifnull` check the same way); general
  * `==` between two instances is rejected until an Any.equals model exists.
+ *
+ * NULLABLE-PRIMITIVE operands (`Int?` and friends, the hybrid `Nullable<T>` representation) get
+ * null-aware structural `==` without any boxing — the JVM precedent is the
+ * `Intrinsics.areEqual` specializations (`areEqual(Double, Double)` compares unboxed values the
+ * same way), the emitted IL is the exact Roslyn lifted-equality shape (probe-verified incl. the
+ * (none, some(0)) corner, boxprobe_s5):
+ * - `T? == T?`: `GetValueOrDefault()` values `ceq` ANDed with `get_HasValue()` flags `ceq`;
+ * - `T? == T` / `T == T?`: value `ceq` ANDed with the nullable side's `get_HasValue()`;
+ * - `T? == null` / `null == T?`: negated `get_HasValue()`.
+ * `Double?`/`Float?` arrive through the separately registered `ieee754equals` symbols and land
+ * in the same shapes: `ceq` on the extracted `float64` values IS the IEEE semantics of the JVM's
+ * nullable specialization (NaN? == NaN? is false — the boxed-`equals` total order applies only
+ * to the eqeq path, which fir2ir never chooses for statically-Double operands). Cross-primitive
+ * pairs (`Int? == Long?`) stay rejected like `Int == Long`. `===` with a nullable-primitive
+ * operand is REJECTED loudly: the operands would have to box, and reference identity of
+ * separately boxed values is unrelated to value equality (probe-verified False for equal
+ * payloads, boxprobe_s6; Kotlin deprecates identity checks on boxed primitives for this reason).
+ *
+ * `Any?`-typed operands are reference-shaped storage: `===` (and `== null`) is the type-agnostic
+ * reference `ceq`; general `==` stays rejected (no Any.equals model).
  */
 private class DotNetIlEqualityIntrinsic(
     private val referenceEquality: Boolean,
@@ -396,12 +422,35 @@ private class DotNetIlEqualityIntrinsic(
         expectedType: DotNetIlValueType,
     ): Boolean {
         if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
-        val operandType = call.dotNetEqualityOperandType(codegen)
-            ?: dotNetUnsupported("equality comparison of unsupported operand types")
         val left = call.arguments[0]
             ?: dotNetUnsupported("missing left operand of an equality comparison")
         val right = call.arguments[1]
             ?: dotNetUnsupported("missing right operand of an equality comparison")
+        val leftType = codegen.toDotNetIlValueType(left.type)
+        val rightType = codegen.toDotNetIlValueType(right.type)
+        if (leftType is DotNetIlValueType.NullableValue || rightType is DotNetIlValueType.NullableValue) {
+            emitNullablePrimitiveEquality(codegen, left, right, leftType, rightType)
+            return true
+        }
+        // A null-only operand (the null literal, or a `Nothing?`-typed value such as a
+        // when-subject temporary the frontend narrowed to definitely-null) against a PLAIN
+        // primitive: statically false — a shape smartcast when-subjects routinely produce
+        // (`when (x) { null -> ... }` after `x` narrowed to Int). Both operands are still
+        // evaluated in order for their side effects; the JVM compiles the same comparison to a
+        // constant-false with the operand evaluated.
+        if ((left.isDotNetNullLike() && rightType.isDotNetPrimitiveValue()) ||
+            (right.isDotNetNullLike() && leftType.isDotNetPrimitiveValue())
+        ) {
+            for ([operand, operandType] in listOf(left to leftType, right to rightType)) {
+                if (operand.isNullConst()) continue
+                codegen.emitExpression(operand, operandType!!)
+                codegen.emit("pop", pops = 1)
+            }
+            codegen.emit("ldc.i4.0", pushes = 1)
+            return true
+        }
+        val operandType = call.dotNetEqualityOperandType(codegen)
+            ?: dotNetUnsupported("equality comparison of unsupported operand types")
 
         codegen.emitExpression(left, operandType)
         codegen.emitExpression(right, operandType)
@@ -419,14 +468,15 @@ private class DotNetIlEqualityIntrinsic(
                     codegen.emit("call bool ${CORE_LIB_REF}System.String::op_Equality(string, string)", pops = 2, pushes = 1)
                 }
             }
-            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass -> {
-                // Reference equality on object references is a plain `ceq` (probe-verified).
-                // `x == null` shares it: Kotlin defines a null-literal comparison as a pure
-                // reference check that never calls `equals` (JVM precedent: the Equals intrinsic
-                // rewrites `isNullConst` operands to an `ifnull` check), so no Any.equals model
-                // is involved. General instance `==` needs that model and is rejected loudly —
-                // never silently downgraded to a reference comparison. Mapped exception types
-                // follow the same rules; `===` on them is what makes rethrow identity observable.
+            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass, DotNetIlValueType.Object -> {
+                // Reference equality on object references is a plain `ceq` (probe-verified;
+                // `object`-typed operands included, nullprobe_s8). `x == null` shares it: Kotlin
+                // defines a null-literal comparison as a pure reference check that never calls
+                // `equals` (JVM precedent: the Equals intrinsic rewrites `isNullConst` operands
+                // to an `ifnull` check), so no Any.equals model is involved. General instance
+                // `==` needs that model and is rejected loudly — never silently downgraded to a
+                // reference comparison. Mapped exception types follow the same rules; `===` on
+                // them is what makes rethrow identity observable.
                 if (referenceEquality || left.isNullConst() || right.isNullConst()) {
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
@@ -435,6 +485,187 @@ private class DotNetIlEqualityIntrinsic(
                     )
                 }
             }
+            is DotNetIlValueType.NullableValue ->
+                error("Internal .NET backend error: nullable-primitive equality operands handled above")
+        }
+        return true
+    }
+
+    /** The nullable-primitive `==` shapes; see the class KDoc. Pushes the `bool` result. */
+    private fun emitNullablePrimitiveEquality(
+        codegen: DotNetIlExpressionCodegen,
+        left: IrExpression,
+        right: IrExpression,
+        leftType: DotNetIlValueType?,
+        rightType: DotNetIlValueType?,
+    ) {
+        if (referenceEquality) {
+            dotNetUnsupported(
+                "'===' with a nullable-primitive operand is not supported: the operands box at the object " +
+                        "boundary and reference identity of separately boxed values is unrelated to value " +
+                        "equality (Kotlin deprecates identity checks on boxed primitives)"
+            )
+        }
+        when {
+            left.isDotNetNullLike() || right.isDotNetNullLike() -> {
+                // `T? == null` (or against a Nothing?-typed definitely-null value): a negated
+                // get_HasValue. Operands stay evaluated left-to-right; the null-only side emits
+                // nothing when it is the bare null literal.
+                val leftIsNull = left.isDotNetNullLike()
+                val nullableOperand = if (leftIsNull) right else left
+                val nullableType = (if (leftIsNull) rightType else leftType) as? DotNetIlValueType.NullableValue
+                    ?: dotNetUnsupported(
+                        "equality comparison between ${left.type.render()} and ${right.type.render()} is not supported"
+                    )
+                val slot: DotNetIlSlot.Local
+                if (leftIsNull) {
+                    emitDiscardedNullLikeOperand(codegen, left, leftType)
+                    codegen.emitExpression(nullableOperand, nullableType)
+                    slot = codegen.spillToSyntheticLocal(nullableType, "<eq>")
+                } else {
+                    codegen.emitExpression(nullableOperand, nullableType)
+                    slot = codegen.spillToSyntheticLocal(nullableType, "<eq>")
+                    emitDiscardedNullLikeOperand(codegen, right, rightType)
+                }
+                codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                codegen.emit(nullableType.hasValueInstruction, pops = 1, pushes = 1)
+                codegen.emit("ldc.i4.0", pushes = 1)
+                codegen.emit("ceq", pops = 2, pushes = 1)
+            }
+            leftType is DotNetIlValueType.NullableValue && leftType == rightType -> {
+                codegen.emitExpression(left, leftType)
+                val leftSlot = codegen.spillToSyntheticLocal(leftType, "<eqLeft>")
+                codegen.emitExpression(right, leftType)
+                val rightSlot = codegen.spillToSyntheticLocal(leftType, "<eqRight>")
+                codegen.emit(loadLocalAddressInstruction(leftSlot.index), pushes = 1)
+                codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                codegen.emit(loadLocalAddressInstruction(rightSlot.index), pushes = 1)
+                codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                codegen.emit("ceq", pops = 2, pushes = 1)
+                codegen.emit(loadLocalAddressInstruction(leftSlot.index), pushes = 1)
+                codegen.emit(leftType.hasValueInstruction, pops = 1, pushes = 1)
+                codegen.emit(loadLocalAddressInstruction(rightSlot.index), pushes = 1)
+                codegen.emit(leftType.hasValueInstruction, pops = 1, pushes = 1)
+                codegen.emit("ceq", pops = 2, pushes = 1)
+                codegen.emit("and", pops = 2, pushes = 1)
+            }
+            leftType is DotNetIlValueType.NullableValue && rightType == leftType.elementType -> {
+                codegen.emitExpression(left, leftType)
+                val slot = codegen.spillToSyntheticLocal(leftType, "<eq>")
+                codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                codegen.emit(leftType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                codegen.emitExpression(right, rightType)
+                codegen.emit("ceq", pops = 2, pushes = 1)
+                codegen.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                codegen.emit(leftType.hasValueInstruction, pops = 1, pushes = 1)
+                codegen.emit("and", pops = 2, pushes = 1)
+            }
+            rightType is DotNetIlValueType.NullableValue && leftType == rightType.elementType -> {
+                // Kotlin evaluates left-to-right, so the plain left value is spilled too: the
+                // nullable right side must be fully evaluated before any of its members are read.
+                codegen.emitExpression(left, leftType)
+                val valueSlot = codegen.spillToSyntheticLocal(leftType, "<eqLeft>")
+                codegen.emitExpression(right, rightType)
+                val nullableSlot = codegen.spillToSyntheticLocal(rightType, "<eqRight>")
+                codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
+                codegen.emit(loadLocalAddressInstruction(nullableSlot.index), pushes = 1)
+                codegen.emit(rightType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
+                codegen.emit("ceq", pops = 2, pushes = 1)
+                codegen.emit(loadLocalAddressInstruction(nullableSlot.index), pushes = 1)
+                codegen.emit(rightType.hasValueInstruction, pops = 1, pushes = 1)
+                codegen.emit("and", pops = 2, pushes = 1)
+            }
+            else -> dotNetUnsupported(
+                "equality comparison between ${left.type.render()} and ${right.type.render()} is not supported " +
+                        "(nullable-primitive '==' requires both operands to share one primitive type)"
+            )
+        }
+    }
+
+    /**
+     * Evaluates a null-only operand for its side effects: the bare null literal emits nothing;
+     * a `Nothing?`-typed expression (mapped to `object`) is emitted and popped.
+     */
+    private fun emitDiscardedNullLikeOperand(
+        codegen: DotNetIlExpressionCodegen,
+        operand: IrExpression,
+        operandType: DotNetIlValueType?,
+    ) {
+        if (operand.isNullConst()) return
+        codegen.emitExpression(operand, operandType ?: DotNetIlValueType.Object)
+        codegen.emit("pop", pops = 1)
+    }
+}
+
+/**
+ * Whether this expression can only ever evaluate to `null`: the null literal itself, or any
+ * `Nothing?`-typed value (the frontend narrows definitely-null values — e.g. a when-subject
+ * temporary initialized from a known-null val — to `Nothing?`).
+ */
+private fun IrExpression.isDotNetNullLike(): Boolean =
+    isNullConst() || type.isNullableNothing()
+
+/** The five plain primitive value types of the supported subset. */
+private fun DotNetIlValueType?.isDotNetPrimitiveValue(): Boolean = when (this) {
+    DotNetIlValueType.Boolean,
+    DotNetIlValueType.Int32,
+    DotNetIlValueType.Int64,
+    DotNetIlValueType.Float64,
+    DotNetIlValueType.Char,
+        -> true
+    else -> false
+}
+
+/**
+ * The CHECK_NOT_NULL builtin — Kotlin `!!` (JVM precedent: the checkNotNull intrinsic backed by
+ * `Intrinsics.checkNotNull`, whose NPE carries no message):
+ * - on a [nullable primitive][DotNetIlValueType.NullableValue]: a `get_HasValue` branch past a
+ *   throw of the mapped Kotlin NPE, then `GetValueOrDefault` extraction
+ *   ([emitNullableUnwrapOrThrowNpe][DotNetIlExpressionCodegen.emitNullableUnwrapOrThrowNpe]) —
+ *   `get_Value` is never used, its InvalidOperationException would surface as the wrong Kotlin
+ *   exception type;
+ * - on a reference (nullable String/user class/interface/exception/`Any?`): `dup`/`brtrue` past
+ *   the same throw, the value flows through unchanged
+ *   ([emitReferenceNotNullOrThrowNpe][DotNetIlExpressionCodegen.emitReferenceNotNullOrThrowNpe]);
+ * - on an already non-null primitive (`x!!` where `x: Int` — legal, frontend-warned Kotlin):
+ *   the bare value, no runtime representation of null exists to check.
+ * The throw is `newobj System.NullReferenceException::.ctor()` + `throw` (probe-verified,
+ * boxprobe_s4), catchable as `catch (e: NullPointerException)` through the existing
+ * [DotNetMappedExceptions] registry mapping.
+ */
+private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.size != 1) return false
+        val argument = call.arguments.single()
+            ?: dotNetUnsupported("missing operand of the '!!' operator")
+        val argumentType = codegen.toDotNetIlValueType(argument.type)
+            ?: dotNetUnsupported("'!!' on a value of unsupported type ${argument.type.render()}")
+        when {
+            argumentType is DotNetIlValueType.NullableValue -> {
+                if (!argumentType.elementType.isDotNetAssignableTo(expectedType)) {
+                    dotNetUnsupported(
+                        "'!!' produces ${argumentType.elementType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                codegen.emitExpression(argument, argumentType)
+                codegen.emitNullableUnwrapOrThrowNpe(argumentType)
+            }
+            argumentType.isDotNetReferenceShaped() -> {
+                if (!argumentType.isDotNetAssignableTo(expectedType)) {
+                    dotNetUnsupported(
+                        "'!!' produces ${argumentType.nameInSignature} " +
+                                "where ${expectedType.nameInSignature} is expected"
+                    )
+                }
+                codegen.emitExpression(argument, argumentType)
+                codegen.emitReferenceNotNullOrThrowNpe()
+            }
+            else -> codegen.emitExpression(argument, expectedType)
         }
         return true
     }
@@ -1006,10 +1237,20 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
     val rightType = codegen.toDotNetIlValueType(right.type)
     return when {
         leftType != null && leftType == rightType -> leftType
-        // A `null` constant compared against a reference type (string or a user class) takes
-        // the reference type: `ldnull` satisfies any class-typed operand slot.
+        // A `null` constant compared against a reference type (string, a user class, or
+        // `Any?`-typed object storage) takes the reference type: `ldnull` satisfies any
+        // reference-shaped operand slot.
         left.isNullConst() && rightType.isDotNetReferenceType() -> rightType
         right.isNullConst() && leftType.isDotNetReferenceType() -> leftType
+        // A reference-shaped operand next to an `Any?`-typed one widens to `object` — the
+        // instruction-free root-reference widening (probe-verified, nullprobe_s8); the
+        // type-agnostic reference `ceq` then serves `===` (and `== null`), while general `==`
+        // still lands in the Object rejection arm of the intrinsic. A PRIMITIVE (or nullable-
+        // primitive) operand next to `Any?` deliberately does NOT widen: it would need boxing,
+        // and identity of boxed values is unrelated to value equality (boxprobe_s6).
+        (leftType == DotNetIlValueType.Object || rightType == DotNetIlValueType.Object) &&
+                leftType?.isDotNetReferenceShaped() == true && rightType?.isDotNetReferenceShaped() == true ->
+            DotNetIlValueType.Object
         // Two differently-mapped exception operands (e.g. `caught === original` where one side
         // is typed `Throwable` and the other `IllegalStateException`) compare through their
         // common CLR supertype: every mapped exception widens to `System.Exception`, and the
@@ -1045,7 +1286,7 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
 }
 
 private fun DotNetIlValueType?.isDotNetReferenceType(): Boolean =
-    this == DotNetIlValueType.String || this is DotNetIlValueType.UserClass || this is DotNetIlValueType.MappedClass
+    this?.isDotNetReferenceShaped() == true
 
 private fun IrFunctionSymbol.toKey(): DotNetIlIntrinsicMethods.Key? =
     owner.toKey()

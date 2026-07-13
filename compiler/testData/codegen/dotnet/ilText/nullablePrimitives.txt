@@ -1,0 +1,687 @@
+.assembly extern mscorlib {}
+.assembly 'nullablePrimitives' {}
+.module 'main-nullablePrimitives.il'
+
+.class public auto ansi sealed beforefieldinit 'Holder'
+       extends [mscorlib]System.Object
+{
+  .field private valuetype [mscorlib]System.Nullable`1<int32> 'limit'
+  .field private valuetype [mscorlib]System.Nullable`1<int64> 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(valuetype [mscorlib]System.Nullable`1<int32> 'limit', valuetype [mscorlib]System.Nullable`1<int64> 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld valuetype [mscorlib]System.Nullable`1<int32> 'Holder'::'limit'
+    ldarg.0
+    ldarg.2
+    stfld valuetype [mscorlib]System.Nullable`1<int64> 'Holder'::'current'
+    ret
+  }
+  .method public hidebysig specialname instance valuetype [mscorlib]System.Nullable`1<int32> 'get_limit'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Holder'::'limit'
+    ret
+  }
+  .method public hidebysig specialname instance valuetype [mscorlib]System.Nullable`1<int64> 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int64> 'Holder'::'current'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_current'(valuetype [mscorlib]System.Nullable`1<int64> '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld valuetype [mscorlib]System.Nullable`1<int64> 'Holder'::'current'
+    ret
+  }
+  .method public hidebysig instance int64 'advance'(valuetype [mscorlib]System.Nullable`1<int64> 'step') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int64> 'next',
+      [1] valuetype [mscorlib]System.Nullable`1<int64> 'tmp0_elvis_lhs',
+      [2] valuetype [mscorlib]System.Nullable`1<int64> '<eq>',
+      [3] valuetype [mscorlib]System.Nullable`1<int64> '<notNull>'
+    )
+    ldarg.1
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.1
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<int64>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i8 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.1
+    stloc.3
+    ldloca 3
+    call instance bool valuetype [mscorlib]System.Nullable`1<int64>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 3
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int64>::GetValueOrDefault()
+IL_whenEnd_0:
+    ret
+  }
+  .property instance valuetype [mscorlib]System.Nullable`1<int32> 'limit'()
+  {
+    .get instance valuetype [mscorlib]System.Nullable`1<int32> 'Holder'::'get_limit'()
+  }
+  .property instance valuetype [mscorlib]System.Nullable`1<int64> 'current'()
+  {
+    .get instance valuetype [mscorlib]System.Nullable`1<int64> 'Holder'::'get_current'()
+    .set instance void 'Holder'::'set_current'(valuetype [mscorlib]System.Nullable`1<int64>)
+  }
+}
+.class public abstract sealed auto ansi 'nullablePrimitivesKt'
+       extends [mscorlib]System.Object
+{
+  .field private static valuetype [mscorlib]System.Nullable`1<int32> 'lastSeen'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    stsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
+    ret
+  }
+  .method public hidebysig specialname static valuetype [mscorlib]System.Nullable`1<int32> 'get_lastSeen'() cil managed
+  {
+    .maxstack 1
+    ldsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_lastSeen'(valuetype [mscorlib]System.Nullable`1<int32> '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'lastSeen'
+    ret
+  }
+  .method public hidebysig static float64 'pick'(valuetype [mscorlib]System.Nullable`1<bool> 'flag', valuetype [mscorlib]System.Nullable`1<float64> 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<bool> 'tmp1_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<bool> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<bool> '<notNull>',
+      [3] valuetype [mscorlib]System.Nullable`1<float64> 'tmp0_elvis_lhs',
+      [4] valuetype [mscorlib]System.Nullable`1<float64> '<eq>@4',
+      [5] valuetype [mscorlib]System.Nullable`1<float64> '<notNull>@5'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<bool>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldc.i4.0
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<bool>::get_HasValue()
+    brtrue IL_notNull_4
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_4:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<bool>::GetValueOrDefault()
+IL_whenEnd_2:
+    brfalse IL_whenNext_1
+    ldarg.1
+    stloc.3
+    ldloc.3
+    stloc 4
+    ldloca 4
+    call instance bool valuetype [mscorlib]System.Nullable`1<float64>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_6
+    ldc.r8 0.0
+    br IL_whenEnd_5
+IL_whenNext_6:
+    ldloc.3
+    stloc 5
+    ldloca 5
+    call instance bool valuetype [mscorlib]System.Nullable`1<float64>::get_HasValue()
+    brtrue IL_notNull_7
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_7:
+    ldloca 5
+    call instance !0 valuetype [mscorlib]System.Nullable`1<float64>::GetValueOrDefault()
+IL_whenEnd_5:
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.r8 1.0
+    neg
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static char 'firstOr'(valuetype [mscorlib]System.Nullable`1<char> 'c') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<char> 'tmp0_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<char> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<char> '<notNull>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<char>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 63
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<char>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<char>::GetValueOrDefault()
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static int32 'added'(valuetype [mscorlib]System.Nullable`1<int32> 'x') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ldc.i4 1
+    add
+    ret
+IL_whenNext_1:
+    ldc.i4 -1
+    ret
+  }
+  .method public hidebysig static int32 'force'(valuetype [mscorlib]System.Nullable`1<int32> 'x') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_0
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ret
+  }
+  .method public hidebysig static string 'forceRef'(string 's') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    dup
+    brtrue IL_notNull_0
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
+      [3] class 'Holder' 'h',
+      [4] valuetype [mscorlib]System.Nullable`1<int64> '<null>',
+      [5] valuetype [mscorlib]System.Nullable`1<int32> 'tmp1_elvis_lhs',
+      [6] valuetype [mscorlib]System.Nullable`1<int32> '<eq>@6',
+      [7] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>@7',
+      [8] valuetype [mscorlib]System.Nullable`1<int64> 'tmp2_elvis_lhs',
+      [9] valuetype [mscorlib]System.Nullable`1<int64> '<eq>@9',
+      [10] valuetype [mscorlib]System.Nullable`1<int64> '<notNull>@10',
+      [11] class 'Holder' 'maybeHolder',
+      [12] class 'Holder' 'tmp3_safe_receiver',
+      [13] valuetype [mscorlib]System.Nullable`1<int64> '<null>@13',
+      [14] valuetype [mscorlib]System.Nullable`1<char> '<null>@14'
+    )
+    ldc.i4 5
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call void 'nullablePrimitivesKt'::'set_lastSeen'(valuetype [mscorlib]System.Nullable`1<int32>)
+    call valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'get_lastSeen'()
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 -1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_0:
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 3
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    ldloca 4
+    initobj valuetype [mscorlib]System.Nullable`1<int64>
+    ldloc 4
+    newobj instance void 'Holder'::.ctor(valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int64>)
+    stloc.3
+    ldloc.3
+    ldc.i8 10
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int64>::.ctor(!0)
+    call instance int64 'Holder'::'advance'(valuetype [mscorlib]System.Nullable`1<int64>)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    call instance valuetype [mscorlib]System.Nullable`1<int32> 'Holder'::'get_limit'()
+    stloc 5
+    ldloc 5
+    stloc 6
+    ldloca 6
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_4
+    ldc.i4 0
+    br IL_whenEnd_3
+IL_whenNext_4:
+    ldloc 5
+    stloc 7
+    ldloca 7
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_5
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_5:
+    ldloca 7
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_3:
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    ldc.i8 20
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int64>::.ctor(!0)
+    call instance void 'Holder'::'set_current'(valuetype [mscorlib]System.Nullable`1<int64>)
+    ldloc.3
+    call instance valuetype [mscorlib]System.Nullable`1<int64> 'Holder'::'get_current'()
+    stloc 8
+    ldloc 8
+    stloc 9
+    ldloca 9
+    call instance bool valuetype [mscorlib]System.Nullable`1<int64>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_7
+    ldc.i8 0
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldloc 8
+    stloc 10
+    ldloca 10
+    call instance bool valuetype [mscorlib]System.Nullable`1<int64>::get_HasValue()
+    brtrue IL_notNull_8
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_8:
+    ldloca 10
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int64>::GetValueOrDefault()
+IL_whenEnd_6:
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    stloc 11
+    ldloc 11
+    stloc 12
+    ldloc 12
+    ldnull
+    ceq
+    brfalse IL_whenNext_10
+    br IL_whenEnd_9
+IL_whenNext_10:
+    ldloc 12
+    ldloca 13
+    initobj valuetype [mscorlib]System.Nullable`1<int64>
+    ldloc 13
+    call instance int64 'Holder'::'advance'(valuetype [mscorlib]System.Nullable`1<int64>)
+    pop
+IL_whenEnd_9:
+    ldc.i4.1
+    newobj instance void valuetype [mscorlib]System.Nullable`1<bool>::.ctor(!0)
+    ldc.r8 2.5
+    newobj instance void valuetype [mscorlib]System.Nullable`1<float64>::.ctor(!0)
+    call float64 'nullablePrimitivesKt'::'pick'(valuetype [mscorlib]System.Nullable`1<bool>, valuetype [mscorlib]System.Nullable`1<float64>)
+    call string '<KotlinIl>'::'DoubleToString'(float64)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 14
+    initobj valuetype [mscorlib]System.Nullable`1<char>
+    ldloc 14
+    call char 'nullablePrimitivesKt'::'firstOr'(valuetype [mscorlib]System.Nullable`1<char>)
+    call void [mscorlib]System.Console::WriteLine(char)
+    ldc.i4 41
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call int32 'nullablePrimitivesKt'::'added'(valuetype [mscorlib]System.Nullable`1<int32>)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call int32 'nullablePrimitivesKt'::'force'(valuetype [mscorlib]System.Nullable`1<int32>)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "r"
+    call string 'nullablePrimitivesKt'::'forceRef'(string)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .property valuetype [mscorlib]System.Nullable`1<int32> 'lastSeen'()
+  {
+    .get valuetype [mscorlib]System.Nullable`1<int32> 'nullablePrimitivesKt'::'get_lastSeen'()
+    .set void 'nullablePrimitivesKt'::'set_lastSeen'(valuetype [mscorlib]System.Nullable`1<int32>)
+  }
+}
+.class private abstract sealed auto ansi beforefieldinit '<KotlinIl>'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'DoubleToString'(float64 'value') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] string 's',
+      [1] int32 'e',
+      [2] string 'digits',
+      [3] int32 'decExp',
+      [4] bool 'neg',
+      [5] int32 'i'
+    )
+    ldarg.0
+    call bool [mscorlib]System.Double::IsNaN(float64)
+    brfalse IL_notNaN
+    ldstr "NaN"
+    ret
+IL_notNaN:
+    ldarg.0
+    call bool [mscorlib]System.Double::IsPositiveInfinity(float64)
+    brfalse IL_notPositiveInfinity
+    ldstr "Infinity"
+    ret
+IL_notPositiveInfinity:
+    ldarg.0
+    call bool [mscorlib]System.Double::IsNegativeInfinity(float64)
+    brfalse IL_notNegativeInfinity
+    ldstr "-Infinity"
+    ret
+IL_notNegativeInfinity:
+    ldarg.0
+    call int64 [mscorlib]System.BitConverter::DoubleToInt64Bits(float64)
+    ldc.i8 -9223372036854775808
+    bne.un IL_finite
+    ldstr "-0.0"
+    ret
+IL_finite:
+    ldarga.s 0
+    ldstr "R"
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    call instance string [mscorlib]System.Double::ToString(string, class [mscorlib]System.IFormatProvider)
+    stloc.0
+    ldarg.0
+    ldc.r8 0.0
+    beq IL_decimal
+    ldarg.0
+    call float64 [mscorlib]System.Math::Abs(float64)
+    ldc.r8 10000000.
+    bge IL_scientific
+    ldarg.0
+    call float64 [mscorlib]System.Math::Abs(float64)
+    ldc.r8 0.001
+    blt IL_scientific
+IL_decimal:
+    ldloc.0
+    ldc.i4.s 46
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    ldc.i4.0
+    bge IL_decimalHasDot
+    ldloc.0
+    ldstr ".0"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+IL_decimalHasDot:
+    ldloc.0
+    ret
+IL_scientific:
+    ldloc.0
+    ldc.i4.s 69
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    stloc.1
+    ldloc.1
+    ldc.i4.0
+    bge IL_scientificFromE
+    ldloc.0
+    ldc.i4.0
+    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+    ldc.i4.s 45
+    ceq
+    stloc.s 'neg'
+    ldloc.s 'neg'
+    brfalse IL_signStripped
+    ldloc.0
+    ldc.i4.1
+    callvirt instance string [mscorlib]System.String::Substring(int32)
+    stloc.0
+IL_signStripped:
+    ldloc.0
+    ldc.i4.s 46
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    stloc.1
+    ldloc.1
+    ldc.i4.0
+    bge IL_removeDot
+    ldloc.0
+    stloc.2
+    ldloc.0
+    callvirt instance int32 [mscorlib]System.String::get_Length()
+    stloc.3
+    br IL_dotRemoved
+IL_removeDot:
+    ldloc.0
+    ldloc.1
+    ldc.i4.1
+    callvirt instance string [mscorlib]System.String::Remove(int32, int32)
+    stloc.2
+    ldloc.1
+    stloc.3
+IL_dotRemoved:
+    ldloc.3
+    ldc.i4.1
+    sub
+    stloc.3
+    ldc.i4.0
+    stloc.s 'i'
+IL_leadingZeroLoop:
+    ldloc.2
+    ldloc.s 'i'
+    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+    ldc.i4.s 48
+    bne.un IL_leadingZerosSkipped
+    ldloc.s 'i'
+    ldc.i4.1
+    add
+    stloc.s 'i'
+    ldloc.3
+    ldc.i4.1
+    sub
+    stloc.3
+    br IL_leadingZeroLoop
+IL_leadingZerosSkipped:
+    ldloc.2
+    ldloc.s 'i'
+    callvirt instance string [mscorlib]System.String::Substring(int32)
+    stloc.2
+    ldloc.2
+    callvirt instance int32 [mscorlib]System.String::get_Length()
+    stloc.s 'i'
+IL_trailingZeroLoop:
+    ldloc.s 'i'
+    ldc.i4.1
+    ble IL_trailingZerosTrimmed
+    ldloc.2
+    ldloc.s 'i'
+    ldc.i4.1
+    sub
+    callvirt instance char [mscorlib]System.String::get_Chars(int32)
+    ldc.i4.s 48
+    bne.un IL_trailingZerosTrimmed
+    ldloc.s 'i'
+    ldc.i4.1
+    sub
+    stloc.s 'i'
+    br IL_trailingZeroLoop
+IL_trailingZerosTrimmed:
+    ldloc.2
+    ldc.i4.0
+    ldloc.s 'i'
+    callvirt instance string [mscorlib]System.String::Substring(int32, int32)
+    stloc.2
+    ldloc.2
+    callvirt instance int32 [mscorlib]System.String::get_Length()
+    ldc.i4.1
+    bne.un IL_insertDot
+    ldloc.2
+    ldstr "0"
+    call string [mscorlib]System.String::Concat(string, string)
+    stloc.2
+IL_insertDot:
+    ldloc.2
+    ldc.i4.1
+    ldstr "."
+    callvirt instance string [mscorlib]System.String::Insert(int32, string)
+    stloc.2
+    ldloc.s 'neg'
+    brfalse IL_mantissaSigned
+    ldstr "-"
+    ldloc.2
+    call string [mscorlib]System.String::Concat(string, string)
+    stloc.2
+IL_mantissaSigned:
+    ldloc.2
+    ldstr "E"
+    ldloc.3
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string, string)
+    ret
+IL_scientificFromE:
+    ldloc.0
+    ldc.i4.0
+    ldloc.1
+    callvirt instance string [mscorlib]System.String::Substring(int32, int32)
+    dup
+    ldc.i4.s 46
+    callvirt instance int32 [mscorlib]System.String::IndexOf(char)
+    ldc.i4.0
+    bge IL_mantissaHasDot
+    ldstr ".0"
+    call string [mscorlib]System.String::Concat(string, string)
+IL_mantissaHasDot:
+    ldstr "E"
+    ldloc.0
+    ldloc.1
+    ldc.i4.1
+    add
+    callvirt instance string [mscorlib]System.String::Substring(int32)
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    call int32 [mscorlib]System.Int32::Parse(string, class [mscorlib]System.IFormatProvider)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string, string)
+    ret
+  }
+}

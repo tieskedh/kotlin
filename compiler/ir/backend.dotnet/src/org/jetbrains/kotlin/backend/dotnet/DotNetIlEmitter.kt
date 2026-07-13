@@ -325,6 +325,55 @@ class DotNetIlEmitter(
             }
         }
 
+        // Facade IL method-identity gate: the file facade's analogue of the class member
+        // pre-pass above. All top-level functions and property accessors of one file render
+        // into ONE facade class, so accessor mangling and IL type erasure make the same clashes
+        // possible there: `fun get_x()` vs the getter of `val x`, `g(String)`/`g(String?)`
+        // (reference nullability erases to the same IL `string`), and `h(Any)`/`h(Any?)` (both
+        // map to `object`) — each yields two identical IL method declarations, which ilasm
+        // rejects as a duplicate method declaration (probe-verified on the modern ilasm 10.0.9,
+        // like the class-member gate; the JVM frontend's analogue is
+        // PLATFORM_DECLARATION_CLASH). Granularity follows the facade rules rather than the
+        // whole-class rule: EVERY callable of a clashing identity is evicted (keeping one half
+        // would be an arbitrary pick between legal Kotlin overloads) — a plain function
+        // per-function, an accessor with its whole property, and a backing-field-bearing
+        // property with the file's whole property group (its initializer can no longer run).
+        // Like the class gate, the return type is deliberately not part of the identity key.
+        // Pinned by ilText/facadeMethodClash.kt.
+        for (file in files) {
+            val facadeCallables = mutableListOf<IrSimpleFunction>()
+            for (declaration in file.declarations) {
+                when (declaration) {
+                    is IrSimpleFunction -> if (declaration in availableFunctions) facadeCallables += declaration
+                    is IrProperty ->
+                        listOfNotNull(declaration.getter, declaration.setter)
+                            .filterTo(facadeCallables) { it in availableFunctions }
+                    else -> {}
+                }
+            }
+            val callablesByIlIdentity = hashMapOf<String, IrSimpleFunction>()
+            for (callable in facadeCallables) {
+                // Already evicted as the partner of an earlier clash in this file.
+                val functionInfo = availableFunctions[callable] ?: continue
+                val ilIdentity = "${callable.dotNetIlMethodName()}(${functionInfo.signature.renderParameterTypes()})"
+                val clashing = callablesByIlIdentity.putIfAbsent(ilIdentity, callable) ?: continue
+                for ([loser, winner] in listOf(callable to clashing, clashing to callable)) {
+                    val reason = "top-level '${loser.diagnosticName()}' clashes with '${winner.diagnosticName()}': " +
+                            "both map to the same IL method '$ilIdentity'"
+                    val property = loser.correspondingPropertySymbol?.owner
+                    if (property == null) {
+                        availableFunctions.remove(loser)
+                        skipReasons.putIfAbsent(loser, reason)
+                    } else {
+                        evictTopLevelProperty(property, reason)
+                        if (property.backingField != null) {
+                            failFilePropertyGroup(file, reason)
+                        }
+                    }
+                }
+            }
+        }
+
         do {
             renderedClasses.clear()
             renderedMethods.clear()
@@ -1316,7 +1365,11 @@ class DotNetIlEmitter(
                 if (literal.startsWith("float64(")) literal else "float64($literal)"
             }
             DotNetIlValueType.String -> (constant.value as? String ?: unsupportedValue()).toIlStringLiteral()
-            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass -> unsupportedValue()
+            // The frontend forbids `const val` of nullable and class types, so these arms are
+            // defensive; a CLR `literal` field of a Nullable<T> or object type is unprobed anyway.
+            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
+            is DotNetIlValueType.NullableValue, DotNetIlValueType.Object,
+                -> unsupportedValue()
         }
     }
 
