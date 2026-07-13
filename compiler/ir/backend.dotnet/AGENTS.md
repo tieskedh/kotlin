@@ -49,13 +49,26 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   reference check that never calls `equals`; JVM precedent: the `Equals` intrinsic's `isNullConst`
   special case); base/derived-typed operand pairs of the inheritance model widen to the
   ancestor type — the reference `ceq` is type-agnostic, the user-class analogue of the
-  mapped-exception common-supertype arm. General `==` between two class instances stays
-  rejected until an Any.equals model exists.
+  mapped-exception common-supertype arm; sibling-typed pairs sharing a supertype (a common
+  base class or, since the interface model, a common implemented interface — the shape a
+  positive-identity smartcast routinely produces) widen to the FIRST common supertype of the
+  left operand's breadth-first supertype walk (deterministic:
+  `DotNetIlClassInfo.allSupertypes` — direct base class, then direct interfaces in
+  declaration order, then the same per level, NOT the whole base chain first). Two FINAL
+  sibling classes are not expressible operands — the frontend rejects them with
+  EQUALITY_NOT_APPLICABLE (empty intersection type) — so the user-reachable sibling shape is
+  two sibling INTERFACE views of an object; the widening and the no-common-supertype
+  rejection are pinned by `ilText/interfaceEqualityWidening.kt` and runtime-pinned (true and
+  false cases) by `box/interfaceHierarchy.kt`. Pairs with no common supertype (e.g. two
+  unrelated interface types, whose only common supertype would need an Any model) stay
+  rejected loudly. General `==` between two
+  class instances stays rejected until an Any.equals model exists.
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
   vtable/class lowering machinery): only top-level, non-generic plain classes — final or, since
-  the inheritance model (below), open — pass the shape gate
-  (`DotNetIlEmitter.checkClassShapeSupported`); objects and companions stay final-only with sole
-  supertype `kotlin.Any`.
+  the inheritance model (below), open — and, since the interface model (below), top-level
+  non-generic all-abstract interfaces pass the shape gate
+  (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
+  companions stay final-only with sole supertype `kotlin.Any`.
   Rejection granularity is always the whole class — a failing member (signature, body, or IL
   method- or field-identity clash) removes the entire class from the module so no call site can
   resolve to a partial class, and the removal cascades through the type mapper to every user of
@@ -95,7 +108,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   such an upcast emits just its operand; every other type operator (CAST, SAFE_CAST,
   INSTANCEOF, IMPLICIT_NOTNULL, non-upcast IMPLICIT_CAST) stays rejected loudly. STAYS
   REJECTED, whole-class: `abstract` and `sealed` classes (no abstract-member/instantiability
-  model), interface supertypes, exception supertypes (existing message), out-of-module or
+  model), exception supertypes (existing message; interface supertypes are SUPPORTED since the
+  interface model, see its bullet), out-of-module or
   non-top-level bases, objects/companions with any supertype, covariant-return overrides
   (ECMA-335 II.15.4.2.3 slot matching includes the RETURN type, so the override would land in
   a fresh slot and base-typed `callvirt` would silently run the BASE body — probe-verified;
@@ -112,6 +126,96 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
   before derived init; `beforefieldinit` semantics unchanged — instance init order is a
   constructor-chain property, not a `.cctor` one).
+- Interface model (probe series `ifaceprobe_s1`–`_s10`; JVM precedent: real CLR interface types =
+  no vtable/interface lowering, the same argument as the class and inheritance bullets): a
+  top-level, non-generic Kotlin `interface` whose members are ALL abstract (abstract functions
+  and abstract `val`/`var` properties; empty interfaces included) is emitted as
+  `.class interface public abstract auto ansi` — no `extends` line, no `sealed`, no
+  `beforefieldinit` (s1). A `sealed interface` is deliberately ACCEPTED and emitted as the
+  same plain interface — unlike a sealed CLASS (whose rejection is the missing abstract-class
+  model), interface sealedness is pure frontend-enforced metadata with no CLR counterpart
+  needed (JVM precedent: the JVM backend emits an ordinary interface too), and the exhaustive
+  `when` it enables is `is`-gated by the type-operator rejection anyway (pinned by
+  `ilText/interfaceEqualityWidening.kt`). Abstract members are
+  `.method public hidebysig [specialname ]newslot abstract virtual instance ... cil managed`
+  with an EMPTY `{ }` block (s1/s2; the emitter keeps its established specialname-first flag
+  order — ilasm treats the flags as an unordered keyword set); abstract accessors are bound by
+  ordinary `.property` blocks targeting the interface's own accessor methods (s2). A class
+  lists its DIRECT interfaces comma-separated on an `implements` line after `extends`
+  (`extends 'Base'` / `implements 'A', 'B'`, s3); interface-extends-interface is the same
+  `implements` list on the interface declaration, and transitively implied super-interfaces are
+  never repeated (s6). MEMBER FLAGS: `isDotNetVirtual` widens — every interface member and
+  every member overriding one is virtual even in a FINAL class, because a non-virtual
+  implementation assembles cleanly but load-poisons the type (TypeLoadException at first JIT of
+  a using method, s1b). A Kotlin override of ONLY interface members introduces a fresh class
+  slot: `newslot virtual`, `newslot virtual final` for a Kotlin-`final` member (the Roslyn
+  implicit-implementation shape); an override of a base-class member keeps the slot-reuse
+  spelling `virtual` (no newslot) even when it also implements an interface — CLR interface
+  mapping follows the class vtable slot (s4). Stated deviation from Roslyn: `final` follows
+  Kotlin modality alone, so an implicit implementation in a final class whose member is not
+  `final override` stays `newslot virtual` where Roslyn would seal it — s4 shows the non-final
+  spelling dispatches identically (goldens + box pin it). CALL SITES: interface-typed receivers
+  always use `callvirt` with the operand naming the DECLARING interface — `resolveFakeOverride`
+  handles inherited members, with a maybe-abstract fallback because the plain resolution
+  ignores abstract targets (a fake override whose only real declarations are abstract interface
+  members resolves to null otherwise); naming a sub-interface that merely inherits the member
+  is a runtime MissingMethodException (s6) — NO fake-override leniency, unlike the class-side
+  rule. One class member implicitly fills every same-signature interface slot (the
+  diamond/merge shape, s9). A base-class member satisfying a derived class's interface works
+  iff the inherited member is VIRTUAL (s5a — Kotlin fake-override semantics for free) AND its
+  mapped IL signature matches the interface slot EXACTLY, return type included: ECMA-335
+  interface mapping matches the full signature and this backend emits no `.override`/bridge
+  machinery (the JVM supports the covariant flavor via generated bridge methods), so the
+  non-virtual variant is gated whole-class at compile time with a message citing s5b and the
+  inherited covariant-return variant (`class Combo : Factory(), Maker` where
+  `Factory.make(): Bottom` is meant to fill `Maker.make(): Top`) is gated whole-class in the
+  member pre-pass with a message citing s10 — both flavors assemble without any ilasm
+  diagnostic and throw TypeLoadException at first JIT of a using method (s5b/s10, the
+  covariant probe covering the function and the property-accessor variants; pinned by
+  `ilText/interfaceNonVirtualImplRejected.kt` and `ilText/interfaceCovariantImplRejected.kt`);
+  same-IL-type Kotlin covariance (`String?` filled by an inherited `String` member) stays
+  supported — the comparison runs on MAPPED types, like the declared-override covariant gate
+  of the inheritance bullet. UPCASTS: class→interface and
+  interface→super-interface are free reference widenings in every position (field, parameter,
+  return, local — s7); `isDotNetAssignableTo` walks the supertype DAG
+  (`DotNetIlClassInfo.baseClass` chain + `interfaces` lists, BFS with dedup — diamonds are
+  legal — linked in the same post-registration pre-pass as the base chain), and the reference
+  `ceq` is type-agnostic across interface-typed and class-typed views (s7; sibling widening —
+  see the equality bullet). EVICTION: an evicted interface cascades whole-class to every
+  implementing class and every sub-interface — the `implements` list is re-resolved from the
+  LIVE class map at the top of every render round with chained reasons, the interface arm of
+  the base-class cascade (pinned by `ilText/interfaceEvicted.kt` and
+  `ilText/interfaceDefaultBodyRejected.kt`); evicting an implementer never affects the
+  interface. STAYS REJECTED, loudly, whole-interface/whole-class: interface members WITH
+  bodies — default methods and accessors with bodies (CoreCLR itself supports Default Interface
+  Methods, s8, so the message says "not yet supported": lifting this is purely backend work),
+  private interface members, abstract redeclarations of super-interface members (an unprobed
+  double-slot shape), companion objects and any nested declaration in an interface,
+  `fun interface` (no SAM-conversion model), generic interfaces, out-of-module or non-top-level
+  interfaces, interface DELEGATION (`class C(...) : I by d`) in BOTH source spellings — the
+  `val`-parameter and the plain-parameter form (which additionally synthesizes a loose
+  `$$delegate_0` field): the frontend's forwarding members (origin DELEGATED_MEMBER) are gated
+  whole-class with a real user-facing message so the two cosmetically different spellings never
+  diverge in support (pinned by `ilText/interfaceDelegationRejected.kt`),
+  `super<I>.f()` (needs the DIM model; rejected up front in `emitCall`),
+  `is`/`as`/safe-cast on interface types (the existing type-operator rejection stays
+  authoritative — including the IMPLICIT_CAST downcast a positive `===` smartcast inserts
+  afterwards), and interface members overriding `kotlin.Any` members (no Any model). Failure-
+  mode calibration: every interface-mapping mistake (missing virtual, wrong operand interface)
+  assembles CLEAN and fails only lazily at runtime, so box coverage is mandatory per dispatch
+  shape — `box/interfaceBasic.kt` (dispatch through interface-typed values, abstract property
+  access, multiple interfaces + base class, final override, derived override via interface
+  dispatch, the s5a inherited-member shape, interface-typed fields/returns, identity and
+  null checks) and `box/interfaceHierarchy.kt` (inherited members through sub-interface
+  receivers, the diamond, super-interface widening, sibling-interface identity); goldens
+  `ilText/interfaces.kt` (including the `newslot virtual final` / `specialname newslot virtual
+  final` spellings of a Kotlin `final override` implementing only interface members) and
+  `ilText/interfaceHierarchy.kt` pin every new spelling,
+  `ilText/interfaceNonVirtualImplRejected.kt` pins the s5b gate,
+  `ilText/interfaceCovariantImplRejected.kt` the s10 gate,
+  `ilText/interfaceDelegationRejected.kt` the delegation gate, and
+  `ilText/interfaceEqualityWidening.kt` the sibling widening, the no-common-supertype
+  rejection and the sealed-interface acceptance.
 - Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
   `specialname` accessor methods, and a `.property` metadata block binding them (spellings
   ilasm-probe-verified) — a stated deviation from the JVM's `PropertiesLowering`, which the CLR

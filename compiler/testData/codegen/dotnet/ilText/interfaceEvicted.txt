@@ -1,18 +1,15 @@
 .assembly extern mscorlib {}
-.assembly 'companionShapeRejected' {}
-.module 'main-companionShapeRejected.il'
+.assembly 'interfaceEvicted' {}
+.module 'main-interfaceEvicted.il'
 
-.class interface public abstract auto ansi 'Marker'
-{
-}
-.class public abstract sealed auto ansi beforefieldinit 'companionShapeRejectedKt'
+.class public abstract sealed auto ansi beforefieldinit 'interfaceEvictedKt'
        extends [mscorlib]System.Object
 {
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
     .maxstack 1
-    ldstr "rejected"
+    ldstr "evicted"
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

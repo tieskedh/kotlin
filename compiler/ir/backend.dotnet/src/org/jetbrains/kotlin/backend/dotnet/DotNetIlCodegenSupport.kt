@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.util.isGetter
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -152,22 +153,38 @@ internal class DotNetIlTypeMapper(
 }
 
 /**
- * The base class of [this] class within the inheritance model, or null when the sole supertype
- * is `kotlin.Any`. Only meaningful on classes that passed the shape gate, which guarantees at
- * most one non-`Any` supertype and that it is a proper class (never an interface).
+ * The base class of [this] class within the inheritance model, or null when no supertype is a
+ * proper class (sole supertype `kotlin.Any`, or only interface supertypes). Interface supertypes
+ * are skipped — they belong to [dotNetDirectInterfaces] — and the shape gate guarantees at most
+ * one proper-class supertype on gate-passing classes.
  */
 internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
     superTypes.firstNotNullOfOrNull { superType ->
         if (superType.isAny()) null
-        else ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+        else ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner?.takeUnless { it.isInterface }
+    }
+
+/**
+ * The directly implemented interfaces of [this] class (for an interface: its directly extended
+ * super-interfaces), in supertype-list order. The interface-model counterpart of
+ * [dotNetBaseClassOrNull]: the emitter's link pre-pass feeds them into
+ * [DotNetIlClassInfo.interfaces] for the assignability walk, and the render re-resolves them
+ * through the live class map every fixpoint round for the `implements` line.
+ */
+internal fun IrClass.dotNetDirectInterfaces(): List<IrClass> =
+    superTypes.mapNotNull { superType ->
+        ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner?.takeIf { it.isInterface }
     }
 
 /**
  * Whether [this] member occupies (or introduces) a CLR virtual slot, i.e. whether its
  * declaration carries `virtual` flags and non-`super` call sites use `callvirt` — the two must
- * agree, so both consult this single predicate. True exactly for instance members that override
- * something (every Kotlin `override` is virtual in IL, including a `final override`, which keeps
- * dispatching correctly under `callvirt` — probe-verified, `inheritprobe_s2`) and for `open`
+ * agree, so both consult this single predicate. True exactly for interface members (the CLR
+ * makes every interface slot virtual: a non-virtual implementation load-poisons the type with
+ * TypeLoadException — probe-verified, `ifaceprobe_s1b`), for instance members that override
+ * something (every Kotlin `override` is virtual in IL — of a base-class member OR of an
+ * interface member, including a `final override`, which keeps dispatching correctly under
+ * `callvirt` — probe-verified, `inheritprobe_s2`, `ifaceprobe_s1`) and for `open`
  * members of `open` classes (which introduce a fresh `newslot` slot). An `open` member of a
  * FINAL class is deliberately NOT virtual: nothing can ever override it, so it keeps the
  * final-class model's plain non-virtual `call` (the JVM has no such distinction — everything
@@ -177,6 +194,7 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
  */
 internal fun IrSimpleFunction.isDotNetVirtual(): Boolean {
     if (parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver) return false
+    if ((parent as? IrClass)?.isInterface == true) return true
     if (overriddenSymbols.isNotEmpty()) return true
     return modality == Modality.OPEN && (parent as? IrClass)?.modality == Modality.OPEN
 }

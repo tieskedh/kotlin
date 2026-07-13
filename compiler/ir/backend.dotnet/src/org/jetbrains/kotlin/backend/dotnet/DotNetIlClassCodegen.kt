@@ -7,12 +7,18 @@ package org.jetbrains.kotlin.backend.dotnet
  * with [isOpen] — the CLR expresses Kotlin's final-by-default directly in metadata, unlike the
  * JVM's ACC_FINAL which the JVM backend sets from the same modality), a companion object
  * ([isNested] = true: a real CLR nested type declared inside the
- * enclosing class's body), or, with [exported] = false, the module-private runtime helper class
- * (see [DotNetIlRuntimeHelper]). [baseClassRef] is the already-rendered IL type reference of the
- * base class of the inheritance model (`extends 'demo.Base'`; assembly-local, forward references
- * legal — probe-verified, `inheritprobe_s1`); without one the class extends the corelib
- * `System.Object`, the IL spelling of `kotlin.Any`. [renderedNestedClasses] are complete,
- * already indented `.class`
+ * enclosing class's body), a Kotlin interface ([isInterface]: `.class interface public abstract
+ * auto ansi` with NO `extends` line, no `sealed`, no `beforefieldinit` — the exact flag set
+ * probe-verified, `ifaceprobe_s1`), or, with [exported] = false, the module-private runtime
+ * helper class (see [DotNetIlRuntimeHelper]). [baseClassRef] is the already-rendered IL type
+ * reference of the base class of the inheritance model (`extends 'demo.Base'`; assembly-local,
+ * forward references legal — probe-verified, `inheritprobe_s1`); without one the class extends
+ * the corelib `System.Object`, the IL spelling of `kotlin.Any`. [interfaceRefs] are the
+ * already-rendered IL type references of the directly implemented interfaces, printed as a
+ * comma-separated `implements 'A', 'B'` line after `extends` (spelling probe-verified,
+ * `ifaceprobe_s3`; on an interface the same line lists its direct super-interfaces,
+ * `ifaceprobe_s6` — transitively implied super-interfaces are never repeated, same probe).
+ * [renderedNestedClasses] are complete, already indented `.class`
  * blocks (a top-level user class carries at most its companion) emitted first in the body;
  * [renderedFields] are single `.field` lines emitted before the methods and
  * [renderedProperties] are `.property` blocks emitted after them (ilasm accepts any member order
@@ -40,15 +46,21 @@ internal class DotNetIlClassCodegen(
     private val renderedNestedClasses: List<String> = emptyList(),
     private val isOpen: Boolean = false,
     private val baseClassRef: String? = null,
+    private val isInterface: Boolean = false,
+    private val interfaceRefs: List<String> = emptyList(),
 ) {
     fun generate(builder: StringBuilder) {
         val visibility = if (exported) "public" else "private"
         // All flag spellings (including their order, with and without beforefieldinit) are
         // ilasm-probe-verified (the nested one by objprobe_s6, the non-sealed open-class one by
-        // inheritprobe_s1); the static-holder one is additionally frozen by the goldens.
+        // inheritprobe_s1, the interface one by ifaceprobe_s1); the static-holder one is
+        // additionally frozen by the goldens.
         val beforeFieldInit = if (hasClassInitializer) "" else " beforefieldinit"
         val sealed = if (isOpen) "" else " sealed"
         val flags = when {
+            // An interface carries neither `sealed` nor `beforefieldinit` (it has no `.cctor`
+            // and cannot be instantiated) and, per ECMA-335, no `extends` line at all.
+            isInterface -> "interface $visibility abstract auto ansi"
             // A nested class is never a static holder here: the only nested shape emitted is
             // the companion object, an instantiable singleton (and always final: isOpen never
             // applies to the nested shape — the gate keeps companions final-only).
@@ -57,7 +69,12 @@ internal class DotNetIlClassCodegen(
             else -> "$visibility auto ansi$sealed$beforeFieldInit"
         }
         builder.appendLine(".class $flags ${className.toIlIdentifier()}")
-        builder.appendLine("       extends ${baseClassRef ?: "${CORE_LIB_REF}System.Object"}")
+        if (!isInterface) {
+            builder.appendLine("       extends ${baseClassRef ?: "${CORE_LIB_REF}System.Object"}")
+        }
+        if (interfaceRefs.isNotEmpty()) {
+            builder.appendLine("       implements ${interfaceRefs.joinToString(", ")}")
+        }
         builder.appendLine("{")
         for (nestedClass in renderedNestedClasses) {
             builder.append(nestedClass)

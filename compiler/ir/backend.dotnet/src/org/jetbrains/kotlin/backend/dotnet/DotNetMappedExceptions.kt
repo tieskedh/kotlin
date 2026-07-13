@@ -124,19 +124,21 @@ internal object DotNetMappedExceptions {
  *   type — the CLR-verified common supertype of all mapped exception types, and the target of
  *   both Kotlin supertypes (`Throwable`, `Exception`) that can appear as the expected type of a
  *   mapped-exception value inside the supported subset;
- * - a [DotNetIlValueType.UserClass] is assignable to every ancestor on its
- *   [base-class chain][DotNetIlClassInfo.baseClass] — the pure reference upcast of the
- *   inheritance model, which needs no IL instruction at all (probe-verified,
- *   `inheritprobe_s1`: `stloc` into a base-typed local and a base-typed call argument both
- *   accept a derived reference without `castclass`). The JVM backend never performs this check
- *   itself — the JVM verifier's assignability subsumes it — while this backend verifies emitted
- *   stack types structurally, so the widening is spelled out here.
+ * - a [DotNetIlValueType.UserClass] is assignable to every proper supertype of its
+ *   [supertype DAG][DotNetIlClassInfo.allSupertypes]: the [base-class chain][DotNetIlClassInfo.baseClass]
+ *   of the inheritance model plus every transitively [implemented interface][DotNetIlClassInfo.interfaces]
+ *   of the interface model — pure reference upcasts needing no IL instruction at all
+ *   (probe-verified: `inheritprobe_s1` for base-typed positions; `ifaceprobe_s7` for
+ *   interface-typed fields, parameters, returns and locals, plus the type-agnostic reference
+ *   `ceq`; `ifaceprobe_s6` for the interface→super-interface widening). The JVM backend never
+ *   performs this check itself — the JVM verifier's assignability subsumes it — while this
+ *   backend verifies emitted stack types structurally, so the widening is spelled out here.
  */
 internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
     this == expected -> true
     this is DotNetIlValueType.MappedClass ->
         expected == DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
     this is DotNetIlValueType.UserClass && expected is DotNetIlValueType.UserClass ->
-        generateSequence(classInfo.baseClass) { it.baseClass }.any { it.ilTypeRef == expected.ilTypeRef }
+        classInfo.allSupertypes().any { it.ilTypeRef == expected.ilTypeRef }
     else -> false
 }

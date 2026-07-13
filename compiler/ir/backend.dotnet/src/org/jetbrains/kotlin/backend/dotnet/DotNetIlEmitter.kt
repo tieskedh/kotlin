@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
@@ -27,7 +28,9 @@ import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.companionObject
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.render
+import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 
 class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
@@ -121,17 +124,21 @@ class DotNetIlEmitter(
                 classSkipReasons[irClass] = e.reason
             }
         }
-        // Base-chain linking pass, deliberately AFTER every registration: a base class may be
-        // declared after its derived class (forward references are legal IL — probe-verified,
-        // inheritprobe_s1 — and legal Kotlin), so the links cannot be built inside the gate
-        // loop. The link feeds [isDotNetAssignableTo]'s upcast walk only; the `extends` line is
-        // re-resolved from the LIVE map every render round (see [renderUserClass]), so a base
-        // that failed the gate (its entry is absent here, leaving the link null) or is evicted
-        // later evicts its derived classes through the fixpoint rather than through this link.
+        // Base-chain and interface linking pass, deliberately AFTER every registration: a base
+        // class or interface may be declared after its user (forward references are legal IL —
+        // probe-verified, inheritprobe_s1 — and legal Kotlin), so the links cannot be built
+        // inside the gate loop. The links feed [isDotNetAssignableTo]'s upcast walk only; the
+        // `extends` and `implements` lines are re-resolved from the LIVE map every render round
+        // (see [renderUserClass]), so a base or interface that failed the gate (its entry is
+        // absent here, leaving the link out) or is evicted later evicts its derived
+        // classes/implementers/sub-interfaces through the fixpoint rather than through these
+        // links.
         for ((irClass, classInfo) in availableClasses) {
             if (irClass.isCompanion) continue
-            val baseClass = irClass.dotNetBaseClassOrNull() ?: continue
-            classInfo.baseClass = availableClasses[baseClass]
+            irClass.dotNetBaseClassOrNull()?.let { baseClass ->
+                classInfo.baseClass = availableClasses[baseClass]
+            }
+            classInfo.interfaces = irClass.dotNetDirectInterfaces().mapNotNull { availableClasses[it] }
         }
         val typeMapper = DotNetIlTypeMapper(availableClasses)
         // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
@@ -261,6 +268,9 @@ class DotNetIlEmitter(
                         )
                     }
                     availableFunctions[member] = DotNetIlFunctionInfo(classInfo, signature)
+                }
+                for (member in irClass.dotNetMemberFakeOverrides()) {
+                    checkInheritedInterfaceImplKeepsIlReturnType(member, typeMapper)
                 }
                 val fieldsByIlIdentity = hashMapOf<String, IrField>()
                 for (field in irClass.dotNetMemberFields()) {
@@ -559,7 +569,16 @@ class DotNetIlEmitter(
      * [moduleTopLevelClasses] (real CLR inheritance; whether that base itself compiles is
      * deliberately NOT checked here — the render re-resolves it every fixpoint round, so a
      * failing base cascades to its derived classes with a carried reason, see
-     * [renderUserClass]); `abstract`/`sealed` classes, interface supertypes, exception
+     * [renderUserClass]) and any number of interface supertypes when each resolves to a
+     * top-level interface of the module (real CLR interface types — see
+     * [checkInterfaceShapeSupported] for the interface half of the gate; the `implements` list
+     * is re-resolved live like the base). Interface slots satisfied through inherited members
+     * must resolve to VIRTUAL members (`ifaceprobe_s5a`/`_s5b` — the non-virtual shape
+     * load-poisons the type) whose mapped IL signature matches the slot exactly, return type
+     * included (`ifaceprobe_s10`; the covariant half runs in the member pre-pass,
+     * [checkInheritedInterfaceImplKeepsIlReturnType], because it needs the type mapper).
+     * Interface delegation (`by`) is rejected whole-class in both source spellings.
+     * `abstract`/`sealed` classes, exception
      * supertypes, out-of-module or non-top-level bases, and overrides of `kotlin.Any` members
      * stay rejected. Objects and companions stay on the sole-supertype-`kotlin.Any`,
      * final-only model. The single supported
@@ -576,9 +595,10 @@ class DotNetIlEmitter(
     ) {
         val name = irClass.diagnosticName()
         when (irClass.kind) {
-            ClassKind.INTERFACE ->
-                if (irClass.isFun) dotNetUnsupported("fun interface '$name' is not supported")
-                else dotNetUnsupported("interface '$name' is not supported")
+            ClassKind.INTERFACE -> {
+                checkInterfaceShapeSupported(irClass, moduleTopLevelClasses)
+                return
+            }
             ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY -> dotNetUnsupported("enum class '$name' is not supported")
             ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
@@ -636,12 +656,25 @@ class DotNetIlEmitter(
                 ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
             }
-            if (superClasses.any { it.kind == ClassKind.INTERFACE }) {
-                dotNetUnsupported("class '$name' implements an interface; interface supertypes are not supported")
+            // A class may implement any number of module-local top-level interfaces next to its
+            // (at most one) base class; whether each interface itself compiles is deliberately
+            // NOT checked here — the render re-resolves the `implements` list every fixpoint
+            // round, so an evicted interface cascades whole-class with a carried reason, exactly
+            // like an evicted base class.
+            for (superInterface in superClasses.filter { it.isInterface }) {
+                if (superInterface !in moduleTopLevelClasses) {
+                    dotNetUnsupported(
+                        "class '$name' implements '${superInterface.diagnosticName()}', which is not a top-level " +
+                                "interface of the compiled module; only module-local interfaces are supported"
+                    )
+                }
             }
-            val superClass = superClasses.singleOrNull()
-                ?: dotNetUnsupported("internal: class '$name' has more than one class supertype")
-            if (superClass !in moduleTopLevelClasses) {
+            val properSuperClasses = superClasses.filterNot { it.isInterface }
+            if (properSuperClasses.size > 1) {
+                dotNetUnsupported("internal: class '$name' has more than one class supertype")
+            }
+            val superClass = properSuperClasses.singleOrNull()
+            if (superClass != null && superClass !in moduleTopLevelClasses) {
                 dotNetUnsupported(
                     "class '$name' extends '${superClass.diagnosticName()}', which is not a top-level class " +
                             "of the compiled module; only module-local base classes are supported"
@@ -665,6 +698,60 @@ class DotNetIlEmitter(
                 )
             }
         }
+        // Interface delegation (`class C(...) : I by d`): the frontend synthesizes forwarding
+        // members (origin DELEGATED_MEMBER) over a delegate value — for a plain constructor
+        // parameter additionally a loose synthetic field (origin DELEGATE). Neither shape is
+        // part of the interface model yet (no probe, no golden, no box coverage), and the two
+        // cosmetically different source spellings (`val` parameter vs plain parameter) must not
+        // diverge in support, so ALL `by`-delegation is rejected here, whole-class, with a real
+        // user-facing message (the plain-parameter form would otherwise trip renderUserClass's
+        // internal propertyless-field invariant).
+        for (declaration in irClass.declarations) {
+            val isDelegationArtifact = when (declaration) {
+                is IrField -> declaration.origin == IrDeclarationOrigin.DELEGATE
+                is IrSimpleFunction -> declaration.origin == IrDeclarationOrigin.DELEGATED_MEMBER
+                is IrProperty -> declaration.origin == IrDeclarationOrigin.DELEGATED_MEMBER
+                else -> false
+            }
+            if (isDelegationArtifact) {
+                dotNetUnsupported(
+                    "class '$name' implements an interface by delegation ('by'); " +
+                            "interface delegation is not supported yet"
+                )
+            }
+        }
+        // Interface slots bound through INHERITED members (the Kotlin fake-override shape:
+        // a base-class member satisfies an interface the derived class declares) work on the
+        // CLR only when the inherited member is VIRTUAL (probe-verified, ifaceprobe_s5a); an
+        // inherited NON-virtual member assembles cleanly but load-poisons the type — every use
+        // throws TypeLoadException at JIT time (ifaceprobe_s5b) — so the shape is gated here,
+        // whole-class. The inherited member's mapped IL signature must ALSO match the interface
+        // slot's exactly, return type included — the covariant-return variant load-poisons the
+        // type the same way (ifaceprobe_s10) — but that comparison needs the type mapper, which
+        // does not exist yet at gate time, so it lives in the member pre-pass
+        // (checkInheritedInterfaceImplKeepsIlReturnType). Declared overrides need no virtualness
+        // check: every Kotlin `override` is emitted virtual (see isDotNetVirtual). A fake
+        // override resolving into an interface (a default interface method) passes this gate and
+        // is instead evicted at render when its interface is (interface members with bodies are
+        // interface-gate-rejected).
+        for (member in irClass.dotNetMemberFakeOverrides()) {
+            if (member.allOverridden().none { (it.parent as? IrClass)?.isInterface == true }) continue
+            val implementation = member.resolveFakeOverride()
+                ?: dotNetUnsupported(
+                    "member '${member.name.asString()}' of class '$name' implements an interface member " +
+                            "without any inherited implementation"
+                )
+            if (!implementation.isDotNetVirtual()) {
+                val implementationOwner = (implementation.parent as? IrClass)?.diagnosticName() ?: "?"
+                dotNetUnsupported(
+                    "member '${member.name.asString()}' of class '$name' implements an interface member through " +
+                            "the non-virtual inherited member '$implementationOwner.${implementation.name.asString()}'; " +
+                            "the CLR binds interface slots only to virtual members — the non-virtual shape assembles " +
+                            "but load-poisons the type with TypeLoadException (probe ifaceprobe_s5b) — so this shape " +
+                            "is not supported"
+                )
+            }
+        }
         for (declaration in irClass.declarations) {
             if (declaration is IrClass) {
                 // The companion object of a top-level class (Kotlin allows at most one) is the
@@ -683,6 +770,125 @@ class DotNetIlEmitter(
     }
 
     /**
+     * The interface half of the shape gate (probe series `ifaceprobe_s1`–`_s10`; JVM precedent:
+     * the CLR has real interface types, so like classes there is no vtable/interface lowering —
+     * a Kotlin `interface` becomes a CLR `.class interface abstract`): a top-level, non-generic
+     * plain interface whose members are ALL abstract (abstract functions and abstract `val`/`var`
+     * properties) is compilable, and it may extend any number of module-local top-level
+     * interfaces (`ifaceprobe_s6`: interface inheritance is the same `implements` list; whether
+     * each super-interface itself compiles is re-resolved live every render round, so an evicted
+     * interface cascades to its sub-interfaces). A `sealed interface` is deliberately ACCEPTED
+     * and emitted as a plain interface — unlike a sealed CLASS (which needs the missing
+     * abstract-class model), interface sealedness is pure frontend-enforced metadata with no
+     * CLR counterpart needed (JVM precedent: the JVM backend emits an ordinary interface too),
+     * and the exhaustive `when` it enables is `is`-gated by the type-operator rejection anyway;
+     * pinned by ilText/interfaceEqualityWidening.kt. Everything else stays rejected, whole-interface:
+     * `fun interface` (no SAM-conversion model), generic interfaces, non-top-level interfaces,
+     * out-of-module super-interfaces, members WITH bodies — default methods and accessors with
+     * bodies — (the CLR itself supports Default Interface Methods, probe-verified
+     * `ifaceprobe_s8`, but this backend has no DIM model yet, so the limitation is
+     * backend-scope), private interface members, abstract redeclarations of super-interface
+     * members (an unprobed double-slot shape), overrides of `kotlin.Any` members (the same
+     * no-Any-model gap as on classes), and nested declarations including companion objects.
+     */
+    private fun checkInterfaceShapeSupported(irClass: IrClass, moduleTopLevelClasses: Set<IrClass>) {
+        val name = irClass.diagnosticName()
+        if (irClass.isFun) {
+            dotNetUnsupported("fun interface '$name' is not supported (no SAM-conversion model)")
+        }
+        if (irClass.parent !is IrFile) {
+            dotNetUnsupported("interface '$name' is not top-level; nested/local interfaces are not supported")
+        }
+        if (irClass.isExpect) dotNetUnsupported("expect interface '$name' is not supported")
+        if (irClass.typeParameters.isNotEmpty()) {
+            dotNetUnsupported("generic interface '$name' is not supported yet")
+        }
+        for (superType in irClass.superTypes) {
+            if (superType.isAny()) continue
+            val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                ?: dotNetUnsupported("interface '$name' has an unsupported supertype")
+            if (!superInterface.isInterface || superInterface !in moduleTopLevelClasses) {
+                dotNetUnsupported(
+                    "interface '$name' extends '${superInterface.diagnosticName()}', which is not a top-level " +
+                            "interface of the compiled module; only module-local super-interfaces are supported"
+                )
+            }
+        }
+        for (declaration in irClass.declarations) {
+            when (declaration) {
+                is IrClass -> {
+                    val kindWord = when {
+                        declaration.isCompanion -> "companion object"
+                        declaration.kind == ClassKind.OBJECT -> "object"
+                        declaration.kind == ClassKind.INTERFACE -> "interface"
+                        else -> "class"
+                    }
+                    dotNetUnsupported(
+                        "interface '$name' contains nested $kindWord '${declaration.name.asString()}'; " +
+                                "nested declarations in interfaces are not supported"
+                    )
+                }
+                is IrSimpleFunction -> checkInterfaceMemberSupported(
+                    declaration, name, "member '${declaration.name.asString()}'"
+                )
+                is IrProperty -> {
+                    if (declaration.isFakeOverride) continue
+                    val propertyName = declaration.name.asString()
+                    if (declaration.isDelegated) {
+                        dotNetUnsupported("delegated property '$propertyName' of interface '$name' is not supported")
+                    }
+                    if (declaration.backingField != null) {
+                        dotNetUnsupported(
+                            "property '$propertyName' of interface '$name' has an initializer or backing field; " +
+                                    "interface property state is not supported"
+                        )
+                    }
+                    declaration.getter?.let {
+                        checkInterfaceMemberSupported(it, name, "getter of property '$propertyName'")
+                    }
+                    declaration.setter?.let {
+                        checkInterfaceMemberSupported(it, name, "setter of property '$propertyName'")
+                    }
+                }
+                else -> dotNetUnsupported(
+                    "unsupported member of interface '$name': ${declaration.javaClass.simpleName}"
+                )
+            }
+        }
+    }
+
+    /**
+     * One interface member (a function or a property accessor) of the interface shape gate; see
+     * [checkInterfaceShapeSupported] for the model and the probe citations.
+     */
+    private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
+        if (member.isFakeOverride) return
+        if (member.visibility == DescriptorVisibilities.PRIVATE) {
+            dotNetUnsupported("private $description of interface '$interfaceName' is not supported")
+        }
+        if (member.body != null || member.modality != Modality.ABSTRACT) {
+            dotNetUnsupported(
+                "$description of interface '$interfaceName' has a body; interface members with bodies are not yet " +
+                        "supported (the CLR supports Default Interface Methods — a future backend slice, not a " +
+                        "platform limitation)"
+            )
+        }
+        if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
+            dotNetUnsupported(
+                "$description of interface '$interfaceName' overrides a member of kotlin.Any; " +
+                        "kotlin.Any member overrides are not supported (no Any model)"
+            )
+        }
+        if (member.overriddenSymbols.isNotEmpty()) {
+            dotNetUnsupported(
+                "$description of interface '$interfaceName' redeclares a super-interface member; abstract " +
+                        "redeclarations are not supported (the redeclaration would occupy a second, unprobed " +
+                        "interface slot)"
+            )
+        }
+    }
+
+    /**
      * Rejects a covariant-return override, whole-class via the member pre-pass: ECMA-335
      * implicit slot matching (II.15.4.2.3) includes the RETURN type, so an override whose
      * mapped return differs from the overridden slot's — `virtual` without `newslot` binds by
@@ -696,7 +902,9 @@ class DotNetIlEmitter(
      * types; the whole [allOverridden] chain is compared so a leaf-vs-root mismatch is caught
      * even when the intermediate class matches one side. An overridden declaration whose own
      * return does not map is skipped here: its class fails its own pre-pass, and the eviction
-     * reaches this class through the render's base re-resolution with a carried reason.
+     * reaches this class through the render's base re-resolution with a carried reason. This
+     * check only sees DECLARED members; the interface-mapping variant of the same failure mode
+     * on INHERITED members is [checkInheritedInterfaceImplKeepsIlReturnType]'s.
      */
     private fun checkOverrideKeepsIlReturnType(
         member: IrSimpleFunction,
@@ -713,6 +921,57 @@ class DotNetIlEmitter(
                             "with a different IL return type (${signature.returnType.nameInSignature} vs " +
                             "${overriddenReturnType.nameInSignature}); covariant-return overrides are not supported " +
                             "(the override would not reuse the base virtual slot)"
+                )
+            }
+        }
+    }
+
+    /**
+     * Rejects an interface slot filled by an INHERITED member whose mapped IL return type
+     * differs from the interface member's, whole-class via the member pre-pass — the
+     * fake-override complement of [checkOverrideKeepsIlReturnType], which only sees declared
+     * members: ECMA-335 implicit interface mapping matches candidate methods by name and FULL
+     * signature INCLUDING the return type, and this backend emits no `.override` arrows, so in
+     * the Kotlin-legal shape `class Combo : Factory(), Maker` — the inherited
+     * `Factory.make(): Bottom` meant to satisfy `Maker.make(): Top` — the `Maker::make` slot
+     * has no implementation at all. ilasm assembles the shape without any diagnostic and EVERY
+     * use of the class throws TypeLoadException at first JIT of a using method (probe-verified,
+     * `ifaceprobe_s10`, both the function and the property-accessor variants; the JVM supports
+     * the shape because its backend generates bridge methods, which this backend has no
+     * analogue of). The check is scoped to fake overrides that override at least one
+     * interface-parented member: the `kotlin.Any` fake overrides present on every class must
+     * not be signature-mapped (`equals(Any?)` has no IL mapping), and a return mismatch against
+     * a BASE-CLASS member cannot survive to a fake override (the declaring class's own pre-pass
+     * ran [checkOverrideKeepsIlReturnType] over the declared chain). Kotlin covariance mapping
+     * to the SAME IL type (`String?` implemented by an inherited `String` member) stays
+     * supported — the comparison runs on MAPPED types — and an overridden interface member
+     * whose own return does not map is skipped here: its interface fails its own pre-pass and
+     * the eviction cascades through the render's `implements` re-resolution with a carried
+     * reason.
+     */
+    private fun checkInheritedInterfaceImplKeepsIlReturnType(
+        member: IrSimpleFunction,
+        typeMapper: DotNetIlTypeMapper,
+    ) {
+        val overriddenInterfaceMembers = member.allOverridden()
+            .filter { (it.parent as? IrClass)?.isInterface == true }
+        if (overriddenInterfaceMembers.isEmpty()) return
+        // The fake override's own return type equals the inherited implementation's; when it
+        // does not map, the implementation's declaring class fails its own pre-pass and this
+        // class falls through the base-chain cascade with a carried reason instead.
+        val memberReturnType = typeMapper.toDotNetIlReturnType(member.returnType) ?: return
+        for (overridden in overriddenInterfaceMembers) {
+            val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
+            if (overriddenReturnType != memberReturnType) {
+                val interfaceName = (overridden.parent as? IrClass)?.diagnosticName() ?: "?"
+                dotNetUnsupported(
+                    "member '${member.name.asString()}' implements interface member " +
+                            "'$interfaceName.${overridden.name.asString()}' through an inherited member with a " +
+                            "different IL return type (${memberReturnType.nameInSignature} vs " +
+                            "${overriddenReturnType.nameInSignature}); ECMA-335 interface mapping matches the " +
+                            "full signature including the return type, so the interface slot would have no " +
+                            "implementation and every use of the class would throw TypeLoadException " +
+                            "(probe ifaceprobe_s10)"
                 )
             }
         }
@@ -741,6 +1000,14 @@ class DotNetIlEmitter(
      * and overrides carry virtual flags (see
      * [DotNetIlMethodCodegen]'s `dotNetVirtualFlags`). The base is re-resolved from the live
      * class map at the top of every render, so an evicted base cascades down the chain.
+     *
+     * A Kotlin INTERFACE renders through this same path as a `.class interface abstract` with no
+     * `extends` line, an `implements` list naming its direct super-interfaces, abstract member
+     * methods with empty bodies and ordinary `.property` blocks over the abstract accessors
+     * (all spellings probe-verified, `ifaceprobe_s1`/`_s2`/`_s6`); a class implementing
+     * interfaces adds the `implements` list after its `extends` line (`ifaceprobe_s3`). The
+     * `implements` list is re-resolved live exactly like the base, so an evicted interface
+     * cascades to every implementer and sub-interface.
      *
      * An `object` class renders through the same path with three additions: its `INSTANCE`
      * field (a loose [IrField] with origin [IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE])
@@ -779,6 +1046,17 @@ class DotNetIlEmitter(
             typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
                 "its base class '${baseClass.diagnosticName()}' could not be compiled: " +
                         (classSkipReasons[baseClass] ?: "the base class is not available in this module")
+            )
+        }
+        // The `implements` list is re-resolved through the LIVE map every render round exactly
+        // like the base class above: an evicted interface takes every implementing class and
+        // every sub-interface down with it, each warned with a reason carrying the interface's
+        // own reason (the interface arm of the inheritance cascade).
+        val interfaceInfos = irClass.dotNetDirectInterfaces().map { superInterface ->
+            typeMapper.classInfoOrNull(superInterface) ?: dotNetUnsupported(
+                "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
+                        "'${superInterface.diagnosticName()}' could not be compiled: " +
+                        (classSkipReasons[superInterface] ?: "the interface is not available in this module")
             )
         }
         val renderedNestedClasses = mutableListOf<String>()
@@ -922,6 +1200,8 @@ class DotNetIlEmitter(
                 // shape gate keeps them final-only.
                 isOpen = irClass.modality == Modality.OPEN,
                 baseClassRef = baseClassInfo?.ilTypeRef,
+                isInterface = irClass.isInterface,
+                interfaceRefs = interfaceInfos.map { it.ilTypeRef },
             ).generate(this)
         }
         return RenderedClass(ilText, requiredHelpers)
@@ -1081,6 +1361,22 @@ class DotNetIlEmitter(
                 is IrProperty ->
                     if (declaration.isFakeOverride || declaration.isConst) emptyList()
                     else listOfNotNull(declaration.getter, declaration.setter).filterNot { it.isFakeOverride }
+                else -> emptyList()
+            }
+        }
+
+    /**
+     * The fake-override member functions of a user class (inherited members re-materialized on
+     * the class, including property accessors), for the shape gate's inherited-interface-
+     * implementation check ([ifaceprobe_s5b][checkClassShapeSupported]) — the complement of
+     * [dotNetMemberFunctions], which skips exactly these.
+     */
+    private fun IrClass.dotNetMemberFakeOverrides(): List<IrSimpleFunction> =
+        declarations.flatMap { declaration ->
+            when (declaration) {
+                is IrSimpleFunction -> if (declaration.isFakeOverride) listOf(declaration) else emptyList()
+                is IrProperty ->
+                    listOfNotNull(declaration.getter, declaration.setter).filter { it.isFakeOverride }
                 else -> emptyList()
             }
         }

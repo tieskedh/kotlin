@@ -1,11 +1,8 @@
 .assembly extern mscorlib {}
-.assembly 'companionShapeRejected' {}
-.module 'main-companionShapeRejected.il'
+.assembly 'interfaceDefaultBodyRejected' {}
+.module 'main-interfaceDefaultBodyRejected.il'
 
-.class interface public abstract auto ansi 'Marker'
-{
-}
-.class public abstract sealed auto ansi beforefieldinit 'companionShapeRejectedKt'
+.class public abstract sealed auto ansi beforefieldinit 'interfaceDefaultBodyRejectedKt'
        extends [mscorlib]System.Object
 {
   .method public hidebysig static void 'main'() cil managed
