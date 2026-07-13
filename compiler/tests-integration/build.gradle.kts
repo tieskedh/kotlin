@@ -38,6 +38,7 @@ dependencies {
     testFixturesApi(testFixtures(project(":generators:test-generator")))
     testFixturesApi(project(":compiler:ir.tree")) // used for deepCopyWithSymbols call that is removed by proguard from the compiler TODO: make it more straightforward
     testFixturesApi(project(":kotlin-scripting-compiler"))
+    testFixturesImplementation(project(":compiler:cli-dotnet"))
 
     otherCompilerModules.forEach {
         testCompileOnly(project(it))
