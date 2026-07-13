@@ -164,6 +164,13 @@ object CompilerModules {
     )
 
     /**
+     * Modules of .NET backend
+     */
+    val dotnetCompilerModules = arrayOf(
+        ":compiler:backend.dotnet",
+    )
+
+    /**
      * Modules of Native backend
      */
     val nativeCompilerModules = arrayOf(
@@ -204,6 +211,7 @@ object CompilerModules {
         ":compiler:cli",
         ":compiler:cli-jvm",
         ":compiler:cli-js",
+        ":compiler:cli-dotnet",
         ":compiler:cli-metadata",
         ":compiler:incremental-compilation-impl",
         ":kotlin-build-common",
@@ -260,6 +268,7 @@ object CompilerModules {
             jvmCompilerModules +
             jsCompilerModules +
             wasmCompilerModules +
+            dotnetCompilerModules +
             nativeCompilerModules +
             cliCompilerModules
 

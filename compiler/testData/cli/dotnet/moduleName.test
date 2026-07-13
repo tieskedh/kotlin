@@ -1,0 +1,3 @@
+// EXISTS: custom.il
+// CONTAINS: custom.il, .assembly 'customAssembly'
+// CONTAINS: custom.il, .module 'customAssembly.exe'

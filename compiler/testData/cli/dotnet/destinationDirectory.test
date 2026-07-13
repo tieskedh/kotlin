@@ -1,0 +1,3 @@
+// EXISTS: main.il
+// CONTAINS: main.il, .assembly 'main'
+// CONTAINS: main.il, ldstr "Hello!"

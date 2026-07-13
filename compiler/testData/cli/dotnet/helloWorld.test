@@ -1,0 +1,3 @@
+// EXISTS: hello.il
+// CONTAINS: hello.il, ldstr "Hello!"
+// CONTAINS: hello.il, System.Console::WriteLine(string)

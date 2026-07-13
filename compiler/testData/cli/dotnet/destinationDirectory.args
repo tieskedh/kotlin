@@ -1,0 +1,5 @@
+$TESTDATA_DIR$/helloWorld.kt
+-module-name
+main
+-d
+$TEMP_DIR$

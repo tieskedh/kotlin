@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.cli.common.CLICompiler;
 import org.jetbrains.kotlin.cli.common.CompilerSystemProperties;
 import org.jetbrains.kotlin.cli.common.ExitCode;
 import org.jetbrains.kotlin.cli.common.messages.MessageRenderer;
+import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler;
 import org.jetbrains.kotlin.cli.js.K2JSCompiler;
 import org.jetbrains.kotlin.cli.js.KotlinWasmCompiler;
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler;
@@ -344,6 +345,10 @@ public abstract class AbstractCliTest extends TestCaseWithTmpdir {
 
     protected void doMetadataTest(@NotNull String fileName) {
         doTest(fileName, new KotlinMetadataCompiler());
+    }
+
+    protected void doDotNetTest(@NotNull String fileName) {
+        doTest(fileName, new K2DotNetCompiler());
     }
 
     public static String removePerfOutput(String output) {

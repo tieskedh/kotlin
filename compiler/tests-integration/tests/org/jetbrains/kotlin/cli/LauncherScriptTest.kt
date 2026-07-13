@@ -161,6 +161,44 @@ class LauncherScriptTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testKotlincDotNetSimple() {
+        val outputFile = File(tmpdir, "out.il")
+        runProcess(
+            "kotlinc-dotnet",
+            "$testDataDirectory/helloWorld.kt",
+            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
+        )
+
+        val il = outputFile.readText()
+        assertTrue("""ldstr "Hello!"""" in il) { "Expected string literal was not emitted:\n$il" }
+        assertTrue("System.Console::WriteLine(string)" in il) { "Expected Console.WriteLine call was not emitted:\n$il" }
+    }
+
+    @Test
+    fun testKotlincDotNetEmptyMain() {
+        val outputFile = File(tmpdir, "empty.il")
+        runProcess(
+            "kotlinc-dotnet",
+            "$testDataDirectory/emptyMain.kt",
+            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
+        )
+
+        val il = outputFile.readText()
+        assertTrue(".entrypoint" in il) { "Expected entry point was not emitted:\n$il" }
+        assertTrue("System.Console::WriteLine" !in il) { "Unexpected Console.WriteLine call was emitted:\n$il" }
+    }
+
+    @Test
+    fun testKotlincDotNetRequiresDestination() {
+        runProcess(
+            "kotlinc-dotnet",
+            "$testDataDirectory/helloWorld.kt",
+            expectedStderr = "error: specify destination via -d\n",
+            expectedExitCode = 1,
+        )
+    }
+
+    @Test
     fun testKotlinNoReflect() {
         kotlincInProcess("$testDataDirectory/reflectionUsage.kt", K2JVMCompilerArguments::destination.cliArgument, tmpdir.path)
 
