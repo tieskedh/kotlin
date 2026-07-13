@@ -157,6 +157,38 @@ internal class DotNetIlClassInfo(
     var baseClass: DotNetIlClassInfo? = null
 
     /**
+     * The class infos of this class's directly implemented interfaces (for an interface: its
+     * directly extended super-interfaces). Linked by the same pre-pass as [baseClass] and, like
+     * it, consumed ONLY by [isDotNetAssignableTo]'s upcast walk — the `implements` line is
+     * re-resolved through the LIVE availableClasses map every render round, so an interface
+     * evicted mid-emission cascades whole-class to its implementers and sub-interfaces instead
+     * of leaving a stale link in emitted IL. Interfaces form a DAG rather than a chain, hence a
+     * list next to the single [baseClass].
+     */
+    var interfaces: List<DotNetIlClassInfo> = emptyList()
+
+    /**
+     * Every proper supertype this class widens to by a pure reference upcast: the [baseClass]
+     * chain, every directly or transitively implemented interface, and the interfaces of every
+     * base-chain ancestor (probe-verified free widenings, `ifaceprobe_s6`/`_s7`). A breadth-first
+     * walk over the supertype DAG (diamonds are legal Kotlin and legal IL), deduplicated by
+     * [ilTypeRef] like [DotNetIlValueType.UserClass] equality.
+     */
+    fun allSupertypes(): Sequence<DotNetIlClassInfo> = sequence {
+        val visited = hashSetOf<String>()
+        val queue = ArrayDeque<DotNetIlClassInfo>()
+        baseClass?.let(queue::add)
+        queue.addAll(interfaces)
+        while (queue.isNotEmpty()) {
+            val next = queue.removeFirst()
+            if (!visited.add(next.ilTypeRef)) continue
+            yield(next)
+            next.baseClass?.let(queue::add)
+            queue.addAll(next.interfaces)
+        }
+    }
+
+    /**
      * The rendered IL type reference of this class — `'demo.Outer'` for a top-level class,
      * `'demo.Outer'/'Companion'` for a nested one: the slash sits OUTSIDE the quoted
      * identifiers, enclosing name first (probe-verified in every operand position —

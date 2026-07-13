@@ -20,9 +20,11 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 
 /**
  * Emits an [IrTry] in value position. Implemented by [DotNetIlMethodCodegen]: a `try` branch
@@ -264,14 +266,35 @@ internal class DotNetIlExpressionCodegen(
      * resolved to the real declaration first (JVM precedent: `MethodSignatureMapper` maps calls
      * through `findSuperDeclaration`), so the emitted member reference names the DECLARING
      * class; the CLR accepts that operand token with a derived-typed receiver for both `call`
-     * and `callvirt` (probe-verified, `inheritprobe_s1`). Dispatch: a
+     * and `callvirt` (probe-verified, `inheritprobe_s1`). For INTERFACE members the same
+     * resolution is mandatory rather than lenient: the `callvirt` operand MUST name the
+     * interface that DECLARES the member — naming a sub-interface that merely inherits it is a
+     * runtime MissingMethodException (probe-verified, `ifaceprobe_s6`). Dispatch: a
      * [virtual callee][isDotNetVirtual] uses `callvirt` — runtime dispatch on the receiver's
      * class — unless the call is `super`-qualified, which is exactly the JVM's
      * invokevirtual/invokespecial split; a `super` call and every final member keep the plain
-     * non-virtual `call` (see [DotNetIlFunctionInfo.renderCallInstruction]).
+     * non-virtual `call` (see [DotNetIlFunctionInfo.renderCallInstruction]). A
+     * `super<I>`-qualified call to an interface member is rejected up front: its non-virtual
+     * `call` would need a callable interface implementation — the Default Interface Methods
+     * model this backend does not have.
      */
     fun emitCall(call: IrCall): DotNetIlReturnType {
-        val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it }
+        call.superQualifierSymbol?.owner?.let { superQualifier ->
+            if (superQualifier.isInterface) {
+                dotNetUnsupported(
+                    "'super<${superQualifier.name.asString()}>' call to an interface member is not supported " +
+                            "(requires the Default Interface Methods model)"
+                )
+            }
+        }
+        // resolveFakeOverride ignores ABSTRACT real declarations, so a fake override whose only
+        // real declarations are abstract interface members (a super-interface member referenced
+        // through a sub-interface-typed receiver, ifaceprobe_s6) falls back to the
+        // maybe-abstract resolution — the operand must name the DECLARING interface. When the
+        // abstract member is inherited from several unrelated super-interfaces at once, any of
+        // them is a correct operand: the implementing class's single member fills every
+        // same-signature interface slot (probe-verified, ifaceprobe_s9).
+        val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee]
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")

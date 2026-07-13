@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 
@@ -101,7 +102,14 @@ internal class DotNetIlMethodCodegen(
     private var returnValueSlot: DotNetIlSlot.Local? = null
 
     fun render(): DotNetIlRenderedMethod {
-        emitBody()
+        // An abstract interface member has no body by definition: its `.method` block stays
+        // empty — no `.maxstack`, no `.locals`, no instructions (spelling probe-verified,
+        // `ifaceprobe_s1`/`_s2`). ABSTRACT modality is only reachable for interface members:
+        // abstract classes are shape-gate-rejected.
+        val isAbstractMember = function is IrSimpleFunction && function.modality == Modality.ABSTRACT
+        if (!isAbstractMember) {
+            emitBody()
+        }
         val ilText = buildString {
             // The printed parameter list never contains the implicit `this` of an instance
             // method: the dispatch-receiver pair of the zip is dropped (an IrConstructor's
@@ -147,12 +155,14 @@ internal class DotNetIlMethodCodegen(
                 )
             }
             appendLine("  {")
-            if (isEntryPoint) {
-                appendLine("    .entrypoint")
+            if (!isAbstractMember) {
+                if (isEntryPoint) {
+                    appendLine("    .entrypoint")
+                }
+                appendLine("    .maxstack ${methodContext.maxStack}")
+                appendLocals()
+                append(methodContext.renderBody())
             }
-            appendLine("    .maxstack ${methodContext.maxStack}")
-            appendLocals()
-            append(methodContext.renderBody())
             appendLine("  }")
         }
         return DotNetIlRenderedMethod(ilText, methodContext.requiredRuntimeHelpers)
@@ -190,21 +200,38 @@ internal class DotNetIlMethodCodegen(
      * with plain `call` — or vice versa — must never diverge). All spellings and their flag
      * order are ilasm-probe-verified (`inheritprobe_s1`/`_s2`/`_s3`; `_s3` additionally showed
      * ilasm treats the flags as an unordered keyword set, so the emitter standardizes on the
-     * s2-verified order):
+     * s2-verified order; interface spellings `ifaceprobe_s1`–`_s4`):
+     * - an abstract interface member is `newslot abstract virtual` with an empty method block
+     *   (`ifaceprobe_s1`; accessors additionally carry `specialname` like everywhere else,
+     *   `ifaceprobe_s2` — ilasm's unordered-keyword-set rule keeps the emitter's established
+     *   `specialname`-first order valid);
      * - an `open` member that overrides nothing introduces a fresh slot: `newslot virtual`
      *   (`specialname newslot virtual` for accessors);
-     * - a Kotlin `override` REUSES the base slot: `virtual` with NO `newslot` — adding `newslot`
-     *   would silently detach it from base-typed dispatch;
-     * - a `final override` adds `final`: it still occupies the virtual slot (and still
-     *   dispatches under `callvirt`) but seals it, the exact Roslyn shape for C# `sealed
-     *   override`;
+     * - a Kotlin `override` of a BASE-CLASS member REUSES the base slot: `virtual` with NO
+     *   `newslot` — adding `newslot` would silently detach it from base-typed dispatch. CLR
+     *   interface mapping follows the class vtable slot, so this also covers a derived override
+     *   of an interface-implementing base member (`ifaceprobe_s4`), and a member overriding
+     *   BOTH a base-class member and an interface member keeps the base slot;
+     * - a Kotlin `override` of ONLY interface members introduces a fresh CLASS slot that the
+     *   CLR's implicit interface mapping binds by name and signature: `newslot virtual` on an
+     *   open implementer (`ifaceprobe_s4`), `newslot virtual final` on a final one — the exact
+     *   Roslyn shape for an implicit implementation on a sealed class (`ifaceprobe_s1`; the
+     *   implementation MUST be virtual even there: the plain non-virtual member shape
+     *   load-poisons the type, `ifaceprobe_s1b`);
+     * - a `final override` of a base-class member adds `final`: it still occupies the virtual
+     *   slot (and still dispatches under `callvirt`) but seals it, the exact Roslyn shape for
+     *   C# `sealed override`;
      * - everything else (final members of the final-class model, static facade methods) carries
      *   no virtual flags — the established plain-`call` model.
      */
     private fun IrFunction.dotNetVirtualFlags(): String {
         if (this !is IrSimpleFunction || !signature.hasThis) return ""
+        if ((parent as? IrClass)?.isInterface == true) return "newslot abstract virtual "
+        val final = if (modality == Modality.FINAL) "final " else ""
+        val overridesClassMember = overriddenSymbols.any { (it.owner.parent as? IrClass)?.isInterface != true }
         return when {
-            overriddenSymbols.isNotEmpty() -> if (modality == Modality.FINAL) "virtual final " else "virtual "
+            overridesClassMember -> "virtual $final"
+            overriddenSymbols.isNotEmpty() -> "newslot virtual $final"
             isDotNetVirtual() -> "newslot virtual "
             else -> ""
         }
