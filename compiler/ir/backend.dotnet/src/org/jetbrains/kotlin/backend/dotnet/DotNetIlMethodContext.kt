@@ -74,7 +74,7 @@ internal class DotNetIlMethodContext(
         private set
 
     init {
-        parameters.zip(parameterTypes).forEachIndexed { index, (parameter, type) ->
+        parameters.zip(parameterTypes).forEachIndexed { index, [parameter, type] ->
             slots[parameter.symbol] = DotNetIlSlot.Parameter(firstArgumentIndex + index, type)
         }
     }

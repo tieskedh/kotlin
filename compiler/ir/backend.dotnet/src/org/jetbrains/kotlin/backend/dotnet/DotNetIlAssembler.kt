@@ -75,7 +75,7 @@ object DotNetIlAssembler {
      */
     private fun writeRuntimeConfig(dll: File) {
         val runtimeVersion = findModernDotNetHost()?.let(::newestInstalledRuntimeVersion)
-        val (major, minor) = runtimeVersion ?: listOf(10, 0)
+        val [major, minor] = runtimeVersion ?: listOf(10, 0)
         val configFile = (dll.parentFile ?: File(".")).resolve("${dll.nameWithoutExtension}.runtimeconfig.json")
         configFile.writeText(
             """

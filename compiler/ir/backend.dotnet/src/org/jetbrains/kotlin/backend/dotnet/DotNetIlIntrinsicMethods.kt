@@ -98,7 +98,7 @@ internal class DotNetIlIntrinsicMethods(
      * fails signature mapping with the registry's per-type reason.
      */
     private fun exceptionMemberIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
-        for ((fqName, entry) in DotNetMappedExceptions.entries) {
+        for ([fqName, entry] in DotNetMappedExceptions.entries) {
             if (entry !is DotNetMappedExceptions.Entry.Mapped) continue
             add(Key(fqName, null, "<get-message>", emptyList()) to DotNetIlExceptionMessageIntrinsic)
             add(Key(fqName, null, "<get-cause>", emptyList()) to DotNetIlExceptionCauseIntrinsic)
@@ -131,7 +131,7 @@ internal class DotNetIlIntrinsicMethods(
             irBuiltIns.doubleClass to DotNetIlValueType.Float64,
             irBuiltIns.charClass to DotNetIlValueType.Char,
         )
-        for ((classSymbol, operandType) in comparableTypes) {
+        for ([classSymbol, operandType] in comparableTypes) {
             val isFloatingPoint = operandType == DotNetIlValueType.Float64
             add(
                 irBuiltIns.lessFunByOperandType.getValue(classSymbol).toKey()!!
@@ -159,10 +159,10 @@ internal class DotNetIlIntrinsicMethods(
      * computation type by the emitting intrinsic (see [emitWidenedOperand]).
      */
     private fun numericOperatorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
-        for ((receiverFqn, receiverType) in numericTypes) {
-            for ((argumentFqn, argumentType) in numericTypes) {
+        for ([receiverFqn, receiverType] in numericTypes) {
+            for ([argumentFqn, argumentType] in numericTypes) {
                 val resultType = promoteNumeric(receiverType, argumentType)
-                for ((name, instruction) in listOf("plus" to "add", "minus" to "sub", "times" to "mul")) {
+                for ([name, instruction] in listOf("plus" to "add", "minus" to "sub", "times" to "mul")) {
                     add(
                         Key(receiverFqn, null, name, listOf(argumentFqn))
                                 to DotNetIlNumericBinaryOperatorIntrinsic(instruction, receiverType, argumentType, resultType)
@@ -228,8 +228,8 @@ internal class DotNetIlIntrinsicMethods(
             "toDouble" to DotNetIlValueType.Float64,
         )
         val sourceTypes = numericTypes + (charFqn to DotNetIlValueType.Char)
-        for ((fromFqn, fromType) in sourceTypes) {
-            for ((name, toType) in conversionNamesToTargets) {
+        for ([fromFqn, fromType] in sourceTypes) {
+            for ([name, toType] in conversionNamesToTargets) {
                 add(Key(fromFqn, null, name, emptyList()) to conversionIntrinsicFor(fromType, toType))
             }
         }
@@ -280,7 +280,7 @@ internal class DotNetIlIntrinsicMethods(
 
     init {
         @Suppress("ReplacePutWithAssignment")
-        for ((key, intrinsic) in intrinsics) {
+        for ([key, intrinsic] in intrinsics) {
             intrinsicsMap.getOrPut(key.name) { hashMapOf() }
                 .getOrPut(key.receiverParameterTypeName) { hashMapOf() }
                 .put(key, intrinsic)
