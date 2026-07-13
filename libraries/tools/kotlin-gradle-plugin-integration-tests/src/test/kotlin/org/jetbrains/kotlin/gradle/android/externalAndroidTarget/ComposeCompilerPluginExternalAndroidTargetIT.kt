@@ -11,7 +11,6 @@ import org.gradle.testkit.runner.BuildResult
 import org.gradle.kotlin.dsl.getByType
 import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.compose.compiler.gradle.ComposeCompilerGradlePluginExtension
-import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
 import org.jetbrains.kotlin.gradle.testbase.*
 import org.gradle.kotlin.dsl.kotlin
 import kotlin.io.path.listDirectoryEntries
@@ -27,90 +26,104 @@ class ComposeCompilerPluginExternalAndroidTargetIT : KGPBaseTest() {
         androidVersion: String,
         jdkVersion: JdkVersions.ProvidedJdk,
     ) {
-        val testProject = externalAndroidLibraryProject(
+        val testProject = project(
+            "empty",
             gradleVersion = gradleVersion,
-            androidVersion = androidVersion,
-            jdkVersion = jdkVersion,
-            namespace = "org.jetbrains.sample.compose.android",
-            withComposeReports = true,
-            configureAndroidTarget = {
-                withHostTest {}
-                withDeviceTest {}
-            },
+            buildOptions = defaultBuildOptions.copy(androidVersion = androidVersion),
+            buildJdk = jdkVersion.location,
         ) {
-            iosArm64()
-            sourceSets.getByName("commonMain").dependencies {
-                implementation("org.jetbrains.compose.runtime:runtime:1.9.1")
+            plugins {
+                kotlin("multiplatform")
+                id("com.android.kotlin.multiplatform.library")
+                id("org.jetbrains.kotlin.plugin.compose")
             }
-            sourceSets.getByName("commonMain").compileSource(
-                """
-                package sample
 
-                import androidx.compose.runtime.Composable
-
-                class SharedApi
-
-                @Composable
-                fun SharedGreeting(name: String) {
-                    Text(name)
-                }
-
-                @Composable
-                private fun Text(value: String) {
-                    println(value)
-                }
-                """.trimIndent()
-            )
-            sourceSets.getByName("androidMain").compileSource(
-                """
-                package sample
-
-                import androidx.compose.runtime.Composable
-
-                class AndroidConsumer(
-                    val api: SharedApi = SharedApi(),
-                )
-
-                @Composable
-                fun AndroidGreeting() {
-                    SharedGreeting("android")
-                }
-
-                @Composable
-                fun AndroidRender() {
-                    SharedGreeting("android")
-                }
-                """.trimIndent()
-            )
-            sourceSets.getByName("androidHostTest").dependencies {
-                implementation("org.jetbrains.compose.runtime:runtime:1.9.1")
-                implementation("junit:junit:4.13.2")
-            }
-            sourceSets.getByName("androidHostTest").compileSource(
-                """
-                package sample
-
-                import androidx.compose.runtime.Composable
-                import org.junit.Test
-
-                class AndroidHostComposeTest {
-                    @Test
-                    fun smoke() {
-                        println("host")
+            buildScriptInjection {
+                kotlinMultiplatform.apply {
+                    targets.withType(KotlinMultiplatformAndroidLibraryTarget::class.java).configureEach { target ->
+                        target.compileSdk = 34
+                        target.namespace = "org.jetbrains.sample.compose.android"
+                        target.withHostTest {}
+                        target.withDeviceTest {}
                     }
+                    iosArm64()
+                    sourceSets.getByName("commonMain").dependencies {
+                        implementation("org.jetbrains.compose.runtime:runtime:1.9.1")
+                    }
+                    sourceSets.getByName("commonMain").compileSource(
+                        """
+                        package sample
+
+                        import androidx.compose.runtime.Composable
+
+                        class SharedApi
+
+                        @Composable
+                        fun SharedGreeting(name: String) {
+                            Text(name)
+                        }
+
+                        @Composable
+                        private fun Text(value: String) {
+                            println(value)
+                        }
+                        """.trimIndent()
+                    )
+                    sourceSets.getByName("androidMain").compileSource(
+                        """
+                        package sample
+
+                        import androidx.compose.runtime.Composable
+
+                        class AndroidConsumer(
+                            val api: SharedApi = SharedApi(),
+                        )
+
+                        @Composable
+                        fun AndroidGreeting() {
+                            SharedGreeting("android")
+                        }
+
+                        @Composable
+                        fun AndroidRender() {
+                            SharedGreeting("android")
+                        }
+                        """.trimIndent()
+                    )
+                    sourceSets.getByName("androidHostTest").dependencies {
+                        implementation("org.jetbrains.compose.runtime:runtime:1.9.1")
+                        implementation("junit:junit:4.13.2")
+                    }
+                    sourceSets.getByName("androidHostTest").compileSource(
+                        """
+                        package sample
+
+                        import androidx.compose.runtime.Composable
+                        import org.junit.Test
+
+                        class AndroidHostComposeTest {
+                            @Test
+                            fun smoke() {
+                                println("host")
+                            }
+                        }
+
+                        @Composable
+                        fun HostGreeting() {
+                            Text("host")
+                        }
+
+                        @Composable
+                        private fun Text(value: String) {
+                            println(value)
+                        }
+                        """.trimIndent()
+                    )
                 }
 
-                @Composable
-                fun HostGreeting() {
-                    Text("host")
-                }
-
-                @Composable
-                private fun Text(value: String) {
-                    println(value)
-                }
-                """.trimIndent()
-            )
+                val composeCompiler = project.extensions.getByType<ComposeCompilerGradlePluginExtension>()
+                composeCompiler.reportsDestination.set(project.layout.buildDirectory.dir("compose-reports"))
+            }
         }
 
         testProject.build(":compileCommonMainKotlinMetadata")
@@ -136,42 +149,6 @@ class ComposeCompilerPluginExternalAndroidTargetIT : KGPBaseTest() {
                 "fun sample.HostGreeting()",
                 "fun sample.Text("
             )
-        }
-    }
-
-
-    private fun externalAndroidLibraryProject(
-        gradleVersion: GradleVersion,
-        androidVersion: String,
-        jdkVersion: JdkVersions.ProvidedJdk,
-        namespace: String,
-        withComposeReports: Boolean = false,
-        configureAndroidTarget: KotlinMultiplatformAndroidLibraryTarget.() -> Unit = {},
-        configureKmp: KotlinMultiplatformExtension.() -> Unit = {},
-    ): TestProject = project(
-        "empty",
-        gradleVersion = gradleVersion,
-        buildOptions = defaultBuildOptions.copy(androidVersion = androidVersion),
-        buildJdk = jdkVersion.location,
-    ) {
-        plugins {
-            kotlin("multiplatform")
-            id("com.android.kotlin.multiplatform.library")
-            id("org.jetbrains.kotlin.plugin.compose")
-        }
-        buildScriptInjection {
-            kotlinMultiplatform.apply {
-                targets.withType(KotlinMultiplatformAndroidLibraryTarget::class.java).configureEach { target ->
-                    target.compileSdk = 34
-                    target.namespace = namespace
-                    target.configureAndroidTarget()
-                }
-                configureKmp()
-            }
-            val composeCompiler = project.extensions.getByType<ComposeCompilerGradlePluginExtension>()
-            if (withComposeReports) {
-                composeCompiler.reportsDestination.set(project.layout.buildDirectory.dir("compose-reports"))
-            }
         }
     }
 
