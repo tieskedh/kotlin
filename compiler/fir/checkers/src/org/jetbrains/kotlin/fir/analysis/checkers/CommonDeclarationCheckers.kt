@@ -182,7 +182,6 @@ object CommonDeclarationCheckers : DeclarationCheckers() {
         FirPackageConflictsWithClassifierChecker,
         FirKotlinPackageChecker,
         PlatformClassMappedToKotlinImportsChecker,
-        FirStaticInitializationChecker,
     )
 
     override val scriptCheckers: Set<FirScriptChecker> = setOf(

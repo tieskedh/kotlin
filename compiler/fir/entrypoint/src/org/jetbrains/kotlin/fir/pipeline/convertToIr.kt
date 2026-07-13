@@ -8,6 +8,9 @@ package org.jetbrains.kotlin.fir.pipeline
 import org.jetbrains.kotlin.backend.common.BackendException
 import org.jetbrains.kotlin.backend.common.IrSpecialAnnotationsProvider
 import org.jetbrains.kotlin.backend.common.actualizer.*
+import org.jetbrains.kotlin.backend.common.dependencies.checker.StaticInitializationChecker
+import org.jetbrains.kotlin.backend.common.dependencies.logic.DefaultFunctionParametersCollector
+import org.jetbrains.kotlin.backend.common.dependencies.logic.OverridingCallablesCollector
 import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
@@ -32,7 +35,6 @@ import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.declarations.impl.IrFactoryImpl
-import org.jetbrains.kotlin.ir.declarations.impl.IrModuleFragmentImpl
 import org.jetbrains.kotlin.ir.declarations.lazy.IrLazyDeclarationBase
 import org.jetbrains.kotlin.ir.overrides.IrFakeOverrideBuilder
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
@@ -104,7 +106,13 @@ fun AllModulesFrontendOutput.convertToIrAndActualize(
         outputs,
         fir2IrExtensions,
         fir2IrConfiguration,
-        irGeneratorExtensions,
+        irGeneratorExtensions.let {
+            val extensions = it.toMutableList()
+            extensions += OverridingCallablesCollector
+            extensions += DefaultFunctionParametersCollector
+            extensions += StaticInitializationChecker
+            extensions
+        },
         irMangler,
         visibilityConverter,
         kotlinBuiltIns,
