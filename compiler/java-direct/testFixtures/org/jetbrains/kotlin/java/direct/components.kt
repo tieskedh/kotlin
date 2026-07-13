@@ -33,6 +33,6 @@ private val javaFileRegex = Regex("""^\s*//\s* FILE:\s* .*\.java\s*$""")
 
 class OnlyTestsWithJavaSourcesMetaConfigurator(testServices: TestServices) : MetaTestConfigurator(testServices) {
     override fun shouldSkipTest(): Boolean =
-        testServices.moduleStructure.modules.any { module -> module.files.any { it.isJavaFile } }
+        testServices.moduleStructure.modules.none { module -> module.files.any { it.isJavaFile } }
 }
 
