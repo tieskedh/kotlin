@@ -354,7 +354,7 @@ object JvmFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact, J
         var firJvmIncrementalCompilationSymbolProvidersIsInitialized = false
 
         val javaDirectFacade =
-            if (configuration.useJavaDirect) {
+            if (true /*configuration.useJavaDirect*/) {
                 createJavaDirectSourceJavaFacadeBuilder(configuration, projectEnvironment)
             } else AbstractProjectEnvironment::getFirJavaFacade
         val context = FirJvmSessionFactory.Context(
