@@ -1027,6 +1027,19 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
                 leftType.isDotNetAssignableTo(rightType) -> rightType
         leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass &&
                 rightType.isDotNetAssignableTo(leftType) -> leftType
+        // Sibling classes sharing a supertype (since the interface model this includes a common
+        // implemented interface, the shape a smartcast routinely produces: after
+        // `if (!(s === r)) return` an interface-typed `s` is narrowed to `r`'s class, so a later
+        // comparison sees two sibling classes) widen to the FIRST common supertype of the left
+        // operand's supertype walk — deterministic (allSupertypes' breadth-first walk: direct
+        // base class, then direct interfaces in declaration order, then the next level) and
+        // free for both sides (reference upcasts, ifaceprobe_s7). Operands with no common
+        // supertype stay rejected loudly (their only common supertype would need an Any model);
+        // both halves are pinned by ilText/interfaceEqualityWidening.kt.
+        leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass ->
+            leftType.classInfo.allSupertypes()
+                .map { DotNetIlValueType.UserClass(it) }
+                .firstOrNull { rightType.isDotNetAssignableTo(it) }
         else -> null
     }
 }
