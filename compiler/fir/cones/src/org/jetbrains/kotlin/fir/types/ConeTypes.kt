@@ -106,7 +106,7 @@ class ConeErrorType(
     override fun hashCode(): Int = System.identityHashCode(this)
 }
 
-abstract class ConeLookupTagBasedType : ConeSimpleKotlinType() {
+sealed class ConeLookupTagBasedType : ConeSimpleKotlinType() {
     abstract val lookupTag: ConeClassifierLookupTag
     abstract val isMarkedNullable: Boolean
 
