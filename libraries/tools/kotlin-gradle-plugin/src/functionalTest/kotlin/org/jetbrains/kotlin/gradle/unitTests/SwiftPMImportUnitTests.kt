@@ -1252,6 +1252,71 @@ class SwiftPMImportUnitTests {
             "Expected no platform condition in manifest but got:\n$subpackageManifest"
         )
     }
+
+    @Test
+    fun `transitive dependency with empty explicit platformConstraints still gets implicit iOS condition`() {
+        val projectDir = createTempDirectory("swiftPMEmptyConstraintTest").toFile()
+        val syntheticRoot = projectDir.resolve("syntheticImport")
+
+        val project = buildProjectWithMPP {
+            kotlin {
+                iosArm64()
+                iosSimulatorArm64()
+                macosArm64()
+            }
+        }
+
+        // The product declares an empty explicit platform set (e.g. `product(name, platforms = emptySet())`).
+        // An empty set must not defeat the implicit iOS constraint derived from the producer's konanTargets.
+        val iosOnlyMetadata = SwiftPMImportMetadata(
+            konanTargets = setOf("ios_arm64", "ios_simulator_arm64"),
+            iosDeploymentVersion = null,
+            macosDeploymentVersion = null,
+            watchosDeploymentVersion = null,
+            tvosDeploymentVersion = null,
+            isModulesDiscoveryEnabled = false,
+            dependencies = setOf(
+                SwiftPMDependency.Remote(
+                    repository = SwiftPMDependency.Remote.Repository.Url("https://github.com/example/ios-sdk.git"),
+                    version = SwiftPMDependency.Remote.Version.Exact("1.0.0"),
+                    products = listOf(SwiftPMDependency.Product(name = "iOSOnlyProduct", platformConstraints = emptySet())),
+                    cinteropClangModules = emptyList(),
+                    packageName = "ios-sdk",
+                    traits = emptySet(),
+                )
+            ),
+        )
+
+        val transitiveId = SwiftPMDependencyIdentifier(identifier = "ios-sdk", isModular = false)
+        val transitiveDependencies = TransitiveSwiftPMMetadata(
+            metadataByDependencyIdentifier = mapOf(transitiveId to iosOnlyMetadata)
+        )
+
+        val task = project.tasks.register("testGenerateEmptyConstraint", GenerateSyntheticLinkageImportProject::class.java).get()
+        task.syntheticImportProjectRoot.set(syntheticRoot)
+        task.konanTargets.set(
+            setOf(KonanTarget.IOS_ARM64, KonanTarget.IOS_SIMULATOR_ARM64, KonanTarget.MACOS_ARM64)
+        )
+        task.syntheticProductType.set(GenerateSyntheticLinkageImportProject.Companion.SyntheticProductType.INFERRED)
+        task.transitiveSwiftPMMetadata.set(transitiveDependencies)
+        task.useOnlyTransitiveImportedDependencies()
+
+        task.generateSwiftPMSyntheticImportProjectAndFetchPackages()
+
+        val subpackageManifest = syntheticRoot
+            .resolve("subpackages/ios-sdk/Package.swift")
+            .readText()
+
+        assertTrue(
+            subpackageManifest.contains("condition: .when(platforms: [.iOS])"),
+            "Expected iOS condition (empty explicit set must not defeat the implicit constraint) but got:\n$subpackageManifest"
+        )
+        // Guard against the degenerate empty-platform condition.
+        assertFalse(
+            subpackageManifest.contains("condition: .when(platforms: [])"),
+            "Empty explicit platform set must not produce an empty-platform condition:\n$subpackageManifest"
+        )
+    }
 }
 
 private fun ProjectInternal.swiftPmLocalDependencies(): List<SwiftPMDependency.Local> {
