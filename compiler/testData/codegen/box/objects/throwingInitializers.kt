@@ -1,4 +1,6 @@
 // IGNORE_BACKEND: JS_IR, JS_IR_ES6, WASM_JS, WASM_WASI
+// WITH_STDLIB
+// FULL_JDK
 
 class C {
     companion object {
@@ -8,7 +10,7 @@ class C {
 
 open class Parent {
     companion object {
-        val never: Nothing = run { throw IllegalStateException("Child.never") }
+        val never: Nothing = run { throw IllegalStateException("Parent.never") }
     }
 }
 
@@ -48,13 +50,14 @@ fun box(): String {
         C()
         return "FAIL 2.1: should throw"
     } catch (e: Error) {
-        if (JDK_MAJOR_VERSION < 20 || BACKEND_UNDER_TEST == "NATIVE") {
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
             if (e.cause != null) return "FAIL 2.2.1: cause must be null, got ${e.cause}"
         } else {
             val cause = e.cause as? Error
-            if (cause == null) return "FAIL 2.2.2: cause must be Error, was ${e.cause}"
-            if (cause.cause !is IllegalStateException) return "FAIL 2.2.3: cause.cause must be IllegalStateException, was ${cause?.let { it::class }}"
-            if (cause.message != "C.never") return "FAIL 2.2.4: cause.message must be 'C.never', was '${cause.message}'"
+            if (cause == null) return "FAIL 2.2.2: cause must be ExceptionInInitializerError, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 2.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = IllegalStateException("C.never").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 2.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
         }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
@@ -63,20 +66,29 @@ fun box(): String {
         if (e.message != expectedMessage) return "FAIL 2.3: message must be '$expectedMessage', was '${e.message}'"
     }
 
-    try {
+    val childEIIE = try {
         Child()
         return "FAIL 3.1: should throw"
     } catch (e: Error) {
         val cause = e.cause
         if (cause !is IllegalStateException) return "FAIL 3.2: cause must be IllegalStateException, was ${cause?.let { it::class }}"
-        if (cause.message != "Child.never") return "FAIL 3.3: message must be 'Child.never', was '${cause.message}'"
+        if (cause.message != "Parent.never") return "FAIL 3.3: message must be 'Parent.never', was '${cause.message}'"
+        e
     }
 
     try {
         Child()
         return "FAIL 4.1: should throw"
     } catch (e: Error) {
-        if (e.cause != null) return "FAIL 4.2: cause must be null, got ${e.cause}"
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
+            if (e.cause != null) return "FAIL 4.2.1: cause must be null, got ${e.cause}"
+        } else {
+            val cause = e.cause as? Error
+            if (cause == null) return "FAIL 4.2.2: cause must be ExceptionInInitializerError, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 4.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = childEIIE.toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 4.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
+        }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
             else -> "Could not initialize class Child"
@@ -88,7 +100,15 @@ fun box(): String {
         Parent()
         return "FAIL 5.1: should throw"
     } catch (e: Throwable) {
-        if (e.cause != null) return "FAIL 5.2: cause must be null, got ${e.cause}"
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
+            if (e.cause != null) return "FAIL 5.2.1: cause must be null, got ${e.cause}"
+        } else {
+            val cause = e.cause as? Error
+            if (cause == null) return "FAIL 5.2.2: cause must be ExceptionInInitializerError, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 5.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = IllegalStateException("Parent.never").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 5.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
+        }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
             else -> "Could not initialize class Parent"
@@ -109,7 +129,15 @@ fun box(): String {
         O.foo()
         return "FAIL 7.1: should throw"
     } catch (e: Error) {
-        if (e.cause != null) return "FAIL 7.2: cause must be null, got ${e.cause}"
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
+            if (e.cause != null) return "FAIL 7.2.1: cause must be null, got ${e.cause}"
+        } else {
+            val cause = e.cause as? Error
+            if (cause == null) return "FAIL 7.2.2: cause must be ExceptionInInitializerError, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 7.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = IllegalStateException("O.never").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 7.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
+        }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
             else -> "Could not initialize class O"
@@ -129,7 +157,15 @@ fun box(): String {
         ThrowsErrorWithCompanion()
         return "FAIL 9.1: should throw"
     } catch (e: Error) {
-        if (e.cause != null) return "FAIL 9.2: cause must be null, got ${e.cause}"
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
+            if (e.cause != null) return "FAIL 9.2.1: cause must be null, got ${e.cause}"
+        } else {
+            val cause = e.cause as? Error
+            if (cause == null) return "FAIL 9.2.2: cause must be Error, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 9.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = Error("ThrowsErrorWithCompanion.never").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 9.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
+        }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
             else -> "Could not initialize class ThrowsErrorWithCompanion"
@@ -150,7 +186,15 @@ fun box(): String {
         ThrowsErrorObject.foo()
         return "FAIL 11.1: should throw"
     } catch (e: Error) {
-        if (e.cause != null) return "FAIL 11.2: cause must be null, got ${e.cause}"
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
+            if (e.cause != null) return "FAIL 11.2.1: cause must be null, got ${e.cause}"
+        } else {
+            val cause = e.cause as? Error
+            if (cause == null) return "FAIL 11.2.2: cause must be Error, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 11.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = Error("ThrowsErrorObject.never").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 11.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
+        }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
             else -> "Could not initialize class ThrowsErrorObject"

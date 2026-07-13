@@ -1,4 +1,6 @@
 // IGNORE_BACKEND: JS_IR, JS_IR_ES6, WASM_JS, WASM_WASI
+// WITH_STDLIB
+// FULL_JDK
 
 enum class Color(val s: String) {
     BLACK("black"),
@@ -24,13 +26,14 @@ fun box(): String {
         Color.BLACK
         return "FAIL 2.1: should throw"
     } catch (e: Error) {
-        if (JDK_MAJOR_VERSION < 20 || BACKEND_UNDER_TEST == "NATIVE") {
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
             if (e.cause != null) return "FAIL 2.2.1: cause must be null, got ${e.cause}"
         } else {
             val cause = e.cause as? Error
-            if (cause == null) return "FAIL 2.2.2: cause must be Error, was ${e.cause}"
-            if (cause.cause !is IllegalStateException) return "FAIL 2.2.3: cause.cause must be IllegalStateException, was ${cause?.let { it::class }}"
-            if (cause.message != "miku is not a color") return "FAIL 2.2.4: cause.message must be 'miku is not a color', was '${cause.message}'"
+            if (cause == null) return "FAIL 2.2.2: cause must be ExceptionInInitializerError, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 2.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = IllegalStateException("miku is not a color").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 2.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
         }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
@@ -51,7 +54,15 @@ fun box(): String {
         ThrowsError.NONTHROWING
         return "FAIL 4.1: should throw"
     } catch (e: Error) {
-        if (e.cause != null) return "FAIL 4.2: cause must be null, got ${e.cause}"
+        if (JDK_MAJOR_VERSION < 17 || BACKEND_UNDER_TEST == "NATIVE") {
+            if (e.cause != null) return "FAIL 4.2.1: cause must be null, got ${e.cause}"
+        } else {
+            val cause = e.cause as? Error
+            if (cause == null) return "FAIL 4.2.2: cause must be Error, was ${e.cause}"
+            if (cause.cause != null) return "FAIL 4.2.3: cause.cause must be null, was ${cause.cause}"
+            val expectedMessage = Error("huh").toString()
+            if (cause.message?.contains(expectedMessage) != true) return "FAIL 4.2.4: cause.message must contain '$expectedMessage', was '${cause.message}'"
+        }
         val expectedMessage = when (BACKEND_UNDER_TEST) {
             "NATIVE" -> "There was an error during file or class initialization"
             else -> "Could not initialize class ThrowsError"
