@@ -1,0 +1,2 @@
+error: [COMPILER_ARGUMENTS_ERROR] Project Valhalla support ('-XXvalhalla-support') requires JVM target 27 or later and the '-Xjvm-enable-preview' flag.
+COMPILATION_ERROR

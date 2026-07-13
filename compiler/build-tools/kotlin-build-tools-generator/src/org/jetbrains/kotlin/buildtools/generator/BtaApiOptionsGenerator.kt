@@ -96,7 +96,9 @@ internal class BtaApiOptionsGenerator(
 
         arguments.forEach { argument ->
             val name = argument.extractName()
-            if (skipXX && name.startsWith("XX_")) return@forEach
+            // Internal ('-XX') arguments are not exposed as public API properties. Their enum value types must still be generated,
+            // however, because they are shared with the implementation module (which does expose internal arguments) via this package.
+            val skipProperty = skipXX && name.startsWith("XX_")
             val experimental = name.startsWith("XX_") || name.startsWith("X_")
 
             /**
@@ -154,6 +156,10 @@ internal class BtaApiOptionsGenerator(
                 }
                 is BtaCompilerArgumentValueType.CustomArgumentValueType -> argument.valueType.type
             }.copy(nullable = argument.valueType.isNullable)
+
+            // The enum value type (if any) has now been registered for generation above; internal arguments stop here so that no
+            // public property is emitted for them.
+            if (skipProperty) return@forEach
 
             property(name, argumentTypeName.parameterizedBy(argumentTypeParameter)) {
                 annotation<JvmField>()

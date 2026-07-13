@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArguments
 import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.NO_REFLECT
 import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.NO_STDLIB
 import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.SCRIPT_TEMPLATES
+import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.XX_VALHALLA_SUPPORT
 import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.X_ABI_STABILITY
 import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.X_ADD_MODULES
 import org.jetbrains.kotlin.buildtools.`internal`.arguments.JvmCompilerArgumentsImpl.Companion.X_ALLOW_NO_SOURCE_FILES
@@ -128,6 +129,7 @@ import org.jetbrains.kotlin.buildtools.api.arguments.enums.JvmTarget
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.LambdasMode
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.SamConversionsMode
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.StringConcatMode
+import org.jetbrains.kotlin.buildtools.api.arguments.enums.ValhallaSupportMode
 import org.jetbrains.kotlin.buildtools.api.arguments.enums.WhenExpressionsMode
 import org.jetbrains.kotlin.cli.common.arguments.CommonToolArguments
 import org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments
@@ -191,6 +193,7 @@ internal class JvmCompilerArgumentsImpl(
     if (unknownArgs.isNotEmpty()) {
       throw IllegalStateException("Unknown arguments: ${unknownArgs.joinToString()}")
     }
+    if (XX_VALHALLA_SUPPORT in this) { arguments.valhallaSupport = get(XX_VALHALLA_SUPPORT)?.stringValue}
     if (X_ABI_STABILITY in this) { arguments.abiStability = get(X_ABI_STABILITY)?.stringValue}
     if (X_ADD_MODULES in this) { arguments.additionalJavaModules = get(X_ADD_MODULES).toTypedArray()}
     if (X_ALLOW_NO_SOURCE_FILES in this) { arguments.allowNoSourceFiles = get(X_ALLOW_NO_SOURCE_FILES)}
@@ -279,6 +282,7 @@ internal class JvmCompilerArgumentsImpl(
   @Suppress("DEPRECATION")
   protected fun applyCompilerArguments(arguments: K2JVMCompilerArguments) {
     super.applyCompilerArguments(arguments)
+    try { this[XX_VALHALLA_SUPPORT] = arguments.valhallaSupport?.let { ValhallaSupportMode.entries.firstOrNull { entry -> entry.stringValue.equals(it, true) }?.also { entry -> checkCaseMatches(_restrictedArgViolations, arguments::valhallaSupport, entry.stringValue, it) } ?: throw CompilerArgumentsParseException("Unknown -XXvalhalla-support value: $it") } } catch (ex: CompilerArgumentsParseException) { _argumentValidationErrors.add(ex.message ?: "Error parsing compiler arguments") } catch (_: NoSuchMethodError) {  }
     try { this[X_ABI_STABILITY] = arguments.abiStability?.let { AbiStabilityMode.entries.firstOrNull { entry -> entry.stringValue.equals(it, true) }?.also { entry -> checkCaseMatches(_restrictedArgViolations, arguments::abiStability, entry.stringValue, it) } ?: throw CompilerArgumentsParseException("Unknown -Xabi-stability value: $it") } } catch (ex: CompilerArgumentsParseException) { _argumentValidationErrors.add(ex.message ?: "Error parsing compiler arguments") } catch (_: NoSuchMethodError) {  }
     try { this[X_ADD_MODULES] = arguments.additionalJavaModules.toListOrEmpty() } catch (_: NoSuchMethodError) {  }
     try { this[X_ALLOW_NO_SOURCE_FILES] = arguments.allowNoSourceFiles } catch (_: NoSuchMethodError) {  }
@@ -365,6 +369,7 @@ internal class JvmCompilerArgumentsImpl(
   @Suppress("DEPRECATION")
   public fun toCompilerArgumentsAffectingOutcome(arguments: K2JVMCompilerArguments = K2JVMCompilerArguments()): K2JVMCompilerArguments {
     super.toCompilerArgumentsAffectingOutcome(arguments)
+    if (XX_VALHALLA_SUPPORT in this) { arguments.valhallaSupport = get(XX_VALHALLA_SUPPORT)?.stringValue}
     if (X_ABI_STABILITY in this) { arguments.abiStability = get(X_ABI_STABILITY)?.stringValue}
     if (X_ADD_MODULES in this) { arguments.additionalJavaModules = get(X_ADD_MODULES).toTypedArray()}
     if (X_ALLOW_NO_SOURCE_FILES in this) { arguments.allowNoSourceFiles = get(X_ALLOW_NO_SOURCE_FILES)}
@@ -486,6 +491,9 @@ internal class JvmCompilerArgumentsImpl(
 
   public companion object {
     private val knownArguments: MutableSet<String> = mutableSetOf()
+
+    public val XX_VALHALLA_SUPPORT: JvmCompilerArgument<ValhallaSupportMode?> =
+        JvmCompilerArgument("XX_VALHALLA_SUPPORT")
 
     public val X_ABI_STABILITY: JvmCompilerArgument<AbiStabilityMode?> =
         JvmCompilerArgument("X_ABI_STABILITY")
