@@ -63,6 +63,110 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   unrelated interface types, whose only common supertype would need an Any model) stay
   rejected loudly. General `==` between two
   class instances stays rejected until an Any.equals model exists.
+- Nullability model (hybrid representation; probe series `boxprobe_s1`–`_s7`, `nullprobe_s8` —
+  a deliberate user-decided design): a concrete nullable CLR VALUE type uses
+  `System.Nullable<T>` in exact typed positions and converts to boxed-underlying-or-null when
+  widened to `Any?`/object-shaped contexts; a nullable REFERENCE type is the same IL type as its
+  non-null flavor (a stated no-op at the type-mapping layer — `String?`/`C?`/`I?`/mapped
+  exceptions all keep their reference type, `ldnull` is the null literal, `== null` is the
+  existing reference `ceq`). Precedents: Roslyn (C# `int?` IS `Nullable<int32>` in typed
+  positions, CLR-collapsed at `object` boundaries) and Kotlin's own inline value classes
+  (context-sensitive representation is established Kotlin policy); the JVM's blanket boxing of
+  `Int?` is a platform limitation, not language policy. Generic `T?` is a SEPARATE future ABI
+  problem and deliberately stays unmapped — it must not force concrete nullable primitives into
+  `object`. Representation table (`DotNetIlValueType.NullableValue`; the five concrete
+  primitives Int/Long/Double/Boolean/Char):
+  - EXACT positions (params, returns, locals, instance/static fields, ctor params):
+    `valuetype [mscorlib]System.Nullable`1<int32|int64|float64|bool|char>` — the
+    `nameInSignature` doubles as the operand spelling of every instruction touching the type
+    (probe-verified in every position, boxprobe_s1). `T -> T?` is
+    `newobj instance void valuetype ...Nullable`1<t>::.ctor(!0)`; the null literal / empty value
+    is `ldloca`+`initobj`+`ldloc` through a synthetic local (also for returns and arguments);
+    null tests are `call instance bool ...::get_HasValue()`, extraction is
+    `GetValueOrDefault()` — never `get_Value`, whose InvalidOperationException would surface as
+    the wrong Kotlin exception, so every extraction branches on HasValue first.
+  - WIDENED positions (`kotlin.Any`/`Any?` maps to CLR `object` as pure STORAGE): `T? -> Any?`
+    is `box valuetype ...Nullable`1<t>`, which the CLR COLLAPSES to boxed-`T`-or-null
+    (boxprobe_s3, all five instantiations nullprobe_s8); `T -> Any?` is a plain
+    `box [mscorlib]System.<Boxed>`; reference types widen to `object` instruction-free
+    (`isDotNetAssignableTo`'s third widening). Conversions are emitted by a widening-coercion
+    layer in `DotNetIlExpressionCodegen.emitExpression` (JVM precedent: StackValue coercion —
+    boxing is never an IR node) plus the IMPLICIT_CAST arms; narrowing exists only as the
+    `T? -> T` smartcast IMPLICIT_CAST / narrowed-slot read, emitted as the CHECKED unwrap
+    (HasValue branch + mapped-NPE throw + GetValueOrDefault — JVM parity: CHECKCAST+`intValue()`
+    NPEs on null there).
+  - MANDATORY SPILL RULE (boxprobe_s2): every instance-member access on a `Nullable<T>` receiver
+    needs a HOME ADDRESS — a freshly computed stack value MUST be spilled `stloc`+`ldloca`; the
+    unspilled call assembles cleanly but is a FATAL, uncatchable CLR error (0x80131506), a
+    poison shape codegen may never emit. Spilling costs a local and zero maxstack.
+  `!!`/IMPLICIT_NOTNULL (JVM precedent: the checkNotNull intrinsic, registered via
+  `checkNotNullSymbol` in the intrinsic registry): references get `dup`/`brtrue` past a
+  `newobj instance void [mscorlib]System.NullReferenceException::.ctor()` + `throw`
+  (boxprobe_s4; message-less, like `Intrinsics.checkNotNull`), Nullable<T> gets the HasValue
+  branch + same throw + extraction — catchable as `catch (e: NullPointerException)` through the
+  existing registry mapping (`box/nullableNotNullThrows.kt`). Null-aware structural `==`
+  (JVM precedent: the `Intrinsics.areEqual` specializations) is the Roslyn lifted-equality
+  shape, NO boxing (boxprobe_s5, incl. the (none, some(0)) corner): `T? == T?` compares
+  GetValueOrDefault values ANDed with HasValue flags; `T? == T`/`T == T?` AND the value `ceq`
+  with the nullable side's HasValue; `T? == null` is a negated HasValue; `Double?` arrives via
+  the ieee754equals symbols and the extracted-`float64` `ceq` IS the JVM's
+  areEqual(Double, Double) semantics (NaN? != NaN?, -0.0? == 0.0? — runtime-pinned). A null-only
+  operand (`Nothing?` maps to `object` — the frontend narrows known-null when-subjects to it)
+  against a plain primitive is statically false with operands still evaluated. Safe calls and
+  elvis are the frontend's block+when shape — value-position `IrBlock` dispatches through the
+  same statement-scope hook as `try` expressions, and a `?:` whose branches are `Int` and `Int?`
+  unifies through the branch-level coercions; string templates of nullable primitives render
+  through a HasValue branch selecting `"null"` or the existing per-type rendering
+  (boxprobe_s7), nullable strings keep the existing dup/brtrue coalesce. A non-Unit `try`
+  DISCARDED in statement position keeps the statement form when its type maps to `object`:
+  branch types that merely LUB to `Any` (an Int-typed try branch next to a Unit-typed catch
+  branch ending in an assignment — a routine statement shape) mix value- and statement-shaped
+  branch results, and a discarded `Any` value is never materialized, so `emitDiscardedTry`
+  treats `object` like an unmapped type (the exact pre-hybrid behavior; runtime-pinned by
+  `box/tryDiscardedValue.kt`) — mapped NON-`object` types imply every branch result is
+  value-shaped and keep the expression form. GATE INTERACTIONS
+  (pinned by `ilText/nullableOverrides.kt`): `Int?`/`Int` are now DISTINCT IL types, so the
+  Kotlin-covariant `Producer.value(): Int?` overridden by `value(): Int` flips to the
+  covariant-return whole-class rejection, and `f(Int)`/`f(Int?)` overloads become two legal IL
+  methods, while `g(String)`/`g(String?)` still clash (reference nullability erases). The
+  member-clash gate has a FACADE analogue (`ilText/facadeMethodClash.kt`): top-level functions
+  and property accessors of one file render into one facade class, so top-level
+  `g(String)`/`g(String?)` (same IL `string`), `h(Any)`/`h(Any?)` (same IL `object`) and
+  `val x` vs `fun get_x()` (accessor mangling) each produce duplicate IL method declarations
+  ilasm rejects; the facade gate evicts EVERY callable of a clashing identity (keeping one
+  half would be an arbitrary pick between legal Kotlin overloads) at facade granularity — a
+  plain function per-function, an accessor with its whole property, a backing-field-bearing
+  property with the file's whole property group. STAYS
+  REJECTED, loudly: generic `T?`, Any member calls and Any string conversion (`object` is
+  storage-only, no Any model), general `==` between reference/`Any?` operands, `===` with a
+  nullable-primitive operand (the operands would box; identity of separately boxed values is
+  unrelated to value equality — `ceq` on two boxed equal int32s is False, boxprobe_s6 — and
+  Kotlin deprecates boxed identity), `==` mixing a nullable
+  primitive with `Any?` (cross-primitive `Int? == Long?` needs no backend gate: the FRONTEND
+  rejects it with EQUALITY_NOT_APPLICABLE, like `==` between unrelated final classes — not
+  expressible in compilable Kotlin, so not pinnable in an ilText test), `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
+  boxprobe_s3, but no supported IR shape produces the cast — rejected like every downcast),
+  `is`/`as`/safe-cast (existing type-operator rejections stay authoritative), `const val`
+  of nullable type (defensive; frontend-rejected anyway), and exhaustive `when` WITHOUT `else`
+  over a nullable (or plain Boolean — pre-existing) subject: fir2ir appends a synthetic call to
+  the `noWhenBranchMatchedException` builtin, which has no intrinsic registration, so the
+  containing function is evicted per-function with the loud availableFunctions miss (adversarial
+  review, 2026-07; correct granularity, no crash). Deliberate follow-up, not part of this slice:
+  register the intrinsic as an inline throw (JVM precedent: the
+  `throwNoWhenBranchMatchedException` intrinsic; Roslyn precedent for the exception choice:
+  switch expressions throw `SwitchExpressionException`, an `InvalidOperationException`) — the
+  exception-mapping choice must be probed and design-decided first. Pins: `ilText/nullablePrimitives.kt`
+  (every declaration-position spelling, wrap/initobj/HasValue/extraction incl. the
+  address-taking `ldloca`, elvis/safe-call shapes, BOTH `!!` throw shapes — the Nullable<T>
+  HasValue branch and the reference `dup`/`brtrue`/`newobj NullReferenceException`/`throw`
+  spelling), `ilText/nullableEquality.kt` (every `==` sequence), `ilText/nullableBoxing.kt`
+  (box-collapse widenings, `object` storage positions, templates), `ilText/nullableRejected.kt`
+  (the rejection warnings' source shapes),
+  `ilText/nullableOverrides.kt` (gate interactions), `ilText/facadeMethodClash.kt` (the facade
+  clash gate, all three flavors); runtime: `box/nullableBasic.kt`, `box/nullableEquality.kt`,
+  `box/nullableBoxing.kt`, `box/nullableNotNullThrows.kt`, `box/nullableObjectMembers.kt`
+  (nullable primitives through the object/companion singleton and static-initializer
+  machinery), `box/tryDiscardedValue.kt` (the discarded Any-LUB try statement shape).
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
   vtable/class lowering machinery): only top-level, non-generic plain classes — final or, since
   the inheritance model (below), open — and, since the interface model (below), top-level
@@ -222,7 +326,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   makes unnecessary. Because of the accessor mangling, the member pre-pass rejects (whole-class)
   IL method-identity clashes such as `val x` vs a user-declared `fun get_x(): Int` — ilasm fails
   on the duplicate method declaration (probed on 10.0.9); the JVM analogue is the frontend
-  `PLATFORM_DECLARATION_CLASH` diagnostic for `val x` vs `fun getX()`.
+  `PLATFORM_DECLARATION_CLASH` diagnostic for `val x` vs `fun getX()`. The same identity gate
+  runs over each file facade's top-level callables, at facade granularity (see the nullability
+  bullet's facade analogue; pinned by `ilText/facadeMethodClash.kt`).
 - Instance members of the final-class model are invoked with plain non-virtual `call`
   (probe-verified) — a stated deviation from Roslyn, which emits `callvirt` purely for its
   implicit null check.

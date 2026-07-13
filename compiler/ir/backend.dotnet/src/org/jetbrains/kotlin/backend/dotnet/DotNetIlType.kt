@@ -26,6 +26,66 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     object String : DotNetIlValueType("string")
 
     /**
+     * `kotlin.Any`/`kotlin.Any?` as a STORAGE type: CLR `object` (`System.Object`), the root
+     * reference type. Every reference type widens to it for free ([isDotNetAssignableTo];
+     * probe-verified, `nullprobe_s8`: string into object locals/params/fields, `ldnull`, and the
+     * type-agnostic reference `ceq`), while value types ([Boolean]..[Char] and [NullableValue])
+     * reach it only through an explicit `box` coercion (see
+     * [DotNetIlExpressionCodegen]'s coercion layer). Member calls on `Any` stay rejected — this
+     * is storage-and-identity only, not an Any model.
+     */
+    object Object : DotNetIlValueType("object")
+
+    /**
+     * A concrete nullable Kotlin primitive (`Int?`, `Long?`, `Double?`, `Boolean?`, `Char?`) in
+     * an EXACT typed position: CLR `System.Nullable<T>` — the hybrid-representation decision
+     * (see AGENTS.md "Nullability model"). Roslyn precedent: C# `int?` is
+     * `valuetype System.Nullable`1<int32>` (corelib-qualified) in typed positions and collapses to
+     * boxed-`int32`-or-null at the `object` boundary (the CLR does the collapse in `box`,
+     * probe-verified `boxprobe_s3`/`nullprobe_s8`). [nameInSignature] doubles as the operand
+     * spelling of every instruction touching the type (`newobj`/`call`/`initobj`/`box`),
+     * probe-verified in every declaration and operand position (`boxprobe_s1`).
+     *
+     * CRITICAL emission rule (probe-verified, `boxprobe_s2`): the instance members
+     * ([hasValueInstruction], [getValueOrDefaultInstruction]) require a HOME ADDRESS —
+     * a freshly computed stack value MUST be spilled to a local first (`stloc`+`ldloca`); an
+     * unspilled stack receiver assembles cleanly but is a FATAL, uncatchable CLR error
+     * (0x80131506). Every emission site goes through
+     * [DotNetIlExpressionCodegen.spillToSyntheticLocal].
+     */
+    data class NullableValue(val elementType: DotNetIlValueType) :
+        DotNetIlValueType("valuetype ${CORE_LIB_REF}System.Nullable`1<${elementType.nameInSignature}>") {
+        /** `newobj` of the `T -> T?` wrap; `!0` is the probe-verified spelling of `T` in member signatures. */
+        val ctorInstruction: kotlin.String
+            get() = "newobj instance void ${nameInSignature}::.ctor(!0)"
+
+        /** The null test; call through a home address only (see the class KDoc). */
+        val hasValueInstruction: kotlin.String
+            get() = "call instance bool ${nameInSignature}::get_HasValue()"
+
+        /**
+         * The value extraction; call through a home address only. `GetValueOrDefault` (the
+         * Roslyn choice) never throws — callers branch on [hasValueInstruction] first where
+         * emptiness matters, so `get_Value`'s InvalidOperationException (the wrong exception
+         * type for Kotlin `!!`) is never involved.
+         */
+        val getValueOrDefaultInstruction: kotlin.String
+            get() = "call instance !0 ${nameInSignature}::GetValueOrDefault()"
+
+        /** `initobj` producing the empty (`null`) value into an addressed local. */
+        val initInstruction: kotlin.String
+            get() = "initobj $nameInSignature"
+
+        /**
+         * The `T? -> Any?` boundary widening: the CLR collapses `box Nullable<T>` to
+         * boxed-`T`-or-null (probe-verified for all five instantiations, `boxprobe_s3`,
+         * `nullprobe_s8`).
+         */
+        val boxInstruction: kotlin.String
+            get() = "box $nameInSignature"
+    }
+
+    /**
      * A user class emitted into this module, referenced assembly-locally — no bracketed
      * resolution-scope prefix (see [CORE_LIB_REF]) — through its already-rendered
      * [type reference][DotNetIlClassInfo.ilTypeRef] (`class 'demo.Point'`, or the nested
@@ -56,6 +116,35 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * ilasm-probe-verified. A nullable `T?` maps to the same reference type, like [UserClass].
      */
     data class MappedClass(val ilTypeRef: kotlin.String) : DotNetIlValueType("class $ilTypeRef")
+}
+
+/**
+ * The corelib reference of the boxed form of a primitive value type, the operand of the
+ * `T -> Any?` `box` instruction (all five spellings probe-verified: Int32/Int64 in landed code
+ * and `boxprobe_s7`; Boolean/Char/Double in `nullprobe_s8`, runtime types confirmed). Null for
+ * every non-primitive type (reference types widen to `object` without an instruction; a
+ * [DotNetIlValueType.NullableValue] boxes through its own [boxInstruction][DotNetIlValueType.NullableValue.boxInstruction]).
+ */
+internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(): String? = when (this) {
+    DotNetIlValueType.Boolean -> "${CORE_LIB_REF}System.Boolean"
+    DotNetIlValueType.Int32 -> "${CORE_LIB_REF}System.Int32"
+    DotNetIlValueType.Int64 -> "${CORE_LIB_REF}System.Int64"
+    DotNetIlValueType.Float64 -> "${CORE_LIB_REF}System.Double"
+    DotNetIlValueType.Char -> "${CORE_LIB_REF}System.Char"
+    else -> null
+}
+
+/**
+ * Whether values of this IL type live on the evaluation stack as object REFERENCES — `ldnull` is
+ * a valid value, reference `ceq` is a valid identity/null test, and widening to
+ * [DotNetIlValueType.Object] is instruction-free. False exactly for the primitive value types
+ * and [DotNetIlValueType.NullableValue] (whose null test is `get_HasValue`, never `ldnull`/`ceq`).
+ */
+internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) {
+    DotNetIlValueType.String, DotNetIlValueType.Object,
+    is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
+        -> true
+    else -> false
 }
 
 internal sealed class DotNetIlReturnType {

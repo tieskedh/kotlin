@@ -119,7 +119,9 @@ internal object DotNetMappedExceptions {
 
 /**
  * Whether a value of this IL type can be used where [expected] is required. Beyond exact
- * equality this admits exactly two widenings:
+ * equality this admits exactly three widenings, all instruction-free (a widening that needs an
+ * IL instruction — `T -> T?` wraps, `-> object` boxing of value types — must NEVER be modeled
+ * here; it belongs to [DotNetIlExpressionCodegen]'s coercion layer):
  * - every [DotNetIlValueType.MappedClass] is assignable to the `System.Exception` reference
  *   type — the CLR-verified common supertype of all mapped exception types, and the target of
  *   both Kotlin supertypes (`Throwable`, `Exception`) that can appear as the expected type of a
@@ -132,10 +134,16 @@ internal object DotNetMappedExceptions {
  *   interface-typed fields, parameters, returns and locals, plus the type-agnostic reference
  *   `ceq`; `ifaceprobe_s6` for the interface→super-interface widening). The JVM backend never
  *   performs this check itself — the JVM verifier's assignability subsumes it — while this
- *   backend verifies emitted stack types structurally, so the widening is spelled out here.
+ *   backend verifies emitted stack types structurally, so the widening is spelled out here;
+ * - every [reference-shaped][isDotNetReferenceShaped] type is assignable to
+ *   [DotNetIlValueType.Object] (`kotlin.Any`/`Any?` storage): CLR `object` is the root
+ *   reference type and the widening is instruction-free in every position (probe-verified,
+ *   `nullprobe_s8`). Value types — the primitives and [DotNetIlValueType.NullableValue] — are
+ *   deliberately NOT assignable to `object`: they need a `box` instruction (coercion layer).
  */
 internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
     this == expected -> true
+    expected == DotNetIlValueType.Object -> isDotNetReferenceShaped()
     this is DotNetIlValueType.MappedClass ->
         expected == DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
     this is DotNetIlValueType.UserClass && expected is DotNetIlValueType.UserClass ->
