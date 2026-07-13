@@ -61,24 +61,20 @@ class FirDefaultComplementarySymbolsCalculator(private val session: FirSession) 
     fun areUnrelated(a: FirClassSymbol<*>, b: FirClassSymbol<*>): Boolean =
         !a.isSubclassOf(b) && !b.isSubclassOf(a)
 
-    context(holder: SessionHolder)
-    fun FirRegularClassSymbol.getImmediateSuperTypes(): Set<FirRegularClassSymbol> =
-        getSuperTypes(holder.session, recursive = false)
-            .mapNotNullTo(mutableSetOf()) { it.toRegularClassSymbol() }
+    fun FirRegularClassSymbol.getImmediateSuperTypes(session: FirSession): Set<FirRegularClassSymbol> =
+        getSuperTypes(session, recursive = false)
+            .mapNotNullTo(mutableSetOf()) { it.toRegularClassSymbol(session) }
 
-    context(holder: SessionHolder)
-    fun FirRegularClassSymbol.collectRelevantSealedUniverse(
-        relevantSealedUniverseCache: MutableMap<FirClassSymbol<*>, Set<FirClassSymbol<*>>> = mutableMapOf(),
-    ): Set<FirClassSymbol<*>> =
-        relevantSealedUniverseCache.getOrPut(this) {
-            getImmediateSuperTypes()
-                .map { it.collectRelevantSealedUniverse(relevantSealedUniverseCache) + collectAllSubclassesFor(it, holder.session) }
+    private val relevantSealedUniverseCache: FirCache<FirRegularClassSymbol, Set<FirClassSymbol<*>>, Nothing?> =
+        session.firCachesFactory.createCache { symbol, _ ->
+            symbol.getImmediateSuperTypes(session)
+                .map { relevantSealedUniverseCache.getValue(it, null) + collectAllSubclassesFor(it, session) }
                 .flattenTo(mutableSetOf())
         }
 
     context(holder: SessionHolder)
     override fun collectComplementarySymbolsFor(symbol: FirRegularClassSymbol): Set<FirClassSymbol<*>> =
-        symbol.collectRelevantSealedUniverse().filterTo(mutableSetOf()) {
+        relevantSealedUniverseCache.getValue(symbol, null).filterTo(mutableSetOf()) {
             (symbol.isFinal || it.isFinal || symbol.isClass && it.isClass) && areUnrelated(symbol, it)
         }
 }
