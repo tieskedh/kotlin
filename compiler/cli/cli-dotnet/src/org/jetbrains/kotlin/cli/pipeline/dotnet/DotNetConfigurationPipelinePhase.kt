@@ -18,7 +18,6 @@ import org.jetbrains.kotlin.cli.report
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.getModuleNameForSource
-import org.jetbrains.kotlin.config.messageCollector
 import org.jetbrains.kotlin.config.moduleName
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.config.targetPlatform
@@ -105,7 +104,7 @@ private fun CompilerConfiguration.addDotNetStdlibSourceRoots() {
     // Files.createTempDirectory per invocation, so repeated compilations do not accumulate
     // temp directories.
     val stdlibDirectory = File(System.getProperty("java.io.tmpdir")).resolve("kotlinc-dotnet-stdlib")
-    for ((fileName, source) in DOTNET_STDLIB_SOURCES) {
+    for ([fileName, source] in DOTNET_STDLIB_SOURCES) {
         val stdlibSource = stdlibDirectory.resolve(fileName)
         if (!stdlibSource.isFile || stdlibSource.readText() != source) {
             stdlibSource.parentFile.mkdirs()
