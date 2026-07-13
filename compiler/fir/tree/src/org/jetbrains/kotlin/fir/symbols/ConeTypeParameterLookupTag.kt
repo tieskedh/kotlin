@@ -5,16 +5,24 @@
 
 package org.jetbrains.kotlin.fir.symbols
 
+import org.jetbrains.kotlin.fir.symbols.id.FirSymbolId
 import org.jetbrains.kotlin.fir.symbols.impl.FirTypeParameterSymbol
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.model.TypeParameterMarker
 
 data class ConeTypeParameterLookupTag(
-    val typeParameterSymbol: FirTypeParameterSymbol
+    val typeParameterSymbolId: FirSymbolId<FirTypeParameterSymbol>,
 ) : ConeClassifierLookupTagWithFixedSymbol(), TypeParameterMarker {
-    override val name: Name get() = typeParameterSymbol.name
+    constructor(typeParameterSymbol: FirTypeParameterSymbol) : this(typeParameterSymbol.symbolId)
+
+    // TODO (marco): Deprecate this in favor of `symbol`.
+    val typeParameterSymbol: FirTypeParameterSymbol
+        get() = symbol
+
+    override val name: Name get() = symbol.name
+
     override val symbol: FirTypeParameterSymbol
-        get() = typeParameterSymbol
+        get() = typeParameterSymbolId.symbol
 }
 
 /**
