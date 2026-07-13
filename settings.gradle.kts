@@ -198,6 +198,7 @@ include(
     ":compiler:ir.validation",
     ":compiler:backend.js",
     ":compiler:backend.wasm",
+    ":compiler:backend.dotnet",
     ":compiler:backend.jvm",
     ":compiler:backend.jvm.lower",
     ":compiler:backend.jvm.codegen",
@@ -210,6 +211,7 @@ include(
     ":compiler:cli",
     ":compiler:cli-jvm",
     ":compiler:cli-js",
+    ":compiler:cli-dotnet",
     ":compiler:cli-jklib",
     ":compiler:cli-metadata",
     ":compiler:cli:cli-native-klib",
@@ -807,6 +809,7 @@ project(":kotlin-build-common").projectDir = File("$rootDir/build-common")
 project(":compiler:cli-base").projectDir = File("$rootDir/compiler/cli/cli-base")
 project(":compiler:cli-jvm").projectDir = File("$rootDir/compiler/cli/cli-jvm")
 project(":compiler:cli-js").projectDir = File("$rootDir/compiler/cli/cli-js")
+project(":compiler:cli-dotnet").projectDir = File("$rootDir/compiler/cli/cli-dotnet")
 project(":compiler:cli-metadata").projectDir = File("$rootDir/compiler/cli/cli-metadata")
 project(":compiler:cli-jklib").projectDir = File("$rootDir/compiler/cli/cli-jklib")
 project(":kotlin-runner").projectDir = File("$rootDir/compiler/cli/cli-runner")
@@ -827,6 +830,7 @@ project(":compiler:ir.inline").projectDir = File("$rootDir/compiler/ir/ir.inline
 project(":compiler:ir.validation").projectDir = File("$rootDir/compiler/ir/ir.validation")
 project(":compiler:backend.js").projectDir = File("$rootDir/compiler/ir/backend.js")
 project(":compiler:backend.wasm").projectDir = File("$rootDir/compiler/ir/backend.wasm")
+project(":compiler:backend.dotnet").projectDir = File("$rootDir/compiler/ir/backend.dotnet")
 project(":compiler:backend.jvm").projectDir = File("$rootDir/compiler/ir/backend.jvm")
 project(":compiler:backend.jvm.lower").projectDir = File("$rootDir/compiler/ir/backend.jvm/lower")
 project(":compiler:backend.jvm.codegen").projectDir = File("$rootDir/compiler/ir/backend.jvm/codegen")
