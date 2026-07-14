@@ -62,11 +62,12 @@ import org.jetbrains.kotlin.name.Name
  * indistinguishable except under initialization re-entrancy, already a documented, unenforced
  * delta.
  *
- * [DotNetStaticInitializersLowering] later sweeps the singleton-field initializer into the owning
- * class's `<clinit>` (rendered as that class's `.cctor`), exactly like the JVM's
+ * [DotNetStaticInitializersLowering] later sweeps singleton-field initializers recursively into
+ * each owning class's `<clinit>` (rendered as that class's `.cctor`), exactly like the JVM's
  * `StaticInitializersLowering`, giving Kotlin/JVM first-active-use initialization semantics (see
  * the `beforefieldinit` decision in AGENTS.md). For a companion that owning class is the
- * ENCLOSING one; the companion itself gets no `.cctor`.
+ * ENCLOSING one; the companion itself gets no `.cctor`. This composes at arbitrary metadata depth;
+ * for a nested singleton the immediate plain-class container must be non-generic.
  *
  * Two reference categories are deliberately left untouched:
  * - `kotlin.Unit` (guarded FIRST): no `kotlin.Unit` class is ever emitted, and the existing
