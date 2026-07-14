@@ -14,8 +14,6 @@
 //   spelling (`newslot virtual` — Kotlin modality: an override not marked `final` stays open),
 //   interface-typed dispatch via `callvirt` on the interface token (`LabeledBox`; runtime-pinned
 //   by box/genericInheritance.kt).
-// Generic-extends-generic stays rejected (see genericRejected.kt).
-
 open class Box<T>(private var value: T) {
     fun get(): T = value
 

@@ -1,6 +1,6 @@
 // Shapes that stay rejected loudly after generic-interfaces stage 4 (each declaration is skipped
-// with a specific warning and absent from the emitted IL; `Gen` — open, so the rejected
-// `GenSub` can name it as a base — `Marked` and `main` are the supported remainder):
+// with a specific warning and absent from the emitted IL; `Gen`, `Marked`, and `main` are the
+// supported remainder):
 // - declaration-site variance (`out`/`in`) on classes: ECMA-335 (II.10.1.7) allows variance only
 //   on interfaces and delegates — emitting the parameter as invariant would silently change
 //   assignability;
@@ -22,9 +22,6 @@
 //   untouched by this slice;
 // - generic (extension) properties: the property metadata/accessor model does not cover generic
 //   accessors;
-// - generic-extends-generic chains (`GenSub`): the IL shape is probed fine (genprobe_s7) but
-//   the override/pre-pass gate interactions are unexercised — rejected whole-class, a later
-//   slice can widen (the open generic base itself stays supported).
 
 open class Gen<T>(val v: T)
 
@@ -37,8 +34,6 @@ class WithCompanion<T>(val v: T) {
 }
 
 interface Marked
-
-class GenSub<T>(v: T) : Gen<T>(v)
 
 fun <T> nullableParam(x: T?): Int = 0
 

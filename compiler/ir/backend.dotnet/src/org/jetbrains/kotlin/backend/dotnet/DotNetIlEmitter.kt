@@ -143,11 +143,10 @@ class DotNetIlEmitter(
         // (see [renderUserClass]), so a base or interface that failed the gate (its entry is
         // absent here, leaving the link out) or is evicted later evicts its derived
         // classes/implementers/sub-interfaces through the fixpoint rather than through these
-        // links. The base link is the full SUPERTYPE token — an instantiated generic base
-        // (`class D : Box<Int>()`) must widen to exactly `Box<Int>`, never another
-        // instantiation — mapped through the type mapper; a base whose instantiation mentions
-        // an unmappable or unavailable type simply leaves the link out (the render's live
-        // re-resolution owns the eviction and its carried reason).
+        // links. The base link is the full SUPERTYPE token — closed (`D : Box<Int>`) or open and
+        // composed (`D<A, B> : Box<B, A>`) — and must widen only to that exact instantiation. A
+        // base whose instantiation mentions an unmappable or unavailable type simply leaves the
+        // link out (the render's live re-resolution owns the eviction and its carried reason).
         for ([irClass, classInfo] in availableClasses) {
             if (irClass.isCompanion) continue
             classInfo.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
@@ -723,12 +722,12 @@ class DotNetIlEmitter(
         // Generic TOP-LEVEL PLAIN classes use real CLR reified generics
         // (Roslyn shape — `.class ... 'C`n'<T>`, `!n` member signatures, instantiation tokens in
         // every operand position; probe series genprobe), no erasure or lowering machinery. The
-        // gate scopes the stage: invariant non-reified parameters, optionally constrained by
+        // gate scopes the model: invariant non-reified parameters, optionally constrained by
         // supported module-local classes/interfaces, no nested declarations (the
-        // companion/object machinery is untouched by this slice), any supported generic or
-        // non-generic interface supertypes, and no generic-extends-generic CLASS chains
-        // (untested override/pre-pass interactions — the IL shape itself is probed,
-        // genprobe_s7, so a later slice can widen).
+        // companion/object machinery is untouched), and any supported generic/non-generic class
+        // or interface supertype. Generic base links retain their full open instantiation, so
+        // constructor calls, owner lookup, and override substitution compose through arbitrary
+        // module-local chains (probe-verified, geninheritprobe_s1).
         // Kotlin objects and companions cannot be generic; the branch is defensive.
         if (irClass.typeParameters.isNotEmpty()) {
             if (irClass.kind == ClassKind.OBJECT || isValidatedCompanion) {
@@ -740,15 +739,6 @@ class DotNetIlEmitter(
                     "generic class '$name' contains nested declarations (companion or nested objects); " +
                             "nested declarations in generic classes are not supported yet"
                 )
-            }
-            for (superType in irClass.superTypes.filterNot { it.isAny() }) {
-                val superClass = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
-                if (superClass != null && !superClass.isInterface && superClass.typeParameters.isNotEmpty()) {
-                    dotNetUnsupported(
-                        "generic class '$name' extends a generic base class; " +
-                                "generic-to-generic inheritance is not supported yet"
-                    )
-                }
             }
         }
         val superTypesExceptAny = irClass.superTypes.filterNot { it.isAny() }
@@ -1238,11 +1228,11 @@ class DotNetIlEmitter(
                 // The established non-generic spelling: `extends 'demo.Base'`.
                 baseClassInfo.ilTypeRef
             } else {
-                // An instantiated generic base: `extends class 'demo.Box`1'<int32>` (probe-
-                // verified, genprobe_s5). Re-mapped through the LIVE type mapper every render
-                // round like the base itself, so an instantiation mentioning an evicted class
-                // fails the derived class here with a carried reason (the type-argument arm of
-                // the base-eviction cascade).
+                // An instantiated generic base: closed (`Box<int32>`, genprobe_s5) or open and
+                // composed (`Mid<!1, !0>`, geninheritprobe_s1). Re-mapped through the LIVE type
+                // mapper every render round like the base itself, so an instantiation mentioning
+                // an evicted class fails the derived class here with a carried reason (the
+                // type-argument arm of the base-eviction cascade).
                 val baseType = typeMapper.toDotNetIlValueType(baseSuperType) as? DotNetIlValueType.GenericInstance
                     ?: dotNetUnsupported(
                         "its base class instantiation '${baseSuperType.render()}' could not be compiled: " +

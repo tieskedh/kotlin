@@ -406,8 +406,9 @@ internal fun List<IrTypeParameter>.renderDotNetIlGenericParameters(
 
 /**
  * The base-class SUPERTYPE of [this] class within the inheritance model as the declared
- * [IrSimpleType] — carrying the instantiation of a generic base (`class D : Box<Int>()`), which
- * the classifier-only [dotNetBaseClassOrNull] cannot — or null when no supertype is a proper
+ * [IrSimpleType] — carrying a closed or open instantiation of a generic base
+ * (`class D : Box<Int>()`, `class D<T> : Box<T>()`), which the classifier-only
+ * [dotNetBaseClassOrNull] cannot — or null when no supertype is a proper
  * class (sole supertype `kotlin.Any`, or only interface supertypes). Interface supertypes are
  * skipped — they belong to [dotNetDirectInterfaceTypes] — and the shape gate guarantees at most one
  * proper-class supertype on gate-passing classes.

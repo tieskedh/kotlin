@@ -6,10 +6,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `4768b7763` ("[DotNet] Add generic member functions"),
+- Branch `dotnet`; latest functional tip `5cc01c4bc` ("[DotNet] Add generic class inheritance"),
   clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **300 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **306 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -17,8 +17,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
   exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
-  interfaces and declaration-site variance stage 4, generic member functions stage 5. Each has
-  a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
+  interfaces and declaration-site variance stage 4, generic member functions stage 5, generic
+  class inheritance stage 6. Each has a design bullet in `AGENTS.md` — the bullets are accurate;
+  trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
@@ -93,6 +94,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interface slots, constrained calls, arity overloads, objects, companions, member extensions,
   nullable method instantiations, and generic virtual/super dispatch. The final FIR suite is
   300/0/0/0 and the generated CLI suite remains 10/0/0/0.
+- Interim continuation landed `5cc01c4bc`: supported generic classes may now extend module-local
+  generic bases through mapped closed, open, permuted, nested, generic-array, concrete-nullable,
+  fixed, and constrained instantiations across arbitrary chains. Full base tokens remain in the
+  prelinked structural graph and are recursively substituted at each hop, so constructor calls,
+  overrides/super calls, inherited generic methods, inherited interface slots, and open base or
+  interface upcasts recover the exact declaring-owner view. Invalid base arguments and evicted
+  bases reject the whole derived chain while unrelated valid instantiations survive.
+  `geninheritprobe_s1` verified multi-hop tokens, constructors, overrides, generic methods,
+  interfaces, and constraints on CoreCLR 10.0.9 and .NET Framework 4.8. Both new goldens assemble
+  under modern and Framework ILAsm; the positive golden executes identically on both runtimes.
+  The final FIR suite is 306/0/0/0 and the generated CLI suite remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -106,7 +118,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
-   `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp dir).
+   `geninheritprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a
+   temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -156,10 +169,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Generic-to-generic class inheritance.** The isolated IL shape already works, but class
-   eviction, composed base substitutions, override/member-owner lookup, constructor chains,
-   constrained owners, generic member methods, and interface implementations must all remain
-   coherent before widening the class gate.
+1. **Audit the next class/interface shape gap.** The staged generics queue is complete. Re-read
+   the class and interface gates, rejection pins, and mature backend precedent before choosing one
+   coherent next slice; keep abstract classes, default interface bodies, and broader `Any` member
+   semantics separate unless the audit proves that one requires another.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

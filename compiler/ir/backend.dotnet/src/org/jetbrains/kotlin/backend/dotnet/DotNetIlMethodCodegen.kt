@@ -446,12 +446,10 @@ internal class DotNetIlMethodCodegen(
             methodContext.emit("call ${classInfo.renderConstructorReference(parameterTypes)}", pops = 1 + parameterTypes.size)
             return
         }
-        // A GENERIC delegation target: the base-ctor chain of a class extending an instantiated
-        // generic base (`call instance void class 'Box`1'<int32>::.ctor(!0)`, probe-verified
-        // genprobe_s5) and a generic class's own `this(...)` delegation (the open instantiation,
-        // `class 'Box`1'<!0>` — the same self-reference spelling as every other in-body member
-        // ref, genprobe_s2). The parameter SLOTS stay open; the argument VALUES are emitted
-        // against the substituted types.
+        // A GENERIC delegation target: a closed base (`Box<int32>`, genprobe_s5), an open or
+        // permuted generic base (`Base<!1, !0>`, geninheritprobe_s1), or a generic class's own
+        // `this(...)` delegation (`Box<!0>`, genprobe_s2). The parameter SLOTS stay open; the
+        // argument VALUES are emitted against the substituted types.
         if (call.typeArguments.size != targetClass.typeParameters.size) {
             dotNetUnsupported("delegating constructor call of '${targetClass.name.asString()}' has an unsupported type-argument shape")
         }
