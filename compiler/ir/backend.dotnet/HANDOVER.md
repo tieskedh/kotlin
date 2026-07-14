@@ -6,18 +6,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `fffb99e14` ("[DotNet] Add constrained generics"),
+- Branch `dotnet`; latest functional tip `344ae86f2` ("[DotNet] Add invariant generic arrays"),
   clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **282 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **288 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
   top-level properties/objects/companions, class inheritance, interfaces, hybrid nullability
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
   exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
-  indexed loops, constrained generics stage 2. Each has a design bullet in `AGENTS.md` — the
-  bullets are accurate; trust but verify.
+  indexed loops, constrained generics stage 2, invariant generic arrays stage 3. Each has a design
+  bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
@@ -53,6 +53,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   assembles under both ILAsm versions and executes on Framework. New ilText/rejection/box pins run
   under both FIR parser variants. Nullable, generic-instantiation, type-parameter, builtin, mapped,
   unavailable, equality/Any-member, unconstrained-widening, variance, and `T?` shapes still reject.
+- Interim continuation landed `344ae86f2`: invariant `Array<E>` maps to a structural CLR vector
+  for reference-shaped or open `!n`/`!!n` elements. The JVM-shaped registry owns `arrayOf`,
+  `emptyArray`, reference-element `arrayOfNulls`, `size`, `get`, and `set`; direct `for` loops
+  reuse the indexed lowering. Literal/get/set operands spill for protected-region safety. The
+  structural kind stays distinct from `PrimitiveArray`, so backend assignability never admits CLR
+  covariance. Concrete primitive elements reject because CLR would collapse `Array<Int>` and
+  `IntArray` to the same `int32[]` ABI; projections, nullable value elements/`Array<T?>`, nested
+  arrays, initializer lambdas, spreads, iterator escape, casts, and copy/content helpers also stay
+  out. `genarrayprobe_s1` verified `T[]` metadata, typed element opcodes for reference and value
+  instantiations, bounded dispatch, and the CLR covariant-store check on CoreCLR 10.0.9 and
+  Framework 4.8. Both final goldens assemble and execute on both runtimes. The feature also closes
+  the existing main-detector gap: `main(args: Array<String>)` now emits the valid CLR
+  `.entrypoint` `main(string[])` shape.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -62,8 +75,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
 1. **Probe first.** Any IL spelling not already golden-pinned must be verified by assembling and
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
-   `genprobe`, `genconstraintprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of
-   the repo (use a temp dir).
+   `genprobe`, `genconstraintprobe`, `genarrayprobe`, `whenprobe`, `arrprobe` are taken). Keep probe
+   files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -113,15 +126,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Generic arrays.** CLR vectors can encode `T[]` and compose with stage-2 generic signatures,
-   but CLR array covariance conflicts with Kotlin invariance.
-   Probe construction, generic element opcodes (`ldelem`/`stelem` with a type token), and bounded
-   `T` before deciding whether `Array<T>` is safe without runtime store holes. Keep `Array<T?>`,
-   casts, covariance, copying/content helpers, and multidimensional arrays out of the first slice.
-2. **Generic interfaces and declaration-site variance, only after generic arrays settle.** CLR
-   interfaces can carry reified parameters and `in`/`out` metadata, but Kotlin class/interface
+1. **Generic interfaces and declaration-site variance.** CLR interfaces can carry reified
+   parameters and `in`/`out` metadata, but Kotlin class/interface
    use-site projections and inherited member-owner views need a coherent assignability model first.
    Probe metadata spelling and cross-view dispatch; do not silently map Kotlin class variance.
+2. **Generic member functions and generic-to-generic inheritance, after generic interfaces.** The
+   isolated IL shapes already work, but class eviction, override substitution, member identity,
+   constrained owners, and interface implementations must compose before widening the gates.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
