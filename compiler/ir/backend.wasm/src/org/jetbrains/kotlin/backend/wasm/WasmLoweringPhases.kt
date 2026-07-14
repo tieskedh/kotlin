@@ -95,7 +95,7 @@ private fun createAutoboxingTransformerPhase(context: JsCommonBackendContext): A
 
 //@PhasePrerequisites(FunctionInlining::class) // This prerequisite is hard to represent for common lowering
 private fun createConstEvaluationPhase(context: CommonBackendContext): ConstEvaluationLowering {
-    return ConstEvaluationLowering(context, isFloatingPointOptimizationEnabled = false)
+    return ConstEvaluationLowering(context)
 }
 
 fun wasmLoweringsOfTheFirstPhase(
