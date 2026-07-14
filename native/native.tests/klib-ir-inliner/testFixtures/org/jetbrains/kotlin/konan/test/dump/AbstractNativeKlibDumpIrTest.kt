@@ -5,11 +5,9 @@
 
 package org.jetbrains.kotlin.konan.test.dump
 
-import org.jetbrains.kotlin.konan.test.blackbox.support.compilation.TestCompilationArtifact.KLIB
 import org.jetbrains.kotlin.konan.test.blackbox.support.settings.KotlinNativeClassLoader
 import org.jetbrains.kotlin.konan.test.blackbox.support.util.dumpIr
 import org.jetbrains.kotlin.konan.test.blackbox.testRunSettings
-import org.jetbrains.kotlin.library.KotlinIrSignatureVersion
 import org.jetbrains.kotlin.test.Constructor
 import org.jetbrains.kotlin.test.model.TestModule
 import org.jetbrains.kotlin.test.services.TestServices
@@ -17,18 +15,22 @@ import org.jetbrains.kotlin.test.services.sourceFileProvider
 import java.io.File
 
 abstract class AbstractNativeKlibDumpIrTest : AbstractKlibToolDumpTest() {
-    override fun getDumpHandlers(): List<Constructor<AbstractKlibToolDumpHandler>> = listOf(::KlibToolIrDumpHandler)
+    override fun getDumpHandlers(): List<Constructor<AbstractKlibToolDumpHandler<*>>> = listOf(::KlibToolIrDumpHandler)
 }
 
-private class KlibToolIrDumpHandler(testServices: TestServices) : AbstractKlibToolDumpHandler(testServices, suffix = "ir") {
-    override val signatureVersion: KotlinIrSignatureVersion?
-        get() = null // TODO: test for all signature versions, KT-62828
+private object IrDumpSingleVariation : KlibToolDumpHandlerVariation {
+    override val dumpFileSuffix: String
+        get() = ".ir" // TODO: test for all signature versions, KT-62828
+}
+
+private class KlibToolIrDumpHandler(testServices: TestServices) : AbstractKlibToolDumpHandler<IrDumpSingleVariation>(testServices) {
+    override val variation get() = IrDumpSingleVariation
 
     override fun makeDump(klib: File, module: TestModule): String {
         val sourceDir = testServices.sourceFileProvider.getKotlinSourceDirectoryForModule(module).absolutePath
         val absolutePathPrefix = if (sourceDir.endsWith(File.separatorChar)) sourceDir else sourceDir + File.separatorChar
 
-        return KLIB(klib).dumpIr(
+        return klib.dumpIr(
             kotlinNativeClassLoader = testServices.testRunSettings.get<KotlinNativeClassLoader>().classLoader,
             absolutePathPrefixes = listOf(absolutePathPrefix),
         )
