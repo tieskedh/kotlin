@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.backend.common.lower.IrBuildingTransformer
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.irIfThen
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.isSupportedDotNetPrimitiveArray
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irInt
@@ -25,8 +26,12 @@ import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.expressions.impl.IrBlockImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrDoWhileLoopImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrWhileLoopImpl
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isInt
 import org.jetbrains.kotlin.ir.util.functions
+import org.jetbrains.kotlin.ir.util.getPropertyGetter
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.util.OperatorNameConventions
@@ -92,6 +97,7 @@ internal class DotNetForLoopLowering(
                     function.parameters.singleOrNull { it.kind == IrParameterKind.Regular }?.type?.isInt() == true
         }.symbol
     private val intLessOrEqual = irBuiltIns.lessOrEqualFunByOperandType.getValue(irBuiltIns.intClass)
+    private val intLess = irBuiltIns.lessFunByOperandType.getValue(irBuiltIns.intClass)
 
     private val oldLoopToNewLoop = hashMapOf<IrLoop, IrLoop>()
 
@@ -112,8 +118,92 @@ internal class DotNetForLoopLowering(
         // Children first: nested for-loops inside this loop's body are rewritten before the
         // enclosing one, matching ForLoopsLowering's transformer order.
         expression.transformChildrenVoid(this)
+        lowerPrimitiveArrayForLoop(expression)
         lowerIntRangeForLoop(expression)
         return expression
+    }
+
+    /**
+     * Rewrites direct iteration over a supported primitive array to backend.common's indexed-get
+     * loop shape: the receiver is evaluated once, its immutable size is cached, and the index is
+     * incremented before the user body so `continue` cannot skip it.
+     */
+    private fun lowerPrimitiveArrayForLoop(block: IrBlock) {
+        if (block.origin != IrStatementOrigin.FOR_LOOP || block.statements.size != 2) return
+
+        val iteratorVariable = block.statements[0] as? IrVariable ?: return
+        if (iteratorVariable.origin != IrDeclarationOrigin.FOR_LOOP_ITERATOR) return
+        val iteratorCall = iteratorVariable.initializer as? IrCall ?: return
+        if (iteratorCall.symbol.owner.name != OperatorNameConventions.ITERATOR) return
+        val arrayExpression = iteratorCall.arguments.singleOrNull() ?: return
+        if (!arrayExpression.type.isSupportedDotNetPrimitiveArray()) return
+        val arrayClass = arrayExpression.type.classifierOrNull as? IrClassSymbol ?: return
+        val elementType = irBuiltIns.primitiveArrayElementTypes[arrayClass] ?: return
+
+        val whileLoop = block.statements[1] as? IrWhileLoop ?: return
+        val hasNextCall = whileLoop.condition as? IrCall ?: return
+        if (hasNextCall.symbol.owner.name != OperatorNameConventions.HAS_NEXT) return
+        if (!hasNextCall.arguments.singleOrNull().isGetOf(iteratorVariable)) return
+        val whileBody = whileLoop.body as? IrBlock ?: return
+        val loopVariable = whileBody.statements.firstOrNull() as? IrVariable ?: return
+        if (loopVariable.origin != IrDeclarationOrigin.FOR_LOOP_VARIABLE || loopVariable.type != elementType) return
+        val nextCall = loopVariable.initializer as? IrCall ?: return
+        if (nextCall.symbol.owner.name != OperatorNameConventions.NEXT) return
+        if (!nextCall.arguments.singleOrNull().isGetOf(iteratorVariable)) return
+
+        val sizeGetter = arrayClass.getPropertyGetter("size") ?: return
+        val getFunction = arrayClass.owner.functions.singleOrNull { function ->
+            function.name == OperatorNameConventions.GET &&
+                    function.parameters.singleOrNull { it.kind == IrParameterKind.Regular }?.type?.isInt() == true
+        }?.symbol ?: return
+
+        with(builder) {
+            at(block)
+            val indexedObject = scope.createTemporaryVariable(
+                arrayExpression, nameHint = "indexedObject", inventUniqueName = false,
+            )
+            val inductionVariable = scope.createTemporaryVariable(
+                irInt(0), nameHint = "inductionVariable", isMutable = true, inventUniqueName = false,
+            )
+            val lastVariable = scope.createTemporaryVariable(
+                irCall(sizeGetter).apply { arguments[0] = irGet(indexedObject) },
+                nameHint = "last",
+                inventUniqueName = false,
+            )
+
+            loopVariable.initializer = irCall(getFunction).apply {
+                arguments[0] = irGet(indexedObject)
+                arguments[1] = irGet(inductionVariable)
+            }
+            val increment = irSet(
+                inductionVariable,
+                irCall(intPlusInt).apply {
+                    arguments[0] = irGet(inductionVariable)
+                    arguments[1] = irInt(1)
+                },
+            )
+            val newBody = IrBlockImpl(
+                whileBody.startOffset, whileBody.endOffset, whileBody.type, whileBody.origin,
+                listOf(loopVariable, increment) + whileBody.statements.drop(1),
+            )
+            val newLoop = IrWhileLoopImpl(
+                whileLoop.startOffset, whileLoop.endOffset, whileLoop.type, whileLoop.origin,
+            ).apply {
+                label = whileLoop.label
+                condition = irCall(intLess).apply {
+                    arguments[0] = irGet(inductionVariable)
+                    arguments[1] = irGet(lastVariable)
+                }
+                body = newBody
+            }
+            oldLoopToNewLoop[whileLoop] = newLoop
+
+            block.statements.clear()
+            block.statements += indexedObject
+            block.statements += inductionVariable
+            block.statements += lastVariable
+            block.statements += newLoop
+        }
     }
 
     /** Rewrites [block]'s statements in place when it is a `for` loop over `Int.rangeTo(Int)`. */

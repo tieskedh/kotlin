@@ -43,6 +43,17 @@ internal const val CORE_LIB = "mscorlib"
 /** The bracketed resolution-scope prefix of corelib type references in emitted IL. */
 internal const val CORE_LIB_REF = "[$CORE_LIB]"
 
+/** Whether this is one of the primitive-array classifiers whose scalar element type is supported. */
+internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqName?.asString()) {
+    "kotlin.BooleanArray",
+    "kotlin.IntArray",
+    "kotlin.LongArray",
+    "kotlin.DoubleArray",
+    "kotlin.CharArray",
+        -> true
+    else -> false
+}
+
 /**
  * Thrown while rendering a single function into IL when a construct the prototype .NET backend
  * cannot compile is encountered. The emitter catches it, discards the partial render, skips the
@@ -138,6 +149,7 @@ internal class DotNetIlTypeMapper(
         type.isChar() -> DotNetIlValueType.Char
         type.isDotNetStringType() -> DotNetIlValueType.String
         type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
+        type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
         // `Nothing?` — the type of the null literal, and of values the frontend narrowed to
         // definitely-null (e.g. a when-subject temporary initialized from a known-null value) —
         // is reference-shaped storage whose only value is `ldnull`. Plain `Nothing` (no values
@@ -147,6 +159,23 @@ internal class DotNetIlTypeMapper(
             ?: toMappedExceptionTypeOrNull(type)
             ?: toUserClassTypeOrNull(type)
             ?: toTypeParameterTypeOrNull(type)
+    }
+
+    /**
+     * Maps the supported Kotlin primitive-array classifiers to CLR zero-based vectors. Matching
+     * by FqName deliberately includes nullable array types: CLR vectors are reference-shaped,
+     * so `IntArray` and `IntArray?` have the same IL signature, just like `String`/`String?`.
+     */
+    private fun toPrimitiveArrayType(type: IrType): DotNetIlValueType.PrimitiveArray {
+        val elementType = when (type.classFqName?.asString()) {
+            "kotlin.BooleanArray" -> DotNetIlValueType.Boolean
+            "kotlin.IntArray" -> DotNetIlValueType.Int32
+            "kotlin.LongArray" -> DotNetIlValueType.Int64
+            "kotlin.DoubleArray" -> DotNetIlValueType.Float64
+            "kotlin.CharArray" -> DotNetIlValueType.Char
+            else -> error("Internal .NET backend error: unsupported primitive-array classifier ${type.render()}")
+        }
+        return DotNetIlValueType.PrimitiveArray(elementType)
     }
 
     /**

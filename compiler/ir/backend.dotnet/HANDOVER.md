@@ -6,16 +6,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `d7915e827` ("[Tests] Isolate the DotNet CLI generated
-  suite"), clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
+- Branch `dotnet`; latest functional tip `08931c5c7` ("[DotNet] Add primitive array vectors"),
+  clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **270 tests, 0 failures, 0 skips** across 8 classes
-  (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)).
+- Full DotNet suite: **276 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+  (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
+  **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
   top-level properties/objects/companions, class inheritance, interfaces, hybrid nullability
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
-  exhaustive Boolean/Boolean? `when` without source `else`. Each has a design bullet in
-  `AGENTS.md` — the bullets are accurate; trust but verify.
+  exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
+  indexed loops. Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but
+  verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
@@ -28,6 +30,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   no longer conflicts with DotNet test data. The same 10 tests pass in the new suite, and an
   explicit smoke filter preserves their selection after the nested-to-top-level move (Smoke-mode
   dry-run discovers all 10). The fresh backend suite remains 270/0/0/0.
+- Interim continuation landed `08931c5c7`: `IntArray`, `LongArray`, `DoubleArray`,
+  `BooleanArray`, and `CharArray` map to native CLR vectors. JVM-shaped registry intrinsics cover
+  unary construction, literal factories, `size`, `get`, and `set`; direct `for` loops use the
+  backend.common indexed-get shape. `arrprobe_s1` verified exact signatures/opcodes and runtime
+  faults on modern CoreCLR and .NET Framework. A negative-size guard prevents CLR
+  `OverflowException` from creating a false Kotlin `ArithmeticException` catch edge. Literal and
+  indexed operands spill to locals because CLR protected regions require an empty entry stack.
+  Nullable/object/generic storage and array identity equality work; generic `Array<T>`, unsupported
+  scalar arrays, initializer constructors, spreads, escaping iterators, and copy/content helpers
+  reject. Contrary to the old task-menu guess, no fake-stdlib declarations were needed: fir2ir
+  already supplies the primitive-array builtins and `*ArrayOf` calls.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -87,20 +100,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Main course: arrays.** Next roadmap item. CLR has native vectors (`newarr`, `ldelem`/`stelem`,
-   `ldlen`) — probe series suggestion: `arrprobe`. Design questions to settle probe-first:
-   which Kotlin array types in scope (suggest primitive arrays `IntArray` etc. first — they map
-   1:1 to `int32[]` and dodge generics interplay; `Array<T>` composes with stage-1 generics but
-   adds covariance questions — CLR arrays are covariant, Kotlin's are invariant, so `Array<T>`
-   likely needs `as`-free invariant discipline stated explicitly); creation (`IntArray(n)`,
-   `intArrayOf(...)` need injected fake-stdlib declarations — see `DotNetStdlibSource` and the
-   intrinsic-registry pattern; injected declarations must compile with ZERO diagnostics);
-   `size`/`get`/`set`/indexing operators as intrinsics; `for (x in array)` via the existing
-   for-loop lowering. Everything else (copyOf, iterators as objects, Array<T?>): reject loudly.
-2. **Generics stage 2 (if appetite remains): constraints.** `T : Base` / `T : Iface` → CLR
+1. **Generics stage 2: constraints.** `T : Base` / `T : Iface` → CLR
    constraint clauses (`class ... where` in IL: `<(class 'Base') T>` — probe the spelling).
    Unlocks member calls on `T` receivers bounded by a supported interface. Variance and `T?`
    remain out (see the generics bullet for why).
+2. **Generic arrays, only after constraints settle.** CLR vectors can encode `T[]` and compose
+   with stage-1 generic signatures, but CLR array covariance conflicts with Kotlin invariance.
+   Probe construction, generic element opcodes (`ldelem`/`stelem` with a type token), and bounded
+   `T` before deciding whether `Array<T>` is safe without runtime store holes. Keep `Array<T?>`,
+   casts, covariance, copying/content helpers, and multidimensional arrays out of the first slice.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
