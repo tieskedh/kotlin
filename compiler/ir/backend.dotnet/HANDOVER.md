@@ -6,18 +6,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `344ae86f2` ("[DotNet] Add invariant generic arrays"),
+- Branch `dotnet`; latest functional tip `7d54b3a82` ("[DotNet] Add generic interfaces and variance"),
   clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **288 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **294 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
   top-level properties/objects/companions, class inheritance, interfaces, hybrid nullability
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
   exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
-  indexed loops, constrained generics stage 2, invariant generic arrays stage 3. Each has a design
-  bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
+  indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
+  interfaces and declaration-site variance stage 4. Each has a design bullet in `AGENTS.md` —
+  the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
@@ -66,17 +67,32 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Framework 4.8. Both final goldens assemble and execute on both runtimes. The feature also closes
   the existing main-detector gap: `main(args: Array<String>)` now emits the valid CLR
   `.entrypoint` `main(string[])` shape.
+- Interim continuation landed `7d54b3a82`: top-level all-abstract generic interfaces now emit
+  as real reified CLR interfaces. Their `out`/`in` parameters preserve `+`/`-` metadata; full
+  open, closed, transitive, and permuted interface instantiations remain in the structural
+  supertype graph and on every `implements`/member-owner token. Generic classes may implement
+  supported interface instantiations. Assignability applies CLR covariance/contravariance only
+  when both differing arguments are statically reference-shaped; exact value instantiations
+  remain supported, while value/open-parameter variant conversions, use-site projections/stars,
+  nullable type-parameter slots, generic interface members, and unsupported bounds reject.
+  `genifaceprobe_s1` verified metadata, constraints, interface inheritance, and dispatch on
+  CoreCLR 10.0.9 and .NET Framework 4.8. Both new goldens assemble under both ILAsm versions;
+  the positive golden and expanded box test execute on both runtimes. The final FIR suite is
+  294/0/0/0 and the generated CLI suite remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
+- `.gradle/codex-backend-dotnet.stop` is the ignored autonomous-work stop flag. It is currently
+  `false`; set it to `true` to have the agent finish its current coherent feature, update this
+  handover, and stop before starting another one.
 
 ## Hard rules (the ones that bit us; violations have all caused real damage)
 
 1. **Probe first.** Any IL spelling not already golden-pinned must be verified by assembling and
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
-   `genprobe`, `genconstraintprobe`, `genarrayprobe`, `whenprobe`, `arrprobe` are taken). Keep probe
-   files OUT of the repo (use a temp dir).
+   `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `whenprobe`, `arrprobe` are
+   taken). Keep probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -126,13 +142,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Generic interfaces and declaration-site variance.** CLR interfaces can carry reified
-   parameters and `in`/`out` metadata, but Kotlin class/interface
-   use-site projections and inherited member-owner views need a coherent assignability model first.
-   Probe metadata spelling and cross-view dispatch; do not silently map Kotlin class variance.
-2. **Generic member functions and generic-to-generic inheritance, after generic interfaces.** The
-   isolated IL shapes already work, but class eviction, override substitution, member identity,
-   constrained owners, and interface implementations must compose before widening the gates.
+1. **Generic member functions and generic-to-generic inheritance.** The isolated IL shapes already
+   work, but class eviction, override substitution, member identity, constrained owners, and
+   interface implementations must compose before widening the gates. Treat these as separate
+   probe-backed slices if their failure boundaries do not compose cleanly.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

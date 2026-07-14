@@ -14,10 +14,11 @@ package org.jetbrains.kotlin.backend.dotnet
  * reference of the base class of the inheritance model (`extends 'demo.Base'`; assembly-local,
  * forward references legal — probe-verified, `inheritprobe_s1`); without one the class extends
  * the corelib `System.Object`, the IL spelling of `kotlin.Any`. [interfaceRefs] are the
- * already-rendered IL type references of the directly implemented interfaces, printed as a
- * comma-separated `implements 'A', 'B'` line after `extends` (spelling probe-verified,
- * `ifaceprobe_s3`; on an interface the same line lists its direct super-interfaces,
- * `ifaceprobe_s6` — transitively implied super-interfaces are never repeated, same probe).
+ * already-rendered IL type references of the directly implemented interfaces: bare non-generic
+ * refs or full generic instantiations (`class 'Producer`1'<!0>`), printed as a comma-separated
+ * `implements` line after `extends` (spelling probe-verified, `ifaceprobe_s3` and
+ * `genifaceprobe_s1`; on an interface the same line lists its direct super-interfaces —
+ * transitively implied super-interfaces are never repeated).
  * [renderedNestedClasses] are complete, already indented `.class`
  * blocks (a top-level user class carries at most its companion) emitted first in the body;
  * [renderedFields] are single `.field` lines emitted before the methods and

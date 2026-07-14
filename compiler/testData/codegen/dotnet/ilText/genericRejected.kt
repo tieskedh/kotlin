@@ -1,10 +1,9 @@
-// Shapes that stay rejected loudly after constrained-generics stage 2 (each declaration is skipped
+// Shapes that stay rejected loudly after generic-interfaces stage 4 (each declaration is skipped
 // with a specific warning and absent from the emitted IL; `Gen` — open, so the rejected
 // `GenSub` can name it as a base — `Marked` and `main` are the supported remainder):
-// - declaration-site variance (`out`/`in`): ECMA-335 (II.10.1.7) allows variance only on
-//   interfaces and delegates while Kotlin allows it on classes — emitting the parameter as
-//   invariant would silently change assignability, so the declaration is rejected (a future
-//   interface-variance slice can widen);
+// - declaration-site variance (`out`/`in`) on classes: ECMA-335 (II.10.1.7) allows variance only
+//   on interfaces and delegates — emitting the parameter as invariant would silently change
+//   assignability;
 // - constraints outside the supported direct module-local class/interface model
 //   (`T : CharSequence` below);
 // - `T?` ANYWHERE in a generic declaration (parameter, local): a nullable type parameter has no
@@ -18,14 +17,11 @@
 // - widening an unconstrained `T` to `Any?`;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
-// - varargs of `T`: the parameter type is `Array<out T>` (no arrays);
-// - generic interfaces: unchanged from the interface model;
+// - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
 // - generic classes containing companions/nested objects: the nested-shape machinery is
 //   untouched by this slice;
 // - generic (extension) properties: stage 1 scopes generic callables to top-level functions;
 // - generic MEMBER functions of classes: an unexercised combination, rejected whole-class;
-// - generic classes IMPLEMENTING interfaces (`GenIface`): an unexercised combination of the
-//   generics and interface models, rejected whole-class (the interface itself stays supported);
 // - generic-extends-generic chains (`GenSub`): the IL shape is probed fine (genprobe_s7) but
 //   the override/pre-pass gate interactions are unexercised — rejected whole-class, a later
 //   slice can widen (the open generic base itself stays supported).
@@ -44,13 +40,7 @@ class HasGenericMember {
     fun <T> pick(x: T): T = x
 }
 
-interface Producer<T> {
-    fun produce(): T
-}
-
 interface Marked
-
-class GenIface<T>(val v: T) : Marked
 
 class GenSub<T>(v: T) : Gen<T>(v)
 

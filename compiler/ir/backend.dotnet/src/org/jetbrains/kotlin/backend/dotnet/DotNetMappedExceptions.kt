@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.types.Variance
 
 /**
  * The curated map of Kotlin exception classes onto the CLR exception hierarchy (JVM precedent:
@@ -136,9 +137,12 @@ internal object DotNetMappedExceptions {
  *   (probe-verified: `inheritprobe_s1` for base-typed positions; `ifaceprobe_s7` for
  *   interface-typed fields, parameters, returns and locals, plus the type-agnostic reference
  *   `ceq`; `ifaceprobe_s6` for the interface→super-interface widening). The comparison runs on
- *   the RENDERED type tokens, which makes generic assignability structurally INVARIANT for
- *   free: `Box<Derived>` never widens to `Box<Base>` (distinct tokens, and the supertype walk
- *   never relates two instantiations of one class). The JVM backend never
+ *   the RENDERED type tokens. Generic classes remain structurally invariant. Generic interfaces
+ *   additionally apply their declaration-site CLR variance when every differing argument on
+ *   both sides is reference-shaped: `Producer<Derived>` widens to `Producer<Base>` and
+ *   `Consumer<Base>` widens to `Consumer<Derived>`, while value-type and open type-parameter
+ *   arguments remain invariant because CLR variance conversions do not apply to value-type
+ *   instantiations. The JVM backend never
  *   performs this check itself — the JVM verifier's assignability subsumes it — while this
  *   backend verifies emitted stack types structurally, so the widening is spelled out here;
  * - every [reference-shaped][isDotNetReferenceShaped] type is assignable to
@@ -155,8 +159,45 @@ internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType)
     expected == DotNetIlValueType.Object -> isDotNetReferenceShaped()
     this is DotNetIlValueType.MappedClass ->
         expected == DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+    this is DotNetIlValueType.GenericInstance && expected is DotNetIlValueType.GenericInstance &&
+            isDotNetVariantInstantiationAssignableTo(expected) -> true
     (this is DotNetIlValueType.UserClass || this is DotNetIlValueType.GenericInstance) &&
             (expected is DotNetIlValueType.UserClass || expected is DotNetIlValueType.GenericInstance) ->
-        dotNetAllSupertypes().any { it.nameInSignature == expected.nameInSignature }
+        dotNetAllSupertypes().any { superType ->
+            superType.nameInSignature == expected.nameInSignature ||
+                    superType is DotNetIlValueType.GenericInstance &&
+                    expected is DotNetIlValueType.GenericInstance &&
+                    superType.isDotNetVariantInstantiationAssignableTo(expected)
+        }
     else -> false
+}
+
+/**
+ * The CLR variant conversion between two instantiations of ONE generic interface definition.
+ * The class shape gate keeps every generic class parameter invariant, so consulting the
+ * declaration's recorded variances is sufficient to exclude the ECMA-forbidden class case.
+ * Exact arguments always pass (including primitives and open `!n`/`!!n`); a differing covariant
+ * or contravariant pair passes only when BOTH sides are statically reference-shaped, matching
+ * the CLR rule that variance does not apply to value-type instantiations. Nested variant
+ * interfaces compose through [isDotNetAssignableTo].
+ */
+private fun DotNetIlValueType.GenericInstance.isDotNetVariantInstantiationAssignableTo(
+    expected: DotNetIlValueType.GenericInstance,
+): Boolean {
+    if (classInfo.ilTypeRef != expected.classInfo.ilTypeRef || arguments.size != expected.arguments.size) {
+        return false
+    }
+    return arguments.indices.all { index ->
+        val actualArgument = arguments[index]
+        val expectedArgument = expected.arguments[index]
+        if (actualArgument == expectedArgument) return@all true
+        if (!actualArgument.isDotNetReferenceShaped() || !expectedArgument.isDotNetReferenceShaped()) {
+            return@all false
+        }
+        when (classInfo.typeParameterVariances[index]) {
+            Variance.OUT_VARIANCE -> actualArgument.isDotNetAssignableTo(expectedArgument)
+            Variance.IN_VARIANCE -> expectedArgument.isDotNetAssignableTo(actualArgument)
+            Variance.INVARIANT -> false
+        }
+    }
 }
