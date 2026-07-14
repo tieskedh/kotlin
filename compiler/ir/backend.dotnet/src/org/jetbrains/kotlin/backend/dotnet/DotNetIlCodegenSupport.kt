@@ -385,7 +385,7 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
 }
 
 /**
- * The formal `<...>` list shared by generic classes, interfaces, and top-level methods.
+ * The formal `<...>` list shared by generic classes, interfaces, and methods.
  * Interface declaration-site variance prefixes the existing constraint/name canon with `+` or
  * `-`; the gates guarantee every class/method parameter reaching here is invariant.
  */
@@ -485,10 +485,10 @@ internal fun checkDotNetTypeParametersSupported(
 }
 
 /**
- * The generic-function slice of the stage-1 gate, run once at gathering over every top-level
- * function: a generic function must additionally be non-inline (inline implies the missing
- * inlining model, and `reified` — rejected by the shared gate — is only expressible on inline
- * functions). Non-generic functions pass untouched.
+ * The generic-method gate, run over top-level functions during gathering and over member
+ * functions by their owning class/interface shape gate. A generic function must additionally be
+ * non-inline (inline implies the missing inlining model, and `reified` — rejected by the shared
+ * gate — is only expressible on inline functions). Non-generic functions pass untouched.
  */
 internal fun IrSimpleFunction.checkDotNetGenericFunctionSupported() {
     if (typeParameters.isEmpty()) return

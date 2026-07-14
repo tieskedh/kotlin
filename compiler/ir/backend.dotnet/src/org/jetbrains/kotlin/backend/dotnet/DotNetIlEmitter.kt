@@ -294,9 +294,8 @@ class DotNetIlEmitter(
                     val signature = member.dotNetSignature(typeMapper)
                     checkOverrideKeepsIlReturnType(member, signature, typeMapper)
                     // CLR method identity includes the generic ARITY (see
-                    // dotNetIlGenericAritySuffix); generic MEMBER functions are currently
-                    // shape-gate-rejected, so the suffix here is forward-consistency with the
-                    // facade gate below.
+                    // dotNetIlGenericAritySuffix), for member methods as well as the facade gate
+                    // below (genmemberprobe_s1).
                     val ilIdentity =
                         "${member.dotNetIlMethodName()}${member.dotNetIlGenericAritySuffix()}(${signature.renderParameterTypes()})"
                     membersByIlIdentity.put(ilIdentity, member)?.let { clashing ->
@@ -810,15 +809,11 @@ class DotNetIlEmitter(
         // an IdSignature comparison, and this pipeline's symbols carry no signatures, so
         // it never matches here.
         for (member in irClass.dotNetMemberFunctions()) {
-            // Stage-1 generics supports generic top-level FUNCTIONS and generic CLASSES; a
-            // generic MEMBER function (its own <T> next to the class's) is a separate,
-            // unexercised combination and stays rejected, whole-class.
-            if (member.typeParameters.isNotEmpty()) {
-                dotNetUnsupported(
-                    "member '${member.name.asString()}' of class '$name' is generic; " +
-                            "generic member functions are not supported yet"
-                )
-            }
+            // A generic member method uses the same real CLR method parameter model as a
+            // top-level generic function. On a generic owner, `!n` and `!!n` remain independent
+            // positional spaces (probe-verified, genmemberprobe_s1). Any unsupported method
+            // parameter shape rejects the whole owning class before registration.
+            member.checkDotNetGenericFunctionSupported()
             if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
                 dotNetUnsupported(
                     "member '${member.name.asString()}' of class '$name' overrides a member of kotlin.Any; " +
@@ -993,12 +988,10 @@ class DotNetIlEmitter(
      */
     private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
         if (member.isFakeOverride) return
-        if (member.typeParameters.isNotEmpty()) {
-            dotNetUnsupported(
-                "$description of interface '$interfaceName' declares its own type parameters; " +
-                        "generic interface member functions are not supported"
-            )
-        }
+        // Abstract generic interface slots are ordinary CLR generic virtual methods. The same
+        // gate as class/top-level methods owns reified, inline, and unsupported constraint shapes
+        // (probe-verified together with a generic-class implementation, genmemberprobe_s1).
+        member.checkDotNetGenericFunctionSupported()
         if (member.visibility == DescriptorVisibilities.PRIVATE) {
             dotNetUnsupported("private $description of interface '$interfaceName' is not supported")
         }
@@ -1065,7 +1058,10 @@ class DotNetIlEmitter(
             val substitutedReturnType =
                 if (memberClass != null && overriddenClass != null && overriddenClass.typeParameters.isNotEmpty()) {
                     val classArguments = memberClass.dotNetTypeArgumentsFor(overriddenClass, typeMapper) ?: continue
-                    overriddenReturnType.substituteDotNetTypeParameters(classArguments)
+                    overriddenReturnType.substituteDotNetTypeParameters(
+                        classArguments,
+                        overridden.dotNetOpenMethodTypeArguments(),
+                    )
                 } else overriddenReturnType
             if (substitutedReturnType != signature.returnType) {
                 val overriddenOwner = overriddenClass?.diagnosticName() ?: "?"
@@ -1137,7 +1133,10 @@ class DotNetIlEmitter(
             val substitutedReturnType =
                 if (memberClass != null && interfaceClass != null && interfaceClass.typeParameters.isNotEmpty()) {
                     val interfaceArguments = memberClass.dotNetTypeArgumentsFor(interfaceClass, typeMapper) ?: continue
-                    overriddenReturnType.substituteDotNetTypeParameters(interfaceArguments)
+                    overriddenReturnType.substituteDotNetTypeParameters(
+                        interfaceArguments,
+                        overridden.dotNetOpenMethodTypeArguments(),
+                    )
                 } else overriddenReturnType
             if (substitutedReturnType != memberReturnType) {
                 val interfaceName = interfaceClass?.diagnosticName() ?: "?"
@@ -1153,6 +1152,16 @@ class DotNetIlEmitter(
             }
         }
     }
+
+    /**
+     * Positional identity instantiation for a generic method's own parameters. Override checks
+     * substitute the declaring OWNER's `!n` view while the compared method signature must keep
+     * its independent `!!n` leaves open (`genmemberprobe_s1`).
+     */
+    private fun IrSimpleFunction.dotNetOpenMethodTypeArguments(): List<DotNetIlValueType> =
+        typeParameters.indices.map { index ->
+            DotNetIlValueType.TypeParameter(index, isMethodParameter = true)
+        }
 
     /**
      * Renders one top-level user class: backing fields (state, `private` per the JVM-facade
