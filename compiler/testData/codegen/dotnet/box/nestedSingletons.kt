@@ -45,6 +45,20 @@ class GenericAncestor<T> {
     }
 }
 
+class DirectGenericObjectOwner<T> {
+    object Singleton {
+        val captured: Int = nextInitialization()
+    }
+}
+
+class GenericNestedObjectOwner {
+    class Generic<T> {
+        object Singleton {
+            val captured: Int = nextInitialization()
+        }
+    }
+}
+
 class ModalOwner {
     open class OpenNested {
         companion object {
@@ -100,15 +114,17 @@ fun box(): String {
     if (DeepOwner.Middle.Nested.captured != 3) return "fail 6: deep nested companion"
     if (GenericAncestor.CompanionHolder.captured != 4) return "fail 7: companion below generic ancestor"
     if (GenericAncestor.ObjectHolder.Singleton.captured != 5) return "fail 8: object below generic ancestor"
-    if (ModalOwner.OpenNested.captured != 6) return "fail 9: open nested owner"
-    if (ModalOwner.AbstractNested.captured != 7) return "fail 10: abstract nested owner"
-    if (HierarchyOwner.Base.captured != 8) return "fail 11: nested inheritance coexistence"
-    if (initializationCount != 8) return "fail 12: initialization count"
+    if (DirectGenericObjectOwner.Singleton.captured != 6) return "fail 9: object in generic owner"
+    if (GenericNestedObjectOwner.Generic.Singleton.captured != 7) return "fail 10: object in generic nested owner"
+    if (ModalOwner.OpenNested.captured != 8) return "fail 11: open nested owner"
+    if (ModalOwner.AbstractNested.captured != 9) return "fail 12: abstract nested owner"
+    if (HierarchyOwner.Base.captured != 10) return "fail 13: nested inheritance coexistence"
+    if (initializationCount != 10) return "fail 14: initialization count"
 
     val access = AccessOwner.Nested(7)
-    if (access.throughCompanion() != 14) return "fail 13: enclosing to private companion access"
-    if (AccessOwner.Nested.read(access) != 7) return "fail 14: companion to private owner access"
-    if (ForwardOwner.Factory.create(12).value != 12) return "fail 15: forward nested reference"
-    if (initializationCount != 8) return "fail 16: stateless singleton construction"
+    if (access.throughCompanion() != 14) return "fail 15: enclosing to private companion access"
+    if (AccessOwner.Nested.read(access) != 7) return "fail 16: companion to private owner access"
+    if (ForwardOwner.Factory.create(12).value != 12) return "fail 17: forward nested reference"
+    if (initializationCount != 10) return "fail 18: stateless singleton construction"
     return "OK"
 }

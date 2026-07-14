@@ -1,16 +1,18 @@
 # Handover — Kotlin/.NET backend, interim development
 
-Written 2026-07-14 for the next agent working on the `dotnet` branch (any model/harness).
+Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
+(any model/harness).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `a547b94ed`
-  ("[DotNet] Add recursive nested singletons"), clean tree, based directly on
+- Branch `dotnet`; latest functional tip is "[DotNet] Correct reviewed semantic gaps", clean tree,
+  based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
-  Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **334 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+  HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
+  handover-only follow-up commits.
+- Full DotNet suite: **336 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -26,12 +28,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   objects and companions of ordinary nested classes.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
-  `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
+  `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
   assembly-scope/Framework-compatibility decision; `whenprobe_s2` forced the exact golden's
   otherwise unreachable fallthrough with raw CLR `bool` value `2`, including a prior value on
   the evaluation stack. The new ilText/box pins cover both parser variants, statement/value
-  positions, mapped catch handling, generic results and the non-first-argument stack shape.
+  positions, mapped catch handling, generic results and the non-first-argument stack shape. The
+  later reviewed-semantic-gaps repair changes the temporary cross-target type to `System.Exception`
+  so the synthetic `NoWhenBranchMatchedException` no longer acquires the false sibling edge
+  `is IllegalStateException`.
 - Interim continuation landed `d7915e827`: `cli/dotnet` now generates into its own top-level
   `DotNetCliTestGenerated.java`, so upstream regeneration of the shared `CliTestGenerated.java`
   no longer conflicts with DotNet test data. The same 10 tests pass in the new suite, and an
@@ -185,18 +190,29 @@ session state, process, and a curated task menu. Keep both files updated as you 
   recursively declared class in postfix order, matching the common/JVM
   `ClassLoweringPass.runOnFilePostfix` precedent. Companions of non-generic ordinary nested classes
   receive their singleton field initialization in the immediate owner's `.cctor`; named objects
-  inside non-generic plain classes receive an `INSTANCE` initializer in their own `.cctor`.
-  Non-generic containers below a generic ancestor remain independent and supported, while a
-  companion or named object declared directly in a generic container stays rejected. The gate
+  inside plain classes receive an `INSTANCE` initializer in their own `.cctor`.
+  A companion declared directly in a generic container stays rejected because its field would be
+  per constructed owner. A named object is safe there because its `INSTANCE` lives on its own
+  independently non-generic type; the reviewed-semantic-gaps repair lifts that over-broad gate.
+  The gate
   also continues to reject declarations inside objects/companions/interfaces and preserves
   whole-family fixpoint eviction when a nested singleton initializer loses its callee.
   `nestedprobe_s4` verified direct/deep companions, a named object, a non-generic owner below a
   generic ancestor, open/abstract owners, laziness, and one-time construction; CoreCLR 10.0.9 and
   .NET Framework 4.8 both printed `0,1,1,1,2,3,4,5,6,6`. The exact positive and rejection goldens
   assemble under both ILAsm versions and execute identically on both runtimes. The fresh full FIR
-  suite is 334/0/0/0 across eight XML files; the generated CLI suite remains 10/0/0/0.
-- The user explicitly requested a stop after the recursive-singleton feature. The nested-interface
-  audit below has not been started.
+  suite at that point was 334/0/0/0 across eight XML files; the generated CLI suite remained
+  10/0/0/0.
+- The reviewed-semantic-gaps repair corrects five independently audited edges: exhaustive `when`
+  now throws `System.Exception` rather than becoming catchable as `IllegalStateException`;
+  `main(Array<String>)` wins over a same-file parameterless overload; nullable-primitive identity
+  against null uses the existing HasValue path; the facade clash index revalidates entries after a
+  backing-property group eviction; and named objects directly below generic metadata parents are
+  supported while generic-owner companions remain rejected. The fresh full suite is 336/0/0/0.
+  All five changed/new exact goldens assemble with modern 10.0.9 and Framework 4.8 ILAsm; the
+  Framework executions exit 0, and the FIR box suites provide the CoreCLR runtime pins.
+- The user requested continued autonomous feature work until explicitly stopped. The next repair
+  and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -233,8 +249,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    dodge the classifier). A SAC-blocked box test SKIPs; that is the designed behavior.
 7. **Git:** never push; never touch other branches; per-feature commits directly on `dotnet` with
    a detailed what/why/how message (look at `git log` for the house style) ending with your own
-   `Co-Authored-By:` trailer. Non-functional changes go in separate commits. No worktrees — work
-   directly in this checkout.
+   `Co-Authored-By:` trailer. HANDOVER/AGENTS changes describing the feature belong in the same
+   functional commit; unrelated non-functional changes stay separate. No worktrees — work directly
+   in this checkout.
 8. **Bootstrap syntax:** this repo compiles with a 2.5 bootstrap that uses name-based
    destructuring `[a, b]` (several dotnet files already do). Positional `(a, b)` over data-like
    classes will not compile.
@@ -263,7 +280,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
+1. **Narrow nested-class failure eviction.** A failure in one nested class currently removes its
+   entire top-level metadata family, even when siblings and the parent do not depend on it. Keep
+   fail-loud dependency cascades, but evict only the failing nested subtree first and let the live
+   render/type fixpoint remove actual users. Companion failures remain owner-sensitive because the
+   singleton field and `.cctor` live on the enclosing class. Pin a supported sibling/parent that
+   survives next to a broken nested class, plus real dependent cascades.
+2. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
    static-nested semantics but retain the Framework-compatible no-default-method boundary. Probe
    CLR nested-interface flags, generic independence, visibility, implementation/dispatch, forward
    references, and recursive metadata placement before lifting either gate. Keep `inner`, local/

@@ -33,9 +33,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `DotNetStringConcatenationLowering`, then IL codegen handles `String.plus`/`toString` intrinsics.
   Avoid ad-hoc IrWhen/boolean handling inside string emission.
 - Lowerings run through `NamedCompilerPhase`/`PhaseEngine`, measured as `PhaseType.IrLowering`.
-- Main selection uses `DotNetMainFunctionDetector`. No wrapper is generated when the selected
-  Kotlin `main` shape already maps to a valid CLR `.entrypoint` method (ECMA-335 allows
-  parameterless or `string[]` entry points); add a wrapper only when a supported source shape needs one.
+- Main selection uses `DotNetMainFunctionDetector`. When one file contains both supported shapes,
+  the parameterized `main(Array<String>)` takes precedence over parameterless `main()`, following
+  Kotlin's mature enhanced-main detector. No wrapper is generated when the selected Kotlin `main`
+  shape already maps to a valid CLR `.entrypoint` method (ECMA-335 allows parameterless or
+  `string[]` entry points); add a wrapper only when a supported source shape needs one.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
   functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
 - Local `val`/`var` follows the JVM/WASM model conceptually: the method context maps IR value
@@ -199,10 +201,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   plain function per-function, an accessor with its whole property, a backing-field-bearing
   property with the file's whole property group. STAYS
   REJECTED, loudly: generic `T?`, Any member calls and Any string conversion (`object` is
-  storage-only, no Any model), general `==` between reference/`Any?` operands, `===` with a
-  nullable-primitive operand (the operands would box; identity of separately boxed values is
+  storage-only, no Any model), general `==` between reference/`Any?` operands, identity between
+  two nullable-primitive values (the operands would box; identity of separately boxed values is
   unrelated to value equality — `ceq` on two boxed equal int32s is False, boxprobe_s6 — and
-  Kotlin deprecates boxed identity), `==` mixing a nullable
+  Kotlin deprecates boxed identity; identity against null is supported as a HasValue test), `==`
+  mixing a nullable
   primitive with `Any?` (cross-primitive `Int? == Long?` needs no backend gate: the FRONTEND
   rejects it with EQUALITY_NOT_APPLICABLE, like `==` between unrelated final classes — not
   expressible in compilable Kotlin, so not pinnable in an ilText test), `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
@@ -240,15 +243,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   and only its OWN generic parameters; a named class inside generic `Outer<T>` is therefore
   referenced as `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic
   nested class is `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted
-  simple names. A final named `ClassKind.OBJECT` inside a non-generic plain class and the companion
-  of a non-generic ordinary nested class are also supported. `DotNetStaticInitializersLowering`
+  simple names. A final named `ClassKind.OBJECT` inside a plain class and the companion of a
+  non-generic ordinary nested class are also supported. `DotNetStaticInitializersLowering`
   matches the common/JVM `ClassLoweringPass.runOnFilePostfix` recursion: it visits every class
   child before its metadata parent, moving a named object's `INSTANCE` initializer into the
-  object's own `.cctor` and a companion initializer into its immediate owner's `.cctor`. The
-  immediate plain-class container must be non-generic: a companion field would be per constructed
-  generic owner, while direct named-object semantics under a generic metadata parent remain
-  deliberately outside this probe-bounded model. A non-generic container below a generic ancestor
-  is safe because the static nested metadata child carries no outer instantiation
+  object's own `.cctor` and a companion initializer into its immediate owner's `.cctor`. A
+  companion's immediate plain-class container must be non-generic because its field would be per
+  constructed generic owner. A named object's `INSTANCE` field is owned by the independently
+  non-generic object type, so it stays singular even under an immediately generic metadata parent
   (`nestedprobe_s4`).
   Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
   rendering remains recursive inside the enclosing `.class` block. Public/private/internal/
@@ -262,8 +264,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   cross-depth links, singleton initialization, and family shapes assemble and run on CoreCLR and
   Framework. STAYS REJECTED, whole-family: `inner`, local/anonymous,
   data/value/enum/annotation, nested interfaces, any class/object inside an
-  object/companion/interface, and a companion or named object whose immediate plain-class
-  container is generic. Recursive render failures preserve the deepest declaration tag while
+  object/companion/interface, and a companion whose immediate plain-class container is generic.
+  Recursive render failures preserve the deepest declaration tag while
   unwinding, then family eviction removes every class/member entry. Pins: `ilText/nestedClasses.kt`,
   `ilText/nestedInheritance.kt`, `ilText/nestedSingletons.kt`,
   `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
@@ -518,7 +520,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   with a shared reason carrying the original one. This is the facade-stateful analogue of the
   whole-class rejection granularity. Accessor-only (custom-getter) properties fail per-function;
   const `literal` fields are independent of the group.
-- Plain top-level `object` declarations and named objects inside non-generic plain classes follow
+- Plain top-level `object` declarations and named objects inside plain classes follow
   the JVM singleton model: `DotNetObjectClassLowering` synthesizes a static `INSTANCE` field on
   every supported module-declared non-companion object (origin
   `FIELD_FOR_OBJECT_INSTANCE`, the object's own type, initializer = a call to the primary
@@ -547,8 +549,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   every object-parented property field static), which the CLR-side real singleton makes
   unnecessary. Rejections ride the existing gates, whole-class: `data object` (the same
   Any-model gap as data classes — the gate message names both), local/anonymous objects, named
-  objects whose immediate plain-class container is generic or is an object/companion/interface,
-  and IL accessor-identity clashes; `==` between objects stays rejected while `===` works via
+  objects inside an object/companion/interface, and IL accessor-identity clashes; `==` between
+  objects stays rejected while `===` works via
   the existing reference `ceq`. The member pre-pass additionally gates IL FIELD-identity
   clashes, whole-class: the backing field of a user property named `INSTANCE` whose type maps to
   the object's own class (`val INSTANCE: A? = null` — nullability erases) collides with the
@@ -706,14 +708,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `System.Runtime.CompilerServices.SwitchExpressionException`, but `whenprobe_s1` proved that the
   type requires the `[System.Runtime]` scope on CoreCLR 10.0.9 (`[mscorlib]` assembles but fails
   with `TypeLoadException`), and the .NET Framework `System.Runtime` facade does not contain it.
-  Emitted IL must stay target-independent, so the backend throws the cross-target base type
-  `[mscorlib]System.InvalidOperationException` directly; it is catchable as Kotlin
-  `IllegalStateException` through the existing mapped-exception registry. `ilText/exhaustiveWhen.kt`
-  pins both emission positions and the mapped catch handler; `box/exhaustiveWhen.kt` runs all
+  Emitted IL must stay target-independent, so until Kotlin-owned exception classes exist the
+  backend throws `[mscorlib]System.Exception` directly. This preserves the supported
+  `Throwable`/`Exception` catch edges without falsely making `NoWhenBranchMatchedException`
+  catchable as the sibling Kotlin `IllegalStateException`. `ilText/exhaustiveWhen.kt` pins both
+  emission positions and the two-handler boundary; `box/exhaustiveWhen.kt` runs all
   reachable Boolean/Boolean? arms on CoreCLR. `whenprobe_s2` links against that exact golden and
   passes the noncanonical CLR `bool` value `2` to force the otherwise unreachable fallthrough in
   a second call-argument position (a prior string remains below the exception on the evaluation
-  stack), runtime-pinning both the throw and base-type catchability.
+  stack), runtime-pinning both the throw and target-neutral catchability.
 - try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
   block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
   first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no
@@ -864,9 +867,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     rejections stay authoritative), inline/reified generic functions (no inlining model), declared
     varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
     generic (extension) properties (the property metadata/accessor binding model does not cover
-    generic accessors), and a companion/named object declared directly in a generic class (direct
-    singleton semantics remain outside the probe-bounded model; a companion field would be per
-    constructed owner, while a non-generic nested owner below a generic ancestor is supported). A
+    generic accessors), and a companion declared directly in a generic class (its field would be
+    per constructed owner; a named object owns its `INSTANCE` on its independent non-generic type
+    and is supported below a generic metadata parent). A
     generic base instantiation whose argument does not map (`T?`, an unsupported external
     generic/primitive/array shape, or an evicted class) rejects the whole derived chain;
     an unrelated valid instantiation of the same base survives.
