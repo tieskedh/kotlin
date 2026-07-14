@@ -176,12 +176,12 @@ fun <T : ConeKotlinType> T.withArguments(arguments: Array<out ConeTypeProjection
 
     @Suppress("UNCHECKED_CAST")
     return when (this) {
-        is ConeErrorType -> ConeErrorType(diagnostic, isUninferredParameter, typeArguments = arguments, attributes = attributes, lookupTag = lookupTag)
-        is ConeClassLikeType -> ConeClassLikeTypeImpl(lookupTag, arguments, isMarkedNullable, attributes)
+        is ConeClassLikeTypeImpl -> ConeClassLikeTypeImpl(lookupTag, arguments, isMarkedNullable, attributes)
         is ConeDefinitelyNotNullType -> ConeDefinitelyNotNullType(original.withArguments(arguments))
         is ConeRawType -> ConeRawType.create(lowerBound.withArguments(arguments), upperBound.withArguments(arguments))
         is ConeDynamicType -> error()
         is ConeFlexibleType -> ConeFlexibleType(lowerBound.withArguments(arguments), upperBound.withArguments(arguments), isTrivial)
+        is ConeErrorType -> ConeErrorType(diagnostic, isUninferredParameter, typeArguments = arguments, attributes = attributes, lookupTag = lookupTag)
         is ConeIntersectionType,
         is ConeTypeVariableType,
         is ConeStubType,
@@ -207,7 +207,7 @@ fun <T : ConeKotlinType> T.withAttributes(attributes: ConeAttributes): T {
     @Suppress("UNCHECKED_CAST")
     return when (this) {
         is ConeErrorType -> ConeErrorType(diagnostic, isUninferredParameter, delegatedType, typeArguments, attributes, nullable, lookupTag)
-        is ConeClassLikeType -> ConeClassLikeTypeImpl(lookupTag, typeArguments, isMarkedNullable, attributes)
+        is ConeClassLikeTypeImpl -> ConeClassLikeTypeImpl(lookupTag, typeArguments, isMarkedNullable, attributes)
         is ConeDefinitelyNotNullType -> ConeDefinitelyNotNullType(original.withAttributes(attributes))
         is ConeTypeParameterType -> ConeTypeParameterTypeImpl(lookupTag, isMarkedNullable, attributes)
         is ConeRawType -> ConeRawType.create(lowerBound.withAttributes(attributes), upperBound.withAttributes(attributes))
@@ -268,7 +268,7 @@ fun <T : ConeKotlinType> T.withNullability(
     @Suppress("UNCHECKED_CAST")
     return when (this) {
         is ConeErrorType -> ConeErrorType(diagnostic, isUninferredParameter, delegatedType, typeArguments, theAttributes, nullable, lookupTag)
-        is ConeClassLikeType -> ConeClassLikeTypeImpl(lookupTag, typeArguments, nullable, theAttributes)
+        is ConeClassLikeTypeImpl -> ConeClassLikeTypeImpl(lookupTag, typeArguments, nullable, theAttributes)
         is ConeTypeParameterType -> ConeTypeParameterTypeImpl(lookupTag, nullable, theAttributes)
         is ConeDynamicType -> this
         is ConeFlexibleType -> {
