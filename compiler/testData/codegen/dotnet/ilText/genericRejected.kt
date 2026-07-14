@@ -18,8 +18,8 @@
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
-// - generic classes containing companions/nested objects: the nested-shape machinery is
-//   untouched by this slice;
+// - generic classes containing companions/nested objects: named static-style nested classes are
+//   supported, but singleton state on a generic CLR owner would exist once per instantiation;
 // - generic (extension) properties: the property metadata/accessor model does not cover generic
 //   accessors;
 
