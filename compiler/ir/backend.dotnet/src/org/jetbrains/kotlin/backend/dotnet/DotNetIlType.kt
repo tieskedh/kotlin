@@ -165,14 +165,28 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * type parameter). The CLR identifies type parameters POSITIONALLY: the declared name is
      * decorative metadata, `!n`/`!!n` indices are authoritative (probe-verified, `genprobe_s1`:
      * the callsite signature keeps the `!!n` slots verbatim while only the `<...>` list is
-     * substituted), which is why equality here is by index and kind alone. Stage-1 generics
-     * model: unconstrained and invariant only, so a `!n`-typed value supports exactly
-     * store/load/pass — it is neither reference-shaped nor value-shaped statically, and every
-     * consumer needing one of those shapes (`ldnull`, `ceq`, boxing to `object`, member calls)
-     * rejects loudly (no constraints model).
+     * substituted), which is why equality here is by index and kind alone. [upperBounds] carries
+     * the stage-2 module-local class/interface constraints without changing token identity. An
+     * unconstrained value supports exactly store/load/pass. A constrained one can additionally
+     * dispatch through a bound with `constrained.` or box to a bound/`object`; it still is not
+     * intrinsically reference-shaped because a CLR caller may instantiate an interface-bound
+     * parameter with a value type.
      */
-    data class TypeParameter(val index: Int, val isMethodParameter: kotlin.Boolean) :
-        DotNetIlValueType(if (isMethodParameter) "!!$index" else "!$index")
+    class TypeParameter(
+        val index: Int,
+        val isMethodParameter: kotlin.Boolean,
+        val upperBounds: List<UserClass> = emptyList(),
+    ) : DotNetIlValueType(if (isMethodParameter) "!!$index" else "!$index") {
+        /** Whether metadata guarantees this parameter is assignable (when boxed) to [expected]. */
+        fun isConstrainedTo(expected: DotNetIlValueType): kotlin.Boolean =
+            upperBounds.any { it.isDotNetAssignableTo(expected) }
+
+        override fun equals(other: Any?): kotlin.Boolean =
+            other is TypeParameter && other.index == index && other.isMethodParameter == isMethodParameter
+
+        override fun hashCode(): Int = 31 * index + isMethodParameter.hashCode()
+        override fun toString(): kotlin.String = "TypeParameter($nameInSignature)"
+    }
 
     /**
      * An INSTANTIATION of a generic user class of this module (`Box<String>`): real CLR reified
@@ -258,14 +272,20 @@ internal fun DotNetIlValueType.dotNetAllSupertypes(): Sequence<DotNetIlValueType
  * owner token for calls to and field accesses on members a generic class DECLARES, reached
  * through any receiver (its own instantiations, open or closed, and derived classes — the
  * operand must name the DECLARING class with its instantiation, `genprobe_s2`/`_s5`). Null when
- * this type does not widen to [owner] at all (e.g. a type-parameter-typed receiver: member calls
- * on `T` receivers have no constraints model and are rejected by the callers of this walk).
+ * this type does not widen to [owner] at all. A constrained type parameter also walks its
+ * module-local upper bounds, allowing a bound that inherits an instantiated generic owner to
+ * provide the correct member-reference token.
  */
 internal fun DotNetIlValueType.dotNetViewAsGenericOwner(
     owner: DotNetIlClassInfo,
 ): DotNetIlValueType.GenericInstance? {
     if (this is DotNetIlValueType.GenericInstance && classInfo.ilTypeRef == owner.ilTypeRef) return this
-    return dotNetAllSupertypes()
+    val ownerViews = if (this is DotNetIlValueType.TypeParameter) {
+        upperBounds.asSequence().flatMap { bound -> sequenceOf(bound) + bound.dotNetAllSupertypes() }
+    } else {
+        dotNetAllSupertypes()
+    }
+    return ownerViews
         .filterIsInstance<DotNetIlValueType.GenericInstance>()
         .firstOrNull { it.classInfo.ilTypeRef == owner.ilTypeRef }
 }
@@ -291,10 +311,11 @@ internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(): String? = when (th
  * a valid value, reference `ceq` is a valid identity/null test, and widening to
  * [DotNetIlValueType.Object] is instruction-free. False exactly for the primitive value types,
  * [DotNetIlValueType.NullableValue] (whose null test is `get_HasValue`, never `ldnull`/`ceq`)
- * and [DotNetIlValueType.TypeParameter] — an unconstrained `T` may instantiate to a value type,
- * so a `!n`-typed value is neither reference- nor value-shaped statically (stage-1 generics:
- * every consumer of this predicate is a rejection point for `T`-typed values). An INSTANTIATED
- * generic class ([DotNetIlValueType.GenericInstance]) is an ordinary reference type.
+ * and [DotNetIlValueType.TypeParameter] — an unconstrained or interface-bound `T` may instantiate
+ * to a value type, so a `!n`-typed value is neither reference- nor value-shaped statically.
+ * Bound widening therefore uses `box !n` even when every Kotlin-side instantiation is a
+ * reference. An INSTANTIATED generic class ([DotNetIlValueType.GenericInstance]) is an ordinary
+ * reference type.
  */
 internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) {
     DotNetIlValueType.String, DotNetIlValueType.Object,

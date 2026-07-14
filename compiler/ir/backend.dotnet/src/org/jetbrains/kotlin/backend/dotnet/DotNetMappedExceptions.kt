@@ -146,9 +146,9 @@ internal object DotNetMappedExceptions {
  *   reference type and the widening is instruction-free in every position (probe-verified,
  *   `nullprobe_s8`). Value types — the primitives and [DotNetIlValueType.NullableValue] — are
  *   deliberately NOT assignable to `object`: they need a `box` instruction (coercion layer).
- *   A [DotNetIlValueType.TypeParameter] is assignable only to ITSELF (the `this == expected`
- *   arm — positional identity): an unconstrained `T` may instantiate to a value type, so it
- *   never widens anywhere, including to `object` (stage-1 generics: store/load/pass only).
+ *   A [DotNetIlValueType.TypeParameter] is instruction-free assignable only to ITSELF (the
+ *   `this == expected` arm — positional identity): even an interface-bound `T` may instantiate
+ *   to a value type, so widening to a bound or `object` belongs to the `box !n` coercion layer.
  */
 internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
     this == expected -> true

@@ -1,21 +1,21 @@
-// Shapes that stay rejected loudly under stage-1 generics (each declaration below is skipped
+// Shapes that stay rejected loudly after constrained-generics stage 2 (each declaration is skipped
 // with a specific warning and absent from the emitted IL; `Gen` — open, so the rejected
 // `GenSub` can name it as a base — `Marked` and `main` are the supported remainder):
 // - declaration-site variance (`out`/`in`): ECMA-335 (II.10.1.7) allows variance only on
 //   interfaces and delegates while Kotlin allows it on classes — emitting the parameter as
 //   invariant would silently change assignability, so the declaration is rejected (a future
 //   interface-variance slice can widen);
-// - generic constraints (`T : Base`): the next generics stage (bound-aware representation plus
-//   `constrained.` call support);
+// - constraints outside the supported direct module-local class/interface model
+//   (`T : CharSequence` below);
 // - `T?` ANYWHERE in a generic declaration (parameter, local): a nullable type parameter has no
 //   uniform CLR representation — `T` may instantiate to a value type needing `Nullable<T>` and
 //   to a reference type needing nothing — the deferred ABI problem of the hybrid nullability
 //   model; the declaration is rejected loudly, never given an ad-hoc representation;
 // - `==`/`===` on `T` operands and `x == null` on `T`: an unconstrained `T` may instantiate to
 //   a value type where the reference `ceq` is meaningless — no lifted story without constraints;
-// - string templates of `T` (no constraints model, so no known toString) and member calls on
-//   `T` receivers (`x.toString()` — resolves to a kotlin.Any member, no Any model);
-// - widening `T` to `Any?`: boxing an unconstrained `T` needs the constraints model;
+// - string templates and Any member calls on `T` (`x.toString()` resolves to kotlin.Any, for
+//   which this backend has no member model);
+// - widening an unconstrained `T` to `Any?`;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
 // - varargs of `T`: the parameter type is `Array<out T>` (no arrays);

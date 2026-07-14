@@ -1,0 +1,54 @@
+.assembly extern mscorlib {}
+.assembly 'genericConstraintsRejected' {}
+.module 'main-genericConstraintsRejected.il'
+
+.class public auto ansi beforefieldinit 'test.constraints.rejected.LocalBase'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi beforefieldinit 'test.constraints.rejected.GenericBase`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.constraints.rejected.GenericBase`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.constraints.rejected.GenericBase`1'<!0>::'value'
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'test.constraints.rejected.GenericBase`1'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'test.constraints.rejected.LocalMark'
+{
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.constraints.rejected.genericConstraintsRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ret
+  }
+}

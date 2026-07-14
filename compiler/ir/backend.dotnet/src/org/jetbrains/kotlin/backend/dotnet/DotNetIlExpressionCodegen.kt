@@ -365,12 +365,12 @@ internal class DotNetIlExpressionCodegen(
                     dotNetUnsupported("string conversion of primitive arrays is not supported yet (no array toString model)")
                 is DotNetIlValueType.MappedClass ->
                     dotNetUnsupported("string conversion of an exception type is not supported yet (no Any.toString model)")
-                // Stage-1 generics: `T` has no known `toString` (no constraints model), so
-                // string templates of type-parameter-typed values are rejected loudly.
+                // Even a constrained `T` inherits this member from Any, whose member model is
+                // deliberately still absent; user-declared bound members are handled by emitCall.
                 is DotNetIlValueType.TypeParameter ->
                     dotNetUnsupported(
                         "string conversion of a type-parameter-typed value is not supported " +
-                                "(no generic-constraints model, so 'T' has no known toString)"
+                                "(no Any.toString model)"
                     )
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
@@ -516,6 +516,16 @@ internal class DotNetIlExpressionCodegen(
                     )
             }
         } else emptyList()
+        val receiverType = if (info.isInstance) {
+            val receiver = call.arguments.firstOrNull()
+                ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
+            typeMapper.toDotNetIlValueType(receiver.type)
+                ?: dotNetUnsupported(
+                    "call to '$calleeName' through a receiver of unsupported type ${receiver.type.render()}"
+                )
+        } else {
+            null
+        }
         // A member of a GENERIC class is called with the operand token naming the receiver's
         // instantiated view of the DECLARING class — `class 'Box`1'<string>` externally, the
         // open `class 'Box`1'<!0>` for `this`-dispatch inside the class's own bodies, and the
@@ -525,13 +535,7 @@ internal class DotNetIlExpressionCodegen(
         var ownerToken = info.owner.ilTypeRef
         var classInstantiation = emptyList<DotNetIlValueType>()
         if (info.isInstance && info.owner.typeParameterCount > 0) {
-            val receiver = call.arguments.firstOrNull()
-                ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
-            val receiverType = typeMapper.toDotNetIlValueType(receiver.type)
-                ?: dotNetUnsupported(
-                    "call to '$calleeName' through a receiver of unsupported type ${receiver.type.render()}"
-                )
-            val ownerView = receiverType.dotNetViewAsGenericOwner(info.owner)
+            val ownerView = receiverType!!.dotNetViewAsGenericOwner(info.owner)
                 ?: dotNetUnsupported(
                     "call to '$calleeName' through a receiver that is not an instantiation of its declaring class"
                 )
@@ -542,11 +546,31 @@ internal class DotNetIlExpressionCodegen(
         // really takes an `int32`), while the member-ref operand keeps the open ones.
         val parameterTypes = info.signature.parameterTypes
             .map { it.substituteDotNetTypeParameters(classInstantiation, methodInstantiation) }
-        emitArguments(call.arguments, parameterTypes, "'$calleeName'")
+        val virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual()
+        val constrainedReceiverType = receiverType as? DotNetIlValueType.TypeParameter
+        if (constrainedReceiverType != null) {
+            val expectedReceiverType = parameterTypes.firstOrNull()
+                ?: dotNetUnsupported("call to '$calleeName' has an unsupported receiver shape")
+            if (!constrainedReceiverType.isConstrainedTo(expectedReceiverType)) {
+                dotNetUnsupported(
+                    "call to '$calleeName' is outside the declared bounds of " +
+                            "type parameter ${constrainedReceiverType.nameInSignature}"
+                )
+            }
+            emitTypeParameterReceiverArguments(
+                call.arguments, parameterTypes, "'$calleeName'", constrainedReceiverType, virtual,
+            )
+        } else {
+            emitArguments(call.arguments, parameterTypes, "'$calleeName'")
+        }
+        if (constrainedReceiverType != null && virtual) {
+            // `constrained.` is a prefix and must be immediately adjacent to its `callvirt`.
+            methodContext.emit("constrained. ${constrainedReceiverType.nameInSignature}")
+        }
         methodContext.emit(
             info.renderCallInstruction(
                 callee.dotNetIlMethodName(),
-                virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual(),
+                virtual = virtual,
                 ownerToken = ownerToken,
                 methodInstantiation = methodInstantiation,
             ),
@@ -554,6 +578,47 @@ internal class DotNetIlExpressionCodegen(
             pushes = if (info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
         return info.signature.returnType.substituteDotNetTypeParameters(classInstantiation, methodInstantiation)
+    }
+
+    /**
+     * Emits a call whose dispatch receiver is a constrained `!n`/`!!n`. Virtual/interface calls
+     * need the receiver's managed address followed by the `constrained.` prefix; non-virtual
+     * class members instead take the boxed receiver accepted by an ordinary instance `call`.
+     * Receiver and arguments are evaluated into locals before any call operands are reloaded:
+     * this preserves source order and keeps the evaluation stack empty if an argument contains a
+     * CLR protected region. Both shapes remain valid if an external CLR caller supplies a value
+     * type for an interface-only constraint (genconstraintprobe_s1/_s2).
+     */
+    private fun emitTypeParameterReceiverArguments(
+        arguments: List<IrExpression?>,
+        parameterTypes: List<DotNetIlValueType>,
+        calleeDescription: String,
+        receiverType: DotNetIlValueType.TypeParameter,
+        virtual: Boolean,
+    ) {
+        if (arguments.size != parameterTypes.size || arguments.isEmpty()) {
+            dotNetUnsupported("call to $calleeDescription has an unsupported argument shape")
+        }
+        val receiver = arguments[0]
+            ?: dotNetUnsupported("call to $calleeDescription has a missing dispatch receiver")
+        emitExpression(receiver, receiverType)
+        val receiverSlot = spillToSyntheticLocal(receiverType, "<constrainedReceiver>")
+        val argumentSlots = arguments.drop(1).indices.map { index ->
+            val argument = arguments[index + 1]
+                ?: dotNetUnsupported("call to $calleeDescription relies on default argument values")
+            val parameterType = parameterTypes[index + 1]
+            emitExpression(argument, parameterType)
+            spillToSyntheticLocal(parameterType, "<constrainedArgument>")
+        }
+        if (virtual) {
+            methodContext.emit(loadLocalAddressInstruction(receiverSlot.index), pushes = 1)
+        } else {
+            methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+            methodContext.emit("box ${receiverType.nameInSignature}", pops = 1, pushes = 1)
+        }
+        for (argumentSlot in argumentSlots) {
+            methodContext.emit(loadLocalInstruction(argumentSlot.index), pushes = 1)
+        }
     }
 
     /**
@@ -1054,12 +1119,16 @@ internal fun storeLocalInstruction(index: Int): String =
  * - `T? -> Any?`: `box Nullable<T>` — the CLR collapses the result to boxed-`T`-or-null
  *   (boxprobe_s3, all five instantiations incl. the empty->null case nullprobe_s8);
  * - `T -> Any?` for plain primitives: `box <boxed T>` (nullprobe_s8).
+ * - constrained `!n`/`!!n -> bound/object`: `box !n`/`!!n`; this is a no-allocation identity
+ *   conversion for reference instantiations and remains correct for an external value-type
+ *   implementation of an interface bound (genconstraintprobe_s2).
  * Roslyn precedent: C# performs exactly these conversions implicitly at typed/object boundaries;
  * JVM precedent: the JVM backend's StackValue boxing coercions.
  */
 internal fun dotNetWideningCoercionOrNull(from: DotNetIlValueType, to: DotNetIlValueType): String? = when {
     to is DotNetIlValueType.NullableValue && from == to.elementType -> to.ctorInstruction
     to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
+    from is DotNetIlValueType.TypeParameter && from.isConstrainedTo(to) -> "box ${from.nameInSignature}"
     to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull()?.let { "box $it" }
     else -> null
 }
