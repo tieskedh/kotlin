@@ -2,6 +2,17 @@
 .assembly 'classShapeRejected' {}
 .module 'main-classShapeRejected.il'
 
+.class public auto ansi sealed beforefieldinit 'C'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'classShapeRejectedKt'
        extends [mscorlib]System.Object
 {

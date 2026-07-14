@@ -2,6 +2,170 @@
 .assembly 'nestedClassesRejected' {}
 .module 'main-nestedClassesRejected.il'
 
+.class public auto ansi sealed beforefieldinit 'InnerHost'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed 'ObjectHost'
+       extends [mscorlib]System.Object
+{
+  .field public static initonly class 'ObjectHost' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'ObjectHost'::.ctor()
+    stsfld class 'ObjectHost' 'ObjectHost'::'INSTANCE'
+    ret
+  }
+  .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'NestedInterfaceHost'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'NestedDataHost'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericNestedCompanionHost'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BrokenFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Good'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 1
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'UsesBroken'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'use'(class 'BrokenFamily'/'Good' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance int32 'BrokenFamily'/'Good'::'value'()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BrokenNestedBaseFamily'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'NestedDerivedFromBrokenNestedBase'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BrokenNestedSingletonFamily'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DeepBrokenFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Middle'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
 .class public auto ansi sealed beforefieldinit 'Survives'
        extends [mscorlib]System.Object
 {
@@ -26,6 +190,14 @@
   {
     .entrypoint
     .maxstack 3
+    newobj instance void 'UsesBroken'::.ctor()
+    newobj instance void 'BrokenFamily'/'Good'::.ctor()
+    call instance int32 'UsesBroken'::'use'(class 'BrokenFamily'/'Good')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'Survives'::.ctor()
     call instance int32 'Survives'::'value'()
     box [mscorlib]System.Int32
