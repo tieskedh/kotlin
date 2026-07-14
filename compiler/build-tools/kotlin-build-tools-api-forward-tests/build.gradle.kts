@@ -86,7 +86,7 @@ val unpackedResourcesResolvable by configurations.resolvable("unpackedResourcesR
 
 dependencies {
     api(kotlinStdlib())
-    api(project(":compiler:build-tools:kotlin-build-tools-api-forward-compatibility-tests:shared"))
+    api(project(":compiler:build-tools:kotlin-build-tools-api-forward-tests:shared"))
     compileOnly(project(":kotlin-tooling-core")) // to reuse `KotlinToolingVersion`
     api(testFixtures(project(":compiler:test-infrastructure-utils"))) // for `@TestDataPath`/`@TestMetadata`
     api(platform(libs.junit.bom))
@@ -307,7 +307,7 @@ testing {
                 runtimeOnly(libs.junit.platform.launcher)
 
                 implementation(project())
-                implementation(project(":compiler:build-tools:kotlin-build-tools-api-forward-compatibility-tests:shared"))
+                implementation(project(":compiler:build-tools:kotlin-build-tools-api-forward-tests:shared"))
                 implementation(project(":kotlin-tooling-core"))
                 implementation(project(":compiler:test-security-manager"))
                 implementation(project(":compiler:arguments"))
