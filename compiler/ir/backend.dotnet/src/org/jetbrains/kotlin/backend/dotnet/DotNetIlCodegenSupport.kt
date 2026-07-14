@@ -276,13 +276,14 @@ internal class DotNetIlTypeMapper(
     /**
      * A user-class type maps only while its class is available; `C?` maps to the same
      * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). A GENERIC
-     * user-class type maps to a full [instantiation][DotNetIlValueType.GenericInstance]
-     * (stages 1-2: real CLR reified generics, the Roslyn shape — never erasure), with
+     * user-class or interface type maps to a full [instantiation][DotNetIlValueType.GenericInstance]
+     * (real CLR reified generics, the Roslyn shape — never erasure), with
      * each type argument mapped recursively through this same mapper, so an argument mentioning
      * an evicted class fails the whole instantiation (null, cascading like any other
      * unavailable type — the fixpoint eviction rule). Use-site variance projections
-     * (`Box<out T>`) and star projections are rejected loudly: assignability is structurally
-     * INVARIANT and ECMA-335 has no use-site variance at all.
+     * (`Box<out T>`) and star projections are rejected loudly: ECMA-335 has no use-site variance.
+     * Declaration-site variance is recorded on generic interface class info and interpreted by
+     * [isDotNetAssignableTo]; generic classes stay structurally invariant.
      */
     private fun toUserClassTypeOrNull(type: IrType): DotNetIlValueType? {
         if (type !is IrSimpleType) return null
@@ -300,7 +301,8 @@ internal class DotNetIlTypeMapper(
             if (projection.variance != Variance.INVARIANT) {
                 dotNetUnsupported(
                     "use-site variance projection in '${type.render()}' is not supported " +
-                            "(ECMA-335 has no use-site variance; generic types are invariant)"
+                            "(ECMA-335 has no use-site variance; only declaration-site interface " +
+                            "variance is represented)"
                 )
             }
             toDotNetIlValueType(projection.type) ?: return null
@@ -382,15 +384,24 @@ internal fun IrTypeParameter.dotNetConstraintTypes(
     return mappedBounds.sortedBy { it.first.isInterface }.map { it.second }
 }
 
-/** The formal `<...>` list shared by generic class and top-level-method declarations. */
+/**
+ * The formal `<...>` list shared by generic classes, interfaces, and top-level methods.
+ * Interface declaration-site variance prefixes the existing constraint/name canon with `+` or
+ * `-`; the gates guarantee every class/method parameter reaching here is invariant.
+ */
 internal fun List<IrTypeParameter>.renderDotNetIlGenericParameters(
     typeMapper: DotNetIlTypeMapper,
 ): String? = takeIf { it.isNotEmpty() }?.joinToString(", ", "<", ">") { typeParameter ->
+    val variancePrefix = when (typeParameter.variance) {
+        Variance.OUT_VARIANCE -> "+ "
+        Variance.IN_VARIANCE -> "- "
+        Variance.INVARIANT -> ""
+    }
     val constraintPrefix = typeParameter.dotNetConstraintTypes(typeMapper)
         .takeIf { it.isNotEmpty() }
         ?.joinToString(", ", "(", ") ") { it.nameInSignature }
         .orEmpty()
-    constraintPrefix + typeParameter.name.asString().toIlIdentifier()
+    variancePrefix + constraintPrefix + typeParameter.name.asString().toIlIdentifier()
 }
 
 /**
@@ -398,7 +409,7 @@ internal fun List<IrTypeParameter>.renderDotNetIlGenericParameters(
  * [IrSimpleType] — carrying the instantiation of a generic base (`class D : Box<Int>()`), which
  * the classifier-only [dotNetBaseClassOrNull] cannot — or null when no supertype is a proper
  * class (sole supertype `kotlin.Any`, or only interface supertypes). Interface supertypes are
- * skipped — they belong to [dotNetDirectInterfaces] — and the shape gate guarantees at most one
+ * skipped — they belong to [dotNetDirectInterfaceTypes] — and the shape gate guarantees at most one
  * proper-class supertype on gate-passing classes.
  */
 internal fun IrClass.dotNetBaseSuperTypeOrNull(): IrSimpleType? =
@@ -413,16 +424,17 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
     (dotNetBaseSuperTypeOrNull()?.classifier as? IrClassSymbol)?.owner
 
 /**
- * The shared generic type-parameter gate: a supported parameter is invariant and non-reified,
- * and is either unconstrained (`Any?`) or has direct non-null, non-generic class/interface
- * bounds. [dotNetConstraintTypes] performs the live module-local mapping later, once the class
- * registry exists. Everything else is rejected loudly at the declaration (never erased):
+ * The shared generic type-parameter gate: a supported parameter is non-reified and is either
+ * unconstrained (`Any?`) or has direct non-null, non-generic class/interface bounds.
+ * [allowDeclarationSiteVariance] is true only for generic interfaces, the sole Kotlin
+ * declaration kind in this backend that has a direct CLR `+`/`-` metadata representation;
+ * classes and functions remain invariant. [dotNetConstraintTypes] performs the live
+ * module-local mapping later, once the class registry exists. Everything else is rejected loudly
+ * at the declaration (never erased):
  * - `reified` requires the inlining model this backend does not have;
- * - declaration-site variance (`out`/`in`) is rejected because ECMA-335 (II.10.1.7) allows
- *   variance only on interfaces and delegates while Kotlin allows it on classes — Roslyn has no
- *   class-variance shape to follow, and emitting the parameter as invariant would silently
- *   change assignability, so the declaration is rejected (a future interface-variance slice can
- *   widen this);
+ * - declaration-site variance (`out`/`in`) is rejected outside interfaces because ECMA-335
+ *   (II.10.1.7) allows variance only on interfaces and delegates; emitting a Kotlin class's
+ *   variance as invariant would silently change assignability;
  * - constraints with nullable, generic-instantiation, or type-parameter bounds stay outside
  *   stage 2 — with ONE pre-existing exception, enabled by
  *   [allowStringBounds]: a `T` bounded by `String`/`String?` predates this slice (the
@@ -435,6 +447,7 @@ internal fun checkDotNetTypeParametersSupported(
     typeParameters: List<IrTypeParameter>,
     ownerDescription: String,
     allowStringBounds: Boolean = false,
+    allowDeclarationSiteVariance: Boolean = false,
 ) {
     for (typeParameter in typeParameters) {
         val parameterName = typeParameter.name.asString()
@@ -444,11 +457,11 @@ internal fun checkDotNetTypeParametersSupported(
                         "reified type parameters are not supported (no inlining model)"
             )
         }
-        if (typeParameter.variance != Variance.INVARIANT) {
+        if (!allowDeclarationSiteVariance && typeParameter.variance != Variance.INVARIANT) {
             dotNetUnsupported(
                 "$ownerDescription declares '${typeParameter.variance.label}' variance on type parameter " +
                         "'$parameterName'; declaration-site variance is not supported (ECMA-335 allows variance " +
-                        "only on interfaces and delegates — a future interface-variance slice can widen this)"
+                        "only on interfaces and delegates; generic interfaces preserve it directly)"
             )
         }
         val unsupportedBound = typeParameter.superTypes.firstOrNull { superType ->
@@ -505,9 +518,10 @@ internal fun IrSimpleFunction.dotNetIlGenericAritySuffix(): String =
  * [DotNetIlClassInfo.interfaces] for the assignability walk, and the render re-resolves them
  * through the live class map every fixpoint round for the `implements` line.
  */
-internal fun IrClass.dotNetDirectInterfaces(): List<IrClass> =
+internal fun IrClass.dotNetDirectInterfaceTypes(): List<IrSimpleType> =
     superTypes.mapNotNull { superType ->
-        ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner?.takeIf { it.isInterface }
+        (superType as? IrSimpleType)
+            ?.takeIf { ((it.classifier as? IrClassSymbol)?.owner)?.isInterface == true }
     }
 
 /**

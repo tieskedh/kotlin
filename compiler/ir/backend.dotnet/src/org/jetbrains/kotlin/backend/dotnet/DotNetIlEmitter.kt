@@ -22,10 +22,8 @@ import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
-import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
-import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.companionObject
 import org.jetbrains.kotlin.ir.util.defaultType
@@ -119,7 +117,10 @@ class DotNetIlEmitter(
                 // also guarantees a plain `Box` and a generic `Box<T>` can never collide in IL.
                 val arity = irClass.typeParameters.size
                 val ilClassName = irClass.fqNameWhenAvailable!!.asString() + if (arity > 0) "`$arity" else ""
-                val classInfo = DotNetIlClassInfo(ilClassName, typeParameterCount = arity)
+                val classInfo = DotNetIlClassInfo(
+                    ilClassName,
+                    typeParameterVariances = irClass.typeParameters.map { it.variance },
+                )
                 availableClasses[irClass] = classInfo
                 // The companion object (validated by the shape gate above) is a separate
                 // availableClasses entry — it needs its own identity for type mapping and member
@@ -156,7 +157,13 @@ class DotNetIlEmitter(
                     null
                 }
             }
-            classInfo.interfaces = irClass.dotNetDirectInterfaces().mapNotNull { availableClasses[it] }
+            classInfo.interfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { interfaceType ->
+                try {
+                    typeMapper.toDotNetIlValueType(interfaceType)
+                } catch (_: DotNetIlUnsupportedException) {
+                    null
+                }
+            }
         }
         // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
         // fields) resolve their owning IL class through this map, the facade counterpart of
@@ -645,8 +652,8 @@ class DotNetIlEmitter(
     /**
      * The shape gate of the class model (JVM precedent: the runtime has real classes, so
      * there is no vtable/class lowering machinery and unsupported shapes are simply rejected):
-     * top-level, non-generic plain classes — `final` or, since the inheritance model, `open` —
-     * and plain (always final) `object` declarations are compilable (an `object` goes through
+     * top-level plain classes — non-generic or invariant reified-generic, `final` or `open` — and
+     * plain (always final) `object` declarations are compilable (an `object` goes through
      * the same constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * already turned its singleton nature into ordinary class machinery). A plain class may
      * have EXACTLY ONE class supertype when it resolves to another top-level class of
@@ -718,10 +725,11 @@ class DotNetIlEmitter(
         // (Roslyn shape — `.class ... 'C`n'<T>`, `!n` member signatures, instantiation tokens in
         // every operand position; probe series genprobe), no erasure or lowering machinery. The
         // gate scopes the stage: invariant non-reified parameters, optionally constrained by
-        // supported module-local classes/interfaces, no nested
-        // declarations (the companion/object machinery is untouched by this slice), no interface
-        // supertypes, and no generic-extends-generic chains (untested override/pre-pass
-        // interactions — the IL shape itself is probed, genprobe_s7, so a later slice can widen).
+        // supported module-local classes/interfaces, no nested declarations (the
+        // companion/object machinery is untouched by this slice), any supported generic or
+        // non-generic interface supertypes, and no generic-extends-generic CLASS chains
+        // (untested override/pre-pass interactions — the IL shape itself is probed,
+        // genprobe_s7, so a later slice can widen).
         // Kotlin objects and companions cannot be generic; the branch is defensive.
         if (irClass.typeParameters.isNotEmpty()) {
             if (irClass.kind == ClassKind.OBJECT || isValidatedCompanion) {
@@ -736,13 +744,7 @@ class DotNetIlEmitter(
             }
             for (superType in irClass.superTypes.filterNot { it.isAny() }) {
                 val superClass = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
-                if (superClass?.isInterface == true) {
-                    dotNetUnsupported(
-                        "generic class '$name' implements an interface; " +
-                                "interface supertypes of generic classes are not supported yet"
-                    )
-                }
-                if (superClass != null && superClass.typeParameters.isNotEmpty()) {
+                if (superClass != null && !superClass.isInterface && superClass.typeParameters.isNotEmpty()) {
                     dotNetUnsupported(
                         "generic class '$name' extends a generic base class; " +
                                 "generic-to-generic inheritance is not supported yet"
@@ -898,8 +900,8 @@ class DotNetIlEmitter(
     /**
      * The interface half of the shape gate (probe series `ifaceprobe_s1`–`_s10`; JVM precedent:
      * the CLR has real interface types, so like classes there is no vtable/interface lowering —
-     * a Kotlin `interface` becomes a CLR `.class interface abstract`): a top-level, non-generic
-     * plain interface whose members are ALL abstract (abstract functions and abstract `val`/`var`
+     * a Kotlin `interface` becomes a CLR `.class interface abstract`): a top-level plain
+     * interface whose members are ALL abstract (abstract functions and abstract `val`/`var`
      * properties) is compilable, and it may extend any number of module-local top-level
      * interfaces (`ifaceprobe_s6`: interface inheritance is the same `implements` list; whether
      * each super-interface itself compiles is re-resolved live every render round, so an evicted
@@ -909,7 +911,7 @@ class DotNetIlEmitter(
      * CLR counterpart needed (JVM precedent: the JVM backend emits an ordinary interface too),
      * and the exhaustive `when` it enables is `is`-gated by the type-operator rejection anyway;
      * pinned by ilText/interfaceEqualityWidening.kt. Everything else stays rejected, whole-interface:
-     * `fun interface` (no SAM-conversion model), generic interfaces, non-top-level interfaces,
+     * `fun interface` (no SAM-conversion model), non-top-level interfaces,
      * out-of-module super-interfaces, members WITH bodies — default methods and accessors with
      * bodies — (the CLR itself supports Default Interface Methods, probe-verified
      * `ifaceprobe_s8`, but this backend has no DIM model yet, so the limitation is
@@ -926,9 +928,11 @@ class DotNetIlEmitter(
             dotNetUnsupported("interface '$name' is not top-level; nested/local interfaces are not supported")
         }
         if (irClass.isExpect) dotNetUnsupported("expect interface '$name' is not supported")
-        if (irClass.typeParameters.isNotEmpty()) {
-            dotNetUnsupported("generic interface '$name' is not supported yet")
-        }
+        checkDotNetTypeParametersSupported(
+            irClass.typeParameters,
+            "interface '$name'",
+            allowDeclarationSiteVariance = true,
+        )
         for (superType in irClass.superTypes) {
             if (superType.isAny()) continue
             val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
@@ -991,7 +995,8 @@ class DotNetIlEmitter(
         if (member.isFakeOverride) return
         if (member.typeParameters.isNotEmpty()) {
             dotNetUnsupported(
-                "$description of interface '$interfaceName' is generic; generic interface members are not supported"
+                "$description of interface '$interfaceName' declares its own type parameters; " +
+                        "generic interface member functions are not supported"
             )
         }
         if (member.visibility == DescriptorVisibilities.PRIVATE) {
@@ -1059,7 +1064,7 @@ class DotNetIlEmitter(
             // the covariant-return rejection.
             val substitutedReturnType =
                 if (memberClass != null && overriddenClass != null && overriddenClass.typeParameters.isNotEmpty()) {
-                    val classArguments = memberClass.dotNetClassArgumentsFor(overriddenClass, typeMapper) ?: continue
+                    val classArguments = memberClass.dotNetTypeArgumentsFor(overriddenClass, typeMapper) ?: continue
                     overriddenReturnType.substituteDotNetTypeParameters(classArguments)
                 } else overriddenReturnType
             if (substitutedReturnType != signature.returnType) {
@@ -1075,31 +1080,20 @@ class DotNetIlEmitter(
     }
 
     /**
-     * The IL type arguments [this] class's inheritance chain supplies for [target]'s type
-     * parameters: the composed substitution of every base-supertype hop from this class up to
-     * [target] (`IntBox : Box<Int>` yields `[int32]` for `Box`'s `T`; chains through
-     * intermediate non-generic classes compose). Starts from this class's own OPEN instantiation
-     * so the walk stays correct if generic-extends-generic chains are ever admitted. Null when
-     * [target] is not on the base chain or a hop does not map — the chain is then broken in a
-     * way another gate already owns (an evicted or unregistered base cascades through the
-     * render's live re-resolution), so callers skip rather than double-report.
+     * The IL type arguments [this] class supplies for the generic [target] through either its
+     * base chain or its interface DAG. The emitter's already-linked structural supertype graph
+     * performs every open-parameter substitution, so `IntBox : Box<Int>` yields `[int32]`,
+     * `class C<A, B> : PairView<B, A>` yields `[!1, !0]`, and transitive generic-interface
+     * inheritance composes without a second IR-level substitution implementation. Null means
+     * another gate owns an unavailable/broken edge, so callers skip rather than double-report.
      */
-    private fun IrClass.dotNetClassArgumentsFor(target: IrClass, typeMapper: DotNetIlTypeMapper): List<DotNetIlValueType>? {
-        var current: IrClass = this
-        var currentArguments: List<DotNetIlValueType> =
-            typeParameters.indices.map { DotNetIlValueType.TypeParameter(it, isMethodParameter = false) }
-        while (current != target) {
-            val baseSuperType = current.dotNetBaseSuperTypeOrNull() ?: return null
-            val baseClass = (baseSuperType.classifier as? IrClassSymbol)?.owner ?: return null
-            currentArguments = baseSuperType.arguments.map { argument ->
-                val projection = (argument as? IrTypeProjection)?.takeIf { it.variance == Variance.INVARIANT }
-                    ?: return null
-                val mapped = typeMapper.toDotNetIlValueType(projection.type) ?: return null
-                mapped.substituteDotNetTypeParameters(currentArguments)
-            }
-            current = baseClass
-        }
-        return currentArguments
+    private fun IrClass.dotNetTypeArgumentsFor(
+        target: IrClass,
+        typeMapper: DotNetIlTypeMapper,
+    ): List<DotNetIlValueType>? {
+        val receiverType = typeMapper.toDotNetIlValueType(defaultType) ?: return null
+        val targetInfo = typeMapper.classInfoOrNull(target) ?: return null
+        return receiverType.dotNetViewAsGenericOwner(targetInfo)?.arguments
     }
 
     /**
@@ -1136,15 +1130,22 @@ class DotNetIlEmitter(
         // does not map, the implementation's declaring class fails its own pre-pass and this
         // class falls through the base-chain cascade with a carried reason instead.
         val memberReturnType = typeMapper.toDotNetIlReturnType(member.returnType) ?: return
+        val memberClass = member.parent as? IrClass
         for (overridden in overriddenInterfaceMembers) {
             val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
-            if (overriddenReturnType != memberReturnType) {
-                val interfaceName = (overridden.parent as? IrClass)?.diagnosticName() ?: "?"
+            val interfaceClass = overridden.parent as? IrClass
+            val substitutedReturnType =
+                if (memberClass != null && interfaceClass != null && interfaceClass.typeParameters.isNotEmpty()) {
+                    val interfaceArguments = memberClass.dotNetTypeArgumentsFor(interfaceClass, typeMapper) ?: continue
+                    overriddenReturnType.substituteDotNetTypeParameters(interfaceArguments)
+                } else overriddenReturnType
+            if (substitutedReturnType != memberReturnType) {
+                val interfaceName = interfaceClass?.diagnosticName() ?: "?"
                 dotNetUnsupported(
                     "member '${member.name.asString()}' implements interface member " +
                             "'$interfaceName.${overridden.name.asString()}' through an inherited member with a " +
                             "different IL return type (${memberReturnType.nameInSignature} vs " +
-                            "${overriddenReturnType.nameInSignature}); ECMA-335 interface mapping matches the " +
+                            "${substitutedReturnType.nameInSignature}); ECMA-335 interface mapping matches the " +
                             "full signature including the return type, so the interface slot would have no " +
                             "implementation and every use of the class would throw TypeLoadException " +
                             "(probe ifaceprobe_s10)"
@@ -1245,12 +1246,19 @@ class DotNetIlEmitter(
         // like the base class above: an evicted interface takes every implementing class and
         // every sub-interface down with it, each warned with a reason carrying the interface's
         // own reason (the interface arm of the inheritance cascade).
-        val interfaceInfos = irClass.dotNetDirectInterfaces().map { superInterface ->
+        val interfaceTypes = irClass.dotNetDirectInterfaceTypes().map { superInterfaceType ->
+            val superInterface = (superInterfaceType.classifier as IrClassSymbol).owner
             typeMapper.classInfoOrNull(superInterface) ?: dotNetUnsupported(
                 "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
                         "'${superInterface.diagnosticName()}' could not be compiled: " +
                         (classSkipReasons[superInterface] ?: "the interface is not available in this module")
             )
+            typeMapper.toDotNetIlValueType(superInterfaceType)
+                ?: dotNetUnsupported(
+                    "its ${if (irClass.isInterface) "extended" else "implemented"} interface " +
+                            "instantiation '${superInterfaceType.render()}' could not be compiled: " +
+                            "a type argument is not available in this module"
+                )
         }
         val renderedNestedClasses = mutableListOf<String>()
         val renderedFields = mutableListOf<String>()
@@ -1394,10 +1402,17 @@ class DotNetIlEmitter(
                 isOpen = irClass.modality == Modality.OPEN,
                 baseClassRef = baseClassRef,
                 isInterface = irClass.isInterface,
-                interfaceRefs = interfaceInfos.map { it.ilTypeRef },
-                // The formal type-parameter list of a generic class: `<'T'>`, or the stage-2
-                // constrained `<(class 'Base', class 'Mark') 'T'>`, between the class name and
-                // `extends` (genprobe_s8, genconstraintprobe_s1).
+                interfaceRefs = interfaceTypes.map { interfaceType ->
+                    when (interfaceType) {
+                        is DotNetIlValueType.UserClass -> interfaceType.ilTypeRef
+                        is DotNetIlValueType.GenericInstance -> interfaceType.nameInSignature
+                        else -> error("Internal .NET backend error: non-class interface type $interfaceType")
+                    }
+                },
+                // The formal type-parameter list of a generic class/interface: `<'T'>`, the
+                // stage-2 constrained `<(class 'Base', class 'Mark') 'T'>`, or the interface
+                // variance form `<+ 'T'>` / `<- 'T'>` (genprobe_s8, genconstraintprobe_s1,
+                // genifaceprobe_s1).
                 genericParameters = irClass.typeParameters.renderDotNetIlGenericParameters(typeMapper),
             ).generate(this)
         }

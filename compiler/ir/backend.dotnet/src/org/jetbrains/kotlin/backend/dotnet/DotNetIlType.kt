@@ -1,5 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.types.Variance
+
 /**
  * The IL type of a value in a signature or on the evaluation stack. A sealed hierarchy rather
  * than an enum so that user-class types can carry their IL class name; the representation stays
@@ -212,8 +214,9 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     }
 
     /**
-     * An INSTANTIATION of a generic user class of this module (`Box<String>`): real CLR reified
-     * generics, the Roslyn shape — never erasure. [nameInSignature] is the instantiation token
+     * An INSTANTIATION of a generic user class or interface of this module (`Box<String>`,
+     * `Producer<Item>`): real CLR reified generics, the Roslyn shape — never erasure.
+     * [nameInSignature] is the instantiation token
      * `class 'demo.Box`1'<string>` (the arity suffix lives INSIDE the quoted identifier, see
      * [DotNetIlClassInfo.ilTypeRef]; a suffix outside the quotes is an ilasm syntax error —
      * probe-verified, `genprobe_s2`/`_s2c`) and doubles as the operand spelling in every
@@ -223,8 +226,9 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * Inside the declaring class's own bodies the self-reference is the OPEN instantiation
      * (`class 'Box`1'<!0>`, `genprobe_s2`/`_s7`), which falls out of mapping the class's own
      * `defaultType` — the [arguments] are then [TypeParameter]s. Like [UserClass], equality is
-     * the rendered token, which makes assignability structurally INVARIANT for free:
-     * `Box<Derived>` and `Box<Base>` render differently and never compare assignable.
+     * the rendered token. Generic classes stay structurally invariant; [isDotNetAssignableTo]
+     * additionally interprets a generic interface's recorded declaration-site variance for
+     * reference-shaped arguments.
      */
     class GenericInstance(val classInfo: DotNetIlClassInfo, val arguments: List<DotNetIlValueType>) :
         DotNetIlValueType("class ${classInfo.ilTypeRef}<${arguments.joinToString(", ") { it.nameInSignature }}>") {
@@ -467,8 +471,11 @@ internal class DotNetIlFunctionInfo(
 internal class DotNetIlClassInfo(
     val ilClassName: String,
     private val enclosingClass: DotNetIlClassInfo? = null,
-    val typeParameterCount: Int = 0,
+    val typeParameterVariances: List<Variance> = emptyList(),
 ) {
+    val typeParameterCount: Int
+        get() = typeParameterVariances.size
+
     /** Whether this is a nested class (a companion object) rather than a top-level one. */
     val isNested: Boolean
         get() = enclosingClass != null
@@ -490,16 +497,18 @@ internal class DotNetIlClassInfo(
     var baseType: DotNetIlValueType? = null
 
     /**
-     * The class infos of this class's directly implemented interfaces (for an interface: its
-     * directly extended super-interfaces). Linked by the same pre-pass as [baseType] and, like
-     * it, consumed ONLY by [isDotNetAssignableTo]'s upcast walk — the `implements` line is
-     * re-resolved through the LIVE availableClasses map every render round, so an interface
-     * evicted mid-emission cascades whole-class to its implementers and sub-interfaces instead
-     * of leaving a stale link in emitted IL. Interfaces form a DAG rather than a chain, hence a
-     * list next to the single [baseType]. Interfaces stay non-generic (the interface shape gate
-     * rejects generic interfaces), so plain infos suffice here.
+     * The full types of this class's directly implemented interfaces (for an interface: its
+     * directly extended super-interfaces). A generic edge retains its instantiation —
+     * `class C : Producer<String>` links `class 'Producer`1'<string>`, while
+     * `class C<T> : Producer<T>` links the open `class 'Producer`1'<!0>` — because both member
+     * owner lookup and variance-aware assignability depend on the arguments. Linked by the same
+     * pre-pass as [baseType] and, like it, consumed ONLY by [isDotNetAssignableTo]'s upcast walk;
+     * the `implements` line is re-resolved through the LIVE availableClasses map every render
+     * round, so an interface evicted mid-emission cascades whole-class to its implementers and
+     * sub-interfaces instead of leaving a stale link in emitted IL. Interfaces form a DAG rather
+     * than a chain, hence a list next to the single [baseType].
      */
-    var interfaces: List<DotNetIlClassInfo> = emptyList()
+    var interfaces: List<DotNetIlValueType> = emptyList()
 
     /**
      * Every proper supertype this class widens to by a pure reference upcast, as full type
@@ -509,16 +518,16 @@ internal class DotNetIlClassInfo(
      * breadth-first walk over the supertype DAG (diamonds are legal Kotlin and legal IL),
      * deduplicated by the rendered token like [DotNetIlValueType.UserClass]/
      * [DotNetIlValueType.GenericInstance] equality. [selfArguments] is this class's own
-     * instantiation, substituted into a base link that mentions its type parameters
-     * (generic-extends-generic is gate-rejected in stage 1, so the substitution is defensive
-     * symmetry; a non-generic class's links are always closed).
+     * instantiation, substituted into every base/interface link that mentions its parameters;
+     * this is active machinery for generic classes implementing open generic interfaces and for
+     * generic-interface inheritance. A non-generic class's own links are always closed.
      */
     fun allSupertypes(selfArguments: List<DotNetIlValueType> = emptyList()): Sequence<DotNetIlValueType> = sequence {
         val visited = hashSetOf<String>()
         val queue = ArrayDeque<DotNetIlValueType>()
         fun enqueueSupertypesOf(classInfo: DotNetIlClassInfo, arguments: List<DotNetIlValueType>) {
             classInfo.baseType?.let { queue.add(it.substituteDotNetTypeParameters(arguments)) }
-            classInfo.interfaces.mapTo(queue) { DotNetIlValueType.UserClass(it) }
+            classInfo.interfaces.mapTo(queue) { it.substituteDotNetTypeParameters(arguments) }
         }
         enqueueSupertypesOf(this@DotNetIlClassInfo, selfArguments)
         while (queue.isNotEmpty()) {
