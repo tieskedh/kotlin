@@ -1,7 +1,8 @@
 // Interface members with bodies are rejected at the shape gate, whole-interface — a
-// backend-scope decision, NOT a platform one: CoreCLR supports Default Interface Methods
-// (probe-verified, ifaceprobe_s8), but this backend has no DIM model yet. The rejection
-// cascades at render to every implementing class and every sub-interface (their `implements`
+// runtime-floor decision: modern CoreCLR supports Default Interface Methods (ifaceprobe_s8 and
+// dimprobe_s1), but .NET Framework 4.8 ILAsm rejects a non-static interface method body. The
+// rejection cascades at render to every implementing class and every sub-interface (their
+// `implements`
 // lines are re-resolved from the live class map each round, with chained reasons), so only the
 // file facade survives here.
 interface WithBody {

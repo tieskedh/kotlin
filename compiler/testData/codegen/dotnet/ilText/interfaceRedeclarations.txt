@@ -1,0 +1,416 @@
+.assembly extern mscorlib {}
+.assembly 'interfaceRedeclarations' {}
+.module 'main-interfaceRedeclarations.il'
+
+.class interface public abstract auto ansi 'BaseView`1'<'T'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_label'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_count'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_count'(int32 '<set-?>') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'M'>(!!0 'value') cil managed
+  {
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'BaseView`1'::'get_label'()
+  }
+  .property instance int32 'count'()
+  {
+    .get instance int32 'BaseView`1'::'get_count'()
+    .set instance void 'BaseView`1'::'set_count'(int32)
+  }
+}
+.class interface public abstract auto ansi 'RedeclaredView`1'<'T'>
+       implements class 'BaseView`1'<!0>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_label'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_count'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_count'(int32 '<set-?>') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'M'>(!!0 'value') cil managed
+  {
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'RedeclaredView`1'::'get_label'()
+  }
+  .property instance int32 'count'()
+  {
+    .get instance int32 'RedeclaredView`1'::'get_count'()
+    .set instance void 'RedeclaredView`1'::'set_count'(int32)
+  }
+}
+.class interface public abstract auto ansi 'LeafView`1'<'T'>
+       implements class 'RedeclaredView`1'<!0>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ViewImpl'
+       extends [mscorlib]System.Object
+       implements class 'LeafView`1'<string>
+{
+  .field private string 'item'
+  .field private int32 'count'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'item', int32 'initialCount') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'ViewImpl'::'item'
+    ldarg.0
+    ldarg.2
+    stfld int32 'ViewImpl'::'count'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'ViewImpl'::'item'
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'ViewImpl'::'get_item'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 2
+    ldstr "label:"
+    ldarg.0
+    call instance string 'ViewImpl'::'get_item'()
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_count'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'ViewImpl'::'count'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_count'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'ViewImpl'::'count'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .property instance string 'item'()
+  {
+    .get instance string 'ViewImpl'::'get_item'()
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'ViewImpl'::'get_label'()
+  }
+  .property instance int32 'count'()
+  {
+    .get instance int32 'ViewImpl'::'get_count'()
+    .set instance void 'ViewImpl'::'set_count'(int32)
+  }
+}
+.class interface public abstract auto ansi 'PairView`2'<'A', 'B'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'first'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !1 'second'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Swapped`2'<'X', 'Y'>
+       implements class 'PairView`2'<!1, !0>
+{
+  .method public hidebysig newslot abstract virtual instance !1 'first'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'second'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'PairImpl'
+       extends [mscorlib]System.Object
+       implements class 'Swapped`2'<int32, string>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'first'() cil managed
+  {
+    .maxstack 1
+    ldstr "first"
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'second'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 2
+    ret
+  }
+}
+.class interface public abstract auto ansi 'Root'
+{
+  .method public hidebysig newslot abstract virtual instance string 'id'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Left'
+       implements 'Root'
+{
+  .method public hidebysig newslot abstract virtual instance string 'id'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Right'
+       implements 'Root'
+{
+  .method public hidebysig newslot abstract virtual instance string 'id'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Diamond'
+       implements 'Left', 'Right'
+{
+  .method public hidebysig newslot abstract virtual instance string 'id'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Node'
+       extends [mscorlib]System.Object
+       implements 'Diamond'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'id'() cil managed
+  {
+    .maxstack 1
+    ldstr "node"
+    ret
+  }
+}
+.class interface public abstract auto ansi 'Action'
+{
+  .method public hidebysig newslot abstract virtual instance string 'act'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'RedeclaredAction'
+       implements 'Action'
+{
+  .method public hidebysig newslot abstract virtual instance string 'act'() cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'ActionBase'
+       extends [mscorlib]System.Object
+       implements 'Action'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'act'() cil managed
+  {
+    .maxstack 1
+    ldstr "inherited"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ActionDerived'
+       extends 'ActionBase'
+       implements 'RedeclaredAction'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'ActionBase'::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'interfaceRedeclarationsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'ViewImpl' 'impl',
+      [1] class 'BaseView`1'<string> 'base',
+      [2] class 'RedeclaredView`1'<string> 'redeclared',
+      [3] class 'LeafView`1'<string> 'leaf',
+      [4] class 'PairImpl' 'pair',
+      [5] class 'PairView`2'<string, int32> 'pairBase',
+      [6] class 'Swapped`2'<int32, string> 'swapped',
+      [7] class 'Node' 'node',
+      [8] class 'Root' 'root',
+      [9] class 'Left' 'left',
+      [10] class 'Right' 'right',
+      [11] class 'Diamond' 'diamond',
+      [12] class 'RedeclaredAction' 'action'
+    )
+    ldstr "item"
+    ldc.i4 1
+    newobj instance void 'ViewImpl'::.ctor(string, int32)
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloc.0
+    stloc.2
+    ldloc.0
+    stloc.3
+    ldloc.1
+    callvirt instance !0 class 'BaseView`1'<string>::'value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance !0 class 'RedeclaredView`1'<string>::'value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    callvirt instance !0 class 'LeafView`1'<string>::'value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    callvirt instance string class 'BaseView`1'<string>::'get_label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance string class 'RedeclaredView`1'<string>::'get_label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    callvirt instance string class 'RedeclaredView`1'<string>::'get_label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldstr "base-echo"
+    callvirt instance !!0 class 'BaseView`1'<string>::'echo'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    ldc.i4 7
+    callvirt instance !!0 class 'RedeclaredView`1'<string>::'echo'<int32>(!!0)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    ldstr "leaf-echo"
+    callvirt instance !!0 class 'RedeclaredView`1'<string>::'echo'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldc.i4 2
+    callvirt instance void class 'BaseView`1'<string>::'set_count'(int32)
+    ldloc.2
+    callvirt instance int32 class 'RedeclaredView`1'<string>::'get_count'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    ldc.i4 3
+    callvirt instance void class 'RedeclaredView`1'<string>::'set_count'(int32)
+    ldloc.3
+    callvirt instance int32 class 'RedeclaredView`1'<string>::'get_count'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'PairImpl'::.ctor()
+    stloc 4
+    ldloc 4
+    stloc 5
+    ldloc 4
+    stloc 6
+    ldloc 5
+    callvirt instance !0 class 'PairView`2'<string, int32>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 5
+    callvirt instance !1 class 'PairView`2'<string, int32>::'second'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    callvirt instance !1 class 'Swapped`2'<int32, string>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    callvirt instance !0 class 'Swapped`2'<int32, string>::'second'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'Node'::.ctor()
+    stloc 7
+    ldloc 7
+    stloc 8
+    ldloc 7
+    stloc 9
+    ldloc 7
+    stloc 10
+    ldloc 7
+    stloc 11
+    ldloc 8
+    callvirt instance string 'Root'::'id'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 9
+    callvirt instance string 'Left'::'id'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 10
+    callvirt instance string 'Right'::'id'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 11
+    callvirt instance string 'Diamond'::'id'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ActionDerived'::.ctor()
+    stloc 12
+    ldloc 12
+    callvirt instance string 'RedeclaredAction'::'act'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

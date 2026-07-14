@@ -300,7 +300,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `box/abstractClasses.kt`; `ilText/classShapeRejected.kt` retains the neighboring variance and
   nested-class rejection boundaries.
 - Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`,
-  `genmemberprobe_s1`; JVM precedent: real CLR interface types =
+  `genmemberprobe_s1`, `ifaceredeclareprobe_s1`; JVM precedent: real CLR interface types =
   no vtable/interface lowering, the same argument as the class and inheritance bullets): a
   top-level Kotlin `interface` whose members are ALL abstract (abstract functions and abstract
   `val`/`var` properties; empty interfaces included) is emitted as
@@ -314,7 +314,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `.method public hidebysig [specialname ]newslot abstract virtual instance ... cil managed`
   with an EMPTY `{ }` block (s1/s2; the emitter keeps its established specialname-first flag
   order — ilasm treats the flags as an unordered keyword set); abstract accessors are bound by
-  ordinary `.property` blocks targeting the interface's own accessor methods (s2). GENERIC
+  ordinary `.property` blocks targeting the interface's own accessor methods (s2). An abstract
+  redeclaration of an inherited function/accessor deliberately introduces another
+  `newslot abstract virtual` slot; one exact-signature class member implicitly fills the original
+  and every redeclared slot, including diamonds and open/composed generic views
+  (`ifaceredeclareprobe_s1`). Calls name the interface that owns the selected declaration.
+  Mapped covariant-return redeclarations remain rejected by the shared override pre-pass because
+  one implicit class member cannot fill slots with different CLR return signatures. GENERIC
   interfaces use real CLR reified generics: the CLS arity suffix and formal list are the class
   canon, declaration-site `out`/`in` is preserved as `+`/`-` metadata
   (`'Producer`1'<+ 'T'>`, `'Consumer`1'<- 'T'>`), invariant parameters stay unmarked, and direct
@@ -377,11 +383,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   LIVE class map at the top of every render round with chained reasons, the interface arm of
   the base-class cascade (pinned by `ilText/interfaceEvicted.kt` and
   `ilText/interfaceDefaultBodyRejected.kt`); evicting an implementer never affects the
-  interface. STAYS REJECTED, loudly, whole-interface/whole-class: interface members WITH
-  bodies — default methods and accessors with bodies (CoreCLR itself supports Default Interface
-  Methods, s8, so the message says "not yet supported": lifting this is purely backend work),
-  private interface members, abstract redeclarations of super-interface members (an unprobed
-  double-slot shape), companion objects and any nested declaration in an interface,
+  interface. STAYS REJECTED, loudly, whole-interface/whole-class: interface members WITH bodies —
+  default methods and accessors with bodies (modern CoreCLR supports DIM, s8/`dimprobe_s1`, but
+  Framework 4.8 ILAsm rejects the same body; lifting this would raise the backend's runtime
+  floor), private interface members, companion objects and any nested declaration in an interface,
   `fun interface` (no SAM-conversion model),
   out-of-module or non-top-level
   interfaces, interface DELEGATION (`class C(...) : I by d`) in BOTH source spellings — the
@@ -389,7 +394,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `$$delegate_0` field): the frontend's forwarding members (origin DELEGATED_MEMBER) are gated
   whole-class with a real user-facing message so the two cosmetically different spellings never
   diverge in support (pinned by `ilText/interfaceDelegationRejected.kt`),
-  `super<I>.f()` (needs the DIM model; rejected up front in `emitCall`),
+  `super<I>.f()` (needs DIM and therefore exceeds the Framework 4.8 floor; rejected up front in
+  `emitCall`),
   `is`/`as`/safe-cast on interface types (the existing type-operator rejection stays
   authoritative — including the IMPLICIT_CAST downcast a positive `===` smartcast inserts
   afterwards), and interface members overriding `kotlin.Any` members (no Any model). Failure-
@@ -407,7 +413,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/interfaceCovariantImplRejected.kt` the s10 gate,
   `ilText/interfaceDelegationRejected.kt` the delegation gate, and
   `ilText/interfaceEqualityWidening.kt` the sibling widening, the no-common-supertype
-  rejection and the sealed-interface acceptance. Generic metadata, open/closed/permuted edges,
+  rejection and the sealed-interface acceptance. Abstract redeclaration metadata, owner-token
+  dispatch, mutable properties, generic composition, diamonds, and mapped-covariance rejection
+  are pinned by `ilText/interfaceRedeclarations.kt`,
+  `ilText/interfaceRedeclarationsRejected.kt`, and `box/interfaceRedeclarations.kt`. Generic
+  metadata, open/closed/permuted edges,
   owner-token dispatch and reference variance are pinned by `ilText/genericInterfaces.kt` and
   `box/genericInterfaces.kt`; `ilText/genericInterfacesRejected.kt` pins value/open-parameter
   conversions, use-site projections/stars, nullable slots, unsupported interface bounds, and
