@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftexport.tasks
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
@@ -15,6 +16,7 @@ import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.*
 import org.gradle.work.DisableCachingByDefault
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.*
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.XcodebuildDefFileUtils.DUMP_FILE_ARGS_SEPARATOR
 import org.jetbrains.kotlin.gradle.utils.getFile
 import org.jetbrains.kotlin.gradle.utils.property
 import org.jetbrains.kotlin.gradle.utils.relativeOrAbsolute
@@ -64,6 +66,16 @@ internal abstract class BuildSPMSwiftExportPackage @Inject constructor(
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val packageRoot: DirectoryProperty
 
+    /**
+     * Dump files listing the module/framework search paths of the built SwiftPM-import synthetic package (empty
+     * unless the project imports a Swift package). Their directories are added to the xcodebuild search paths so
+     * the reexported `import <ObjCModule>` lines in the generated Swift API resolve.
+     */
+    @get:InputFiles
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val swiftPMImportSearchPathDumps: ConfigurableFileCollection
+
     @get:OutputDirectory
     abstract val packageDerivedData: DirectoryProperty
 
@@ -112,19 +124,29 @@ internal abstract class BuildSPMSwiftExportPackage @Inject constructor(
         val deploymentTargetSettingName = deploymentTargetSettingName.get()
         val deploymentTarget = deploymentTarget.get()
 
-        val buildArguments = mapOf(
-            "ARCHS" to target.map { it.appleArchitecture }.get().xcodebuildArch,
-            "CONFIGURATION" to configuration.get(),
-            "DEPLOYMENT_TARGET_SETTING_NAME" to deploymentTargetSettingName,
-            deploymentTargetSettingName to deploymentTarget,
+        val buildArguments = buildMap {
+            put("ARCHS", target.map { it.appleArchitecture }.get().xcodebuildArch)
+            put("CONFIGURATION", configuration.get())
+            put("DEPLOYMENT_TARGET_SETTING_NAME", deploymentTargetSettingName)
+            put(deploymentTargetSettingName, deploymentTarget)
 
             /*
             We need to add -public-autolink-library flag because bridge module is imported with @_implementationOnly
             All object files will be merged in `lib${swiftApiModuleName}.a`
             More information can be found here: https://github.com/swiftlang/swift/pull/35936
              */
-            "OTHER_SWIFT_FLAGS" to "-Xfrontend -public-autolink-library -Xfrontend $swiftModuleName"
-        )
+            put("OTHER_SWIFT_FLAGS", "-Xfrontend -public-autolink-library -Xfrontend $swiftModuleName")
+
+            // When Swift Export reexports SwiftPM-imported Objective-C modules, the generated Swift API contains
+            // `import <ObjCModule>`. Those modules were built by the SwiftPM-import feature into the directories
+            // captured in these dumps; add them to the search paths so the compile resolves the imports.
+            val importSearchPaths = importModuleSearchPaths()
+            if (importSearchPaths.isNotEmpty()) {
+                val setting = (listOf("\$(inherited)") + importSearchPaths.map { "\"$it\"" }).joinToString(" ")
+                put("FRAMEWORK_SEARCH_PATHS", setting)
+                put("SWIFT_INCLUDE_PATHS", setting)
+            }
+        }
 
         val derivedData = packageDerivedData.getFile()
 
@@ -164,6 +186,14 @@ internal abstract class BuildSPMSwiftExportPackage @Inject constructor(
 
         libraryTools.mergeLibraries(objectFilePaths, packageLibrary.getFile())
     }
+
+    private fun importModuleSearchPaths(): List<String> =
+        swiftPMImportSearchPathDumps.files
+            .filter { it.isFile }
+            .flatMap { it.readText().split(DUMP_FILE_ARGS_SEPARATOR) }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
 
     private fun destination(): String {
         val deviceId = targetDeviceIdentifier.orNull

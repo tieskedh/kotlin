@@ -49,17 +49,6 @@ internal abstract class GenerateSPMPackageFromSwiftExport @Inject constructor(
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val swiftModulesFile: RegularFileProperty
 
-    /**
-     * The reexported product of the SwiftPM-import synthetic package (`KotlinMultiplatformLinkedPackage`),
-     * present only when a Swift package is imported.
-     */
-    @get:Optional
-    @get:Input
-    abstract val swiftPMImportProductName: Property<String>
-
-    @get:Internal
-    abstract val swiftPMImportPackageRoot: DirectoryProperty
-
     @get:OutputDirectory
     abstract val packagePath: DirectoryProperty
 
@@ -154,16 +143,7 @@ internal abstract class GenerateSPMPackageFromSwiftExport @Inject constructor(
 
     private fun createPackageManifest(modules: List<GradleSwiftExportModule>) {
         val manifest = packagePath.getFile().resolve("Package.swift")
-        val cinteropImport = if (swiftPMImportProductName.isPresent && swiftPMImportPackageRoot.isPresent) {
-            val root = swiftPMImportPackageRoot.getFile()
-            CinteropPackageImport(
-                // `.package(path:)` is resolved relative to the generated manifest's directory.
-                relativePath = root.relativeTo(packagePath.getFile()).invariantSeparatorsPath,
-                productName = swiftPMImportProductName.get(),
-                packageIdentity = root.name,
-            )
-        } else null
-        val content = SPMManifestGenerator.generateManifest(swiftApiModule, swiftLibrary, kotlinRuntimeModule, modules, cinteropImport)
+        val content = SPMManifestGenerator.generateManifest(swiftApiModule, swiftLibrary, kotlinRuntimeModule, modules)
         manifest.writeText(content)
     }
 
@@ -176,21 +156,6 @@ internal abstract class GenerateSPMPackageFromSwiftExport @Inject constructor(
     }
 }
 
-/**
- * Describes a dependency the generated Swift Export package must declare on the SwiftPM-import synthetic
- * package, so that the `import <ObjCModule>` lines emitted for a reexported cinterop klib resolve.
- */
-internal data class CinteropPackageImport(
-    /** Path of the synthetic package, relative to the generated manifest's directory. */
-    val relativePath: String,
-    /** Product to depend on (`KotlinMultiplatformLinkedPackage`). */
-    val productName: String,
-    /** SwiftPM identity of the synthetic package (its directory name). */
-    val packageIdentity: String,
-) {
-    fun productExpression(): String = ".product(name: \"$productName\", package: \"$packageIdentity\")"
-}
-
 internal object SPMManifestGenerator {
 
     fun generateManifest(
@@ -198,7 +163,6 @@ internal object SPMManifestGenerator {
         swiftLibrary: String,
         kotlinRuntime: String,
         modules: List<GradleSwiftExportModule>,
-        cinteropImport: CinteropPackageImport? = null,
     ): String = buildStringBlock {
         line("// swift-tools-version: 5.9")
         line()
@@ -216,17 +180,10 @@ internal object SPMManifestGenerator {
                         }
                     }
                 }
-                if (cinteropImport != null) {
-                    entry {
-                        block("dependencies: [", "]") {
-                            line(".package(path: \"${cinteropImport.relativePath}\")")
-                        }
-                    }
-                }
                 entry {
                     block("targets: [", "]") {
                         commaSeparatedEntries {
-                            emitTargetDefinitions(modules, kotlinRuntime, cinteropImport?.productExpression())
+                            emitTargetDefinitions(modules, kotlinRuntime)
                             entry { emitTarget(kotlinRuntime) }
                         }
                     }
@@ -249,15 +206,12 @@ internal object SPMManifestGenerator {
     private fun StringBlockBuilder.emitTarget(
         name: String,
         dependencies: List<String>? = null,
-        rawDependencies: List<String> = emptyList(),
     ) {
         block(".target(", ")") {
             commaSeparatedEntries {
                 entry { line("name: \"$name\"") }
-                // Module-name deps are quoted; rawDependencies are already valid Swift expressions (e.g. `.product(...)`).
-                val deps = (dependencies?.map { "\"$it\"" } ?: emptyList()) + rawDependencies
-                if (deps.isNotEmpty()) {
-                    entry { line("dependencies: [${deps.joinToString(", ")}]") }
+                if (dependencies != null) {
+                    entry { line("dependencies: [${dependencies.joinToString(", ") { "\"$it\"" }}]") }
                 }
             }
         }
@@ -266,12 +220,9 @@ internal object SPMManifestGenerator {
     private fun CommaSeparatedEntriesBuilder.emitTargetDefinitions(
         modules: List<GradleSwiftExportModule>,
         kotlinRuntime: String,
-        cinteropProductExpression: String?,
     ) {
-        // The reexported cinterop's `import`s live in the Swift API targets, so each gets the product dependency.
-        val rawDependencies = listOfNotNull(cinteropProductExpression)
         modules.forEach { module ->
-            entry { emitTarget(module.name, module.spmDependencies(kotlinRuntime), rawDependencies) }
+            entry { emitTarget(module.name, module.spmDependencies(kotlinRuntime)) }
             if (module is GradleSwiftExportModule.BridgesToKotlin) {
                 entry { emitTarget(module.bridgeName) }
             }

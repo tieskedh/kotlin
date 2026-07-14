@@ -938,22 +938,38 @@ class SwiftExportIT : KGPBaseTest() {
                 }
             }
 
+            // The synthetic linkage package must be integrated into the Xcode project (and PROJECT_FILE_PATH set)
+            // for embedSwiftExportForXcode's integration check to pass, mirroring the sibling swiftPMImport tests.
+            val iosAppXcodeProj = projectPath.resolve("iosApp/iosApp.xcodeproj")
+            val envVars = swiftExportEmbedAndSignEnvVariables(
+                testBuildDir,
+                customVariables = mapOf(
+                    "XCODEPROJ_PATH" to "iosApp/iosApp.xcodeproj",
+                    "PROJECT_FILE_PATH" to iosAppXcodeProj.absolutePathString(),
+                )
+            )
+
+            build(
+                ":integrateLinkagePackage",
+                environmentVariables = envVars
+            )
+
             build(
                 ":embedSwiftExportForXcode",
-                environmentVariables = swiftExportEmbedAndSignEnvVariables(testBuildDir)
+                environmentVariables = envVars
             ) {
                 assertTasksExecuted(":cinteropSwiftPMImportIosArm64")
+                // Building the generated SPM package compiles the reexported Swift API. Its success proves the
+                // reexported `import <ObjCModule>` resolved via the SwiftPM-import module search paths handed to
+                // the package build.
+                assertTasksExecuted(":iosArm64DebugBuildSPMPackage")
                 assertTasksExecuted(":linkSwiftExportBinaryDebugStaticIosArm64")
                 assertTasksExecuted(":copyDebugSPMIntermediates")
 
-                // The generated SPM manifest must depend on the SwiftPM-import synthetic package and pull in its
-                // umbrella product, so the reexported `import LocalSwiftPackage` resolves when the package is built.
-                val generatedManifest = projectPath.resolve("build/SPMPackage/iosArm64/debug/Package.swift").readText()
-                assertContains(generatedManifest, ".package(path:")
-                assertContains(
-                    generatedManifest,
-                    ".product(name: \"KotlinMultiplatformLinkedPackage\", package: \"swiftImport\")"
-                )
+                // The reexport is non-vacuous: the imported Objective-C type surfaces in the generated Swift API.
+                val generatedSwift = projectPath.resolve("build/SPMPackage/iosArm64/debug/Sources").toFile()
+                    .walkTopDown().filter { it.extension == "swift" }.joinToString("\n") { it.readText() }
+                assertContains(generatedSwift, "LocalHelper")
             }
         }
     }

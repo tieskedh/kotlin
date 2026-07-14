@@ -92,16 +92,6 @@ internal fun Project.registerSwiftExportTask(
         swiftExportTask = swiftExportTask
     )
 
-    target.whenSwiftPMImportAvailable { products ->
-        swiftExportTask.configure { task ->
-            task.cinteropModuleName.set(products.cinteropModuleName)
-            task.cinteropModuleArtifact.fileProvider(products.cinteropKlib)
-        }
-        packageGenerationTask.configure { task ->
-            task.swiftPMImportProductName.set(products.umbrellaProductName)
-            task.swiftPMImportPackageRoot.set(products.syntheticPackageRoot)
-        }
-    }
     val packageBuild = registerSPMPackageBuild(
         taskNamePrefix = taskNamePrefix,
         taskGroup = taskGroup,
@@ -111,6 +101,23 @@ internal fun Project.registerSwiftExportTask(
         swiftApiLibraryName = swiftApiLibraryName,
         packageGenerationTask = packageGenerationTask
     )
+
+    target.whenSwiftPMImportAvailable { products ->
+        // Hand the reexported cinterop klib to the Swift Export runner so its Objective-C modules are reexported
+        // into the generated Swift API (emitting `import <ObjCModule>`).
+        swiftExportTask.configure { task ->
+            task.cinteropModuleName.set(products.cinteropModuleName)
+            task.cinteropModuleArtifact.fileProvider(products.cinteropKlib)
+        }
+        // The generated SPM package build must be able to resolve those `import`s. Give its xcodebuild the module
+        // search paths the SwiftPM-import feature already captured from the built synthetic package (the link
+        // `-F`/`-L` directories, where SwiftPM drops the built modules). This avoids declaring an SPM package
+        // dependency: the synthetic package is not a consumable SPM path dependency (its transitive local-package
+        // paths don't resolve from the generated package's location).
+        packageBuild.configure { task ->
+            task.swiftPMImportSearchPathDumps.from(products.searchPathDumps)
+        }
+    }
     val mergeLibrariesTask = registerMergeLibraryTask(
         taskGroup = taskGroup,
         appleTarget = target.konanTarget.appleTarget,

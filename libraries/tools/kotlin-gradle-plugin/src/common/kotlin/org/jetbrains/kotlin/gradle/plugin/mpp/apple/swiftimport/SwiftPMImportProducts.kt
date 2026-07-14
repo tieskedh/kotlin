@@ -5,12 +5,16 @@
 
 package org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport
 
-import org.gradle.api.file.Directory
+import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.appleArchitecture
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.appleTarget
+import org.jetbrains.kotlin.gradle.plugin.mpp.apple.sdk
 import org.jetbrains.kotlin.gradle.tasks.CInteropProcess
 import org.jetbrains.kotlin.gradle.tasks.locateTask
+import org.jetbrains.kotlin.gradle.utils.lowerCamelCaseName
 import java.io.File
 
 /**
@@ -22,34 +26,40 @@ internal class SwiftPMImportProducts(
     val cinteropModuleName: Provider<String>,
     /** The cinterop klib bundling the imported package's Objective-C modules (klib manifest `interop=true`). */
     val cinteropKlib: Provider<File>,
-    /** Root of the generated synthetic SPM package; its directory name is the SwiftPM package identity. */
-    val syntheticPackageRoot: Provider<Directory>,
-    /** The umbrella library product vended by the synthetic package. */
-    val umbrellaProductName: String,
+    /**
+     * Dump files (one per line, `DUMP_FILE_ARGS_SEPARATOR`-joined) listing the module/framework search paths of
+     * the built synthetic package — the directories where SwiftPM dropped the imported Objective-C modules.
+     * A consumer that compiles the reexported Swift API (`import <ObjCModule>`) must add these to its search paths.
+     */
+    val searchPathDumps: List<Provider<RegularFile>>,
 )
 
 /**
  * Invokes [onAvailable] if and when this target has SwiftPM-import products — i.e. the project imports a Swift
- * package, which produces the `swiftPMImport` cinterop and the synthetic SPM package. Does nothing otherwise.
+ * package, which produces the `swiftPMImport` cinterop. Does nothing otherwise.
  *
  * Lazy and configuration-order independent: it reacts to the cinterop's creation rather than requiring it to
  * exist already, so consumers can wire task inputs without depending on setup-action ordering.
  */
 internal fun KotlinNativeTarget.whenSwiftPMImportAvailable(onAvailable: (SwiftPMImportProducts) -> Unit) {
     val mainCompilation = compilations.getByName(KotlinCompilation.MAIN_COMPILATION_NAME)
+    val architecture = konanTarget.appleArchitecture
+    val sdk = konanTarget.appleTarget.sdk
     mainCompilation.cinterops
         .matching { it.name == GenerateSyntheticLinkageImportProject.SWIFT_PM_IMPORT_CINTEROP_NAME }
         .all { cinterop ->
             val cinteropTask = project.locateTask<CInteropProcess>(cinterop.interopProcessingTaskName) ?: return@all
-            val syntheticPackageTask = project.locateTask<GenerateSyntheticLinkageImportProject>(
-                GenerateSyntheticLinkageImportProject.syntheticImportProjectGenerationTaskName
+            val defFileTask = project.locateTask<ConvertSyntheticSwiftPMImportProjectIntoDefFile>(
+                lowerCamelCaseName(ConvertSyntheticSwiftPMImportProjectIntoDefFile.TASK_NAME, sdk)
             ) ?: return@all
             onAvailable(
                 SwiftPMImportProducts(
                     cinteropModuleName = cinteropTask.map { it.moduleName },
                     cinteropKlib = cinteropTask.flatMap { it.klibOutput },
-                    syntheticPackageRoot = syntheticPackageTask.flatMap { it.syntheticImportProjectRoot },
-                    umbrellaProductName = GenerateSyntheticLinkageImportProject.SYNTHETIC_IMPORT_TARGET_MAGIC_NAME,
+                    searchPathDumps = listOf(
+                        defFileTask.flatMap { it.frameworkSearchpathFilePath(architecture) },
+                        defFileTask.flatMap { it.librarySearchpathFilePath(architecture) },
+                    ),
                 )
             )
         }
