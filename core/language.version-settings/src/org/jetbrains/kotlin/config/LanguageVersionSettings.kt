@@ -543,7 +543,7 @@ enum class LanguageFeature(
     JsAllowExportingAnnotationClasses(sinceVersion = KOTLIN_2_5, "KT-85599"),
     JsAllowExportingStarProjection(sinceVersion = KOTLIN_2_5, "KT-83462"),
     AllowReturnsResultOfContract(sinceVersion = KOTLIN_2_5, sinceApiVersion = ApiVersion.KOTLIN_2_4, issue = "KT-85948", forcesPreReleaseBinaries = true),
-    UnnamedLocalVariables(sinceVersion = KOTLIN_2_5, forcesPreReleaseBinaries = false, issue = "KT-74809", enabledInLatestLVTests = true),
+    UnnamedLocalVariables(sinceVersion = KOTLIN_2_5, forcesPreReleaseBinaries = false, issue = "KT-74809"),
     ForbidAliasedRepeatedAnnotationsOnExpressionsInMultiplatform(sinceVersion = KOTLIN_2_5, "KTLC-409"),
     ProhibitIllegalNotNullSmartCastsInEqualities(KOTLIN_2_5, "KTLC-410"),
     ProhibitNotNullSmartCastsBasedOnFlexibleComponentsInEqualities(KOTLIN_2_5, "KTLC-410") {
