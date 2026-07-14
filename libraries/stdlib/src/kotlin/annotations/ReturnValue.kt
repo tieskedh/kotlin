@@ -7,17 +7,15 @@ package kotlin
 
 /**
  * Expresses that calls of the annotated function are ignorable.
- * Ignorable calls would not trigger a warning from Kotlin's return value checker, even if they are not used.
+ * Ignorable calls would not trigger a warning from Kotlin's [return value checker](https://kotlinlang.org/docs/unused-return-value-checker.html), even if they are not used.
  *
  * This annotation only makes sense when used together with the 'Return value checker' feature.
- * Placing it without enabling the corresponding feature would result in a compiler error.
- *
- * Please note that this feature is currently experimental and this annotation may be changed without further notice
- * or deprecation cycle. This, in particular, concerns annotation's target list.
+ * Please note that this feature is available as stable only since Kotlin 2.5.
+ * Using this annotation with a lower language version requires explicit opt-in into the feature.
  */
 @Target(AnnotationTarget.FUNCTION)
 @MustBeDocumented
-@SinceKotlin("2.2")
+@SinceKotlin("2.3")
 public annotation class IgnorableReturnValue
 
 /**
@@ -28,10 +26,8 @@ public annotation class IgnorableReturnValue
  * is set to the 'full' mode. There is no need to place it manually except for certain migration scenarios.
  *
  * This annotation only makes sense when used together with the 'Return value checker' feature.
- * Placing it without enabling the corresponding feature would result in a compiler error.
- *
- * Please note that this feature is currently experimental and this annotation may be changed without further notice
- * or deprecation cycle. This, in particular, concerns annotation's target list.
+ * Please note that this feature is available as stable only since Kotlin 2.5.
+ * Using this annotation with a lower language version requires explicit opt-in into the feature.
  */
 @Target(AnnotationTarget.FILE, AnnotationTarget.CLASS)
 @SinceKotlin("2.3")
