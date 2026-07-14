@@ -230,7 +230,7 @@ class NativeCompilerSecondStageFacade private constructor(
                     })
                     if (cacheMode.useStaticCacheForDistributionLibraries) {
                         add(K2NativeCompilerArguments::autoCacheableFrom.cliArgument(nativeHome.resolve("klib").absolutePath))
-                        add(K2NativeCompilerArguments::binaryOptions.cliArgument("enableReleaseBinaryCahce=true"))
+                        add(K2NativeCompilerArguments::binaryOptions.cliArgument("enableReleaseBinaryCache=true"))
                     }
                     if (enableAssertions) {
                         add(K2NativeCompilerArguments::enableAssertions.cliArgument)
