@@ -3,9 +3,10 @@ package org.jetbrains.kotlin.backend.dotnet
 /**
  * Assembles the class wrapper around already rendered members: the file class of one Kotlin file
  * (public and static — `abstract sealed` — like the JVM's file facades), a top-level user class
- * ([isStaticHolder] = false: instantiable, `sealed` for a final Kotlin class and non-`sealed`
- * with [isOpen] — the CLR expresses Kotlin's final-by-default directly in metadata, unlike the
- * JVM's ACC_FINAL which the JVM backend sets from the same modality), a companion object
+ * ([isStaticHolder] = false: instantiable, `sealed` for a final Kotlin class, unsealed with
+ * [isOpen], or non-instantiable `abstract` with [isAbstract] — the CLR expresses Kotlin modality
+ * directly in metadata, unlike the JVM access flags which the JVM backend derives from the same
+ * modality), a companion object
  * ([isNested] = true: a real CLR nested type declared inside the
  * enclosing class's body), a Kotlin interface ([isInterface]: `.class interface public abstract
  * auto ansi` with NO `extends` line, no `sealed`, no `beforefieldinit` — the exact flag set
@@ -46,6 +47,7 @@ internal class DotNetIlClassCodegen(
     private val isNested: Boolean = false,
     private val renderedNestedClasses: List<String> = emptyList(),
     private val isOpen: Boolean = false,
+    private val isAbstract: Boolean = false,
     private val baseClassRef: String? = null,
     private val isInterface: Boolean = false,
     private val interfaceRefs: List<String> = emptyList(),
@@ -55,8 +57,8 @@ internal class DotNetIlClassCodegen(
         val visibility = if (exported) "public" else "private"
         // All flag spellings (including their order, with and without beforefieldinit) are
         // ilasm-probe-verified (the nested one by objprobe_s6, the non-sealed open-class one by
-        // inheritprobe_s1, the interface one by ifaceprobe_s1); the static-holder one is
-        // additionally frozen by the goldens.
+        // inheritprobe_s1, the abstract-class one by abstractprobe_s1, the interface one by
+        // ifaceprobe_s1); the static-holder one is additionally frozen by the goldens.
         val beforeFieldInit = if (hasClassInitializer) "" else " beforefieldinit"
         val sealed = if (isOpen) "" else " sealed"
         val flags = when {
@@ -68,6 +70,7 @@ internal class DotNetIlClassCodegen(
             // applies to the nested shape — the gate keeps companions final-only).
             isNested -> "nested $visibility auto ansi sealed$beforeFieldInit"
             isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"
+            isAbstract -> "$visibility abstract auto ansi$beforeFieldInit"
             else -> "$visibility auto ansi$sealed$beforeFieldInit"
         }
         // A generic class appends its formal type-parameter list right after the (arity-

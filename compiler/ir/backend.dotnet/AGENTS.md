@@ -223,9 +223,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   (nullable primitives through the object/companion singleton and static-initializer
   machinery), `box/tryDiscardedValue.kt` (the discarded Any-LUB try statement shape).
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
-  vtable/class lowering machinery): only top-level plain classes — final or, since
-  the inheritance model (below), open; non-generic or, since the generics model (below), with
-  reified type parameters — and, since the interface/generics models (below), top-level
+  vtable/class lowering machinery): only top-level plain classes — final, open, abstract, or
+  sealed; non-generic or, since the generics model (below), with reified type parameters — and,
+  since the interface/generics models (below), top-level
   non-generic or generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
@@ -233,22 +233,32 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   method- or field-identity clash) removes the entire class from the module so no call site can
   resolve to a partial class, and the removal cascades through the type mapper to every user of
   the class.
-- Inheritance model (probe series `inheritprobe_s1`–`_s3`; JVM precedent: real CLR classes =
-  real platform inheritance, no vtable lowering — the same argument as the class-model bullet):
-  a top-level plain class may be `open` (drops `sealed` from the `.class` flags) and may extend
-  EXACTLY ONE base class when the supertype resolves to another top-level class of the compiled
-  module. The gate checks only the structural shape; whether the base itself compiles is
+- Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
+  `abstractprobe_s1`–`_s2`; JVM precedent: real CLR classes = real platform inheritance, no
+  vtable lowering — the same argument as the class-model bullet): a top-level plain class may be
+  `open` (drops `sealed` from the `.class` flags), `abstract`, or `sealed` (both emit ordinary CLR
+  `abstract`, never CLR `sealed`; Kotlin sealing remains frontend-enforced like the JVM's
+  historical sealed-class model), and may extend EXACTLY ONE base class when the supertype
+  resolves to another top-level class of the compiled module. The gate checks only the
+  structural shape; whether the base itself compiles is
   re-resolved from the live class map at the top of every render round, so a failing base
   cascades whole-class down the chain, each derived class warned with a reason carrying the
   base's reason (the chain analogue of the companion pair warnings) — pinned by
   `ilText/inheritanceBaseEvicted.kt`. Member flags (order probe-verified; ilasm treats them as
   an unordered keyword set, the emitter standardizes on the s2 spellings): an `open` member
   introducing a slot is `hidebysig newslot virtual` (`specialname newslot virtual` for
-  accessors), a Kotlin `override` REUSES the base slot — `virtual` with NO `newslot` — and a
-  `final override` is `virtual final` (still dispatching under `callvirt`, the Roslyn `sealed
-  override` shape). An `open` member of a FINAL class stays non-virtual (nothing can override
-  it; `isDotNetVirtual` is the single predicate both the declaration flags and the call sites
-  consult). CALL SITES: virtual callees use `callvirt` — a stated widening of the established
+  accessors); a new abstract function/accessor is `newslot abstract virtual` with an empty body;
+  an abstract or concrete Kotlin `override` REUSES a base-class slot — `abstract virtual` or
+  `virtual` with NO `newslot`; and a `final override` is `virtual final` (still dispatching under
+  `callvirt`, the Roslyn `sealed override` shape). An abstract member implementing only an
+  interface uses `newslot abstract virtual`. An abstract class may instead carry a pure abstract
+  interface obligation only as a fake override and emit NO method; a concrete descendant then
+  introduces or reuses the implementing slot (`abstractprobe_s2`, accepted and dispatching on
+  both runtimes). An `open` member of a FINAL class stays non-virtual (nothing can override it;
+  `isDotNetVirtual` is the single predicate both the declaration flags and the call sites
+  consult). Constructors, concrete state, companions, generic owners/methods, constraints, and
+  base/interface links reuse their existing machinery unchanged. CALL SITES: virtual callees use
+  `callvirt` — a stated widening of the established
   call-for-final deviation from Roslyn: final members keep the plain null-check-free `call`,
   but virtual dispatch has no non-virtual substitute, and `callvirt` with the operand token
   naming the DECLARING class dispatches correctly even through base-typed values and to final
@@ -267,9 +277,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   references are legal IL and legal Kotlin), and expression-position `IMPLICIT_CAST` that is
   such an upcast emits just its operand; every other type operator (CAST, SAFE_CAST,
   INSTANCEOF, IMPLICIT_NOTNULL, non-upcast IMPLICIT_CAST) stays rejected loudly. STAYS
-  REJECTED, whole-class: `abstract` and `sealed` classes (no abstract-member/instantiability
-  model), exception supertypes (existing message; interface supertypes are SUPPORTED since the
-  interface model, see its bullet), out-of-module or
+  REJECTED, whole-class: exception supertypes (existing message; interface supertypes are
+  SUPPORTED since the interface model, see its bullet), out-of-module or
   non-top-level bases, objects/companions with any supertype, covariant-return overrides
   (ECMA-335 II.15.4.2.3 slot matching includes the RETURN type, so the override would land in
   a fresh slot and base-typed `callvirt` would silently run the BASE body — probe-verified;
@@ -285,7 +294,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   chain: polymorphic dispatch through base-typed values, super chains, final override,
   inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
   before derived init; `beforefieldinit` semantics unchanged — instance init order is a
-  constructor-chain property, not a `.cctor` one).
+  constructor-chain property, not a `.cctor` one). Abstract metadata, new/reused slots, explicit
+  and fake interface obligations, generic methods/constraints, sealed-class dispatch, companion
+  construction, and constructor state are pinned by `ilText/abstractClasses.kt` and
+  `box/abstractClasses.kt`; `ilText/classShapeRejected.kt` retains the neighboring variance and
+  nested-class rejection boundaries.
 - Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`,
   `genmemberprobe_s1`; JVM precedent: real CLR interface types =
   no vtable/interface lowering, the same argument as the class and inheritance bullets): a
@@ -293,9 +306,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `val`/`var` properties; empty interfaces included) is emitted as
   `.class interface public abstract auto ansi` — no `extends` line, no `sealed`, no
   `beforefieldinit` (s1). A `sealed interface` is deliberately ACCEPTED and emitted as the
-  same plain interface — unlike a sealed CLASS (whose rejection is the missing abstract-class
-  model), interface sealedness is pure frontend-enforced metadata with no CLR counterpart
-  needed (JVM precedent: the JVM backend emits an ordinary interface too), and the exhaustive
+  same plain interface. Like the sealed-class model, interface sealedness is pure
+  frontend-enforced metadata with no CLR counterpart needed (JVM precedent: the JVM backend
+  emits an ordinary interface too), and the exhaustive
   `when` it enables is `is`-gated by the type-operator rejection anyway (pinned by
   `ilText/interfaceEqualityWidening.kt`). Abstract members are
   `.method public hidebysig [specialname ]newslot abstract virtual instance ... cil managed`
@@ -676,8 +689,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     all-abstract interfaces), plus the pre-existing `T : String`/`String?` erosion of the
     string-concat lowering, kept for compatibility and pinned by the borrowed
     `box/strings/kt50140.kt`: such a `T` still declares its real arity but its SLOTS map to
-    `string`); generic TOP-LEVEL PLAIN CLASSES (final or open, the same direct module-local
-    constraint rule without the String exception); generic TOP-LEVEL ALL-ABSTRACT INTERFACES with
+    `string`); generic TOP-LEVEL PLAIN CLASSES (final, open, abstract, or sealed; the same direct
+    module-local constraint rule without the String exception); generic TOP-LEVEL ALL-ABSTRACT
+    INTERFACES with
     invariant, `out`, or `in` parameters under that same constraint rule; generic and non-generic
     classes implementing open or closed generic-interface instantiations; generic-interface
     inheritance with composed arguments; any supported class extending a module-local plain or

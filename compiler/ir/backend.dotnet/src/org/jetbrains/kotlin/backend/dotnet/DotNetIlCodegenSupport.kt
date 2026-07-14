@@ -533,10 +533,11 @@ internal fun IrClass.dotNetDirectInterfaceTypes(): List<IrSimpleType> =
  * TypeLoadException — probe-verified, `ifaceprobe_s1b`), for instance members that override
  * something (every Kotlin `override` is virtual in IL — of a base-class member OR of an
  * interface member, including a `final override`, which keeps dispatching correctly under
- * `callvirt` — probe-verified, `inheritprobe_s2`, `ifaceprobe_s1`) and for `open`
- * members of `open` classes (which introduce a fresh `newslot` slot). An `open` member of a
- * FINAL class is deliberately NOT virtual: nothing can ever override it, so it keeps the
- * final-class model's plain non-virtual `call` (the JVM has no such distinction — everything
+ * `callvirt` — probe-verified, `inheritprobe_s2`, `ifaceprobe_s1`), for abstract members, and for
+ * `open` members of open/abstract/sealed classes (new declarations introduce a fresh `newslot`
+ * slot). An `open` member of a FINAL class is deliberately NOT virtual: nothing can ever
+ * override it, so it keeps the final-class model's plain non-virtual `call` (the JVM has no such
+ * distinction — everything
  * non-private is virtual bytecode-side and the JIT devirtualizes; the CLR makes virtualness a
  * declaration-site property, so the backend decides it here, following what Roslyn emits for
  * C# `virtual`/`override` members).
@@ -545,7 +546,11 @@ internal fun IrSimpleFunction.isDotNetVirtual(): Boolean {
     if (parameters.firstOrNull()?.kind != IrParameterKind.DispatchReceiver) return false
     if ((parent as? IrClass)?.isInterface == true) return true
     if (overriddenSymbols.isNotEmpty()) return true
-    return modality == Modality.OPEN && (parent as? IrClass)?.modality == Modality.OPEN
+    val ownerModality = (parent as? IrClass)?.modality
+    return (modality == Modality.OPEN || modality == Modality.ABSTRACT) &&
+            (ownerModality == Modality.OPEN ||
+                    ownerModality == Modality.ABSTRACT ||
+                    ownerModality == Modality.SEALED)
 }
 
 internal fun IrType.isDotNetNullableStringType(): Boolean {
