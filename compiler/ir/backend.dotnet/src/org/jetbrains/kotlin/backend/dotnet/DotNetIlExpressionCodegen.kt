@@ -345,10 +345,17 @@ internal class DotNetIlExpressionCodegen(
                 }
                 DotNetIlValueType.Object ->
                     dotNetUnsupported("string conversion of Any-typed values is not supported yet (no Any.toString model)")
-                is DotNetIlValueType.UserClass ->
+                is DotNetIlValueType.UserClass, is DotNetIlValueType.GenericInstance ->
                     dotNetUnsupported("string conversion of class instances is not supported yet (no Any.toString model)")
                 is DotNetIlValueType.MappedClass ->
                     dotNetUnsupported("string conversion of an exception type is not supported yet (no Any.toString model)")
+                // Stage-1 generics: `T` has no known `toString` (no constraints model), so
+                // string templates of type-parameter-typed values are rejected loudly.
+                is DotNetIlValueType.TypeParameter ->
+                    dotNetUnsupported(
+                        "string conversion of a type-parameter-typed value is not supported " +
+                                "(no generic-constraints model, so 'T' has no known toString)"
+                    )
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
                 DotNetIlValueType.String, null -> {
@@ -477,16 +484,60 @@ internal class DotNetIlExpressionCodegen(
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee]
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
-        emitArguments(call.arguments, info.signature.parameterTypes, "'$calleeName'")
+        // A generic FUNCTION call carries its instantiation on the method token —
+        // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration
+        // (probe-verified, genprobe_s1; `!!0` is itself a legal instantiation argument at
+        // generic→generic call sites) — never erased: an unmappable type argument fails the
+        // call site loudly.
+        val methodInstantiation = if (callee.typeParameters.isNotEmpty()) {
+            if (call.typeArguments.size != callee.typeParameters.size) {
+                dotNetUnsupported("call to '$calleeName' has an unsupported type-argument shape")
+            }
+            call.typeArguments.map { argumentType ->
+                argumentType?.let { typeMapper.toDotNetIlValueType(it) }
+                    ?: dotNetUnsupported(
+                        "call to '$calleeName' instantiates a type parameter with an unsupported type argument"
+                    )
+            }
+        } else emptyList()
+        // A member of a GENERIC class is called with the operand token naming the receiver's
+        // instantiated view of the DECLARING class — `class 'Box`1'<string>` externally, the
+        // open `class 'Box`1'<!0>` for `this`-dispatch inside the class's own bodies, and the
+        // instantiated BASE view for inherited members and super-calls through a derived
+        // receiver (probe-verified: genprobe_s2/_s3/_s5/_s7) — while the signature slots stay
+        // open per CLR member-ref rules.
+        var ownerToken = info.owner.ilTypeRef
+        var classInstantiation = emptyList<DotNetIlValueType>()
+        if (info.isInstance && info.owner.typeParameterCount > 0) {
+            val receiver = call.arguments.firstOrNull()
+                ?: dotNetUnsupported("call to '$calleeName' has an unsupported argument shape")
+            val receiverType = typeMapper.toDotNetIlValueType(receiver.type)
+                ?: dotNetUnsupported(
+                    "call to '$calleeName' through a receiver of unsupported type ${receiver.type.render()}"
+                )
+            val ownerView = receiverType.dotNetViewAsGenericOwner(info.owner)
+                ?: dotNetUnsupported(
+                    "call to '$calleeName' through a receiver that is not an instantiation of its declaring class"
+                )
+            ownerToken = ownerView.nameInSignature
+            classInstantiation = ownerView.arguments
+        }
+        // Argument VALUES flow at the substituted types (the CLR's reification: `Box<Int>`
+        // really takes an `int32`), while the member-ref operand keeps the open ones.
+        val parameterTypes = info.signature.parameterTypes
+            .map { it.substituteDotNetTypeParameters(classInstantiation, methodInstantiation) }
+        emitArguments(call.arguments, parameterTypes, "'$calleeName'")
         methodContext.emit(
             info.renderCallInstruction(
                 callee.dotNetIlMethodName(),
                 virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual(),
+                ownerToken = ownerToken,
+                methodInstantiation = methodInstantiation,
             ),
             pops = info.signature.parameterTypes.size,
             pushes = if (info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
-        return info.signature.returnType
+        return info.signature.returnType.substituteDotNetTypeParameters(classInstantiation, methodInstantiation)
     }
 
     /**
@@ -533,13 +584,18 @@ internal class DotNetIlExpressionCodegen(
     /**
      * `Point(1, 2)` → arguments then `newobj instance void 'Point'::.ctor(int32, int32)`
      * (probe-verified; `newobj` pops the arguments and pushes the new instance, calling the
-     * constructor with the freshly allocated `this` as argument 0). Generic instantiations are
-     * rejected loudly, never erased.
+     * constructor with the freshly allocated `this` as argument 0).
+     *
+     * A GENERIC instantiation (`Box<String>(v)`, arguments inferred or explicit) carries the
+     * full instantiation on the owner token while the parameter slots stay open —
+     * `newobj instance void class 'demo.Box`1'<string>::.ctor(!0)` (probe-verified,
+     * genprobe_s2; nested instantiations genprobe_s3; Nullable arguments genprobe_s4) — and the
+     * argument values are emitted against the SUBSTITUTED parameter types (real reification:
+     * `Box<Int>` really stores an `int32`, zero box/unbox, genprobe_s3). The instantiation is
+     * mapped through the live type mapper, so a type argument mentioning an evicted class fails
+     * the call site loudly — never erased.
      */
     private fun emitConstructorCall(call: IrConstructorCall, expectedType: DotNetIlValueType) {
-        if (call.typeArguments.isNotEmpty()) {
-            dotNetUnsupported("generic class types are not supported yet")
-        }
         val constructor = call.symbol.owner
         val irClass = constructor.constructedClass
         when (val entry = irClass.fqNameWhenAvailable?.let(DotNetMappedExceptions.entries::get)) {
@@ -552,7 +608,16 @@ internal class DotNetIlExpressionCodegen(
         }
         val classInfo = typeMapper.classInfoOrNull(irClass)
             ?: dotNetUnsupported("constructor call of unsupported class '${irClass.name.asString()}'")
-        val producedType = DotNetIlValueType.UserClass(classInfo)
+        val [producedType, ownerToken, classInstantiation] = if (irClass.typeParameters.isEmpty()) {
+            Triple(DotNetIlValueType.UserClass(classInfo) as DotNetIlValueType, classInfo.ilTypeRef, emptyList<DotNetIlValueType>())
+        } else {
+            // The constructed IrType carries the (inferred or explicit) instantiation.
+            val instanceType = typeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance
+                ?: dotNetUnsupported(
+                    "constructor call of generic class '${irClass.name.asString()}' with an unsupported instantiation"
+                )
+            Triple(instanceType as DotNetIlValueType, instanceType.nameInSignature, instanceType.arguments)
+        }
         // Assignability, not equality: `val b: Base = Derived(...)` is a pure reference upcast
         // needing no IL instruction (probe-verified, inheritprobe_s1), the same widening every
         // other value producer already goes through.
@@ -563,9 +628,10 @@ internal class DotNetIlExpressionCodegen(
             )
         }
         val parameterTypes = constructor.dotNetSignature(typeMapper).parameterTypes
-        emitArguments(call.arguments, parameterTypes, "constructor of '${irClass.name.asString()}'")
+        val substitutedParameterTypes = parameterTypes.map { it.substituteDotNetTypeParameters(classInstantiation) }
+        emitArguments(call.arguments, substitutedParameterTypes, "constructor of '${irClass.name.asString()}'")
         methodContext.emit(
-            "newobj ${classInfo.renderConstructorReference(parameterTypes)}",
+            "newobj ${classInfo.renderConstructorReference(parameterTypes, ownerToken)}",
             pops = parameterTypes.size,
             pushes = 1,
         )
@@ -632,20 +698,41 @@ internal class DotNetIlExpressionCodegen(
      */
     private fun emitGetField(expression: IrGetField, expectedType: DotNetIlValueType) {
         val field = expression.symbol.owner
-        val [classInfo, fieldType, isStatic] = resolveFieldAccess(field)
-        if (!fieldType.isDotNetAssignableTo(expectedType)) {
+        val [classInfo, declaredFieldType, isStatic] = resolveFieldAccess(field)
+        if (classInfo.typeParameterCount > 0) {
+            // A field of a GENERIC class: the operand keeps the DECLARED (open) field type while
+            // the owner token carries the receiver's instantiation — `ldfld !0 class
+            // 'Box`1'<string>::'value'` (probe-verified, genprobe_s2/_s3); the VALUE that lands
+            // on the stack has the substituted type.
+            val [ownerView, receiver, receiverType] = resolveGenericFieldOwner(expression.receiver, field, isStatic)
+            val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
+            if (!fieldType.isDotNetAssignableTo(expectedType)) {
+                dotNetUnsupported(
+                    "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
+                            "where ${expectedType.nameInSignature} is expected"
+                )
+            }
+            emitExpression(receiver, receiverType)
+            methodContext.emit(
+                "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
+                pops = 1,
+                pushes = 1,
+            )
+            return
+        }
+        if (!declaredFieldType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
-                "field '${field.name.asString()}' has type ${fieldType.nameInSignature} " +
+                "field '${field.name.asString()}' has type ${declaredFieldType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
         if (isStatic) {
-            methodContext.emit("ldsfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pushes = 1)
+            methodContext.emit("ldsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pushes = 1)
             return
         }
         emitFieldReceiver(expression.receiver, field, classInfo)
         methodContext.emit(
-            "ldfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}",
+            "ldfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}",
             pops = 1,
             pushes = 1,
         )
@@ -662,15 +749,58 @@ internal class DotNetIlExpressionCodegen(
      */
     fun emitSetField(expression: IrSetField) {
         val field = expression.symbol.owner
-        val [classInfo, fieldType, isStatic] = resolveFieldAccess(field)
-        if (isStatic) {
+        val [classInfo, declaredFieldType, isStatic] = resolveFieldAccess(field)
+        if (classInfo.typeParameterCount > 0) {
+            // The store counterpart of the generic-owner `ldfld` above: open field-type slot,
+            // instantiated owner token, value emitted at the substituted type (genprobe_s2/_s3).
+            val [ownerView, receiver, receiverType] = resolveGenericFieldOwner(expression.receiver, field, isStatic)
+            val fieldType = declaredFieldType.substituteDotNetTypeParameters(ownerView.arguments)
+            emitExpression(receiver, receiverType)
             emitExpression(expression.value, fieldType)
-            methodContext.emit("stsfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pops = 1)
+            methodContext.emit(
+                "stfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString(), ownerView.nameInSignature)}",
+                pops = 2,
+            )
+            return
+        }
+        if (isStatic) {
+            emitExpression(expression.value, declaredFieldType)
+            methodContext.emit("stsfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pops = 1)
             return
         }
         emitFieldReceiver(expression.receiver, field, classInfo)
-        emitExpression(expression.value, fieldType)
-        methodContext.emit("stfld ${classInfo.renderFieldReference(fieldType, field.name.asString())}", pops = 2)
+        emitExpression(expression.value, declaredFieldType)
+        methodContext.emit("stfld ${classInfo.renderFieldReference(declaredFieldType, field.name.asString())}", pops = 2)
+    }
+
+    /**
+     * The instantiated owner view of a field access on a GENERIC class: the receiver's mapped
+     * type walked up to the field's declaring class (usually the open self-instantiation —
+     * backing-field accesses live in the class's own accessors and constructors). Static fields
+     * cannot exist on a generic class of this model (objects and companions are non-generic and
+     * `const val` reads are inlined), so that flavor is rejected defensively.
+     */
+    private fun resolveGenericFieldOwner(
+        receiver: IrExpression?,
+        field: IrField,
+        isStatic: Boolean,
+    ): Triple<DotNetIlValueType.GenericInstance, IrExpression, DotNetIlValueType> {
+        val fieldName = field.name.asString()
+        if (isStatic) {
+            dotNetUnsupported("static field '$fieldName' on a generic class is not supported")
+        }
+        if (receiver == null) {
+            dotNetUnsupported("receiverless access to instance field '$fieldName' is not supported")
+        }
+        val receiverType = typeMapper.toDotNetIlValueType(receiver.type)
+            ?: dotNetUnsupported("access to field '$fieldName' through a receiver of unsupported type ${receiver.type.render()}")
+        val ownerInfo = (field.parent as? IrClass)?.let(typeMapper::classInfoOrNull)
+            ?: dotNetUnsupported("access to a field of unsupported class")
+        val ownerView = receiverType.dotNetViewAsGenericOwner(ownerInfo)
+            ?: dotNetUnsupported(
+                "access to field '$fieldName' through a receiver that is not an instantiation of its declaring class"
+            )
+        return Triple(ownerView, receiver, receiverType)
     }
 
     /**
@@ -790,6 +920,16 @@ internal class DotNetIlExpressionCodegen(
                 null -> methodContext.emit("ldnull", pushes = 1)
                 else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
             }
+            // An instantiated generic class is an ordinary reference type: `null` is its only
+            // constant (`val b: Box<String>? = null`), like UserClass above.
+            is DotNetIlValueType.GenericInstance -> when (expression.value) {
+                null -> methodContext.emit("ldnull", pushes = 1)
+                else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
+            }
+            // No constant has a type-parameter type (`T?`/null is rejected at the type mapper
+            // and every value constant maps to its concrete type first); defensive.
+            is DotNetIlValueType.TypeParameter ->
+                dotNetUnsupported("constant in a type-parameter-typed position is not supported")
         }
     }
 

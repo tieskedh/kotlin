@@ -126,13 +126,19 @@ internal object DotNetMappedExceptions {
  *   type — the CLR-verified common supertype of all mapped exception types, and the target of
  *   both Kotlin supertypes (`Throwable`, `Exception`) that can appear as the expected type of a
  *   mapped-exception value inside the supported subset;
- * - a [DotNetIlValueType.UserClass] is assignable to every proper supertype of its
- *   [supertype DAG][DotNetIlClassInfo.allSupertypes]: the [base-class chain][DotNetIlClassInfo.baseClass]
- *   of the inheritance model plus every transitively [implemented interface][DotNetIlClassInfo.interfaces]
+ * - a [DotNetIlValueType.UserClass] or [DotNetIlValueType.GenericInstance] is assignable to
+ *   every proper supertype of its [supertype DAG][DotNetIlClassInfo.allSupertypes]: the
+ *   [base-type chain][DotNetIlClassInfo.baseType] of the inheritance model — including an
+ *   INSTANTIATED generic base (`class D : Box<Int>()` widens to exactly `Box<Int>`,
+ *   probe-verified `genprobe_s5`) — plus every transitively
+ *   [implemented interface][DotNetIlClassInfo.interfaces]
  *   of the interface model — pure reference upcasts needing no IL instruction at all
  *   (probe-verified: `inheritprobe_s1` for base-typed positions; `ifaceprobe_s7` for
  *   interface-typed fields, parameters, returns and locals, plus the type-agnostic reference
- *   `ceq`; `ifaceprobe_s6` for the interface→super-interface widening). The JVM backend never
+ *   `ceq`; `ifaceprobe_s6` for the interface→super-interface widening). The comparison runs on
+ *   the RENDERED type tokens, which makes generic assignability structurally INVARIANT for
+ *   free: `Box<Derived>` never widens to `Box<Base>` (distinct tokens, and the supertype walk
+ *   never relates two instantiations of one class). The JVM backend never
  *   performs this check itself — the JVM verifier's assignability subsumes it — while this
  *   backend verifies emitted stack types structurally, so the widening is spelled out here;
  * - every [reference-shaped][isDotNetReferenceShaped] type is assignable to
@@ -140,13 +146,17 @@ internal object DotNetMappedExceptions {
  *   reference type and the widening is instruction-free in every position (probe-verified,
  *   `nullprobe_s8`). Value types — the primitives and [DotNetIlValueType.NullableValue] — are
  *   deliberately NOT assignable to `object`: they need a `box` instruction (coercion layer).
+ *   A [DotNetIlValueType.TypeParameter] is assignable only to ITSELF (the `this == expected`
+ *   arm — positional identity): an unconstrained `T` may instantiate to a value type, so it
+ *   never widens anywhere, including to `object` (stage-1 generics: store/load/pass only).
  */
 internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType): Boolean = when {
     this == expected -> true
     expected == DotNetIlValueType.Object -> isDotNetReferenceShaped()
     this is DotNetIlValueType.MappedClass ->
         expected == DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
-    this is DotNetIlValueType.UserClass && expected is DotNetIlValueType.UserClass ->
-        classInfo.allSupertypes().any { it.ilTypeRef == expected.ilTypeRef }
+    (this is DotNetIlValueType.UserClass || this is DotNetIlValueType.GenericInstance) &&
+            (expected is DotNetIlValueType.UserClass || expected is DotNetIlValueType.GenericInstance) ->
+        dotNetAllSupertypes().any { it.nameInSignature == expected.nameInSignature }
     else -> false
 }

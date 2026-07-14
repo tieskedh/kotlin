@@ -48,6 +48,7 @@ internal class DotNetIlClassCodegen(
     private val baseClassRef: String? = null,
     private val isInterface: Boolean = false,
     private val interfaceRefs: List<String> = emptyList(),
+    private val genericParameters: String? = null,
 ) {
     fun generate(builder: StringBuilder) {
         val visibility = if (exported) "public" else "private"
@@ -68,7 +69,12 @@ internal class DotNetIlClassCodegen(
             isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"
             else -> "$visibility auto ansi$sealed$beforeFieldInit"
         }
-        builder.appendLine(".class $flags ${className.toIlIdentifier()}")
+        // A generic class appends its formal type-parameter list right after the (arity-
+        // suffixed) name: `.class ... 'demo.Box`1'<'T'>` — quoted parameter names probe-verified
+        // (genprobe_s8; the bare spelling genprobe_s2). [baseClassRef] then carries a full
+        // instantiation token when the base is generic (`extends class 'demo.Box`1'<int32>`,
+        // genprobe_s5).
+        builder.appendLine(".class $flags ${className.toIlIdentifier()}${genericParameters.orEmpty()}")
         if (!isInterface) {
             builder.appendLine("       extends ${baseClassRef ?: "${CORE_LIB_REF}System.Object"}")
         }

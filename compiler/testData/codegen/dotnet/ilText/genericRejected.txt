@@ -1,0 +1,45 @@
+.assembly extern mscorlib {}
+.assembly 'genericRejected' {}
+.module 'main-genericRejected.il'
+
+.class public auto ansi beforefieldinit 'Gen`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'v'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Gen`1'<!0>::'v'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_v'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'Gen`1'<!0>::'v'
+    ret
+  }
+  .property instance !0 'v'()
+  {
+    .get instance !0 'Gen`1'::'get_v'()
+  }
+}
+.class interface public abstract auto ansi 'Marked'
+{
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "ok"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
