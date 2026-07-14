@@ -402,7 +402,6 @@ private fun CompilerConfiguration.buildHmppModuleStructure(arguments: CommonComp
             sourceDependencies = emptyMap(),
             moduleDependencies = emptyMap(),
             friendDependencies = emptyMap(),
-            incrementalDependencies = emptyMap(),
         )
     }
 
@@ -488,7 +487,6 @@ private fun CompilerConfiguration.buildHmppModuleStructure(arguments: CommonComp
 
     val moduleDependencies = buildFragmentDependencyMap(arguments.fragmentDependencies, FRAGMENT_DEPENDENCIES_ARG_NAME)
     val friendDependencies = buildFragmentDependencyMap(arguments.fragmentFriendDependencies, FRAGMENT_FRIEND_DEPENDENCIES_ARG_NAME)
-    val incrementalDependencies = buildFragmentDependencyMap(arguments.fragmentIncrementalClasspath, FRAGMENT_INCREMENTAL_CLASSPATH_ARG_NAME)
 
-    return HmppCliModuleStructure(modules, sourceDependencies, moduleDependencies, friendDependencies, incrementalDependencies)
+    return HmppCliModuleStructure(modules, sourceDependencies, moduleDependencies, friendDependencies)
 }

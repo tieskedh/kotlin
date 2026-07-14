@@ -127,8 +127,7 @@ class CommonEnvironmentConfigurator(testServices: TestServices) : EnvironmentCon
                 hmppModules.values.toList(),
                 sourceDependencies,
                 moduleDependencies,
-                friendDependencies,
-                incrementalDependencies = emptyMap(),
+                friendDependencies
             )
         }
 
