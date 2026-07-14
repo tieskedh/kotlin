@@ -119,6 +119,7 @@ projectTests {
             filter {
                 includeTestsMatching("*SmokeTest")
                 includeTestsMatching("*CliTestGenerated$*")
+                includeTestsMatching("*DotNetCliTestGenerated")
             }
         }
     }
