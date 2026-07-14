@@ -41,7 +41,10 @@ class ResultTypeResolver(
         val typeParameter = typeVariableConstructor.typeParameter ?: return null
 
         val typesForRecursiveTypeParameters = constraints.mapNotNull { constraint ->
-            if (useOnlyConstraintsFromDeclaredUpperBounds && constraint.position.from !is DeclaredUpperBoundConstraintPosition<*>) {
+            if (
+                useOnlyConstraintsFromDeclaredUpperBounds && constraint.position.from !is DeclaredUpperBoundConstraintPosition<*> ||
+                constraint.kind == ConstraintKind.LOWER
+            ) {
                 return@mapNotNull null
             }
             constraint.type.extractTypeForGivenRecursiveTypeParameter(typeParameter)
