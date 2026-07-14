@@ -912,10 +912,9 @@ class DotNetIlEmitter(
      * pinned by ilText/interfaceEqualityWidening.kt. Everything else stays rejected, whole-interface:
      * `fun interface` (no SAM-conversion model), non-top-level interfaces,
      * out-of-module super-interfaces, members WITH bodies — default methods and accessors with
-     * bodies — (the CLR itself supports Default Interface Methods, probe-verified
-     * `ifaceprobe_s8`, but this backend has no DIM model yet, so the limitation is
-     * backend-scope), private interface members, abstract redeclarations of super-interface
-     * members (an unprobed double-slot shape), overrides of `kotlin.Any` members (the same
+     * bodies — (modern CoreCLR supports Default Interface Methods, but Framework 4.8 ILAsm
+     * rejects their bodies, `dimprobe_s1`), private interface members, overrides of
+     * `kotlin.Any` members (the same
      * no-Any-model gap as on classes), and nested declarations including companion objects.
      */
     private fun checkInterfaceShapeSupported(irClass: IrClass, moduleTopLevelClasses: Set<IrClass>) {
@@ -1002,21 +1001,14 @@ class DotNetIlEmitter(
         if (member.body != null || member.modality != Modality.ABSTRACT) {
             dotNetUnsupported(
                 "$description of interface '$interfaceName' has a body; interface members with bodies are not yet " +
-                        "supported (the CLR supports Default Interface Methods — a future backend slice, not a " +
-                        "platform limitation)"
+                        "supported (Default Interface Methods require modern CoreCLR and are rejected by the " +
+                        ".NET Framework 4.8 ILAsm compatibility floor)"
             )
         }
         if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
             dotNetUnsupported(
                 "$description of interface '$interfaceName' overrides a member of kotlin.Any; " +
                         "kotlin.Any member overrides are not supported (no Any model)"
-            )
-        }
-        if (member.overriddenSymbols.isNotEmpty()) {
-            dotNetUnsupported(
-                "$description of interface '$interfaceName' redeclares a super-interface member; abstract " +
-                        "redeclarations are not supported (the redeclaration would occupy a second, unprobed " +
-                        "interface slot)"
             )
         }
     }
