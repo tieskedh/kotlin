@@ -11,7 +11,7 @@ companion operator fun C.invoke(s: String) {}
 // MODULE: m2(m1)
 // LANGUAGE: +CompanionBlocks
 // FILE: m2.kt
-class D : <!SUPERTYPE_NOT_INITIALIZED!>C<!> {
+class D : <!PRE_RELEASE_CLASS!>C<!>() {
     fun test() {
         <!UNRESOLVED_REFERENCE!>foo<!>()
         <!UNRESOLVED_REFERENCE!>bar<!>
@@ -21,7 +21,7 @@ class D : <!SUPERTYPE_NOT_INITIALIZED!>C<!> {
 fun test() {
     C.<!UNRESOLVED_REFERENCE!>foo<!>()
     C.<!UNRESOLVED_REFERENCE!>bar<!>
-    C(<!TOO_MANY_ARGUMENTS!>""<!>)
+    <!PRE_RELEASE_CLASS, PRE_RELEASE_CLASS!>C(<!TOO_MANY_ARGUMENTS!>""<!>)<!>
 }
 
 /* GENERATED_FIR_TAGS: classDeclaration, funWithExtensionReceiver, functionDeclaration, integerLiteral, operator,
