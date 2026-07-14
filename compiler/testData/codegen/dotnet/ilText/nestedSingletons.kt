@@ -49,6 +49,20 @@ class GenericAncestor<T> {
     }
 }
 
+class DirectGenericObjectOwner<T> {
+    object Singleton {
+        val captured: Int = nextInitialization()
+    }
+}
+
+class GenericNestedObjectOwner {
+    class Generic<T> {
+        object Singleton {
+            val captured: Int = nextInitialization()
+        }
+    }
+}
+
 class ModalOwner {
     open class OpenNested {
         companion object {
@@ -104,6 +118,8 @@ fun main() {
     println(DeepOwner.Middle.Nested.captured)
     println(GenericAncestor.CompanionHolder.captured)
     println(GenericAncestor.ObjectHolder.Singleton.captured)
+    println(DirectGenericObjectOwner.Singleton.captured)
+    println(GenericNestedObjectOwner.Generic.Singleton.captured)
     println(ModalOwner.OpenNested.captured)
     println(ModalOwner.AbstractNested.captured)
     println(HierarchyOwner.Base.captured)

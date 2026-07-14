@@ -426,6 +426,14 @@ class DotNetIlEmitter(
                 val ilIdentity =
                     "${callable.dotNetIlMethodName()}${callable.dotNetIlGenericAritySuffix()}(${functionInfo.signature.renderParameterTypes()})"
                 val clashing = callablesByIlIdentity.putIfAbsent(ilIdentity, callable) ?: continue
+                // A previous accessor clash may have failed the file's whole backing-property
+                // group, removing accessors that were indexed earlier in this snapshot. Such a
+                // declaration cannot participate in emitted IL anymore; replace the stale entry
+                // with the current live callable instead of evicting it against a dead partner.
+                if (clashing !in availableFunctions) {
+                    callablesByIlIdentity[ilIdentity] = callable
+                    continue
+                }
                 for ([loser, winner] in listOf(callable to clashing, clashing to callable)) {
                     val reason = "top-level '${loser.diagnosticName()}' clashes with '${winner.diagnosticName()}': " +
                             "both map to the same IL method '$ilIdentity'"
@@ -708,8 +716,11 @@ class DotNetIlEmitter(
      * A top-level or nested class may derive from a module-local nested class, including a
      * sibling, enclosing metadata parent, forward declaration, generic instantiation, or class
      * in another top-level family (`nestedprobe_s3`). Companion objects of non-generic ordinary
-     * nested classes and named objects in non-generic plain classes are supported by the recursive
-     * static-initializer sweep (`nestedprobe_s4`). Inner classes, nested interfaces, and any class
+     * nested classes and named objects in plain classes are supported by the recursive
+     * static-initializer sweep (`nestedprobe_s4`). A companion's singleton field lives on its
+     * immediate owner, so that owner must be non-generic; a named object's `INSTANCE` lives on the
+     * non-generic object type itself and is safe below a generic metadata parent. Inner classes,
+     * nested interfaces, and any class
      * or object inside an object, companion, or interface stay rejected. Each violation throws
      * [DotNetIlUnsupportedException]; the granularity is always the whole top-level class family.
      */
@@ -794,11 +805,11 @@ class DotNetIlEmitter(
         // gate scopes the model: invariant non-reified parameters, optionally constrained by
         // supported module-local classes/interfaces, and any supported generic/non-generic
         // class or interface supertype. A named nested class carries only its own parameters,
-        // independently of a generic outer (`nestedprobe_s1`). Singleton declarations whose
-        // immediate plain-class container is generic remain outside the probed model: a companion
-        // field would be per constructed owner, and direct named-object semantics under that
-        // metadata parent are deliberately not assumed. A non-generic nested container below a
-        // generic ancestor is safe because it has no outer instantiation (`nestedprobe_s4`).
+        // independently of a generic outer (`nestedprobe_s1`). A companion whose immediate
+        // plain-class container is generic remains outside the model: its field lives on that
+        // container and would be per constructed owner. A named object's `INSTANCE` field instead
+        // lives on the non-generic object type itself, so it remains one singleton even when the
+        // immediate metadata parent is generic (`nestedprobe_s4`).
         // Generic base links retain their full open instantiation, so
         // constructor calls, owner lookup, and override substitution compose through arbitrary
         // module-local chains (probe-verified, geninheritprobe_s1).
@@ -808,13 +819,12 @@ class DotNetIlEmitter(
                 dotNetUnsupported("generic object '$name' is not supported")
             }
             checkDotNetTypeParametersSupported(irClass.typeParameters, "class '$name'")
-            val nestedSingleton = irClass.declarations.filterIsInstance<IrClass>()
-                .firstOrNull { it.kind == ClassKind.OBJECT }
-            if (nestedSingleton != null) {
-                val nestedKind = if (nestedSingleton.isCompanion) "companion object" else "object"
+            val nestedCompanion = irClass.declarations.filterIsInstance<IrClass>()
+                .firstOrNull { it.kind == ClassKind.OBJECT && it.isCompanion }
+            if (nestedCompanion != null) {
                 dotNetUnsupported(
-                    "generic class '$name' contains $nestedKind '${nestedSingleton.name.asString()}'; " +
-                            "singleton nested declarations in generic classes are not supported"
+                    "generic class '$name' contains companion object '${nestedCompanion.name.asString()}'; " +
+                            "a companion field on a generic CLR owner would be duplicated per constructed type"
                 )
             }
         }

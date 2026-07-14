@@ -27,7 +27,7 @@ IL_whenNext_1:
     ldstr "false"
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    newobj instance void [mscorlib]System.Exception::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -79,7 +79,7 @@ IL_whenNext_2:
     ldstr "null"
     br IL_whenEnd_0
 IL_whenNext_3:
-    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    newobj instance void [mscorlib]System.Exception::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -108,7 +108,7 @@ IL_whenNext_1:
     call void [mscorlib]System.Console::WriteLine(string)
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    newobj instance void [mscorlib]System.Exception::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -119,7 +119,8 @@ IL_whenEnd_0:
     .locals init (
       [0] string '<try>',
       [1] bool 'tmp0_subject',
-      [2] class [mscorlib]System.InvalidOperationException 'e'
+      [2] class [mscorlib]System.InvalidOperationException 'e',
+      [3] class [mscorlib]System.Exception 'e@3'
     )
     .try {
       ldarg.0
@@ -138,7 +139,7 @@ IL_whenNext_2:
       ldstr "false"
       br IL_whenEnd_1
 IL_whenNext_3:
-      newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+      newobj instance void [mscorlib]System.Exception::.ctor()
       throw
 IL_whenEnd_1:
       stloc.0
@@ -146,6 +147,12 @@ IL_whenEnd_1:
     }
     catch [mscorlib]System.InvalidOperationException {
       stloc.2
+      ldstr "wrong"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.3
       ldstr "caught"
       stloc.0
       leave IL_tryEnd_0
@@ -185,7 +192,7 @@ IL_whenNext_1:
     ldstr "false"
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    newobj instance void [mscorlib]System.Exception::.ctor()
     throw
 IL_whenEnd_0:
     call string 'test.exhaustiveWhenKt'::'join'(string, string)
@@ -213,7 +220,7 @@ IL_whenNext_1:
     ldarg.2
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    newobj instance void [mscorlib]System.Exception::.ctor()
     throw
 IL_whenEnd_0:
     ret

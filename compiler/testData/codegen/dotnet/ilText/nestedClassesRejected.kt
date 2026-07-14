@@ -5,7 +5,9 @@
 // exercising preservation of the deepest failure attribution while the whole family is evicted.
 // BrokenNestedBaseFamily pins the inheritance cascade: its nested base fails the member pre-pass,
 // then both a top-level derived class and a separate nested family disappear in the render fixpoint.
-// Generic singleton containers stay rejected because their direct CLR semantics are not modeled.
+// Generic companion containers stay rejected because the companion field would live on the
+// constructed generic owner. Named objects own their own non-generic INSTANCE field and are
+// covered positively by nestedSingletons.
 // BrokenNestedSingletonFamily pins recursive-static-initializer eviction after its callee
 // disappears.
 
@@ -29,19 +31,9 @@ class GenericCompanionHost<T> {
     companion object
 }
 
-class GenericObjectHost<T> {
-    object Nested
-}
-
 class GenericNestedCompanionHost {
     class Nested<T> {
         companion object
-    }
-}
-
-class GenericNestedObjectHost {
-    class Nested<T> {
-        object Named
     }
 }
 

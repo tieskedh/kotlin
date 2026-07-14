@@ -1,9 +1,9 @@
 // fir2ir appends the synthetic noWhenBranchMatchedException call to exhaustive `when`
 // expressions without a source `else`. The DotNet intrinsic emits an inline parameterless
-// System.InvalidOperationException throw (JVM intrinsic-registry precedent; deliberate
+// System.Exception throw (JVM intrinsic-registry precedent; deliberate
 // cross-target deviation from Roslyn's modern-only SwitchExpressionException, whenprobe_s1).
-// Pin value and statement positions, nullable-Boolean composition, and catchability as the
-// existing IllegalStateException mapping.
+// Pin value and statement positions, nullable-Boolean composition, and the absence of a false
+// IllegalStateException catch edge.
 package test
 
 import kotlin.io.println
@@ -32,6 +32,8 @@ fun caught(flag: Boolean): String = try {
         false -> "false"
     }
 } catch (e: IllegalStateException) {
+    "wrong"
+} catch (e: Exception) {
     "caught"
 }
 
