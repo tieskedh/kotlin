@@ -215,7 +215,7 @@ internal class DotNetIlTypeMapper(
      * A user-class type maps only while its class is available; `C?` maps to the same
      * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). A GENERIC
      * user-class type maps to a full [instantiation][DotNetIlValueType.GenericInstance]
-     * (stage-1 generics: real CLR reified generics, the Roslyn shape — never erasure), with
+     * (stages 1-2: real CLR reified generics, the Roslyn shape — never erasure), with
      * each type argument mapped recursively through this same mapper, so an argument mentioning
      * an evicted class fails the whole instantiation (null, cascading like any other
      * unavailable type — the fixpoint eviction rule). Use-site variance projections
@@ -248,16 +248,15 @@ internal class DotNetIlTypeMapper(
 
     /**
      * A reference to a type parameter of the enclosing generic declaration maps positionally to
-     * the CLR `!n` (class) / `!!n` (method) token — stage-1 generics supports exactly the
-     * UNCONSTRAINED, invariant type parameter (Kotlin bound `Any?` only; the shape gates reject
-     * constrained declarations, and this arm backstops any other path). Two loud rejections are
-     * deliberate design points:
+     * the CLR `!n` (class) / `!!n` (method) token. Stage 2 additionally carries every supported
+     * module-local class/interface bound on the structural token; the rendered slot remains
+     * positional and open. Two loud rejections remain deliberate design points:
      * - `T?` (a nullable type-parameter type) has NO uniform CLR representation — `T` may
      *   instantiate to a value type needing `Nullable<T>` and to a reference type needing
      *   nothing — so any declaration mentioning it is rejected (the deferred ABI problem the
-     *   hybrid nullability model documents; a constraints model is the prerequisite);
-     * - a constrained `T` would need `constrained.` call support and bound-aware
-     *   representation choices (the next generics stage).
+     *   hybrid nullability model documents; interface-only CLR constraints can still admit a
+     *   value type, so the stage-2 constraint subset does not make this uniform);
+     * - constraints outside [dotNetConstraintTypes] are rejected instead of erased.
      * A `T` whose bound is `String`/`String?` never reaches this arm: the string-concat
      * lowering's receiver mapping ([isDotNetStringType]) runs earlier in the dispatch chain and
      * maps it to IL `string` (the pre-existing behavior).
@@ -269,19 +268,67 @@ internal class DotNetIlTypeMapper(
         if (type.isMarkedNullable()) {
             dotNetUnsupported(
                 "nullable type-parameter type '$parameterName?' has no uniform CLR representation " +
-                        "and is not supported (requires the future generic-constraints model)"
-            )
-        }
-        if (typeParameter.superTypes.any { !it.isNullableAny() }) {
-            dotNetUnsupported(
-                "type parameter '$parameterName' has a constraint; generic constraints are not supported yet"
+                        "and is not supported by the current generic-constraints model"
             )
         }
         return DotNetIlValueType.TypeParameter(
             typeParameter.index,
             isMethodParameter = typeParameter.parent is IrFunction,
+            upperBounds = typeParameter.dotNetConstraintTypes(this),
         )
     }
+}
+
+/**
+ * Maps the stage-2 constraints of this parameter to live module-local class/interface types.
+ * `Any?` is the unconstrained Kotlin default and contributes no metadata. The historical
+ * function-only `String` bound keeps its pre-stage-1 slot erosion and is likewise omitted here.
+ * Every new constraint is deliberately direct, non-null, and non-generic; accepting a mapped or
+ * external type without a complete member model would publish metadata the backend cannot use.
+ * A class constraint is sorted before interface constraints, matching the ECMA/Roslyn canonical
+ * order regardless of source `where`-clause order.
+ */
+internal fun IrTypeParameter.dotNetConstraintTypes(
+    typeMapper: DotNetIlTypeMapper,
+): List<DotNetIlValueType.UserClass> {
+    val mappedBounds = superTypes
+        .filterNot { it.isNullableAny() || it.isString() || it.isNullableString() }
+        .map { bound ->
+            val simpleBound = bound as? IrSimpleType
+                ?: dotNetUnsupported(
+                    "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
+                            "constraints must be non-null, non-generic module-local classes or interfaces"
+                )
+            if (simpleBound.isMarkedNullable() || simpleBound.arguments.isNotEmpty()) {
+                dotNetUnsupported(
+                    "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
+                            "constraints must be non-null, non-generic module-local classes or interfaces"
+                )
+            }
+            val boundClass = (simpleBound.classifier as? IrClassSymbol)?.owner
+                ?: dotNetUnsupported(
+                    "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
+                            "constraints on other type parameters are not supported"
+                )
+            val mappedBound = typeMapper.toDotNetIlValueType(bound) as? DotNetIlValueType.UserClass
+                ?: dotNetUnsupported(
+                    "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
+                            "only classes and interfaces emitted in this module can be constraints"
+                )
+            boundClass to mappedBound
+        }
+    return mappedBounds.sortedBy { it.first.isInterface }.map { it.second }
+}
+
+/** The formal `<...>` list shared by generic class and top-level-method declarations. */
+internal fun List<IrTypeParameter>.renderDotNetIlGenericParameters(
+    typeMapper: DotNetIlTypeMapper,
+): String? = takeIf { it.isNotEmpty() }?.joinToString(", ", "<", ">") { typeParameter ->
+    val constraintPrefix = typeParameter.dotNetConstraintTypes(typeMapper)
+        .takeIf { it.isNotEmpty() }
+        ?.joinToString(", ", "(", ") ") { it.nameInSignature }
+        .orEmpty()
+    constraintPrefix + typeParameter.name.asString().toIlIdentifier()
 }
 
 /**
@@ -304,17 +351,18 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
     (dotNetBaseSuperTypeOrNull()?.classifier as? IrClassSymbol)?.owner
 
 /**
- * The shared stage-1 type-parameter gate: a supported type parameter is exactly the
- * UNCONSTRAINED (Kotlin bound `Any?` only), INVARIANT, non-reified one — everything else is
- * rejected loudly at the declaration (never erased):
+ * The shared generic type-parameter gate: a supported parameter is invariant and non-reified,
+ * and is either unconstrained (`Any?`) or has direct non-null, non-generic class/interface
+ * bounds. [dotNetConstraintTypes] performs the live module-local mapping later, once the class
+ * registry exists. Everything else is rejected loudly at the declaration (never erased):
  * - `reified` requires the inlining model this backend does not have;
  * - declaration-site variance (`out`/`in`) is rejected because ECMA-335 (II.10.1.7) allows
  *   variance only on interfaces and delegates while Kotlin allows it on classes — Roslyn has no
  *   class-variance shape to follow, and emitting the parameter as invariant would silently
  *   change assignability, so the declaration is rejected (a future interface-variance slice can
  *   widen this);
- * - constraints (`T : Base`) are the next generics stage (bound-aware representation plus
- *   `constrained.` call support) — with ONE pre-existing exception, enabled by
+ * - constraints with nullable, generic-instantiation, or type-parameter bounds stay outside
+ *   stage 2 — with ONE pre-existing exception, enabled by
  *   [allowStringBounds]: a `T` bounded by `String`/`String?` predates this slice (the
  *   string-concat lowering's receiver mapping sends every use of such a `T` to IL `string`,
  *   see [isDotNetStringType]) and stays supported on FUNCTIONS for compatibility — the
@@ -341,14 +389,21 @@ internal fun checkDotNetTypeParametersSupported(
                         "only on interfaces and delegates — a future interface-variance slice can widen this)"
             )
         }
-        val hasUnsupportedBound = typeParameter.superTypes.any { superType ->
-            !superType.isNullableAny() &&
-                    !(allowStringBounds && (superType.isString() || superType.isNullableString()))
+        val unsupportedBound = typeParameter.superTypes.firstOrNull { superType ->
+            when {
+                superType.isNullableAny() -> false
+                superType.isString() || superType.isNullableString() -> !allowStringBounds
+                else -> {
+                    val simpleType = superType as? IrSimpleType
+                    simpleType == null || simpleType.isMarkedNullable() ||
+                            simpleType.arguments.isNotEmpty() || simpleType.classifier !is IrClassSymbol
+                }
+            }
         }
-        if (hasUnsupportedBound) {
+        if (unsupportedBound != null) {
             dotNetUnsupported(
-                "$ownerDescription constrains type parameter '$parameterName'; " +
-                        "generic constraints are not supported yet"
+                "$ownerDescription constrains type parameter '$parameterName' with unsupported type " +
+                        "${unsupportedBound.render()}; constraints must be non-null, non-generic classes or interfaces"
             )
         }
     }

@@ -730,16 +730,14 @@ private class DotNetIlEqualityIntrinsic(
             ?: dotNetUnsupported("missing right operand of an equality comparison")
         val leftType = codegen.toDotNetIlValueType(left.type)
         val rightType = codegen.toDotNetIlValueType(right.type)
-        // Stage-1 generics: every equality with a type-parameter-typed operand — `==`, `===`
-        // and `x == null` alike — is rejected loudly: an unconstrained `T` may instantiate to a
-        // value type, where the reference `ceq` is meaningless (and `Nullable<T>`'s null test
-        // is a method call, not `ldnull`/`ceq`), and there is no lifted story without a
-        // constraints model.
+        // Every equality with a type-parameter operand stays rejected: an unconstrained or
+        // interface-bound `T` may instantiate to a value type, where reference `ceq` is
+        // meaningless, while general `==` on a class-bound `T` still needs the missing Any.equals
+        // model. Stage-2 bound-member dispatch deliberately does not guess either equality shape.
         if (leftType is DotNetIlValueType.TypeParameter || rightType is DotNetIlValueType.TypeParameter) {
             dotNetUnsupported(
-                "equality comparison with a type-parameter-typed operand is not supported: an unconstrained " +
-                        "'T' may instantiate to a value type, where reference comparison is meaningless " +
-                        "(no generic-constraints model)"
+                "equality comparison with a type-parameter-typed operand is not supported " +
+                        "(interface-bound parameters can be value types, and general equality requires Any.equals)"
             )
         }
         if (leftType is DotNetIlValueType.NullableValue || rightType is DotNetIlValueType.NullableValue) {
