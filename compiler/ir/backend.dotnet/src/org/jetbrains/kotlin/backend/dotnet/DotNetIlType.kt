@@ -94,7 +94,7 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * structurally nullable, exactly like `string`).
      *
      * The value type carries the whole [classInfo] rather than just the rendered reference so
-     * that [isDotNetAssignableTo] can walk the [base-class chain][DotNetIlClassInfo.baseClass]
+     * that [isDotNetAssignableTo] can walk the [base-type chain][DotNetIlClassInfo.baseType]
      * for reference upcasts (`Derived` used where `Base` is expected). Equality stays what the
      * old data class had — the rendered type reference, unique per class within one emission —
      * so two infos for the same class compare equal regardless of the base link's state.
@@ -116,6 +116,114 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * ilasm-probe-verified. A nullable `T?` maps to the same reference type, like [UserClass].
      */
     data class MappedClass(val ilTypeRef: kotlin.String) : DotNetIlValueType("class $ilTypeRef")
+
+    /**
+     * A reference to a type parameter of the enclosing generic declaration — CLR
+     * ELEMENT_TYPE_VAR (`!n`, a class type parameter) or ELEMENT_TYPE_MVAR (`!!n`, a method
+     * type parameter). The CLR identifies type parameters POSITIONALLY: the declared name is
+     * decorative metadata, `!n`/`!!n` indices are authoritative (probe-verified, `genprobe_s1`:
+     * the callsite signature keeps the `!!n` slots verbatim while only the `<...>` list is
+     * substituted), which is why equality here is by index and kind alone. Stage-1 generics
+     * model: unconstrained and invariant only, so a `!n`-typed value supports exactly
+     * store/load/pass — it is neither reference-shaped nor value-shaped statically, and every
+     * consumer needing one of those shapes (`ldnull`, `ceq`, boxing to `object`, member calls)
+     * rejects loudly (no constraints model).
+     */
+    data class TypeParameter(val index: Int, val isMethodParameter: kotlin.Boolean) :
+        DotNetIlValueType(if (isMethodParameter) "!!$index" else "!$index")
+
+    /**
+     * An INSTANTIATION of a generic user class of this module (`Box<String>`): real CLR reified
+     * generics, the Roslyn shape — never erasure. [nameInSignature] is the instantiation token
+     * `class 'demo.Box`1'<string>` (the arity suffix lives INSIDE the quoted identifier, see
+     * [DotNetIlClassInfo.ilTypeRef]; a suffix outside the quotes is an ilasm syntax error —
+     * probe-verified, `genprobe_s2`/`_s2c`) and doubles as the operand spelling in every
+     * position: locals, fields, params, returns, `newobj`, `ldfld`/`stfld` owner tokens and
+     * `call`/`callvirt` owner tokens (`genprobe_s2`/`_s3`), composing with [NullableValue]
+     * arguments (`genprobe_s4`) and nesting arbitrarily (`Box<Box<String>>`, `genprobe_s3`).
+     * Inside the declaring class's own bodies the self-reference is the OPEN instantiation
+     * (`class 'Box`1'<!0>`, `genprobe_s2`/`_s7`), which falls out of mapping the class's own
+     * `defaultType` — the [arguments] are then [TypeParameter]s. Like [UserClass], equality is
+     * the rendered token, which makes assignability structurally INVARIANT for free:
+     * `Box<Derived>` and `Box<Base>` render differently and never compare assignable.
+     */
+    class GenericInstance(val classInfo: DotNetIlClassInfo, val arguments: List<DotNetIlValueType>) :
+        DotNetIlValueType("class ${classInfo.ilTypeRef}<${arguments.joinToString(", ") { it.nameInSignature }}>") {
+        override fun equals(other: Any?): kotlin.Boolean =
+            other is GenericInstance && other.nameInSignature == nameInSignature
+
+        override fun hashCode(): Int = nameInSignature.hashCode()
+        override fun toString(): kotlin.String = "GenericInstance($nameInSignature)"
+    }
+}
+
+/**
+ * Substitutes [DotNetIlValueType.TypeParameter] leaves of this mapped type with the given
+ * instantiation — [classArguments] for `!n` references, [methodArguments] for `!!n` — recursing
+ * through [DotNetIlValueType.GenericInstance] arguments (nested instantiations). This is the
+ * IL-level counterpart of the CLR's own signature instantiation: declared member signatures stay
+ * OPEN in every member-reference operand while the VALUES flowing at a call site have the
+ * substituted types (probe-verified, `genprobe_s1`/`_s2`), so codegen emits arguments and checks
+ * results against the substituted form. An out-of-range index is an internal error: every
+ * substitution site derives its argument lists from the same declaration the open type came from.
+ */
+internal fun DotNetIlValueType.substituteDotNetTypeParameters(
+    classArguments: List<DotNetIlValueType>,
+    methodArguments: List<DotNetIlValueType> = emptyList(),
+): DotNetIlValueType = when (this) {
+    is DotNetIlValueType.TypeParameter -> {
+        val arguments = if (isMethodParameter) methodArguments else classArguments
+        arguments.getOrNull(index)
+            ?: error("Internal .NET backend error: no substitution for type parameter $nameInSignature")
+    }
+    is DotNetIlValueType.GenericInstance -> DotNetIlValueType.GenericInstance(
+        classInfo,
+        arguments.map { it.substituteDotNetTypeParameters(classArguments, methodArguments) },
+    )
+    // A NullableValue element is always concrete (`T?` is rejected at the type mapper), so this
+    // arm is defensive symmetry.
+    is DotNetIlValueType.NullableValue ->
+        DotNetIlValueType.NullableValue(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
+    else -> this
+}
+
+/** The return-type wrapper of [substituteDotNetTypeParameters]; `void` never substitutes. */
+internal fun DotNetIlReturnType.substituteDotNetTypeParameters(
+    classArguments: List<DotNetIlValueType>,
+    methodArguments: List<DotNetIlValueType> = emptyList(),
+): DotNetIlReturnType = when (this) {
+    DotNetIlReturnType.Void -> this
+    is DotNetIlReturnType.Value ->
+        DotNetIlReturnType.Value(type.substituteDotNetTypeParameters(classArguments, methodArguments))
+}
+
+/**
+ * The proper supertypes this class-like type widens to, as full instantiated type tokens — the
+ * value-type view of [DotNetIlClassInfo.allSupertypes] for [DotNetIlValueType.UserClass] and
+ * [DotNetIlValueType.GenericInstance]; empty for every other type.
+ */
+internal fun DotNetIlValueType.dotNetAllSupertypes(): Sequence<DotNetIlValueType> = when (this) {
+    is DotNetIlValueType.UserClass -> classInfo.allSupertypes()
+    is DotNetIlValueType.GenericInstance -> classInfo.allSupertypes(arguments)
+    else -> emptySequence()
+}
+
+/**
+ * This type's view AS the generic class [owner] — itself when it is an instantiation of [owner],
+ * otherwise the (unique) instantiated-[owner] entry of its supertype walk: the member-reference
+ * owner token for calls to and field accesses on members a generic class DECLARES, reached
+ * through any receiver (its own instantiations, open or closed, and derived classes — the
+ * operand must name the DECLARING class with its instantiation, `genprobe_s2`/`_s5`). Null when
+ * this type does not widen to [owner] at all (e.g. a type-parameter-typed receiver: member calls
+ * on `T` receivers have no constraints model and are rejected by the callers of this walk).
+ */
+internal fun DotNetIlValueType.dotNetViewAsGenericOwner(
+    owner: DotNetIlClassInfo,
+): DotNetIlValueType.GenericInstance? {
+    if (this is DotNetIlValueType.GenericInstance && classInfo.ilTypeRef == owner.ilTypeRef) return this
+    return dotNetAllSupertypes()
+        .filterIsInstance<DotNetIlValueType.GenericInstance>()
+        .firstOrNull { it.classInfo.ilTypeRef == owner.ilTypeRef }
 }
 
 /**
@@ -137,12 +245,17 @@ internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(): String? = when (th
 /**
  * Whether values of this IL type live on the evaluation stack as object REFERENCES — `ldnull` is
  * a valid value, reference `ceq` is a valid identity/null test, and widening to
- * [DotNetIlValueType.Object] is instruction-free. False exactly for the primitive value types
- * and [DotNetIlValueType.NullableValue] (whose null test is `get_HasValue`, never `ldnull`/`ceq`).
+ * [DotNetIlValueType.Object] is instruction-free. False exactly for the primitive value types,
+ * [DotNetIlValueType.NullableValue] (whose null test is `get_HasValue`, never `ldnull`/`ceq`)
+ * and [DotNetIlValueType.TypeParameter] — an unconstrained `T` may instantiate to a value type,
+ * so a `!n`-typed value is neither reference- nor value-shaped statically (stage-1 generics:
+ * every consumer of this predicate is a rejection point for `T`-typed values). An INSTANTIATED
+ * generic class ([DotNetIlValueType.GenericInstance]) is an ordinary reference type.
  */
 internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) {
     DotNetIlValueType.String, DotNetIlValueType.Object,
     is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
+    is DotNetIlValueType.GenericInstance,
         -> true
     else -> false
 }
@@ -195,11 +308,29 @@ internal class DotNetIlFunctionInfo(
      * final classes on non-null Kotlin receivers are called with plain (non-virtual) `call`
      * (probe-verified) — a stated deviation from Roslyn, which emits `callvirt` purely for its
      * implicit null check.
+     *
+     * The signature slots are always the DECLARED (open) ones — `!n`/`!!n` stay verbatim in
+     * member references per CLR member-ref rules (probe-verified, `genprobe_s1`/`_s2`) — while
+     * generic contexts substitute only the tokens around them: [ownerToken] carries the
+     * instantiated owner for members of a generic class (`class 'Box`1'<string>` at external
+     * call sites, the open `class 'Box`1'<!0>` inside the class's own bodies; the default is the
+     * established bare non-generic spelling, which `.property` accessor references also require
+     * for generic owners — bare name, NO type-arguments list, `genprobe_s2`), and
+     * [methodInstantiation] renders the `<inst>` list of a generic METHOD between its name and
+     * parameter list (`'id'<string>(!!0)`, `genprobe_s1`; `!!0` itself is a legal instantiation
+     * argument at generic→generic call sites).
      */
-    fun renderMethodReference(methodName: String): String {
+    fun renderMethodReference(
+        methodName: String,
+        ownerToken: String = owner.ilTypeRef,
+        methodInstantiation: List<DotNetIlValueType> = emptyList(),
+    ): String {
         val instancePrefix = if (isInstance) "instance " else ""
+        val instantiation =
+            if (methodInstantiation.isEmpty()) ""
+            else methodInstantiation.joinToString(", ", "<", ">") { it.nameInSignature }
         return "$instancePrefix${signature.returnType.nameInSignature} " +
-                "${owner.ilTypeRef}::${methodName.toIlIdentifier()}(${signature.renderParameterTypes()})"
+                "$ownerToken::${methodName.toIlIdentifier()}$instantiation(${signature.renderParameterTypes()})"
     }
 
     /**
@@ -212,9 +343,16 @@ internal class DotNetIlFunctionInfo(
      * [renderMethodReference]), static facade functions, and `super`-qualified calls, whose
      * non-virtual `call` to a virtual method with the `this` receiver runs the BASE
      * implementation (probe-verified, `inheritprobe_s1`) — keeps the plain `call`.
+     * [ownerToken]/[methodInstantiation] are the generic-context tokens documented on
+     * [renderMethodReference].
      */
-    fun renderCallInstruction(methodName: String, virtual: Boolean = false): String =
-        "${if (virtual) "callvirt" else "call"} ${renderMethodReference(methodName)}"
+    fun renderCallInstruction(
+        methodName: String,
+        virtual: Boolean = false,
+        ownerToken: String = owner.ilTypeRef,
+        methodInstantiation: List<DotNetIlValueType> = emptyList(),
+    ): String =
+        "${if (virtual) "callvirt" else "call"} ${renderMethodReference(methodName, ownerToken, methodInstantiation)}"
 }
 
 /**
@@ -227,53 +365,69 @@ internal class DotNetIlFunctionInfo(
 internal class DotNetIlClassInfo(
     val ilClassName: String,
     private val enclosingClass: DotNetIlClassInfo? = null,
+    val typeParameterCount: Int = 0,
 ) {
     /** Whether this is a nested class (a companion object) rather than a top-level one. */
     val isNested: Boolean
         get() = enclosingClass != null
 
     /**
-     * The class info of this class's base class, or null when the class extends `kotlin.Any`
-     * (IL `System.Object`). Linked by [DotNetIlEmitter]'s pre-pass after ALL gate-passing
-     * classes are registered (a base may be declared after its derived class — forward
-     * references are legal IL, probe-verified `inheritprobe_s1`) and consumed by
-     * [isDotNetAssignableTo]'s upcast walk. Deliberately NOT consulted for the `extends` line:
-     * the render re-resolves the base through the LIVE availableClasses map every fixpoint
-     * round, so a base evicted mid-emission fails its derived classes instead of leaving a
-     * stale link in emitted IL (the link itself is then unreachable — the derived class is
-     * evicted with it).
+     * The base TYPE of this class as a full type token — a [DotNetIlValueType.UserClass] for a
+     * plain base, a [DotNetIlValueType.GenericInstance] for an instantiated generic base
+     * (`class D : Box<Int>()` links `class 'Box`1'<int32>`; the instantiation must be part of
+     * the link because assignability is INVARIANT — `D` widens to `Box<Int>` but never to
+     * `Box<String>`) — or null when the class extends `kotlin.Any` (IL `System.Object`). Linked
+     * by [DotNetIlEmitter]'s pre-pass after ALL gate-passing classes are registered (a base may
+     * be declared after its derived class — forward references are legal IL, probe-verified
+     * `inheritprobe_s1`) and consumed by [isDotNetAssignableTo]'s upcast walk. Deliberately NOT
+     * consulted for the `extends` line: the render re-resolves the base through the LIVE
+     * availableClasses map every fixpoint round, so a base evicted mid-emission fails its
+     * derived classes instead of leaving a stale link in emitted IL (the link itself is then
+     * unreachable — the derived class is evicted with it).
      */
-    var baseClass: DotNetIlClassInfo? = null
+    var baseType: DotNetIlValueType? = null
 
     /**
      * The class infos of this class's directly implemented interfaces (for an interface: its
-     * directly extended super-interfaces). Linked by the same pre-pass as [baseClass] and, like
+     * directly extended super-interfaces). Linked by the same pre-pass as [baseType] and, like
      * it, consumed ONLY by [isDotNetAssignableTo]'s upcast walk — the `implements` line is
      * re-resolved through the LIVE availableClasses map every render round, so an interface
      * evicted mid-emission cascades whole-class to its implementers and sub-interfaces instead
      * of leaving a stale link in emitted IL. Interfaces form a DAG rather than a chain, hence a
-     * list next to the single [baseClass].
+     * list next to the single [baseType]. Interfaces stay non-generic (the interface shape gate
+     * rejects generic interfaces), so plain infos suffice here.
      */
     var interfaces: List<DotNetIlClassInfo> = emptyList()
 
     /**
-     * Every proper supertype this class widens to by a pure reference upcast: the [baseClass]
-     * chain, every directly or transitively implemented interface, and the interfaces of every
-     * base-chain ancestor (probe-verified free widenings, `ifaceprobe_s6`/`_s7`). A breadth-first
-     * walk over the supertype DAG (diamonds are legal Kotlin and legal IL), deduplicated by
-     * [ilTypeRef] like [DotNetIlValueType.UserClass] equality.
+     * Every proper supertype this class widens to by a pure reference upcast, as full type
+     * tokens: the [baseType] chain, every directly or transitively implemented interface, and
+     * the interfaces of every base-chain ancestor (probe-verified free widenings,
+     * `ifaceprobe_s6`/`_s7`; the instantiated-generic-base widening `genprobe_s5`). A
+     * breadth-first walk over the supertype DAG (diamonds are legal Kotlin and legal IL),
+     * deduplicated by the rendered token like [DotNetIlValueType.UserClass]/
+     * [DotNetIlValueType.GenericInstance] equality. [selfArguments] is this class's own
+     * instantiation, substituted into a base link that mentions its type parameters
+     * (generic-extends-generic is gate-rejected in stage 1, so the substitution is defensive
+     * symmetry; a non-generic class's links are always closed).
      */
-    fun allSupertypes(): Sequence<DotNetIlClassInfo> = sequence {
+    fun allSupertypes(selfArguments: List<DotNetIlValueType> = emptyList()): Sequence<DotNetIlValueType> = sequence {
         val visited = hashSetOf<String>()
-        val queue = ArrayDeque<DotNetIlClassInfo>()
-        baseClass?.let(queue::add)
-        queue.addAll(interfaces)
+        val queue = ArrayDeque<DotNetIlValueType>()
+        fun enqueueSupertypesOf(classInfo: DotNetIlClassInfo, arguments: List<DotNetIlValueType>) {
+            classInfo.baseType?.let { queue.add(it.substituteDotNetTypeParameters(arguments)) }
+            classInfo.interfaces.mapTo(queue) { DotNetIlValueType.UserClass(it) }
+        }
+        enqueueSupertypesOf(this@DotNetIlClassInfo, selfArguments)
         while (queue.isNotEmpty()) {
             val next = queue.removeFirst()
-            if (!visited.add(next.ilTypeRef)) continue
+            if (!visited.add(next.nameInSignature)) continue
             yield(next)
-            next.baseClass?.let(queue::add)
-            queue.addAll(next.interfaces)
+            when (next) {
+                is DotNetIlValueType.UserClass -> enqueueSupertypesOf(next.classInfo, emptyList())
+                is DotNetIlValueType.GenericInstance -> enqueueSupertypesOf(next.classInfo, next.arguments)
+                else -> {}
+            }
         }
     }
 
@@ -291,13 +445,21 @@ internal class DotNetIlClassInfo(
 
     /**
      * The `instance void 'C'::.ctor(<params>)` member reference shared by every constructor use:
-     * prefixed with `newobj` at instantiation sites and with `call` in `this(...)` delegations
-     * (`.ctor` is a bare keyword, not a quoted identifier; both spellings are probe-verified).
+     * prefixed with `newobj` at instantiation sites and with `call` in `this(...)` and base
+     * delegations (`.ctor` is a bare keyword, not a quoted identifier; both spellings are
+     * probe-verified). For a generic class, [ownerToken] carries the instantiation
+     * (`newobj instance void class 'Box`1'<string>::.ctor(!0)` — the parameter slots stay OPEN,
+     * probe-verified `genprobe_s2`; base-ctor chaining `genprobe_s5`).
      */
-    fun renderConstructorReference(parameterTypes: List<DotNetIlValueType>): String =
-        "instance void ${ilTypeRef}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})"
+    fun renderConstructorReference(parameterTypes: List<DotNetIlValueType>, ownerToken: String = ilTypeRef): String =
+        "instance void ${ownerToken}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})"
 
-    /** The `<type> 'C'::'name'` field reference `ldfld`/`stfld` instructions take as operand. */
-    fun renderFieldReference(fieldType: DotNetIlValueType, fieldName: String): String =
-        "${fieldType.nameInSignature} ${ilTypeRef}::${fieldName.toIlIdentifier()}"
+    /**
+     * The `<type> 'C'::'name'` field reference `ldfld`/`stfld` instructions take as operand.
+     * [fieldType] is the DECLARED (open) field type and [ownerToken] the instantiated owner for
+     * fields of a generic class (`ldfld !0 class 'Box`1'<string>::'value'` — open type slot,
+     * closed owner; probe-verified `genprobe_s2`/`_s3`, the derived-receiver flavor `_s5`).
+     */
+    fun renderFieldReference(fieldType: DotNetIlValueType, fieldName: String, ownerToken: String = ilTypeRef): String =
+        "${fieldType.nameInSignature} ${ownerToken}::${fieldName.toIlIdentifier()}"
 }

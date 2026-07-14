@@ -1,0 +1,108 @@
+.assembly extern mscorlib {}
+.assembly 'genericArity' {}
+.module 'main-genericArity.il'
+
+.class public auto ansi sealed beforefieldinit 'Holder'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'n'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'n') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Holder'::'n'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_n'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Holder'::'n'
+    ret
+  }
+  .property instance int32 'n'()
+  {
+    .get instance int32 'Holder'::'get_n'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'HolderG`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'v'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'HolderG`1'<!0>::'v'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_v'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'HolderG`1'<!0>::'v'
+    ret
+  }
+  .property instance !0 'v'()
+  {
+    .get instance !0 'HolderG`1'::'get_v'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericArityKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'pick'(string 'x') cil managed
+  {
+    .maxstack 1
+    ldc.i4 1
+    ret
+  }
+  .method public hidebysig static int32 'pick'<'T'>(string 'x') cil managed
+  {
+    .maxstack 1
+    ldc.i4 2
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldstr "plain"
+    call int32 'genericArityKt'::'pick'(string)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    call int32 'genericArityKt'::'pick'<bool>(string)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newobj instance void 'Holder'::.ctor(int32)
+    call instance int32 'Holder'::'get_n'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 2
+    newobj instance void class 'HolderG`1'<int32>::.ctor(!0)
+    call instance !0 class 'HolderG`1'<int32>::'get_v'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

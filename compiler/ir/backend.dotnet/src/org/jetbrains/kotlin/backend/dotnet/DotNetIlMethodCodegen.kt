@@ -84,10 +84,17 @@ internal class DotNetIlMethodCodegen(
         firstArgumentIndex = if (function is IrConstructor) 1 else 0,
     ).apply {
         if (function is IrConstructor) {
-            registerThis(
-                function.constructedClass.thisReceiver!!.symbol,
-                DotNetIlValueType.UserClass(functionInfo.owner),
-            )
+            val constructedClass = function.constructedClass
+            // Inside a generic class's own bodies, `this` is the OPEN self-instantiation
+            // (`class 'Box`1'<!0>`, probe-verified genprobe_s2/_s7), which mapping the class's
+            // own defaultType produces (its arguments are the type parameters themselves).
+            val thisType =
+                if (constructedClass.typeParameters.isEmpty()) DotNetIlValueType.UserClass(functionInfo.owner)
+                else typeMapper.toDotNetIlValueType(constructedClass.defaultType)
+                    ?: dotNetUnsupported(
+                        "constructor of generic class '${constructedClass.name.asString()}' whose open type cannot be mapped"
+                    )
+            registerThis(constructedClass.thisReceiver!!.symbol, thisType)
         }
     }
     private val expressionCodegen =
@@ -156,10 +163,18 @@ internal class DotNetIlMethodCodegen(
                 val specialname = if (function.isAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
+                // A generic METHOD declares its formal type-parameter list between the name and
+                // the parameter list: `.method ... !!0 'id'<'T'>(!!0 'x')` — generic methods are
+                // fully self-contained, no class machinery involved (probe-verified,
+                // genprobe_s1; the quoted-name spelling genprobe_s8).
+                val genericParameters = function.typeParameters
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(", ", "<", ">") { it.name.asString().toIlIdentifier() }
+                    .orEmpty()
                 appendLine(
                     "  .method $visibility hidebysig $specialname${function.dotNetVirtualFlags()}$dispatch " +
                             "${signature.returnType.nameInSignature} " +
-                            "${methodName.toIlIdentifier()}($parameters) cil managed"
+                            "${methodName.toIlIdentifier()}$genericParameters($parameters) cil managed"
                 )
             }
             appendLine("  {")
@@ -426,8 +441,34 @@ internal class DotNetIlMethodCodegen(
         val classInfo = typeMapper.classInfoOrNull(targetClass)
             ?: dotNetUnsupported("delegating call to a constructor of unsupported class '${targetClass.name.asString()}'")
         val parameterTypes = target.dotNetSignature(typeMapper).parameterTypes
-        expressionCodegen.emitArguments(call.arguments, parameterTypes, "constructor of '${targetClass.name.asString()}'")
-        methodContext.emit("call ${classInfo.renderConstructorReference(parameterTypes)}", pops = 1 + parameterTypes.size)
+        if (targetClass.typeParameters.isEmpty()) {
+            expressionCodegen.emitArguments(call.arguments, parameterTypes, "constructor of '${targetClass.name.asString()}'")
+            methodContext.emit("call ${classInfo.renderConstructorReference(parameterTypes)}", pops = 1 + parameterTypes.size)
+            return
+        }
+        // A GENERIC delegation target: the base-ctor chain of a class extending an instantiated
+        // generic base (`call instance void class 'Box`1'<int32>::.ctor(!0)`, probe-verified
+        // genprobe_s5) and a generic class's own `this(...)` delegation (the open instantiation,
+        // `class 'Box`1'<!0>` — the same self-reference spelling as every other in-body member
+        // ref, genprobe_s2). The parameter SLOTS stay open; the argument VALUES are emitted
+        // against the substituted types.
+        if (call.typeArguments.size != targetClass.typeParameters.size) {
+            dotNetUnsupported("delegating constructor call of '${targetClass.name.asString()}' has an unsupported type-argument shape")
+        }
+        val instantiation = call.typeArguments.map { argumentType ->
+            argumentType?.let { typeMapper.toDotNetIlValueType(it) }
+                ?: dotNetUnsupported(
+                    "delegating constructor call of '${targetClass.name.asString()}' instantiates a type parameter " +
+                            "with an unsupported type argument"
+                )
+        }
+        val ownerToken = DotNetIlValueType.GenericInstance(classInfo, instantiation).nameInSignature
+        val substitutedParameterTypes = parameterTypes.map { it.substituteDotNetTypeParameters(instantiation) }
+        expressionCodegen.emitArguments(call.arguments, substitutedParameterTypes, "constructor of '${targetClass.name.asString()}'")
+        methodContext.emit(
+            "call ${classInfo.renderConstructorReference(parameterTypes, ownerToken)}",
+            pops = 1 + parameterTypes.size,
+        )
     }
 
     private fun emitSetValue(expression: IrSetValue) {

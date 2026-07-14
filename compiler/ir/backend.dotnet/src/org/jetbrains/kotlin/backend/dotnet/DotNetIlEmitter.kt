@@ -22,8 +22,10 @@ import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.companionObject
 import org.jetbrains.kotlin.ir.util.defaultType
@@ -110,7 +112,14 @@ class DotNetIlEmitter(
             if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             try {
                 checkClassShapeSupported(irClass, moduleTopLevelClasses)
-                val classInfo = DotNetIlClassInfo(irClass.fqNameWhenAvailable!!.asString())
+                // A generic class's IL name carries the CLS `` `n `` arity suffix INSIDE the
+                // quoted identifier ('demo.Box`1' — outside the quotes is an ilasm syntax error,
+                // probe-verified genprobe_s2/_s2c). The suffix is CLS convention rather than a
+                // CLR requirement (genprobe_s2b) but is emitted for Roslyn/interop parity, which
+                // also guarantees a plain `Box` and a generic `Box<T>` can never collide in IL.
+                val arity = irClass.typeParameters.size
+                val ilClassName = irClass.fqNameWhenAvailable!!.asString() + if (arity > 0) "`$arity" else ""
+                val classInfo = DotNetIlClassInfo(ilClassName, typeParameterCount = arity)
                 availableClasses[irClass] = classInfo
                 // The companion object (validated by the shape gate above) is a separate
                 // availableClasses entry — it needs its own identity for type mapping and member
@@ -124,6 +133,7 @@ class DotNetIlEmitter(
                 classSkipReasons[irClass] = e.reason
             }
         }
+        val typeMapper = DotNetIlTypeMapper(availableClasses)
         // Base-chain and interface linking pass, deliberately AFTER every registration: a base
         // class or interface may be declared after its user (forward references are legal IL —
         // probe-verified, inheritprobe_s1 — and legal Kotlin), so the links cannot be built
@@ -132,15 +142,22 @@ class DotNetIlEmitter(
         // (see [renderUserClass]), so a base or interface that failed the gate (its entry is
         // absent here, leaving the link out) or is evicted later evicts its derived
         // classes/implementers/sub-interfaces through the fixpoint rather than through these
-        // links.
+        // links. The base link is the full SUPERTYPE token — an instantiated generic base
+        // (`class D : Box<Int>()`) must widen to exactly `Box<Int>`, never another
+        // instantiation — mapped through the type mapper; a base whose instantiation mentions
+        // an unmappable or unavailable type simply leaves the link out (the render's live
+        // re-resolution owns the eviction and its carried reason).
         for ([irClass, classInfo] in availableClasses) {
             if (irClass.isCompanion) continue
-            irClass.dotNetBaseClassOrNull()?.let { baseClass ->
-                classInfo.baseClass = availableClasses[baseClass]
+            classInfo.baseType = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
+                try {
+                    typeMapper.toDotNetIlValueType(baseSuperType)
+                } catch (_: DotNetIlUnsupportedException) {
+                    null
+                }
             }
             classInfo.interfaces = irClass.dotNetDirectInterfaces().mapNotNull { availableClasses[it] }
         }
-        val typeMapper = DotNetIlTypeMapper(availableClasses)
         // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
         // fields) resolve their owning IL class through this map, the facade counterpart of
         // [DotNetIlTypeMapper.classInfoOrNull].
@@ -153,6 +170,11 @@ class DotNetIlEmitter(
             for (function in functions) {
                 if (intrinsicMethods.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true) continue
                 try {
+                    // Generic top-level functions are stage-1 supported (real CLR generic
+                    // methods, `!!n`-indexed — no monomorphization or erasure machinery); the
+                    // gate rejects the unsupported flavors (inline/reified, variance,
+                    // constraints) loudly before the signature maps.
+                    function.checkDotNetGenericFunctionSupported()
                     availableFunctions[function] = DotNetIlFunctionInfo(facadeClassInfo, function.dotNetSignature(typeMapper))
                 } catch (e: DotNetIlUnsupportedException) {
                     skipReasons[function] = e.reason
@@ -180,6 +202,10 @@ class DotNetIlEmitter(
                 when {
                     property.isDelegated -> propertySkipReasons[property] = "delegated property '$name' is not supported"
                     property.isLateinit -> propertySkipReasons[property] = "lateinit property '$name' is not supported"
+                    // A generic (extension) property's accessors would be generic IL methods,
+                    // which stage-1 generics scopes to top-level FUNCTIONS only.
+                    accessors.any { it.typeParameters.isNotEmpty() } ->
+                        propertySkipReasons[property] = "generic property '$name' is not supported yet"
                     property.isConst -> try {
                         constFieldLines[property] = renderConstField(property, typeMapper)
                     } catch (e: DotNetIlUnsupportedException) {
@@ -260,7 +286,12 @@ class DotNetIlEmitter(
                 for (member in irClass.dotNetMemberFunctions()) {
                     val signature = member.dotNetSignature(typeMapper)
                     checkOverrideKeepsIlReturnType(member, signature, typeMapper)
-                    val ilIdentity = "${member.dotNetIlMethodName()}(${signature.renderParameterTypes()})"
+                    // CLR method identity includes the generic ARITY (see
+                    // dotNetIlGenericAritySuffix); generic MEMBER functions are currently
+                    // shape-gate-rejected, so the suffix here is forward-consistency with the
+                    // facade gate below.
+                    val ilIdentity =
+                        "${member.dotNetIlMethodName()}${member.dotNetIlGenericAritySuffix()}(${signature.renderParameterTypes()})"
                     membersByIlIdentity.put(ilIdentity, member)?.let { clashing ->
                         dotNetUnsupported(
                             "member '${member.name.asString()}' clashes with '${clashing.name.asString()}': " +
@@ -355,7 +386,11 @@ class DotNetIlEmitter(
             for (callable in facadeCallables) {
                 // Already evicted as the partner of an earlier clash in this file.
                 val functionInfo = availableFunctions[callable] ?: continue
-                val ilIdentity = "${callable.dotNetIlMethodName()}(${functionInfo.signature.renderParameterTypes()})"
+                // The generic-arity marker keeps a generic `fun <T> f(x: Int)` distinct from a
+                // plain `fun f(x: Int)` — CLR method identity includes the arity (the Roslyn
+                // overload rule), so both are legal IL methods on one facade.
+                val ilIdentity =
+                    "${callable.dotNetIlMethodName()}${callable.dotNetIlGenericAritySuffix()}(${functionInfo.signature.renderParameterTypes()})"
                 val clashing = callablesByIlIdentity.putIfAbsent(ilIdentity, callable) ?: continue
                 for ([loser, winner] in listOf(callable to clashing, clashing to callable)) {
                     val reason = "top-level '${loser.diagnosticName()}' clashes with '${winner.diagnosticName()}': " +
@@ -679,8 +714,41 @@ class DotNetIlEmitter(
             Modality.SEALED ->
                 dotNetUnsupported("sealed class '$name' is not supported (no abstract-class model)")
         }
+        // Generic TOP-LEVEL PLAIN classes are stage-1 supported: real CLR reified generics
+        // (Roslyn shape — `.class ... 'C`n'<T>`, `!n` member signatures, instantiation tokens in
+        // every operand position; probe series genprobe), no erasure or lowering machinery. The
+        // gate scopes the stage: unconstrained invariant type parameters only (the shared
+        // checkDotNetTypeParametersSupported gate: variance, constraints, reified), no nested
+        // declarations (the companion/object machinery is untouched by this slice), no interface
+        // supertypes, and no generic-extends-generic chains (untested override/pre-pass
+        // interactions — the IL shape itself is probed, genprobe_s7, so a later slice can widen).
+        // Kotlin objects and companions cannot be generic; the branch is defensive.
         if (irClass.typeParameters.isNotEmpty()) {
-            dotNetUnsupported("generic class '$name' is not supported yet")
+            if (irClass.kind == ClassKind.OBJECT || isValidatedCompanion) {
+                dotNetUnsupported("generic object '$name' is not supported")
+            }
+            checkDotNetTypeParametersSupported(irClass.typeParameters, "class '$name'")
+            if (irClass.declarations.any { it is IrClass }) {
+                dotNetUnsupported(
+                    "generic class '$name' contains nested declarations (companion or nested objects); " +
+                            "nested declarations in generic classes are not supported yet"
+                )
+            }
+            for (superType in irClass.superTypes.filterNot { it.isAny() }) {
+                val superClass = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                if (superClass?.isInterface == true) {
+                    dotNetUnsupported(
+                        "generic class '$name' implements an interface; " +
+                                "interface supertypes of generic classes are not supported yet"
+                    )
+                }
+                if (superClass != null && superClass.typeParameters.isNotEmpty()) {
+                    dotNetUnsupported(
+                        "generic class '$name' extends a generic base class; " +
+                                "generic-to-generic inheritance is not supported yet"
+                    )
+                }
+            }
         }
         val superTypesExceptAny = irClass.superTypes.filterNot { it.isAny() }
         if (superTypesExceptAny.isNotEmpty()) {
@@ -740,6 +808,15 @@ class DotNetIlEmitter(
         // an IdSignature comparison, and this pipeline's symbols carry no signatures, so
         // it never matches here.
         for (member in irClass.dotNetMemberFunctions()) {
+            // Stage-1 generics supports generic top-level FUNCTIONS and generic CLASSES; a
+            // generic MEMBER function (its own <T> next to the class's) is a separate,
+            // unexercised combination and stays rejected, whole-class.
+            if (member.typeParameters.isNotEmpty()) {
+                dotNetUnsupported(
+                    "member '${member.name.asString()}' of class '$name' is generic; " +
+                            "generic member functions are not supported yet"
+                )
+            }
             if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
                 dotNetUnsupported(
                     "member '${member.name.asString()}' of class '$name' overrides a member of kotlin.Any; " +
@@ -912,6 +989,11 @@ class DotNetIlEmitter(
      */
     private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
         if (member.isFakeOverride) return
+        if (member.typeParameters.isNotEmpty()) {
+            dotNetUnsupported(
+                "$description of interface '$interfaceName' is generic; generic interface members are not supported"
+            )
+        }
         if (member.visibility == DescriptorVisibilities.PRIVATE) {
             dotNetUnsupported("private $description of interface '$interfaceName' is not supported")
         }
@@ -961,18 +1043,63 @@ class DotNetIlEmitter(
         typeMapper: DotNetIlTypeMapper,
     ) {
         if (member.overriddenSymbols.isEmpty()) return
+        val memberClass = member.parent as? IrClass
         for (overridden in member.allOverridden()) {
             val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
-            if (overriddenReturnType != signature.returnType) {
-                val overriddenOwner = (overridden.parent as? IrClass)?.diagnosticName() ?: "?"
+            val overriddenClass = overridden.parent as? IrClass
+            // An overridden member of a GENERIC base declares its return against the base's type
+            // parameters (`fun describe(): T` maps to `!0`); CLR slot matching for the derived
+            // override then runs against the SUBSTITUTED signature — the override MUST be spelled
+            // with the substituted type (`int32`), which lands in the base slot (probe-verified,
+            // genprobe_s5 for returns, genprobe_s8 for parameters), while the open `!0` spelling
+            // assembles warning-free and silently splits the slot (the s5b poison shape this
+            // backend never emits: derived members are mapped from their own concrete Kotlin
+            // types). So the comparison substitutes the derived class's instantiation of the
+            // base before comparing — otherwise every substituted override would falsely trip
+            // the covariant-return rejection.
+            val substitutedReturnType =
+                if (memberClass != null && overriddenClass != null && overriddenClass.typeParameters.isNotEmpty()) {
+                    val classArguments = memberClass.dotNetClassArgumentsFor(overriddenClass, typeMapper) ?: continue
+                    overriddenReturnType.substituteDotNetTypeParameters(classArguments)
+                } else overriddenReturnType
+            if (substitutedReturnType != signature.returnType) {
+                val overriddenOwner = overriddenClass?.diagnosticName() ?: "?"
                 dotNetUnsupported(
                     "member '${member.name.asString()}' overrides '$overriddenOwner.${overridden.name.asString()}' " +
                             "with a different IL return type (${signature.returnType.nameInSignature} vs " +
-                            "${overriddenReturnType.nameInSignature}); covariant-return overrides are not supported " +
+                            "${substitutedReturnType.nameInSignature}); covariant-return overrides are not supported " +
                             "(the override would not reuse the base virtual slot)"
                 )
             }
         }
+    }
+
+    /**
+     * The IL type arguments [this] class's inheritance chain supplies for [target]'s type
+     * parameters: the composed substitution of every base-supertype hop from this class up to
+     * [target] (`IntBox : Box<Int>` yields `[int32]` for `Box`'s `T`; chains through
+     * intermediate non-generic classes compose). Starts from this class's own OPEN instantiation
+     * so the walk stays correct if generic-extends-generic chains are ever admitted. Null when
+     * [target] is not on the base chain or a hop does not map — the chain is then broken in a
+     * way another gate already owns (an evicted or unregistered base cascades through the
+     * render's live re-resolution), so callers skip rather than double-report.
+     */
+    private fun IrClass.dotNetClassArgumentsFor(target: IrClass, typeMapper: DotNetIlTypeMapper): List<DotNetIlValueType>? {
+        var current: IrClass = this
+        var currentArguments: List<DotNetIlValueType> =
+            typeParameters.indices.map { DotNetIlValueType.TypeParameter(it, isMethodParameter = false) }
+        while (current != target) {
+            val baseSuperType = current.dotNetBaseSuperTypeOrNull() ?: return null
+            val baseClass = (baseSuperType.classifier as? IrClassSymbol)?.owner ?: return null
+            currentArguments = baseSuperType.arguments.map { argument ->
+                val projection = (argument as? IrTypeProjection)?.takeIf { it.variance == Variance.INVARIANT }
+                    ?: return null
+                val mapped = typeMapper.toDotNetIlValueType(projection.type) ?: return null
+                mapped.substituteDotNetTypeParameters(currentArguments)
+            }
+            current = baseClass
+        }
+        return currentArguments
     }
 
     /**
@@ -1091,11 +1218,28 @@ class DotNetIlEmitter(
         // with it — a derived class whose base does not exist cannot keep its `extends` line —
         // each warned with a reason carrying the base's own reason, the inheritance
         // counterpart of the companion pair warnings.
-        val baseClassInfo = irClass.dotNetBaseClassOrNull()?.let { baseClass ->
-            typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
+        val baseClassRef = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
+            val baseClass = (baseSuperType.classifier as IrClassSymbol).owner
+            val baseClassInfo = typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
                 "its base class '${baseClass.diagnosticName()}' could not be compiled: " +
                         (classSkipReasons[baseClass] ?: "the base class is not available in this module")
             )
+            if (baseClass.typeParameters.isEmpty()) {
+                // The established non-generic spelling: `extends 'demo.Base'`.
+                baseClassInfo.ilTypeRef
+            } else {
+                // An instantiated generic base: `extends class 'demo.Box`1'<int32>` (probe-
+                // verified, genprobe_s5). Re-mapped through the LIVE type mapper every render
+                // round like the base itself, so an instantiation mentioning an evicted class
+                // fails the derived class here with a carried reason (the type-argument arm of
+                // the base-eviction cascade).
+                val baseType = typeMapper.toDotNetIlValueType(baseSuperType) as? DotNetIlValueType.GenericInstance
+                    ?: dotNetUnsupported(
+                        "its base class instantiation '${baseSuperType.render()}' could not be compiled: " +
+                                "a type argument is not available in this module"
+                    )
+                baseType.nameInSignature
+            }
         }
         // The `implements` list is re-resolved through the LIVE map every render round exactly
         // like the base class above: an evicted interface takes every implementing class and
@@ -1248,9 +1392,15 @@ class DotNetIlEmitter(
                 // the JVM's ACC_FINAL); companions and objects never reach here as open — the
                 // shape gate keeps them final-only.
                 isOpen = irClass.modality == Modality.OPEN,
-                baseClassRef = baseClassInfo?.ilTypeRef,
+                baseClassRef = baseClassRef,
                 isInterface = irClass.isInterface,
                 interfaceRefs = interfaceInfos.map { it.ilTypeRef },
+                // The formal type-parameter list of a generic class: `<'T'>` between the class
+                // name and the `extends` line (quoted names assemble and run, probe-verified
+                // genprobe_s8; names are decorative — CLR identity is positional).
+                genericParameters = irClass.typeParameters
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(", ", "<", ">") { it.name.asString().toIlIdentifier() },
             ).generate(this)
         }
         return RenderedClass(ilText, requiredHelpers)
@@ -1365,10 +1515,11 @@ class DotNetIlEmitter(
                 if (literal.startsWith("float64(")) literal else "float64($literal)"
             }
             DotNetIlValueType.String -> (constant.value as? String ?: unsupportedValue()).toIlStringLiteral()
-            // The frontend forbids `const val` of nullable and class types, so these arms are
-            // defensive; a CLR `literal` field of a Nullable<T> or object type is unprobed anyway.
+            // The frontend forbids `const val` of nullable, class and generic types, so these
+            // arms are defensive; a CLR `literal` field of such a type is unprobed anyway.
             is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
             is DotNetIlValueType.NullableValue, DotNetIlValueType.Object,
+            is DotNetIlValueType.GenericInstance, is DotNetIlValueType.TypeParameter,
                 -> unsupportedValue()
         }
     }

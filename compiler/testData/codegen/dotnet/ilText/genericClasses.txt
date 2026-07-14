@@ -1,0 +1,209 @@
+.assembly extern mscorlib {}
+.assembly 'genericClasses' {}
+.module 'main-genericClasses.il'
+
+.class public auto ansi sealed beforefieldinit 'Box`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Box`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'Box`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_value'(!0 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Box`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig instance !0 'get'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'Box`1'<!0>::'get_value'()
+    ret
+  }
+  .method public hidebysig instance void 'put'(!0 'v') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'Box`1'<!0>::'set_value'(!0)
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'Box`1'<!0>::'get_value'()
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'Box`1'::'get_value'()
+    .set instance void 'Box`1'::'set_value'(!0)
+  }
+  .property instance !0 'item'()
+  {
+    .get instance !0 'Box`1'::'get_item'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Pair2`2'<'A', 'B'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'first'
+  .field private !1 'second'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !1 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Pair2`2'<!0, !1>::'first'
+    ldarg.0
+    ldarg.2
+    stfld !1 class 'Pair2`2'<!0, !1>::'second'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'Pair2`2'<!0, !1>::'first'
+    ret
+  }
+  .method public hidebysig specialname instance !1 'get_second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !1 class 'Pair2`2'<!0, !1>::'second'
+    ret
+  }
+  .property instance !0 'first'()
+  {
+    .get instance !0 'Pair2`2'::'get_first'()
+  }
+  .property instance !1 'second'()
+  {
+    .get instance !1 'Pair2`2'::'get_second'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericClassesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'Box`1'<string> 'bs',
+      [1] class 'Box`1'<int32> 'bi',
+      [2] class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>> 'bn',
+      [3] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [4] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [5] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
+      [6] class 'Box`1'<class 'Box`1'<string>> 'nested',
+      [7] class 'Pair2`2'<int32, string> 'p'
+    )
+    ldstr "first"
+    newobj instance void class 'Box`1'<string>::.ctor(!0)
+    stloc.0
+    ldloc.0
+    call instance !0 class 'Box`1'<string>::'get'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldstr "second"
+    call instance void class 'Box`1'<string>::'put'(!0)
+    ldloc.0
+    call instance !0 class 'Box`1'<string>::'get_item'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 41
+    newobj instance void class 'Box`1'<int32>::.ctor(!0)
+    stloc.1
+    ldloc.1
+    ldloc.1
+    call instance !0 class 'Box`1'<int32>::'get'()
+    ldc.i4 1
+    add
+    call instance void class 'Box`1'<int32>::'put'(!0)
+    ldloc.1
+    call instance !0 class 'Box`1'<int32>::'get'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    newobj instance void class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>::.ctor(!0)
+    stloc.2
+    ldloc.2
+    call instance !0 class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>::'get'()
+    stloc.3
+    ldloc.3
+    stloc 4
+    ldloca 4
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.3
+    stloc 5
+    ldloca 5
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 5
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_0:
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "inner"
+    newobj instance void class 'Box`1'<string>::.ctor(!0)
+    newobj instance void class 'Box`1'<class 'Box`1'<string>>::.ctor(!0)
+    stloc 6
+    ldloc 6
+    call instance !0 class 'Box`1'<class 'Box`1'<string>>::'get'()
+    call instance !0 class 'Box`1'<string>::'get'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldstr "one"
+    newobj instance void class 'Pair2`2'<int32, string>::.ctor(!0, !1)
+    stloc 7
+    ldloc 7
+    call instance !0 class 'Pair2`2'<int32, string>::'get_first'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    call instance !1 class 'Pair2`2'<int32, string>::'get_second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
