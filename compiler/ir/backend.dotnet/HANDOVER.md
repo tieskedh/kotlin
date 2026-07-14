@@ -6,14 +6,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`, tip `590209f47` ("DotNet: support reified structural generics, stage 1"),
-  clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
-- Full DotNet suite: **266 tests, 0 failures, 0 skips** across 8 classes
+- Branch `dotnet`; latest functional tip `8702cf407` ("[DotNet] Support exhaustive when
+  without source else"), clean tree, based directly on `origin/master` (`995cf26a0`, rebased
+  2026-07-13). Handover-only maintenance stays in separate non-functional commits.
+- Full DotNet suite: **270 tests, 0 failures, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)).
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
   top-level properties/objects/companions, class inheritance, interfaces, hybrid nullability
-  (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1.
-  Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
+  (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
+  exhaustive Boolean/Boolean? `when` without source `else`. Each has a design bullet in
+  `AGENTS.md` — the bullets are accurate; trust but verify.
+- Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
+  `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
+  instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
+  assembly-scope/Framework-compatibility decision; `whenprobe_s2` forced the exact golden's
+  otherwise unreachable fallthrough with raw CLR `bool` value `2`, including a prior value on
+  the evaluation stack. The new ilText/box pins cover both parser variants, statement/value
+  positions, mapped catch handling, generic results and the non-first-argument stack shape.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -23,7 +32,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 1. **Probe first.** Any IL spelling not already golden-pinned must be verified by assembling and
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
-   `genprobe` are taken). Keep probe files OUT of the repo (use a temp dir).
+   `genprobe`, `whenprobe` are taken). Keep probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -73,19 +82,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Warm-up: `noWhenBranchMatchedException` intrinsic.** Exhaustive `when` without `else`
-   (nullable or Boolean subject) currently evicts per-function because fir2ir appends a call to
-   this unregistered builtin (documented in the nullability bullet). Register an intrinsic that
-   emits an inline throw. The exception CHOICE is an open design decision: Roslyn throws
-   `SwitchExpressionException` (an `InvalidOperationException`, i.e. catchable as Kotlin
-   `IllegalStateException` under the existing registry) — probe it exists/constructs on
-   CoreCLR 10.0.9 first, state the precedent, pin with ilText + box tests (a `when` that falls
-   through must throw catchably).
-2. **Small infra: split dotnet CLI tests out of `CliTestGenerated.java`.** The dotnet section of
+1. **Small infra: split dotnet CLI tests out of `CliTestGenerated.java`.** The dotnet section of
    that shared generated file conflicts on every upstream rebase. Give the `model("cli/dotnet")`
    group its own generated class (own `testGroupSuite` entry → e.g. `DotNetCliTestGenerated.java`)
    in `compiler/tests-integration/testFixtures/.../TestGeneratorForTestsIntegrationTests.kt`.
-3. **Main course: arrays.** Next roadmap item. CLR has native vectors (`newarr`, `ldelem`/`stelem`,
+2. **Main course: arrays.** Next roadmap item. CLR has native vectors (`newarr`, `ldelem`/`stelem`,
    `ldlen`) — probe series suggestion: `arrprobe`. Design questions to settle probe-first:
    which Kotlin array types in scope (suggest primitive arrays `IntArray` etc. first — they map
    1:1 to `int32[]` and dodge generics interplay; `Array<T>` composes with stage-1 generics but
@@ -95,7 +96,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
    intrinsic-registry pattern; injected declarations must compile with ZERO diagnostics);
    `size`/`get`/`set`/indexing operators as intrinsics; `for (x in array)` via the existing
    for-loop lowering. Everything else (copyOf, iterators as objects, Array<T?>): reject loudly.
-4. **Generics stage 2 (if appetite remains): constraints.** `T : Base` / `T : Iface` → CLR
+3. **Generics stage 2 (if appetite remains): constraints.** `T : Base` / `T : Iface` → CLR
    constraint clauses (`class ... where` in IL: `<(class 'Base') T>` — probe the spelling).
    Unlocks member calls on `T` receivers bounded by a supported interface. Variance and `T?`
    remain out (see the generics bullet for why).

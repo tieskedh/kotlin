@@ -77,6 +77,20 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emitLabel(label)
     }
 
+    /**
+     * Emits a parameterless exception construction followed by `throw` for an intrinsic. In
+     * value position the intrinsic has Kotlin type `Nothing`, so the dead consumer instructions
+     * still need one phantom stack value, exactly like an [IrThrow] emitted by [emitExpression].
+     * A statement-position throw has no consumer and therefore records no phantom value.
+     */
+    fun emitParameterlessExceptionThrow(exceptionTypeRef: String, valuePosition: Boolean) {
+        methodContext.emit("newobj instance void $exceptionTypeRef::.ctor()", pushes = 1)
+        methodContext.emitThrow()
+        if (valuePosition) {
+            methodContext.notePhantomValueAfterThrow()
+        }
+    }
+
     fun emitExpression(expression: IrExpression?, expectedType: DotNetIlValueType) {
         // Widening-coercion interception, the hybrid nullability model's conversion layer (JVM
         // precedent: the JVM backend coerces at codegen time through StackValue — boxing is

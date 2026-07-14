@@ -147,15 +147,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   expressible in compilable Kotlin, so not pinnable in an ilText test), `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
   boxprobe_s3, but no supported IR shape produces the cast — rejected like every downcast),
   `is`/`as`/safe-cast (existing type-operator rejections stay authoritative), `const val`
-  of nullable type (defensive; frontend-rejected anyway), and exhaustive `when` WITHOUT `else`
-  over a nullable (or plain Boolean — pre-existing) subject: fir2ir appends a synthetic call to
-  the `noWhenBranchMatchedException` builtin, which has no intrinsic registration, so the
-  containing function is evicted per-function with the loud availableFunctions miss (adversarial
-  review, 2026-07; correct granularity, no crash). Deliberate follow-up, not part of this slice:
-  register the intrinsic as an inline throw (JVM precedent: the
-  `throwNoWhenBranchMatchedException` intrinsic; Roslyn precedent for the exception choice:
-  switch expressions throw `SwitchExpressionException`, an `InvalidOperationException`) — the
-  exception-mapping choice must be probed and design-decided first. Pins: `ilText/nullablePrimitives.kt`
+  of nullable type (defensive; frontend-rejected anyway). Exhaustive `when` without a source
+  `else` over nullable or plain Boolean subjects is supported by the registered intrinsic
+  described in the exception-model bullets below. Pins: `ilText/nullablePrimitives.kt`
   (every declaration-position spelling, wrap/initobj/HasValue/extraction incl. the
   address-taking `ldloca`, elvis/safe-call shapes, BOTH `!!` throw shapes — the Nullable<T>
   HasValue branch and the reference `dup`/`brtrue`/`newobj NullReferenceException`/`throw`
@@ -542,6 +536,21 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   user classes extending them are shape-gate-rejected until the inheritance model exists.
   Deferred: Roslyn-parity `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws)
   until interop with non-Exception-throwing code matters.
+- Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
+  synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
+  emits an inline parameterless exception construction + `throw`, in both value and statement
+  positions. Exception choice deliberately deviates from Roslyn: C# uses
+  `System.Runtime.CompilerServices.SwitchExpressionException`, but `whenprobe_s1` proved that the
+  type requires the `[System.Runtime]` scope on CoreCLR 10.0.9 (`[mscorlib]` assembles but fails
+  with `TypeLoadException`), and the .NET Framework `System.Runtime` facade does not contain it.
+  Emitted IL must stay target-independent, so the backend throws the cross-target base type
+  `[mscorlib]System.InvalidOperationException` directly; it is catchable as Kotlin
+  `IllegalStateException` through the existing mapped-exception registry. `ilText/exhaustiveWhen.kt`
+  pins both emission positions and the mapped catch handler; `box/exhaustiveWhen.kt` runs all
+  reachable Boolean/Boolean? arms on CoreCLR. `whenprobe_s2` links against that exact golden and
+  passes the noncanonical CLR `bool` value `2` to force the otherwise unreachable fallthrough in
+  a second call-argument position (a prior string remains below the exception on the evaluation
+  stack), runtime-pinning both the throw and base-type catchability.
 - try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
   block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
   first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no
