@@ -5,7 +5,7 @@
 
 package org.jetbrains.kotlin.test.preprocessors
 
-import com.intellij.util.lang.JavaVersion
+import com.intellij.util.currentJavaVersion
 import org.jetbrains.kotlin.test.TargetBackend
 import org.jetbrains.kotlin.test.TestJdkKind
 import org.jetbrains.kotlin.test.services.TestServices
@@ -38,13 +38,13 @@ class JdkVersionSourcePreprocessor(testServices: TestServices) : BackendDependen
         if (!targetBackend.isTransitivelyCompatibleWith(TargetBackend.JVM)) return ReplacingSourceTransformer(MAGIC_IDENTIFIER, "999")
         val jdkKind = JvmEnvironmentConfigurator.extractJdkKind(testServices.moduleStructure.allDirectives)
         val version = when (jdkKind) {
-            TestJdkKind.MOCK_JDK -> JavaVersion.current().feature
-            TestJdkKind.MODIFIED_MOCK_JDK -> JavaVersion.current().feature
+            TestJdkKind.MOCK_JDK -> currentJavaVersion().feature
+            TestJdkKind.MODIFIED_MOCK_JDK -> currentJavaVersion().feature
             TestJdkKind.FULL_JDK_8 -> 8
             TestJdkKind.FULL_JDK_11 -> 11
             TestJdkKind.FULL_JDK_17 -> 17
             TestJdkKind.FULL_JDK_21 -> 21
-            TestJdkKind.FULL_JDK -> JavaVersion.current().feature
+            TestJdkKind.FULL_JDK -> currentJavaVersion().feature
         }
         return ReplacingSourceTransformer(MAGIC_IDENTIFIER, "$version")
     }
