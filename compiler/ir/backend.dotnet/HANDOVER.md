@@ -6,10 +6,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `5cc01c4bc` ("[DotNet] Add generic class inheritance"),
+- Branch `dotnet`; latest functional tip `f90b08a1a` ("[DotNet] Add abstract and sealed classes"),
   clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **306 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **310 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -18,8 +18,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
   interfaces and declaration-site variance stage 4, generic member functions stage 5, generic
-  class inheritance stage 6. Each has a design bullet in `AGENTS.md` — the bullets are accurate;
-  trust but verify.
+  class inheritance stage 6, abstract and sealed classes. Each has a design bullet in
+  `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
@@ -105,6 +105,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interfaces, and constraints on CoreCLR 10.0.9 and .NET Framework 4.8. Both new goldens assemble
   under modern and Framework ILAsm; the positive golden executes identically on both runtimes.
   The final FIR suite is 306/0/0/0 and the generated CLI suite remains 10/0/0/0.
+- Interim continuation landed `f90b08a1a`: top-level plain abstract and sealed classes now emit
+  as ordinary CLR `abstract` types; Kotlin sealing remains frontend-enforced. New abstract
+  functions/accessors use `newslot abstract virtual`, abstract base overrides reuse their slot
+  with `abstract virtual`, and open/concrete members, constructors, state, companions, generic
+  owners/methods, constraints, and mapped inheritance keep their existing machinery. A pure
+  abstract interface obligation may remain only as a fake override on an abstract owner with no
+  emitted method; concrete descendants introduce or reuse the implementation slot, while
+  concrete owners remain strict. `abstractprobe_s1` verified metadata, constructor chains,
+  re-abstraction, interface mapping, and generic substitution; `abstractprobe_s2` verified both
+  new-slot and slot-reuse concrete implementations after a methodless abstract interface carrier.
+  Both probes and the exact positive golden assemble and execute identically on CoreCLR 10.0.9
+  and .NET Framework 4.8. Runtime pins also cover mutable abstract properties, abstract generic
+  calls through abstract views, generic sealed owners, constrained dispatch, companion factories,
+  and state. The final FIR suite is 310/0/0/0; the generated CLI suite remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -118,8 +132,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
-   `geninheritprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a
-   temp dir).
+   `geninheritprobe`, `abstractprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of
+   the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -169,10 +183,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit the next class/interface shape gap.** The staged generics queue is complete. Re-read
-   the class and interface gates, rejection pins, and mature backend precedent before choosing one
-   coherent next slice; keep abstract classes, default interface bodies, and broader `Any` member
-   semantics separate unless the audit proves that one requires another.
+1. **Audit Default Interface Methods against the Framework floor.** The existing
+   `ifaceprobe_s8` establishes the modern CoreCLR spelling, but Framework 4.8 compatibility must
+   be tested explicitly before widening the interface-body gate. If Framework cannot load or
+   dispatch the shape, preserve the loud rejection and choose a different standalone gap; do not
+   silently raise the backend's runtime floor or bundle the broader `Any` member model.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
