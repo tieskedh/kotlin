@@ -72,6 +72,9 @@ internal class DotNetIlIntrinsicMethods(
         // like on the JVM, whose backend intrinsifies it as checkNotNull (Intrinsics.checkNotNull
         // at runtime); here the null test + throw is emitted inline (see the intrinsic's KDoc).
         irBuiltIns.checkNotNullSymbol.toKey()!! to DotNetIlCheckNotNullIntrinsic,
+        // fir2ir appends this synthetic call as the final branch of an exhaustive `when`
+        // without a source `else`, exactly the symbol the JVM backend intrinsifies.
+        irBuiltIns.noWhenBranchMatchedExceptionSymbol.toKey()!! to DotNetIlNoWhenBranchMatchedIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
@@ -380,6 +383,53 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
         codegen.emit("ldc.i4.0", pushes = 1)
         codegen.emit("ceq", pops = 2, pushes = 1)
         return true
+    }
+}
+
+/**
+ * The synthetic `noWhenBranchMatchedException` builtin fir2ir appends to an exhaustive `when`
+ * without a source `else` (JVM precedent: `IrNoWhenBranchMatchedException`, registered in the
+ * intrinsic registry and emitted as an inline throw).
+ *
+ * Roslyn throws `System.Runtime.CompilerServices.SwitchExpressionException`, but that type is
+ * scoped through `System.Runtime` and is absent from the .NET Framework facade. The DotNet
+ * backend deliberately emits its `System.InvalidOperationException` base type instead: emitted
+ * IL is target-independent between `netframework` and `net`, and the existing exception registry
+ * maps Kotlin `IllegalStateException` to this exact CLR type. `whenprobe_s1` verified on CoreCLR
+ * 10.0.9 that the Roslyn type constructs and is caught by `InvalidOperationException`, while the
+ * usual `[mscorlib]` scope fails to resolve it; the legacy CLR's `System.Runtime` facade was also
+ * verified not to contain the type.
+ */
+private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        requireNoArguments(call)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = "${CORE_LIB_REF}System.InvalidOperationException",
+            valuePosition = true,
+        )
+        return true
+    }
+
+    override fun tryEmitAsStatement(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): Boolean {
+        requireNoArguments(call)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = "${CORE_LIB_REF}System.InvalidOperationException",
+            valuePosition = false,
+        )
+        return true
+    }
+
+    private fun requireNoArguments(call: IrCall) {
+        if (call.arguments.isNotEmpty()) {
+            dotNetUnsupported("noWhenBranchMatchedException has an unsupported argument shape")
+        }
     }
 }
 

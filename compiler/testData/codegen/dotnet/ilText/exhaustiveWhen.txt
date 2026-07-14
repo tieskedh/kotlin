@@ -1,0 +1,251 @@
+.assembly extern mscorlib {}
+.assembly 'exhaustiveWhen' {}
+.module 'main-exhaustiveWhen.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.exhaustiveWhenKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'describe'(bool 'flag') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] bool 'tmp0_subject'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldc.i4.1
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "true"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldstr "false"
+    br IL_whenEnd_0
+IL_whenNext_2:
+    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    throw
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static string 'describeNullable'(valuetype [mscorlib]System.Nullable`1<bool> 'flag') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<bool> 'tmp0_subject',
+      [1] valuetype [mscorlib]System.Nullable`1<bool> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<bool> '<eq>@2',
+      [3] valuetype [mscorlib]System.Nullable`1<bool> '<eq>@3'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<bool>::GetValueOrDefault()
+    ldc.i4.1
+    ceq
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<bool>::get_HasValue()
+    and
+    brfalse IL_whenNext_1
+    ldstr "true"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<bool>::GetValueOrDefault()
+    ldc.i4.0
+    ceq
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<bool>::get_HasValue()
+    and
+    brfalse IL_whenNext_2
+    ldstr "false"
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldloc.0
+    stloc.3
+    ldloca 3
+    call instance bool valuetype [mscorlib]System.Nullable`1<bool>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldstr "null"
+    br IL_whenEnd_0
+IL_whenNext_3:
+    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    throw
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'printFlag'(bool 'flag') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] bool 'tmp0_subject'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldc.i4.1
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "true"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldstr "false"
+    call void [mscorlib]System.Console::WriteLine(string)
+    br IL_whenEnd_0
+IL_whenNext_2:
+    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    throw
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static string 'caught'(bool 'flag') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string '<try>',
+      [1] bool 'tmp0_subject',
+      [2] class [mscorlib]System.InvalidOperationException 'e'
+    )
+    .try {
+      ldarg.0
+      stloc.1
+      ldloc.1
+      ldc.i4.1
+      ceq
+      brfalse IL_whenNext_2
+      ldstr "true"
+      br IL_whenEnd_1
+IL_whenNext_2:
+      ldloc.1
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_3
+      ldstr "false"
+      br IL_whenEnd_1
+IL_whenNext_3:
+      newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+      throw
+IL_whenEnd_1:
+      stloc.0
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.InvalidOperationException {
+      stloc.2
+      ldstr "caught"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'join'(string 'left', string 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig static string 'secondArgument'(bool 'flag') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] bool 'tmp0_subject'
+    )
+    ldstr "value:"
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldc.i4.1
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "true"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldstr "false"
+    br IL_whenEnd_0
+IL_whenNext_2:
+    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    throw
+IL_whenEnd_0:
+    call string 'test.exhaustiveWhenKt'::'join'(string, string)
+    ret
+  }
+  .method public hidebysig static !!0 'choose'<'T'>(bool 'flag', !!0 'first', !!0 'second') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] bool 'tmp0_subject'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldc.i4.1
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_2
+    ldarg.2
+    br IL_whenEnd_0
+IL_whenNext_2:
+    newobj instance void [mscorlib]System.InvalidOperationException::.ctor()
+    throw
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<bool> '<null>'
+    )
+    ldc.i4.1
+    call string 'test.exhaustiveWhenKt'::'describe'(bool)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<bool>
+    ldloc.0
+    call string 'test.exhaustiveWhenKt'::'describeNullable'(valuetype [mscorlib]System.Nullable`1<bool>)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4.0
+    call void 'test.exhaustiveWhenKt'::'printFlag'(bool)
+    ldc.i4.1
+    call string 'test.exhaustiveWhenKt'::'caught'(bool)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4.0
+    call string 'test.exhaustiveWhenKt'::'secondArgument'(bool)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4.1
+    ldstr "first"
+    ldstr "second"
+    call !!0 'test.exhaustiveWhenKt'::'choose'<string>(bool, !!0, !!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
