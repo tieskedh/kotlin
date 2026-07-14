@@ -1,0 +1,741 @@
+.assembly extern mscorlib {}
+.assembly 'interfaceDelegation' {}
+.module 'main-interfaceDelegation.il'
+
+.class interface public abstract auto ansi 'Counter'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'add'(int32 'delta') cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_label'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_value'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'Counter'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'Counter'::'get_value'()
+    .set instance void 'Counter'::'set_value'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CounterImpl'
+       extends [mscorlib]System.Object
+       implements 'Counter'
+{
+  .field private string 'label'
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'initial', string 'label') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.2
+    stfld string 'CounterImpl'::'label'
+    ldarg.0
+    ldarg.1
+    stfld int32 'CounterImpl'::'value'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'CounterImpl'::'label'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'CounterImpl'::'value'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'CounterImpl'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'add'(int32 'delta') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.0
+    callvirt instance int32 'CounterImpl'::'get_value'()
+    ldarg.1
+    add
+    callvirt instance void 'CounterImpl'::'set_value'(int32)
+    ldarg.0
+    callvirt instance int32 'CounterImpl'::'get_value'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'CounterImpl'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'CounterImpl'::'get_value'()
+    .set instance void 'CounterImpl'::'set_value'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'PlainCounter'
+       extends [mscorlib]System.Object
+       implements 'Counter'
+{
+  .field private class 'Counter' '$$delegate_0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Counter' 'delegate') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Counter' 'PlainCounter'::'$$delegate_0'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'add'(int32 'delta') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'PlainCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance int32 'Counter'::'add'(int32)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'PlainCounter'::'$$delegate_0'
+    callvirt instance string 'Counter'::'get_label'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'PlainCounter'::'$$delegate_0'
+    callvirt instance int32 'Counter'::'get_value'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'PlainCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance void 'Counter'::'set_value'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'PlainCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance !!0 'Counter'::'echo'<!!0>(!!0)
+    ret
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'PlainCounter'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'PlainCounter'::'get_value'()
+    .set instance void 'PlainCounter'::'set_value'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'PropertyCounter'
+       extends [mscorlib]System.Object
+       implements 'Counter'
+{
+  .field private class 'Counter' 'delegate'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Counter' 'delegate') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Counter' 'PropertyCounter'::'delegate'
+    ret
+  }
+  .method public hidebysig specialname instance class 'Counter' 'get_delegate'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'PropertyCounter'::'delegate'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'add'(int32 'delta') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'PropertyCounter'::'delegate'
+    ldarg.1
+    callvirt instance int32 'Counter'::'add'(int32)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'PropertyCounter'::'delegate'
+    callvirt instance string 'Counter'::'get_label'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'PropertyCounter'::'delegate'
+    callvirt instance int32 'Counter'::'get_value'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'PropertyCounter'::'delegate'
+    ldarg.1
+    callvirt instance void 'Counter'::'set_value'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'PropertyCounter'::'delegate'
+    ldarg.1
+    callvirt instance !!0 'Counter'::'echo'<!!0>(!!0)
+    ret
+  }
+  .property instance class 'Counter' 'delegate'()
+  {
+    .get instance class 'Counter' 'PropertyCounter'::'get_delegate'()
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'PropertyCounter'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'PropertyCounter'::'get_value'()
+    .set instance void 'PropertyCounter'::'set_value'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CustomCounter'
+       extends [mscorlib]System.Object
+       implements 'Counter'
+{
+  .field private class 'Counter' '$$delegate_0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Counter' 'delegate') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Counter' 'CustomCounter'::'$$delegate_0'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'add'(int32 'delta') cil managed
+  {
+    .maxstack 2
+    ldc.i4 100
+    ldarg.1
+    add
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'CustomCounter'::'$$delegate_0'
+    callvirt instance string 'Counter'::'get_label'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'CustomCounter'::'$$delegate_0'
+    callvirt instance int32 'Counter'::'get_value'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'CustomCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance void 'Counter'::'set_value'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'CustomCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance !!0 'Counter'::'echo'<!!0>(!!0)
+    ret
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'CustomCounter'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'CustomCounter'::'get_value'()
+    .set instance void 'CustomCounter'::'set_value'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ExpressionCounter'
+       extends [mscorlib]System.Object
+       implements 'Counter'
+{
+  .field private class 'CounterImpl' '$$delegate_0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'initial') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    ldstr "expression"
+    newobj instance void 'CounterImpl'::.ctor(int32, string)
+    stfld class 'CounterImpl' 'ExpressionCounter'::'$$delegate_0'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'add'(int32 'delta') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'CounterImpl' 'ExpressionCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance int32 'CounterImpl'::'add'(int32)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'CounterImpl' 'ExpressionCounter'::'$$delegate_0'
+    callvirt instance string 'CounterImpl'::'get_label'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'CounterImpl' 'ExpressionCounter'::'$$delegate_0'
+    callvirt instance int32 'CounterImpl'::'get_value'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'CounterImpl' 'ExpressionCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance void 'CounterImpl'::'set_value'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'CounterImpl' 'ExpressionCounter'::'$$delegate_0'
+    ldarg.1
+    callvirt instance !!0 'CounterImpl'::'echo'<!!0>(!!0)
+    ret
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'ExpressionCounter'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'ExpressionCounter'::'get_value'()
+    .set instance void 'ExpressionCounter'::'set_value'(int32)
+  }
+}
+.class interface public abstract auto ansi 'Source`1'<'T'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'current'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'choose'<'M'>(!!0 'item') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'StringSource'
+       extends [mscorlib]System.Object
+       implements class 'Source`1'<string>
+{
+  .field private string 'item'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'StringSource'::'item'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'StringSource'::'item'
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'StringSource'::'get_item'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'choose'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .property instance string 'item'()
+  {
+    .get instance string 'StringSource'::'get_item'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericSource`1'<'T'>
+       extends [mscorlib]System.Object
+       implements class 'Source`1'<!0>
+{
+  .field private class 'Source`1'<!0> '$$delegate_0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Source`1'<!0> 'delegate') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Source`1'<!0> class 'GenericSource`1'<!0>::'$$delegate_0'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Source`1'<!0> class 'GenericSource`1'<!0>::'$$delegate_0'
+    callvirt instance !0 class 'Source`1'<!0>::'current'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'choose'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Source`1'<!0> class 'GenericSource`1'<!0>::'$$delegate_0'
+    ldarg.1
+    callvirt instance !!0 class 'Source`1'<!0>::'choose'<!!0>(!!0)
+    ret
+  }
+}
+.class interface public abstract auto ansi 'RootId'
+{
+  .method public hidebysig newslot abstract virtual instance string 'id'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'LeafId'
+       implements 'RootId'
+{
+  .method public hidebysig newslot abstract virtual instance string 'id'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'LeafIdImpl'
+       extends [mscorlib]System.Object
+       implements 'LeafId'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'id'() cil managed
+  {
+    .maxstack 1
+    ldstr "leaf"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'RedeclaredForwarder'
+       extends [mscorlib]System.Object
+       implements 'LeafId'
+{
+  .field private class 'LeafId' '$$delegate_0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'LeafId' 'delegate') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'LeafId' 'RedeclaredForwarder'::'$$delegate_0'
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'id'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'LeafId' 'RedeclaredForwarder'::'$$delegate_0'
+    callvirt instance string 'LeafId'::'id'()
+    ret
+  }
+}
+.class interface public abstract auto ansi 'Named'
+{
+  .method public hidebysig newslot abstract virtual instance string 'name'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'NamedImpl'
+       extends [mscorlib]System.Object
+       implements 'Named'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'name'() cil managed
+  {
+    .maxstack 1
+    ldstr "named"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'MultiForwarder'
+       extends [mscorlib]System.Object
+       implements 'Counter', 'Named'
+{
+  .field private class 'Counter' '$$delegate_0'
+  .field private class 'Named' '$$delegate_1'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Counter' 'counter', class 'Named' 'named') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Counter' 'MultiForwarder'::'$$delegate_0'
+    ldarg.0
+    ldarg.2
+    stfld class 'Named' 'MultiForwarder'::'$$delegate_1'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'add'(int32 'delta') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'MultiForwarder'::'$$delegate_0'
+    ldarg.1
+    callvirt instance int32 'Counter'::'add'(int32)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'MultiForwarder'::'$$delegate_0'
+    callvirt instance string 'Counter'::'get_label'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Counter' 'MultiForwarder'::'$$delegate_0'
+    callvirt instance int32 'Counter'::'get_value'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'MultiForwarder'::'$$delegate_0'
+    ldarg.1
+    callvirt instance void 'Counter'::'set_value'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'M'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class 'Counter' 'MultiForwarder'::'$$delegate_0'
+    ldarg.1
+    callvirt instance !!0 'Counter'::'echo'<!!0>(!!0)
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'name'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Named' 'MultiForwarder'::'$$delegate_1'
+    callvirt instance string 'Named'::'name'()
+    ret
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'MultiForwarder'::'get_label'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'MultiForwarder'::'get_value'()
+    .set instance void 'MultiForwarder'::'set_value'(int32)
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'interfaceDelegationKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'CounterImpl' 'implementation',
+      [1] class 'PlainCounter' 'plain',
+      [2] class 'PropertyCounter' 'property',
+      [3] class 'Source`1'<string> 'generic',
+      [4] class 'RedeclaredForwarder' 'redeclared',
+      [5] class 'RootId' 'root',
+      [6] class 'MultiForwarder' 'multi'
+    )
+    ldc.i4 1
+    ldstr "shared"
+    newobj instance void 'CounterImpl'::.ctor(int32, string)
+    stloc.0
+    ldloc.0
+    newobj instance void 'PlainCounter'::.ctor(class 'Counter')
+    stloc.1
+    ldloc.0
+    newobj instance void 'PropertyCounter'::.ctor(class 'Counter')
+    stloc.2
+    ldloc.1
+    ldc.i4 2
+    callvirt instance int32 'PlainCounter'::'add'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    ldc.i4 9
+    callvirt instance void 'PropertyCounter'::'set_value'(int32)
+    ldloc.1
+    callvirt instance int32 'PlainCounter'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance string 'PropertyCounter'::'get_label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldstr "plain"
+    callvirt instance !!0 'PlainCounter'::'echo'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    newobj instance void 'CustomCounter'::.ctor(class 'Counter')
+    ldc.i4 5
+    callvirt instance int32 'CustomCounter'::'add'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 4
+    newobj instance void 'ExpressionCounter'::.ctor(int32)
+    ldc.i4 3
+    callvirt instance int32 'ExpressionCounter'::'add'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    newobj instance void 'StringSource'::.ctor(string)
+    newobj instance void class 'GenericSource`1'<string>::.ctor(class 'Source`1'<!0>)
+    stloc.3
+    ldloc.3
+    callvirt instance !0 class 'Source`1'<string>::'current'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    ldc.i4 12
+    callvirt instance !!0 class 'Source`1'<string>::'choose'<int32>(!!0)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'LeafIdImpl'::.ctor()
+    newobj instance void 'RedeclaredForwarder'::.ctor(class 'LeafId')
+    stloc 4
+    ldloc 4
+    stloc 5
+    ldloc 5
+    callvirt instance string 'RootId'::'id'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    callvirt instance string 'RedeclaredForwarder'::'id'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 20
+    ldstr "multi"
+    newobj instance void 'CounterImpl'::.ctor(int32, string)
+    newobj instance void 'NamedImpl'::.ctor()
+    newobj instance void 'MultiForwarder'::.ctor(class 'Counter', class 'Named')
+    stloc 6
+    ldloc 6
+    ldc.i4 2
+    callvirt instance int32 'MultiForwarder'::'add'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    callvirt instance string 'MultiForwarder'::'name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

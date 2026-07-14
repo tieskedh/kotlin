@@ -300,8 +300,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `box/abstractClasses.kt`; `ilText/classShapeRejected.kt` retains the neighboring variance and
   nested-class rejection boundaries.
 - Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`,
-  `genmemberprobe_s1`, `ifaceredeclareprobe_s1`; JVM precedent: real CLR interface types =
-  no vtable/interface lowering, the same argument as the class and inheritance bullets): a
+  `genmemberprobe_s1`, `ifaceredeclareprobe_s1`, `delegationprobe_s1`; JVM precedent: real CLR
+  interface types = no vtable/interface lowering, the same argument as the class and inheritance
+  bullets): a
   top-level Kotlin `interface` whose members are ALL abstract (abstract functions and abstract
   `val`/`var` properties; empty interfaces included) is emitted as
   `.class interface public abstract auto ansi` — no `extends` line, no `sealed`, no
@@ -376,9 +377,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Consumer<Base> -> Consumer<Derived>` are free, including through transitive interface links,
   while `Producer<Int> -> Producer<Any>` and conversions over open unconstrained `T` reject:
   CLR variance does not apply to value-type instantiations. Generic classes remain invariant.
-  The reference
-  `ceq` is type-agnostic across interface-typed and class-typed views (s7; sibling widening —
-  see the equality bullet). EVICTION: an evicted interface cascades whole-class to every
+  The reference `ceq` is type-agnostic across interface-typed and class-typed views (s7; sibling
+  widening — see the equality bullet).
+  INTERFACE DELEGATION follows the JVM frontend-owned model: FIR supplies ordinary forwarding
+  functions/accessors with origin `DELEGATED_MEMBER`, and codegen renders their existing bodies
+  through the normal member path. A constructor-property delegate uses that property's private
+  backing field; a plain parameter, expression, bounded type parameter, or `var` delegate gets a
+  separate private instance field with origin `DELEGATE` (`$$delegate_n`). The shared
+  `InitializersLowering` merges its initializer into the constructor after the base-constructor
+  call and before later member initializers, preserving JVM evaluation order and one-time capture
+  (reassigning a `var` property does not retarget forwarding). Calls use the delegate expression's
+  exact static owner — interface, concrete class, generic instantiation, or constrained `!n` — so
+  existing `callvirt`/`constrained.` machinery handles dispatch without a delegation-specific
+  call emitter. Explicit overrides suppress only their corresponding forwarding member; multiple
+  delegates, mutable properties, generic owners/methods, inherited interface redeclarations, and
+  a delegated member overriding an inherited virtual class member compose with the existing slot
+  model. The private-field/forwarding shape and generic method dispatch assemble and run on
+  CoreCLR 10.0.9 and Framework 4.8 (`delegationprobe_s1`); both FIR source spellings, the exact IL,
+  runtime capture/order/dispatch, and an evicted-interface cascade are pinned by
+  `ilText/interfaceDelegation.kt`, `box/interfaceDelegation.kt`, and
+  `ilText/interfaceDelegationRejected.kt`.
+  EVICTION: an evicted interface cascades whole-class to every
   implementing class and every sub-interface — the `implements` list is re-resolved from the
   LIVE class map at the top of every render round with chained reasons, the interface arm of
   the base-class cascade (pinned by `ilText/interfaceEvicted.kt` and
@@ -389,11 +408,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   floor), private interface members, companion objects and any nested declaration in an interface,
   `fun interface` (no SAM-conversion model),
   out-of-module or non-top-level
-  interfaces, interface DELEGATION (`class C(...) : I by d`) in BOTH source spellings — the
-  `val`-parameter and the plain-parameter form (which additionally synthesizes a loose
-  `$$delegate_0` field): the frontend's forwarding members (origin DELEGATED_MEMBER) are gated
-  whole-class with a real user-facing message so the two cosmetically different spellings never
-  diverge in support (pinned by `ilText/interfaceDelegationRejected.kt`),
+  interfaces,
   `super<I>.f()` (needs DIM and therefore exceeds the Framework 4.8 floor; rejected up front in
   `emitCall`),
   `is`/`as`/safe-cast on interface types (the existing type-operator rejection stays
@@ -411,7 +426,6 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/interfaceHierarchy.kt` pin every new spelling,
   `ilText/interfaceNonVirtualImplRejected.kt` pins the s5b gate,
   `ilText/interfaceCovariantImplRejected.kt` the s10 gate,
-  `ilText/interfaceDelegationRejected.kt` the delegation gate, and
   `ilText/interfaceEqualityWidening.kt` the sibling widening, the no-common-supertype
   rejection and the sealed-interface acceptance. Abstract redeclaration metadata, owner-token
   dispatch, mutable properties, generic composition, diamonds, and mapped-covariance rejection
