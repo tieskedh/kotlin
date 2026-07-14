@@ -203,9 +203,10 @@ internal class DotNetIlMethodCodegen(
      *   singleton field. The `.method assembly ... .ctor()` spelling `newobj`'d from the
      *   enclosing `.cctor` is probe-verified (objprobe_s7c). Stated deviation from the JVM
      *   backend, whose analogue is the synthetic `access$` bridge it generates for
-     *   outer→companion-private access. The reverse direction needs nothing: Kotlin-private
-     *   members of the ENCLOSING class reached from companion code are fine at their current
-     *   IL visibility (nested→enclosing access is granted, objprobe_s7a).
+     *   outer→companion-private access. Ordinary named nested classes need no such widening:
+     *   Kotlin does not allow their enclosing class to call private nested members. The reverse
+     *   direction needs nothing: Kotlin-private members of the ENCLOSING class reached from
+     *   nested code are fine at IL private visibility (objprobe_s7a, nestedprobe_s2).
      */
     private fun IrFunction.dotNetMemberVisibility(): String? {
         if (visibility != DescriptorVisibilities.PRIVATE) return null

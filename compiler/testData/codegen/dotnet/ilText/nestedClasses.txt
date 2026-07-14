@@ -1,0 +1,640 @@
+.assembly extern mscorlib {}
+.assembly 'nestedClasses' {}
+.module 'main-nestedClasses.il'
+
+.class interface public abstract auto ansi 'NestedLabel'
+{
+  .method public hidebysig newslot abstract virtual instance string 'label'() cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'NestedBase'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'NestedBase'::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'NestedBase'::'seed'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'NestedBase'::'get_seed'()
+    ret
+  }
+  .property instance int32 'seed'()
+  {
+    .get instance int32 'NestedBase'::'get_seed'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericOuter`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Plain'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'number'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'number') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'GenericOuter`1'/'Plain'::'number'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_number'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'GenericOuter`1'/'Plain'::'number'
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'GenericOuter`1'/'Plain'::'get_number'()
+      ret
+    }
+    .property instance int32 'number'()
+    {
+      .get instance int32 'GenericOuter`1'/'Plain'::'get_number'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'U'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'item'
+    .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'
+      ret
+    }
+    .method public hidebysig instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'GenericOuter`1'/'Generic`1'<!0>::'get_item'()
+      ret
+    }
+    .property instance !0 'item'()
+    {
+      .get instance !0 'GenericOuter`1'/'Generic`1'::'get_item'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Middle'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Deep'
+           extends [mscorlib]System.Object
+    {
+      .field private string 'text'
+      .method public hidebysig specialname rtspecialname instance void .ctor(string 'text') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        ldarg.1
+        stfld string 'GenericOuter`1'/'Middle'/'Deep'::'text'
+        ret
+      }
+      .method public hidebysig specialname instance string 'get_text'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld string 'GenericOuter`1'/'Middle'/'Deep'::'text'
+        ret
+      }
+      .method public hidebysig instance string 'text'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance string 'GenericOuter`1'/'Middle'/'Deep'::'get_text'()
+        ret
+      }
+      .property instance string 'text'()
+      {
+        .get instance string 'GenericOuter`1'/'Middle'/'Deep'::'get_text'()
+      }
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi beforefieldinit 'VisibilityOuter'
+       extends [mscorlib]System.Object
+{
+  .class nested private auto ansi sealed beforefieldinit 'Hidden'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'number'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'number') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'VisibilityOuter'/'Hidden'::'number'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_number'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'VisibilityOuter'/'Hidden'::'number'
+      ret
+    }
+    .method public hidebysig instance int32 'twice'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance int32 'VisibilityOuter'/'Hidden'::'get_number'()
+      ldarg.0
+      call instance int32 'VisibilityOuter'/'Hidden'::'get_number'()
+      add
+      ret
+    }
+    .method public hidebysig instance int32 'doubled'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'VisibilityOuter'/'Hidden'::'twice'()
+      ret
+    }
+    .method public hidebysig instance int32 'readOuter'(class 'VisibilityOuter' 'outer') cil managed
+    {
+      .maxstack 1
+      ldarg.1
+      call instance int32 'VisibilityOuter'::'get_secret'()
+      ret
+    }
+    .property instance int32 'number'()
+    {
+      .get instance int32 'VisibilityOuter'/'Hidden'::'get_number'()
+    }
+  }
+  .class nested assembly auto ansi sealed beforefieldinit 'InternalNested'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'VisibilityOuter'/'InternalNested'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'VisibilityOuter'/'InternalNested'::'value'
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'VisibilityOuter'/'InternalNested'::'get_value'()
+    }
+  }
+  .class nested family auto ansi sealed beforefieldinit 'ProtectedNested'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'VisibilityOuter'/'ProtectedNested'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'VisibilityOuter'/'ProtectedNested'::'value'
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'VisibilityOuter'/'ProtectedNested'::'get_value'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'PublicNested'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'VisibilityOuter'/'PublicNested'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'VisibilityOuter'/'PublicNested'::'value'
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'VisibilityOuter'/'PublicNested'::'get_value'()
+    }
+  }
+  .field private int32 'secret'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'secret') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'VisibilityOuter'::'secret'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_secret'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'VisibilityOuter'::'secret'
+    ret
+  }
+  .method public hidebysig instance int32 'hiddenValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 21
+    newobj instance void 'VisibilityOuter'/'Hidden'::.ctor(int32)
+    call instance int32 'VisibilityOuter'/'Hidden'::'doubled'()
+    ret
+  }
+  .method public hidebysig instance int32 'hiddenReadsOuter'() cil managed
+  {
+    .maxstack 2
+    ldc.i4 0
+    newobj instance void 'VisibilityOuter'/'Hidden'::.ctor(int32)
+    ldarg.0
+    call instance int32 'VisibilityOuter'/'Hidden'::'readOuter'(class 'VisibilityOuter')
+    ret
+  }
+  .method public hidebysig instance int32 'protectedValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 7
+    newobj instance void 'VisibilityOuter'/'ProtectedNested'::.ctor(int32)
+    call instance int32 'VisibilityOuter'/'ProtectedNested'::'get_value'()
+    ret
+  }
+  .property instance int32 'secret'()
+  {
+    .get instance int32 'VisibilityOuter'::'get_secret'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'HierarchyOuter'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Derived'
+         extends 'NestedBase'
+         implements 'NestedLabel'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance void 'NestedBase'::.ctor(int32)
+      ret
+    }
+    .method public hidebysig virtual instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance int32 'NestedBase'::'value'()
+      ldc.i4 1
+      add
+      ret
+    }
+    .method public hidebysig newslot virtual instance string 'label'() cil managed
+    {
+      .maxstack 1
+      ldstr "nested"
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ForwardOuter'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'UsesLater'
+         extends [mscorlib]System.Object
+  {
+    .field private class 'ForwardOuter'/'Later' 'later'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'ForwardOuter'/'Later' 'later') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld class 'ForwardOuter'/'Later' 'ForwardOuter'/'UsesLater'::'later'
+      ret
+    }
+    .method public hidebysig specialname instance class 'ForwardOuter'/'Later' 'get_later'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'ForwardOuter'/'Later' 'ForwardOuter'/'UsesLater'::'later'
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance class 'ForwardOuter'/'Later' 'ForwardOuter'/'UsesLater'::'get_later'()
+      call instance int32 'ForwardOuter'/'Later'::'get_value'()
+      ret
+    }
+    .property instance class 'ForwardOuter'/'Later' 'later'()
+    {
+      .get instance class 'ForwardOuter'/'Later' 'ForwardOuter'/'UsesLater'::'get_later'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Later'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'ForwardOuter'/'Later'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'ForwardOuter'/'Later'::'value'
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'ForwardOuter'/'Later'::'get_value'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed 'MixedOuter'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Nested'
+         extends [mscorlib]System.Object
+  {
+    .field private string 'text'
+    .method public hidebysig specialname rtspecialname instance void .ctor(string 'text') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld string 'MixedOuter'/'Nested'::'text'
+      ret
+    }
+    .method public hidebysig specialname instance string 'get_text'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld string 'MixedOuter'/'Nested'::'text'
+      ret
+    }
+    .method public hidebysig instance string 'text'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance string 'MixedOuter'/'Nested'::'get_text'()
+      ret
+    }
+    .property instance string 'text'()
+    {
+      .get instance string 'MixedOuter'/'Nested'::'get_text'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+  {
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance class 'MixedOuter'/'Nested' 'create'(string 'text') cil managed
+    {
+      .maxstack 1
+      ldarg.1
+      newobj instance void 'MixedOuter'/'Nested'::.ctor(string)
+      ret
+    }
+  }
+  .field public static initonly class 'MixedOuter'/'Companion' 'Companion'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'MixedOuter'/'Companion'::.ctor()
+    stsfld class 'MixedOuter'/'Companion' 'MixedOuter'::'Companion'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'nestedClassesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class 'GenericOuter`1'/'Plain' 'makePlain'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'GenericOuter`1'/'Plain'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig static int32 'readPlain'(class 'GenericOuter`1'/'Plain' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'GenericOuter`1'/'Plain'::'value'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'VisibilityOuter' 'visibility',
+      [1] class 'HierarchyOuter'/'Derived' 'derived',
+      [2] class 'NestedBase' 'base',
+      [3] class 'NestedLabel' 'label'
+    )
+    ldc.i4 3
+    call class 'GenericOuter`1'/'Plain' 'nestedClassesKt'::'makePlain'(int32)
+    call int32 'nestedClassesKt'::'readPlain'(class 'GenericOuter`1'/'Plain')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    newobj instance void class 'GenericOuter`1'/'Generic`1'<string>::.ctor(!0)
+    call instance !0 class 'GenericOuter`1'/'Generic`1'<string>::'item'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "deep"
+    newobj instance void 'GenericOuter`1'/'Middle'/'Deep'::.ctor(string)
+    call instance string 'GenericOuter`1'/'Middle'/'Deep'::'text'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    newobj instance void 'VisibilityOuter'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    call instance int32 'VisibilityOuter'::'hiddenValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance int32 'VisibilityOuter'::'hiddenReadsOuter'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    newobj instance void 'VisibilityOuter'/'InternalNested'::.ctor(int32)
+    call instance int32 'VisibilityOuter'/'InternalNested'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance int32 'VisibilityOuter'::'protectedValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    newobj instance void 'VisibilityOuter'/'PublicNested'::.ctor(int32)
+    call instance int32 'VisibilityOuter'/'PublicNested'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 10
+    newobj instance void 'HierarchyOuter'/'Derived'::.ctor(int32)
+    stloc.1
+    ldloc.1
+    stloc.2
+    ldloc.1
+    stloc.3
+    ldloc.2
+    callvirt instance int32 'NestedBase'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    callvirt instance string 'NestedLabel'::'label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 12
+    newobj instance void 'ForwardOuter'/'Later'::.ctor(int32)
+    newobj instance void 'ForwardOuter'/'UsesLater'::.ctor(class 'ForwardOuter'/'Later')
+    call instance int32 'ForwardOuter'/'UsesLater'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'MixedOuter'/'Companion' 'MixedOuter'::'Companion'
+    ldstr "companion"
+    call instance class 'MixedOuter'/'Nested' 'MixedOuter'/'Companion'::'create'(string)
+    call instance string 'MixedOuter'/'Nested'::'text'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

@@ -465,10 +465,10 @@ internal class DotNetIlFunctionInfo(
 
 /**
  * A user class currently considered compilable to .NET IL — top-level, or, with [enclosingClass]
- * set, the companion object nested inside a top-level class. The counterpart of
+ * set, a recursively nested named class or companion object. The counterpart of
  * [DotNetIlFunctionInfo] for classes; it carries the IL class name ([ilClassName] — the dotted
- * FqName for a top-level class, the simple name for a nested one, i.e. what the `.class`
- * directive declares) and renders the member references of the class model.
+ * FqName for a top-level class, the simple arity-suffixed name for a nested one, i.e. what the
+ * `.class` directive declares) and renders the member references of the class model.
  */
 internal class DotNetIlClassInfo(
     val ilClassName: String,
@@ -478,7 +478,7 @@ internal class DotNetIlClassInfo(
     val typeParameterCount: Int
         get() = typeParameterVariances.size
 
-    /** Whether this is a nested class (a companion object) rather than a top-level one. */
+    /** Whether this is a named nested class or companion object rather than a top-level class. */
     val isNested: Boolean
         get() = enclosingClass != null
 
@@ -548,10 +548,10 @@ internal class DotNetIlClassInfo(
 
     /**
      * The rendered IL type reference of this class — `'demo.Outer'` for a top-level class,
-     * `'demo.Outer'/'Companion'` for a nested one: the slash sits OUTSIDE the quoted
-     * identifiers, enclosing name first (probe-verified in every operand position —
+     * `'demo.Outer'/'Middle'/'Deep'` for recursively nested classes: each slash sits OUTSIDE the
+     * quoted identifiers, enclosing name first (probe-verified in every operand position —
      * field types, `newobj`, `ldsfld`/`stsfld`, `call`, method parameter/return signatures
-     * and `.locals`; objprobe_s6). Every member-reference renderer and every
+     * and `.locals`; objprobe_s6, nestedprobe_s1). Every member-reference renderer and every
      * [UserClass][DotNetIlValueType.UserClass] signature name routes through this single
      * property, so the nested spelling exists in exactly one place.
      */

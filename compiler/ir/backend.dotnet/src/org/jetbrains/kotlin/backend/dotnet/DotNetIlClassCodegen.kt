@@ -6,9 +6,9 @@ package org.jetbrains.kotlin.backend.dotnet
  * ([isStaticHolder] = false: instantiable, `sealed` for a final Kotlin class, unsealed with
  * [isOpen], or non-instantiable `abstract` with [isAbstract] — the CLR expresses Kotlin modality
  * directly in metadata, unlike the JVM access flags which the JVM backend derives from the same
- * modality), a companion object
- * ([isNested] = true: a real CLR nested type declared inside the
- * enclosing class's body), a Kotlin interface ([isInterface]: `.class interface public abstract
+ * modality), a named nested class or companion object ([isNested] = true: a real CLR nested
+ * type declared inside the enclosing class's body, with [nestedVisibility]), a Kotlin interface
+ * ([isInterface]: `.class interface public abstract
  * auto ansi` with NO `extends` line, no `sealed`, no `beforefieldinit` — the exact flag set
  * probe-verified, `ifaceprobe_s1`), or, with [exported] = false, the module-private runtime
  * helper class (see [DotNetIlRuntimeHelper]). [baseClassRef] is the already-rendered IL type
@@ -20,8 +20,7 @@ package org.jetbrains.kotlin.backend.dotnet
  * `implements` line after `extends` (spelling probe-verified, `ifaceprobe_s3` and
  * `genifaceprobe_s1`; on an interface the same line lists its direct super-interfaces —
  * transitively implied super-interfaces are never repeated).
- * [renderedNestedClasses] are complete, already indented `.class`
- * blocks (a top-level user class carries at most its companion) emitted first in the body;
+ * [renderedNestedClasses] are complete, already indented `.class` blocks emitted first in the body;
  * [renderedFields] are single `.field` lines emitted before the methods and
  * [renderedProperties] are `.property` blocks emitted after them (ilasm accepts any member order
  * — probe-verified — so this is the deterministic order the goldens freeze).
@@ -45,6 +44,7 @@ internal class DotNetIlClassCodegen(
     private val exported: Boolean = true,
     private val hasClassInitializer: Boolean = false,
     private val isNested: Boolean = false,
+    private val nestedVisibility: String = "public",
     private val renderedNestedClasses: List<String> = emptyList(),
     private val isOpen: Boolean = false,
     private val isAbstract: Boolean = false,
@@ -65,10 +65,9 @@ internal class DotNetIlClassCodegen(
             // An interface carries neither `sealed` nor `beforefieldinit` (it has no `.cctor`
             // and cannot be instantiated) and, per ECMA-335, no `extends` line at all.
             isInterface -> "interface $visibility abstract auto ansi"
-            // A nested class is never a static holder here: the only nested shape emitted is
-            // the companion object, an instantiable singleton (and always final: isOpen never
-            // applies to the nested shape — the gate keeps companions final-only).
-            isNested -> "nested $visibility auto ansi sealed$beforeFieldInit"
+            // A nested class is never a static holder here. Named nested classes and companion
+            // objects are final in the current gate, so both carry CLR `sealed`.
+            isNested -> "nested $nestedVisibility auto ansi sealed$beforeFieldInit"
             isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"
             isAbstract -> "$visibility abstract auto ansi$beforeFieldInit"
             else -> "$visibility auto ansi$sealed$beforeFieldInit"

@@ -6,11 +6,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `5a77b7435`
-  ("[DotNet] Add interface delegation"), clean tree, based directly on
+- Branch `dotnet`; latest functional tip `911b1113e`
+  ("[DotNet] Add named nested classes"), clean tree, based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **320 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **326 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -20,7 +20,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
   interfaces and declaration-site variance stage 4, generic member functions stage 5, generic
   class inheritance stage 6, abstract and sealed classes, abstract interface redeclarations,
-  interface delegation through FIR's frontend-owned forwarding artifacts.
+  interface delegation through FIR's frontend-owned forwarding artifacts, final named nested
+  classes with static-style JVM semantics and real CLR nested metadata.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
@@ -146,6 +147,25 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and .NET Framework 4.8; runtime pins cover initialization order, one-time capture, constrained
   calls, and base/interface dispatch. The final FIR suite is 320/0/0/0; the generated CLI suite
   remains 10/0/0/0.
+- Interim continuation landed `911b1113e`: FINAL named classes may now nest recursively inside
+  plain classes as real CLR nested metadata types, following the JVM's static-nested semantics.
+  Each declaration has its own simple arity-suffixed identity and independent generic parameter
+  space, so named classes inside generic outers do not capture the outer's `!n` slots. Public,
+  private, internal, and protected map to `nested public/private/assembly/family`; arbitrary depth,
+  forward sibling references, generic nested classes, top-level base/interface links, and a direct
+  companion alongside named nested siblings all compose through the existing member machinery.
+  Registration, rendering, and eviction now operate on the whole top-level class family. A deep
+  recursive render failure preserves the exact descendant tag while unwinding, then removes every
+  family class and callable with chained diagnostics. `nestedprobe_s1` verified names, independent
+  generics, depth, visibility, construction, and member/field references; `nestedprobe_s2` verified
+  CLR nested/enclosing access behavior. Both probes and both exact goldens assemble and execute
+  identically on CoreCLR 10.0.9 and .NET Framework 4.8; the runtime box test covers generic value
+  instantiations, visibility paths, inheritance/interface dispatch, forward references, and
+  companion coexistence. A companion OF an ordinary nested class remains rejected: the current
+  lowering pipeline does not synthesize its `.cctor`, and the adversarial first attempt exposed
+  a null singleton field before that output could be pinned. Non-final, inner, nested interface/
+  object, and object-contained classes also remain rejected. The final fresh FIR suite is
+  326/0/0/0; the generated CLI suite remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -160,10 +180,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
    `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
-   `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp dir).
+   `nestedprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp
+   dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
-   message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
-   eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
+   message; rejection granularity is the whole top-level class family (or property group where
+   AGENTS.md says so); eviction cascades with chained reasons. Never emit fallback IL. Never let a
+   construction reach
    ilasm-rejected or JIT-poisoned output: interface/generic mapping mistakes characteristically
    assemble CLEAN and throw `TypeLoadException`/`MissingMethodException` lazily — that is why box
    coverage per dispatch shape is mandatory, and why reviews must assemble suspicious goldens.
@@ -210,14 +232,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit ordinary named nested classes.** Companion objects already prove the CLR nested
-   registration, type-reference, recursive-render, fixpoint-eviction, and generic-outer machinery.
-   Determine which parts can be generalized safely to `class Outer { class Nested }`, following
-   the JVM's static-nested semantics while using real CLR nested metadata. Probe visibility,
-   construction, calls/fields, multi-level nesting, forward references, generic nested classes,
-   and a nested class inside a generic outer on both runtimes before lifting the existing
-   enclosing-class gate. Keep `inner`, local/anonymous, enum/data, and nested-interface support out
-   of the first slice unless their IR and CLR requirements are independently settled.
+1. **Audit non-final nested classes and nested-family inheritance.** The first nested slice is
+   deliberately FINAL-only and permits bases/interfaces only when they are top-level. Probe CLR
+   flag order for open/abstract/sealed nested types and base/interface tokens that name sibling,
+   enclosing-family, generic, and forward-declared nested types on both runtimes. Then decide
+   whether to lift modality and nested-to-nested inheritance together, reusing the existing slot,
+   assignability, live-link, and whole-family eviction machinery. Keep `inner`, local/anonymous,
+   enum/data/value, nested-interface/object, and companion-of-nested support separate; the latter
+   first needs recursive object/static-initializer lowering rather than a gate-only change.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

@@ -223,16 +223,37 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   (nullable primitives through the object/companion singleton and static-initializer
   machinery), `box/tryDiscardedValue.kt` (the discarded Any-LUB try statement shape).
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
-  vtable/class lowering machinery): only top-level plain classes — final, open, abstract, or
-  sealed; non-generic or, since the generics model (below), with reified type parameters — and,
-  since the interface/generics models (below), top-level
+  vtable/class lowering machinery): top-level plain classes — final, open, abstract, or sealed;
+  non-generic or, since the generics model (below), with reified type parameters — plus the final
+  named nested classes described below, and, since the interface/generics models (below), top-level
   non-generic or generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
-  Rejection granularity is always the whole class — a failing member (signature, body, or IL
-  method- or field-identity clash) removes the entire class from the module so no call site can
-  resolve to a partial class, and the removal cascades through the type mapper to every user of
-  the class.
+  Rejection granularity is always the whole top-level class family — a failing member (signature,
+  body, or IL method- or field-identity clash) removes the root and every recursively nested class
+  from the module so no call site can resolve to a partial family, and the removal cascades through
+  the type mapper to every user of any family member.
+- Named nested-class model (probe series `nestedprobe_s1`–`_s2`; JVM precedent: a Kotlin named
+  nested class is static unless `isInner`, represented by JVM `ACC_STATIC`; the CLR analogue is a
+  real nested metadata type): a FINAL plain `ClassKind.CLASS` declared directly inside another
+  plain class passes the shape gate recursively. It owns no outer instance and only its OWN generic
+  parameters; a named class inside generic `Outer<T>` is therefore referenced as
+  `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic nested class is
+  `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted simple names.
+  Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
+  rendering remains recursive inside the enclosing `.class` block. Public/private/internal/
+  protected source visibility maps to `nested public`/`nested private`/`nested assembly`/
+  `nested family`; all spellings, generic independence, construction, member/field references,
+  forward sibling references, and multi-level nesting assemble and run on CoreCLR and Framework.
+  A supported nested class may extend or implement the existing supported module-local TOP-LEVEL
+  base/interface shapes; nested-to-nested inheritance remains outside this first slice. STAYS
+  REJECTED, whole-family: `inner`, local/anonymous, open/abstract/sealed, data/value/enum/annotation,
+  nested interface/object, any class inside an object/companion/interface, and a companion of an
+  ordinary nested class (the current object-lowering pass would leave that companion's singleton
+  field uninitialized). A top-level plain class may carry supported named nested classes alongside
+  its existing direct companion. Recursive render failures preserve the deepest declaration tag
+  while unwinding, then family eviction removes every class/member entry. Pins:
+  `ilText/nestedClasses.kt`, `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`; JVM precedent: real CLR classes = real platform inheritance, no
   vtable lowering — the same argument as the class-model bullet): a top-level plain class may be
@@ -576,22 +597,24 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `.method assembly hidebysig specialname` spelling is golden-pinned by
   `ilText/companionObject.kt`). `const val` in a companion is a `literal` field on the NESTED class (literal
   fields on a nested class probe-verified, objprobe_s9b), the same no-copy-to-enclosing
-  deviation as objects. Rejection granularity is the linked WHOLE PAIR: the enclosing class and
-  its companion are separate `availableClasses` entries (the companion needs its own identity
-  for type mapping and member resolution), but every eviction site removes both entries and
-  both member sets — a partial pair violates the whole-class rule in both directions (the
-  singleton field on the enclosing class is typed as the companion and the enclosing `.cctor`
-  news it). The pair warnings attribute the failure to the half that actually failed: a
+  deviation as objects. The enclosing class and its companion are separate `availableClasses`
+  entries (the companion needs its own identity for type mapping and member resolution), but the
+  class-family eviction rule removes both plus any named nested siblings/descendants — a partial
+  family violates the whole-class rule in both directions (the singleton field on the enclosing
+  class is typed as the companion and the enclosing `.cctor` news it). The warnings attribute a
+  failure to the declaration that actually failed: a
   companion failure surfaces out of the enclosing class's render (the companion renders only
   recursively inside it), so the render fixpoint re-tags it with the companion
-  (`DotNetIlUnsupportedClassException`) before evicting. Pair eviction is pinned in both
+  (`DotNetIlUnsupportedClassException`) before evicting. Companion eviction is pinned in both
   phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
   companion member body failing only after its callee's round-one eviction, plus the extra
-  round that re-fails an already-rendered user of the evicted pair) by
-  `ilText/companionFixpointEviction.kt`. The gate allows exactly one nested `IrClass` iff it `isCompanion` with kind OBJECT,
-  recursively validated with the same constraint chain (sole supertype `Any`, final,
-  non-generic, no nested classes of its own, not data); non-companion nested classes/objects
-  stay rejected, and a companion inside an `object` cannot reach the gate (frontend-rejected).
+  round that re-fails an already-rendered user of the evicted family) by
+  `ilText/companionFixpointEviction.kt`. The companion gate accepts exactly the direct companion
+  of a top-level plain class, recursively validated with the same constraint chain (sole supertype
+  `Any`, final, non-generic, no nested classes of its own, not data). Supported named nested class
+  siblings are independent metadata children; a companion of an ordinary nested class stays
+  rejected until object lowering recursively initializes its singleton field, and a companion
+  inside an `object` cannot reach the gate (frontend-rejected).
   The companion singleton field participates in the ENCLOSING class's field-identity gate, but
   the colliding source shape (a user property named after the companion) is itself a frontend
   REDECLARATION — a companion also occupies the value namespace — so that slice is
@@ -714,7 +737,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     string-concat lowering, kept for compatibility and pinned by the borrowed
     `box/strings/kt50140.kt`: such a `T` still declares its real arity but its SLOTS map to
     `string`); generic TOP-LEVEL PLAIN CLASSES (final, open, abstract, or sealed; the same direct
-    module-local constraint rule without the String exception); generic TOP-LEVEL ALL-ABSTRACT
+    module-local constraint rule without the String exception), plus FINAL generic named nested
+    classes with an independent `!n` space and named nested classes inside generic outers (the
+    outer's parameters are not captured); generic TOP-LEVEL ALL-ABSTRACT
     INTERFACES with
     invariant, `out`, or `in` parameters under that same constraint rule; generic and non-generic
     classes implementing open or closed generic-interface instantiations; generic-interface
