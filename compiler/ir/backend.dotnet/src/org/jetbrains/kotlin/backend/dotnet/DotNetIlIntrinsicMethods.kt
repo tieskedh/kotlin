@@ -428,6 +428,18 @@ private class DotNetIlEqualityIntrinsic(
             ?: dotNetUnsupported("missing right operand of an equality comparison")
         val leftType = codegen.toDotNetIlValueType(left.type)
         val rightType = codegen.toDotNetIlValueType(right.type)
+        // Stage-1 generics: every equality with a type-parameter-typed operand — `==`, `===`
+        // and `x == null` alike — is rejected loudly: an unconstrained `T` may instantiate to a
+        // value type, where the reference `ceq` is meaningless (and `Nullable<T>`'s null test
+        // is a method call, not `ldnull`/`ceq`), and there is no lifted story without a
+        // constraints model.
+        if (leftType is DotNetIlValueType.TypeParameter || rightType is DotNetIlValueType.TypeParameter) {
+            dotNetUnsupported(
+                "equality comparison with a type-parameter-typed operand is not supported: an unconstrained " +
+                        "'T' may instantiate to a value type, where reference comparison is meaningless " +
+                        "(no generic-constraints model)"
+            )
+        }
         if (leftType is DotNetIlValueType.NullableValue || rightType is DotNetIlValueType.NullableValue) {
             emitNullablePrimitiveEquality(codegen, left, right, leftType, rightType)
             return true
@@ -468,7 +480,9 @@ private class DotNetIlEqualityIntrinsic(
                     codegen.emit("call bool ${CORE_LIB_REF}System.String::op_Equality(string, string)", pops = 2, pushes = 1)
                 }
             }
-            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass, DotNetIlValueType.Object -> {
+            is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass, DotNetIlValueType.Object,
+            is DotNetIlValueType.GenericInstance,
+                -> {
                 // Reference equality on object references is a plain `ceq` (probe-verified;
                 // `object`-typed operands included, nullprobe_s8). `x == null` shares it: Kotlin
                 // defines a null-literal comparison as a pure reference check that never calls
@@ -476,7 +490,9 @@ private class DotNetIlEqualityIntrinsic(
                 // to an `ifnull` check), so no Any.equals model is involved. General instance
                 // `==` needs that model and is rejected loudly — never silently downgraded to a
                 // reference comparison. Mapped exception types follow the same rules; `===` on
-                // them is what makes rethrow identity observable.
+                // them is what makes rethrow identity observable. An INSTANTIATED generic class
+                // is an ordinary reference type and follows the UserClass rules unchanged (the
+                // reference `ceq` is type-agnostic).
                 if (referenceEquality || left.isNullConst() || right.isNullConst()) {
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
@@ -487,6 +503,8 @@ private class DotNetIlEqualityIntrinsic(
             }
             is DotNetIlValueType.NullableValue ->
                 error("Internal .NET backend error: nullable-primitive equality operands handled above")
+            is DotNetIlValueType.TypeParameter ->
+                error("Internal .NET backend error: type-parameter equality operands rejected above")
         }
         return true
     }
@@ -1263,11 +1281,15 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         // derived-typed side widens by the established no-instruction upcast, so the wider
         // static type is the operand slot's type — the user-class analogue of the mapped
         // exception arm above. General `==` on such a pair still lands in the UserClass
-        // rejection arm of the intrinsic, exactly like same-typed instances.
-        leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass &&
-                leftType.isDotNetAssignableTo(rightType) -> rightType
-        leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass &&
-                rightType.isDotNetAssignableTo(leftType) -> leftType
+        // rejection arm of the intrinsic, exactly like same-typed instances. Since the generics
+        // model, an INSTANTIATED generic class participates like any other class type (a
+        // derived `IntBox` next to a `Box<Int>`-typed operand widens to `Box<Int>`; the
+        // assignability walk is invariant, so unrelated instantiations still fall through to
+        // the loud rejection).
+        leftType.isDotNetUserClassLike() && rightType.isDotNetUserClassLike() &&
+                leftType!!.isDotNetAssignableTo(rightType!!) -> rightType
+        leftType.isDotNetUserClassLike() && rightType.isDotNetUserClassLike() &&
+                rightType!!.isDotNetAssignableTo(leftType!!) -> leftType
         // Sibling classes sharing a supertype (since the interface model this includes a common
         // implemented interface, the shape a smartcast routinely produces: after
         // `if (!(s === r)) return` an interface-typed `s` is narrowed to `r`'s class, so a later
@@ -1277,13 +1299,15 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         // free for both sides (reference upcasts, ifaceprobe_s7). Operands with no common
         // supertype stay rejected loudly (their only common supertype would need an Any model);
         // both halves are pinned by ilText/interfaceEqualityWidening.kt.
-        leftType is DotNetIlValueType.UserClass && rightType is DotNetIlValueType.UserClass ->
-            leftType.classInfo.allSupertypes()
-                .map { DotNetIlValueType.UserClass(it) }
-                .firstOrNull { rightType.isDotNetAssignableTo(it) }
+        leftType.isDotNetUserClassLike() && rightType.isDotNetUserClassLike() ->
+            leftType!!.dotNetAllSupertypes()
+                .firstOrNull { rightType!!.isDotNetAssignableTo(it) }
         else -> null
     }
 }
+
+private fun DotNetIlValueType?.isDotNetUserClassLike(): Boolean =
+    this is DotNetIlValueType.UserClass || this is DotNetIlValueType.GenericInstance
 
 private fun DotNetIlValueType?.isDotNetReferenceType(): Boolean =
     this?.isDotNetReferenceShaped() == true

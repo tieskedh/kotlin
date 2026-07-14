@@ -168,8 +168,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   (nullable primitives through the object/companion singleton and static-initializer
   machinery), `box/tryDiscardedValue.kt` (the discarded Any-LUB try statement shape).
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
-  vtable/class lowering machinery): only top-level, non-generic plain classes — final or, since
-  the inheritance model (below), open — and, since the interface model (below), top-level
+  vtable/class lowering machinery): only top-level plain classes — final or, since
+  the inheritance model (below), open; non-generic or, since the generics model (below), with
+  stage-1 type parameters — and, since the interface model (below), top-level
   non-generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
@@ -566,9 +567,110 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   OUT of a finally body are rejected (`dotNetUnsupported`) — even `leave` may not exit a
   finally handler; exits within it (a loop or try/catch declared inside the finally body) work
   normally.
-- Generics stance: the type representation stays structural so that future generics can target real
+- Generics stance: the type representation stays structural so that generics target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
+- Generics model (stage 1) (probe series `genprobe_s1`–`_s9`; precedent: Roslyn — the CLR has REAL
+  reified generics, so like every prior model bullet there is NO erasure/monomorphization/lowering
+  machinery: the type mapper and emitters learn generic declarations, type-parameter references and
+  instantiation tokens, and the frontend owns all type checking):
+  - SUPPORTED: generic TOP-LEVEL FUNCTIONS (non-inline; unconstrained invariant type parameters —
+    Kotlin bound `Any?` only, plus the pre-existing `T : String`/`String?` erosion of the
+    string-concat lowering, kept for compatibility and pinned by the borrowed `box/strings/kt50140.kt`:
+    such a `T` still declares its real arity but its SLOTS map to `string`); generic TOP-LEVEL PLAIN
+    CLASSES (final or open, same bounds rule without the String exception); a NON-generic class
+    extending an INSTANTIATED generic base — optionally ALSO implementing interfaces: the ordinary
+    `implements` line composes with the instantiated `extends` and the gate only rejects interface
+    supertypes on classes that are themselves generic (pinned by `ilText/genericInheritance.kt` +
+    `box/genericInheritance.kt`, `LabeledBox`) — and a GENERIC class extending a plain base; what a
+    `T`-typed value supports is exactly store/load (locals, params, returns, fields of the declaring
+    class) and passing to another `T` position.
+  - SPELLING CANON (all probe-verified): a generic class is ONE quoted identifier with the CLS
+    backtick-arity suffix INSIDE the quotes (`.class ... 'demo.Box`1'<'T'>` — suffix outside the
+    quotes is an ilasm syntax error, genprobe_s2c; the suffix is CLS convention, not CLR-required,
+    genprobe_s2b — emitted for Roslyn/interop parity, which also makes plain-`Box`/generic-`Box`
+    IL collisions impossible); quoted type-parameter NAMES assemble and run (genprobe_s8) and are
+    decorative — CLR identity is positional (`!n` class / `!!n` method vars). A generic method is
+    `.method ... !!0 'id'<'T'>(!!0 'x')`, self-contained, no class machinery (genprobe_s1). EVERY
+    member reference on a generic class carries an instantiation on the OWNER token while its
+    signature slots stay OPEN (`!0`/`!!0` verbatim): closed externally
+    (`newobj instance void class 'Box`1'<string>::.ctor(!0)`,
+    `call instance !0 class 'Box`1'<string>::'get'()`, `ldfld !0 class 'Box`1'<string>::'value'`),
+    the OPEN self-instantiation `class 'Box`1'<!0>` inside the class's own bodies (genprobe_s2/_s7);
+    generic-method call sites substitute only the `<inst>` list (`call !!0 ...::'id'<string>(!!0)`;
+    `!!0` is itself a legal instantiation argument at generic→generic pass-through sites, and
+    `class 'Box`1'<!!0>` composes inside generic methods, genprobe_s9). EXCEPTION: `.property`
+    accessor references use the bare class name with NO type-args list (genprobe_s2). The `extends`
+    line of an instantiated generic base is `extends class 'Box`1'<int32>` with the ordinary
+    base-ctor chain (genprobe_s5). Nullable composes verbatim as an argument
+    (`class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>`) in every operand position, and
+    the mandatory home-address spill rule extends to `!0`-returning calls — spill to a local typed
+    with the CLOSED substituted type, then `ldloca` (genprobe_s4). Reification is real:
+    `Box`1<int32>` stores a raw int32, zero box/unbox, instantiations coexist and nest (genprobe_s3).
+  - CODEGEN MODEL: mapped signatures stay OPEN (`TypeParameter`/`GenericInstance` arms of
+    `DotNetIlValueType`); call sites derive the owner token from the RECEIVER's mapped type walked
+    to the declaring class (`dotNetViewAsGenericOwner` — inherited members and super-calls through a
+    derived receiver name the instantiated BASE, genprobe_s5) and emit argument VALUES against the
+    IL-level SUBSTITUTED types (`substituteDotNetTypeParameters`). Assignability stays structural
+    and INVARIANT for free (instantiation tokens compare as rendered strings; the supertype walk
+    carries the base INSTANTIATION — `DotNetIlClassInfo.baseType`). CLR method identity includes
+    generic ARITY, so the member/facade identity gates key on it (`fun <T> pick(x: String)` and
+    `fun pick(x: String)` are legal coexisting overloads, pinned by `ilText/genericArity.kt`).
+    OVERRIDES in a class with a generic base MUST be spelled with the SUBSTITUTED types — that
+    spelling reuses the base slot for returns (genprobe_s5) AND parameters (genprobe_s8), and falls
+    out of mapping the derived member's own concrete Kotlin types; the OPEN `!0` spelling in a
+    non-generic derived class is a POISON SHAPE (assembles warning-free, silently splits the slot,
+    base-typed `callvirt` runs the BASE body — the covariant-return failure family; genprobe_s5b)
+    that this codegen can never emit, and the covariant-return member pre-pass gate compares the
+    overridden return UNDER the substitution (`dotNetClassArgumentsFor`) so substituted overrides
+    pass and real covariance still rejects. Eviction rides the existing fixpoint: instantiations
+    map arguments through the LIVE class map, so an instantiation mentioning an evicted class fails
+    its USE, and the `extends` re-resolution carries a type-argument-eviction reason down the chain
+    (pinned by `ilText/genericEvicted.kt` — the generics analogue of `inheritanceBaseEvicted.kt`:
+    an evicted class used as a function's instantiation argument evicts per-function, used as a
+    generic-base argument evicts the derived class whole-class, while a sibling instantiation of
+    the same base survives untouched).
+  - STAYS REJECTED, loudly (each with a specific message; pinned by `ilText/genericRejected.kt`):
+    declaration-site variance (`out`/`in` — ECMA-335 II.10.1.7 allows variance only on interfaces
+    and delegates while Kotlin allows it on classes; Roslyn has no class-variance shape to follow,
+    and emitting invariant would silently change assignability; a future interface-variance slice
+    can widen), generic constraints (`T : Base` — next stage: bound-aware representation +
+    `constrained.` calls), `T?` ANYWHERE in a generic declaration (NO uniform CLR representation:
+    `T` may instantiate to a value type needing `Nullable<T>` and to a reference type needing
+    nothing — the deferred ABI problem the nullability bullet reserved; the declaration is rejected,
+    never given an ad-hoc representation), `==`/`===` on `T` operands and `x == null` on `T` (a
+    value-type instantiation makes reference `ceq` meaningless; no lifted story without
+    constraints), string templates/toString of `T` and member calls on `T` receivers (no
+    constraints model / no Any model), widening `T` to `Any?` (boxing an unconstrained `T` is
+    constraints-model territory), `is`/`as` on `T` or generic types (existing type-operator
+    rejections stay authoritative), inline/reified generic functions (no inlining model), varargs
+    of `T` (no arrays), generic MEMBER functions (unexercised combination, whole-class), generic
+    (extension) properties, generic INTERFACES (unchanged from the interface model), generic
+    classes containing companions/nested objects (untouched nested machinery), generic classes
+    implementing interfaces, and generic-extends-generic chains (IL shape probed fine, genprobe_s7,
+    but the gate interactions are unexercised — a later slice can widen the last three).
+  - Pins: `ilText/genericFunctions.kt` (declaration + call-site spellings for every mapped
+    type-arg kind incl. `<!!0>` pass-through, a nested instantiation as a generic-method type
+    argument — `id<Box<String>>` carries `class 'Box`1'<string>` in the `<inst>` list — and the
+    genprobe_s9 composition: `wrap` returning `class 'Box`1'<!!0>` with the
+    `newobj instance void class 'Box`1'<!!0>::.ctor(!0)` body spelling), `ilText/genericClasses.kt`
+    (full class shape, open
+    self-instantiation, closed external operands, nested instantiation, `.property` bare-name
+    accessor refs), `ilText/genericInheritance.kt` (instantiated-base extends/ctor-chain/override/
+    super-call spellings + generic-extends-plain + the instantiated-base-with-`implements`
+    combination), `ilText/genericArity.kt` (arity overloads +
+    suffix coexistence), `ilText/genericRejected.kt` (every rejection above),
+    `ilText/genericEvicted.kt` (the eviction cascade), `ilText/classShapeRejected.kt` (the
+    variance flavor in the class-shape gate); runtime:
+    `box/genericFunctions.kt` (every type-arg kind incl. both `Int?` flavors through `!!0`,
+    multi-param, T pass-through, `wrap(x).v` round-trips of the `Box<!!0>` composition, the
+    nested-instantiation type-arg), `box/genericClasses.kt` (state, coexisting instantiations,
+    nesting, permuted self-instantiation `Pair2<B, A>`), `box/genericInheritance.kt` (dispatch
+    through instantiated-base views, substituted overrides, super chains, inherited mutation,
+    cross-view identity, generic-extends-plain dispatch, and the combined
+    generic-base-plus-interface flavor: interface-view dispatch, inherited state and mutation
+    through all views — interface-mapping mistakes fail only at JIT time, so the dispatch shape
+    carries its own runtime pin).
 - Shared runtime code (e.g. the Kotlin-parity `Double.toString` rendering) is hand-written IL on the
   synthetic module-private `'<KotlinIl>'` class (`DotNetIlRuntimeHelpers`) — the CLR-side stand-in
   for the JVM's `kotlin.jvm.internal.Intrinsics` runtime until a real .NET stdlib exists. The class

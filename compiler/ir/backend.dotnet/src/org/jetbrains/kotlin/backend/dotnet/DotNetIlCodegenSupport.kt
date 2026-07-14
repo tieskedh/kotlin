@@ -3,8 +3,10 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.util.isGetter
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -12,6 +14,8 @@ import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isBoolean
@@ -142,6 +146,7 @@ internal class DotNetIlTypeMapper(
         else -> toNullablePrimitiveTypeOrNull(type)
             ?: toMappedExceptionTypeOrNull(type)
             ?: toUserClassTypeOrNull(type)
+            ?: toTypeParameterTypeOrNull(type)
     }
 
     /**
@@ -179,32 +184,173 @@ internal class DotNetIlTypeMapper(
 
     /**
      * A user-class type maps only while its class is available; `C?` maps to the same
-     * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). Generic
-     * user-class types are rejected loudly — never erased — keeping the structural mapping
-     * ready for CLR reified generics.
+     * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). A GENERIC
+     * user-class type maps to a full [instantiation][DotNetIlValueType.GenericInstance]
+     * (stage-1 generics: real CLR reified generics, the Roslyn shape — never erasure), with
+     * each type argument mapped recursively through this same mapper, so an argument mentioning
+     * an evicted class fails the whole instantiation (null, cascading like any other
+     * unavailable type — the fixpoint eviction rule). Use-site variance projections
+     * (`Box<out T>`) and star projections are rejected loudly: assignability is structurally
+     * INVARIANT and ECMA-335 has no use-site variance at all.
      */
-    private fun toUserClassTypeOrNull(type: IrType): DotNetIlValueType.UserClass? {
+    private fun toUserClassTypeOrNull(type: IrType): DotNetIlValueType? {
         if (type !is IrSimpleType) return null
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
         val classInfo = availableClasses[irClass] ?: return null
-        if (type.arguments.isNotEmpty()) {
-            dotNetUnsupported("generic class types are not supported yet")
+        if (irClass.typeParameters.isEmpty()) {
+            return DotNetIlValueType.UserClass(classInfo)
         }
-        return DotNetIlValueType.UserClass(classInfo)
+        if (type.arguments.size != irClass.typeParameters.size) return null
+        val arguments = type.arguments.map { argument ->
+            val projection = argument as? IrTypeProjection
+                ?: dotNetUnsupported(
+                    "star-projected generic type '${irClass.name.asString()}<*>' is not supported"
+                )
+            if (projection.variance != Variance.INVARIANT) {
+                dotNetUnsupported(
+                    "use-site variance projection in '${type.render()}' is not supported " +
+                            "(ECMA-335 has no use-site variance; generic types are invariant)"
+                )
+            }
+            toDotNetIlValueType(projection.type) ?: return null
+        }
+        return DotNetIlValueType.GenericInstance(classInfo, arguments)
+    }
+
+    /**
+     * A reference to a type parameter of the enclosing generic declaration maps positionally to
+     * the CLR `!n` (class) / `!!n` (method) token — stage-1 generics supports exactly the
+     * UNCONSTRAINED, invariant type parameter (Kotlin bound `Any?` only; the shape gates reject
+     * constrained declarations, and this arm backstops any other path). Two loud rejections are
+     * deliberate design points:
+     * - `T?` (a nullable type-parameter type) has NO uniform CLR representation — `T` may
+     *   instantiate to a value type needing `Nullable<T>` and to a reference type needing
+     *   nothing — so any declaration mentioning it is rejected (the deferred ABI problem the
+     *   hybrid nullability model documents; a constraints model is the prerequisite);
+     * - a constrained `T` would need `constrained.` call support and bound-aware
+     *   representation choices (the next generics stage).
+     * A `T` whose bound is `String`/`String?` never reaches this arm: the string-concat
+     * lowering's receiver mapping ([isDotNetStringType]) runs earlier in the dispatch chain and
+     * maps it to IL `string` (the pre-existing behavior).
+     */
+    private fun toTypeParameterTypeOrNull(type: IrType): DotNetIlValueType.TypeParameter? {
+        if (type !is IrSimpleType) return null
+        val typeParameter = (type.classifier as? IrTypeParameterSymbol)?.owner ?: return null
+        val parameterName = typeParameter.name.asString()
+        if (type.isMarkedNullable()) {
+            dotNetUnsupported(
+                "nullable type-parameter type '$parameterName?' has no uniform CLR representation " +
+                        "and is not supported (requires the future generic-constraints model)"
+            )
+        }
+        if (typeParameter.superTypes.any { !it.isNullableAny() }) {
+            dotNetUnsupported(
+                "type parameter '$parameterName' has a constraint; generic constraints are not supported yet"
+            )
+        }
+        return DotNetIlValueType.TypeParameter(
+            typeParameter.index,
+            isMethodParameter = typeParameter.parent is IrFunction,
+        )
     }
 }
 
 /**
- * The base class of [this] class within the inheritance model, or null when no supertype is a
- * proper class (sole supertype `kotlin.Any`, or only interface supertypes). Interface supertypes
- * are skipped — they belong to [dotNetDirectInterfaces] — and the shape gate guarantees at most
- * one proper-class supertype on gate-passing classes.
+ * The base-class SUPERTYPE of [this] class within the inheritance model as the declared
+ * [IrSimpleType] — carrying the instantiation of a generic base (`class D : Box<Int>()`), which
+ * the classifier-only [dotNetBaseClassOrNull] cannot — or null when no supertype is a proper
+ * class (sole supertype `kotlin.Any`, or only interface supertypes). Interface supertypes are
+ * skipped — they belong to [dotNetDirectInterfaces] — and the shape gate guarantees at most one
+ * proper-class supertype on gate-passing classes.
  */
-internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
+internal fun IrClass.dotNetBaseSuperTypeOrNull(): IrSimpleType? =
     superTypes.firstNotNullOfOrNull { superType ->
         if (superType.isAny()) null
-        else ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner?.takeUnless { it.isInterface }
+        else (superType as? IrSimpleType)
+            ?.takeIf { ((it.classifier as? IrClassSymbol)?.owner)?.isInterface == false }
     }
+
+/** The classifier of [dotNetBaseSuperTypeOrNull], for sites that only need the class link. */
+internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
+    (dotNetBaseSuperTypeOrNull()?.classifier as? IrClassSymbol)?.owner
+
+/**
+ * The shared stage-1 type-parameter gate: a supported type parameter is exactly the
+ * UNCONSTRAINED (Kotlin bound `Any?` only), INVARIANT, non-reified one — everything else is
+ * rejected loudly at the declaration (never erased):
+ * - `reified` requires the inlining model this backend does not have;
+ * - declaration-site variance (`out`/`in`) is rejected because ECMA-335 (II.10.1.7) allows
+ *   variance only on interfaces and delegates while Kotlin allows it on classes — Roslyn has no
+ *   class-variance shape to follow, and emitting the parameter as invariant would silently
+ *   change assignability, so the declaration is rejected (a future interface-variance slice can
+ *   widen this);
+ * - constraints (`T : Base`) are the next generics stage (bound-aware representation plus
+ *   `constrained.` call support) — with ONE pre-existing exception, enabled by
+ *   [allowStringBounds]: a `T` bounded by `String`/`String?` predates this slice (the
+ *   string-concat lowering's receiver mapping sends every use of such a `T` to IL `string`,
+ *   see [isDotNetStringType]) and stays supported on FUNCTIONS for compatibility — the
+ *   function still declares its real `<T>` arity and call sites still carry the instantiation
+ *   (no erasure of the token; only the SLOT type is the bound's `string`).
+ */
+internal fun checkDotNetTypeParametersSupported(
+    typeParameters: List<IrTypeParameter>,
+    ownerDescription: String,
+    allowStringBounds: Boolean = false,
+) {
+    for (typeParameter in typeParameters) {
+        val parameterName = typeParameter.name.asString()
+        if (typeParameter.isReified) {
+            dotNetUnsupported(
+                "$ownerDescription has a reified type parameter '$parameterName'; " +
+                        "reified type parameters are not supported (no inlining model)"
+            )
+        }
+        if (typeParameter.variance != Variance.INVARIANT) {
+            dotNetUnsupported(
+                "$ownerDescription declares '${typeParameter.variance.label}' variance on type parameter " +
+                        "'$parameterName'; declaration-site variance is not supported (ECMA-335 allows variance " +
+                        "only on interfaces and delegates — a future interface-variance slice can widen this)"
+            )
+        }
+        val hasUnsupportedBound = typeParameter.superTypes.any { superType ->
+            !superType.isNullableAny() &&
+                    !(allowStringBounds && (superType.isString() || superType.isNullableString()))
+        }
+        if (hasUnsupportedBound) {
+            dotNetUnsupported(
+                "$ownerDescription constrains type parameter '$parameterName'; " +
+                        "generic constraints are not supported yet"
+            )
+        }
+    }
+}
+
+/**
+ * The generic-function slice of the stage-1 gate, run once at gathering over every top-level
+ * function: a generic function must additionally be non-inline (inline implies the missing
+ * inlining model, and `reified` — rejected by the shared gate — is only expressible on inline
+ * functions). Non-generic functions pass untouched.
+ */
+internal fun IrSimpleFunction.checkDotNetGenericFunctionSupported() {
+    if (typeParameters.isEmpty()) return
+    val functionName = name.asString()
+    if (isInline) {
+        dotNetUnsupported(
+            "generic function '$functionName' is inline; inline generic functions are not supported (no inlining model)"
+        )
+    }
+    checkDotNetTypeParametersSupported(typeParameters, "function '$functionName'", allowStringBounds = true)
+}
+
+/**
+ * The generic-arity marker of an IL method-identity key: CLR method identity includes the
+ * generic ARITY (`f` and ``f`1`` are distinct methods, the Roslyn overload rule), so the
+ * member/facade identity gates append it — without it a generic `fun <T> f(x: Int)` would
+ * falsely clash with a plain `fun f(x: Int)`. Two same-arity generic functions whose parameters
+ * differ only in the type-parameter NAME still clash correctly: `!!n` identity is positional.
+ */
+internal fun IrSimpleFunction.dotNetIlGenericAritySuffix(): String =
+    if (typeParameters.isEmpty()) "" else "`${typeParameters.size}"
 
 /**
  * The directly implemented interfaces of [this] class (for an interface: its directly extended
