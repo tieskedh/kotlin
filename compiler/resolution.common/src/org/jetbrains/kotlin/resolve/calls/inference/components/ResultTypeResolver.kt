@@ -35,7 +35,7 @@ class ResultTypeResolver(
     context(c: Context)
     private fun TypeVariableMarker.getDefaultTypeForSelfType(
         constraints: List<Constraint>,
-        useOnlyConstraintsFromDeclaredUpperBounds: Boolean = false,
+        useOnlyConstraintsFromDeclaredUpperBounds: Boolean,
     ): KotlinTypeMarker? {
         val typeVariableConstructor = freshTypeConstructor()
         val typeParameter = typeVariableConstructor.typeParameter ?: return null
@@ -535,9 +535,8 @@ class ResultTypeResolver(
         val needsExplicitSelfType = components.isEmpty() || !c.isSubtypeConstraintCompatible(components.first(), typeVariable.defaultType())
 
         if (needsExplicitSelfType) {
-            typeVariable.getDefaultTypeForSelfType(constraints)?.let { capturedTypeForSelf ->
-                components += capturedTypeForSelf
-            }
+            typeVariable.getDefaultTypeForSelfType(constraints, useOnlyConstraintsFromDeclaredUpperBounds = false)
+                ?.let { capturedTypeForSelf -> components += capturedTypeForSelf }
         }
 
         return when {
