@@ -25,7 +25,6 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.util.allOverridden
-import org.jetbrains.kotlin.ir.util.companionObject
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -107,6 +106,31 @@ class DotNetIlEmitter(
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
         val classSkipReasons = LinkedHashMap<IrClass, String>()
         val moduleTopLevelClasses = topLevelClassesByFile.values.flatten().toHashSet()
+
+        // A CLR nested type is registered independently for type/member resolution, while its
+        // metadata block renders recursively inside the enclosing class. Kotlin named nested
+        // classes are static-style classes (JVM precedent: ACC_STATIC unless `isInner`), so a
+        // nested class owns only its own generic parameters. The CLR accepts exactly that shape:
+        // the nested type's simple arity-suffixed name composes with the enclosing type reference
+        // without inheriting the enclosing class's `!n` parameter space (`nestedprobe_s1`).
+        fun registerClassFamily(irClass: IrClass, enclosingClassInfo: DotNetIlClassInfo? = null) {
+            val arity = irClass.typeParameters.size
+            val baseName = if (enclosingClassInfo == null) {
+                irClass.fqNameWhenAvailable!!.asString()
+            } else {
+                irClass.name.asString()
+            }
+            val classInfo = DotNetIlClassInfo(
+                baseName + if (arity > 0) "`$arity" else "",
+                enclosingClass = enclosingClassInfo,
+                typeParameterVariances = irClass.typeParameters.map { it.variance },
+            )
+            availableClasses[irClass] = classInfo
+            for (nestedClass in irClass.declarations.filterIsInstance<IrClass>()) {
+                registerClassFamily(nestedClass, classInfo)
+            }
+        }
+
         for (irClass in topLevelClassesByFile.values.flatten()) {
             if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             try {
@@ -116,21 +140,7 @@ class DotNetIlEmitter(
                 // probe-verified genprobe_s2/_s2c). The suffix is CLS convention rather than a
                 // CLR requirement (genprobe_s2b) but is emitted for Roslyn/interop parity, which
                 // also guarantees a plain `Box` and a generic `Box<T>` can never collide in IL.
-                val arity = irClass.typeParameters.size
-                val ilClassName = irClass.fqNameWhenAvailable!!.asString() + if (arity > 0) "`$arity" else ""
-                val classInfo = DotNetIlClassInfo(
-                    ilClassName,
-                    typeParameterVariances = irClass.typeParameters.map { it.variance },
-                )
-                availableClasses[irClass] = classInfo
-                // The companion object (validated by the shape gate above) is a separate
-                // availableClasses entry — it needs its own identity for type mapping and member
-                // resolution — carrying the nested IL name (see DotNetIlClassInfo.ilTypeRef).
-                // Registration is strictly paired with eviction: every site that removes one
-                // half of the (class, companion) pair removes the other too (evictClassPair).
-                irClass.companionObject()?.let { companion ->
-                    availableClasses[companion] = DotNetIlClassInfo(companion.name.asString(), enclosingClass = classInfo)
-                }
+                registerClassFamily(irClass)
             } catch (e: DotNetIlUnsupportedException) {
                 classSkipReasons[irClass] = e.reason
             }
@@ -230,30 +240,41 @@ class DotNetIlEmitter(
             }
         }
 
-        // Linked whole-pair eviction, the companion extension of the whole-class rejection rule:
-        // a top-level class and its companion object are separate availableClasses entries, but
-        // a PARTIAL pair would violate the whole-class rule in both directions — the singleton
-        // field on the enclosing class is typed as the companion and the enclosing `.cctor`
-        // `newobj`s it, while companion members resolve through the pair's nested IL name — so
-        // every eviction site removes both entries and both member sets, each warned with a
-        // reason carrying the original one. [failedClass] must be the half whose member or
-        // shape actually failed — the partner's warning points at it — so the render fixpoint
-        // re-tags a failure surfacing out of the companion's recursive render with the
-        // companion (see DotNetIlUnsupportedClassException).
-        fun evictClassPair(failedClass: IrClass, reason: String) {
-            val enclosing = failedClass.parent as? IrClass ?: failedClass
-            for (partner in listOfNotNull(enclosing, enclosing.companionObject())) {
-                availableClasses.remove(partner)
+        // Linked whole-family eviction generalizes the companion pair rule. Nested classes are
+        // separate availableClasses entries but metadata children of one top-level class, so a
+        // partial family would leave dangling type/member references or omit a nested block that
+        // Kotlin declarations still name. Every failure therefore removes the top-level root,
+        // all recursively nested classes (including companions), and all their callable entries.
+        // A recursively rendered failure is tagged with the exact nested class that failed; the
+        // root and its remaining children receive carried reasons naming that declaration.
+        fun evictClassFamily(failedClass: IrClass, reason: String) {
+            var root = failedClass
+            while (root.parent is IrClass) root = root.parent as IrClass
+
+            val family = buildList {
+                fun collect(irClass: IrClass) {
+                    add(irClass)
+                    irClass.declarations.filterIsInstance<IrClass>().forEach(::collect)
+                }
+                collect(root)
+            }
+            val rootReason = if (failedClass === root) {
+                reason
+            } else {
+                val kind = if (failedClass.isCompanion) "companion object" else "nested class"
+                "its $kind '${failedClass.diagnosticName()}' could not be compiled: $reason"
+            }
+            for (familyClass in family) {
+                availableClasses.remove(familyClass)
                 // The members go with the class: a call site must not resolve to a member of a
                 // class that no longer exists in the module.
-                partner.dotNetMemberFunctions().forEach(availableFunctions::remove)
-                val partnerReason = when {
-                    partner === failedClass -> reason
-                    partner === enclosing ->
-                        "its companion object '${failedClass.diagnosticName()}' could not be compiled: $reason"
-                    else -> "its enclosing class '${enclosing.diagnosticName()}' could not be compiled: $reason"
+                familyClass.dotNetMemberFunctions().forEach(availableFunctions::remove)
+                val familyReason = when {
+                    familyClass === failedClass -> reason
+                    familyClass === root -> rootReason
+                    else -> "its enclosing class '${root.diagnosticName()}' could not be compiled: $rootReason"
                 }
-                classSkipReasons.putIfAbsent(partner, partnerReason)
+                classSkipReasons.putIfAbsent(familyClass, familyReason)
             }
         }
 
@@ -284,9 +305,9 @@ class DotNetIlEmitter(
         // rejected whole-class like the method-identity clash above. The companion's singleton
         // field participates in the ENCLOSING class's gate the same way (the lowering parents
         // it there): a user field named after the companion whose type maps to the companion
-        // clashes, evicting the whole (class, companion) pair.
+        // clashes, evicting the whole class family.
         for ([irClass, classInfo] in availableClasses.entries.toList()) {
-            // Already evicted as the partner of an earlier pair failure in this snapshot.
+            // Already evicted with the family of an earlier failure in this snapshot.
             if (irClass !in availableClasses) continue
             try {
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
@@ -323,7 +344,7 @@ class DotNetIlEmitter(
                     }
                 }
             } catch (e: DotNetIlUnsupportedException) {
-                evictClassPair(irClass, e.reason)
+                evictClassFamily(irClass, e.reason)
             }
         }
 
@@ -422,11 +443,11 @@ class DotNetIlEmitter(
             staticFieldLines.clear()
             var anyDeclarationRemoved = false
             for (irClass in availableClasses.keys.toList()) {
-                // Already evicted as the partner of an earlier pair failure in this round.
+                // Already evicted with the family of an earlier failure in this round.
                 if (irClass !in availableClasses) continue
-                // A companion renders recursively INSIDE its enclosing class's render (as a
-                // nested `.class` block), never as a top-level class of its own.
-                if (irClass.isCompanion) continue
+                // Every nested class renders recursively inside its enclosing class's metadata
+                // block, never as a top-level declaration of its own.
+                if (irClass.parent is IrClass) continue
                 try {
                     renderedClasses[irClass] = renderUserClass(
                         classInfo = availableClasses.getValue(irClass),
@@ -438,13 +459,11 @@ class DotNetIlEmitter(
                         classSkipReasons = classSkipReasons,
                     )
                 } catch (e: DotNetIlUnsupportedException) {
-                    // A companion failure surfaces from INSIDE the enclosing class's render
-                    // (the companion renders only recursively), tagged with the companion so
-                    // the pair warnings name the half that actually failed — the same
-                    // attribution the member pre-pass gets for free by iterating the
-                    // companion as its own entry.
+                    // A nested failure surfaces from inside the top-level class's recursive
+                    // render. The tag identifies the exact family member that failed, matching
+                    // the member pre-pass's per-class attribution.
                     val failedClass = (e as? DotNetIlUnsupportedClassException)?.irClass ?: irClass
-                    evictClassPair(failedClass, e.reason)
+                    evictClassFamily(failedClass, e.reason)
                     anyDeclarationRemoved = true
                 }
             }
@@ -672,20 +691,27 @@ class DotNetIlEmitter(
      * fields. Exception supertypes, out-of-module or non-top-level bases, and overrides of
      * `kotlin.Any` members stay rejected. Abstract and sealed plain classes map to CLR `abstract`;
      * Kotlin sealing is frontend-enforced like sealed interfaces. Objects and companions stay
-     * on the sole-supertype-`kotlin.Any`,
-     * final-only model. The single supported
-     * NESTED shape is the companion object of a top-level class ([isValidatedCompanion] marks
-     * the recursive call): it is emitted as a real CLR nested type and validated with the same
-     * constraint chain — sole supertype `kotlin.Any`, final, non-generic, no nested classes of
-     * its own, not data. Each violation throws [DotNetIlUnsupportedException]; the granularity
-     * is always the whole class — for a class with a companion, always the whole PAIR.
+     * on the sole-supertype-`kotlin.Any`, final-only model. A plain FINAL named class nested
+     * directly in another plain class is also supported recursively, including under a generic
+     * outer and with its own independent generic parameters. This follows the JVM's static
+     * nested-class model (`ACC_STATIC` unless `isInner`) and maps directly to a CLR nested type;
+     * the metadata and generic spelling is probe-verified by `nestedprobe_s1`. Nested classes
+     * may be public, private, internal, or protected (`nested public/private/assembly/family`).
+     * Inner classes, nested interfaces/objects, classes inside objects, and non-final nested
+     * classes stay rejected. Companion objects retain their singleton rules and remain limited
+     * to top-level plain classes; the object-lowering pass does not initialize a companion of an
+     * ordinary nested class yet. Each violation throws [DotNetIlUnsupportedException]; the
+     * granularity is always the whole top-level class family.
      */
     private fun checkClassShapeSupported(
         irClass: IrClass,
         moduleTopLevelClasses: Set<IrClass>,
-        isValidatedCompanion: Boolean = false,
     ) {
         val name = irClass.diagnosticName()
+        val enclosingClass = irClass.parent as? IrClass
+        val isValidatedCompanion =
+            enclosingClass != null && irClass.isCompanion && irClass.kind == ClassKind.OBJECT
+        val isNamedNestedClass = enclosingClass != null && irClass.kind == ClassKind.CLASS
         when (irClass.kind) {
             ClassKind.INTERFACE -> {
                 checkInterfaceShapeSupported(irClass, moduleTopLevelClasses)
@@ -695,8 +721,26 @@ class DotNetIlEmitter(
             ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
         }
-        if (!isValidatedCompanion && irClass.parent !is IrFile) {
+        if (enclosingClass == null && irClass.parent !is IrFile) {
             dotNetUnsupported("class '$name' is not top-level; nested/inner/local classes are not supported")
+        }
+        if (enclosingClass != null && enclosingClass.kind != ClassKind.CLASS) {
+            val enclosingKind = if (enclosingClass.kind == ClassKind.OBJECT) "object" else "interface"
+            val kind = if (isValidatedCompanion) "companion object" else "class"
+            dotNetUnsupported(
+                "$kind '$name' is nested inside $enclosingKind '${enclosingClass.diagnosticName()}'; " +
+                        "nested declarations are supported only inside plain classes"
+            )
+        }
+        if (enclosingClass != null && !isValidatedCompanion && !isNamedNestedClass) {
+            val kind = if (irClass.kind == ClassKind.OBJECT) "object" else "class"
+            dotNetUnsupported("nested $kind '$name' is not supported")
+        }
+        if (isValidatedCompanion && enclosingClass.parent is IrClass) {
+            dotNetUnsupported(
+                "companion object '$name' belongs to nested class '${enclosingClass.diagnosticName()}'; " +
+                        "companions of ordinary nested classes are not supported yet"
+            )
         }
         if (irClass.isData) {
             // `data object` lands here too: its generated toString/equals/hashCode overrides
@@ -717,16 +761,36 @@ class DotNetIlEmitter(
             Modality.OPEN ->
                 if (isValidatedCompanion || irClass.kind == ClassKind.OBJECT) {
                     dotNetUnsupported("non-final object '$name' is not supported")
+                } else if (isNamedNestedClass) {
+                    dotNetUnsupported("open nested class '$name' is not supported yet")
                 }
-            Modality.ABSTRACT, Modality.SEALED -> {}
+            Modality.ABSTRACT, Modality.SEALED ->
+                if (isNamedNestedClass) {
+                    dotNetUnsupported("non-final nested class '$name' is not supported yet")
+                }
         }
-        // Generic TOP-LEVEL PLAIN classes use real CLR reified generics
+        if (isNamedNestedClass) {
+            when (irClass.visibility) {
+                DescriptorVisibilities.PUBLIC,
+                DescriptorVisibilities.PRIVATE,
+                DescriptorVisibilities.INTERNAL,
+                DescriptorVisibilities.PROTECTED,
+                    -> {}
+                else -> dotNetUnsupported(
+                    "nested class '$name' has unsupported visibility '${irClass.visibility}'"
+                )
+            }
+        }
+        // Generic plain classes use real CLR reified generics
         // (Roslyn shape — `.class ... 'C`n'<T>`, `!n` member signatures, instantiation tokens in
         // every operand position; probe series genprobe), no erasure or lowering machinery. The
         // gate scopes the model: invariant non-reified parameters, optionally constrained by
-        // supported module-local classes/interfaces, no nested declarations (the
-        // companion/object machinery is untouched), and any supported generic/non-generic class
-        // or interface supertype. Generic base links retain their full open instantiation, so
+        // supported module-local classes/interfaces, and any supported generic/non-generic
+        // class or interface supertype. A named nested class carries only its own parameters,
+        // independently of a generic outer (`nestedprobe_s1`). Singleton declarations remain
+        // rejected inside a generic class because CLR static state is per constructed generic
+        // owner, which would violate Kotlin's one-instance companion/object semantics. Generic
+        // base links retain their full open instantiation, so
         // constructor calls, owner lookup, and override substitution compose through arbitrary
         // module-local chains (probe-verified, geninheritprobe_s1).
         // Kotlin objects and companions cannot be generic; the branch is defensive.
@@ -735,10 +799,13 @@ class DotNetIlEmitter(
                 dotNetUnsupported("generic object '$name' is not supported")
             }
             checkDotNetTypeParametersSupported(irClass.typeParameters, "class '$name'")
-            if (irClass.declarations.any { it is IrClass }) {
+            val nestedSingleton = irClass.declarations.filterIsInstance<IrClass>()
+                .firstOrNull { it.kind == ClassKind.OBJECT }
+            if (nestedSingleton != null) {
+                val nestedKind = if (nestedSingleton.isCompanion) "companion object" else "object"
                 dotNetUnsupported(
-                    "generic class '$name' contains nested declarations (companion or nested objects); " +
-                            "nested declarations in generic classes are not supported yet"
+                    "generic class '$name' contains $nestedKind '${nestedSingleton.name.asString()}'; " +
+                            "singleton nested declarations in generic classes are not supported"
                 )
             }
         }
@@ -859,17 +926,10 @@ class DotNetIlEmitter(
         }
         for (declaration in irClass.declarations) {
             if (declaration is IrClass) {
-                // The companion object of a top-level class (Kotlin allows at most one) is the
-                // single supported nested shape, recursively validated with the same constraint
-                // chain; the recursion is depth-one because a companion cannot itself contain a
-                // companion (the frontend rejects it). Every other nested class — including any
-                // nested class of the companion — stays rejected, whole-class.
-                if (!isValidatedCompanion && declaration.isCompanion && declaration.kind == ClassKind.OBJECT) {
-                    checkClassShapeSupported(declaration, moduleTopLevelClasses, isValidatedCompanion = true)
-                    continue
-                }
-                val kindWord = if (declaration.kind == ClassKind.OBJECT) "object" else "class"
-                dotNetUnsupported("$kindWord '${declaration.diagnosticName()}' is not top-level; nested/inner/local classes are not supported")
+                // Named nested classes and companions use the same recursive constraint chain.
+                // The start of the recursive call rejects nested interfaces/objects, inner
+                // classes, and declarations whose enclosing container is not a plain class.
+                checkClassShapeSupported(declaration, moduleTopLevelClasses)
             }
         }
     }
@@ -1201,7 +1261,7 @@ class DotNetIlEmitter(
         // pre-pass or an earlier render round) must take every derived class down the chain
         // with it — a derived class whose base does not exist cannot keep its `extends` line —
         // each warned with a reason carrying the base's own reason, the inheritance
-        // counterpart of the companion pair warnings.
+        // counterpart of the nested class-family warnings.
         val baseClassRef = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
             val baseClass = (baseSuperType.classifier as IrClassSymbol).owner
             val baseClassInfo = typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
@@ -1284,17 +1344,15 @@ class DotNetIlEmitter(
                 is IrAnonymousInitializer ->
                     dotNetUnsupported("internal: init block of class '$name' survived InitializersLowering")
                 is IrClass -> {
-                    // Only the companion object reaches here: the shape gate rejected every
-                    // other nested class, and registration is paired, so a missing class info
-                    // is an internal inconsistency rather than a reachable user shape. The
-                    // companion renders recursively as a real CLR nested `.class` block inside
-                    // this class's body (probe-verified, objprobe_s6), indented two columns
-                    // like every other member.
-                    val companionInfo = typeMapper.classInfoOrNull(declaration)
+                    // Every accepted nested declaration renders recursively as a real CLR
+                    // nested `.class` block inside this class's body. Registration is recursive
+                    // too, so a missing class info is an internal inconsistency rather than a
+                    // reachable user shape (`objprobe_s6`, `nestedprobe_s1`).
+                    val nestedClassInfo = typeMapper.classInfoOrNull(declaration)
                         ?: dotNetUnsupported("internal: nested class '${declaration.name.asString()}' of class '$name' has no registered class info")
                     val rendered = try {
                         renderUserClass(
-                            classInfo = companionInfo,
+                            classInfo = nestedClassInfo,
                             irClass = declaration,
                             availableFunctions = availableFunctions,
                             intrinsicMethods = intrinsicMethods,
@@ -1303,10 +1361,11 @@ class DotNetIlEmitter(
                             classSkipReasons = classSkipReasons,
                         )
                     } catch (e: DotNetIlUnsupportedException) {
-                        // Attribute the failure to the companion itself: this render is the
-                        // companion's ONLY render (it never renders as a top-level class), so
-                        // without the tag the fixpoint catch would see the enclosing class as
-                        // the failing half of the pair and invert the two eviction warnings.
+                        // Attribute the failure to the nested declaration itself: this is its
+                        // only render, so the family eviction diagnostics must not blame the
+                        // enclosing root for a descendant's failure. Preserve a deeper tag while
+                        // unwinding multi-level nesting instead of replacing it at each parent.
+                        if (e is DotNetIlUnsupportedClassException) throw e
                         throw DotNetIlUnsupportedClassException(declaration, e.reason)
                     }
                     renderedNestedClasses += rendered.ilText.trimEnd('\n').prependIndent("  ") + "\n"
@@ -1387,6 +1446,7 @@ class DotNetIlEmitter(
                 isStaticHolder = false,
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
+                nestedVisibility = irClass.dotNetNestedTypeVisibility(),
                 renderedNestedClasses = renderedNestedClasses,
                 // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
                 // the JVM's ACC_FINAL); companions and objects never reach here as open — the
@@ -1449,6 +1509,21 @@ class DotNetIlEmitter(
             }
             appendLine("  }")
         }
+    }
+
+    /**
+     * The accessibility flag of an ordinary CLR nested type (`nestedprobe_s1`). Companions keep
+     * the established public metadata shape; Kotlin controls their source visibility through
+     * the enclosing declaration and the singleton field/accessors. The shape gate has already
+     * rejected every ordinary nested-class visibility outside these four source forms.
+     */
+    private fun IrClass.dotNetNestedTypeVisibility(): String = when {
+        parent !is IrClass || isCompanion -> "public"
+        visibility == DescriptorVisibilities.PUBLIC -> "public"
+        visibility == DescriptorVisibilities.PRIVATE -> "private"
+        visibility == DescriptorVisibilities.INTERNAL -> "assembly"
+        visibility == DescriptorVisibilities.PROTECTED -> "family"
+        else -> error("Internal .NET backend error: unsupported nested visibility '$visibility'")
     }
 
     /**
@@ -1600,7 +1675,7 @@ class DotNetIlEmitter(
      * field-identity clash gate: the loose singleton field — `INSTANCE` on an `object`, or the
      * field named after the companion that [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * parents to a companion-bearing class (so a user field named `Companion` with the
-     * companion's type clashes, whole-pair) — FIR's loose interface-delegate field, plus the
+     * companion's type clashes, whole-family) — FIR's loose interface-delegate field, plus the
      * backing fields of the declared properties, including `const val`s, whose `literal` fields
      * share the class's field namespace like any other field.
      */
@@ -1636,12 +1711,11 @@ class DotNetIlEmitter(
     )
 
     /**
-     * A [DotNetIlUnsupportedException] tagged with the class whose render actually failed. A
-     * companion object renders only recursively INSIDE its enclosing class's [renderUserClass],
-     * so a companion member failure would otherwise surface at the render-fixpoint catch as a
-     * failure of the ENCLOSING class and invert the attribution of the two pair-eviction
-     * warnings (the shape gate and the member pre-pass need no tag — they iterate the companion
-     * as its own entry).
+     * A [DotNetIlUnsupportedException] tagged with the nested class whose recursive render
+     * actually failed. Without the tag, a descendant failure would surface at the top-level
+     * render-fixpoint catch as a failure of the enclosing root and invert the family diagnostics.
+     * An existing tag is preserved while unwinding arbitrary nesting depth. The shape gate and
+     * member pre-pass need no tag because they iterate every registered class independently.
      */
     private class DotNetIlUnsupportedClassException(
         val irClass: IrClass,
