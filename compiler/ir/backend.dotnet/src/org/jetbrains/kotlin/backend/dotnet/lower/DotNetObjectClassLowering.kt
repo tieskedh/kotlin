@@ -66,8 +66,9 @@ import org.jetbrains.kotlin.name.Name
  * each owning class's `<clinit>` (rendered as that class's `.cctor`), exactly like the JVM's
  * `StaticInitializersLowering`, giving Kotlin/JVM first-active-use initialization semantics (see
  * the `beforefieldinit` decision in AGENTS.md). For a companion that owning class is the
- * ENCLOSING one; the companion itself gets no `.cctor`. This composes at arbitrary metadata depth;
- * for a nested singleton the immediate plain-class container must be non-generic.
+ * ENCLOSING one; the companion itself gets no `.cctor`. This composes at arbitrary metadata depth.
+ * A companion's immediate plain-class container must be non-generic because it owns the field; a
+ * named object owns its field itself and can therefore sit below a generic metadata parent.
  *
  * Two reference categories are deliberately left untouched:
  * - `kotlin.Unit` (guarded FIRST): no `kotlin.Unit` class is ever emitted, and the existing
