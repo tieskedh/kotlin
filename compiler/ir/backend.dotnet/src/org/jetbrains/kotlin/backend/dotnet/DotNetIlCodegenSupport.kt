@@ -54,6 +54,17 @@ internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqNa
     else -> false
 }
 
+/** Whether this is Kotlin's invariant generic array classifier (`Array<E>`). */
+internal fun IrType.isDotNetGenericArray(): Boolean =
+    classFqName?.asString() == "kotlin.Array"
+
+/** The exact invariant element type used by the indexed-loop lowering, or null for projections. */
+internal fun IrType.dotNetInvariantArrayElementTypeOrNull(): IrType? {
+    if (!isDotNetGenericArray()) return null
+    val argument = (this as? IrSimpleType)?.arguments?.singleOrNull() as? IrTypeProjection ?: return null
+    return argument.type.takeIf { argument.variance == Variance.INVARIANT }
+}
+
 /**
  * Thrown while rendering a single function into IL when a construct the prototype .NET backend
  * cannot compile is encountered. The emitter catches it, discards the partial render, skips the
@@ -150,6 +161,7 @@ internal class DotNetIlTypeMapper(
         type.isDotNetStringType() -> DotNetIlValueType.String
         type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
         type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
+        type.isDotNetGenericArray() -> toGenericArrayTypeOrNull(type)
         // `Nothing?` — the type of the null literal, and of values the frontend narrowed to
         // definitely-null (e.g. a when-subject temporary initialized from a known-null value) —
         // is reference-shaped storage whose only value is `ldnull`. Plain `Nothing` (no values
@@ -176,6 +188,56 @@ internal class DotNetIlTypeMapper(
             else -> error("Internal .NET backend error: unsupported primitive-array classifier ${type.render()}")
         }
         return DotNetIlValueType.PrimitiveArray(elementType)
+    }
+
+    /**
+     * Maps invariant Kotlin `Array<E>` to a CLR vector while preserving it as the distinct
+     * [DotNetIlValueType.GenericArray] structural kind. Concrete primitive elements are rejected:
+     * CLR would give `Array<Int>` and `IntArray` the same `int32[]` signature and collapse legal
+     * Kotlin overloads. An OPEN type parameter remains valid (`!n[]`/`!!n[]`) because CLR generic
+     * arity and token identity keep its declaration distinct, including value-type
+     * instantiations. Projections are never mapped to CLR covariance; nested arrays remain a
+     * separate ABI slice.
+     */
+    private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType.GenericArray? {
+        val simpleType = type as? IrSimpleType
+            ?: dotNetUnsupported("generic array type ${type.render()} has an unsupported shape")
+        val argument = simpleType.arguments.singleOrNull()
+            ?: dotNetUnsupported("generic array type ${type.render()} must have exactly one element type")
+        val projection = argument as? IrTypeProjection
+            ?: dotNetUnsupported("star-projected generic array type ${type.render()} is not supported")
+        if (projection.variance != Variance.INVARIANT) {
+            dotNetUnsupported(
+                "generic array type ${type.render()} has a use-site projection; " +
+                        "generic arrays are invariant in the supported .NET model"
+            )
+        }
+        val elementIrType = projection.type
+        if (elementIrType.isDotNetGenericArray() || elementIrType.isSupportedDotNetPrimitiveArray()) {
+            dotNetUnsupported(
+                "generic array type ${type.render()} is nested or contains an array element; " +
+                        "jagged arrays are not supported yet"
+            )
+        }
+        val elementType = toDotNetIlValueType(elementIrType) ?: return null
+        if (elementType.isSupportedPrimitiveArrayElement()) {
+            dotNetUnsupported(
+                "generic array type ${type.render()} has a concrete primitive element; " +
+                        "its CLR vector would collide with the corresponding primitive-array type"
+            )
+        }
+        if (elementType is DotNetIlValueType.NullableValue) {
+            dotNetUnsupported(
+                "generic array type ${type.render()} has a nullable primitive element; " +
+                        "nullable value-type array elements are not supported yet"
+            )
+        }
+        if (elementType is DotNetIlValueType.PrimitiveArray || elementType is DotNetIlValueType.GenericArray) {
+            dotNetUnsupported(
+                "generic array type ${type.render()} contains an array element; jagged arrays are not supported yet"
+            )
+        }
+        return DotNetIlValueType.GenericArray(elementType)
     }
 
     /**
