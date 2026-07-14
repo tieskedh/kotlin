@@ -54,9 +54,7 @@ class ResultTypeResolver(
     }
 
     context(c: Context)
-    private fun TypeVariableMarker.getDefaultType(direction: ResolveDirection, constraints: List<Constraint>): KotlinTypeMarker {
-        getDefaultTypeForSelfType(constraints, useOnlyConstraintsFromDeclaredUpperBounds = true)?.let { return it }
-
+    private fun getDefaultType(direction: ResolveDirection): KotlinTypeMarker {
         return if (direction == ResolveDirection.TO_SUBTYPE) c.nothingType() else c.nullableAnyType()
     }
 
@@ -65,7 +63,7 @@ class ResultTypeResolver(
         findResultTypeOrNull(variableWithConstraints, direction)?.let { return it }
 
         // no proper constraints
-        return variableWithConstraints.typeVariable.getDefaultType(direction, variableWithConstraints.constraints)
+        return getDefaultType(direction)
     }
 
     context(c: Context)
@@ -532,17 +530,16 @@ class ResultTypeResolver(
             }
         }
 
-        if (languageVersionSettings.supportsFeature(LanguageFeature.DontIgnoreUpperBoundViolatedOnImplicitArguments)) {
-            // The computed upper type is most likely a concrete type that satisfies
-            // the recursive constraints already, but if it's not (e.g., it's a supertype of one),
-            // we need to manually account for them too.
-            val needsExplicitSelfType = components.isEmpty()
-                    || !c.isSubtypeConstraintCompatible(components.first(), typeVariable.defaultType())
+        // The computed upper type is most likely a concrete type that satisfies
+        // the recursive constraints already, but if it's not (e.g., it's a supertype of one),
+        // we need to manually account for them too.
+        val needsExplicitSelfType = components.isEmpty()
+                || languageVersionSettings.supportsFeature(LanguageFeature.DontIgnoreUpperBoundViolatedOnImplicitArguments)
+                && !c.isSubtypeConstraintCompatible(components.first(), typeVariable.defaultType())
 
-            if (needsExplicitSelfType) {
-                typeVariable.getDefaultTypeForSelfType(constraints, useOnlyConstraintsFromDeclaredUpperBounds = false)
-                    ?.let { capturedTypeForSelf -> components += capturedTypeForSelf }
-            }
+        if (needsExplicitSelfType) {
+            typeVariable.getDefaultTypeForSelfType(constraints, useOnlyConstraintsFromDeclaredUpperBounds = components.isEmpty())
+                ?.let { capturedTypeForSelf -> components += capturedTypeForSelf }
         }
 
         return when {
