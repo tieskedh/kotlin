@@ -65,9 +65,12 @@ internal class DotNetIlClassCodegen(
             // An interface carries neither `sealed` nor `beforefieldinit` (it has no `.cctor`
             // and cannot be instantiated) and, per ECMA-335, no `extends` line at all.
             isInterface -> "interface $visibility abstract auto ansi"
-            // A nested class is never a static holder here. Named nested classes and companion
-            // objects are final in the current gate, so both carry CLR `sealed`.
-            isNested -> "nested $nestedVisibility auto ansi sealed$beforeFieldInit"
+            // A nested class is never a static holder here. Its modality uses the same flags as
+            // a top-level class after the nested accessibility prefix: abstract/sealed Kotlin
+            // classes are CLR `abstract`, open classes omit `sealed`, and final named classes
+            // plus companion objects carry CLR `sealed` (`nestedprobe_s3`).
+            isNested && isAbstract -> "nested $nestedVisibility abstract auto ansi$beforeFieldInit"
+            isNested -> "nested $nestedVisibility auto ansi$sealed$beforeFieldInit"
             isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"
             isAbstract -> "$visibility abstract auto ansi$beforeFieldInit"
             else -> "$visibility auto ansi$sealed$beforeFieldInit"

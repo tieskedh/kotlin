@@ -3,14 +3,8 @@
 // then the fixpoint also removes UsesBroken's reference to the now-unavailable nested type.
 // DeepBrokenFamily instead fails while recursively rendering a three-level nested member body,
 // exercising preservation of the deepest failure attribution while the whole family is evicted.
-
-class OpenNestedHost {
-    open class Nested
-}
-
-class AbstractNestedHost {
-    abstract class Nested
-}
+// BrokenNestedBaseFamily pins the inheritance cascade: its nested base fails the member pre-pass,
+// then both a top-level derived class and a separate nested family disappear in the render fixpoint.
 
 class InnerHost {
     inner class Nested
@@ -54,6 +48,18 @@ class BrokenFamily {
 
 class UsesBroken {
     fun use(value: BrokenFamily.Good): Int = value.value()
+}
+
+class BrokenNestedBaseFamily {
+    open class Base {
+        fun unsupported(value: Byte): Byte = value
+    }
+}
+
+class DerivedFromBrokenNestedBase : BrokenNestedBaseFamily.Base()
+
+class NestedDerivedFromBrokenNestedBase {
+    class Derived : BrokenNestedBaseFamily.Base()
 }
 
 class DeepBrokenFamily {

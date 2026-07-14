@@ -106,6 +106,13 @@ class DotNetIlEmitter(
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
         val classSkipReasons = LinkedHashMap<IrClass, String>()
         val moduleTopLevelClasses = topLevelClassesByFile.values.flatten().toHashSet()
+        val moduleClasses = buildSet {
+            fun collect(irClass: IrClass) {
+                add(irClass)
+                irClass.declarations.filterIsInstance<IrClass>().forEach(::collect)
+            }
+            moduleTopLevelClasses.forEach(::collect)
+        }
 
         // A CLR nested type is registered independently for type/member resolution, while its
         // metadata block renders recursively inside the enclosing class. Kotlin named nested
@@ -134,7 +141,7 @@ class DotNetIlEmitter(
         for (irClass in topLevelClassesByFile.values.flatten()) {
             if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             try {
-                checkClassShapeSupported(irClass, moduleTopLevelClasses)
+                checkClassShapeSupported(irClass, moduleClasses, moduleTopLevelClasses)
                 // A generic class's IL name carries the CLS `` `n `` arity suffix INSIDE the
                 // quoted identifier ('demo.Box`1' — outside the quotes is an ilasm syntax error,
                 // probe-verified genprobe_s2/_s2c). The suffix is CLS convention rather than a
@@ -675,8 +682,8 @@ class DotNetIlEmitter(
      * (an `object` goes through
      * the same constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * already turned its singleton nature into ordinary class machinery). A plain class may
-     * have EXACTLY ONE class supertype when it resolves to another top-level class of
-     * [moduleTopLevelClasses] (real CLR inheritance; whether that base itself compiles is
+     * have EXACTLY ONE class supertype when it resolves to another recursively declared class of
+     * [moduleClasses] (real CLR inheritance; whether that base itself compiles is
      * deliberately NOT checked here — the render re-resolves it every fixpoint round, so a
      * failing base cascades to its derived classes with a carried reason, see
      * [renderUserClass]) and any number of interface supertypes when each resolves to a
@@ -688,23 +695,27 @@ class DotNetIlEmitter(
      * included (`ifaceprobe_s10`; the covariant half runs in the member pre-pass,
      * [checkInheritedInterfaceImplKeepsIlReturnType], because it needs the type mapper).
      * Interface delegation (`by`) uses FIR's ordinary forwarding members and private delegate
-     * fields. Exception supertypes, out-of-module or non-top-level bases, and overrides of
+     * fields. Exception supertypes, out-of-module bases, and overrides of
      * `kotlin.Any` members stay rejected. Abstract and sealed plain classes map to CLR `abstract`;
      * Kotlin sealing is frontend-enforced like sealed interfaces. Objects and companions stay
-     * on the sole-supertype-`kotlin.Any`, final-only model. A plain FINAL named class nested
-     * directly in another plain class is also supported recursively, including under a generic
-     * outer and with its own independent generic parameters. This follows the JVM's static
-     * nested-class model (`ACC_STATIC` unless `isInner`) and maps directly to a CLR nested type;
-     * the metadata and generic spelling is probe-verified by `nestedprobe_s1`. Nested classes
-     * may be public, private, internal, or protected (`nested public/private/assembly/family`).
-     * Inner classes, nested interfaces/objects, classes inside objects, and non-final nested
-     * classes stay rejected. Companion objects retain their singleton rules and remain limited
+     * on the sole-supertype-`kotlin.Any`, final-only model. A plain named class nested directly
+     * in another plain class is also supported recursively at every class modality, including
+     * under a generic outer and with its own independent generic parameters. This follows the
+     * JVM's static nested-class model (`ACC_STATIC` unless `isInner`) and maps directly to a CLR
+     * nested type; the metadata and generic spelling is probe-verified by
+     * `nestedprobe_s1`/`_s3`. Nested classes may be public, private, internal, or protected
+     * (`nested public/private/assembly/family`).
+     * A top-level or nested class may derive from a module-local nested class, including a
+     * sibling, enclosing metadata parent, forward declaration, generic instantiation, or class
+     * in another top-level family (`nestedprobe_s3`). Inner classes, nested interfaces/objects,
+     * and classes inside objects stay rejected. Companion objects remain limited
      * to top-level plain classes; the object-lowering pass does not initialize a companion of an
      * ordinary nested class yet. Each violation throws [DotNetIlUnsupportedException]; the
      * granularity is always the whole top-level class family.
      */
     private fun checkClassShapeSupported(
         irClass: IrClass,
+        moduleClasses: Set<IrClass>,
         moduleTopLevelClasses: Set<IrClass>,
     ) {
         val name = irClass.diagnosticName()
@@ -761,13 +772,8 @@ class DotNetIlEmitter(
             Modality.OPEN ->
                 if (isValidatedCompanion || irClass.kind == ClassKind.OBJECT) {
                     dotNetUnsupported("non-final object '$name' is not supported")
-                } else if (isNamedNestedClass) {
-                    dotNetUnsupported("open nested class '$name' is not supported yet")
                 }
-            Modality.ABSTRACT, Modality.SEALED ->
-                if (isNamedNestedClass) {
-                    dotNetUnsupported("non-final nested class '$name' is not supported yet")
-                }
+            Modality.ABSTRACT, Modality.SEALED -> {}
         }
         if (isNamedNestedClass) {
             when (irClass.visibility) {
@@ -850,9 +856,9 @@ class DotNetIlEmitter(
                 dotNetUnsupported("internal: class '$name' has more than one class supertype")
             }
             val superClass = properSuperClasses.singleOrNull()
-            if (superClass != null && superClass !in moduleTopLevelClasses) {
+            if (superClass != null && superClass !in moduleClasses) {
                 dotNetUnsupported(
-                    "class '$name' extends '${superClass.diagnosticName()}', which is not a top-level class " +
+                    "class '$name' extends '${superClass.diagnosticName()}', which is not a class " +
                             "of the compiled module; only module-local base classes are supported"
                 )
             }
@@ -929,7 +935,7 @@ class DotNetIlEmitter(
                 // Named nested classes and companions use the same recursive constraint chain.
                 // The start of the recursive call rejects nested interfaces/objects, inner
                 // classes, and declarations whose enclosing container is not a plain class.
-                checkClassShapeSupported(declaration, moduleTopLevelClasses)
+                checkClassShapeSupported(declaration, moduleClasses, moduleTopLevelClasses)
             }
         }
     }

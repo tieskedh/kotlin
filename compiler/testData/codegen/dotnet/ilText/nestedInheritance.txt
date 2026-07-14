@@ -1,0 +1,511 @@
+.assembly extern mscorlib {}
+.assembly 'nestedInheritance' {}
+.module 'main-nestedInheritance.il'
+
+.class interface public abstract auto ansi 'NestedValue'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'value'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ForwardFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Derived'
+         extends 'ForwardFamily'/'Base'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance void 'ForwardFamily'/'Base'::.ctor(int32)
+      ret
+    }
+    .method public hidebysig virtual instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance int32 'ForwardFamily'/'Base'::'value'()
+      ldc.i4 1
+      add
+      ret
+    }
+  }
+  .class nested public auto ansi beforefieldinit 'Base'
+         extends [mscorlib]System.Object
+         implements 'NestedValue'
+  {
+    .field private int32 'seed'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'ForwardFamily'/'Base'::'seed'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_seed'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'ForwardFamily'/'Base'::'seed'
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'ForwardFamily'/'Base'::'get_seed'()
+      ret
+    }
+    .property instance int32 'seed'()
+    {
+      .get instance int32 'ForwardFamily'/'Base'::'get_seed'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AbstractFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public abstract auto ansi beforefieldinit 'Base'
+         extends [mscorlib]System.Object
+         implements 'NestedValue'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Concrete'
+         extends 'AbstractFamily'/'Base'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'AbstractFamily'/'Base'::.ctor()
+      ret
+    }
+    .method public hidebysig virtual instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 7
+      ret
+    }
+  }
+  .class nested public abstract auto ansi beforefieldinit 'Choice'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig newslot abstract virtual instance int32 'code'() cil managed
+    {
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Chosen'
+         extends 'AbstractFamily'/'Choice'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'AbstractFamily'/'Choice'::.ctor()
+      ret
+    }
+    .method public hidebysig virtual instance int32 'code'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 8
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericFamily`1'<'Unused'>
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi beforefieldinit 'Base`1'<'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'item'
+    .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld !0 class 'GenericFamily`1'/'Base`1'<!0>::'item'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'GenericFamily`1'/'Base`1'<!0>::'item'
+      ret
+    }
+    .method public hidebysig newslot virtual instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'GenericFamily`1'/'Base`1'<!0>::'get_item'()
+      ret
+    }
+    .property instance !0 'item'()
+    {
+      .get instance !0 'GenericFamily`1'/'Base`1'::'get_item'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Derived`1'<'T'>
+         extends class 'GenericFamily`1'/'Base`1'<!0>
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance void class 'GenericFamily`1'/'Base`1'<!0>::.ctor(!0)
+      ret
+    }
+    .method public hidebysig virtual instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'GenericFamily`1'/'Base`1'<!0>::'item'()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DepthFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi beforefieldinit 'Parent'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Child'
+           extends 'DepthFamily'/'Parent'
+    {
+      .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        ldarg.1
+        call instance void 'DepthFamily'/'Parent'::.ctor(int32)
+        ret
+      }
+    }
+    .field private int32 'stored'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'DepthFamily'/'Parent'::'stored'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_stored'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'DepthFamily'/'Parent'::'stored'
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'DepthFamily'/'Parent'::'get_stored'()
+      ret
+    }
+    .property instance int32 'stored'()
+    {
+      .get instance int32 'DepthFamily'/'Parent'::'get_stored'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Middle'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi beforefieldinit 'Base'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'stored'
+      .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        ldarg.1
+        stfld int32 'DepthFamily'/'Middle'/'Base'::'stored'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_stored'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'DepthFamily'/'Middle'/'Base'::'stored'
+        ret
+      }
+      .method public hidebysig newslot virtual instance int32 'value'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance int32 'DepthFamily'/'Middle'/'Base'::'get_stored'()
+        ret
+      }
+      .property instance int32 'stored'()
+      {
+        .get instance int32 'DepthFamily'/'Middle'/'Base'::'get_stored'()
+      }
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'CrossDepth'
+         extends 'DepthFamily'/'Middle'/'Base'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance void 'DepthFamily'/'Middle'/'Base'::.ctor(int32)
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SharedFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi beforefieldinit 'Base'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'stored'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'SharedFamily'/'Base'::'stored'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_stored'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'SharedFamily'/'Base'::'stored'
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'SharedFamily'/'Base'::'get_stored'()
+      ret
+    }
+    .property instance int32 'stored'()
+    {
+      .get instance int32 'SharedFamily'/'Base'::'get_stored'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'OtherFamily'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Derived'
+         extends 'SharedFamily'/'Base'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance void 'SharedFamily'/'Base'::.ctor(int32)
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'TopLevelDerived'
+       extends 'SharedFamily'/'Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'stored') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'SharedFamily'/'Base'::.ctor(int32)
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'nestedInheritanceKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'readForward'(class 'ForwardFamily'/'Base' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'ForwardFamily'/'Base'::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'readNestedValue'(class 'NestedValue' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'NestedValue'::'value'()
+    ret
+  }
+  .method public hidebysig static !!0 'readGeneric'<'T'>(class 'GenericFamily`1'/'Base`1'<!!0> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericFamily`1'/'Base`1'<!!0>::'item'()
+    ret
+  }
+  .method public hidebysig static int32 'readParent'(class 'DepthFamily'/'Parent' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'DepthFamily'/'Parent'::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'readDeep'(class 'DepthFamily'/'Middle'/'Base' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'DepthFamily'/'Middle'/'Base'::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'readShared'(class 'SharedFamily'/'Base' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'SharedFamily'/'Base'::'value'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldc.i4 4
+    newobj instance void 'ForwardFamily'/'Derived'::.ctor(int32)
+    call int32 'nestedInheritanceKt'::'readForward'(class 'ForwardFamily'/'Base')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'AbstractFamily'/'Concrete'::.ctor()
+    call int32 'nestedInheritanceKt'::'readNestedValue'(class 'NestedValue')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'AbstractFamily'/'Chosen'::.ctor()
+    callvirt instance int32 'AbstractFamily'/'Chosen'::'code'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    newobj instance void class 'GenericFamily`1'/'Derived`1'<string>::.ctor(!0)
+    call !!0 'nestedInheritanceKt'::'readGeneric'<string>(class 'GenericFamily`1'/'Base`1'<!!0>)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    newobj instance void 'DepthFamily'/'Parent'/'Child'::.ctor(int32)
+    call int32 'nestedInheritanceKt'::'readParent'(class 'DepthFamily'/'Parent')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 10
+    newobj instance void 'DepthFamily'/'CrossDepth'::.ctor(int32)
+    call int32 'nestedInheritanceKt'::'readDeep'(class 'DepthFamily'/'Middle'/'Base')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 11
+    newobj instance void 'TopLevelDerived'::.ctor(int32)
+    call int32 'nestedInheritanceKt'::'readShared'(class 'SharedFamily'/'Base')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 12
+    newobj instance void 'OtherFamily'/'Derived'::.ctor(int32)
+    call int32 'nestedInheritanceKt'::'readShared'(class 'SharedFamily'/'Base')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
