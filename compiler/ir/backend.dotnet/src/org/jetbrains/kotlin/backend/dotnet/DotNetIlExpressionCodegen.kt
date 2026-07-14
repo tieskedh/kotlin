@@ -485,7 +485,8 @@ internal class DotNetIlExpressionCodegen(
             if (superQualifier.isInterface) {
                 dotNetUnsupported(
                     "'super<${superQualifier.name.asString()}>' call to an interface member is not supported " +
-                            "(requires the Default Interface Methods model)"
+                            "(requires Default Interface Methods, which are outside the .NET Framework 4.8 " +
+                            "compatibility floor)"
                 )
             }
         }
