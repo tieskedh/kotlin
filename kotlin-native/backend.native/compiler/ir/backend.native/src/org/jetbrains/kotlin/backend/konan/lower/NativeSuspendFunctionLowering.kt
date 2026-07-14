@@ -83,7 +83,9 @@ internal class NativeSuspendFunctionsLowering(
 
                 shortCut.transformChildrenVoid(this)
 
-                return shortCut
+                return if (!expression.isSuspend || expression !in tailSuspendCalls)
+                    shortCut
+                else irBuilder.at(expression).irReturn(shortCut)
             }
         })
     }
