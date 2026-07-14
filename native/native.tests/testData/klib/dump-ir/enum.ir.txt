@@ -1,4 +1,4 @@
-MODULE_FRAGMENT name:<enum.kt>
+MODULE_FRAGMENT name:<main>
   FILE fqName:test fileName:enum.kt
     CLASS ENUM_CLASS name:Color signature:test/Color|null[0] modality:FINAL visibility:public superTypes:[kotlin.Enum<test.Color>]
       thisReceiver: VALUE_PARAMETER INSTANCE_RECEIVER kind:DispatchReceiver name:<this> type:test.Color

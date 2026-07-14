@@ -1,4 +1,4 @@
-MODULE_FRAGMENT name:<fun.kt>
+MODULE_FRAGMENT name:<main>
   FILE fqName:test fileName:fun.kt
     CLASS CLASS name:A signature:test/A|null[0] modality:FINAL visibility:public superTypes:[kotlin.Any]
       thisReceiver: VALUE_PARAMETER INSTANCE_RECEIVER kind:DispatchReceiver name:<this> type:test.A
