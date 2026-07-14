@@ -6,11 +6,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `ebcc4b799`
-  ("[DotNet] Add nested class modality and inheritance"), clean tree, based directly on
+- Branch `dotnet`; latest functional tip `a547b94ed`
+  ("[DotNet] Add recursive nested singletons"), clean tree, based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **330 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **334 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -22,7 +22,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   class inheritance stage 6, abstract and sealed classes, abstract interface redeclarations,
   interface delegation through FIR's frontend-owned forwarding artifacts, named nested classes
   with static-style JVM semantics and real CLR nested metadata, nested class modality and
-  module-local nested-base inheritance.
+  module-local nested-base inheritance, and recursive singleton initialization for named nested
+  objects and companions of ordinary nested classes.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
@@ -162,11 +163,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   CLR nested/enclosing access behavior. Both probes and both exact goldens assemble and execute
   identically on CoreCLR 10.0.9 and .NET Framework 4.8; the runtime box test covers generic value
   instantiations, visibility paths, inheritance/interface dispatch, forward references, and
-  companion coexistence. A companion OF an ordinary nested class remains rejected: the current
-  lowering pipeline does not synthesize its `.cctor`, and the adversarial first attempt exposed
-  a null singleton field before that output could be pinned. Non-final, inner, nested interface/
-  object, and object-contained classes also remain rejected. The final fresh FIR suite is
-  326/0/0/0; the generated CLI suite remains 10/0/0/0.
+  companion coexistence. That slice deliberately left companions OF ordinary nested classes and
+  named nested objects rejected: the then-current lowering pipeline did not synthesize their
+  `.cctor`, and the adversarial first attempt exposed a null singleton field before that output
+  could be pinned. The later `a547b94ed` slice closes that boundary. The fresh FIR suite at this
+  point was 326/0/0/0; the generated CLI suite remained 10/0/0/0.
 - Interim continuation landed `ebcc4b799`: named nested classes now support the same final, open,
   abstract, and sealed modality set as top-level classes. After the nested accessibility prefix,
   final emits CLR `sealed`, open omits it, and abstract/sealed emit CLR `abstract`. The inheritance
@@ -180,6 +181,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   rejection goldens assemble and run identically on CoreCLR 10.0.9 and .NET Framework 4.8. The
   focused six-test gate and fresh full FIR suite have zero skips/failures; the final baseline is
   330/0/0/0, and the generated CLI suite remains 10/0/0/0.
+- Interim continuation landed `a547b94ed`: `DotNetStaticInitializersLowering` now visits every
+  recursively declared class in postfix order, matching the common/JVM
+  `ClassLoweringPass.runOnFilePostfix` precedent. Companions of non-generic ordinary nested classes
+  receive their singleton field initialization in the immediate owner's `.cctor`; named objects
+  inside non-generic plain classes receive an `INSTANCE` initializer in their own `.cctor`.
+  Non-generic containers below a generic ancestor remain independent and supported, while a
+  companion or named object declared directly in a generic container stays rejected. The gate
+  also continues to reject declarations inside objects/companions/interfaces and preserves
+  whole-family fixpoint eviction when a nested singleton initializer loses its callee.
+  `nestedprobe_s4` verified direct/deep companions, a named object, a non-generic owner below a
+  generic ancestor, open/abstract owners, laziness, and one-time construction; CoreCLR 10.0.9 and
+  .NET Framework 4.8 both printed `0,1,1,1,2,3,4,5,6,6`. The exact positive and rejection goldens
+  assemble under both ILAsm versions and execute identically on both runtimes. The fresh full FIR
+  suite is 334/0/0/0 across eight XML files; the generated CLI suite remains 10/0/0/0.
+- The user explicitly requested a stop after the recursive-singleton feature. The nested-interface
+  audit below has not been started.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -246,17 +263,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Add recursive singleton initialization for ordinary nested owners.** A companion of a named
-   nested class is currently gate-rejected because its synthesized field survives without the
-   owning nested class's `.cctor`; the adversarial attempt before `911b1113e` loaded a null
-   singleton. Trace `DotNetObjectClassLowering` and `DotNetStaticInitializersLowering` recursively,
-   then probe direct and deep nested companions, first-use order, one-time initialization, private
-   cross-boundary access, forward references, and coexistence with nested inheritance on both
-   runtimes. Keep singleton declarations under generic owners rejected: CLR static state is per
-   constructed generic owner, which violates Kotlin's one-instance rule. Decide separately, from
-   the same evidence, whether a named `object` nested in a non-generic class can land in this slice
-   or needs a follow-up. Preserve whole-family eviction and add an adversarial failing initializer.
-2. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
+1. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
    static-nested semantics but retain the Framework-compatible no-default-method boundary. Probe
    CLR nested-interface flags, generic independence, visibility, implementation/dispatch, forward
    references, and recursive metadata placement before lifting either gate. Keep `inner`, local/

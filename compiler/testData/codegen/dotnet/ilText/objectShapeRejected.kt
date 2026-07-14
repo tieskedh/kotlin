@@ -1,13 +1,8 @@
-// Every object shape here is outside the supported model; each is skipped whole with a warning
-// and only the file facade is emitted — never a silent partial class. A named object nested in
-// a class rejects the enclosing class whole (the same gate that rejects nested classes); a data
-// object needs the same Any model as a data class; an anonymous object expression is a local
-// class, so the function using it is skipped.
+// Every object shape here is outside the supported model and is skipped with a warning. A data
+// object needs the same Any model as a data class; an anonymous object expression is a local class,
+// so the function using it is skipped. Named objects nested in non-generic plain classes are
+// supported by the recursive nested-singleton model and are covered separately.
 data object D
-
-class Outer {
-    object Nested
-}
 
 fun localObject(): Int {
     val o = object { val x = 1 }

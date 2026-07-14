@@ -1,0 +1,765 @@
+.assembly extern mscorlib {}
+.assembly 'nestedSingletons' {}
+.module 'main-nestedSingletons.il'
+
+.class public auto ansi sealed beforefieldinit 'DirectOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed 'Nested'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'captured'
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        call int32 'nestedSingletonsKt'::'nextInitialization'()
+        stfld int32 'DirectOwner'/'Nested'/'Companion'::'captured'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_captured'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'DirectOwner'/'Nested'/'Companion'::'captured'
+        ret
+      }
+      .property instance int32 'captured'()
+      {
+        .get instance int32 'DirectOwner'/'Nested'/'Companion'::'get_captured'()
+      }
+    }
+    .field public static initonly class 'DirectOwner'/'Nested'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'DirectOwner'/'Nested'/'Companion'::.ctor()
+      stsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ObjectOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested private auto ansi sealed 'Hidden'
+         extends [mscorlib]System.Object
+  {
+    .field public static initonly class 'ObjectOwner'/'Hidden' 'INSTANCE'
+    .field private int32 'captured'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ObjectOwner'/'Hidden'::.ctor()
+      stsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
+      ret
+    }
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      call int32 'nestedSingletonsKt'::'nextInitialization'()
+      stfld int32 'ObjectOwner'/'Hidden'::'captured'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_captured'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'ObjectOwner'/'Hidden'::'captured'
+      ret
+    }
+    .property instance int32 'captured'()
+    {
+      .get instance int32 'ObjectOwner'/'Hidden'::'get_captured'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'hiddenValue'() cil managed
+  {
+    .maxstack 1
+    ldsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
+    call instance int32 'ObjectOwner'/'Hidden'::'get_captured'()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DeepOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Middle'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed 'Nested'
+           extends [mscorlib]System.Object
+    {
+      .class nested public auto ansi sealed beforefieldinit 'Companion'
+             extends [mscorlib]System.Object
+      {
+        .field private int32 'captured'
+        .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+        {
+          .maxstack 2
+          ldarg.0
+          call instance void [mscorlib]System.Object::.ctor()
+          ldarg.0
+          call int32 'nestedSingletonsKt'::'nextInitialization'()
+          stfld int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'captured'
+          ret
+        }
+        .method public hidebysig specialname instance int32 'get_captured'() cil managed
+        {
+          .maxstack 1
+          ldarg.0
+          ldfld int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'captured'
+          ret
+        }
+        .property instance int32 'captured'()
+        {
+          .get instance int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'get_captured'()
+        }
+      }
+      .field public static initonly class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'Companion'
+      .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+      {
+        .maxstack 1
+        newobj instance void 'DeepOwner'/'Middle'/'Nested'/'Companion'::.ctor()
+        stsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
+        ret
+      }
+      .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ret
+      }
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericAncestor`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed 'CompanionHolder'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'captured'
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        call int32 'nestedSingletonsKt'::'nextInitialization'()
+        stfld int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'captured'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_captured'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'captured'
+        ret
+      }
+      .property instance int32 'captured'()
+      {
+        .get instance int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'get_captured'()
+      }
+    }
+    .field public static initonly class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor()
+      stsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'ObjectHolder'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed 'Singleton'
+           extends [mscorlib]System.Object
+    {
+      .field public static initonly class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'INSTANCE'
+      .field private int32 'captured'
+      .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+      {
+        .maxstack 1
+        newobj instance void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::.ctor()
+        stsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
+        ret
+      }
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        call int32 'nestedSingletonsKt'::'nextInitialization'()
+        stfld int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'captured'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_captured'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'captured'
+        ret
+      }
+      .property instance int32 'captured'()
+      {
+        .get instance int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'get_captured'()
+      }
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ModalOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi 'OpenNested'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'captured'
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        call int32 'nestedSingletonsKt'::'nextInitialization'()
+        stfld int32 'ModalOwner'/'OpenNested'/'Companion'::'captured'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_captured'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'ModalOwner'/'OpenNested'/'Companion'::'captured'
+        ret
+      }
+      .property instance int32 'captured'()
+      {
+        .get instance int32 'ModalOwner'/'OpenNested'/'Companion'::'get_captured'()
+      }
+    }
+    .field public static initonly class 'ModalOwner'/'OpenNested'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ModalOwner'/'OpenNested'/'Companion'::.ctor()
+      stsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .class nested public abstract auto ansi 'AbstractNested'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'captured'
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        call int32 'nestedSingletonsKt'::'nextInitialization'()
+        stfld int32 'ModalOwner'/'AbstractNested'/'Companion'::'captured'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_captured'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'ModalOwner'/'AbstractNested'/'Companion'::'captured'
+        ret
+      }
+      .property instance int32 'captured'()
+      {
+        .get instance int32 'ModalOwner'/'AbstractNested'/'Companion'::'get_captured'()
+      }
+    }
+    .field public static initonly class 'ModalOwner'/'AbstractNested'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor()
+      stsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AccessOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed 'Nested'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ret
+      }
+      .method assembly hidebysig instance int32 'double'(int32 'value') cil managed
+      {
+        .maxstack 2
+        ldarg.1
+        ldarg.1
+        add
+        ret
+      }
+      .method public hidebysig instance int32 'read'(class 'AccessOwner'/'Nested' 'value') cil managed
+      {
+        .maxstack 1
+        ldarg.1
+        call instance int32 'AccessOwner'/'Nested'::'get_seed'()
+        ret
+      }
+    }
+    .field public static initonly class 'AccessOwner'/'Nested'/'Companion' 'Companion'
+    .field private int32 'seed'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'AccessOwner'/'Nested'/'Companion'::.ctor()
+      stsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'AccessOwner'/'Nested'::'seed'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_seed'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'AccessOwner'/'Nested'::'seed'
+      ret
+    }
+    .method public hidebysig instance int32 'throughCompanion'() cil managed
+    {
+      .maxstack 2
+      ldsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
+      ldarg.0
+      call instance int32 'AccessOwner'/'Nested'::'get_seed'()
+      call instance int32 'AccessOwner'/'Nested'/'Companion'::'double'(int32)
+      ret
+    }
+    .property instance int32 'seed'()
+    {
+      .get instance int32 'AccessOwner'/'Nested'::'get_seed'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ForwardOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed 'Factory'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ret
+      }
+      .method public hidebysig instance class 'ForwardOwner'/'Later' 'create'(int32 'value') cil managed
+      {
+        .maxstack 1
+        ldarg.1
+        newobj instance void 'ForwardOwner'/'Later'::.ctor(int32)
+        ret
+      }
+    }
+    .field public static initonly class 'ForwardOwner'/'Factory'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor()
+      stsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Later'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld int32 'ForwardOwner'/'Later'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'ForwardOwner'/'Later'::'value'
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'ForwardOwner'/'Later'::'get_value'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'HierarchyOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi 'Base'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'captured'
+      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        call int32 'nestedSingletonsKt'::'nextInitialization'()
+        stfld int32 'HierarchyOwner'/'Base'/'Companion'::'captured'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_captured'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'HierarchyOwner'/'Base'/'Companion'::'captured'
+        ret
+      }
+      .property instance int32 'captured'()
+      {
+        .get instance int32 'HierarchyOwner'/'Base'/'Companion'::'get_captured'()
+      }
+    }
+    .field public static initonly class 'HierarchyOwner'/'Base'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'HierarchyOwner'/'Base'/'Companion'::.ctor()
+      stsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Derived'
+         extends 'HierarchyOwner'/'Base'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'HierarchyOwner'/'Base'::.ctor()
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi 'nestedSingletonsKt'
+       extends [mscorlib]System.Object
+{
+  .field private static int32 'initializationCount'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    ldc.i4 0
+    stsfld int32 'nestedSingletonsKt'::'initializationCount'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_initializationCount'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32 'nestedSingletonsKt'::'initializationCount'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_initializationCount'(int32 '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld int32 'nestedSingletonsKt'::'initializationCount'
+    ret
+  }
+  .method public hidebysig static int32 'nextInitialization'() cil managed
+  {
+    .maxstack 2
+    call int32 'nestedSingletonsKt'::'get_initializationCount'()
+    ldc.i4 1
+    add
+    call void 'nestedSingletonsKt'::'set_initializationCount'(int32)
+    call int32 'nestedSingletonsKt'::'get_initializationCount'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'AccessOwner'/'Nested' 'access'
+    )
+    call int32 'nestedSingletonsKt'::'get_initializationCount'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
+    call instance int32 'DirectOwner'/'Nested'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
+    call instance int32 'DirectOwner'/'Nested'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'nestedSingletonsKt'::'get_initializationCount'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ObjectOwner'::.ctor()
+    call instance int32 'ObjectOwner'::'hiddenValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
+    call instance int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
+    call instance int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
+    call instance int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
+    call instance int32 'ModalOwner'/'OpenNested'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
+    call instance int32 'ModalOwner'/'AbstractNested'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
+    call instance int32 'HierarchyOwner'/'Base'/'Companion'::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'nestedSingletonsKt'::'get_initializationCount'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    newobj instance void 'AccessOwner'/'Nested'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    call instance int32 'AccessOwner'/'Nested'::'throughCompanion'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
+    ldloc.0
+    call instance int32 'AccessOwner'/'Nested'/'Companion'::'read'(class 'AccessOwner'/'Nested')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
+    ldc.i4 12
+    call instance class 'ForwardOwner'/'Later' 'ForwardOwner'/'Factory'/'Companion'::'create'(int32)
+    call instance int32 'ForwardOwner'/'Later'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'nestedSingletonsKt'::'get_initializationCount'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .property int32 'initializationCount'()
+  {
+    .get int32 'nestedSingletonsKt'::'get_initializationCount'()
+    .set void 'nestedSingletonsKt'::'set_initializationCount'(int32)
+  }
+}

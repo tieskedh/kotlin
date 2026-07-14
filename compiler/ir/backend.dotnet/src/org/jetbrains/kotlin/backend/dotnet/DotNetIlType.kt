@@ -465,7 +465,7 @@ internal class DotNetIlFunctionInfo(
 
 /**
  * A user class currently considered compilable to .NET IL — top-level, or, with [enclosingClass]
- * set, a recursively nested named class or companion object. The counterpart of
+ * set, a recursively nested named class, named object, or companion object. The counterpart of
  * [DotNetIlFunctionInfo] for classes; it carries the IL class name ([ilClassName] — the dotted
  * FqName for a top-level class, the simple arity-suffixed name for a nested one, i.e. what the
  * `.class` directive declares) and renders the member references of the class model.
@@ -478,7 +478,7 @@ internal class DotNetIlClassInfo(
     val typeParameterCount: Int
         get() = typeParameterVariances.size
 
-    /** Whether this is a named nested class or companion object rather than a top-level class. */
+    /** Whether this is a named nested class/object or companion rather than a top-level class. */
     val isNested: Boolean
         get() = enclosingClass != null
 

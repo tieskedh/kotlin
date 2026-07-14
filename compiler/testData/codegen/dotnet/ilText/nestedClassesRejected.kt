@@ -5,13 +5,12 @@
 // exercising preservation of the deepest failure attribution while the whole family is evicted.
 // BrokenNestedBaseFamily pins the inheritance cascade: its nested base fails the member pre-pass,
 // then both a top-level derived class and a separate nested family disappear in the render fixpoint.
+// Generic singleton containers stay rejected because their direct CLR semantics are not modeled.
+// BrokenNestedSingletonFamily pins recursive-static-initializer eviction after its callee
+// disappears.
 
 class InnerHost {
     inner class Nested
-}
-
-class NestedObjectHost {
-    object Nested
 }
 
 object ObjectHost {
@@ -30,9 +29,19 @@ class GenericCompanionHost<T> {
     companion object
 }
 
-class NestedCompanionHost {
-    class Nested {
+class GenericObjectHost<T> {
+    object Nested
+}
+
+class GenericNestedCompanionHost {
+    class Nested<T> {
         companion object
+    }
+}
+
+class GenericNestedObjectHost {
+    class Nested<T> {
+        object Named
     }
 }
 
@@ -60,6 +69,22 @@ class DerivedFromBrokenNestedBase : BrokenNestedBaseFamily.Base()
 
 class NestedDerivedFromBrokenNestedBase {
     class Derived : BrokenNestedBaseFamily.Base()
+}
+
+fun brokenNestedSingletonInitializer(): Int {
+    var count = 0
+    for (value in 1L..2L) {
+        count += 1
+    }
+    return count
+}
+
+class BrokenNestedSingletonFamily {
+    class Nested {
+        companion object {
+            val captured: Int = brokenNestedSingletonInitializer()
+        }
+    }
 }
 
 class DeepBrokenFamily {
