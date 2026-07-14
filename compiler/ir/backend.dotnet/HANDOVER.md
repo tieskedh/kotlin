@@ -7,7 +7,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip is "[DotNet] Correct reviewed semantic gaps", clean tree,
+- Branch `dotnet`; latest functional work is "[DotNet] Narrow nested class failure eviction",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
@@ -27,7 +27,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   module-local nested-base inheritance, and recursive singleton initialization for named nested
   objects and companions of ordinary nested classes.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
-- Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
+- Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
   assembly-scope/Framework-compatibility decision; `whenprobe_s2` forced the exact golden's
@@ -37,12 +37,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   later reviewed-semantic-gaps repair changes the temporary cross-target type to `System.Exception`
   so the synthetic `NoWhenBranchMatchedException` no longer acquires the false sibling edge
   `is IllegalStateException`.
-- Interim continuation landed `d7915e827`: `cli/dotnet` now generates into its own top-level
+- Interim continuation landed `b9fed511e`: `cli/dotnet` now generates into its own top-level
   `DotNetCliTestGenerated.java`, so upstream regeneration of the shared `CliTestGenerated.java`
   no longer conflicts with DotNet test data. The same 10 tests pass in the new suite, and an
   explicit smoke filter preserves their selection after the nested-to-top-level move (Smoke-mode
   dry-run discovers all 10). The fresh backend suite remains 270/0/0/0.
-- Interim continuation landed `08931c5c7`: `IntArray`, `LongArray`, `DoubleArray`,
+- Interim continuation landed `85e7df603`: `IntArray`, `LongArray`, `DoubleArray`,
   `BooleanArray`, and `CharArray` map to native CLR vectors. JVM-shaped registry intrinsics cover
   unary construction, literal factories, `size`, `get`, and `set`; direct `for` loops use the
   backend.common indexed-get shape. `arrprobe_s1` verified exact signatures/opcodes and runtime
@@ -53,7 +53,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   scalar arrays, initializer constructors, spreads, escaping iterators, and copy/content helpers
   reject. Contrary to the old task-menu guess, no fake-stdlib declarations were needed: fir2ir
   already supplies the primitive-array builtins and `*ArrayOf` calls.
-- Interim continuation landed `fffb99e14`: supported direct, non-null, non-generic module-local
+- Interim continuation landed `1767fe982`: supported direct, non-null, non-generic module-local
   class and all-abstract interface bounds now remain on CLR generic method/class metadata and on
   the backend's structural `!n`/`!!n` type. Bound virtual/interface calls spill receiver and
   arguments, reload the receiver address, and emit `constrained.` immediately before `callvirt`;
@@ -65,7 +65,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   assembles under both ILAsm versions and executes on Framework. New ilText/rejection/box pins run
   under both FIR parser variants. Nullable, generic-instantiation, type-parameter, builtin, mapped,
   unavailable, equality/Any-member, unconstrained-widening, variance, and `T?` shapes still reject.
-- Interim continuation landed `344ae86f2`: invariant `Array<E>` maps to a structural CLR vector
+- Interim continuation landed `eb3651083`: invariant `Array<E>` maps to a structural CLR vector
   for reference-shaped or open `!n`/`!!n` elements. The JVM-shaped registry owns `arrayOf`,
   `emptyArray`, reference-element `arrayOfNulls`, `size`, `get`, and `set`; direct `for` loops
   reuse the indexed lowering. Literal/get/set operands spill for protected-region safety. The
@@ -78,7 +78,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Framework 4.8. Both final goldens assemble and execute on both runtimes. The feature also closes
   the existing main-detector gap: `main(args: Array<String>)` now emits the valid CLR
   `.entrypoint` `main(string[])` shape.
-- Interim continuation landed `7d54b3a82`: top-level all-abstract generic interfaces now emit
+- Interim continuation landed `934f50a7c`: top-level all-abstract generic interfaces now emit
   as real reified CLR interfaces. Their `out`/`in` parameters preserve `+`/`-` metadata; full
   open, closed, transitive, and permuted interface instantiations remain in the structural
   supertype graph and on every `implements`/member-owner token. Generic classes may implement
@@ -90,7 +90,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   CoreCLR 10.0.9 and .NET Framework 4.8. Both new goldens assemble under both ILAsm versions;
   the positive golden and expanded box test execute on both runtimes. The final FIR suite is
   294/0/0/0 and the generated CLI suite remains 10/0/0/0.
-- Interim continuation landed `4768b7763`: non-inline generic methods are now supported on every
+- Interim continuation landed `3bcbe6c1f`: non-inline generic methods are now supported on every
   otherwise-supported class, object, companion, and all-abstract interface. Generic owners keep
   their `!n` space independent from a method's `!!n` space across declarations, calls, nested
   generic owner tokens, inherited interface views, and instantiated generic base overrides/super
@@ -104,7 +104,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interface slots, constrained calls, arity overloads, objects, companions, member extensions,
   nullable method instantiations, and generic virtual/super dispatch. The final FIR suite is
   300/0/0/0 and the generated CLI suite remains 10/0/0/0.
-- Interim continuation landed `5cc01c4bc`: supported generic classes may now extend module-local
+- Interim continuation landed `f719d1206`: supported generic classes may now extend module-local
   generic bases through mapped closed, open, permuted, nested, generic-array, concrete-nullable,
   fixed, and constrained instantiations across arbitrary chains. Full base tokens remain in the
   prelinked structural graph and are recursively substituted at each hop, so constructor calls,
@@ -115,7 +115,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interfaces, and constraints on CoreCLR 10.0.9 and .NET Framework 4.8. Both new goldens assemble
   under modern and Framework ILAsm; the positive golden executes identically on both runtimes.
   The final FIR suite is 306/0/0/0 and the generated CLI suite remains 10/0/0/0.
-- Interim continuation landed `f90b08a1a`: top-level plain abstract and sealed classes now emit
+- Interim continuation landed `11cfd104b`: top-level plain abstract and sealed classes now emit
   as ordinary CLR `abstract` types; Kotlin sealing remains frontend-enforced. New abstract
   functions/accessors use `newslot abstract virtual`, abstract base overrides reuse their slot
   with `abstract virtual`, and open/concrete members, constructors, state, companions, generic
@@ -129,7 +129,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and .NET Framework 4.8. Runtime pins also cover mutable abstract properties, abstract generic
   calls through abstract views, generic sealed owners, constrained dispatch, companion factories,
   and state. The final FIR suite is 310/0/0/0; the generated CLI suite remains 10/0/0/0.
-- Interim continuation landed `a35ec8319`: an abstract interface function or accessor may now
+- Interim continuation landed `e748011b0`: an abstract interface function or accessor may now
   redeclare an inherited member, emitting another `newslot abstract virtual` slot. One class
   member with an exact signature fills the original and every redeclared slot, including repeated
   and diamond redeclarations, mutable properties, independent generic methods, composed generic
@@ -141,7 +141,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Default Interface Method, but Framework 4.8 ILAsm rejects a non-static interface method body,
   so DIM and `super<I>` remain loudly unsupported unless the runtime floor is deliberately raised.
   The final FIR suite is 316/0/0/0; the generated CLI suite remains 10/0/0/0.
-- Interim continuation landed `5a77b7435`: FIR interface delegation now renders through the
+- Interim continuation landed `67ac4b6c2`: FIR interface delegation now renders through the
   ordinary member pipeline. Constructor-property delegates reuse their private backing field;
   plain parameters, expressions, bounded type parameters, and `var` delegates use FIR's private
   `$$delegate_n` field, initialized after the base constructor and before later member state.
@@ -154,16 +154,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and .NET Framework 4.8; runtime pins cover initialization order, one-time capture, constrained
   calls, and base/interface dispatch. The final FIR suite is 320/0/0/0; the generated CLI suite
   remains 10/0/0/0.
-- Interim continuation landed `911b1113e`: FINAL named classes may now nest recursively inside
+- Interim continuation landed `e5721e916`: FINAL named classes may now nest recursively inside
   plain classes as real CLR nested metadata types, following the JVM's static-nested semantics.
   Each declaration has its own simple arity-suffixed identity and independent generic parameter
   space, so named classes inside generic outers do not capture the outer's `!n` slots. Public,
   private, internal, and protected map to `nested public/private/assembly/family`; arbitrary depth,
   forward sibling references, generic nested classes, top-level base/interface links, and a direct
   companion alongside named nested siblings all compose through the existing member machinery.
-  Registration, rendering, and eviction now operate on the whole top-level class family. A deep
-  recursive render failure preserves the exact descendant tag while unwinding, then removes every
-  family class and callable with chained diagnostics. `nestedprobe_s1` verified names, independent
+  That slice initially made registration, rendering, and eviction operate on the whole top-level
+  class family. The later narrow-eviction repair keeps recursive rendering and exact descendant
+  attribution while removing only the failing metadata subtree and actual dependents.
+  `nestedprobe_s1` verified names, independent
   generics, depth, visibility, construction, and member/field references; `nestedprobe_s2` verified
   CLR nested/enclosing access behavior. Both probes and both exact goldens assemble and execute
   identically on CoreCLR 10.0.9 and .NET Framework 4.8; the runtime box test covers generic value
@@ -171,9 +172,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   companion coexistence. That slice deliberately left companions OF ordinary nested classes and
   named nested objects rejected: the then-current lowering pipeline did not synthesize their
   `.cctor`, and the adversarial first attempt exposed a null singleton field before that output
-  could be pinned. The later `a547b94ed` slice closes that boundary. The fresh FIR suite at this
+  could be pinned. The later `1f43c5a4b` slice closes that boundary. The fresh FIR suite at this
   point was 326/0/0/0; the generated CLI suite remained 10/0/0/0.
-- Interim continuation landed `ebcc4b799`: named nested classes now support the same final, open,
+- Interim continuation landed `7f1f9acc6`: named nested classes now support the same final, open,
   abstract, and sealed modality set as top-level classes. After the nested accessibility prefix,
   final emits CLR `sealed`, open omits it, and abstract/sealed emit CLR `abstract`. The inheritance
   gate now distinguishes every recursively declared module class from the still-top-level-only
@@ -186,7 +187,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   rejection goldens assemble and run identically on CoreCLR 10.0.9 and .NET Framework 4.8. The
   focused six-test gate and fresh full FIR suite have zero skips/failures; the final baseline is
   330/0/0/0, and the generated CLI suite remains 10/0/0/0.
-- Interim continuation landed `a547b94ed`: `DotNetStaticInitializersLowering` now visits every
+- Interim continuation landed `1f43c5a4b`: `DotNetStaticInitializersLowering` now visits every
   recursively declared class in postfix order, matching the common/JVM
   `ClassLoweringPass.runOnFilePostfix` precedent. Companions of non-generic ordinary nested classes
   receive their singleton field initialization in the immediate owner's `.cctor`; named objects
@@ -194,9 +195,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   A companion declared directly in a generic container stays rejected because its field would be
   per constructed owner. A named object is safe there because its `INSTANCE` lives on its own
   independently non-generic type; the reviewed-semantic-gaps repair lifts that over-broad gate.
-  The gate
-  also continues to reject declarations inside objects/companions/interfaces and preserves
-  whole-family fixpoint eviction when a nested singleton initializer loses its callee.
+  The gate also continues to reject declarations inside objects/companions/interfaces. The later
+  narrow-eviction repair makes a nested singleton initializer that loses its callee evict its
+  immediate singleton owner subtree while independent metadata ancestors survive.
   `nestedprobe_s4` verified direct/deep companions, a named object, a non-generic owner below a
   generic ancestor, open/abstract owners, laziness, and one-time construction; CoreCLR 10.0.9 and
   .NET Framework 4.8 both printed `0,1,1,1,2,3,4,5,6,6`. The exact positive and rejection goldens
@@ -211,6 +212,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   supported while generic-owner companions remain rejected. The fresh full suite is 336/0/0/0.
   All five changed/new exact goldens assemble with modern 10.0.9 and Framework 4.8 ILAsm; the
   Framework executions exit 0, and the FIR box suites provide the CoreCLR runtime pins.
+- The narrow-nested-eviction repair replaces top-level-family rejection with the smallest sound
+  metadata boundary. Shape-gate and member/render failures of an ordinary nested declaration
+  remove only that declaration and its descendants; valid parents and siblings render without the
+  omitted nested block. The live type/function maps still remove real users, including derived
+  classes. Companion failures remain owner-sensitive because the immediate owner contains the
+  singleton field and `.cctor`. `ilText/nestedClassesRejected.kt` pins independent parents and
+  siblings, the surviving `BrokenFamily.Good` call path, derived-class cascades, deepest nested
+  render attribution, and singleton-owner eviction. The final 336-test FIR filter is clean across
+  both parsers. All three changed rejection goldens assemble under modern 10.0.9 and Framework
+  4.8 ILAsm; their Framework executions exit 0 with output `rejected`, `rejected`, and `1,17`.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -230,8 +241,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    `nestedprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp
    dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
-   message; rejection granularity is the whole top-level class family (or property group where
-   AGENTS.md says so); eviction cascades with chained reasons. Never emit fallback IL. Never let a
+   message; rejection granularity is the class metadata subtree, the companion's immediate owner
+   subtree, or the property group where AGENTS.md says so; live-map eviction cascades to actual
+   dependents with chained reasons. Never emit fallback IL. Never let a
    construction reach
    ilasm-rejected or JIT-poisoned output: interface/generic mapping mistakes characteristically
    assemble CLEAN and throw `TypeLoadException`/`MissingMethodException` lazily — that is why box
@@ -280,13 +292,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Narrow nested-class failure eviction.** A failure in one nested class currently removes its
-   entire top-level metadata family, even when siblings and the parent do not depend on it. Keep
-   fail-loud dependency cascades, but evict only the failing nested subtree first and let the live
-   render/type fixpoint remove actual users. Companion failures remain owner-sensitive because the
-   singleton field and `.cctor` live on the enclosing class. Pin a supported sibling/parent that
-   survives next to a broken nested class, plus real dependent cascades.
-2. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
+1. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
    static-nested semantics but retain the Framework-compatible no-default-method boundary. Probe
    CLR nested-interface flags, generic independence, visibility, implementation/dispatch, forward
    references, and recursive metadata placement before lifting either gate. Keep `inner`, local/
