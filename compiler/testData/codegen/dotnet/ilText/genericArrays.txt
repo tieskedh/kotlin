@@ -1,0 +1,617 @@
+.assembly extern mscorlib {}
+.assembly 'genericArrays' {}
+.module 'main-genericArrays.il'
+
+.class public auto ansi beforefieldinit 'test.genericarrays.Base'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'test.genericarrays.Base'::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'test.genericarrays.Base'::'seed'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'test.genericarrays.Base'::'get_seed'()
+    ret
+  }
+  .property instance int32 'seed'()
+  {
+    .get instance int32 'test.genericarrays.Base'::'get_seed'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.genericarrays.Derived'
+       extends 'test.genericarrays.Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'test.genericarrays.Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 30
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.genericarrays.Box`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.genericarrays.Box`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.genericarrays.Box`1'<!0>::'value'
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'test.genericarrays.Box`1'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.genericarrays.ArrayBox`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0[] 'values'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0[] 'values') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0[] class 'test.genericarrays.ArrayBox`1'<!0>::'values'
+    ret
+  }
+  .method public hidebysig specialname instance !0[] 'get_values'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0[] class 'test.genericarrays.ArrayBox`1'<!0>::'values'
+    ret
+  }
+  .method public hidebysig instance !0 'first'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !0[] '<arrayGet>',
+      [1] int32 '<arrayIndex>'
+    )
+    ldarg.0
+    call instance !0[] class 'test.genericarrays.ArrayBox`1'<!0>::'get_values'()
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ldelem !0
+    ret
+  }
+  .method public hidebysig instance void 'replace'(!0 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !0[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] !0 '<arrayValue>'
+    )
+    ldarg.0
+    call instance !0[] class 'test.genericarrays.ArrayBox`1'<!0>::'get_values'()
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldarg.1
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem !0
+    ret
+  }
+  .property instance !0[] 'values'()
+  {
+    .get instance !0[] 'test.genericarrays.ArrayBox`1'::'get_values'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.genericarrays.genericArraysKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'strings'(string[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string[] '<arrayGet>',
+      [1] int32 '<arrayIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ldelem string
+    ret
+  }
+  .method public hidebysig static string[] 'nullableOuter'(string[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static !!0 'first'<'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !!0[] '<arrayGet>',
+      [1] int32 '<arrayIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ldelem !!0
+    ret
+  }
+  .method public hidebysig static void 'replace'<'T'>(!!0[] 'values', !!0 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !!0[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] !!0 '<arrayValue>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldarg.1
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem !!0
+    ret
+  }
+  .method public hidebysig static int32 'bounded'<(class 'test.genericarrays.Base') 'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !!0[] '<arrayGet>',
+      [1] int32 '<arrayIndex>',
+      [2] !!0 '<constrainedReceiver>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ldelem !!0
+    stloc.2
+    ldloca 2
+    constrained. !!0
+    callvirt instance int32 'test.genericarrays.Base'::'value'()
+    ret
+  }
+  .method public hidebysig static string[] 'stringLiteral'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] string[] '<arrayOf>',
+      [1] string '<arrayElement>',
+      [2] string '<try>',
+      [3] class [mscorlib]System.Exception 'e'
+    )
+    ldc.i4 2
+    newarr string
+    stloc.0
+    ldstr "a"
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem string
+    .try {
+      ldstr "b"
+      stloc.2
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.3
+      ldstr "fallback"
+      stloc.2
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.2
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem string
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string[] 'nullableLiteral'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] string[] '<arrayOf>',
+      [1] string '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr string
+    stloc.0
+    ldstr "a"
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem string
+    ldnull
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem string
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string[] 'emptyStrings'() cil managed
+  {
+    .maxstack 1
+    ldc.i4.0
+    newarr string
+    ret
+  }
+  .method public hidebysig static string[] 'nullableStrings'(int32 'size') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr string
+    ret
+  }
+  .method public hidebysig static class 'test.genericarrays.Base'[] 'baseLiteral'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'test.genericarrays.Base'[] '<arrayOf>',
+      [1] class 'test.genericarrays.Base' '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr class 'test.genericarrays.Base'
+    stloc.0
+    ldc.i4 1
+    newobj instance void 'test.genericarrays.Base'::.ctor(int32)
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem class 'test.genericarrays.Base'
+    ldc.i4 2
+    newobj instance void 'test.genericarrays.Derived'::.ctor(int32)
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem class 'test.genericarrays.Base'
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static class 'test.genericarrays.Box`1'<string>[] 'boxes'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'test.genericarrays.Box`1'<string>[] '<arrayOf>',
+      [1] class 'test.genericarrays.Box`1'<string> '<arrayElement>'
+    )
+    ldc.i4 1
+    newarr class 'test.genericarrays.Box`1'<string>
+    stloc.0
+    ldstr "boxed"
+    newobj instance void class 'test.genericarrays.Box`1'<string>::.ctor(!0)
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem class 'test.genericarrays.Box`1'<string>
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static object[] 'anyValues'(string 'marker') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] object[] '<arrayOf>',
+      [1] object '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr object
+    stloc.0
+    ldc.i4 1
+    box [mscorlib]System.Int32
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem object
+    ldarg.0
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem object
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'protectedGet'(string[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string[] '<arrayGet>',
+      [1] int32 '<try>',
+      [2] class [mscorlib]System.Exception 'e',
+      [3] int32 '<arrayIndex>'
+    )
+    ldarg.0
+    stloc.0
+    .try {
+      ldc.i4 0
+      stloc.1
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.2
+      ldc.i4 1
+      stloc.1
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.1
+    stloc.3
+    ldloc.0
+    ldloc.3
+    ldelem string
+    ret
+  }
+  .method public hidebysig static void 'protectedSet'(string[] 'values', string 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] string[] '<arraySet>',
+      [1] int32 '<try>',
+      [2] class [mscorlib]System.Exception 'e',
+      [3] int32 '<arrayIndex>',
+      [4] string '<try>@4',
+      [5] class [mscorlib]System.Exception 'e@5',
+      [6] string '<arrayValue>'
+    )
+    ldarg.0
+    stloc.0
+    .try {
+      ldc.i4 0
+      stloc.1
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.2
+      ldc.i4 1
+      stloc.1
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.1
+    stloc.3
+    .try {
+      ldarg.1
+      stloc 4
+      leave IL_tryEnd_1
+    }
+    catch [mscorlib]System.Exception {
+      stloc 5
+      ldstr "fallback"
+      stloc 4
+      leave IL_tryEnd_1
+    }
+IL_tryEnd_1:
+    ldloc 4
+    stloc 6
+    ldloc.0
+    ldloc.3
+    ldloc 6
+    stelem string
+    ret
+  }
+  .method public hidebysig static !!0 'last'<'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !!0 'result',
+      [1] !!0[] '<arrayGet>',
+      [2] int32 '<arrayIndex>',
+      [3] !!0[] 'indexedObject',
+      [4] int32 'inductionVariable',
+      [5] int32 'last',
+      [6] !!0 'value',
+      [7] !!0[] '<arrayGet>@7',
+      [8] int32 '<arrayIndex>@8'
+    )
+    ldarg.0
+    stloc.1
+    ldc.i4 0
+    stloc.2
+    ldloc.1
+    ldloc.2
+    ldelem !!0
+    stloc.0
+    ldarg.0
+    stloc.3
+    ldc.i4 0
+    stloc 4
+    ldloc.3
+    ldlen
+    conv.i4
+    stloc 5
+IL_whileCond_0:
+    ldloc 4
+    ldloc 5
+    clt
+    brfalse IL_whileEnd_1
+    ldloc.3
+    stloc 7
+    ldloc 4
+    stloc 8
+    ldloc 7
+    ldloc 8
+    ldelem !!0
+    stloc 6
+    ldloc 4
+    ldc.i4 1
+    add
+    stloc 4
+    ldloc 6
+    stloc.0
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static bool 'sameArray'(string[] 'left', string[] 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    ceq
+    ret
+  }
+  .method public hidebysig static bool 'nullArray'(string[] 'values') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldnull
+    ceq
+    ret
+  }
+  .method public hidebysig static void 'main'(string[] 'args') cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] string[] 'values',
+      [1] class 'test.genericarrays.Derived'[] '<arrayOf>',
+      [2] class 'test.genericarrays.Derived' '<arrayElement>',
+      [3] class 'test.genericarrays.ArrayBox`1'<string> 'holder'
+    )
+    call string[] 'test.genericarrays.genericArraysKt'::'stringLiteral'()
+    stloc.0
+    ldloc.0
+    call string 'test.genericarrays.genericArraysKt'::'strings'(string[])
+    pop
+    ldloc.0
+    call string[] 'test.genericarrays.genericArraysKt'::'nullableOuter'(string[])
+    pop
+    ldloc.0
+    call !!0 'test.genericarrays.genericArraysKt'::'first'<string>(!!0[])
+    pop
+    ldloc.0
+    ldstr "c"
+    call void 'test.genericarrays.genericArraysKt'::'replace'<string>(!!0[], !!0)
+    ldc.i4 1
+    newarr class 'test.genericarrays.Derived'
+    stloc.1
+    ldc.i4 1
+    newobj instance void 'test.genericarrays.Derived'::.ctor(int32)
+    stloc.2
+    ldloc.1
+    ldc.i4 0
+    ldloc.2
+    stelem class 'test.genericarrays.Derived'
+    ldloc.1
+    call int32 'test.genericarrays.genericArraysKt'::'bounded'<class 'test.genericarrays.Derived'>(!!0[])
+    pop
+    call string[] 'test.genericarrays.genericArraysKt'::'nullableLiteral'()
+    pop
+    call string[] 'test.genericarrays.genericArraysKt'::'emptyStrings'()
+    pop
+    ldc.i4 2
+    call string[] 'test.genericarrays.genericArraysKt'::'nullableStrings'(int32)
+    pop
+    call class 'test.genericarrays.Base'[] 'test.genericarrays.genericArraysKt'::'baseLiteral'()
+    pop
+    call class 'test.genericarrays.Box`1'<string>[] 'test.genericarrays.genericArraysKt'::'boxes'()
+    pop
+    ldstr "marker"
+    call object[] 'test.genericarrays.genericArraysKt'::'anyValues'(string)
+    pop
+    ldloc.0
+    call string 'test.genericarrays.genericArraysKt'::'protectedGet'(string[])
+    pop
+    ldloc.0
+    ldstr "d"
+    call void 'test.genericarrays.genericArraysKt'::'protectedSet'(string[], string)
+    ldloc.0
+    call !!0 'test.genericarrays.genericArraysKt'::'last'<string>(!!0[])
+    pop
+    ldloc.0
+    newobj instance void class 'test.genericarrays.ArrayBox`1'<string>::.ctor(!0[])
+    stloc.3
+    ldloc.3
+    call instance !0 class 'test.genericarrays.ArrayBox`1'<string>::'first'()
+    pop
+    ldloc.3
+    ldstr "e"
+    call instance void class 'test.genericarrays.ArrayBox`1'<string>::'replace'(!0)
+    ldloc.0
+    ldloc.0
+    call bool 'test.genericarrays.genericArraysKt'::'sameArray'(string[], string[])
+    pop
+    ldnull
+    call bool 'test.genericarrays.genericArraysKt'::'nullArray'(string[])
+    pop
+    ldarg.0
+    ldlen
+    conv.i4
+    pop
+    ret
+  }
+}
