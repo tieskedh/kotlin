@@ -599,6 +599,9 @@ private fun Project.createGradlePluginVariant(
                 // Workaround until 'dev.gradleplugins:gradle-api:8.13' will be published
                 variantSourceSet.compileOnlyConfigurationName("org.jetbrains.intellij.deps:gradle-api:${variant.gradleApiVersion}")
                 variantSourceSet.compileOnlyConfigurationName("javax.inject:javax.inject:1")
+                val catalogs = this@createGradlePluginVariant.extensions.getByType<VersionCatalogsExtension>()
+                val libsCatalog = catalogs.named("libs")
+                variantSourceSet.compileOnlyConfigurationName(libsCatalog.findLibrary("slf4j.api").get())
             }
             else -> {
                 variantSourceSet.compileOnlyConfigurationName("dev.gradleplugins:gradle-api:${variant.gradleApiVersion}")
