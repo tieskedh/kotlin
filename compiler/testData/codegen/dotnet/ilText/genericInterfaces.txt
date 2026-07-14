@@ -1,0 +1,513 @@
+.assembly extern mscorlib {}
+.assembly 'genericInterfaces' {}
+.module 'main-genericInterfaces.il'
+
+.class public auto ansi beforefieldinit 'Item'
+       extends [mscorlib]System.Object
+{
+  .field private string 'name'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'name') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'Item'::'name'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'Item'::'name'
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'Item'::'get_name'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Special'
+       extends 'Item'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'name') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'Item'::.ctor(string)
+    ret
+  }
+}
+.class interface public abstract auto ansi 'Producer`1'<+ 'T'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'produce'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance !0 'get_value'() cil managed
+  {
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'Producer`1'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'Consumer`1'<- 'T'>
+{
+  .method public hidebysig newslot abstract virtual instance void 'consume'(!0 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Channel`1'<'T'>
+       implements class 'Producer`1'<!0>, class 'Consumer`1'<!0>
+{
+}
+.class interface public abstract auto ansi 'PairView`2'<'A', 'B'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'first'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !1 'second'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Swapped`2'<'A', 'B'>
+       implements class 'PairView`2'<!1, !0>
+{
+}
+.class interface public abstract auto ansi 'BoundedProducer`1'<+ (class 'Item') 'T'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'bounded'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericChannel`1'<'T'>
+       extends [mscorlib]System.Object
+       implements class 'Channel`1'<!0>
+{
+  .field private !0 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericChannel`1'<!0>::'current'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericChannel`1'<!0>::'current'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_current'(!0 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericChannel`1'<!0>::'current'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'produce'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'GenericChannel`1'<!0>::'get_current'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'GenericChannel`1'<!0>::'get_current'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance void 'consume'(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'GenericChannel`1'<!0>::'set_current'(!0)
+    ret
+  }
+  .property instance !0 'current'()
+  {
+    .get instance !0 'GenericChannel`1'::'get_current'()
+    .set instance void 'GenericChannel`1'::'set_current'(!0)
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'GenericChannel`1'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericProducer`1'<'T'>
+       extends [mscorlib]System.Object
+       implements class 'Producer`1'<!0>
+{
+  .field private !0 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericProducer`1'<!0>::'current'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericProducer`1'<!0>::'current'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'produce'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'GenericProducer`1'<!0>::'get_current'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'GenericProducer`1'<!0>::'get_current'()
+    ret
+  }
+  .property instance !0 'current'()
+  {
+    .get instance !0 'GenericProducer`1'::'get_current'()
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'GenericProducer`1'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SpecialProducer'
+       extends [mscorlib]System.Object
+       implements class 'Producer`1'<class 'Special'>
+{
+  .field private class 'Special' 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Special' 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Special' 'SpecialProducer'::'current'
+    ret
+  }
+  .method public hidebysig specialname instance class 'Special' 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Special' 'SpecialProducer'::'current'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Special' 'produce'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class 'Special' 'SpecialProducer'::'get_current'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'Special' 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class 'Special' 'SpecialProducer'::'get_current'()
+    ret
+  }
+  .property instance class 'Special' 'current'()
+  {
+    .get instance class 'Special' 'SpecialProducer'::'get_current'()
+  }
+  .property instance class 'Special' 'value'()
+  {
+    .get instance class 'Special' 'SpecialProducer'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ItemConsumer'
+       extends [mscorlib]System.Object
+       implements class 'Consumer`1'<class 'Item'>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance void 'consume'(class 'Item' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance string 'Item'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SwappedPair`2'<'A', 'B'>
+       extends [mscorlib]System.Object
+       implements class 'Swapped`2'<!0, !1>
+{
+  .field private !0 'a'
+  .field private !1 'b'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'a', !1 'b') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'SwappedPair`2'<!0, !1>::'a'
+    ldarg.0
+    ldarg.2
+    stfld !1 class 'SwappedPair`2'<!0, !1>::'b'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_a'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'SwappedPair`2'<!0, !1>::'a'
+    ret
+  }
+  .method public hidebysig specialname instance !1 'get_b'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !1 class 'SwappedPair`2'<!0, !1>::'b'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !1 'first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !1 class 'SwappedPair`2'<!0, !1>::'get_b'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'SwappedPair`2'<!0, !1>::'get_a'()
+    ret
+  }
+  .property instance !0 'a'()
+  {
+    .get instance !0 'SwappedPair`2'::'get_a'()
+  }
+  .property instance !1 'b'()
+  {
+    .get instance !1 'SwappedPair`2'::'get_b'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BoundedSpecial'
+       extends [mscorlib]System.Object
+       implements class 'BoundedProducer`1'<class 'Special'>
+{
+  .field private class 'Special' 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Special' 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Special' 'BoundedSpecial'::'current'
+    ret
+  }
+  .method public hidebysig specialname instance class 'Special' 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Special' 'BoundedSpecial'::'current'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Special' 'bounded'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class 'Special' 'BoundedSpecial'::'get_current'()
+    ret
+  }
+  .property instance class 'Special' 'current'()
+  {
+    .get instance class 'Special' 'BoundedSpecial'::'get_current'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'IntProducer'
+       extends [mscorlib]System.Object
+       implements class 'Producer`1'<int32>
+{
+  .field private int32 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'IntProducer'::'current'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'IntProducer'::'current'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'produce'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'IntProducer'::'get_current'()
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'IntProducer'::'get_current'()
+    ret
+  }
+  .property instance int32 'current'()
+  {
+    .get instance int32 'IntProducer'::'get_current'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'IntProducer'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericInterfacesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class 'Producer`1'<class 'Item'> 'widen'(class 'Producer`1'<class 'Special'> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer`1'<class 'Item'> 'widenImplementation'(class 'SpecialProducer' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Consumer`1'<class 'Special'> 'narrow'(class 'Consumer`1'<class 'Item'> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer`1'<class 'Producer`1'<class 'Item'>> 'nested'(class 'Producer`1'<class 'Producer`1'<class 'Special'>> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer`1'<object> 'nullableReference'(class 'Producer`1'<string> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer`1'<int32> 'exactValue'(class 'Producer`1'<int32> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'Producer`1'<class 'Item'> 'producer',
+      [1] class 'Consumer`1'<class 'Special'> 'consumer',
+      [2] class 'Channel`1'<string> 'channel',
+      [3] class 'PairView`2'<int32, string> 'pair',
+      [4] class 'BoundedProducer`1'<class 'Item'> 'bounded',
+      [5] class 'GenericProducer`1'<class 'Producer`1'<class 'Special'>> 'nestedValue'
+    )
+    ldstr "special"
+    newobj instance void 'Special'::.ctor(string)
+    newobj instance void 'SpecialProducer'::.ctor(class 'Special')
+    stloc.0
+    ldloc.0
+    callvirt instance !0 class 'Producer`1'<class 'Item'>::'produce'()
+    call instance string 'Item'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ItemConsumer'::.ctor()
+    stloc.1
+    ldloc.1
+    ldstr "consumed"
+    newobj instance void 'Special'::.ctor(string)
+    callvirt instance void class 'Consumer`1'<class 'Special'>::'consume'(!0)
+    ldstr "channel"
+    newobj instance void class 'GenericChannel`1'<string>::.ctor(!0)
+    stloc.2
+    ldloc.2
+    callvirt instance !0 class 'Producer`1'<string>::'produce'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    ldstr "changed"
+    callvirt instance void class 'Consumer`1'<string>::'consume'(!0)
+    ldloc.2
+    callvirt instance !0 class 'Producer`1'<string>::'get_value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "left"
+    ldc.i4 7
+    newobj instance void class 'SwappedPair`2'<string, int32>::.ctor(!0, !1)
+    stloc.3
+    ldloc.3
+    callvirt instance !0 class 'PairView`2'<int32, string>::'first'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    callvirt instance !1 class 'PairView`2'<int32, string>::'second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "bounded"
+    newobj instance void 'Special'::.ctor(string)
+    newobj instance void 'BoundedSpecial'::.ctor(class 'Special')
+    stloc 4
+    ldloc 4
+    callvirt instance !0 class 'BoundedProducer`1'<class 'Item'>::'bounded'()
+    call instance string 'Item'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "nested"
+    newobj instance void 'Special'::.ctor(string)
+    newobj instance void 'SpecialProducer'::.ctor(class 'Special')
+    newobj instance void class 'GenericProducer`1'<class 'Producer`1'<class 'Special'>>::.ctor(!0)
+    stloc 5
+    ldloc 5
+    call class 'Producer`1'<class 'Producer`1'<class 'Item'>> 'genericInterfacesKt'::'nested'(class 'Producer`1'<class 'Producer`1'<class 'Special'>>)
+    callvirt instance !0 class 'Producer`1'<class 'Producer`1'<class 'Item'>>::'produce'()
+    callvirt instance !0 class 'Producer`1'<class 'Item'>::'produce'()
+    call instance string 'Item'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    newobj instance void 'IntProducer'::.ctor(int32)
+    call class 'Producer`1'<int32> 'genericInterfacesKt'::'exactValue'(class 'Producer`1'<int32>)
+    callvirt instance !0 class 'Producer`1'<int32>::'produce'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
