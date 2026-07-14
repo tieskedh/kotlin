@@ -164,8 +164,10 @@ internal class DotNetIlMethodCodegen(
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
                 // A generic METHOD declares its formal list between the name and parameters:
-                // `<'T'>`, or `<(class 'Base', class 'Mark') 'T'>` with stage-2 constraints
-                // (genprobe_s1/_s8, genconstraintprobe_s1).
+                // `<'T'>`, or `<(class 'Base', class 'Mark') 'T'>` with supported constraints.
+                // Class/interface members use the identical formal spelling while the owner may
+                // independently carry `!n` parameters (genprobe_s1/_s8, genconstraintprobe_s1,
+                // genmemberprobe_s1).
                 val genericParameters = function.typeParameters
                     .renderDotNetIlGenericParameters(typeMapper)
                     .orEmpty()

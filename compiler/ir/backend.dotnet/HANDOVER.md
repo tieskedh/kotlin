@@ -6,10 +6,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `7d54b3a82` ("[DotNet] Add generic interfaces and variance"),
+- Branch `dotnet`; latest functional tip `4768b7763` ("[DotNet] Add generic member functions"),
   clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **294 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **300 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -17,8 +17,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
   exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
-  interfaces and declaration-site variance stage 4. Each has a design bullet in `AGENTS.md` —
-  the bullets are accurate; trust but verify.
+  interfaces and declaration-site variance stage 4, generic member functions stage 5. Each has
+  a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
   instead of Roslyn's modern-only `SwitchExpressionException`. `whenprobe_s1` settled the
@@ -74,11 +74,25 @@ session state, process, and a curated task menu. Keep both files updated as you 
   supported interface instantiations. Assignability applies CLR covariance/contravariance only
   when both differing arguments are statically reference-shaped; exact value instantiations
   remain supported, while value/open-parameter variant conversions, use-site projections/stars,
-  nullable type-parameter slots, generic interface members, and unsupported bounds reject.
+  nullable type-parameter slots, and unsupported bounds reject.
   `genifaceprobe_s1` verified metadata, constraints, interface inheritance, and dispatch on
   CoreCLR 10.0.9 and .NET Framework 4.8. Both new goldens assemble under both ILAsm versions;
   the positive golden and expanded box test execute on both runtimes. The final FIR suite is
   294/0/0/0 and the generated CLI suite remains 10/0/0/0.
+- Interim continuation landed `4768b7763`: non-inline generic methods are now supported on every
+  otherwise-supported class, object, companion, and all-abstract interface. Generic owners keep
+  their `!n` space independent from a method's `!!n` space across declarations, calls, nested
+  generic owner tokens, inherited interface views, and instantiated generic base overrides/super
+  calls. The override return-type pre-pass now identity-substitutes open method parameters while
+  substituting only the generic owner view; the new test exposed the old path's internal crash.
+  Inline/reified methods, nullable type-parameter slots, generic/type-parameter bounds, and generic
+  properties remain rejected. `genmemberprobe_s1` verified class/interface methods, combined
+  owner/method parameters, constraints, and nested companion owner tokens on CoreCLR 10.0.9 and
+  Framework 4.8. Both exact goldens assemble under both ILAsm versions; the positive golden runs
+  identically on both runtimes. Runtime pins include inherited virtual methods satisfying generic
+  interface slots, constrained calls, arity overloads, objects, companions, member extensions,
+  nullable method instantiations, and generic virtual/super dispatch. The final FIR suite is
+  300/0/0/0 and the generated CLI suite remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -91,8 +105,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
 1. **Probe first.** Any IL spelling not already golden-pinned must be verified by assembling and
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
-   `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `whenprobe`, `arrprobe` are
-   taken). Keep probe files OUT of the repo (use a temp dir).
+   `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
+   `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -142,10 +156,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Generic member functions and generic-to-generic inheritance.** The isolated IL shapes already
-   work, but class eviction, override substitution, member identity, constrained owners, and
-   interface implementations must compose before widening the gates. Treat these as separate
-   probe-backed slices if their failure boundaries do not compose cleanly.
+1. **Generic-to-generic class inheritance.** The isolated IL shape already works, but class
+   eviction, composed base substitutions, override/member-owner lookup, constructor chains,
+   constrained owners, generic member methods, and interface implementations must all remain
+   coherent before widening the class gate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
