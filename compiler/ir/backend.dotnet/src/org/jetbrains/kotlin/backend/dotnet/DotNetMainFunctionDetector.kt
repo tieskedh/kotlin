@@ -16,7 +16,16 @@ internal class DotNetMainFunctionDetector {
      */
     fun getMainFunctions(module: IrModuleFragment): List<IrSimpleFunction> =
         module.files.flatMap { file ->
-            file.declarations.filterIsInstance<IrSimpleFunction>().filter { it.isDotNetMainCandidate() }
+            val candidates = file.declarations.filterIsInstance<IrSimpleFunction>()
+                .filter { it.isDotNetMainCandidate() }
+            // Kotlin's enhanced-main convention gives the parameterized overload precedence
+            // within one file. Keeping both would turn a valid pair into an ambiguous CLR
+            // entrypoint even though the mature detector selects `main(Array<String>)`.
+            if (candidates.any { it.hasDotNetEntryPointArgument() }) {
+                candidates.filter { it.hasDotNetEntryPointArgument() }
+            } else {
+                candidates
+            }
         }
 
     private fun IrSimpleFunction.isDotNetMainCandidate(): Boolean {
@@ -30,6 +39,10 @@ internal class DotNetMainFunctionDetector {
     /** ECMA-335 entry points admit either no parameters or one `string[]` parameter. */
     private fun IrSimpleFunction.hasDotNetEntryPointParameters(): Boolean {
         if (hasShape(regularParameters = 0)) return true
+        return hasDotNetEntryPointArgument()
+    }
+
+    private fun IrSimpleFunction.hasDotNetEntryPointArgument(): Boolean {
         if (!hasShape(regularParameters = 1)) return false
         val parameter = parameters.singleOrNull { it.kind == IrParameterKind.Regular } ?: return false
         return !parameter.type.isMarkedNullable() &&

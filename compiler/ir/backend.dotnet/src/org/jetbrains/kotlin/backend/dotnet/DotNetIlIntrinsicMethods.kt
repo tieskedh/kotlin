@@ -824,12 +824,12 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
  *
  * Roslyn throws `System.Runtime.CompilerServices.SwitchExpressionException`, but that type is
  * scoped through `System.Runtime` and is absent from the .NET Framework facade. The DotNet
- * backend deliberately emits its `System.InvalidOperationException` base type instead: emitted
- * IL is target-independent between `netframework` and `net`, and the existing exception registry
- * maps Kotlin `IllegalStateException` to this exact CLR type. `whenprobe_s1` verified on CoreCLR
- * 10.0.9 that the Roslyn type constructs and is caught by `InvalidOperationException`, while the
- * usual `[mscorlib]` scope fails to resolve it; the legacy CLR's `System.Runtime` facade was also
- * verified not to contain the type.
+ * backend instead emits `System.Exception` until it can own an exact
+ * `NoWhenBranchMatchedException`: this is target-independent, preserves the supported Kotlin
+ * `Throwable`/`Exception` catch edges, and—unlike `System.InvalidOperationException`—does not
+ * create a false `NoWhenBranchMatchedException is IllegalStateException` edge. `whenprobe_s1`
+ * verified on CoreCLR 10.0.9 that the Roslyn type needs the non-corelib scope; the legacy CLR's
+ * `System.Runtime` facade was also verified not to contain it.
  */
 private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
@@ -839,7 +839,7 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
     ): Boolean {
         requireNoArguments(call)
         codegen.emitParameterlessExceptionThrow(
-            exceptionTypeRef = "${CORE_LIB_REF}System.InvalidOperationException",
+            exceptionTypeRef = DotNetMappedExceptions.EXCEPTION_TYPE_REF,
             valuePosition = true,
         )
         return true
@@ -851,7 +851,7 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
     ): Boolean {
         requireNoArguments(call)
         codegen.emitParameterlessExceptionThrow(
-            exceptionTypeRef = "${CORE_LIB_REF}System.InvalidOperationException",
+            exceptionTypeRef = DotNetMappedExceptions.EXCEPTION_TYPE_REF,
             valuePosition = false,
         )
         return true
@@ -886,10 +886,12 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
  * in the same shapes: `ceq` on the extracted `float64` values IS the IEEE semantics of the JVM's
  * nullable specialization (NaN? == NaN? is false — the boxed-`equals` total order applies only
  * to the eqeq path, which fir2ir never chooses for statically-Double operands). Cross-primitive
- * pairs (`Int? == Long?`) stay rejected like `Int == Long`. `===` with a nullable-primitive
- * operand is REJECTED loudly: the operands would have to box, and reference identity of
- * separately boxed values is unrelated to value equality (probe-verified False for equal
- * payloads, boxprobe_s6; Kotlin deprecates identity checks on boxed primitives for this reason).
+ * pairs (`Int? == Long?`) stay rejected like `Int == Long`. Identity against a null-like operand
+ * (`x === null` / `x !== null`, either order) is the same HasValue test as structural equality and
+ * needs no boxing. Identity between two nullable-primitive values remains REJECTED loudly: the
+ * operands would have to box, and reference identity of separately boxed values is unrelated to
+ * value equality (probe-verified False for equal payloads, boxprobe_s6; Kotlin deprecates identity
+ * checks on boxed primitives for this reason).
  *
  * `Any?`-typed operands are reference-shaped storage: `===` (and `== null`) is the type-agnostic
  * reference `ceq`; general `==` stays rejected (no Any.equals model).
@@ -1007,18 +1009,11 @@ private class DotNetIlEqualityIntrinsic(
         leftType: DotNetIlValueType?,
         rightType: DotNetIlValueType?,
     ) {
-        if (referenceEquality) {
-            dotNetUnsupported(
-                "'===' with a nullable-primitive operand is not supported: the operands box at the object " +
-                        "boundary and reference identity of separately boxed values is unrelated to value " +
-                        "equality (Kotlin deprecates identity checks on boxed primitives)"
-            )
-        }
         when {
             left.isDotNetNullLike() || right.isDotNetNullLike() -> {
-                // `T? == null` (or against a Nothing?-typed definitely-null value): a negated
-                // get_HasValue. Operands stay evaluated left-to-right; the null-only side emits
-                // nothing when it is the bare null literal.
+                // `T? == null` / `T? === null` (or against a Nothing?-typed definitely-null
+                // value): a negated get_HasValue. Operands stay evaluated left-to-right; the
+                // null-only side emits nothing when it is the bare null literal.
                 val leftIsNull = left.isDotNetNullLike()
                 val nullableOperand = if (leftIsNull) right else left
                 val nullableType = (if (leftIsNull) rightType else leftType) as? DotNetIlValueType.NullableValue
@@ -1040,6 +1035,11 @@ private class DotNetIlEqualityIntrinsic(
                 codegen.emit("ldc.i4.0", pushes = 1)
                 codegen.emit("ceq", pops = 2, pushes = 1)
             }
+            referenceEquality -> dotNetUnsupported(
+                "identity comparison between nullable-primitive values is not supported: the operands box " +
+                        "at the object boundary and reference identity of separately boxed values is unrelated " +
+                        "to value equality (Kotlin deprecates identity checks on boxed primitives)"
+            )
             leftType is DotNetIlValueType.NullableValue && leftType == rightType -> {
                 codegen.emitExpression(left, leftType)
                 val leftSlot = codegen.spillToSyntheticLocal(leftType, "<eqLeft>")

@@ -5,6 +5,12 @@
 .class public abstract sealed auto ansi beforefieldinit 'facadeMethodClashKt'
        extends [mscorlib]System.Object
 {
+  .method public hidebysig static string 'get_y'() cil managed
+  {
+    .maxstack 1
+    ldstr "d"
+    ret
+  }
   .method public hidebysig static int32 'survivor'() cil managed
   {
     .maxstack 1
@@ -15,6 +21,13 @@
   {
     .entrypoint
     .maxstack 3
+    call string 'facadeMethodClashKt'::'get_y'()
+    dup
+    brtrue IL_stringValueNotNull_0
+    pop
+    ldstr "null"
+IL_stringValueNotNull_0:
+    call void [mscorlib]System.Console::WriteLine(string)
     call int32 'facadeMethodClashKt'::'survivor'()
     box [mscorlib]System.Int32
     ldnull
