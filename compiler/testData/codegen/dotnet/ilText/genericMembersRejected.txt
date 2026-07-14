@@ -1,0 +1,48 @@
+.assembly extern mscorlib {}
+.assembly 'genericMembersRejected' {}
+.module 'main-genericMembersRejected.il'
+
+.class public auto ansi sealed beforefieldinit 'Survivor'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Survivor'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Survivor'::'value'
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'Survivor'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericMembersRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldc.i4 17
+    newobj instance void 'Survivor'::.ctor(int32)
+    call instance int32 'Survivor'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

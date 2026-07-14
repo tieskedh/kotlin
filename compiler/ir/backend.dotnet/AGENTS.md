@@ -286,7 +286,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
   before derived init; `beforefieldinit` semantics unchanged — instance init order is a
   constructor-chain property, not a `.cctor` one).
-- Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`; JVM precedent: real CLR interface types =
+- Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`,
+  `genmemberprobe_s1`; JVM precedent: real CLR interface types =
   no vtable/interface lowering, the same argument as the class and inheritance bullets): a
   top-level Kotlin `interface` whose members are ALL abstract (abstract functions and abstract
   `val`/`var` properties; empty interfaces included) is emitted as
@@ -305,9 +306,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   canon, declaration-site `out`/`in` is preserved as `+`/`-` metadata
   (`'Producer`1'<+ 'T'>`, `'Consumer`1'<- 'T'>`), invariant parameters stay unmarked, and direct
   supported constraints compose as `<+ (class 'Base') 'T'>` (genifaceprobe_s1). Generic
-  interface/member signatures stay open `!n`; a generic or non-generic class may implement an
-  open or closed instantiation, and a generic interface may extend another with composed or
-  permuted arguments. A class
+  interface signatures stay open `!n`; a generic or non-generic class may implement an open or
+  closed instantiation, and a generic interface may extend another with composed or permuted
+  arguments. An interface member may independently declare method parameters (`!!n`), including
+  supported constraints; its implementing class method uses the same open generic method slot
+  (`genmemberprobe_s1`). A class
   lists its DIRECT interfaces comma-separated on an `implements` line after `extends`
   (`extends 'Base'` / `implements 'A', 'B'`, s3; a generic edge is the FULL token
   `implements class 'Producer`1'<!0>`, genifaceprobe_s1); interface-extends-interface is the same
@@ -365,8 +368,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   bodies — default methods and accessors with bodies (CoreCLR itself supports Default Interface
   Methods, s8, so the message says "not yet supported": lifting this is purely backend work),
   private interface members, abstract redeclarations of super-interface members (an unprobed
-  double-slot shape), member functions declaring their own type parameters, companion objects
-  and any nested declaration in an interface, `fun interface` (no SAM-conversion model),
+  double-slot shape), companion objects and any nested declaration in an interface,
+  `fun interface` (no SAM-conversion model),
   out-of-module or non-top-level
   interfaces, interface DELEGATION (`class C(...) : I by d`) in BOTH source spellings — the
   `val`-parameter and the plain-parameter form (which additionally synthesizes a loose
@@ -394,7 +397,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   rejection and the sealed-interface acceptance. Generic metadata, open/closed/permuted edges,
   owner-token dispatch and reference variance are pinned by `ilText/genericInterfaces.kt` and
   `box/genericInterfaces.kt`; `ilText/genericInterfacesRejected.kt` pins value/open-parameter
-  conversions, use-site projections/stars, nullable slots, generic members/bounds, and
+  conversions, use-site projections/stars, nullable slots, unsupported interface bounds, and
   substituted covariant-return poisoning.
 - Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
   `specialname` accessor methods, and a `.property` metadata block binding them (spellings
@@ -660,22 +663,24 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Generics stance: the type representation stays structural so that generics target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
-- Generics model (stages 1-4) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
-  `genarrayprobe_s1`, `genifaceprobe_s1`; precedent: Roslyn — the CLR has REAL reified generics,
+- Generics model (stages 1-5) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
+  `genarrayprobe_s1`, `genifaceprobe_s1`, `genmemberprobe_s1`; precedent: Roslyn — the CLR has
+  REAL reified generics,
   so like every prior
   model bullet there is NO erasure/monomorphization/lowering machinery: the type mapper and
   emitters learn generic declarations, type-parameter references and instantiation tokens, and
   the frontend owns all type checking):
-  - SUPPORTED: generic TOP-LEVEL FUNCTIONS (non-inline; invariant type parameters, either
+  - SUPPORTED: generic FUNCTIONS (top-level, or members of any otherwise-supported class, object,
+    companion, or all-abstract interface; non-inline; invariant method parameters, either
     unconstrained or directly constrained by non-null, non-generic, module-local classes and
     all-abstract interfaces), plus the pre-existing `T : String`/`String?` erosion of the
-    string-concat lowering, kept for compatibility and pinned by the borrowed `box/strings/kt50140.kt`:
-    such a `T` still declares its real arity but its SLOTS map to `string`); generic TOP-LEVEL PLAIN
-    CLASSES (final or open, the same direct module-local constraint rule without the String
-    exception); generic TOP-LEVEL ALL-ABSTRACT INTERFACES with invariant, `out`, or `in`
-    parameters under that same constraint rule; generic and non-generic classes implementing
-    open or closed generic-interface instantiations; generic-interface inheritance with composed
-    arguments; a NON-generic class extending an INSTANTIATED generic base — optionally ALSO
+    string-concat lowering, kept for compatibility and pinned by the borrowed
+    `box/strings/kt50140.kt`: such a `T` still declares its real arity but its SLOTS map to
+    `string`); generic TOP-LEVEL PLAIN CLASSES (final or open, the same direct module-local
+    constraint rule without the String exception); generic TOP-LEVEL ALL-ABSTRACT INTERFACES with
+    invariant, `out`, or `in` parameters under that same constraint rule; generic and non-generic
+    classes implementing open or closed generic-interface instantiations; generic-interface
+    inheritance with composed arguments; a NON-generic class extending an INSTANTIATED generic base — optionally ALSO
     implementing interfaces (`ilText/genericInheritance.kt` + `box/genericInheritance.kt`,
     `LabeledBox`) — and a GENERIC class extending a plain base; what an
     unconstrained `T`-typed value supports exactly store/load (locals, params, returns, fields of
@@ -689,7 +694,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     genprobe_s2b — emitted for Roslyn/interop parity, which also makes plain-`Box`/generic-`Box`
     IL collisions impossible); quoted type-parameter NAMES assemble and run (genprobe_s8) and are
     decorative — CLR identity is positional (`!n` class / `!!n` method vars). A generic method is
-    `.method ... !!0 'id'<'T'>(!!0 'x')`, self-contained, no class machinery (genprobe_s1).
+    `.method ... !!0 'id'<'T'>(!!0 'x')`; on a generic owner its `!!n` method space remains
+    independent from the owner's `!n` class space, and both tokens compose on member references
+    (`class 'Picker`1'<string>::'pick'<int32>(!0, !!0)`, `genmemberprobe_s1`).
     constrained formal stays inline in that same list: one base constraint first, then interface
     constraints, e.g. `<(class 'Base', class 'Mark') 'T'>`; reflection confirms both constraints
     are present in metadata (`genconstraintprobe_s1`). On an interface, `+`/`-` precedes the
@@ -768,9 +775,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     `T` to `Any?`, `is`/`as` on `T` or generic types (existing type-operator
     rejections stay authoritative), inline/reified generic functions (no inlining model), declared
     varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
-    generic MEMBER functions (including methods declaring their own type parameters inside a
-    generic interface), generic (extension) properties, generic classes containing
-    companions/nested objects (untouched nested machinery), and generic-extends-generic CLASS
+    generic (extension) properties (the property metadata/accessor binding model does not cover
+    generic accessors), generic classes containing companions/nested objects (untouched nested
+    machinery), and generic-extends-generic CLASS
     chains (IL shape probed fine, genprobe_s7, but the gate interactions are unexercised).
   - Pins: `ilText/genericFunctions.kt` (declaration + call-site spellings for every mapped
     type-arg kind incl. `<!!0>` pass-through, a nested instantiation as a generic-method type
@@ -791,7 +798,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     element boundary), `ilText/genericInterfaces.kt` (variance metadata, constrained formals,
     open/closed/permuted interface edges, owner tokens and reference conversions),
     `ilText/genericInterfacesRejected.kt` (value/open variance conversions, projections/stars,
-    nullable slots, generic interface members/bounds and substituted covariant returns),
+    nullable slots, unsupported interface bounds and substituted covariant returns),
+    `ilText/genericMembers.kt` (independent owner/method parameter spaces, nested generic owners,
+    constrained members, generic interface slots and implementations, instantiated-base
+    overrides/super calls, object/companion owners, member extensions and arity overloads),
+    `ilText/genericMembersRejected.kt` (inline/reified methods, nullable method slots and
+    unsupported method bounds),
     `ilText/classShapeRejected.kt` (the
     variance flavor in the class-shape gate); runtime:
     `box/genericFunctions.kt` (every type-arg kind incl. both `Int?` flavors through `!!0`,
@@ -808,7 +820,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     fields, open and constrained element access, indexed iteration, identity/null behavior and
     multiple reference element shapes), `box/genericInterfaces.kt` (reference covariance and
     contravariance, transitive/permuted interface inheritance, nested variance, generic
-    implementers and exact value-type instantiations).
+    implementers and exact value-type instantiations), `box/genericMembers.kt` (method
+    pass-through, nullable method instantiations, inherited interface implementation, generic
+    virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
+    member extensions).
 - Shared runtime code (e.g. the Kotlin-parity `Double.toString` rendering) is hand-written IL on the
   synthetic module-private `'<KotlinIl>'` class (`DotNetIlRuntimeHelpers`) — the CLR-side stand-in
   for the JVM's `kotlin.jvm.internal.Intrinsics` runtime until a real .NET stdlib exists. The class
