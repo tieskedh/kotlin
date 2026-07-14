@@ -130,8 +130,9 @@ internal object DotNetMappedExceptions {
  * - a [DotNetIlValueType.UserClass] or [DotNetIlValueType.GenericInstance] is assignable to
  *   every proper supertype of its [supertype DAG][DotNetIlClassInfo.allSupertypes]: the
  *   [base-type chain][DotNetIlClassInfo.baseType] of the inheritance model — including an
- *   INSTANTIATED generic base (`class D : Box<Int>()` widens to exactly `Box<Int>`,
- *   probe-verified `genprobe_s5`) — plus every transitively
+ *   INSTANTIATED generic base (closed `class D : Box<Int>()` or open/composed
+ *   `class D<T> : Box<T>()`, widening only to that exact view; probe-verified
+ *   `genprobe_s5`/`geninheritprobe_s1`) — plus every transitively
  *   [implemented interface][DotNetIlClassInfo.interfaces]
  *   of the interface model — pure reference upcasts needing no IL instruction at all
  *   (probe-verified: `inheritprobe_s1` for base-typed positions; `ifaceprobe_s7` for
