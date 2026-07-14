@@ -233,14 +233,23 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   body, or IL method- or field-identity clash) removes the root and every recursively nested class
   from the module so no call site can resolve to a partial family, and the removal cascades through
   the type mapper to every user of any family member.
-- Named nested-class model (probe series `nestedprobe_s1`–`_s3`; JVM precedent: a Kotlin named
+- Named nested-type model (probe series `nestedprobe_s1`–`_s4`; JVM precedent: a Kotlin named
   nested class is static unless `isInner`, represented by JVM `ACC_STATIC`; the CLR analogue is a
   real nested metadata type): a final, open, abstract, or sealed plain `ClassKind.CLASS` declared
   directly inside another plain class passes the shape gate recursively. It owns no outer instance
   and only its OWN generic parameters; a named class inside generic `Outer<T>` is therefore
   referenced as `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic
   nested class is `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted
-  simple names.
+  simple names. A final named `ClassKind.OBJECT` inside a non-generic plain class and the companion
+  of a non-generic ordinary nested class are also supported. `DotNetStaticInitializersLowering`
+  matches the common/JVM `ClassLoweringPass.runOnFilePostfix` recursion: it visits every class
+  child before its metadata parent, moving a named object's `INSTANCE` initializer into the
+  object's own `.cctor` and a companion initializer into its immediate owner's `.cctor`. The
+  immediate plain-class container must be non-generic: a companion field would be per constructed
+  generic owner, while direct named-object semantics under a generic metadata parent remain
+  deliberately outside this probe-bounded model. A non-generic container below a generic ancestor
+  is safe because the static nested metadata child carries no outer instantiation
+  (`nestedprobe_s4`).
   Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
   rendering remains recursive inside the enclosing `.class` block. Public/private/internal/
   protected source visibility maps to `nested public`/`nested private`/`nested assembly`/
@@ -250,15 +259,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   its metadata parent, a deeper family member, an independently generic instantiation under a
   generic outer, or a class in another top-level family. Interfaces remain top-level-only. All
   spellings, construction, member/field references, virtual/interface dispatch, forward links,
-  cross-depth links, and family shapes assemble and run on CoreCLR and Framework. STAYS REJECTED,
-  whole-family: `inner`, local/anonymous, data/value/enum/annotation, nested interface/object, any
-  class inside an object/companion/interface, and a companion of an ordinary nested class (the
-  current lowering pipeline would leave that companion's singleton field uninitialized). A
-  top-level plain class may carry supported named nested classes alongside its existing direct
-  companion. Recursive render failures preserve the deepest declaration tag while unwinding, then
-  family eviction removes every class/member entry. Pins: `ilText/nestedClasses.kt`,
-  `ilText/nestedInheritance.kt`, `ilText/nestedClassesRejected.kt`; runtime:
-  `box/nestedClasses.kt`, `box/nestedInheritance.kt`.
+  cross-depth links, singleton initialization, and family shapes assemble and run on CoreCLR and
+  Framework. STAYS REJECTED, whole-family: `inner`, local/anonymous,
+  data/value/enum/annotation, nested interfaces, any class/object inside an
+  object/companion/interface, and a companion or named object whose immediate plain-class
+  container is generic. Recursive render failures preserve the deepest declaration tag while
+  unwinding, then family eviction removes every class/member entry. Pins: `ilText/nestedClasses.kt`,
+  `ilText/nestedInheritance.kt`, `ilText/nestedSingletons.kt`,
+  `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
+  `box/nestedInheritance.kt`, `box/nestedSingletons.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
   inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level or
@@ -509,8 +518,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   with a shared reason carrying the original one. This is the facade-stateful analogue of the
   whole-class rejection granularity. Accessor-only (custom-getter) properties fail per-function;
   const `literal` fields are independent of the group.
-- Plain top-level `object` declarations follow the JVM singleton model: `DotNetObjectClassLowering`
-  synthesizes a static `INSTANCE` field on every module-declared non-companion object (origin
+- Plain top-level `object` declarations and named objects inside non-generic plain classes follow
+  the JVM singleton model: `DotNetObjectClassLowering` synthesizes a static `INSTANCE` field on
+  every supported module-declared non-companion object (origin
   `FIELD_FOR_OBJECT_INSTANCE`, the object's own type, initializer = a call to the primary
   constructor, which is private from the frontend) and rewrites every `IrGetObjectValue`
   targeting a module-declared object into an `IrGetField(INSTANCE)`; `kotlin.Unit` is guarded
@@ -519,9 +529,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   cooperating pieces (`ObjectClassLowering`, `SingletonReferencesLowering`, and the
   field-creation slice of `CachedFieldsForObjectInstances`) are merged into this one module pass
   — no intermediate producers of singleton references exist in this backend.
-  `DotNetStaticInitializersLowering` sweeps static class fields (today exactly `INSTANCE`) into
-  a class-parented `<clinit>` rendered as the class's `.cctor` — that slice matches the JVM
-  `ClassLoweringPass` precedent even more directly than the facade slice. The IL shape is
+  `DotNetStaticInitializersLowering` recursively sweeps static class fields (today exactly
+  `INSTANCE`) into a class-parented `<clinit>` rendered as the class's `.cctor` — that slice
+  matches the JVM `ClassLoweringPass` postfix precedent even more directly than the facade slice.
+  The IL shape is
   probe-verified (objprobe_s1): `.field public static initonly class 'C' 'INSTANCE'`, a private
   `.ctor` (`.ctor` visibility now follows the Kotlin declaration; a public one would let other
   .NET code mint second instances) `newobj`'d from the same class's own `.cctor`, and use sites
@@ -535,7 +546,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   deviation from the JVM's static-state hoist (`MoveOrCopyCompanionObjectFieldsLowering` makes
   every object-parented property field static), which the CLR-side real singleton makes
   unnecessary. Rejections ride the existing gates, whole-class: `data object` (the same
-  Any-model gap as data classes — the gate message names both), nested/local/anonymous objects,
+  Any-model gap as data classes — the gate message names both), local/anonymous objects, named
+  objects whose immediate plain-class container is generic or is an object/companion/interface,
   and IL accessor-identity clashes; `==` between objects stays rejected while `===` works via
   the existing reference `ceq`. The member pre-pass additionally gates IL FIELD-identity
   clashes, whole-class: the backing field of a user property named `INSTANCE` whose type maps to
@@ -615,12 +627,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
   companion member body failing only after its callee's round-one eviction, plus the extra
   round that re-fails an already-rendered user of the evicted family) by
-  `ilText/companionFixpointEviction.kt`. The companion gate accepts exactly the direct companion
-  of a top-level plain class, recursively validated with the same constraint chain (sole supertype
-  `Any`, final, non-generic, no nested classes of its own, not data). Supported named nested class
-  siblings are independent metadata children; a companion of an ordinary nested class stays
-  rejected until object lowering recursively initializes its singleton field, and a companion
-  inside an `object` cannot reach the gate (frontend-rejected).
+  `ilText/companionFixpointEviction.kt`. The companion gate accepts the direct companion of any
+  non-generic plain class, including an ordinary named nested class, recursively validated with the
+  same constraint chain (sole supertype `Any`, final, non-generic, no nested classes of its own,
+  not data). The recursive postfix static-initializer sweep puts the companion field initialization
+  on that actual owner (`nestedprobe_s4`, pinned by `ilText/nestedSingletons.kt` and
+  `box/nestedSingletons.kt`). A companion whose immediate owner is generic remains rejected, and a
+  companion inside an `object` cannot reach the gate (frontend-rejected).
   The companion singleton field participates in the ENCLOSING class's field-identity gate, but
   the colliding source shape (a user property named after the companion) is itself a frontend
   REDECLARATION — a companion also occupies the value namespace — so that slice is
@@ -851,9 +864,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     rejections stay authoritative), inline/reified generic functions (no inlining model), declared
     varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
     generic (extension) properties (the property metadata/accessor binding model does not cover
-    generic accessors), and generic classes containing companions/nested objects (untouched nested
-    machinery). A generic base instantiation whose argument does not map (`T?`, an unsupported
-    external generic/primitive/array shape, or an evicted class) rejects the whole derived chain;
+    generic accessors), and a companion/named object declared directly in a generic class (direct
+    singleton semantics remain outside the probe-bounded model; a companion field would be per
+    constructed owner, while a non-generic nested owner below a generic ancestor is supported). A
+    generic base instantiation whose argument does not map (`T?`, an unsupported external
+    generic/primitive/array shape, or an evicted class) rejects the whole derived chain;
     an unrelated valid instantiation of the same base survives.
   - Pins: `ilText/genericFunctions.kt` (declaration + call-site spellings for every mapped
     type-arg kind incl. `<!!0>` pass-through, a nested instantiation as a generic-method type
