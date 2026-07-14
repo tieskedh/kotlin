@@ -40,7 +40,7 @@ dependencies {
     compileOnly(libs.intellij.asm)
     compileOnly(commonDependency("org.jetbrains.kotlin:kotlin-reflect")) { isTransitive = false }
     compileOnly(libs.guava)
-    implementation(libs.kotlinx.coroutines.core)
+    runtimeOnly(libs.kotlinx.coroutines.core)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter.api)

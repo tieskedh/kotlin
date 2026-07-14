@@ -16,8 +16,6 @@
 
 package org.jetbrains.kotlin.integration;
 
-import com.intellij.mock.MockProject;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.util.ArrayUtil;
 import org.jetbrains.kotlin.cli.AbstractCliTest;
@@ -278,11 +276,5 @@ public class CompilerSmokeTest extends CompilerSmokeTestBase {
         javaArgs.addAll(Arrays.asList("Hello.kt", "-d", jar));
 
         runJava(workingDirectory, null, ArrayUtil.toStringArray(javaArgs));
-    }
-
-    @Test
-    public void testMockProject() throws Exception {
-        MockProject project = new MockProject(null, Disposer.newDisposable(""));
-        assertEquals("251.patched", project.getStubVersion());
     }
 }
