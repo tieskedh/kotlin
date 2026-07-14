@@ -107,7 +107,7 @@ class ProblemsApiIT : KGPBaseTest() {
                             ProblemsApiDiagnosticG94(
                                 locations = listOf(ProblemsApiLocation("org.jetbrains.kotlin.jvm")),
                                 problem = emptyList(),
-                                severity = "ERROR",
+                                severity = "WARNING",
                                 problemDetails = "The `kotlin.internal.single.build.metrics.file` deprecated property is used in your build.",
                                 contextualLabel = "Deprecated Gradle Property 'kotlin.internal.single.build.metrics.file' Used",
                                 problemId = listOf(
@@ -126,7 +126,7 @@ class ProblemsApiIT : KGPBaseTest() {
                             ProblemsApiDiagnosticG94(
                                 locations = listOf(ProblemsApiLocation("org.jetbrains.kotlin.jvm")),
                                 problem = emptyList(),
-                                severity = "ERROR",
+                                severity = "WARNING",
                                 problemDetails = "The `kotlin.build.report.dir` deprecated property is used in your build.",
                                 contextualLabel = "Deprecated Gradle Property 'kotlin.build.report.dir' Used",
                                 problemId = listOf(
@@ -145,7 +145,7 @@ class ProblemsApiIT : KGPBaseTest() {
                             ProblemsApiDiagnosticG94(
                                 locations = listOf(ProblemsApiLocation("org.jetbrains.kotlin.jvm")),
                                 problem = emptyList(),
-                                severity = "ERROR",
+                                severity = "WARNING",
                                 problemDetails = "ATTENTION! This build uses the following Kotlin Gradle Plugin properties:\n\nkotlin.internal.compiler.arguments.log.level\nkotlin.internal.diagnostics.showStacktrace\nkotlin.internal.diagnostics.useParsableFormatting\n\nInternal properties are not recommended for production use.\nStability and future compatibility of the build is not guaranteed.",
                                 contextualLabel = "Usage of Internal Kotlin Gradle Plugin Properties Detected",
                                 problemId = listOf(
