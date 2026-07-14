@@ -129,7 +129,7 @@ sealed class ConeLookupTagBasedType : ConeSimpleKotlinType() {
     }
 }
 
-abstract class ConeClassLikeType : ConeLookupTagBasedType() {
+sealed class ConeClassLikeType : ConeLookupTagBasedType() {
     abstract override val lookupTag: ConeClassLikeLookupTag
 }
 
