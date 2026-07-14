@@ -1,15 +1,16 @@
-// Unsupported nested shapes reject their entire top-level class family. BrokenFamily reaches
-// the member pre-pass before failing: Bad's Byte signature evicts Good and the root together,
-// then the fixpoint also removes UsesBroken's reference to the now-unavailable nested type.
+// Unsupported nested shapes remove only their own metadata subtree. BrokenFamily reaches the
+// member pre-pass before Bad's Byte signature fails; Good, the root, and UsesBroken survive.
 // DeepBrokenFamily instead fails while recursively rendering a three-level nested member body,
-// exercising preservation of the deepest failure attribution while the whole family is evicted.
+// exercising deepest-failure attribution while its valid metadata ancestors survive.
 // BrokenNestedBaseFamily pins the inheritance cascade: its nested base fails the member pre-pass,
-// then both a top-level derived class and a separate nested family disappear in the render fixpoint.
+// then actual derived classes disappear in the render fixpoint, while their independent enclosing
+// metadata parents survive.
 // Generic companion containers stay rejected because the companion field would live on the
 // constructed generic owner. Named objects own their own non-generic INSTANCE field and are
 // covered positively by nestedSingletons.
-// BrokenNestedSingletonFamily pins recursive-static-initializer eviction after its callee
-// disappears.
+// BrokenNestedSingletonFamily pins owner-sensitive recursive-static-initializer eviction after
+// its callee disappears: Nested owns the companion field/.cctor and is removed, but its parent
+// survives.
 
 class InnerHost {
     inner class Nested
@@ -98,5 +99,6 @@ class Survives {
 }
 
 fun main() {
+    println(UsesBroken().use(BrokenFamily.Good()))
     println(Survives().value())
 }

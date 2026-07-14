@@ -232,10 +232,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   non-generic or generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
-  Rejection granularity is always the whole top-level class family — a failing member (signature,
-  body, or IL method- or field-identity clash) removes the root and every recursively nested class
-  from the module so no call site can resolve to a partial family, and the removal cascades through
-  the type mapper to every user of any family member.
+  Rejection granularity is the failing class's metadata subtree — a failing member (signature,
+  body, or IL method- or field-identity clash) removes its owning class and every recursively
+  nested declaration, because CLR nested metadata cannot outlive its parent. A failing ordinary
+  nested class does NOT remove independent enclosing classes or siblings. The live type/function
+  maps then cascade to actual users of the removed class. Companion failures are owner-sensitive:
+  the singleton field and `.cctor` live on the immediate enclosing class, so that owner subtree is
+  the minimum safe eviction boundary.
 - Named nested-type model (probe series `nestedprobe_s1`–`_s4`; JVM precedent: a Kotlin named
   nested class is static unless `isInner`, represented by JVM `ACC_STATIC`; the CLR analogue is a
   real nested metadata type): a final, open, abstract, or sealed plain `ClassKind.CLASS` declared
@@ -262,11 +265,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   generic outer, or a class in another top-level family. Interfaces remain top-level-only. All
   spellings, construction, member/field references, virtual/interface dispatch, forward links,
   cross-depth links, singleton initialization, and family shapes assemble and run on CoreCLR and
-  Framework. STAYS REJECTED, whole-family: `inner`, local/anonymous,
+  Framework. STAYS REJECTED, per rejected metadata subtree: `inner`, local/anonymous,
   data/value/enum/annotation, nested interfaces, any class/object inside an
   object/companion/interface, and a companion whose immediate plain-class container is generic.
   Recursive render failures preserve the deepest declaration tag while
-  unwinding, then family eviction removes every class/member entry. Pins: `ilText/nestedClasses.kt`,
+  unwinding, then subtree eviction removes that declaration and its descendants; independent
+  metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
+  Pins: `ilText/nestedClasses.kt`,
   `ilText/nestedInheritance.kt`, `ilText/nestedSingletons.kt`,
   `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
   `box/nestedInheritance.kt`, `box/nestedSingletons.kt`.
@@ -618,17 +623,17 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/companionObject.kt`). `const val` in a companion is a `literal` field on the NESTED class (literal
   fields on a nested class probe-verified, objprobe_s9b), the same no-copy-to-enclosing
   deviation as objects. The enclosing class and its companion are separate `availableClasses`
-  entries (the companion needs its own identity for type mapping and member resolution), but the
-  class-family eviction rule removes both plus any named nested siblings/descendants — a partial
-  family violates the whole-class rule in both directions (the singleton field on the enclosing
-  class is typed as the companion and the enclosing `.cctor` news it). The warnings attribute a
+  entries (the companion needs its own identity for type mapping and member resolution), but a
+  companion failure removes its immediate owner subtree — the singleton field on the enclosing
+  class is typed as the companion and the enclosing `.cctor` news it. Metadata ancestors and
+  siblings outside that owner remain independent. The warnings attribute a
   failure to the declaration that actually failed: a
   companion failure surfaces out of the enclosing class's render (the companion renders only
   recursively inside it), so the render fixpoint re-tags it with the companion
   (`DotNetIlUnsupportedClassException`) before evicting. Companion eviction is pinned in both
   phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
   companion member body failing only after its callee's round-one eviction, plus the extra
-  round that re-fails an already-rendered user of the evicted family) by
+  round that re-fails an already-rendered user of the evicted companion owner) by
   `ilText/companionFixpointEviction.kt`. The companion gate accepts the direct companion of any
   non-generic plain class, including an ordinary named nested class, recursively validated with the
   same constraint chain (sole supertype `Any`, final, non-generic, no nested classes of its own,
