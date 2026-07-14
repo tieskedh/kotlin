@@ -529,14 +529,17 @@ class ResultTypeResolver(
             }
         }
 
-        // The computed upper type is most likely a concrete type that satisfies
-        // the recursive constraints already, but if it's not (e.g., it's a supertype of one),
-        // we need to manually account for them too.
-        val needsExplicitSelfType = components.isEmpty() || !c.isSubtypeConstraintCompatible(components.first(), typeVariable.defaultType())
+        if (languageVersionSettings.supportsFeature(LanguageFeature.DontIgnoreUpperBoundViolatedOnImplicitArguments)) {
+            // The computed upper type is most likely a concrete type that satisfies
+            // the recursive constraints already, but if it's not (e.g., it's a supertype of one),
+            // we need to manually account for them too.
+            val needsExplicitSelfType = components.isEmpty()
+                    || !c.isSubtypeConstraintCompatible(components.first(), typeVariable.defaultType())
 
-        if (needsExplicitSelfType) {
-            typeVariable.getDefaultTypeForSelfType(constraints, useOnlyConstraintsFromDeclaredUpperBounds = false)
-                ?.let { capturedTypeForSelf -> components += capturedTypeForSelf }
+            if (needsExplicitSelfType) {
+                typeVariable.getDefaultTypeForSelfType(constraints, useOnlyConstraintsFromDeclaredUpperBounds = false)
+                    ?.let { capturedTypeForSelf -> components += capturedTypeForSelf }
+            }
         }
 
         return when {
