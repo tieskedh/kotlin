@@ -38,6 +38,7 @@ internal class DotNetIlIntrinsicMethods(
     private val kotlinIoFqn = FqName("kotlin.io")
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
+    private val arrayFqn = StandardNames.FqNames.array.toSafe()
     private val stringFqn = StandardNames.FqNames.string.toSafe()
     private val intFqn = StandardNames.FqNames._int.toSafe()
     private val longFqn = StandardNames.FqNames._long.toSafe()
@@ -127,7 +128,8 @@ internal class DotNetIlIntrinsicMethods(
         Key(charFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
-            conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics()
+            conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
+            genericArrayIntrinsics()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -178,6 +180,36 @@ internal class DotNetIlIntrinsicMethods(
                         to DotNetIlUnsupportedIntrinsic("primitive-array clone/copy operations are not supported yet")
             )
         }
+    }
+
+    /**
+     * Kotlin `Array<E>` uses the same registry surface as the JVM backend's generic-array arm.
+     * The actual CLR vector type is resolved from each call's receiver/result so open `!n`/`!!n`
+     * elements and concrete reference elements share these entries without erasure.
+     */
+    private fun genericArrayIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> {
+        val function1Fqn = FqName("kotlin.Function1")
+        val typeParameterFqn = FqName("T")
+        return listOf(
+            Key(arrayFqn, null, "<init>", listOf(intFqn, function1Fqn)) to
+                    DotNetIlUnsupportedIntrinsic(
+                        "generic-array initializer constructors are not supported yet; " +
+                                "use arrayOf, emptyArray, or arrayOfNulls"
+                    ),
+            Key(arrayFqn, null, "<get-size>", emptyList()) to DotNetIlGenericArraySizeIntrinsic,
+            Key(arrayFqn, null, "get", listOf(intFqn)) to DotNetIlGenericArrayGetIntrinsic,
+            Key(arrayFqn, null, "set", listOf(intFqn, typeParameterFqn)) to DotNetIlGenericArraySetIntrinsic,
+            Key(kotlinFqn, null, "arrayOf", listOf(arrayFqn)) to DotNetIlGenericArrayOfIntrinsic,
+            Key(kotlinFqn, null, "emptyArray", emptyList()) to DotNetIlGenericEmptyArrayIntrinsic,
+            Key(kotlinFqn, null, "arrayOfNulls", listOf(intFqn)) to DotNetIlGenericArrayOfNullsIntrinsic,
+            Key(arrayFqn, null, "iterator", emptyList()) to
+                    DotNetIlUnsupportedIntrinsic(
+                        "generic-array iterator values are not supported; " +
+                                "direct 'for (element in array)' loops are lowered"
+                    ),
+            Key(arrayFqn, null, "clone", emptyList()) to
+                    DotNetIlUnsupportedIntrinsic("generic-array clone/copy operations are not supported yet"),
+        )
     }
 
     /**
@@ -428,6 +460,31 @@ internal abstract class DotNetIlIntrinsicMethod {
     ): Boolean = false
 }
 
+/** Emits a dynamic-size vector allocation with the Kotlin negative-size exception boundary. */
+private fun emitGuardedArrayAllocation(
+    size: IrExpression,
+    newArrayInstruction: String,
+    codegen: DotNetIlExpressionCodegen,
+) {
+    // CLR newarr(-1) throws OverflowException, which is an ArithmeticException. Kotlin's
+    // negative-array-size failure is not arithmetic, so branch first and use the neutral
+    // System.Exception approximation documented in AGENTS.md. Keep the size on the stack
+    // across the test so the non-negative path feeds newarr without a synthetic local.
+    val nonNegativeLabel = codegen.nextLabel("arraySizeNonNegative")
+    codegen.emitExpression(size, DotNetIlValueType.Int32)
+    codegen.emit("dup", pops = 1, pushes = 2)
+    codegen.emit("ldc.i4.0", pushes = 1)
+    codegen.emit("clt", pops = 2, pushes = 1)
+    codegen.emitBranch("brfalse", nonNegativeLabel, pops = 1)
+    codegen.emit("pop", pops = 1)
+    codegen.emitParameterlessExceptionThrow(
+        exceptionTypeRef = "${CORE_LIB_REF}System.Exception",
+        valuePosition = true,
+    )
+    codegen.emitLabel(nonNegativeLabel)
+    codegen.emit(newArrayInstruction, pops = 1, pushes = 1)
+}
+
 /** `IntArray(size)` and its four supported peers -> guarded CLR `newarr`. */
 private class DotNetIlPrimitiveArrayConstructorIntrinsic(
     private val arrayType: DotNetIlValueType.PrimitiveArray,
@@ -440,26 +497,60 @@ private class DotNetIlPrimitiveArrayConstructorIntrinsic(
         if (expectedType != arrayType || call.arguments.size != 1) return false
         val size = call.arguments.single()
             ?: dotNetUnsupported("missing primitive-array size")
-
-        // CLR newarr(-1) throws OverflowException, which is an ArithmeticException. Kotlin's
-        // negative-array-size failure is not arithmetic, so branch first and use the neutral
-        // System.Exception approximation documented in AGENTS.md. Keep the size on the stack
-        // across the test so the non-negative path feeds newarr without a synthetic local.
-        val nonNegativeLabel = codegen.nextLabel("arraySizeNonNegative")
-        codegen.emitExpression(size, DotNetIlValueType.Int32)
-        codegen.emit("dup", pops = 1, pushes = 2)
-        codegen.emit("ldc.i4.0", pushes = 1)
-        codegen.emit("clt", pops = 2, pushes = 1)
-        codegen.emitBranch("brfalse", nonNegativeLabel, pops = 1)
-        codegen.emit("pop", pops = 1)
-        codegen.emitParameterlessExceptionThrow(
-            exceptionTypeRef = "${CORE_LIB_REF}System.Exception",
-            valuePosition = true,
-        )
-        codegen.emitLabel(nonNegativeLabel)
-        codegen.emit(arrayType.newArrayInstruction, pops = 1, pushes = 1)
+        emitGuardedArrayAllocation(size, arrayType.newArrayInstruction, codegen)
         return true
     }
+}
+
+/** Shared literal-vector emission for primitive `*ArrayOf` and generic `arrayOf`. */
+private fun emitArrayLiteral(
+    call: IrCall,
+    codegen: DotNetIlExpressionCodegen,
+    expectedType: DotNetIlValueType,
+    arrayType: DotNetIlValueType,
+    elementType: DotNetIlValueType,
+    newArrayInstruction: String,
+    storeElementInstruction: String,
+    functionName: String,
+): Boolean {
+    if (expectedType != arrayType || call.arguments.size != 1) return false
+    val vararg = call.arguments.single()
+    val varargElements = when (vararg) {
+        null -> emptyList()
+        is IrVararg -> vararg.elements
+        else -> dotNetUnsupported("$functionName requires a literal vararg argument")
+    }
+    val elements = varargElements.mapIndexed { index, element ->
+        when (element) {
+            is IrSpreadElement -> dotNetUnsupported(
+                "spread element at index $index in $functionName is not supported yet"
+            )
+            is IrExpression -> element
+            else -> error("Internal .NET backend error: unknown IrVarargElement ${element.javaClass.simpleName}")
+        }
+    }
+
+    codegen.emit("ldc.i4 ${elements.size}", pushes = 1)
+    codegen.emit(newArrayInstruction, pops = 1, pushes = 1)
+    val arraySlot = codegen.spillToSyntheticLocal(arrayType, "<arrayOf>")
+    var elementSlot: DotNetIlSlot.Local? = null
+    for ([index, element] in elements.withIndex()) {
+        // Evaluate each element with an otherwise empty stack. A supported expression may
+        // itself contain a CLR protected region (`try`), whose entry requires stack depth
+        // zero; keeping array/index operands below it would produce invalid IL. The vector
+        // was allocated first, and the reused value temp preserves source evaluation order.
+        codegen.emitExpression(element, elementType)
+        val storedElementSlot = elementSlot?.also { slot ->
+            codegen.emit(storeLocalInstruction(slot.index), pops = 1)
+        } ?: codegen.spillToSyntheticLocal(elementType, "<arrayElement>")
+        elementSlot = storedElementSlot
+        codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+        codegen.emit("ldc.i4 $index", pushes = 1)
+        codegen.emit(loadLocalInstruction(storedElementSlot.index), pushes = 1)
+        codegen.emit(storeElementInstruction, pops = 3)
+    }
+    codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
+    return true
 }
 
 /** Literal `intArrayOf(a, b)` and peers -> one vector plus ordered typed stores. */
@@ -471,46 +562,10 @@ private class DotNetIlPrimitiveArrayOfIntrinsic(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
-    ): Boolean {
-        if (expectedType != arrayType || call.arguments.size != 1) return false
-        val vararg = call.arguments.single()
-        val varargElements = when (vararg) {
-            null -> emptyList()
-            is IrVararg -> vararg.elements
-            else -> dotNetUnsupported("$functionName requires a literal vararg argument")
-        }
-        val elements = varargElements.mapIndexed { index, element ->
-            when (element) {
-                is IrSpreadElement -> dotNetUnsupported(
-                    "spread element at index $index in $functionName is not supported yet"
-                )
-                is IrExpression -> element
-                else -> error("Internal .NET backend error: unknown IrVarargElement ${element.javaClass.simpleName}")
-            }
-        }
-
-        codegen.emit("ldc.i4 ${elements.size}", pushes = 1)
-        codegen.emit(arrayType.newArrayInstruction, pops = 1, pushes = 1)
-        val arraySlot = codegen.spillToSyntheticLocal(arrayType, "<arrayOf>")
-        var elementSlot: DotNetIlSlot.Local? = null
-        for ([index, element] in elements.withIndex()) {
-            // Evaluate each element with an otherwise empty stack. A supported expression may
-            // itself contain a CLR protected region (`try`), whose entry requires stack depth
-            // zero; keeping array/index operands below it would produce invalid IL. The vector
-            // was allocated first, and the reused value temp preserves source evaluation order.
-            codegen.emitExpression(element, arrayType.elementType)
-            val storedElementSlot = elementSlot?.also { slot ->
-                codegen.emit(storeLocalInstruction(slot.index), pops = 1)
-            } ?: codegen.spillToSyntheticLocal(arrayType.elementType, "<arrayElement>")
-            elementSlot = storedElementSlot
-            codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
-            codegen.emit("ldc.i4 $index", pushes = 1)
-            codegen.emit(loadLocalInstruction(storedElementSlot.index), pushes = 1)
-            codegen.emit(arrayType.storeElementInstruction, pops = 3)
-        }
-        codegen.emit(loadLocalInstruction(arraySlot.index), pushes = 1)
-        return true
-    }
+    ): Boolean = emitArrayLiteral(
+        call, codegen, expectedType, arrayType, arrayType.elementType,
+        arrayType.newArrayInstruction, arrayType.storeElementInstruction, functionName,
+    )
 }
 
 /** Primitive-array `size` -> `ldlen; conv.i4` (Kotlin sizes are Int, not native unsigned). */
@@ -572,6 +627,133 @@ private class DotNetIlPrimitiveArraySetIntrinsic(
             ?: dotNetUnsupported("missing primitive-array index for 'set'")
         val value = call.arguments[2]
             ?: dotNetUnsupported("missing primitive-array value for 'set'")
+        codegen.emitExpression(receiver, arrayType)
+        val receiverSlot = codegen.spillToSyntheticLocal(arrayType, "<arraySet>")
+        codegen.emitExpression(index, DotNetIlValueType.Int32)
+        val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<arrayIndex>")
+        codegen.emitExpression(value, arrayType.elementType)
+        val valueSlot = codegen.spillToSyntheticLocal(arrayType.elementType, "<arrayValue>")
+        codegen.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
+        codegen.emit(arrayType.storeElementInstruction, pops = 3)
+        return true
+    }
+}
+
+/** Generic `arrayOf(a, b)` -> one reified vector plus ordered typed stores. */
+private object DotNetIlGenericArrayOfIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val arrayType = expectedType as? DotNetIlValueType.GenericArray ?: return false
+        return emitArrayLiteral(
+            call, codegen, expectedType, arrayType, arrayType.elementType,
+            arrayType.newArrayInstruction, arrayType.storeElementInstruction, "arrayOf",
+        )
+    }
+}
+
+/** Reified `emptyArray<E>()` -> `ldc.i4.0; newarr E`. */
+private object DotNetIlGenericEmptyArrayIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val arrayType = expectedType as? DotNetIlValueType.GenericArray ?: return false
+        if (call.arguments.isNotEmpty()) return false
+        codegen.emit("ldc.i4.0", pushes = 1)
+        codegen.emit(arrayType.newArrayInstruction, pops = 1, pushes = 1)
+        return true
+    }
+}
+
+/** Reference-element `arrayOfNulls<E>(size)` -> a guarded, zero-initialized reified vector. */
+private object DotNetIlGenericArrayOfNullsIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val arrayType = expectedType as? DotNetIlValueType.GenericArray ?: return false
+        if (call.arguments.size != 1) return false
+        if (!arrayType.elementType.isDotNetReferenceShaped()) {
+            dotNetUnsupported(
+                "arrayOfNulls requires a supported reference element, but got " +
+                        arrayType.elementType.nameInSignature
+            )
+        }
+        val size = call.arguments.single() ?: dotNetUnsupported("missing generic-array size")
+        emitGuardedArrayAllocation(size, arrayType.newArrayInstruction, codegen)
+        return true
+    }
+}
+
+private fun IrCall.genericArrayReceiver(
+    codegen: DotNetIlExpressionCodegen,
+    memberName: String,
+): Pair<IrExpression, DotNetIlValueType.GenericArray> {
+    val receiver = arguments.firstOrNull()
+        ?: dotNetUnsupported("missing generic-array receiver for '$memberName'")
+    val arrayType = codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
+        ?: dotNetUnsupported("receiver of generic-array '$memberName' has unsupported type ${receiver.type.render()}")
+    return receiver to arrayType
+}
+
+/** Generic-array `size` -> `ldlen; conv.i4`. */
+private object DotNetIlGenericArraySizeIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 1) return false
+        val [receiver, arrayType] = call.genericArrayReceiver(codegen, "size")
+        codegen.emitExpression(receiver, arrayType)
+        codegen.emit("ldlen", pops = 1, pushes = 1)
+        codegen.emit("conv.i4", pops = 1, pushes = 1)
+        return true
+    }
+}
+
+/** Generic-array indexed read -> `ldelem E`, including an open `!n`/`!!n` token. */
+private object DotNetIlGenericArrayGetIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.size != 2) return false
+        val [receiver, arrayType] = call.genericArrayReceiver(codegen, "get")
+        if (expectedType != arrayType.elementType) return false
+        val index = call.arguments[1]
+            ?: dotNetUnsupported("missing generic-array index for 'get'")
+        codegen.emitExpression(receiver, arrayType)
+        val receiverSlot = codegen.spillToSyntheticLocal(arrayType, "<arrayGet>")
+        codegen.emitExpression(index, DotNetIlValueType.Int32)
+        val indexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<arrayIndex>")
+        codegen.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
+        codegen.emit(arrayType.loadElementInstruction, pops = 2, pushes = 1)
+        return true
+    }
+}
+
+/** Generic-array indexed write -> `stelem E`, including an open `!n`/`!!n` token. */
+private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsStatement(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+    ): Boolean {
+        if (call.arguments.size != 3) return false
+        val [receiver, arrayType] = call.genericArrayReceiver(codegen, "set")
+        val index = call.arguments[1]
+            ?: dotNetUnsupported("missing generic-array index for 'set'")
+        val value = call.arguments[2]
+            ?: dotNetUnsupported("missing generic-array value for 'set'")
         codegen.emitExpression(receiver, arrayType)
         val receiverSlot = codegen.spillToSyntheticLocal(arrayType, "<arraySet>")
         codegen.emitExpression(index, DotNetIlValueType.Int32)
@@ -711,9 +893,10 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
  *
  * `Any?`-typed operands are reference-shaped storage: `===` (and `== null`) is the type-agnostic
  * reference `ceq`; general `==` stays rejected (no Any.equals model).
- * Primitive-array operands are a closed exception to that general reference rule: Kotlin arrays
- * inherit identity-based `Any.equals`, so both `==` and `===` use reference `ceq`. Structural
- * comparison remains the separate, currently unsupported `contentEquals` operation.
+ * Array operands are a closed exception to that general reference rule: Kotlin primitive and
+ * generic arrays inherit identity-based `Any.equals`, so both `==` and `===` use reference
+ * `ceq`. Structural comparison remains the separate, currently unsupported `contentEquals`
+ * operation.
  */
 private class DotNetIlEqualityIntrinsic(
     private val referenceEquality: Boolean,
@@ -784,7 +967,9 @@ private class DotNetIlEqualityIntrinsic(
             // target; CLR vectors inherit the same identity behavior from System.Array/Object.
             // Therefore both `==` and `===` are the type-agnostic reference `ceq` here, with no
             // general Any.equals model required (structural comparison remains contentEquals).
-            is DotNetIlValueType.PrimitiveArray -> codegen.emit("ceq", pops = 2, pushes = 1)
+            is DotNetIlValueType.PrimitiveArray,
+            is DotNetIlValueType.GenericArray,
+                -> codegen.emit("ceq", pops = 2, pushes = 1)
             is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass, DotNetIlValueType.Object,
             is DotNetIlValueType.GenericInstance,
                 -> {

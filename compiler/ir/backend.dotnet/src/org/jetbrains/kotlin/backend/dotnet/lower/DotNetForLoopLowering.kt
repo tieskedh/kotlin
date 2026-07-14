@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.backend.common.lower.IrBuildingTransformer
 import org.jetbrains.kotlin.backend.common.lower.at
 import org.jetbrains.kotlin.backend.common.lower.irIfThen
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.dotNetInvariantArrayElementTypeOrNull
 import org.jetbrains.kotlin.backend.dotnet.isSupportedDotNetPrimitiveArray
 import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
@@ -118,17 +119,18 @@ internal class DotNetForLoopLowering(
         // Children first: nested for-loops inside this loop's body are rewritten before the
         // enclosing one, matching ForLoopsLowering's transformer order.
         expression.transformChildrenVoid(this)
-        lowerPrimitiveArrayForLoop(expression)
+        lowerArrayForLoop(expression)
         lowerIntRangeForLoop(expression)
         return expression
     }
 
     /**
-     * Rewrites direct iteration over a supported primitive array to backend.common's indexed-get
-     * loop shape: the receiver is evaluated once, its immutable size is cached, and the index is
-     * incremented before the user body so `continue` cannot skip it.
+     * Rewrites direct iteration over a supported primitive or invariant generic array to
+     * backend.common's indexed-get loop shape: the receiver is evaluated once, its immutable
+     * size is cached, and the index is incremented before the user body so `continue` cannot
+     * skip it.
      */
-    private fun lowerPrimitiveArrayForLoop(block: IrBlock) {
+    private fun lowerArrayForLoop(block: IrBlock) {
         if (block.origin != IrStatementOrigin.FOR_LOOP || block.statements.size != 2) return
 
         val iteratorVariable = block.statements[0] as? IrVariable ?: return
@@ -136,9 +138,12 @@ internal class DotNetForLoopLowering(
         val iteratorCall = iteratorVariable.initializer as? IrCall ?: return
         if (iteratorCall.symbol.owner.name != OperatorNameConventions.ITERATOR) return
         val arrayExpression = iteratorCall.arguments.singleOrNull() ?: return
-        if (!arrayExpression.type.isSupportedDotNetPrimitiveArray()) return
         val arrayClass = arrayExpression.type.classifierOrNull as? IrClassSymbol ?: return
-        val elementType = irBuiltIns.primitiveArrayElementTypes[arrayClass] ?: return
+        val elementType = if (arrayExpression.type.isSupportedDotNetPrimitiveArray()) {
+            irBuiltIns.primitiveArrayElementTypes[arrayClass]
+        } else {
+            arrayExpression.type.dotNetInvariantArrayElementTypeOrNull()
+        } ?: return
 
         val whileLoop = block.statements[1] as? IrWhileLoop ?: return
         val hasNextCall = whileLoop.condition as? IrCall ?: return

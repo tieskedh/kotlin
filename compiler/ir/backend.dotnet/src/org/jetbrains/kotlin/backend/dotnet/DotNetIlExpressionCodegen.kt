@@ -361,8 +361,8 @@ internal class DotNetIlExpressionCodegen(
                     dotNetUnsupported("string conversion of Any-typed values is not supported yet (no Any.toString model)")
                 is DotNetIlValueType.UserClass, is DotNetIlValueType.GenericInstance ->
                     dotNetUnsupported("string conversion of class instances is not supported yet (no Any.toString model)")
-                is DotNetIlValueType.PrimitiveArray ->
-                    dotNetUnsupported("string conversion of primitive arrays is not supported yet (no array toString model)")
+                is DotNetIlValueType.PrimitiveArray, is DotNetIlValueType.GenericArray ->
+                    dotNetUnsupported("string conversion of arrays is not supported yet (no array toString model)")
                 is DotNetIlValueType.MappedClass ->
                     dotNetUnsupported("string conversion of an exception type is not supported yet (no Any.toString model)")
                 // Even a constrained `T` inherits this member from Any, whose member model is
@@ -679,11 +679,14 @@ internal class DotNetIlExpressionCodegen(
     private fun emitConstructorCall(call: IrConstructorCall, expectedType: DotNetIlValueType) {
         val constructor = call.symbol.owner
         val irClass = constructor.constructedClass
-        if (typeMapper.toDotNetIlValueType(call.type) is DotNetIlValueType.PrimitiveArray) {
+        val constructedType = typeMapper.toDotNetIlValueType(call.type)
+        if (constructedType is DotNetIlValueType.PrimitiveArray ||
+            constructedType is DotNetIlValueType.GenericArray
+        ) {
             val intrinsic = intrinsicMethods.getIntrinsic(call.symbol)
             if (intrinsic != null && intrinsic.tryEmitConstructorAsExpression(call, this, expectedType)) return
             dotNetUnsupported(
-                "primitive-array constructor '${irClass.name.asString()}' has an unsupported argument shape"
+                "array constructor '${irClass.name.asString()}' has an unsupported argument shape"
             )
         }
         when (val entry = irClass.fqNameWhenAvailable?.let(DotNetMappedExceptions.entries::get)) {
@@ -1016,6 +1019,11 @@ internal class DotNetIlExpressionCodegen(
             }
             // A primitive array is an ordinary CLR reference: its only literal is null.
             is DotNetIlValueType.PrimitiveArray -> when (expression.value) {
+                null -> methodContext.emit("ldnull", pushes = 1)
+                else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
+            }
+            // A generic array is likewise an ordinary CLR reference with only the null literal.
+            is DotNetIlValueType.GenericArray -> when (expression.value) {
                 null -> methodContext.emit("ldnull", pushes = 1)
                 else -> dotNetUnsupported("unsupported ${expectedType.nameInSignature} constant: ${expression.value}")
             }

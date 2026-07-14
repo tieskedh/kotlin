@@ -79,6 +79,29 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     }
 
     /**
+     * A Kotlin `Array<E>` as a CLR zero-based vector. This stays a distinct structural type from
+     * [PrimitiveArray] even when substitution produces the same CLR spelling: Kotlin
+     * `Array<Int>` and `IntArray` are different invariant types, while CLR represents both as
+     * `int32[]`. The mapper rejects that concrete source collision, but an open `Array<T>` must
+     * still be able to substitute `T = Int` at a generic call site without losing its Kotlin
+     * identity inside assignability checks.
+     *
+     * Typed element instructions work uniformly for reference tokens and open `!n`/`!!n`
+     * tokens; `genarrayprobe_s1` assembles and executes both forms on CoreCLR and Framework.
+     */
+    data class GenericArray(val elementType: DotNetIlValueType) :
+        DotNetIlValueType("${elementType.nameInSignature}[]") {
+        val newArrayInstruction: kotlin.String
+            get() = "newarr ${elementType.nameInSignature}"
+
+        val loadElementInstruction: kotlin.String
+            get() = "ldelem ${elementType.nameInSignature}"
+
+        val storeElementInstruction: kotlin.String
+            get() = "stelem ${elementType.nameInSignature}"
+    }
+
+    /**
      * A concrete nullable Kotlin primitive (`Int?`, `Long?`, `Double?`, `Boolean?`, `Char?`) in
      * an EXACT typed position: CLR `System.Nullable<T>` — the hybrid-representation decision
      * (see AGENTS.md "Nullability model"). Roslyn precedent: C# `int?` is
@@ -242,6 +265,8 @@ internal fun DotNetIlValueType.substituteDotNetTypeParameters(
         DotNetIlValueType.NullableValue(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
     is DotNetIlValueType.PrimitiveArray ->
         DotNetIlValueType.PrimitiveArray(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
+    is DotNetIlValueType.GenericArray ->
+        DotNetIlValueType.GenericArray(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
     else -> this
 }
 
@@ -321,6 +346,7 @@ internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) 
     DotNetIlValueType.String, DotNetIlValueType.Object,
     is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
     is DotNetIlValueType.GenericInstance, is DotNetIlValueType.PrimitiveArray,
+    is DotNetIlValueType.GenericArray,
         -> true
     else -> false
 }

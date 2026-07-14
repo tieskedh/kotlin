@@ -72,14 +72,38 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `last = indexedObject.size`, then `while (inductionVariable < last)` load
   `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
-  the removed iterator loop. STAYS REJECTED, loudly: generic `Array<T>` (covariance and reference
-  element stores are a separate slice), `ByteArray`/`ShortArray`/`FloatArray` (scalar elements are
-  unsupported), initializer-lambda constructors, spread elements in `*ArrayOf`, iterator values
-  escaping as objects, copying/content helpers, multidimensional/jagged arrays, and unsigned
-  arrays. The literal/get/set temporaries are mandatory for general expressions: CLR protected
+  the removed iterator loop. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
+  elements are unsupported), primitive-array initializer-lambda constructors, spread elements in
+  `*ArrayOf`, iterator values escaping as objects, copying/content helpers, and unsigned arrays.
+  The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
   `ilText/primitiveArraysRejected.kt`; runtime: `box/primitiveArrays.kt`.
+- Generic-array model (probe series `genarrayprobe_s1`; JVM `IrIntrinsicMethods.arrayMethods`
+  registry precedent plus the same backend.common indexed-loop shape as primitive arrays): an
+  invariant Kotlin `Array<E>` maps structurally to a CLR zero-based vector when `E` is a supported
+  reference-shaped type or an open `!n`/`!!n` parameter. Outer nullability is erased because the
+  vector is itself a reference. Backend assignability remains EXACT and invariant even though CLR
+  arrays are covariant; this follows the JVM precedent (Kotlin's type checker prevents source
+  widening, while an invalid store supplied through an external covariant view fails with the
+  runtime's store check). Both CoreCLR and Framework throw `ArrayTypeMismatchException` for that
+  probe shape. A concrete primitive or `Nullable<T>` element stays rejected: CLR would give
+  `Array<Int>` and `IntArray` the same `int32[]` ABI and make legal Kotlin overloads collide. An
+  OPEN `Array<T>` remains supported because its declaration is `!0[]`/`!!0[]`; CLR generic arity
+  and token identity keep the ABI distinct and reify a value-type instantiation safely.
+  `genarrayprobe_s1` reflection confirms the open element in metadata, and both runtimes execute
+  `newarr`, `ldelem`, and `stelem` with `!n`/`!!n` tokens for reference and value instantiations.
+  Known string/class/instantiated-generic elements use the same typed-token instructions. The
+  registry owns `arrayOf`, `emptyArray`, reference-element `arrayOfNulls`, `size`, `get`, and
+  `set`; allocation/store operands spill exactly like primitive arrays, and dynamic sizes share
+  the negative-size guard. Direct `for` iteration shares the indexed lowering. Array identity
+  equality/null tests use `ceq`, and widening to `Any`/`Any?` is instruction-free. STAYS REJECTED,
+  loudly: use-site projections/star projections (never erase Kotlin invariance into CLR
+  covariance), concrete primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
+  including arrays of primitive arrays, initializer-lambda constructors, spread elements,
+  iterator values escaping as objects, array casts/type checks, and copying/content helpers.
+  Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
+  `box/genericArrays.kt`.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
@@ -616,11 +640,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Generics stance: the type representation stays structural so that generics target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
-- Generics model (stages 1-2) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`;
-  precedent: Roslyn — the CLR has REAL
-  reified generics, so like every prior model bullet there is NO erasure/monomorphization/lowering
-  machinery: the type mapper and emitters learn generic declarations, type-parameter references and
-  instantiation tokens, and the frontend owns all type checking):
+- Generics model (stages 1-3) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
+  `genarrayprobe_s1`; precedent: Roslyn — the CLR has REAL reified generics, so like every prior
+  model bullet there is NO erasure/monomorphization/lowering machinery: the type mapper and
+  emitters learn generic declarations, type-parameter references and instantiation tokens, and
+  the frontend owns all type checking):
   - SUPPORTED: generic TOP-LEVEL FUNCTIONS (non-inline; invariant type parameters, either
     unconstrained or directly constrained by non-null, non-generic, module-local classes and
     all-abstract interfaces), plus the pre-existing `T : String`/`String?` erosion of the
@@ -635,7 +659,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     unconstrained `T`-typed value supports exactly store/load (locals, params, returns, fields of
     the declaring class) and passing to another `T` position. A constrained `T` additionally
     supports calls to members exposed by any direct/transitive bound and widening to a bound or
-    `Any`/`Any?` through `box !n`/`box !!n`.
+    `Any`/`Any?` through `box !n`/`box !!n`. Invariant `Array<T>` composes as a real CLR
+    `!n[]`/`!!n[]` in those same positions, with typed element access and indexed iteration.
   - SPELLING CANON (all probe-verified): a generic class is ONE quoted identifier with the CLS
     backtick-arity suffix INSIDE the quotes (`.class ... 'demo.Box`1'<'T'>` — suffix outside the
     quotes is an ilasm syntax error, genprobe_s2c; the suffix is CLS convention, not CLR-required,
@@ -661,6 +686,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     the mandatory home-address spill rule extends to `!0`-returning calls — spill to a local typed
     with the CLOSED substituted type, then `ldloca` (genprobe_s4). Reification is real:
     `Box`1<int32>` stores a raw int32, zero box/unbox, instantiations coexist and nest (genprobe_s3).
+    Generic arrays likewise keep the element token open (`!!0[]`; `newarr !!0`; `ldelem !!0`;
+    `stelem !!0`) and substitute structurally at call sites (`genarrayprobe_s1`).
   - CODEGEN MODEL: mapped signatures stay OPEN (`TypeParameter`/`GenericInstance` arms of
     `DotNetIlValueType`); call sites derive the owner token from the RECEIVER's mapped type walked
     to the declaring class (`dotNetViewAsGenericOwner` — inherited members and super-calls through a
@@ -709,8 +736,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     constraints), string templates/toString and other `Any` member calls on `T` (no Any model),
     member calls on an unconstrained `T` or outside its declared bounds, widening an unconstrained
     `T` to `Any?`, `is`/`as` on `T` or generic types (existing type-operator
-    rejections stay authoritative), inline/reified generic functions (no inlining model), varargs
-    of `T` (no arrays), generic MEMBER functions (unexercised combination, whole-class), generic
+    rejections stay authoritative), inline/reified generic functions (no inlining model), declared
+    varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
+    generic MEMBER functions (unexercised combination, whole-class), generic
     (extension) properties, generic INTERFACES (unchanged from the interface model), generic
     classes containing companions/nested objects (untouched nested machinery), generic classes
     implementing interfaces, and generic-extends-generic chains (IL shape probed fine, genprobe_s7,
@@ -729,6 +757,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     `ilText/genericEvicted.kt` (the eviction cascade), `ilText/genericConstraints.kt` (formal
     constraint spelling plus virtual/interface/non-virtual calls and bound widening),
     `ilText/genericConstraintsRejected.kt` (constraint shapes outside the stage-2 boundary),
+    `ilText/genericArrays.kt` (open/concrete vector signatures, construction and typed element
+    access), `ilText/genericArraysRejected.kt` (array shapes outside the invariant reference/open
+    element boundary),
     `ilText/classShapeRejected.kt` (the
     variance flavor in the class-shape gate); runtime:
     `box/genericFunctions.kt` (every type-arg kind incl. both `Int?` flavors through `!!0`,
@@ -741,7 +772,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     through all views — interface-mapping mistakes fail only at JIT time, so the dispatch shape
     carries its own runtime pin), `box/genericConstraints.kt` (multiple bounds, virtual override
     dispatch, interface properties/methods, non-virtual class members, bound/Any widening, class
-    type parameters and multiple generic instantiations).
+    type parameters and multiple generic instantiations), `box/genericArrays.kt` (construction,
+    fields, open and constrained element access, indexed iteration, identity/null behavior and
+    multiple reference element shapes).
 - Shared runtime code (e.g. the Kotlin-parity `Double.toString` rendering) is hand-written IL on the
   synthetic module-private `'<KotlinIl>'` class (`DotNetIlRuntimeHelpers`) — the CLR-side stand-in
   for the JVM's `kotlin.jvm.internal.Intrinsics` runtime until a real .NET stdlib exists. The class
