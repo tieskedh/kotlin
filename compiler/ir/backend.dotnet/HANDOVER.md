@@ -6,9 +6,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `8702cf407` ("[DotNet] Support exhaustive when
-  without source else"), clean tree, based directly on `origin/master` (`995cf26a0`, rebased
-  2026-07-13). Handover-only maintenance stays in separate non-functional commits.
+- Branch `dotnet`; latest functional tip `d7915e827` ("[Tests] Isolate the DotNet CLI generated
+  suite"), clean tree, based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
+  Handover-only maintenance stays in separate non-functional commits.
 - Full DotNet suite: **270 tests, 0 failures, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)).
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -23,6 +23,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   otherwise unreachable fallthrough with raw CLR `bool` value `2`, including a prior value on
   the evaluation stack. The new ilText/box pins cover both parser variants, statement/value
   positions, mapped catch handling, generic results and the non-first-argument stack shape.
+- Interim continuation landed `d7915e827`: `cli/dotnet` now generates into its own top-level
+  `DotNetCliTestGenerated.java`, so upstream regeneration of the shared `CliTestGenerated.java`
+  no longer conflicts with DotNet test data. The same 10 tests pass in the new suite, and an
+  explicit smoke filter preserves their selection after the nested-to-top-level move (Smoke-mode
+  dry-run discovers all 10). The fresh backend suite remains 270/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -82,11 +87,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Small infra: split dotnet CLI tests out of `CliTestGenerated.java`.** The dotnet section of
-   that shared generated file conflicts on every upstream rebase. Give the `model("cli/dotnet")`
-   group its own generated class (own `testGroupSuite` entry → e.g. `DotNetCliTestGenerated.java`)
-   in `compiler/tests-integration/testFixtures/.../TestGeneratorForTestsIntegrationTests.kt`.
-2. **Main course: arrays.** Next roadmap item. CLR has native vectors (`newarr`, `ldelem`/`stelem`,
+1. **Main course: arrays.** Next roadmap item. CLR has native vectors (`newarr`, `ldelem`/`stelem`,
    `ldlen`) — probe series suggestion: `arrprobe`. Design questions to settle probe-first:
    which Kotlin array types in scope (suggest primitive arrays `IntArray` etc. first — they map
    1:1 to `int32[]` and dodge generics interplay; `Array<T>` composes with stage-1 generics but
@@ -96,7 +97,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
    intrinsic-registry pattern; injected declarations must compile with ZERO diagnostics);
    `size`/`get`/`set`/indexing operators as intrinsics; `for (x in array)` via the existing
    for-loop lowering. Everything else (copyOf, iterators as objects, Array<T?>): reject loudly.
-3. **Generics stage 2 (if appetite remains): constraints.** `T : Base` / `T : Iface` → CLR
+2. **Generics stage 2 (if appetite remains): constraints.** `T : Base` / `T : Iface` → CLR
    constraint clauses (`class ... where` in IL: `<(class 'Base') T>` — probe the spelling).
    Unlocks member calls on `T` receivers bounded by a supported interface. Variance and `T?`
    remain out (see the generics bullet for why).
