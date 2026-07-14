@@ -224,7 +224,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   machinery), `box/tryDiscardedValue.kt` (the discarded Any-LUB try statement shape).
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
   vtable/class lowering machinery): top-level plain classes — final, open, abstract, or sealed;
-  non-generic or, since the generics model (below), with reified type parameters — plus the final
+  non-generic or, since the generics model (below), with reified type parameters — plus the
   named nested classes described below, and, since the interface/generics models (below), top-level
   non-generic or generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
@@ -233,34 +233,40 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   body, or IL method- or field-identity clash) removes the root and every recursively nested class
   from the module so no call site can resolve to a partial family, and the removal cascades through
   the type mapper to every user of any family member.
-- Named nested-class model (probe series `nestedprobe_s1`–`_s2`; JVM precedent: a Kotlin named
+- Named nested-class model (probe series `nestedprobe_s1`–`_s3`; JVM precedent: a Kotlin named
   nested class is static unless `isInner`, represented by JVM `ACC_STATIC`; the CLR analogue is a
-  real nested metadata type): a FINAL plain `ClassKind.CLASS` declared directly inside another
-  plain class passes the shape gate recursively. It owns no outer instance and only its OWN generic
-  parameters; a named class inside generic `Outer<T>` is therefore referenced as
-  `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic nested class is
-  `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted simple names.
+  real nested metadata type): a final, open, abstract, or sealed plain `ClassKind.CLASS` declared
+  directly inside another plain class passes the shape gate recursively. It owns no outer instance
+  and only its OWN generic parameters; a named class inside generic `Outer<T>` is therefore
+  referenced as `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic
+  nested class is `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted
+  simple names.
   Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
   rendering remains recursive inside the enclosing `.class` block. Public/private/internal/
   protected source visibility maps to `nested public`/`nested private`/`nested assembly`/
-  `nested family`; all spellings, generic independence, construction, member/field references,
-  forward sibling references, and multi-level nesting assemble and run on CoreCLR and Framework.
-  A supported nested class may extend or implement the existing supported module-local TOP-LEVEL
-  base/interface shapes; nested-to-nested inheritance remains outside this first slice. STAYS
-  REJECTED, whole-family: `inner`, local/anonymous, open/abstract/sealed, data/value/enum/annotation,
-  nested interface/object, any class inside an object/companion/interface, and a companion of an
-  ordinary nested class (the current object-lowering pass would leave that companion's singleton
-  field uninitialized). A top-level plain class may carry supported named nested classes alongside
-  its existing direct companion. Recursive render failures preserve the deepest declaration tag
-  while unwinding, then family eviction removes every class/member entry. Pins:
-  `ilText/nestedClasses.kt`, `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`.
+  `nested family`. Modality follows the top-level class model after that prefix: final carries CLR
+  `sealed`, open omits it, and abstract/sealed Kotlin classes carry CLR `abstract`. A top-level or
+  nested class may extend any module-local top-level or nested class, including a forward sibling,
+  its metadata parent, a deeper family member, an independently generic instantiation under a
+  generic outer, or a class in another top-level family. Interfaces remain top-level-only. All
+  spellings, construction, member/field references, virtual/interface dispatch, forward links,
+  cross-depth links, and family shapes assemble and run on CoreCLR and Framework. STAYS REJECTED,
+  whole-family: `inner`, local/anonymous, data/value/enum/annotation, nested interface/object, any
+  class inside an object/companion/interface, and a companion of an ordinary nested class (the
+  current lowering pipeline would leave that companion's singleton field uninitialized). A
+  top-level plain class may carry supported named nested classes alongside its existing direct
+  companion. Recursive render failures preserve the deepest declaration tag while unwinding, then
+  family eviction removes every class/member entry. Pins: `ilText/nestedClasses.kt`,
+  `ilText/nestedInheritance.kt`, `ilText/nestedClassesRejected.kt`; runtime:
+  `box/nestedClasses.kt`, `box/nestedInheritance.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
-  `abstractprobe_s1`–`_s2`; JVM precedent: real CLR classes = real platform inheritance, no
-  vtable lowering — the same argument as the class-model bullet): a top-level plain class may be
-  `open` (drops `sealed` from the `.class` flags), `abstract`, or `sealed` (both emit ordinary CLR
+  `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
+  inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level or
+  named nested plain class may be `open` (drops `sealed` from the `.class` flags), `abstract`, or
+  `sealed` (both emit ordinary CLR
   `abstract`, never CLR `sealed`; Kotlin sealing remains frontend-enforced like the JVM's
   historical sealed-class model), and may extend EXACTLY ONE base class when the supertype
-  resolves to another top-level class of the compiled module. The gate checks only the
+  resolves to another recursively declared class of the compiled module. The gate checks only the
   structural shape; whether the base itself compiles is
   re-resolved from the live class map at the top of every render round, so a failing base
   cascades whole-class down the chain, each derived class warned with a reason carrying the
@@ -299,8 +305,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   such an upcast emits just its operand; every other type operator (CAST, SAFE_CAST,
   INSTANCEOF, IMPLICIT_NOTNULL, non-upcast IMPLICIT_CAST) stays rejected loudly. STAYS
   REJECTED, whole-class: exception supertypes (existing message; interface supertypes are
-  SUPPORTED since the interface model, see its bullet), out-of-module or
-  non-top-level bases, objects/companions with any supertype, covariant-return overrides
+  SUPPORTED since the interface model, see its bullet), out-of-module bases,
+  objects/companions with any supertype, covariant-return overrides
   (ECMA-335 II.15.4.2.3 slot matching includes the RETURN type, so the override would land in
   a fresh slot and base-typed `callvirt` would silently run the BASE body — probe-verified;
   Roslyn's fix is `.override` + `PreserveBaseOverrides` machinery this backend does not emit;
@@ -736,10 +742,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     all-abstract interfaces), plus the pre-existing `T : String`/`String?` erosion of the
     string-concat lowering, kept for compatibility and pinned by the borrowed
     `box/strings/kt50140.kt`: such a `T` still declares its real arity but its SLOTS map to
-    `string`); generic TOP-LEVEL PLAIN CLASSES (final, open, abstract, or sealed; the same direct
-    module-local constraint rule without the String exception), plus FINAL generic named nested
-    classes with an independent `!n` space and named nested classes inside generic outers (the
-    outer's parameters are not captured); generic TOP-LEVEL ALL-ABSTRACT
+    `string`); generic TOP-LEVEL OR NAMED NESTED PLAIN CLASSES (final, open, abstract, or sealed;
+    the same direct module-local constraint rule without the String exception), with nested
+    classes owning an independent `!n` space even inside generic outers (the outer's parameters are
+    not captured); generic TOP-LEVEL ALL-ABSTRACT
     INTERFACES with
     invariant, `out`, or `in` parameters under that same constraint rule; generic and non-generic
     classes implementing open or closed generic-interface instantiations; generic-interface
