@@ -37,6 +37,48 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     object Object : DotNetIlValueType("object")
 
     /**
+     * A CLR zero-based vector for one of the five supported primitive element types. The vector
+     * is a reference type even though its elements are values, so nullable and non-null Kotlin
+     * primitive arrays share this representation and widen to [Object] without boxing.
+     *
+     * The element-specific instructions are deliberately carried by the structural type: every
+     * array producer and consumer then derives its signature and opcode spelling from one source
+     * of truth. `arrprobe_s1` assembled and executed all five spellings on both CoreCLR and the
+     * .NET Framework CLR.
+     */
+    data class PrimitiveArray(val elementType: DotNetIlValueType) :
+        DotNetIlValueType("${elementType.nameInSignature}[]") {
+        init {
+            require(elementType.isSupportedPrimitiveArrayElement()) {
+                "unsupported CLR vector element type ${elementType.nameInSignature}"
+            }
+        }
+
+        val newArrayInstruction: kotlin.String
+            get() = "newarr ${elementType.nameInSignature}"
+
+        val loadElementInstruction: kotlin.String
+            get() = when (elementType) {
+                Boolean -> "ldelem.u1"
+                Int32 -> "ldelem.i4"
+                Int64 -> "ldelem.i8"
+                Float64 -> "ldelem.r8"
+                Char -> "ldelem.u2"
+                else -> error("Internal .NET backend error: unsupported vector element $elementType")
+            }
+
+        val storeElementInstruction: kotlin.String
+            get() = when (elementType) {
+                Boolean -> "stelem.i1"
+                Int32 -> "stelem.i4"
+                Int64 -> "stelem.i8"
+                Float64 -> "stelem.r8"
+                Char -> "stelem.i2"
+                else -> error("Internal .NET backend error: unsupported vector element $elementType")
+            }
+    }
+
+    /**
      * A concrete nullable Kotlin primitive (`Int?`, `Long?`, `Double?`, `Boolean?`, `Char?`) in
      * an EXACT typed position: CLR `System.Nullable<T>` — the hybrid-representation decision
      * (see AGENTS.md "Nullability model"). Roslyn precedent: C# `int?` is
@@ -184,6 +226,8 @@ internal fun DotNetIlValueType.substituteDotNetTypeParameters(
     // arm is defensive symmetry.
     is DotNetIlValueType.NullableValue ->
         DotNetIlValueType.NullableValue(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
+    is DotNetIlValueType.PrimitiveArray ->
+        DotNetIlValueType.PrimitiveArray(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
     else -> this
 }
 
@@ -255,7 +299,18 @@ internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(): String? = when (th
 internal fun DotNetIlValueType.isDotNetReferenceShaped(): Boolean = when (this) {
     DotNetIlValueType.String, DotNetIlValueType.Object,
     is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
-    is DotNetIlValueType.GenericInstance,
+    is DotNetIlValueType.GenericInstance, is DotNetIlValueType.PrimitiveArray,
+        -> true
+    else -> false
+}
+
+/** The scalar value types whose CLR vector forms are part of the supported primitive-array slice. */
+internal fun DotNetIlValueType.isSupportedPrimitiveArrayElement(): Boolean = when (this) {
+    DotNetIlValueType.Boolean,
+    DotNetIlValueType.Int32,
+    DotNetIlValueType.Int64,
+    DotNetIlValueType.Float64,
+    DotNetIlValueType.Char,
         -> true
     else -> false
 }

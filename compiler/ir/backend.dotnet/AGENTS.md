@@ -43,6 +43,43 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   (`ldloc`/`stloc`).
 - `if`/`when` follows JVM/WASM `IrWhen` handling: evaluate conditions, `brfalse` to next branch,
   `br` to the end label after a matched branch.
+- Primitive-array model (probe series `arrprobe_s1`; JVM intrinsic-registry precedent and
+  backend.common `IndexedGetLoopHeader` loop precedent): the five element types already supported
+  as scalar values (`Int`, `Long`, `Double`, `Boolean`, `Char`) map their Kotlin primitive-array
+  classes to CLR zero-based vectors (`int32[]`, `int64[]`, `float64[]`, `bool[]`, `char[]`). Arrays
+  are reference-shaped: nullable and non-null array types share one IL representation, `ldnull`
+  is valid, `===`/null checks use `ceq`, and array `==` is the same identity `ceq` because
+  primitive arrays inherit identity-based `Any.equals` on JVM and `System.Array` does likewise
+  on CLR (`contentEquals` remains the separate structural operation). Widening to `Any`/`Any?`
+  is instruction-free. Vectors compose unchanged in parameters, returns, locals, fields, and
+  generic type arguments. The registry owns the builtin surface: unary size constructors emit a
+  guarded `newarr`; literal `intArrayOf`/`longArrayOf`/`doubleArrayOf`/`booleanArrayOf`/
+  `charArrayOf` allocate once, spill the vector, and initialize in source order through one
+  reused element temporary plus typed `stelem`; `size` is `ldlen; conv.i4`; `get`/`set` use the
+  exact typed instructions (`ldelem.i4`/`stelem.i4`,
+  `ldelem.i8`/`stelem.i8`, `ldelem.r8`/`stelem.r8`, `ldelem.u1`/`stelem.i1`,
+  `ldelem.u2`/`stelem.i2`). Both the modern and .NET Framework assemblers accept those exact
+  signature, field, local, and instruction spellings; CoreCLR and Framework both throw
+  `System.IndexOutOfRangeException` for a vector bounds failure, which is already the mapped
+  `IndexOutOfBoundsException`. Both instead throw `System.OverflowException` for a negative
+  `newarr` length; exposing that raw fault would wrongly make `catch (ArithmeticException)` catch
+  a Kotlin negative-array-size failure. Constructors therefore branch on a negative size and
+  throw plain `System.Exception`: the supported Kotlin catch edges (`Exception`/`Throwable`)
+  remain correct without inventing an `ArithmeticException` or `IllegalArgumentException` edge;
+  exact `NegativeArraySizeException` identity is deferred with Kotlin-owned exception classes.
+  Direct `for (x in array)` iteration is lowered without iterator allocation: evaluate the array
+  expression once into `indexedObject`, initialize `inductionVariable = 0`, cache immutable
+  `last = indexedObject.size`, then `while (inductionVariable < last)` load
+  `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
+  before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
+  the removed iterator loop. STAYS REJECTED, loudly: generic `Array<T>` (covariance and reference
+  element stores are a separate slice), `ByteArray`/`ShortArray`/`FloatArray` (scalar elements are
+  unsupported), initializer-lambda constructors, spread elements in `*ArrayOf`, iterator values
+  escaping as objects, copying/content helpers, multidimensional/jagged arrays, and unsigned
+  arrays. The literal/get/set temporaries are mandatory for general expressions: CLR protected
+  regions require an empty stack at entry, so an element/index/value containing `try` cannot be
+  evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
+  `ilText/primitiveArraysRejected.kt`; runtime: `box/primitiveArrays.kt`.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure

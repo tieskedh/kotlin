@@ -1520,6 +1520,7 @@ class DotNetIlEmitter(
             is DotNetIlValueType.UserClass, is DotNetIlValueType.MappedClass,
             is DotNetIlValueType.NullableValue, DotNetIlValueType.Object,
             is DotNetIlValueType.GenericInstance, is DotNetIlValueType.TypeParameter,
+            is DotNetIlValueType.PrimitiveArray,
                 -> unsupportedValue()
         }
     }
