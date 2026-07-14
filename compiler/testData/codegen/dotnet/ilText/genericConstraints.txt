@@ -1,0 +1,484 @@
+.assembly extern mscorlib {}
+.assembly 'genericConstraints' {}
+.module 'main-genericConstraints.il'
+
+.class interface public abstract auto ansi 'test.constraints.Left'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'left'(int32 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'test.constraints.Right'
+{
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_right'() cil managed
+  {
+  }
+  .property instance int32 'right'()
+  {
+    .get instance int32 'test.constraints.Right'::'get_right'()
+  }
+}
+.class interface public abstract auto ansi 'test.constraints.ParentMark'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'parentValue'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'test.constraints.ChildMark'
+       implements 'test.constraints.ParentMark'
+{
+}
+.class public auto ansi beforefieldinit 'test.constraints.Base'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'test.constraints.Base'::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'test.constraints.Base'::'seed'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'virtualValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'test.constraints.Base'::'get_seed'()
+    ret
+  }
+  .method public hidebysig instance int32 'finalValue'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 'test.constraints.Base'::'get_seed'()
+    ldc.i4 1
+    add
+    ret
+  }
+  .property instance int32 'seed'()
+  {
+    .get instance int32 'test.constraints.Base'::'get_seed'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.constraints.Impl'
+       extends 'test.constraints.Base'
+       implements 'test.constraints.Left', 'test.constraints.Right', 'test.constraints.ChildMark'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'test.constraints.Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_right'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 5
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'left'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.0
+    callvirt instance int32 'test.constraints.Impl'::'get_right'()
+    add
+    ret
+  }
+  .method public hidebysig virtual instance int32 'virtualValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 30
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'parentValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 11
+    ret
+  }
+  .property instance int32 'right'()
+  {
+    .get instance int32 'test.constraints.Impl'::'get_right'()
+  }
+}
+.class public auto ansi beforefieldinit 'test.constraints.GenericParent`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'item'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.constraints.GenericParent`1'<!0>::'item'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.constraints.GenericParent`1'<!0>::'item'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'inheritedVirtual'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'test.constraints.GenericParent`1'<!0>::'get_item'()
+    ret
+  }
+  .method public hidebysig instance !0 'inheritedFinal'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'test.constraints.GenericParent`1'<!0>::'get_item'()
+    ret
+  }
+  .property instance !0 'item'()
+  {
+    .get instance !0 'test.constraints.GenericParent`1'::'get_item'()
+  }
+}
+.class public auto ansi beforefieldinit 'test.constraints.StringParent'
+       extends class 'test.constraints.GenericParent`1'<string>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'test.constraints.GenericParent`1'<string>::.ctor(!0)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.constraints.OverrideStringParent'
+       extends 'test.constraints.StringParent'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'test.constraints.StringParent'::.ctor(string)
+    ret
+  }
+  .method public hidebysig virtual instance string 'inheritedVirtual'() cil managed
+  {
+    .maxstack 1
+    ldstr "override"
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.constraints.BoundBox`1'<(class 'test.constraints.Left', class 'test.constraints.Right') 'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.constraints.BoundBox`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.constraints.BoundBox`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig instance int32 'total'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !0 '<constrainedReceiver>',
+      [1] !0 '<constrainedReceiver>@1',
+      [2] int32 '<constrainedArgument>'
+    )
+    ldarg.0
+    call instance !0 class 'test.constraints.BoundBox`1'<!0>::'get_value'()
+    stloc.0
+    ldarg.0
+    call instance !0 class 'test.constraints.BoundBox`1'<!0>::'get_value'()
+    stloc.1
+    ldloca 1
+    constrained. !0
+    callvirt instance int32 'test.constraints.Right'::'get_right'()
+    stloc.2
+    ldloca 0
+    ldloc.2
+    constrained. !0
+    callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'test.constraints.BoundBox`1'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'test.constraints.genericConstraintsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'consumeLeft'(class 'test.constraints.Left' 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 2
+    callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    ret
+  }
+  .method public hidebysig static int32 'methodTotal'<(class 'test.constraints.Base', class 'test.constraints.Left', class 'test.constraints.Right') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !!0 '<constrainedReceiver>',
+      [1] !!0 '<constrainedReceiver>@1',
+      [2] !!0 '<constrainedReceiver>@2',
+      [3] !!0 '<constrainedReceiver>@3',
+      [4] int32 '<constrainedArgument>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    constrained. !!0
+    callvirt instance int32 'test.constraints.Base'::'virtualValue'()
+    ldarg.0
+    stloc.1
+    ldloc.1
+    box !!0
+    call instance int32 'test.constraints.Base'::'finalValue'()
+    add
+    ldarg.0
+    stloc.2
+    ldarg.0
+    stloc.3
+    ldloca 3
+    constrained. !!0
+    callvirt instance int32 'test.constraints.Right'::'get_right'()
+    stloc 4
+    ldloca 2
+    ldloc 4
+    constrained. !!0
+    callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    add
+    ldarg.0
+    box !!0
+    call int32 'test.constraints.genericConstraintsKt'::'consumeLeft'(class 'test.constraints.Left')
+    add
+    ret
+  }
+  .method public hidebysig static int32 'interfaceOnly'<(class 'test.constraints.Left') 'T'>(!!0 'value', int32 'add') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !!0 '<constrainedReceiver>',
+      [1] int32 '<constrainedArgument>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloca 0
+    ldloc.1
+    constrained. !!0
+    callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    ret
+  }
+  .method public hidebysig static int32 'finalOnly'<(class 'test.constraints.Base') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !!0 '<constrainedReceiver>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    box !!0
+    call instance int32 'test.constraints.Base'::'finalValue'()
+    ret
+  }
+  .method public hidebysig static !!1 'keepSecond'<(class 'test.constraints.Left') 'T', 'U'>(!!0 'value', !!1 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !!0 '<constrainedReceiver>',
+      [1] int32 '<constrainedArgument>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldloca 0
+    ldloc.1
+    constrained. !!0
+    callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    pop
+    ldarg.1
+    ret
+  }
+  .method public hidebysig static int32 'forward'<(class 'test.constraints.Left') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 1
+    call int32 'test.constraints.genericConstraintsKt'::'interfaceOnly'<!!0>(!!0, int32)
+    ret
+  }
+  .method public hidebysig static int32 'transitiveInterface'<(class 'test.constraints.ChildMark') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !!0 '<constrainedReceiver>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    constrained. !!0
+    callvirt instance int32 'test.constraints.ParentMark'::'parentValue'()
+    ret
+  }
+  .method public hidebysig static string 'inheritedGenericVirtual'<(class 'test.constraints.StringParent') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !!0 '<constrainedReceiver>'
+    )
+    ldarg.0
+    stloc.0
+    ldloca 0
+    constrained. !!0
+    callvirt instance !0 class 'test.constraints.GenericParent`1'<string>::'inheritedVirtual'()
+    ret
+  }
+  .method public hidebysig static string 'inheritedGenericFinal'<(class 'test.constraints.StringParent') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !!0 '<constrainedReceiver>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    box !!0
+    call instance !0 class 'test.constraints.GenericParent`1'<string>::'inheritedFinal'()
+    ret
+  }
+  .method public hidebysig static int32 'protectedCall'<(class 'test.constraints.Left') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] !!0 '<constrainedReceiver>',
+      [1] int32 '<try>',
+      [2] class [mscorlib]System.Exception 'e',
+      [3] int32 '<constrainedArgument>'
+    )
+    ldarg.0
+    stloc.0
+    .try {
+      ldc.i4 3
+      stloc.1
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.2
+      ldc.i4 -1
+      stloc.1
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.1
+    stloc.3
+    ldloca 0
+    ldloc.3
+    constrained. !!0
+    callvirt instance int32 'test.constraints.Left'::'left'(int32)
+    ret
+  }
+  .method public hidebysig static class 'test.constraints.Left' 'widenBound'<(class 'test.constraints.Left') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box !!0
+    ret
+  }
+  .method public hidebysig static object 'widenAny'<(class 'test.constraints.Left') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box !!0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    .locals init (
+      [0] class 'test.constraints.Impl' 'value',
+      [1] class 'test.constraints.OverrideStringParent' 'inherited'
+    )
+    ldc.i4 3
+    newobj instance void 'test.constraints.Impl'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    call int32 'test.constraints.genericConstraintsKt'::'methodTotal'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    ldc.i4 4
+    call int32 'test.constraints.genericConstraintsKt'::'interfaceOnly'<class 'test.constraints.Impl'>(!!0, int32)
+    pop
+    ldloc.0
+    call int32 'test.constraints.genericConstraintsKt'::'finalOnly'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    ldstr "kept"
+    call !!1 'test.constraints.genericConstraintsKt'::'keepSecond'<class 'test.constraints.Impl', string>(!!0, !!1)
+    pop
+    ldloc.0
+    call int32 'test.constraints.genericConstraintsKt'::'forward'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    call int32 'test.constraints.genericConstraintsKt'::'transitiveInterface'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldstr "base"
+    newobj instance void 'test.constraints.OverrideStringParent'::.ctor(string)
+    stloc.1
+    ldloc.1
+    call string 'test.constraints.genericConstraintsKt'::'inheritedGenericVirtual'<class 'test.constraints.OverrideStringParent'>(!!0)
+    pop
+    ldloc.1
+    call string 'test.constraints.genericConstraintsKt'::'inheritedGenericFinal'<class 'test.constraints.OverrideStringParent'>(!!0)
+    pop
+    ldloc.0
+    call int32 'test.constraints.genericConstraintsKt'::'protectedCall'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    call class 'test.constraints.Left' 'test.constraints.genericConstraintsKt'::'widenBound'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    call object 'test.constraints.genericConstraintsKt'::'widenAny'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    newobj instance void class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::.ctor(!0)
+    call instance int32 class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::'total'()
+    pop
+    ret
+  }
+}

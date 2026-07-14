@@ -163,13 +163,11 @@ internal class DotNetIlMethodCodegen(
                 val specialname = if (function.isAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
-                // A generic METHOD declares its formal type-parameter list between the name and
-                // the parameter list: `.method ... !!0 'id'<'T'>(!!0 'x')` — generic methods are
-                // fully self-contained, no class machinery involved (probe-verified,
-                // genprobe_s1; the quoted-name spelling genprobe_s8).
+                // A generic METHOD declares its formal list between the name and parameters:
+                // `<'T'>`, or `<(class 'Base', class 'Mark') 'T'>` with stage-2 constraints
+                // (genprobe_s1/_s8, genconstraintprobe_s1).
                 val genericParameters = function.typeParameters
-                    .takeIf { it.isNotEmpty() }
-                    ?.joinToString(", ", "<", ">") { it.name.asString().toIlIdentifier() }
+                    .renderDotNetIlGenericParameters(typeMapper)
                     .orEmpty()
                 appendLine(
                     "  .method $visibility hidebysig $specialname${function.dotNetVirtualFlags()}$dispatch " +
