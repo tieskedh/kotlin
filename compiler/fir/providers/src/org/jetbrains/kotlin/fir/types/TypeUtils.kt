@@ -208,7 +208,7 @@ fun <T : ConeKotlinType> T.withAttributes(attributes: ConeAttributes): T {
         is ConeErrorType -> ConeErrorType(diagnostic, isUninferredParameter, delegatedType, typeArguments, attributes, nullable, lookupTag)
         is ConeClassLikeTypeImpl -> ConeClassLikeTypeImpl(lookupTag, typeArguments, isMarkedNullable, attributes)
         is ConeDefinitelyNotNullType -> ConeDefinitelyNotNullType(original.withAttributes(attributes))
-        is ConeTypeParameterType -> ConeTypeParameterTypeImpl(lookupTag, isMarkedNullable, attributes)
+        is ConeTypeParameterTypeImpl -> ConeTypeParameterTypeImpl(lookupTag, isMarkedNullable, attributes)
         is ConeRawType -> ConeRawType.create(lowerBound.withAttributes(attributes), upperBound.withAttributes(attributes))
         is ConeDynamicType -> ConeDynamicType(lowerBound.withAttributes(attributes), upperBound.withAttributes(attributes))
         is ConeFlexibleType -> ConeFlexibleType(lowerBound.withAttributes(attributes), upperBound.withAttributes(attributes), isTrivial)
@@ -268,7 +268,7 @@ fun <T : ConeKotlinType> T.withNullability(
     return when (this) {
         is ConeErrorType -> ConeErrorType(diagnostic, isUninferredParameter, delegatedType, typeArguments, theAttributes, nullable, lookupTag)
         is ConeClassLikeTypeImpl -> ConeClassLikeTypeImpl(lookupTag, typeArguments, nullable, theAttributes)
-        is ConeTypeParameterType -> ConeTypeParameterTypeImpl(lookupTag, nullable, theAttributes)
+        is ConeTypeParameterTypeImpl -> ConeTypeParameterTypeImpl(lookupTag, nullable, theAttributes)
         is ConeDynamicType -> this
         is ConeFlexibleType -> {
             if (isTrivial) {
