@@ -1,0 +1,564 @@
+.assembly extern mscorlib {}
+.assembly 'genericInheritanceChains' {}
+.module 'main-genericInheritanceChains.il'
+
+.class interface public abstract auto ansi 'View`1'<'T'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'first'() cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'Base`2'<'A', 'B'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'left'
+  .field private !1 'right'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'left', !1 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Base`2'<!0, !1>::'left'
+    ldarg.0
+    ldarg.2
+    stfld !1 class 'Base`2'<!0, !1>::'right'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_left'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'Base`2'<!0, !1>::'left'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_left'(!0 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Base`2'<!0, !1>::'left'
+    ret
+  }
+  .method public hidebysig specialname instance !1 'get_right'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !1 class 'Base`2'<!0, !1>::'right'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_right'(!1 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld !1 class 'Base`2'<!0, !1>::'right'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'Base`2'<!0, !1>::'get_left'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !1 'second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !1 class 'Base`2'<!0, !1>::'get_right'()
+    ret
+  }
+  .method public hidebysig instance void 'putLeft'(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'Base`2'<!0, !1>::'set_left'(!0)
+    ret
+  }
+  .method public hidebysig instance void 'putRight'(!1 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'Base`2'<!0, !1>::'set_right'(!1)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'choose'<'M'>(!0 'context', !!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'source'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldstr "base"
+    ret
+  }
+  .property instance !0 'left'()
+  {
+    .get instance !0 'Base`2'::'get_left'()
+    .set instance void 'Base`2'::'set_left'(!0)
+  }
+  .property instance !1 'right'()
+  {
+    .get instance !1 'Base`2'::'get_right'()
+    .set instance void 'Base`2'::'set_right'(!1)
+  }
+}
+.class public auto ansi beforefieldinit 'Mid`2'<'X', 'Y'>
+       extends class 'Base`2'<!1, !0>
+       implements class 'View`1'<!1>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'x', !1 'y') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.2
+    ldarg.1
+    call instance void class 'Base`2'<!1, !0>::.ctor(!0, !1)
+    ret
+  }
+  .method public hidebysig virtual instance !0 'second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !1 class 'Base`2'<!1, !0>::'second'()
+    ret
+  }
+  .method public hidebysig virtual instance !!0 'choose'<'M'>(!1 'context', !!0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance !!0 class 'Base`2'<!1, !0>::'choose'<!!0>(!0, !!0)
+    ret
+  }
+  .method public hidebysig virtual instance string 'source'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 3
+    ldstr "mid:"
+    ldarg.0
+    ldarg.1
+    call instance string class 'Base`2'<!1, !0>::'source'<!!0>(!!0)
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Leaf`2'<'P', 'Q'>
+       extends class 'Mid`2'<!1, !0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'p', !1 'q') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.2
+    ldarg.1
+    call instance void class 'Mid`2'<!1, !0>::.ctor(!0, !1)
+    ret
+  }
+  .method public hidebysig virtual instance !1 'second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'Mid`2'<!1, !0>::'second'()
+    ret
+  }
+  .method public hidebysig virtual instance string 'source'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 3
+    ldstr "leaf:"
+    ldarg.0
+    ldarg.1
+    call instance string class 'Mid`2'<!1, !0>::'source'<!!0>(!!0)
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Holder`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'Holder`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'Holder`1'<!0>::'value'
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'Holder`1'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Wrapped`1'<'T'>
+       extends class 'Base`2'<class 'Holder`1'<!0>, !0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    newobj instance void class 'Holder`1'<!0>::.ctor(!0)
+    ldarg.1
+    call instance void class 'Base`2'<class 'Holder`1'<!0>, !0>::.ctor(!0, !1)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Fixed`1'<'T'>
+       extends class 'Base`2'<string, !0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldstr "fixed"
+    ldarg.1
+    call instance void class 'Base`2'<string, !0>::.ctor(!0, !1)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ArrayWrapped`1'<'T'>
+       extends class 'Base`2'<!0[], !0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0[] 'values', !0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance void class 'Base`2'<!0[], !0>::.ctor(!0, !1)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'NullableFixed`1'<'T'>
+       extends class 'Base`2'<valuetype [mscorlib]System.Nullable`1<int32>, !0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    ldarg.0
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    ldarg.1
+    call instance void class 'Base`2'<valuetype [mscorlib]System.Nullable`1<int32>, !0>::.ctor(!0, !1)
+    ret
+  }
+}
+.class interface public abstract auto ansi 'Marked'
+{
+  .method public hidebysig newslot abstract virtual instance string 'label'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Token'
+       extends [mscorlib]System.Object
+       implements 'Marked'
+{
+  .field private string 'text'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'text') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'Token'::'text'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_text'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'Token'::'text'
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'Token'::'get_text'()
+    ret
+  }
+  .property instance string 'text'()
+  {
+    .get instance string 'Token'::'get_text'()
+  }
+}
+.class public auto ansi beforefieldinit 'ConstrainedBase`1'<(class 'Marked') 'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'ConstrainedBase`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'ConstrainedBase`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig instance !0 'current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'ConstrainedBase`1'<!0>::'get_value'()
+    ret
+  }
+  .method public hidebysig instance string 'label'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !0 '<constrainedReceiver>'
+    )
+    ldarg.0
+    call instance !0 class 'ConstrainedBase`1'<!0>::'get_value'()
+    stloc.0
+    ldloca 0
+    constrained. !0
+    callvirt instance string 'Marked'::'label'()
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'ConstrainedBase`1'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ConstrainedDerived`1'<(class 'Marked') 'T'>
+       extends class 'ConstrainedBase`1'<!0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'ConstrainedBase`1'<!0>::.ctor(!0)
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericInheritanceChainsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class 'Base`2'<!!0, !!1> 'baseView'<'A', 'B'>(class 'Leaf`2'<!!0, !!1> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'View`1'<!!0> 'interfaceView'<'A', 'B'>(class 'Leaf`2'<!!0, !!1> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static !!2 'choose'<'A', 'B', 'M'>(class 'Leaf`2'<!!0, !!1> 'value', !!0 'context', !!2 'selected') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance !!0 class 'Mid`2'<!!1, !!0>::'choose'<!!2>(!1, !!0)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'Leaf`2'<string, int32> 'leaf',
+      [1] class 'Base`2'<string, int32> 'base',
+      [2] class 'View`1'<string> 'view',
+      [3] class 'Base`2'<int32, string> 'swapped',
+      [4] class 'Wrapped`1'<string> 'wrapped',
+      [5] class 'Fixed`1'<int32> 'fixed',
+      [6] class 'ArrayWrapped`1'<string> 'arrayWrapped',
+      [7] string[] '<arrayOf>',
+      [8] string '<arrayElement>',
+      [9] string[] '<arrayGet>',
+      [10] int32 '<arrayIndex>',
+      [11] class 'NullableFixed`1'<string> 'nullableFixed',
+      [12] valuetype [mscorlib]System.Nullable`1<int32> '<str>',
+      [13] class 'ConstrainedDerived`1'<class 'Token'> 'constrained'
+    )
+    ldstr "left"
+    ldc.i4 7
+    newobj instance void class 'Leaf`2'<string, int32>::.ctor(!0, !1)
+    stloc.0
+    ldloc.0
+    callvirt instance !0 class 'Base`2'<string, int32>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    callvirt instance !1 class 'Leaf`2'<string, int32>::'second'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    stloc.1
+    ldloc.1
+    ldc.i4.1
+    callvirt instance string class 'Base`2'<string, int32>::'source'<bool>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldstr "context"
+    ldc.i8 11
+    callvirt instance !!0 class 'Base`2'<string, int32>::'choose'<int64>(!0, !!0)
+    box [mscorlib]System.Int64
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldstr "changed"
+    call instance void class 'Base`2'<string, int32>::'putLeft'(!0)
+    ldloc.0
+    callvirt instance !0 class 'Base`2'<string, int32>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    stloc.2
+    ldloc.2
+    callvirt instance !0 class 'View`1'<string>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class 'Base`2'<!!0, !!1> 'genericInheritanceChainsKt'::'baseView'<string, int32>(class 'Leaf`2'<!!0, !!1>)
+    callvirt instance !1 class 'Base`2'<string, int32>::'second'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class 'View`1'<!!0> 'genericInheritanceChainsKt'::'interfaceView'<string, int32>(class 'Leaf`2'<!!0, !!1>)
+    callvirt instance !0 class 'View`1'<string>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldstr "open"
+    ldstr "selected"
+    call !!2 'genericInheritanceChainsKt'::'choose'<string, int32, string>(class 'Leaf`2'<!!0, !!1>, !!0, !!2)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 13
+    ldstr "right"
+    newobj instance void class 'Leaf`2'<int32, string>::.ctor(!0, !1)
+    stloc.3
+    ldloc.3
+    callvirt instance !0 class 'Base`2'<int32, string>::'first'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    callvirt instance !1 class 'Base`2'<int32, string>::'second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "nested"
+    newobj instance void class 'Wrapped`1'<string>::.ctor(!0)
+    stloc 4
+    ldloc 4
+    callvirt instance !0 class 'Base`2'<class 'Holder`1'<string>, string>::'first'()
+    call instance !0 class 'Holder`1'<string>::'get_value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    callvirt instance !1 class 'Base`2'<class 'Holder`1'<string>, string>::'second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 17
+    newobj instance void class 'Fixed`1'<int32>::.ctor(!0)
+    stloc 5
+    ldloc 5
+    callvirt instance !0 class 'Base`2'<string, int32>::'first'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 5
+    callvirt instance !1 class 'Base`2'<string, int32>::'second'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newarr string
+    stloc 7
+    ldstr "array"
+    stloc 8
+    ldloc 7
+    ldc.i4 0
+    ldloc 8
+    stelem string
+    ldloc 7
+    ldstr "array"
+    newobj instance void class 'ArrayWrapped`1'<string>::.ctor(!0[], !0)
+    stloc 6
+    ldloc 6
+    callvirt instance !0 class 'Base`2'<string[], string>::'first'()
+    stloc 9
+    ldc.i4 0
+    stloc 10
+    ldloc 9
+    ldloc 10
+    ldelem string
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    callvirt instance !1 class 'Base`2'<string[], string>::'second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "nullable"
+    newobj instance void class 'NullableFixed`1'<string>::.ctor(!0)
+    stloc 11
+    ldloc 11
+    callvirt instance !0 class 'Base`2'<valuetype [mscorlib]System.Nullable`1<int32>, string>::'first'()
+    stloc 12
+    ldloca 12
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_strValueNotNull_0
+    ldstr "null"
+    br IL_strValueEnd_1
+IL_strValueNotNull_0:
+    ldloca 12
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+IL_strValueEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 11
+    callvirt instance !1 class 'Base`2'<valuetype [mscorlib]System.Nullable`1<int32>, string>::'second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "constrained"
+    newobj instance void 'Token'::.ctor(string)
+    newobj instance void class 'ConstrainedDerived`1'<class 'Token'>::.ctor(!0)
+    stloc 13
+    ldloc 13
+    call instance !0 class 'ConstrainedBase`1'<class 'Token'>::'current'()
+    callvirt instance string 'Token'::'label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 13
+    call instance string class 'ConstrainedBase`1'<class 'Token'>::'label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

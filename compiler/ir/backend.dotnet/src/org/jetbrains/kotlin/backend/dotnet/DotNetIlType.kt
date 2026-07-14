@@ -485,9 +485,10 @@ internal class DotNetIlClassInfo(
     /**
      * The base TYPE of this class as a full type token — a [DotNetIlValueType.UserClass] for a
      * plain base, a [DotNetIlValueType.GenericInstance] for an instantiated generic base
-     * (`class D : Box<Int>()` links `class 'Box`1'<int32>`; the instantiation must be part of
-     * the link because assignability is INVARIANT — `D` widens to `Box<Int>` but never to
-     * `Box<String>`) — or null when the class extends `kotlin.Any` (IL `System.Object`). Linked
+     * (`class D : Box<Int>()` links `class 'Box`1'<int32>`; `class D<T> : Box<T>()` links the
+     * open `class 'Box`1'<!0>`). The instantiation must be part of the link because assignability
+     * is INVARIANT — `D` widens only to its exact base view — or null when the class extends
+     * `kotlin.Any` (IL `System.Object`). Linked
      * by [DotNetIlEmitter]'s pre-pass after ALL gate-passing classes are registered (a base may
      * be declared after its derived class — forward references are legal IL, probe-verified
      * `inheritprobe_s1`) and consumed by [isDotNetAssignableTo]'s upcast walk. Deliberately NOT
@@ -521,8 +522,9 @@ internal class DotNetIlClassInfo(
      * deduplicated by the rendered token like [DotNetIlValueType.UserClass]/
      * [DotNetIlValueType.GenericInstance] equality. [selfArguments] is this class's own
      * instantiation, substituted into every base/interface link that mentions its parameters;
-     * this is active machinery for generic classes implementing open generic interfaces and for
-     * generic-interface inheritance. A non-generic class's own links are always closed.
+     * this is active machinery for generic-to-generic class inheritance, generic classes
+     * implementing open generic interfaces, and generic-interface inheritance. A non-generic
+     * class's own links are always closed.
      */
     fun allSupertypes(selfArguments: List<DotNetIlValueType> = emptyList()): Sequence<DotNetIlValueType> = sequence {
         val visited = hashSetOf<String>()

@@ -663,9 +663,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Generics stance: the type representation stays structural so that generics target real
   CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
   rejected, never erased.
-- Generics model (stages 1-5) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
-  `genarrayprobe_s1`, `genifaceprobe_s1`, `genmemberprobe_s1`; precedent: Roslyn — the CLR has
-  REAL reified generics,
+- Generics model (stages 1-6) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
+  `genarrayprobe_s1`, `genifaceprobe_s1`, `genmemberprobe_s1`, `geninheritprobe_s1`; precedent:
+  Roslyn — the CLR has REAL reified generics,
   so like every prior
   model bullet there is NO erasure/monomorphization/lowering machinery: the type mapper and
   emitters learn generic declarations, type-parameter references and instantiation tokens, and
@@ -680,9 +680,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     constraint rule without the String exception); generic TOP-LEVEL ALL-ABSTRACT INTERFACES with
     invariant, `out`, or `in` parameters under that same constraint rule; generic and non-generic
     classes implementing open or closed generic-interface instantiations; generic-interface
-    inheritance with composed arguments; a NON-generic class extending an INSTANTIATED generic base — optionally ALSO
-    implementing interfaces (`ilText/genericInheritance.kt` + `box/genericInheritance.kt`,
-    `LabeledBox`) — and a GENERIC class extending a plain base; what an
+    inheritance with composed arguments; any supported class extending a module-local plain or
+    generic base through a mapped closed/open instantiation — including permuted, nested,
+    generic-array, concrete nullable-value and constrained arguments — across arbitrary chains,
+    optionally ALSO implementing interfaces (`ilText/genericInheritance.kt`,
+    `ilText/genericInheritanceChains.kt` and their box tests); what an
     unconstrained `T`-typed value supports exactly store/load (locals, params, returns, fields of
     the declaring class) and passing to another `T` position. A constrained `T` additionally
     supports calls to members exposed by any direct/transitive bound and widening to a bound or
@@ -712,8 +714,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     `!!0` is itself a legal instantiation argument at generic→generic pass-through sites, and
     `class 'Box`1'<!!0>` composes inside generic methods, genprobe_s9). EXCEPTION: `.property`
     accessor references use the bare class name with NO type-args list (genprobe_s2). The `extends`
-    line of an instantiated generic base is `extends class 'Box`1'<int32>` with the ordinary
-    base-ctor chain (genprobe_s5). Nullable composes verbatim as an argument
+    line of an instantiated generic base is closed `extends class 'Box`1'<int32>` (genprobe_s5)
+    or open/permuted `extends class 'Base`2'<!1, !0>`; its base-ctor operand carries that same
+    owner token while keeping the base's formal parameter slots open (`geninheritprobe_s1`).
+    Nullable composes verbatim as an argument
     (`class 'Box`1'<valuetype [mscorlib]System.Nullable`1<int32>>`) in every operand position, and
     the mandatory home-address spill rule extends to `!0`-returning calls — spill to a local typed
     with the CLOSED substituted type, then `ldloca` (genprobe_s4). Reification is real:
@@ -724,7 +728,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     `DotNetIlValueType`); call sites derive the owner token from the RECEIVER's mapped type walked
     to the declaring class (`dotNetViewAsGenericOwner` — inherited members and super-calls through a
     derived receiver name the instantiated BASE, genprobe_s5) and emit argument VALUES against the
-    IL-level SUBSTITUTED types (`substituteDotNetTypeParameters`). Assignability stays structural:
+    IL-level SUBSTITUTED types (`substituteDotNetTypeParameters`). Base/interface edges substitute
+    recursively at every hop, so a chain such as `Leaf<P,Q> : Mid<Q,P> : Base<P,Q>` recovers the
+    exact open declaring-owner view (`geninheritprobe_s1`). Assignability stays structural:
     generic classes and exact generic arguments are invariant, while interface `out`/`in`
     conversions recurse in the appropriate direction only for statically reference-shaped
     differing arguments (the CLR excludes value-type instantiations). The supertype walk carries
@@ -776,9 +782,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     rejections stay authoritative), inline/reified generic functions (no inlining model), declared
     varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
     generic (extension) properties (the property metadata/accessor binding model does not cover
-    generic accessors), generic classes containing companions/nested objects (untouched nested
-    machinery), and generic-extends-generic CLASS
-    chains (IL shape probed fine, genprobe_s7, but the gate interactions are unexercised).
+    generic accessors), and generic classes containing companions/nested objects (untouched nested
+    machinery). A generic base instantiation whose argument does not map (`T?`, an unsupported
+    external generic/primitive/array shape, or an evicted class) rejects the whole derived chain;
+    an unrelated valid instantiation of the same base survives.
   - Pins: `ilText/genericFunctions.kt` (declaration + call-site spellings for every mapped
     type-arg kind incl. `<!!0>` pass-through, a nested instantiation as a generic-method type
     argument — `id<Box<String>>` carries `class 'Box`1'<string>` in the `<inst>` list — and the
@@ -804,6 +811,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     overrides/super calls, object/companion owners, member extensions and arity overloads),
     `ilText/genericMembersRejected.kt` (inline/reified methods, nullable method slots and
     unsupported method bounds),
+    `ilText/genericInheritanceChains.kt` (open/permuted multi-hop extends and ctor tokens,
+    substituted generic/non-generic overrides and super calls, inherited interface/member owner
+    views, open upcasts, nested/array/nullable/constrained arguments),
+    `ilText/genericInheritanceChainsRejected.kt` (invalid argument and base-eviction cascades with
+    an unrelated surviving open instantiation),
     `ilText/classShapeRejected.kt` (the
     variance flavor in the class-shape gate); runtime:
     `box/genericFunctions.kt` (every type-arg kind incl. both `Int?` flavors through `!!0`,
@@ -823,7 +835,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     implementers and exact value-type instantiations), `box/genericMembers.kt` (method
     pass-through, nullable method instantiations, inherited interface implementation, generic
     virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
-    member extensions).
+    member extensions), `box/genericInheritanceChains.kt` (multi-hop constructor/state flow,
+    generic virtual/super dispatch, inherited generic-interface mapping, open base/interface
+    upcasts, cross-view identity and every supported composite base-argument family).
 - Shared runtime code (e.g. the Kotlin-parity `Double.toString` rendering) is hand-written IL on the
   synthetic module-private `'<KotlinIl>'` class (`DotNetIlRuntimeHelpers`) — the CLR-side stand-in
   for the JVM's `kotlin.jvm.internal.Intrinsics` runtime until a real .NET stdlib exists. The class
