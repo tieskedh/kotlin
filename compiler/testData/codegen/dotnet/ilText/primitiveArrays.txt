@@ -1,0 +1,574 @@
+.assembly extern mscorlib {}
+.assembly 'primitiveArrays' {}
+.module 'main-primitiveArrays.il'
+
+.class public auto ansi sealed beforefieldinit 'test.arrays.Holder'
+       extends [mscorlib]System.Object
+{
+  .field private int32[] 'ints'
+  .field private char[] 'chars'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32[] 'ints', char[] 'chars') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32[] 'test.arrays.Holder'::'ints'
+    ldarg.0
+    ldarg.2
+    stfld char[] 'test.arrays.Holder'::'chars'
+    ret
+  }
+  .method public hidebysig specialname instance int32[] 'get_ints'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32[] 'test.arrays.Holder'::'ints'
+    ret
+  }
+  .method public hidebysig specialname instance char[] 'get_chars'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld char[] 'test.arrays.Holder'::'chars'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_chars'(char[] '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld char[] 'test.arrays.Holder'::'chars'
+    ret
+  }
+  .property instance int32[] 'ints'()
+  {
+    .get instance int32[] 'test.arrays.Holder'::'get_ints'()
+  }
+  .property instance char[] 'chars'()
+  {
+    .get instance char[] 'test.arrays.Holder'::'get_chars'()
+    .set instance void 'test.arrays.Holder'::'set_chars'(char[])
+  }
+}
+.class public auto ansi sealed beforefieldinit 'test.arrays.Crate`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'test.arrays.Crate`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'test.arrays.Crate`1'<!0>::'value'
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'test.arrays.Crate`1'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi 'test.arrays.primitiveArraysKt'
+       extends [mscorlib]System.Object
+{
+  .field private static int32 'sequence'
+  .field private static int32[] 'seeded'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOf>',
+      [1] int32 '<arrayElement>'
+    )
+    ldc.i4 0
+    stsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
+    ldc.i4 2
+    newarr int32
+    stloc.0
+    ldc.i4 1
+    call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.i4
+    ldc.i4 2
+    call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.i4
+    ldloc.0
+    stsfld int32[] 'test.arrays.primitiveArraysKt'::'seeded'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_sequence'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_sequence'(int32 '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
+    ret
+  }
+  .method public hidebysig static int32 'marked'(int32 'value') cil managed
+  {
+    .maxstack 2
+    call int32 'test.arrays.primitiveArraysKt'::'get_sequence'()
+    ldc.i4 10
+    mul
+    ldarg.0
+    add
+    call void 'test.arrays.primitiveArraysKt'::'set_sequence'(int32)
+    ldarg.0
+    ret
+  }
+  .method public hidebysig specialname static int32[] 'get_seeded'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32[] 'test.arrays.primitiveArraysKt'::'seeded'
+    ret
+  }
+  .method public hidebysig static int32[] 'allocate'(int32 'size') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int32
+    ret
+  }
+  .method public hidebysig static int32[] 'ints'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOf>',
+      [1] int32 '<arrayElement>'
+    )
+    ldc.i4 3
+    newarr int32
+    stloc.0
+    ldc.i4 1
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.i4
+    ldc.i4 2
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.i4
+    ldc.i4 3
+    stloc.1
+    ldloc.0
+    ldc.i4 2
+    ldloc.1
+    stelem.i4
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32[] 'emptyInts'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] int32[] '<arrayOf>'
+    )
+    ldc.i4 0
+    newarr int32
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int64[] 'longs'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int64[] '<arrayOf>',
+      [1] int64 '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr int64
+    stloc.0
+    ldc.i8 4
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.i8
+    ldc.i8 5
+    neg
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.i8
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static float64[] 'doubles'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] float64[] '<arrayOf>',
+      [1] float64 '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr float64
+    stloc.0
+    ldc.r8 1.5
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.r8
+    ldc.r8 0.0
+    neg
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.r8
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static bool[] 'booleans'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] bool[] '<arrayOf>',
+      [1] bool '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr bool
+    stloc.0
+    ldc.i4.1
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.i1
+    ldc.i4.0
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.i1
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static char[] 'chars'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] char[] '<arrayOf>',
+      [1] char '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr char
+    stloc.0
+    ldc.i4 65
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.i2
+    ldc.i4 8364
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.i2
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static int32 'intAccess'(int32[] 'values', int32 'index', int32 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] int32 '<arrayValue>',
+      [3] int32[] '<arrayGet>',
+      [4] int32 '<arrayIndex>@4'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem.i4
+    ldarg.0
+    stloc.3
+    ldarg.1
+    stloc 4
+    ldloc.3
+    ldloc 4
+    ldelem.i4
+    ret
+  }
+  .method public hidebysig static int64 'longAccess'(int64[] 'values', int32 'index', int64 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int64[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] int64 '<arrayValue>',
+      [3] int64[] '<arrayGet>',
+      [4] int32 '<arrayIndex>@4'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem.i8
+    ldarg.0
+    stloc.3
+    ldarg.1
+    stloc 4
+    ldloc.3
+    ldloc 4
+    ldelem.i8
+    ret
+  }
+  .method public hidebysig static float64 'doubleAccess'(float64[] 'values', int32 'index', float64 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] float64[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] float64 '<arrayValue>',
+      [3] float64[] '<arrayGet>',
+      [4] int32 '<arrayIndex>@4'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem.r8
+    ldarg.0
+    stloc.3
+    ldarg.1
+    stloc 4
+    ldloc.3
+    ldloc 4
+    ldelem.r8
+    ret
+  }
+  .method public hidebysig static bool 'booleanAccess'(bool[] 'values', int32 'index', bool 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] bool[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] bool '<arrayValue>',
+      [3] bool[] '<arrayGet>',
+      [4] int32 '<arrayIndex>@4'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem.i1
+    ldarg.0
+    stloc.3
+    ldarg.1
+    stloc 4
+    ldloc.3
+    ldloc 4
+    ldelem.u1
+    ret
+  }
+  .method public hidebysig static char 'charAccess'(char[] 'values', int32 'index', char 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] char[] '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] char '<arrayValue>',
+      [3] char[] '<arrayGet>',
+      [4] int32 '<arrayIndex>@4'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    stelem.i2
+    ldarg.0
+    stloc.3
+    ldarg.1
+    stloc 4
+    ldloc.3
+    ldloc 4
+    ldelem.u2
+    ret
+  }
+  .method public hidebysig static int32 'totalSize'(int32[] 'ints', int64[] 'longs', float64[] 'doubles', bool[] 'booleans', char[] 'chars') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldlen
+    conv.i4
+    ldarg.1
+    ldlen
+    conv.i4
+    add
+    ldarg.2
+    ldlen
+    conv.i4
+    add
+    ldarg.3
+    ldlen
+    conv.i4
+    add
+    ldarg 4
+    ldlen
+    conv.i4
+    add
+    ret
+  }
+  .method public hidebysig static int32 'sum'(int32[] 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'result',
+      [1] int32[] 'indexedObject',
+      [2] int32 'inductionVariable',
+      [3] int32 'last',
+      [4] int32 'value',
+      [5] int32[] '<arrayGet>',
+      [6] int32 '<arrayIndex>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldc.i4 0
+    stloc.2
+    ldloc.1
+    ldlen
+    conv.i4
+    stloc.3
+IL_whileCond_0:
+    ldloc.2
+    ldloc.3
+    clt
+    brfalse IL_whileEnd_1
+    ldloc.1
+    stloc 5
+    ldloc.2
+    stloc 6
+    ldloc 5
+    ldloc 6
+    ldelem.i4
+    stloc 4
+    ldloc.2
+    ldc.i4 1
+    add
+    stloc.2
+    ldloc 4
+    ldc.i4 2
+    ceq
+    brfalse IL_whenNext_3
+    br IL_whileCond_0
+IL_whenNext_3:
+    ldloc 4
+    ldc.i4 9
+    ceq
+    brfalse IL_whenNext_5
+    br IL_whileEnd_1
+IL_whenNext_5:
+    ldloc.0
+    ldloc 4
+    add
+    stloc.0
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static bool 'isNull'(int32[] 'values') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldnull
+    ceq
+    ret
+  }
+  .method public hidebysig static bool 'sameArray'(int32[] 'left', int32[] 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    ceq
+    ret
+  }
+  .method public hidebysig static class 'test.arrays.Crate`1'<int32[]> 'wrap'(int32[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void class 'test.arrays.Crate`1'<int32[]>::.ctor(!0)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ret
+  }
+  .property int32 'sequence'()
+  {
+    .get int32 'test.arrays.primitiveArraysKt'::'get_sequence'()
+    .set void 'test.arrays.primitiveArraysKt'::'set_sequence'(int32)
+  }
+  .property int32[] 'seeded'()
+  {
+    .get int32[] 'test.arrays.primitiveArraysKt'::'get_seeded'()
+  }
+}
