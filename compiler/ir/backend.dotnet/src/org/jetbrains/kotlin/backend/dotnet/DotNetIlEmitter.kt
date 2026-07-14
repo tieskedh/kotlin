@@ -668,11 +668,11 @@ class DotNetIlEmitter(
      * load-poisons the type) whose mapped IL signature matches the slot exactly, return type
      * included (`ifaceprobe_s10`; the covariant half runs in the member pre-pass,
      * [checkInheritedInterfaceImplKeepsIlReturnType], because it needs the type mapper).
-     * Interface delegation (`by`) is rejected whole-class in both source spellings. Exception
-     * supertypes, out-of-module or non-top-level bases, and overrides of `kotlin.Any` members
-     * stay rejected. Abstract and sealed plain classes map to CLR `abstract`; Kotlin sealing is
-     * frontend-enforced like sealed interfaces. Objects and companions stay on the
-     * sole-supertype-`kotlin.Any`,
+     * Interface delegation (`by`) uses FIR's ordinary forwarding members and private delegate
+     * fields. Exception supertypes, out-of-module or non-top-level bases, and overrides of
+     * `kotlin.Any` members stay rejected. Abstract and sealed plain classes map to CLR `abstract`;
+     * Kotlin sealing is frontend-enforced like sealed interfaces. Objects and companions stay
+     * on the sole-supertype-`kotlin.Any`,
      * final-only model. The single supported
      * NESTED shape is the companion object of a top-level class ([isValidatedCompanion] marks
      * the recursive call): it is emitted as a real CLR nested type and validated with the same
@@ -809,28 +809,6 @@ class DotNetIlEmitter(
                 dotNetUnsupported(
                     "member '${member.name.asString()}' of class '$name' overrides a member of kotlin.Any; " +
                             "kotlin.Any member overrides are not supported (no Any model)"
-                )
-            }
-        }
-        // Interface delegation (`class C(...) : I by d`): the frontend synthesizes forwarding
-        // members (origin DELEGATED_MEMBER) over a delegate value — for a plain constructor
-        // parameter additionally a loose synthetic field (origin DELEGATE). Neither shape is
-        // part of the interface model yet (no probe, no golden, no box coverage), and the two
-        // cosmetically different source spellings (`val` parameter vs plain parameter) must not
-        // diverge in support, so ALL `by`-delegation is rejected here, whole-class, with a real
-        // user-facing message (the plain-parameter form would otherwise trip renderUserClass's
-        // internal propertyless-field invariant).
-        for (declaration in irClass.declarations) {
-            val isDelegationArtifact = when (declaration) {
-                is IrField -> declaration.origin == IrDeclarationOrigin.DELEGATE
-                is IrSimpleFunction -> declaration.origin == IrDeclarationOrigin.DELEGATED_MEMBER
-                is IrProperty -> declaration.origin == IrDeclarationOrigin.DELEGATED_MEMBER
-                else -> false
-            }
-            if (isDelegationArtifact) {
-                dotNetUnsupported(
-                    "class '$name' implements an interface by delegation ('by'); " +
-                            "interface delegation is not supported yet"
                 )
             }
         }
@@ -1335,17 +1313,26 @@ class DotNetIlEmitter(
                     requiredHelpers += rendered.requiredRuntimeHelpers
                 }
                 is IrField -> {
-                    // The only loose fields of a supported class are the singleton fields
-                    // DotNetObjectClassLowering synthesized: INSTANCE on an `object`, or the
-                    // field named after the companion on a companion-bearing class; anything
-                    // else has no defined render and must fail the class rather than emit
-                    // guesswork.
-                    if (declaration.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) {
-                        dotNetUnsupported(
+                    // JVM precedent: FIR's interface-delegation field is an ordinary private
+                    // instance field whose initializer is merged into the constructor; its
+                    // DELEGATED_MEMBER forwarding methods render through the normal function
+                    // path below. Singleton fields keep their distinct public-static shape.
+                    when (declaration.origin) {
+                        IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE ->
+                            renderedFields += renderObjectInstanceField(declaration, typeMapper)
+                        IrDeclarationOrigin.DELEGATE -> {
+                            if (declaration.isStatic) {
+                                dotNetUnsupported(
+                                    "internal: interface-delegate field '${declaration.name.asString()}' " +
+                                            "in class '$name' is unexpectedly static"
+                                )
+                            }
+                            renderedFields += renderField(declaration, typeMapper)
+                        }
+                        else -> dotNetUnsupported(
                             "internal: unexpected propertyless field '${declaration.name.asString()}' in class '$name'"
                         )
                     }
-                    renderedFields += renderObjectInstanceField(declaration, typeMapper)
                 }
                 is IrSimpleFunction -> when {
                     declaration.origin == DOTNET_STATIC_INITIALIZER -> {
@@ -1465,12 +1452,13 @@ class DotNetIlEmitter(
     }
 
     /**
-     * One `.field` line: the instance backing field of a member property, or, with [isStatic],
-     * the static backing field of a top-level property on its file facade. Backing fields are
-     * always `private` (the JVM `final` analogue `initonly` is deliberately omitted on both
-     * shapes — a pure metadata nicety with no semantic need, and a `var`'s `stsfld` from the
-     * static setter must stay legal); both spellings are ilasm-probe-verified
-     * (`statprobe_s1`/`_s2` for the static shape, including a user-class-typed static field).
+     * One `.field` line: the instance backing field of a member property, FIR's loose private
+     * interface-delegate field, or, with [isStatic], the static backing field of a top-level
+     * property on its file facade. These fields are always `private` (the JVM `final` analogue
+     * `initonly` is deliberately omitted — a pure metadata nicety with no semantic need, and a
+     * `var`'s `stsfld` from the static setter must stay legal); the delegation shape is
+     * ilasm-probe-verified by `delegationprobe_s1`, and both backing-field spellings by
+     * `statprobe_s1`/`_s2` (including a user-class-typed static field).
      */
     private fun renderField(field: IrField, typeMapper: DotNetIlTypeMapper, isStatic: Boolean = false): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
@@ -1612,9 +1600,9 @@ class DotNetIlEmitter(
      * field-identity clash gate: the loose singleton field — `INSTANCE` on an `object`, or the
      * field named after the companion that [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * parents to a companion-bearing class (so a user field named `Companion` with the
-     * companion's type clashes, whole-pair) — plus the backing fields of the declared
-     * properties, including `const val`s, whose `literal` fields share the class's field
-     * namespace like any other field.
+     * companion's type clashes, whole-pair) — FIR's loose interface-delegate field, plus the
+     * backing fields of the declared properties, including `const val`s, whose `literal` fields
+     * share the class's field namespace like any other field.
      */
     private fun IrClass.dotNetMemberFields(): List<IrField> =
         declarations.flatMap { declaration ->

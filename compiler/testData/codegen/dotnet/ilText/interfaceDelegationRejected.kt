@@ -1,8 +1,7 @@
-// Interface delegation is rejected whole-class in BOTH source spellings — the `val`-parameter
-// form and the plain-parameter form (which additionally synthesizes a loose `$$delegate_0`
-// field): the frontend's forwarding members (origin DELEGATED_MEMBER) are not part of the
-// interface model yet, and the two cosmetically different spellings must not diverge in
-// support. `Able` itself and the ordinary implementer survive.
+// An unsupported delegated interface evicts the whole forwarding class through the normal
+// supertype cascade. A supported delegated sibling survives, including the plain-parameter
+// `$$delegate_0` field shape; a class mixing a supported and unsupported delegate is also evicted
+// whole-class rather than retaining a partial interface surface.
 interface Able {
     fun f(): Int
 }
@@ -11,10 +10,22 @@ class Impl : Able {
     override fun f(): Int = 1
 }
 
-class DelVal(private val d: Able) : Able by d
+class GoodDelegate(delegate: Able) : Able by delegate
 
-class DelPlain(d: Able) : Able by d
+interface UnsupportedDelegate {
+    fun convert(value: Float): Float
+}
+
+class UnsupportedImpl : UnsupportedDelegate {
+    override fun convert(value: Float): Float = value
+}
+
+class BadDelegate(delegate: UnsupportedDelegate) : UnsupportedDelegate by delegate
+
+class MixedDelegate(good: Able, bad: UnsupportedDelegate) :
+    Able by good,
+    UnsupportedDelegate by bad
 
 fun main() {
-    println(Impl().f())
+    println(GoodDelegate(Impl()).f())
 }

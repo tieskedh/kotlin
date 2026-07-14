@@ -6,11 +6,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `a35ec8319`
-  ("[DotNet] Add abstract interface redeclarations"), clean tree, based directly on
+- Branch `dotnet`; latest functional tip `5a77b7435`
+  ("[DotNet] Add interface delegation"), clean tree, based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **316 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **320 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -19,7 +19,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
   interfaces and declaration-site variance stage 4, generic member functions stage 5, generic
-  class inheritance stage 6, abstract and sealed classes, abstract interface redeclarations.
+  class inheritance stage 6, abstract and sealed classes, abstract interface redeclarations,
+  interface delegation through FIR's frontend-owned forwarding artifacts.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
@@ -132,6 +133,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Default Interface Method, but Framework 4.8 ILAsm rejects a non-static interface method body,
   so DIM and `super<I>` remain loudly unsupported unless the runtime floor is deliberately raised.
   The final FIR suite is 316/0/0/0; the generated CLI suite remains 10/0/0/0.
+- Interim continuation landed `5a77b7435`: FIR interface delegation now renders through the
+  ordinary member pipeline. Constructor-property delegates reuse their private backing field;
+  plain parameters, expressions, bounded type parameters, and `var` delegates use FIR's private
+  `$$delegate_n` field, initialized after the base constructor and before later member state.
+  Forwarding composes with functions/accessors, mutable properties, generic owners and methods,
+  multiple delegates, inherited interface redeclarations, explicit overrides, constrained type
+  parameters, and inherited virtual class implementations. Reassigning a `var` keeps forwarding
+  to the initially captured delegate, matching JVM behavior. An unavailable delegated interface
+  still cascades whole-class, including mixed supported/unsupported delegation.
+  `delegationprobe_s1` and both exact goldens assemble and execute identically on CoreCLR 10.0.9
+  and .NET Framework 4.8; runtime pins cover initialization order, one-time capture, constrained
+  calls, and base/interface dispatch. The final FIR suite is 320/0/0/0; the generated CLI suite
+  remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -145,8 +159,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
-   `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `whenprobe`, `arrprobe`
-   are taken). Keep probe files OUT of the repo (use a temp dir).
+   `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
+   `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the whole class (pair/property-group where AGENTS.md says so);
    eviction cascades with chained reasons. Never emit fallback IL. Never let a construction reach
@@ -196,12 +210,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit interface delegation.** FIR already synthesizes forwarding members for both
-   `class C(val d: I) : I by d` and the plain-parameter spelling; the latter also creates a loose
-   `$$delegate_0` field. Determine whether those bodies and initialization order compose with the
-   existing member/property/constructor codegen, then probe the exact CLR field and dispatch
-   shape on both runtimes before lifting the whole-class gate. Keep DIM and the broader `Any`
-   member model out of this slice.
+1. **Audit ordinary named nested classes.** Companion objects already prove the CLR nested
+   registration, type-reference, recursive-render, fixpoint-eviction, and generic-outer machinery.
+   Determine which parts can be generalized safely to `class Outer { class Nested }`, following
+   the JVM's static-nested semantics while using real CLR nested metadata. Probe visibility,
+   construction, calls/fields, multi-level nesting, forward references, generic nested classes,
+   and a nested class inside a generic outer on both runtimes before lifting the existing
+   enclosing-class gate. Keep `inner`, local/anonymous, enum/data, and nested-interface support out
+   of the first slice unless their IR and CLR requirements are independently settled.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
