@@ -707,11 +707,11 @@ class DotNetIlEmitter(
      * (`nested public/private/assembly/family`).
      * A top-level or nested class may derive from a module-local nested class, including a
      * sibling, enclosing metadata parent, forward declaration, generic instantiation, or class
-     * in another top-level family (`nestedprobe_s3`). Inner classes, nested interfaces/objects,
-     * and classes inside objects stay rejected. Companion objects remain limited
-     * to top-level plain classes; the object-lowering pass does not initialize a companion of an
-     * ordinary nested class yet. Each violation throws [DotNetIlUnsupportedException]; the
-     * granularity is always the whole top-level class family.
+     * in another top-level family (`nestedprobe_s3`). Companion objects of non-generic ordinary
+     * nested classes and named objects in non-generic plain classes are supported by the recursive
+     * static-initializer sweep (`nestedprobe_s4`). Inner classes, nested interfaces, and any class
+     * or object inside an object, companion, or interface stay rejected. Each violation throws
+     * [DotNetIlUnsupportedException]; the granularity is always the whole top-level class family.
      */
     private fun checkClassShapeSupported(
         irClass: IrClass,
@@ -723,6 +723,8 @@ class DotNetIlEmitter(
         val isValidatedCompanion =
             enclosingClass != null && irClass.isCompanion && irClass.kind == ClassKind.OBJECT
         val isNamedNestedClass = enclosingClass != null && irClass.kind == ClassKind.CLASS
+        val isNamedNestedObject =
+            enclosingClass != null && !irClass.isCompanion && irClass.kind == ClassKind.OBJECT
         when (irClass.kind) {
             ClassKind.INTERFACE -> {
                 checkInterfaceShapeSupported(irClass, moduleTopLevelClasses)
@@ -737,21 +739,19 @@ class DotNetIlEmitter(
         }
         if (enclosingClass != null && enclosingClass.kind != ClassKind.CLASS) {
             val enclosingKind = if (enclosingClass.kind == ClassKind.OBJECT) "object" else "interface"
-            val kind = if (isValidatedCompanion) "companion object" else "class"
+            val kind = when {
+                isValidatedCompanion -> "companion object"
+                irClass.kind == ClassKind.OBJECT -> "object"
+                else -> "class"
+            }
             dotNetUnsupported(
                 "$kind '$name' is nested inside $enclosingKind '${enclosingClass.diagnosticName()}'; " +
                         "nested declarations are supported only inside plain classes"
             )
         }
-        if (enclosingClass != null && !isValidatedCompanion && !isNamedNestedClass) {
+        if (enclosingClass != null && !isValidatedCompanion && !isNamedNestedClass && !isNamedNestedObject) {
             val kind = if (irClass.kind == ClassKind.OBJECT) "object" else "class"
             dotNetUnsupported("nested $kind '$name' is not supported")
-        }
-        if (isValidatedCompanion && enclosingClass.parent is IrClass) {
-            dotNetUnsupported(
-                "companion object '$name' belongs to nested class '${enclosingClass.diagnosticName()}'; " +
-                        "companions of ordinary nested classes are not supported yet"
-            )
         }
         if (irClass.isData) {
             // `data object` lands here too: its generated toString/equals/hashCode overrides
@@ -775,7 +775,7 @@ class DotNetIlEmitter(
                 }
             Modality.ABSTRACT, Modality.SEALED -> {}
         }
-        if (isNamedNestedClass) {
+        if (isNamedNestedClass || isNamedNestedObject) {
             when (irClass.visibility) {
                 DescriptorVisibilities.PUBLIC,
                 DescriptorVisibilities.PRIVATE,
@@ -783,7 +783,8 @@ class DotNetIlEmitter(
                 DescriptorVisibilities.PROTECTED,
                     -> {}
                 else -> dotNetUnsupported(
-                    "nested class '$name' has unsupported visibility '${irClass.visibility}'"
+                    "nested ${if (isNamedNestedObject) "object" else "class"} '$name' has " +
+                            "unsupported visibility '${irClass.visibility}'"
                 )
             }
         }
@@ -793,10 +794,12 @@ class DotNetIlEmitter(
         // gate scopes the model: invariant non-reified parameters, optionally constrained by
         // supported module-local classes/interfaces, and any supported generic/non-generic
         // class or interface supertype. A named nested class carries only its own parameters,
-        // independently of a generic outer (`nestedprobe_s1`). Singleton declarations remain
-        // rejected inside a generic class because CLR static state is per constructed generic
-        // owner, which would violate Kotlin's one-instance companion/object semantics. Generic
-        // base links retain their full open instantiation, so
+        // independently of a generic outer (`nestedprobe_s1`). Singleton declarations whose
+        // immediate plain-class container is generic remain outside the probed model: a companion
+        // field would be per constructed owner, and direct named-object semantics under that
+        // metadata parent are deliberately not assumed. A non-generic nested container below a
+        // generic ancestor is safe because it has no outer instantiation (`nestedprobe_s4`).
+        // Generic base links retain their full open instantiation, so
         // constructor calls, owner lookup, and override substitution compose through arbitrary
         // module-local chains (probe-verified, geninheritprobe_s1).
         // Kotlin objects and companions cannot be generic; the branch is defensive.
@@ -1204,7 +1207,8 @@ class DotNetIlEmitter(
         }
 
     /**
-     * Renders one top-level user class: backing fields (state, `private` per the JVM-facade
+     * Renders one user class, either a top-level root or one of its recursively rendered metadata
+     * children: backing fields (state, `private` per the JVM-facade
      * precedent of private field + accessors as the public surface), constructor bodies with
      * the initializer code [DotNetInitializersLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering]
      * merged into them, instance member functions, property accessors (`get_x`/`set_x`, plain
@@ -1518,10 +1522,11 @@ class DotNetIlEmitter(
     }
 
     /**
-     * The accessibility flag of an ordinary CLR nested type (`nestedprobe_s1`). Companions keep
+     * The accessibility flag of an ordinary named CLR nested class or object (`nestedprobe_s1`,
+     * `nestedprobe_s4`). Companions keep
      * the established public metadata shape; Kotlin controls their source visibility through
      * the enclosing declaration and the singleton field/accessors. The shape gate has already
-     * rejected every ordinary nested-class visibility outside these four source forms.
+     * rejected every ordinary named nested-type visibility outside these four source forms.
      */
     private fun IrClass.dotNetNestedTypeVisibility(): String = when {
         parent !is IrClass || isCompanion -> "public"

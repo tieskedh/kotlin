@@ -29,10 +29,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // Matches the JVM phase order (the singleton passes run before StaticInitializersLowering).
     ::DotNetObjectClassLowering,
     // Top-level property initializers move into the synthetic per-file `<clinit>` (and static
-    // class fields — the object INSTANCE, the companion field — into the per-class one) before the loop/concat
-    // rewrites for the same reason the instance pair runs first: a `for` or a string
-    // concatenation inside a top-level initializer must sit inside a real function body before
-    // those function-scoped rewrites run.
+    // class fields — object INSTANCE and companion fields at any supported nesting depth — into
+    // the owning class's `<clinit>`) before the loop/concat rewrites for the same reason the
+    // instance pair runs first: a `for` or a string concatenation inside an initializer must sit
+    // inside a real function body before those function-scoped rewrites run.
     ::DotNetStaticInitializersLowering,
     // For-loops next: the rewrite produces plain calls/whens the later phases treat like any
     // other code (string concatenations inside loop bodies are still ahead of their lowerings).

@@ -27,8 +27,8 @@ import org.jetbrains.kotlin.name.Name
 /**
  * The origin of the synthetic `<clinit>` functions produced by
  * [DotNetStaticInitializersLowering] — file-parented for the facade statics, class-parented for
- * the static fields of top-level classes (the `INSTANCE` field of an `object`, the companion
- * singleton field of a companion-bearing class).
+ * the static fields of recursively declared classes (the `INSTANCE` field of an `object`, the
+ * companion singleton field of a companion-bearing class).
  * [DotNetIlEmitter][org.jetbrains.kotlin.backend.dotnet.DotNetIlEmitter]
  * keys on it to keep the function out of the callable surface (never a call target, a main
  * candidate, or a named method) and
@@ -47,13 +47,16 @@ internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOrigi
  *   is a `ClassLoweringPass` over the facade `IrClass` that `FileClassLowering` created earlier,
  *   while this backend builds file facades at emission time, so this slice runs per [IrFile] and
  *   parents the `<clinit>` to the file.
- * - the static fields of each top-level class (today exactly the singleton fields
+ * - the static fields of each recursively declared class (today exactly the singleton fields
  *   [DotNetObjectClassLowering] synthesizes: `INSTANCE` on an `object` class, or the field
  *   named after the companion on a companion-bearing class) become one class-parented
  *   `<clinit>`, appended to the class's declarations and rendered as the class's `.cctor` —
  *   this slice matches the JVM `ClassLoweringPass` precedent directly. For a companion this
  *   `newobj`/`stsfld` in the ENCLOSING class's `.cctor` is what ties companion initialization
- *   to the enclosing class (objprobe_s8).
+ *   to the enclosing class (objprobe_s8, nestedprobe_s4). Like the common
+ *   `ClassLoweringPass` runner, the sweep is recursive and postfix, so companions of ordinary
+ *   nested classes and named nested objects receive a `.cctor` on their actual static-field
+ *   owner rather than leaving the synthesized field uninitialized.
  *
  * Giving the initializers a real function body here (instead of rendering them at emission time)
  * lets the later phases — the `for`-loop rewrite and the string-concatenation lowerings — treat
@@ -88,8 +91,13 @@ internal class DotNetStaticInitializersLowering(private val context: DotNetBacke
     }
 
     private fun lowerClassStatics(irClass: IrClass) {
+        // Match ClassLoweringPass.runOnFilePostfix: every nested declaration is lowered before
+        // its metadata parent. Use a snapshot because each recursive call may append a <clinit>.
+        val declarations = irClass.declarations.toList()
+        declarations.filterIsInstance<IrClass>().forEach(::lowerClassStatics)
+
         val statements = mutableListOf<IrStatement>()
-        for (declaration in irClass.declarations) {
+        for (declaration in declarations) {
             val field = when (declaration) {
                 is IrField -> declaration
                 is IrProperty -> if (declaration.isConst || declaration.isDelegated) null else declaration.backingField
