@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
+import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 
 class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
@@ -98,9 +99,9 @@ class DotNetIlEmitter(
             return null
         }
 
-        // Class pre-pass: the shape gate. Everything outside the final-class model is rejected
-        // whole-class here, so the type mapper only ever sees supported classes. The injected
-        // exception declarations (see DotNetMappedExceptions) are excluded up front — the
+        // Class pre-pass: the shape gate. Everything outside the supported class model is
+        // rejected whole-class here, so the type mapper only ever sees supported classes. The
+        // injected exception declarations (see DotNetMappedExceptions) are excluded up front — the
         // class-level parallel of an intrinsic's excludesDeclarationFromCodegen: they exist for
         // frontend resolution only and must be neither emitted nor skip-warned.
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
@@ -650,8 +651,9 @@ class DotNetIlEmitter(
     /**
      * The shape gate of the class model (JVM precedent: the runtime has real classes, so
      * there is no vtable/class lowering machinery and unsupported shapes are simply rejected):
-     * top-level plain classes — non-generic or invariant reified-generic, `final` or `open` — and
-     * plain (always final) `object` declarations are compilable (an `object` goes through
+     * top-level plain classes — non-generic or invariant reified-generic, `final`, `open`,
+     * `abstract`, or `sealed` — and plain (always final) `object` declarations are compilable
+     * (an `object` goes through
      * the same constraint chain as a class — [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * already turned its singleton nature into ordinary class machinery). A plain class may
      * have EXACTLY ONE class supertype when it resolves to another top-level class of
@@ -666,10 +668,11 @@ class DotNetIlEmitter(
      * load-poisons the type) whose mapped IL signature matches the slot exactly, return type
      * included (`ifaceprobe_s10`; the covariant half runs in the member pre-pass,
      * [checkInheritedInterfaceImplKeepsIlReturnType], because it needs the type mapper).
-     * Interface delegation (`by`) is rejected whole-class in both source spellings.
-     * `abstract`/`sealed` classes, exception
+     * Interface delegation (`by`) is rejected whole-class in both source spellings. Exception
      * supertypes, out-of-module or non-top-level bases, and overrides of `kotlin.Any` members
-     * stay rejected. Objects and companions stay on the sole-supertype-`kotlin.Any`,
+     * stay rejected. Abstract and sealed plain classes map to CLR `abstract`; Kotlin sealing is
+     * frontend-enforced like sealed interfaces. Objects and companions stay on the
+     * sole-supertype-`kotlin.Any`,
      * final-only model. The single supported
      * NESTED shape is the companion object of a top-level class ([isValidatedCompanion] marks
      * the recursive call): it is emitted as a real CLR nested type and validated with the same
@@ -704,20 +707,18 @@ class DotNetIlEmitter(
         if (irClass.isInner) dotNetUnsupported("inner class '$name' is not supported")
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
-        // Modality maps 1:1 onto CLR metadata like the JVM's ACC_FINAL: FINAL keeps `sealed`,
-        // OPEN drops it (probe-verified, inheritprobe_s1). ABSTRACT and SEALED classes need an
-        // abstract-member/instantiability model that does not exist yet. The singleton shapes
-        // are final in Kotlin anyway; the branch is defensive.
+        // Modality maps directly onto CLR metadata like the JVM's class access flags: FINAL
+        // keeps `sealed`, OPEN drops it (inheritprobe_s1), and ABSTRACT emits `abstract`
+        // (abstractprobe_s1). A Kotlin SEALED class also emits ordinary CLR `abstract`: sealing
+        // is frontend-enforced, the same JVM precedent as sealed interfaces. Singleton shapes
+        // are final in Kotlin anyway; the OPEN branch is defensive.
         when (irClass.modality) {
             Modality.FINAL -> {}
             Modality.OPEN ->
                 if (isValidatedCompanion || irClass.kind == ClassKind.OBJECT) {
                     dotNetUnsupported("non-final object '$name' is not supported")
                 }
-            Modality.ABSTRACT ->
-                dotNetUnsupported("abstract class '$name' is not supported (no abstract-class model)")
-            Modality.SEALED ->
-                dotNetUnsupported("sealed class '$name' is not supported (no abstract-class model)")
+            Modality.ABSTRACT, Modality.SEALED -> {}
         }
         // Generic TOP-LEVEL PLAIN classes use real CLR reified generics
         // (Roslyn shape — `.class ... 'C`n'<T>`, `!n` member signatures, instantiation tokens in
@@ -850,10 +851,23 @@ class DotNetIlEmitter(
         for (member in irClass.dotNetMemberFakeOverrides()) {
             if (member.allOverridden().none { (it.parent as? IrClass)?.isInterface == true }) continue
             val implementation = member.resolveFakeOverride()
-                ?: dotNetUnsupported(
+            if (implementation == null) {
+                // An abstract class may carry an interface obligation only as a fake override:
+                // no method is emitted on this owner, and a concrete subclass introduces the
+                // implementing slot. Both CLR runtimes accept and dispatch this exact shape
+                // (abstractprobe_s2). A concrete class still needs a real implementation.
+                val abstractObligation = member.resolveFakeOverrideMaybeAbstract()
+                if (
+                    (irClass.modality == Modality.ABSTRACT || irClass.modality == Modality.SEALED) &&
+                    abstractObligation?.modality == Modality.ABSTRACT
+                ) {
+                    continue
+                }
+                dotNetUnsupported(
                     "member '${member.name.asString()}' of class '$name' implements an interface member " +
                             "without any inherited implementation"
                 )
+            }
             if (!implementation.isDotNetVirtual()) {
                 val implementationOwner = (implementation.parent as? IrClass)?.diagnosticName() ?: "?"
                 dotNetUnsupported(
@@ -891,9 +905,9 @@ class DotNetIlEmitter(
      * interfaces (`ifaceprobe_s6`: interface inheritance is the same `implements` list; whether
      * each super-interface itself compiles is re-resolved live every render round, so an evicted
      * interface cascades to its sub-interfaces). A `sealed interface` is deliberately ACCEPTED
-     * and emitted as a plain interface — unlike a sealed CLASS (which needs the missing
-     * abstract-class model), interface sealedness is pure frontend-enforced metadata with no
-     * CLR counterpart needed (JVM precedent: the JVM backend emits an ordinary interface too),
+     * and emitted as a plain interface. Like the sealed-class model, interface sealedness is
+     * pure frontend-enforced metadata with no CLR counterpart needed (JVM precedent: the JVM
+     * backend emits an ordinary interface too),
      * and the exhaustive `when` it enables is `is`-gated by the type-operator rejection anyway;
      * pinned by ilText/interfaceEqualityWidening.kt. Everything else stays rejected, whole-interface:
      * `fun interface` (no SAM-conversion model), non-top-level interfaces,
@@ -1171,11 +1185,11 @@ class DotNetIlEmitter(
      * `kotlin.Any` fake overrides (`equals`/`hashCode`/`toString`) resolve to nothing emitted
      * and stay rejected.
      *
-     * A class of the INHERITANCE model renders `extends <base>` instead of `System.Object` and,
-     * when `open`, drops `sealed` (both probe-verified, `inheritprobe_s1`); its `open` members
-     * and overrides carry virtual flags (see
-     * [DotNetIlMethodCodegen]'s `dotNetVirtualFlags`). The base is re-resolved from the live
-     * class map at the top of every render, so an evicted base cascades down the chain.
+     * A class of the INHERITANCE model renders `extends <base>` instead of `System.Object`; an
+     * `open` class drops `sealed` (`inheritprobe_s1`), while abstract/sealed Kotlin classes carry
+     * CLR `abstract` (`abstractprobe_s1`). Its open/abstract members and overrides carry virtual
+     * flags (see [DotNetIlMethodCodegen]'s `dotNetVirtualFlags`). The base is re-resolved from
+     * the live class map at the top of every render, so an evicted base cascades down the chain.
      *
      * A Kotlin INTERFACE renders through this same path as a `.class interface abstract` with no
      * `extends` line, an `implements` list naming its direct super-interfaces, abstract member
@@ -1399,6 +1413,9 @@ class DotNetIlEmitter(
                 // the JVM's ACC_FINAL); companions and objects never reach here as open — the
                 // shape gate keeps them final-only.
                 isOpen = irClass.modality == Modality.OPEN,
+                // Kotlin abstract and sealed classes are non-instantiable. Sealing remains a
+                // frontend restriction, like the sealed-interface model (abstractprobe_s1).
+                isAbstract = irClass.modality == Modality.ABSTRACT || irClass.modality == Modality.SEALED,
                 baseClassRef = baseClassRef,
                 isInterface = irClass.isInterface,
                 interfaceRefs = interfaceTypes.map { interfaceType ->
