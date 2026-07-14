@@ -122,6 +122,7 @@ private val levelsToArgumentTransforms: Map<String, Map<String, ArgumentTransfor
 
             // KMP related
             drop("Xcommon-fragments-metadata-destination")
+            drop("Xuse-classpath-metadata")
         }
         with(removedJvmCompilerArguments) {
             drop("Xuse-javac")
