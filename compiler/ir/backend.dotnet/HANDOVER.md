@@ -6,11 +6,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional tip `911b1113e`
-  ("[DotNet] Add named nested classes"), clean tree, based directly on
+- Branch `dotnet`; latest functional tip `ebcc4b799`
+  ("[DotNet] Add nested class modality and inheritance"), clean tree, based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   Handover-only maintenance stays in separate non-functional commits.
-- Full DotNet suite: **326 tests, 0 failures, 0 errors, 0 skips** across 8 classes
+- Full DotNet suite: **330 tests, 0 failures, 0 errors, 0 skips** across 8 classes
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -20,8 +20,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
   interfaces and declaration-site variance stage 4, generic member functions stage 5, generic
   class inheritance stage 6, abstract and sealed classes, abstract interface redeclarations,
-  interface delegation through FIR's frontend-owned forwarding artifacts, final named nested
-  classes with static-style JVM semantics and real CLR nested metadata.
+  interface delegation through FIR's frontend-owned forwarding artifacts, named nested classes
+  with static-style JVM semantics and real CLR nested metadata, nested class modality and
+  module-local nested-base inheritance.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `8702cf407`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, emitting target-neutral `[mscorlib]InvalidOperationException`
@@ -166,6 +167,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   a null singleton field before that output could be pinned. Non-final, inner, nested interface/
   object, and object-contained classes also remain rejected. The final fresh FIR suite is
   326/0/0/0; the generated CLI suite remains 10/0/0/0.
+- Interim continuation landed `ebcc4b799`: named nested classes now support the same final, open,
+  abstract, and sealed modality set as top-level classes. After the nested accessibility prefix,
+  final emits CLR `sealed`, open omits it, and abstract/sealed emit CLR `abstract`. The inheritance
+  gate now distinguishes every recursively declared module class from the still-top-level-only
+  interface set, so a top-level or nested class can extend any module-local nested class. This
+  covers forward siblings, a nested metadata parent, deeper family members, independent generic
+  bases under a generic outer, top-level-to-nested links, and cross-family links. Base resolution
+  remains live: a nested base evicted during the member pre-pass takes both top-level and nested
+  dependent families down in the render fixpoint with carried diagnostics. `nestedprobe_s3`
+  verified every modality/base token and runtime dispatch shape; the probe and exact positive/
+  rejection goldens assemble and run identically on CoreCLR 10.0.9 and .NET Framework 4.8. The
+  focused six-test gate and fresh full FIR suite have zero skips/failures; the final baseline is
+  330/0/0/0, and the generated CLI suite remains 10/0/0/0.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -232,14 +246,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit non-final nested classes and nested-family inheritance.** The first nested slice is
-   deliberately FINAL-only and permits bases/interfaces only when they are top-level. Probe CLR
-   flag order for open/abstract/sealed nested types and base/interface tokens that name sibling,
-   enclosing-family, generic, and forward-declared nested types on both runtimes. Then decide
-   whether to lift modality and nested-to-nested inheritance together, reusing the existing slot,
-   assignability, live-link, and whole-family eviction machinery. Keep `inner`, local/anonymous,
-   enum/data/value, nested-interface/object, and companion-of-nested support separate; the latter
-   first needs recursive object/static-initializer lowering rather than a gate-only change.
+1. **Add recursive singleton initialization for ordinary nested owners.** A companion of a named
+   nested class is currently gate-rejected because its synthesized field survives without the
+   owning nested class's `.cctor`; the adversarial attempt before `911b1113e` loaded a null
+   singleton. Trace `DotNetObjectClassLowering` and `DotNetStaticInitializersLowering` recursively,
+   then probe direct and deep nested companions, first-use order, one-time initialization, private
+   cross-boundary access, forward references, and coexistence with nested inheritance on both
+   runtimes. Keep singleton declarations under generic owners rejected: CLR static state is per
+   constructed generic owner, which violates Kotlin's one-instance rule. Decide separately, from
+   the same evidence, whether a named `object` nested in a non-generic class can land in this slice
+   or needs a follow-up. Preserve whole-family eviction and add an adversarial failing initializer.
+2. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
+   static-nested semantics but retain the Framework-compatible no-default-method boundary. Probe
+   CLR nested-interface flags, generic independence, visibility, implementation/dispatch, forward
+   references, and recursive metadata placement before lifting either gate. Keep `inner`, local/
+   anonymous, enum/data/value, and annotation classes separate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
