@@ -318,22 +318,18 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
     1. `Derived <: TypeVariable(R)`
 5. Combine `TypeVariable(K) <: TypeVariable(R)` with `TypeVariable(R) <: TypeVariable(K)`
     1. `TypeVariable(K) == TypeVariable(R)`
-6. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) <: TypeVariable(R)`
-    1. `TypeVariable(R) <: TypeVariable(R)`
-7. Combine `TypeVariable(K) <: TypeVariable(R)` with `TypeVariable(R) <: TypeVariable(K)`
+6. Combine `TypeVariable(K) <: TypeVariable(R)` with `TypeVariable(R) <: TypeVariable(K)`
     1. `TypeVariable(R) == TypeVariable(K)`
-8. Combine `TypeVariable(R) == TypeVariable(K)` with `TypeVariable(K) == TypeVariable(R)`
-    1. `TypeVariable(K) <: TypeVariable(K)`
-9. Combine `TypeVariable(T1) & Any <: TypeVariable(K)` with `TypeVariable(K) <: Base`
+7. Combine `TypeVariable(T1) & Any <: TypeVariable(K)` with `TypeVariable(K) <: Base`
     1. `TypeVariable(T1) <: Base?`
-10. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) <: Base`
+8. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) <: Base`
     1. `TypeVariable(R) <: Base`
-11. Combine `TypeVariable(T1) & Any <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
+9. Combine `TypeVariable(T1) & Any <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
     1. `TypeVariable(T1) & Any <: TypeVariable(K)`
     2. `TypeVariable(T1) <: TypeVariable(K)?`
-12. Combine `Derived <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
+10. Combine `Derived <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
     1. `Derived <: TypeVariable(K)`
-13. Choose `TypeVariable(T1)` with `Readiness(
+11. Choose `TypeVariable(T1)` with `Readiness(
     	 true ALLOWED
     	 true HAS_PROPER_CONSTRAINTS
     	 true HAS_NO_OUTER_TYPE_VARIABLE_DEPENDENCY
@@ -381,17 +377,17 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
        	false HAS_PROPER_EQUALITY_CONSTRAINT
        	 true HAS_PROPER_NON_NOTHING_NON_UPPER_CONSTRAINT
        )`
-14. `Base <: TypeVariable(T1)` _from SimpleConstraintSystemConstraintPosition_
-15. Combine `Base <: TypeVariable(T1)` with `TypeVariable(T1) <: TypeVariable(K)?`
+12. `Base <: TypeVariable(T1)` _from SimpleConstraintSystemConstraintPosition_
+13. Combine `Base <: TypeVariable(T1)` with `TypeVariable(T1) <: TypeVariable(K)?`
     1. `Base <: TypeVariable(K)`
-16. Combine `Base <: TypeVariable(T1)` with `TypeVariable(T1) <: TypeVariable(R)?`
+14. Combine `Base <: TypeVariable(T1)` with `TypeVariable(T1) <: TypeVariable(R)?`
     1. `Base <: TypeVariable(R)`
-17. Combine `TypeVariable(K) <: Base` with `Base <: TypeVariable(K)`
+15. Combine `TypeVariable(K) <: Base` with `Base <: TypeVariable(K)`
     1. `TypeVariable(K) == Base`
-18. Combine `TypeVariable(R) <: Base` with `Base <: TypeVariable(R)`
+16. Combine `TypeVariable(R) <: Base` with `Base <: TypeVariable(R)`
     1. `TypeVariable(R) == Base`
-19. `TypeVariable(T1) == Base` _from Fix variable T1_
-20. Choose `TypeVariable(R)` with `Readiness(
+17. `TypeVariable(T1) == Base` _from Fix variable T1_
+18. Choose `TypeVariable(R)` with `Readiness(
     	 true ALLOWED
     	 true HAS_PROPER_CONSTRAINTS
     	 true HAS_NO_OUTER_TYPE_VARIABLE_DEPENDENCY
@@ -423,7 +419,7 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
        	 true HAS_PROPER_EQUALITY_CONSTRAINT
        	 true HAS_PROPER_NON_NOTHING_NON_UPPER_CONSTRAINT
        )`
-21. Choose `TypeVariable(K)` with `Readiness(
+19. Choose `TypeVariable(K)` with `Readiness(
     	 true ALLOWED
     	 true HAS_PROPER_CONSTRAINTS
     	 true HAS_NO_OUTER_TYPE_VARIABLE_DEPENDENCY
@@ -570,22 +566,18 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
     1. `Derived <: TypeVariable(R)`
 5. Combine `TypeVariable(K) <: TypeVariable(R)` with `TypeVariable(R) <: TypeVariable(K)`
     1. `TypeVariable(K) == TypeVariable(R)`
-6. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) <: TypeVariable(R)`
-    1. `TypeVariable(R) <: TypeVariable(R)`
-7. Combine `TypeVariable(K) <: TypeVariable(R)` with `TypeVariable(R) <: TypeVariable(K)`
+6. Combine `TypeVariable(K) <: TypeVariable(R)` with `TypeVariable(R) <: TypeVariable(K)`
     1. `TypeVariable(R) == TypeVariable(K)`
-8. Combine `TypeVariable(R) == TypeVariable(K)` with `TypeVariable(K) == TypeVariable(R)`
-    1. `TypeVariable(K) <: TypeVariable(K)`
-9. Combine `TypeVariable(T2) & Any <: TypeVariable(K)` with `TypeVariable(K) <: Base`
+7. Combine `TypeVariable(T2) & Any <: TypeVariable(K)` with `TypeVariable(K) <: Base`
     1. `TypeVariable(T2) <: Base?`
-10. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) <: Base`
+8. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) <: Base`
     1. `TypeVariable(R) <: Base`
-11. Combine `TypeVariable(T2) & Any <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
+9. Combine `TypeVariable(T2) & Any <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
     1. `TypeVariable(T2) & Any <: TypeVariable(K)`
     2. `TypeVariable(T2) <: TypeVariable(K)?`
-12. Combine `Derived <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
+10. Combine `Derived <: TypeVariable(R)` with `TypeVariable(R) == TypeVariable(K)`
     1. `Derived <: TypeVariable(K)`
-13. Choose `TypeVariable(R)` with `Readiness(
+11. Choose `TypeVariable(R)` with `Readiness(
     	 true ALLOWED
     	 true HAS_PROPER_CONSTRAINTS
     	 true HAS_NO_OUTER_TYPE_VARIABLE_DEPENDENCY
@@ -633,23 +625,23 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
        	false HAS_PROPER_EQUALITY_CONSTRAINT
        	false HAS_PROPER_NON_NOTHING_NON_UPPER_CONSTRAINT
        )`
-14. `Base <: TypeVariable(R)` _from SimpleConstraintSystemConstraintPosition_
-15. Combine `TypeVariable(R) <: Base` with `Base <: TypeVariable(R)`
+12. `Base <: TypeVariable(R)` _from SimpleConstraintSystemConstraintPosition_
+13. Combine `TypeVariable(R) <: Base` with `Base <: TypeVariable(R)`
     1. `TypeVariable(R) == Base`
-16. Combine `TypeVariable(R) == Base` with `TypeVariable(R) == TypeVariable(K)`
+14. Combine `TypeVariable(R) == Base` with `TypeVariable(R) == TypeVariable(K)`
     1. `Base <: TypeVariable(K)`
-17. Combine `TypeVariable(K) <: Base` with `Base <: TypeVariable(K)`
+15. Combine `TypeVariable(K) <: Base` with `Base <: TypeVariable(K)`
     1. `TypeVariable(K) == Base`
-18. `TypeVariable(R) == Derived` _from Fix variable R_
-19. Combine `TypeVariable(R) == TypeVariable(K)` with `TypeVariable(R) == Derived`
+16. `TypeVariable(R) == Derived` _from Fix variable R_
+17. Combine `TypeVariable(R) == TypeVariable(K)` with `TypeVariable(R) == Derived`
     1. `TypeVariable(K) <: Derived`
-20. Combine `TypeVariable(T2) & Any <: TypeVariable(R)` with `TypeVariable(R) == Derived`
+18. Combine `TypeVariable(T2) & Any <: TypeVariable(R)` with `TypeVariable(R) == Derived`
     1. `TypeVariable(T2) <: Derived?`
-21. Combine `Derived <: TypeVariable(K)` with `TypeVariable(K) <: Derived`
+19. Combine `Derived <: TypeVariable(K)` with `TypeVariable(K) <: Derived`
     1. `TypeVariable(K) == Derived`
-22. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) == Derived`
+20. Combine `TypeVariable(K) == TypeVariable(R)` with `TypeVariable(K) == Derived`
     1. `TypeVariable(R) <: Derived`
-23. Choose `TypeVariable(K)` with `Readiness(
+21. Choose `TypeVariable(K)` with `Readiness(
     	 true ALLOWED
     	 true HAS_PROPER_CONSTRAINTS
     	 true HAS_NO_OUTER_TYPE_VARIABLE_DEPENDENCY
@@ -681,7 +673,7 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
        	false HAS_PROPER_EQUALITY_CONSTRAINT
        	false HAS_PROPER_NON_NOTHING_NON_UPPER_CONSTRAINT
        )`
-24. Choose `TypeVariable(T2)` with `Readiness(
+22. Choose `TypeVariable(T2)` with `Readiness(
     	 true ALLOWED
     	 true HAS_PROPER_CONSTRAINTS
     	 true HAS_NO_OUTER_TYPE_VARIABLE_DEPENDENCY
@@ -697,5 +689,5 @@ myRun#(<L> = myRun@fun <implicit>.<anonymous>(): <implicit> <inline=Unknown>  {
     	false HAS_PROPER_EQUALITY_CONSTRAINT
     	false HAS_PROPER_NON_NOTHING_NON_UPPER_CONSTRAINT
     )`
-25. `Derived <: TypeVariable(T2)` _from SimpleConstraintSystemConstraintPosition_
-26. `TypeVariable(T2) == Derived` _from Fix variable T2_
+23. `Derived <: TypeVariable(T2)` _from SimpleConstraintSystemConstraintPosition_
+24. `TypeVariable(T2) == Derived` _from Fix variable T2_

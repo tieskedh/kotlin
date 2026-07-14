@@ -776,14 +776,12 @@ R?C|<local>/pntvOwner|.provide#()
 4. `TypeVariable(OT) == TypeVariable(PNT)` _from SimpleConstraintSystemConstraintPosition_
 5. Combine `ScopeOwner <: TypeVariable(OT)` with `TypeVariable(OT) == TypeVariable(PNT)`
     1. `ScopeOwner <: TypeVariable(PNT)`
-6. Combine `TypeVariable(OT) == TypeVariable(PNT)` with `TypeVariable(PNT) <: TypeVariable(OT)`
-    1. `TypeVariable(PNT) <: TypeVariable(PNT)`
-7. Combine `TypeVariable(OT) == TypeVariable(PNT)` with `TypeVariable(PNT) <: CapturedType(in TypeVariable(OT))`
+6. Combine `TypeVariable(OT) == TypeVariable(PNT)` with `TypeVariable(PNT) <: CapturedType(in TypeVariable(OT))`
     1. `TypeVariable(PNT) <: CapturedType(in TypeVariable(PNT))`
-8. Combine `ScopeOwner <: TypeVariable(PNT)` with `TypeVariable(PNT) <: TypeVariable(OT)`
+7. Combine `ScopeOwner <: TypeVariable(PNT)` with `TypeVariable(PNT) <: TypeVariable(OT)`
     1. `ScopeOwner <: TypeVariable(OT)`
-9. `TypeVariable(PNT) == TypeVariable(OT)` _from Fix variable PNT_
-10. Combine `TypeVariable(PNT) == TypeVariable(OT)` with `TypeVariable(PNT) <: CapturedType(in TypeVariable(OT))`
+8. `TypeVariable(PNT) == TypeVariable(OT)` _from Fix variable PNT_
+9. Combine `TypeVariable(PNT) == TypeVariable(OT)` with `TypeVariable(PNT) <: CapturedType(in TypeVariable(OT))`
     1. `TypeVariable(OT) <: CapturedType(in TypeVariable(OT))`
 
 ### Call 20
