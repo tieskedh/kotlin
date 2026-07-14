@@ -16,7 +16,7 @@ plugins {
     id("java-test-fixtures")
     id("project-tests-convention")
     id("test-inputs-check-v2")
-    id("org.gradle.crypto.checksum") version "1.4.0"
+    alias(libs.plugins.gradle.crypto.checksum)
 }
 
 val nativeImageClasspath by configurations.creating {
@@ -178,15 +178,12 @@ val nativeImageDistSbomTask = configureSbom(
     gradleConfigurations = setOf(nativeImageClasspath.name),
 )
 
-val nativeImageArtifactsDir = layout.buildDirectory.dir("artifacts")
-val nativeImageDistDir = layout.buildDirectory.dir("dist")
-
 val kotlincNativeImageDist = tasks.register<Copy>("kotlincNativeImageDist") {
     description = "Build the kotlin-compiler-embeddable native distribution"
     duplicatesStrategy = DuplicatesStrategy.FAIL
     rename(quote("-${version}"), "")
     rename(quote("-${bootstrapKotlinVersion}"), "")
-    destinationDir = nativeImageDistDir.get().asFile
+    destinationDir = layout.buildDirectory.dir("dist").get().asFile
     val wrapperScriptFiles = files("bin/kotlinc-native-image.sh", "bin/kotlinc-native-image.bat")
     into("bin") {
         from(kotlincNativeImageTask)
@@ -230,8 +227,7 @@ val nativeImageArchiveExtension = if (currentOs.isWindows) "zip" else "tar.gz"
 
 fun AbstractArchiveTask.configureNativeImageArchive() {
     description = "Packs the native image distribution into the publishable release archive"
-    dependsOn(kotlincNativeImageDist)
-    from(nativeImageDistDir) {
+    from(kotlincNativeImageDist) {
         into(nativeImageArchiveBaseName)
     }
     archiveFileName.set("$nativeImageArchiveBaseName.$nativeImageArchiveExtension")
@@ -252,8 +248,7 @@ val kotlincNativeImageArchive = when {
 
 val kotlincNativeImageChecksum = tasks.register<Checksum>("kotlincNativeImageChecksum") {
     description = "Writes the SHA-256 checksum of the native image archive"
-    dependsOn(kotlincNativeImageArchive)
-    inputFiles.setFrom(kotlincNativeImageArchive.flatMap { it.archiveFile })
+    inputFiles.setFrom(kotlincNativeImageArchive.map { it.archiveFile })
     outputDirectory.set(layout.buildDirectory.map { it.dir("checksum") })
     checksumAlgorithm.set(Checksum.Algorithm.SHA256)
 }
@@ -267,7 +262,7 @@ val kotlincNativeImageArtifacts = tasks.register<Sync>("kotlincNativeImageArtifa
     from(nativeImageDistSbomTask) {
         rename { "$archiveBaseName.spdx.json" }
     }
-    into(nativeImageArtifactsDir)
+    into(layout.buildDirectory.dir("artifacts"))
 }
 
 fun ProjectTestsExtension.nativeImageTestTask(name: String, body: Test.() -> Unit): TaskProvider<out Task> =
