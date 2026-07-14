@@ -12,6 +12,8 @@ import org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.K2NativeCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.cliArgument
 import org.jetbrains.kotlin.config.LanguageFeature
+import org.jetbrains.kotlin.config.nativeBinaryOptions.BinaryOptions
+import org.jetbrains.kotlin.config.nativeBinaryOptions.RuntimeAssertsMode
 import org.jetbrains.kotlin.konan.config.konanTarget
 import org.jetbrains.kotlin.konan.test.blackbox.support.AssertionsMode
 import org.jetbrains.kotlin.konan.test.blackbox.support.TestDirectives.ASSERTIONS_MODE
@@ -217,7 +219,7 @@ class NativeCompilerSecondStageFacade private constructor(
                 buildList {
                     addAll(listOf(K2NativeCompilerArguments::kotlinHome.cliArgument, nativeHome.absolutePath))
                     add(optimizationArgument.cliArgument)
-                    add(K2NativeCompilerArguments::binaryOptions.cliArgument("runtimeAssertionsMode=panic"))
+                    add(K2NativeCompilerArguments::binaryOptions.cliArgument("${BinaryOptions.runtimeAssertionsMode}=${RuntimeAssertsMode.PANIC}"))
                     add(K2NativeCompilerArguments::verifyIr.cliArgument(verifyIrMode.name))
                     add(K2NativeCompilerArguments::llvmVariant.cliArgument("dev"))
                     addAll(listOf(K2NativeCompilerArguments::produce.cliArgument, "program"))
@@ -230,7 +232,7 @@ class NativeCompilerSecondStageFacade private constructor(
                     })
                     if (cacheMode.useStaticCacheForDistributionLibraries) {
                         add(K2NativeCompilerArguments::autoCacheableFrom.cliArgument(nativeHome.resolve("klib").absolutePath))
-                        add(K2NativeCompilerArguments::binaryOptions.cliArgument("enableReleaseBinaryCache=true"))
+                        add(K2NativeCompilerArguments::binaryOptions.cliArgument("${BinaryOptions.enableReleaseBinaryCache}=true"))
                     }
                     if (enableAssertions) {
                         add(K2NativeCompilerArguments::enableAssertions.cliArgument)
