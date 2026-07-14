@@ -59,14 +59,15 @@ abstract class AbstractResolveSymbolTest : AbstractResolveByElementTest() {
 
         val localLookup = (mainElement as? KtSimpleNameExpression)?.lookupLocally()
 
-        if (localLookup != null)
+        if (localLookup != null) {
+            val resolved = symbolAttempt?.successfulSymbols?.singleOrNull()?.psi
+            testServices.assertions.assertNotNull(resolved)
             ignoreStabilityIfNeeded {
-                val resolved = symbolAttempt?.successfulSymbols?.singleOrNull()?.psi
-                testServices.assertions.assertNotNull(resolved)
                 testServices.assertions.assertTrue(resolved!!.isEquivalentTo(localLookup)) {
                     "${stringRepresentation(resolved)} != ${stringRepresentation(localLookup)}"
                 }
             }
+        }
 
         prettyPrint {
             if (mainElement is KtSimpleNameExpression) {
