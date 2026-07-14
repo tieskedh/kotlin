@@ -202,8 +202,8 @@ class DotNetIlEmitter(
                 when {
                     property.isDelegated -> propertySkipReasons[property] = "delegated property '$name' is not supported"
                     property.isLateinit -> propertySkipReasons[property] = "lateinit property '$name' is not supported"
-                    // A generic (extension) property's accessors would be generic IL methods,
-                    // which stage-1 generics scopes to top-level FUNCTIONS only.
+                    // Generic (extension) properties remain outside the supported declaration
+                    // model even though their accessors would be generic IL methods.
                     accessors.any { it.typeParameters.isNotEmpty() } ->
                         propertySkipReasons[property] = "generic property '$name' is not supported yet"
                     property.isConst -> try {
@@ -714,11 +714,11 @@ class DotNetIlEmitter(
             Modality.SEALED ->
                 dotNetUnsupported("sealed class '$name' is not supported (no abstract-class model)")
         }
-        // Generic TOP-LEVEL PLAIN classes are stage-1 supported: real CLR reified generics
+        // Generic TOP-LEVEL PLAIN classes use real CLR reified generics
         // (Roslyn shape — `.class ... 'C`n'<T>`, `!n` member signatures, instantiation tokens in
         // every operand position; probe series genprobe), no erasure or lowering machinery. The
-        // gate scopes the stage: unconstrained invariant type parameters only (the shared
-        // checkDotNetTypeParametersSupported gate: variance, constraints, reified), no nested
+        // gate scopes the stage: invariant non-reified parameters, optionally constrained by
+        // supported module-local classes/interfaces, no nested
         // declarations (the companion/object machinery is untouched by this slice), no interface
         // supertypes, and no generic-extends-generic chains (untested override/pre-pass
         // interactions — the IL shape itself is probed, genprobe_s7, so a later slice can widen).
@@ -1395,12 +1395,10 @@ class DotNetIlEmitter(
                 baseClassRef = baseClassRef,
                 isInterface = irClass.isInterface,
                 interfaceRefs = interfaceInfos.map { it.ilTypeRef },
-                // The formal type-parameter list of a generic class: `<'T'>` between the class
-                // name and the `extends` line (quoted names assemble and run, probe-verified
-                // genprobe_s8; names are decorative — CLR identity is positional).
-                genericParameters = irClass.typeParameters
-                    .takeIf { it.isNotEmpty() }
-                    ?.joinToString(", ", "<", ">") { it.name.asString().toIlIdentifier() },
+                // The formal type-parameter list of a generic class: `<'T'>`, or the stage-2
+                // constrained `<(class 'Base', class 'Mark') 'T'>`, between the class name and
+                // `extends` (genprobe_s8, genconstraintprobe_s1).
+                genericParameters = irClass.typeParameters.renderDotNetIlGenericParameters(typeMapper),
             ).generate(this)
         }
         return RenderedClass(ilText, requiredHelpers)
