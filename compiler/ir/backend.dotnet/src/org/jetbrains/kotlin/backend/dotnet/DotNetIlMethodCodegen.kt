@@ -117,10 +117,9 @@ internal class DotNetIlMethodCodegen(
     private var returnValueSlot: DotNetIlSlot.Local? = null
 
     fun render(): DotNetIlRenderedMethod {
-        // An abstract interface member has no body by definition: its `.method` block stays
-        // empty — no `.maxstack`, no `.locals`, no instructions (spelling probe-verified,
-        // `ifaceprobe_s1`/`_s2`). ABSTRACT modality is only reachable for interface members:
-        // abstract classes are shape-gate-rejected.
+        // An abstract interface or class member has no body by definition: its `.method` block
+        // stays empty — no `.maxstack`, no `.locals`, no instructions (spelling probe-verified,
+        // `ifaceprobe_s1`/`_s2` and `abstractprobe_s1`).
         val isAbstractMember = function is IrSimpleFunction && function.modality == Modality.ABSTRACT
         if (!isAbstractMember) {
             emitBody()
@@ -224,10 +223,9 @@ internal class DotNetIlMethodCodegen(
      * order are ilasm-probe-verified (`inheritprobe_s1`/`_s2`/`_s3`; `_s3` additionally showed
      * ilasm treats the flags as an unordered keyword set, so the emitter standardizes on the
      * s2-verified order; interface spellings `ifaceprobe_s1`–`_s4`):
-     * - an abstract interface member is `newslot abstract virtual` with an empty method block
-     *   (`ifaceprobe_s1`; accessors additionally carry `specialname` like everywhere else,
-     *   `ifaceprobe_s2` — ilasm's unordered-keyword-set rule keeps the emitter's established
-     *   `specialname`-first order valid);
+     * - a new abstract interface or class member is `newslot abstract virtual` with an empty
+     *   method block; an abstract override of a base-class slot is `abstract virtual` with NO
+     *   `newslot` (`ifaceprobe_s1`/`_s2`, `abstractprobe_s1`);
      * - an `open` member that overrides nothing introduces a fresh slot: `newslot virtual`
      *   (`specialname newslot virtual` for accessors);
      * - a Kotlin `override` of a BASE-CLASS member REUSES the base slot: `virtual` with NO
@@ -250,11 +248,13 @@ internal class DotNetIlMethodCodegen(
     private fun IrFunction.dotNetVirtualFlags(): String {
         if (this !is IrSimpleFunction || !signature.hasThis) return ""
         if ((parent as? IrClass)?.isInterface == true) return "newslot abstract virtual "
+        val abstractFlag = if (modality == Modality.ABSTRACT) "abstract " else ""
         val final = if (modality == Modality.FINAL) "final " else ""
         val overridesClassMember = overriddenSymbols.any { (it.owner.parent as? IrClass)?.isInterface != true }
         return when {
-            overridesClassMember -> "virtual $final"
-            overriddenSymbols.isNotEmpty() -> "newslot virtual $final"
+            overridesClassMember -> "${abstractFlag}virtual $final"
+            overriddenSymbols.isNotEmpty() -> "newslot ${abstractFlag}virtual $final"
+            modality == Modality.ABSTRACT -> "newslot abstract virtual "
             isDotNetVirtual() -> "newslot virtual "
             else -> ""
         }
