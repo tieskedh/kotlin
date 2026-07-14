@@ -500,10 +500,11 @@ internal class DotNetIlExpressionCodegen(
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee]
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
-        // A generic FUNCTION call carries its instantiation on the method token —
+        // A generic FUNCTION call, top-level or member, carries its instantiation on the method token —
         // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration
         // (probe-verified, genprobe_s1; `!!0` is itself a legal instantiation argument at
-        // generic→generic call sites) — never erased: an unmappable type argument fails the
+        // generic→generic call sites; a member can combine it with an independently instantiated
+        // generic owner, genmemberprobe_s1) — never erased: an unmappable type argument fails the
         // call site loudly.
         val methodInstantiation = if (callee.typeParameters.isNotEmpty()) {
             if (call.typeArguments.size != callee.typeParameters.size) {

@@ -20,8 +20,8 @@
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
 // - generic classes containing companions/nested objects: the nested-shape machinery is
 //   untouched by this slice;
-// - generic (extension) properties: stage 1 scopes generic callables to top-level functions;
-// - generic MEMBER functions of classes: an unexercised combination, rejected whole-class;
+// - generic (extension) properties: the property metadata/accessor model does not cover generic
+//   accessors;
 // - generic-extends-generic chains (`GenSub`): the IL shape is probed fine (genprobe_s7) but
 //   the override/pre-pass gate interactions are unexercised — rejected whole-class, a later
 //   slice can widen (the open generic base itself stays supported).
@@ -34,10 +34,6 @@ class Constrained<T : CharSequence>(val v: T)
 
 class WithCompanion<T>(val v: T) {
     companion object
-}
-
-class HasGenericMember {
-    fun <T> pick(x: T): T = x
 }
 
 interface Marked

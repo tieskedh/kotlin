@@ -424,7 +424,9 @@ internal class DotNetIlFunctionInfo(
      * for generic owners — bare name, NO type-arguments list, `genprobe_s2`), and
      * [methodInstantiation] renders the `<inst>` list of a generic METHOD between its name and
      * parameter list (`'id'<string>(!!0)`, `genprobe_s1`; `!!0` itself is a legal instantiation
-     * argument at generic→generic call sites).
+     * argument at generic→generic call sites). A generic owner and generic member compose those
+     * tokens independently (`class 'Picker`1'<string>::'pick'<int32>(!0, !!0)`,
+     * `genmemberprobe_s1`).
      */
     fun renderMethodReference(
         methodName: String,

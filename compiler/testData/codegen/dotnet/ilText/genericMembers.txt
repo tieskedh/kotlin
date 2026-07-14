@@ -1,0 +1,500 @@
+.assembly extern mscorlib {}
+.assembly 'genericMembers' {}
+.module 'main-genericMembers.il'
+
+.class interface public abstract auto ansi 'Marked'
+{
+  .method public hidebysig newslot abstract virtual instance string 'label'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'MarkedValue'
+       extends [mscorlib]System.Object
+       implements 'Marked'
+{
+  .field private string 'text'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'text') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'MarkedValue'::'text'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_text'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'MarkedValue'::'text'
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'MarkedValue'::'get_text'()
+    ret
+  }
+  .property instance string 'text'()
+  {
+    .get instance string 'MarkedValue'::'get_text'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'MemberHost`1'<'C'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'captured'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'captured') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'MemberHost`1'<!0>::'captured'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_captured'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'MemberHost`1'<!0>::'captured'
+    ret
+  }
+  .method public hidebysig instance !!0 'choose'<'M'>(!0 'context', !!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+  .method public hidebysig instance !0 'capturedFrom'<'M'>(!!0 'ignored') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'MemberHost`1'<!0>::'get_captured'()
+    ret
+  }
+  .method public hidebysig instance !!0 'relay'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.0
+    call instance !0 class 'MemberHost`1'<!0>::'get_captured'()
+    ldarg.1
+    call instance !!0 class 'MemberHost`1'<!0>::'choose'<!!0>(!0, !!0)
+    ret
+  }
+  .method public hidebysig instance class 'MemberHost`1'<!!0> 'wrap'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    newobj instance void class 'MemberHost`1'<!!0>::.ctor(!0)
+    ret
+  }
+  .method public hidebysig instance !!0 'read'<'M'>(class 'MemberHost`1'<!!0> 'other') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance !0 class 'MemberHost`1'<!!0>::'get_captured'()
+    ret
+  }
+  .method public hidebysig instance string 'labelOf'<(class 'Marked') 'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !!0 '<constrainedReceiver>'
+    )
+    ldarg.1
+    stloc.0
+    ldloca 0
+    constrained. !!0
+    callvirt instance string 'Marked'::'label'()
+    ret
+  }
+  .property instance !0 'captured'()
+  {
+    .get instance !0 'MemberHost`1'::'get_captured'()
+  }
+}
+.class interface public abstract auto ansi 'GenericPicker`1'<'C'>
+{
+  .method public hidebysig newslot abstract virtual instance !!0 'pick'<'M'>(!0 'context', !!0 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'ChildPicker`1'<'C'>
+       implements class 'GenericPicker`1'<!0>
+{
+}
+.class public auto ansi sealed beforefieldinit 'Picker`1'<'C'>
+       extends [mscorlib]System.Object
+       implements class 'ChildPicker`1'<!0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'pick'<'M'>(!0 'context', !!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+}
+.class interface public abstract auto ansi 'BoundMember'
+{
+  .method public hidebysig newslot abstract virtual instance string 'labelOf'<(class 'Marked') 'M'>(!!0 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BoundMemberImpl'
+       extends [mscorlib]System.Object
+       implements 'BoundMember'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'labelOf'<(class 'Marked') 'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] !!0 '<constrainedReceiver>'
+    )
+    ldarg.1
+    stloc.0
+    ldloca 0
+    constrained. !!0
+    callvirt instance string 'Marked'::'label'()
+    ret
+  }
+}
+.class interface public abstract auto ansi 'GenericIdentity'
+{
+  .method public hidebysig newslot abstract virtual instance !!0 'identity'<'M'>(!!0 'value') cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'GenericProvider'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'identity'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'InheritedIdentity'
+       extends 'GenericProvider'
+       implements 'GenericIdentity'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'GenericProvider'::.ctor()
+    ret
+  }
+}
+.class public auto ansi beforefieldinit 'GenericBase`1'<'C'>
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'select'<'M'>(!0 'context', !!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'StringDerived'
+       extends class 'GenericBase`1'<string>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void class 'GenericBase`1'<string>::.ctor()
+    ret
+  }
+  .method public hidebysig virtual instance !!0 'select'<'M'>(string 'context', !!0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance !!0 class 'GenericBase`1'<string>::'select'<!!0>(!0, !!0)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ArityOverloads'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'same'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .method public hidebysig instance int32 'same'<'Unused'>(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+}
+.class public auto ansi sealed 'GenericObject'
+       extends [mscorlib]System.Object
+{
+  .field public static initonly class 'GenericObject' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'GenericObject'::.ctor()
+    stsfld class 'GenericObject' 'GenericObject'::'INSTANCE'
+    ret
+  }
+  .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance !!0 'identity'<'M'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+}
+.class public auto ansi sealed 'CompanionOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+  {
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance !!0 'identity'<'M'>(!!0 'value') cil managed
+    {
+      .maxstack 1
+      ldarg.1
+      ret
+    }
+  }
+  .field public static initonly class 'CompanionOwner'/'Companion' 'Companion'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'CompanionOwner'/'Companion'::.ctor()
+    stsfld class 'CompanionOwner'/'Companion' 'CompanionOwner'::'Companion'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ExtensionHost'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance !!0 'keep'<'M'>(string '<this>', !!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+  .method public hidebysig instance string 'run'() cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldstr "receiver"
+    ldstr "extension"
+    call instance !!0 'ExtensionHost'::'keep'<string>(string, !!0)
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericMembersKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'childPick'(class 'ChildPicker`1'<string> 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldstr "child"
+    ldc.i4 9
+    callvirt instance !!0 class 'GenericPicker`1'<string>::'pick'<int32>(!0, !!0)
+    ret
+  }
+  .method public hidebysig static int32 'basePick'(class 'GenericBase`1'<string> 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldstr "base"
+    ldc.i4 41
+    callvirt instance !!0 class 'GenericBase`1'<string>::'select'<int32>(!0, !!0)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'MemberHost`1'<string> 'host',
+      [1] class 'ChildPicker`1'<int32> 'intPicker',
+      [2] class 'GenericIdentity' 'inherited',
+      [3] class 'ArityOverloads' 'overloads'
+    )
+    ldstr "captured"
+    newobj instance void class 'MemberHost`1'<string>::.ctor(!0)
+    stloc.0
+    ldloc.0
+    ldstr "context"
+    ldc.i4 7
+    call instance !!0 class 'MemberHost`1'<string>::'choose'<int32>(!0, !!0)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4.1
+    call instance !0 class 'MemberHost`1'<string>::'capturedFrom'<bool>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldstr "relayed"
+    call instance !!0 class 'MemberHost`1'<string>::'relay'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 11
+    call instance class 'MemberHost`1'<!!0> class 'MemberHost`1'<string>::'wrap'<int32>(!!0)
+    call instance !0 class 'MemberHost`1'<int32>::'get_captured'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldstr "read"
+    newobj instance void class 'MemberHost`1'<string>::.ctor(!0)
+    call instance !!0 class 'MemberHost`1'<string>::'read'<string>(class 'MemberHost`1'<!!0>)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldstr "marked"
+    newobj instance void 'MarkedValue'::.ctor(string)
+    call instance string class 'MemberHost`1'<string>::'labelOf'<class 'MarkedValue'>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void class 'Picker`1'<string>::.ctor()
+    call int32 'genericMembersKt'::'childPick'(class 'ChildPicker`1'<string>)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void class 'Picker`1'<int32>::.ctor()
+    stloc.1
+    ldloc.1
+    ldc.i4 1
+    ldstr "value-owner"
+    callvirt instance !!0 class 'GenericPicker`1'<int32>::'pick'<string>(!0, !!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'BoundMemberImpl'::.ctor()
+    ldstr "bound-interface"
+    newobj instance void 'MarkedValue'::.ctor(string)
+    callvirt instance string 'BoundMemberImpl'::'labelOf'<class 'MarkedValue'>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'InheritedIdentity'::.ctor()
+    stloc.2
+    ldloc.2
+    ldstr "inherited-interface"
+    callvirt instance !!0 'GenericIdentity'::'identity'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'StringDerived'::.ctor()
+    call int32 'genericMembersKt'::'basePick'(class 'GenericBase`1'<string>)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'StringDerived'::.ctor()
+    ldstr "direct"
+    ldstr "derived"
+    callvirt instance !!0 'StringDerived'::'select'<string>(string, !!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ArityOverloads'::.ctor()
+    stloc.3
+    ldloc.3
+    ldc.i4 12
+    call instance int32 'ArityOverloads'::'same'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    ldc.i4 13
+    call instance int32 'ArityOverloads'::'same'<string>(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'GenericObject' 'GenericObject'::'INSTANCE'
+    ldstr "object"
+    call instance !!0 'GenericObject'::'identity'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'CompanionOwner'/'Companion' 'CompanionOwner'::'Companion'
+    ldstr "companion"
+    call instance !!0 'CompanionOwner'/'Companion'::'identity'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ExtensionHost'::.ctor()
+    call instance string 'ExtensionHost'::'run'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

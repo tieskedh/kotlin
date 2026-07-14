@@ -41,10 +41,6 @@ class NullableSlotImplementation : NullableSlot<String> {
     override fun nullable(): String? = null
 }
 
-interface GenericInterfaceMember<T> {
-    fun <U> transform(value: U): T
-}
-
 interface UnsupportedInterfaceBound<T : List<String>> {
     fun value(): T
 }
