@@ -55,6 +55,18 @@ fun <T> genericFunctionLocal(value: T, failure: T): T {
     return local.captured()
 }
 
+fun mutableLocalClassCapture(): Int {
+    var value = 1
+
+    class Local {
+        fun value(): Int = value
+    }
+
+    val local = Local()
+    value = 42
+    return local.value()
+}
+
 class GenericLocalOwner<T>(private val seed: T) {
     fun value(): T {
         class Local {
@@ -87,5 +99,6 @@ fun box(): String {
     if (genericFunctionLocal("generic", "bad") != "generic") return "fail 5: generic function capture"
     if (GenericLocalOwner("owner").value() != "owner") return "fail 6: generic owner capture"
     if (LocalInInitializer(8).value != 12) return "fail 7: local class in initializer"
+    if (mutableLocalClassCapture() != 42) return "fail 8: mutable local-class capture"
     return "OK"
 }

@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
+import org.jetbrains.kotlin.types.Variance
 
 /**
  * The callable portion of the Kotlin.Runtime ABI candidate evaluated by this POC.
@@ -36,6 +37,12 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    private val mutableRefClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.MutableRef`1",
+        typeParameterVariances = listOf(Variance.INVARIANT),
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
     private val fixedFunctionClasses = listOf(
         functionClassInfo(arity = 0),
         functionClassInfo(arity = 1),
@@ -49,6 +56,7 @@ internal object DotNetRuntimeTypes {
     }
 
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? = when {
+        irClass.isDotNetMutableRefStub == true -> mutableRefClass
         irClass.isDotNetFunctionBase -> functionBase
         else -> irClass.dotNetFixedFunctionArityOrNull()?.let(fixedFunctionClasses::get)
     }
