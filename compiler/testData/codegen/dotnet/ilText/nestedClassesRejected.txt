@@ -13,25 +13,6 @@
     ret
   }
 }
-.class public auto ansi sealed 'ObjectHost'
-       extends [mscorlib]System.Object
-{
-  .field public static initonly class 'ObjectHost' 'INSTANCE'
-  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
-  {
-    .maxstack 1
-    newobj instance void 'ObjectHost'::.ctor()
-    stsfld class 'ObjectHost' 'ObjectHost'::'INSTANCE'
-    ret
-  }
-  .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
-    ret
-  }
-}
 .class public auto ansi sealed beforefieldinit 'NestedDataHost'
        extends [mscorlib]System.Object
 {

@@ -1,0 +1,198 @@
+.assembly extern mscorlib {}
+.assembly 'nestedObjectDeclarationsRejected' {}
+.module 'main-nestedObjectDeclarationsRejected.il'
+
+.class public auto ansi sealed 'BrokenObjectOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Good'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 1
+      ret
+    }
+  }
+  .class nested public auto ansi sealed 'GoodObject'
+         extends [mscorlib]System.Object
+  {
+    .field public static initonly class 'BrokenObjectOwner'/'GoodObject' 'INSTANCE'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'BrokenObjectOwner'/'GoodObject'::.ctor()
+      stsfld class 'BrokenObjectOwner'/'GoodObject' 'BrokenObjectOwner'/'GoodObject'::'INSTANCE'
+      ret
+    }
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 2
+      ret
+    }
+  }
+  .field public static initonly class 'BrokenObjectOwner' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'BrokenObjectOwner'::.ctor()
+    stsfld class 'BrokenObjectOwner' 'BrokenObjectOwner'::'INSTANCE'
+    ret
+  }
+  .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed 'BrokenCompanionOwner'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Good'
+           extends [mscorlib]System.Object
+    {
+      .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ret
+      }
+      .method public hidebysig instance int32 'value'() cil managed
+      {
+        .maxstack 1
+        ldc.i4 3
+        ret
+      }
+    }
+    .class nested public auto ansi sealed 'GoodObject'
+           extends [mscorlib]System.Object
+    {
+      .field public static initonly class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'INSTANCE'
+      .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+      {
+        .maxstack 1
+        newobj instance void 'BrokenCompanionOwner'/'Companion'/'GoodObject'::.ctor()
+        stsfld class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'INSTANCE'
+        ret
+      }
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ret
+      }
+      .method public hidebysig instance int32 'value'() cil managed
+      {
+        .maxstack 1
+        ldc.i4 4
+        ret
+      }
+    }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .field public static initonly class 'BrokenCompanionOwner'/'Companion' 'Companion'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'BrokenCompanionOwner'/'Companion'::.ctor()
+    stsfld class 'BrokenCompanionOwner'/'Companion' 'BrokenCompanionOwner'::'Companion'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'UsesNestedObjectDeclarationSurvivors'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'objectClass'(class 'BrokenObjectOwner'/'Good' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance int32 'BrokenObjectOwner'/'Good'::'value'()
+    ret
+  }
+  .method public hidebysig instance int32 'companionClass'(class 'BrokenCompanionOwner'/'Companion'/'Good' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance int32 'BrokenCompanionOwner'/'Companion'/'Good'::'value'()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'nestedObjectDeclarationsRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'UsesNestedObjectDeclarationSurvivors' 'uses',
+      [1] int32 'classes'
+    )
+    newobj instance void 'UsesNestedObjectDeclarationSurvivors'::.ctor()
+    stloc.0
+    ldloc.0
+    newobj instance void 'BrokenObjectOwner'/'Good'::.ctor()
+    call instance int32 'UsesNestedObjectDeclarationSurvivors'::'objectClass'(class 'BrokenObjectOwner'/'Good')
+    ldloc.0
+    newobj instance void 'BrokenCompanionOwner'/'Companion'/'Good'::.ctor()
+    call instance int32 'UsesNestedObjectDeclarationSurvivors'::'companionClass'(class 'BrokenCompanionOwner'/'Companion'/'Good')
+    add
+    stloc.1
+    ldloc.1
+    ldsfld class 'BrokenObjectOwner'/'GoodObject' 'BrokenObjectOwner'/'GoodObject'::'INSTANCE'
+    call instance int32 'BrokenObjectOwner'/'GoodObject'::'value'()
+    add
+    ldsfld class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'INSTANCE'
+    call instance int32 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'value'()
+    add
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

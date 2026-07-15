@@ -16,10 +16,6 @@ class InnerHost {
     inner class Nested
 }
 
-object ObjectHost {
-    class Nested
-}
-
 class NestedDataHost {
     data class Nested(val value: Int)
 }

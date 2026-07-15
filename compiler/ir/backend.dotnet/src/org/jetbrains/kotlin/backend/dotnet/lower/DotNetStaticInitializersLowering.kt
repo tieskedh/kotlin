@@ -52,11 +52,12 @@ internal val DOTNET_STATIC_INITIALIZER: IrDeclarationOrigin = IrDeclarationOrigi
  *   named after the companion on a companion-bearing class) become one class-parented
  *   `<clinit>`, appended to the class's declarations and rendered as the class's `.cctor` —
  *   this slice matches the JVM `ClassLoweringPass` precedent directly. For a companion this
- *   `newobj`/`stsfld` in the ENCLOSING class's `.cctor` is what ties companion initialization
- *   to the enclosing class (objprobe_s8, nestedprobe_s4). Like the common
+ *   `newobj`/`stsfld` in the ENCLOSING type's `.cctor` is what ties companion initialization
+ *   to the enclosing type (objprobe_s8, nestedprobe_s4, nestedifaceprobe_s2). Like the common
  *   `ClassLoweringPass` runner, the sweep is recursive and postfix, so companions of ordinary
- *   nested classes and named nested objects receive a `.cctor` on their actual static-field
- *   owner rather than leaving the synthesized field uninitialized.
+ *   nested classes and named objects at any supported metadata depth receive a `.cctor` on their
+ *   actual static-field owner rather than leaving the synthesized field uninitialized
+ *   (`nestedprobe_s4`, `nestedownerprobe_s1`).
  *
  * Giving the initializers a real function body here (instead of rendering them at emission time)
  * lets the later phases — the `for`-loop rewrite and the string-concatenation lowerings — treat
