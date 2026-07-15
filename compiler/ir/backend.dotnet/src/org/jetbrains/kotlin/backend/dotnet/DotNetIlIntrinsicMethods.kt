@@ -1609,7 +1609,7 @@ private class DotNetIlUnsupportedIntrinsic(
  *   locale) and because it prints CLR shapes (`1`, `1E+20`) instead of Kotlin's (`1.0`,
  *   `1.0E20`). It funnels through
  *   [DotNetIlExpressionCodegen.emitStringValueExpression], whose Double branch calls the shared
- *   [DotNetIlRuntimeHelper.DoubleToString] runtime helper — Kotlin-parity rendering, with the
+ *   [DotNetRuntimeLibraryHelpers] runtime helper — Kotlin-parity rendering, with the
  *   divergences documented on that helper.
  * - `String`/`Boolean`/`Any?` funnel through the Kotlin string rendering of the value. In
  *   particular `Console.WriteLine(bool)` must NOT be used: it prints `"True"`/`"False"` while

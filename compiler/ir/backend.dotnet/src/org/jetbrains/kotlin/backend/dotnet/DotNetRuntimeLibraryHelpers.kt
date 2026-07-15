@@ -1,23 +1,15 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 /**
- * The synthetic utility class hosting hand-written IL runtime helpers. It plays the role the
- * kotlin-stdlib runtime classes play on the JVM (e.g. `kotlin.jvm.internal.Intrinsics`): shared
- * code that user methods call into but that has no Kotlin source. The name follows the CLR
- * convention for compiler-emitted types (`<Module>`, `<PrivateImplementationDetails>` in Roslyn):
- * angle brackets make it unspeakable from C#/Kotlin source, and the quoted-identifier emission
- * this backend uses everywhere makes it a valid ILAsm class name. The class is emitted at most
- * once per module, and only when at least one rendered method required one of its helpers.
+ * The hand-written IL for compiler support that lives in the Kotlin.Runtime assembly.
+ *
+ * These members play the role of JVM runtime internals such as `kotlin.jvm.internal.Intrinsics`:
+ * generated Kotlin code calls them, but they are not Kotlin source APIs. The CLR type and methods
+ * must be metadata-public because their callers live in other assemblies. Keeping them below the
+ * reserved `Kotlin.Runtime.Internal` namespace marks the supported boundary accurately: this is a
+ * versioned compiler/runtime contract, not a surface for Kotlin or CLR user code.
  */
-internal const val DOTNET_RUNTIME_HELPER_CLASS_NAME = "<KotlinIl>"
-
-/**
- * A runtime helper method of [DOTNET_RUNTIME_HELPER_CLASS_NAME]: methods that are too large to
- * inline at every use site and are instead emitted once per module, on demand. Each rendered
- * user method records the helpers it called (see [DotNetIlMethodContext.requireRuntimeHelper]);
- * [DotNetIlEmitter] appends the utility class containing every required helper.
- */
-internal enum class DotNetIlRuntimeHelper {
+internal object DotNetRuntimeLibraryHelpers {
     /**
      * `static string DoubleToString(float64)` — Kotlin-parity `Double.toString()`.
      *
@@ -77,8 +69,12 @@ internal enum class DotNetIlRuntimeHelper {
      * `DotNetIlExpressionCodegen.emitStringValueExpression`: constant and non-constant values of
      * the same `Double` must print identically, so both are routed through this helper.
      */
-    DoubleToString {
-        override val methodIlText: String = """
+    val ilText: String = """
+            |.namespace Kotlin.Runtime.Internal
+            |{
+            |  .class public abstract sealed auto ansi beforefieldinit DoubleFormatting
+            |         extends [mscorlib]System.Object
+            |  {
             |  .method public hidebysig static string 'DoubleToString'(float64 'value') cil managed
             |  {
             |    .maxstack 5
@@ -296,16 +292,14 @@ internal enum class DotNetIlRuntimeHelper {
             |    call string ${CORE_LIB_REF}System.String::Concat(string, string, string)
             |    ret
             |  }
+            |  }
+            |}
             |
         """.trimMargin()
 
-        override val callInstruction: String =
-            "call string ${DOTNET_RUNTIME_HELPER_CLASS_NAME.toIlIdentifier()}::${"DoubleToString".toIlIdentifier()}(float64)"
-    };
-
-    /** The complete `.method` block, in the same layout [DotNetIlMethodCodegen] renders. */
-    abstract val methodIlText: String
-
-    /** The `call` instruction user methods invoke the helper with; pops its arguments, pushes 1. */
-    abstract val callInstruction: String
+    /** The cross-assembly call emitted by compiled Kotlin code; one float64 in, one string out. */
+    val doubleToStringCallInstruction: String =
+        "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.DoubleFormatting".toIlIdentifier()}::" +
+                "${"DoubleToString".toIlIdentifier()}(float64)"
 }
