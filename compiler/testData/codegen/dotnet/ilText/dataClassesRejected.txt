@@ -1,0 +1,27 @@
+.assembly extern mscorlib {}
+.assembly 'dataClassesRejected' {}
+.module 'main-dataClassesRejected.il'
+
+.class public auto ansi sealed beforefieldinit 'Owner'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'dataClassesRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "survives"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

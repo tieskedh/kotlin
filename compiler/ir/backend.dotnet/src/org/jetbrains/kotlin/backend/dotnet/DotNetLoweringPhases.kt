@@ -4,6 +4,9 @@ import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultArgumentStubGenerator
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
@@ -45,6 +48,13 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalFunctions,
     ::DotNetLocalDeclarationsLowering,
     ::DotNetLocalDeclarationPopupLowering,
+    // JVM/common masked-default dispatch after local declarations are lifted: generated
+    // `$default` functions see final metadata owners, and every call with omitted ordinary
+    // function arguments is redirected before later lowerings inspect its body. Constructor
+    // defaults deliberately remain outside this slice.
+    ::DotNetDefaultArgumentStubGenerator,
+    ::DotNetDefaultParameterInjector,
+    ::DotNetDefaultParameterCleaner,
     // Follow the common/JVM inner-class pipeline before initializer merging: first make a generic
     // outer's implicit type arguments explicit on the independent CLR nested type, then add the
     // outer field/constructor argument, rewrite outer-this reads into field chains, and move

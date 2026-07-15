@@ -104,6 +104,14 @@ internal class DotNetIlIntrinsicMethods(
         irBuiltIns.ieee754equalsFunByOperandType.getValue(irBuiltIns.floatClass).toKey()!!
                 to DotNetIlEqualityIntrinsic(referenceEquality = false),
         irBuiltIns.booleanNotSymbol.toKey()!! to DotNetIlBooleanNotIntrinsic,
+        // Masked default-argument stubs test one bit at a time with the common IR builtin. JVM
+        // intrinsifies the same Int.and operation; CLR has the direct stack `and` instruction.
+        irBuiltIns.intAndSymbol.toKey()!! to DotNetIlNumericBinaryOperatorIntrinsic(
+            "and",
+            DotNetIlValueType.Int32,
+            DotNetIlValueType.Int32,
+            DotNetIlValueType.Int32,
+        ),
         // `a!!` arrives as a call to the CHECK_NOT_NULL builtin (`kotlin.internal.ir`), exactly
         // like on the JVM, whose backend intrinsifies it as checkNotNull (Intrinsics.checkNotNull
         // at runtime); here the null test + throw is emitted inline (see the intrinsic's KDoc).

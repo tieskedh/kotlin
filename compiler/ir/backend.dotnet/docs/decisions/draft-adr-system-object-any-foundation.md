@@ -132,11 +132,29 @@ results.
 Compiler promotion requires exact-IL pins for slot names and flags, runtime boxes for virtual and
 null-safe behavior, and continued assembly under both ILAsm implementations.
 
+## Later consumer: bounded data classes
+
+A later slice now consumes this foundation for non-generic top-level data classes with supported
+non-array primary-constructor properties and no constructor defaults. It does not revise the Any
+decision. Fir2ir's shared generated bodies reuse the physical System.Object slots and runtime Any
+helpers: `equals` adds a CLR `isinst` plus checked `castclass`, `hashCode` and `toString` use the
+existing normalized helper/conversion paths, and `componentN`/`copy` remain ordinary members.
+Ordinary function defaults, including `copy`, use a masked instance `$default` helper; this adds no
+object root or callable identity.
+
+The slice rejects generic data classes because CLR reified `isinst C<T>` is stricter than Kotlin's
+erased class identity, and rejects array properties until the dedicated data-class content
+hash/string builtins exist. Nested/local data classes, constructor defaults, and data objects also
+remain gated. The gate runs before class registration, so an unsupported generated body cannot
+leave behind a partial class.
+
 ## Deliberate boundaries
 
-This foundation does not by itself enable data classes/data objects, interface redeclarations of
-Any members, Kotlin-owned exception classes, type tests/casts, or a complete foreign-object import
-model. Generic `T : Any` constraints also remain deferred: mapping that bound to CLR `class` would
+This foundation does not by itself enable data objects, unsupported data-class families, interface
+redeclarations of Any members, Kotlin-owned exception classes, general type tests/casts, or a
+complete foreign-object import model. The later bounded data-class consumer above adds only
+non-generic module-class tests/downcasts. Generic `T : Any` constraints remain deferred: mapping
+that bound to CLR `class` would
 incorrectly reject value-type instantiations, while erasing it entirely would admit null. Those
 features may consume this decision in later slices, but must keep the one physical System.Object
 root. Default `System.Object.ToString()` text is platform-specific and is not an ABI promise.

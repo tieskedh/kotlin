@@ -27,13 +27,16 @@ import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.classFqName
+import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isArrayOrPrimitiveArray
 import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
+import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
@@ -893,10 +896,35 @@ class DotNetIlEmitter(
             dotNetUnsupported("nested $kind '$name' is not supported")
         }
         if (irClass.isData) {
-            // `data object` lands here too. The Any slots now exist, but the frontend-generated
-            // equality/hash/string bodies still use constructs that need their own audited slice.
-            val kindWord = if (irClass.kind == ClassKind.OBJECT) "data object" else "data class"
-            dotNetUnsupported("$kindWord '$name' is not supported")
+            when {
+                irClass.kind == ClassKind.OBJECT -> dotNetUnsupported("data object '$name' is not supported")
+                enclosingClass != null -> dotNetUnsupported("nested data class '$name' is not supported yet")
+                irClass.isOriginallyLocalDeclaration -> dotNetUnsupported("local data class '$name' is not supported yet")
+                irClass.typeParameters.isNotEmpty() -> dotNetUnsupported(
+                    "generic data class '$name' is not supported: CLR reified generic type tests " +
+                            "do not preserve Kotlin's erased data-class equality"
+                )
+            }
+            val primaryConstructor = irClass.primaryConstructor
+                ?: dotNetUnsupported("data class '$name' has no primary constructor")
+            if (primaryConstructor.parameters.any { parameter ->
+                    parameter.kind == IrParameterKind.Regular && parameter.defaultValue != null
+                }
+            ) {
+                dotNetUnsupported(
+                    "data class '$name' has default primary-constructor arguments, which are not supported yet"
+                )
+            }
+            if (primaryConstructor.parameters.any { parameter ->
+                    parameter.kind == IrParameterKind.Regular &&
+                            parameter.type.classifierOrNull.isArrayOrPrimitiveArray(irBuiltIns)
+                }
+            ) {
+                dotNetUnsupported(
+                    "data class '$name' has an array property; generated array hashCode/toString members " +
+                            "are not supported yet"
+                )
+            }
         }
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
