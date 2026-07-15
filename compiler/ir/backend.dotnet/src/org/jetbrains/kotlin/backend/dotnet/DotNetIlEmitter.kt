@@ -1000,7 +1000,8 @@ class DotNetIlEmitter(
             for (superInterface in superClasses.filter { it.isInterface }) {
                 if (superInterface !in moduleInterfaces &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
-                    superInterface.dotNetFixedKFunctionArityOrNull() == null
+                    superInterface.dotNetFixedKFunctionArityOrNull() == null &&
+                    superInterface.dotNetExactFunctionArity == null
                 ) {
                     dotNetUnsupported(
                         "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +
