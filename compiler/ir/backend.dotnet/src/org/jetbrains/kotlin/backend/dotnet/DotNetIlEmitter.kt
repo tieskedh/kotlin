@@ -744,8 +744,9 @@ class DotNetIlEmitter(
      * `kotlin.Any` members stay rejected. Abstract and sealed plain classes map to CLR `abstract`;
      * Kotlin sealing is frontend-enforced like sealed interfaces. Objects and companions stay
      * on the sole-supertype-`kotlin.Any`, final-only model. A plain named class nested directly
-     * in another plain class or interface is also supported recursively at every class modality,
-     * including under a generic outer and with its own independent generic parameters. This
+     * in any supported named class, interface, object, or companion is also supported recursively
+     * at every class modality, including under a generic outer and with its own independent
+     * generic parameters. This
      * follows the JVM's static nested-class model (`ACC_STATIC` unless `isInner`) and maps directly
      * to a CLR nested type; the metadata and generic spelling is probe-verified by
      * `nestedprobe_s1`/`_s3`. Nested classes may be public, private, internal, or protected
@@ -753,15 +754,17 @@ class DotNetIlEmitter(
      * A top-level or nested class may derive from a module-local nested class, including a
      * sibling, enclosing metadata parent, forward declaration, generic instantiation, or class
      * in another top-level family (`nestedprobe_s3`). Companion objects of non-generic ordinary
-     * nested classes/interfaces and named objects in plain classes/interfaces are supported by
-     * the recursive static-initializer sweep (`nestedprobe_s4`, `nestedifaceprobe_s2`). A
+     * nested classes/interfaces and named objects in any supported metadata owner are supported
+     * by the recursive static-initializer sweep (`nestedprobe_s4`, `nestedifaceprobe_s2`,
+     * `nestedownerprobe_s1`). A
      * companion's singleton field lives on its immediate owner, so that owner must be non-generic;
      * a named object's `INSTANCE` lives on the non-generic object type itself and is safe below a
      * generic metadata parent. All-abstract interfaces may nest inside any supported named class,
      * interface, object, or companion, with the same independent generic parameter and visibility
-     * model. Classes, objects, and companions inside interfaces are likewise static-style nested
-     * declarations. Inner classes and class/object declarations inside an object or companion
-     * stay rejected. Each violation throws
+     * model. Named classes and objects may likewise nest recursively in any supported class,
+     * interface, object, or companion; all use the JVM static-nested model and the same recursive
+     * metadata/initializer machinery (`nestedownerprobe_s1`–`_s2`). Inner classes stay rejected.
+     * Each violation throws
      * [DotNetIlUnsupportedException]; registration drops that declaration's metadata subtree,
      * while its valid enclosing classes and siblings remain available.
      */
@@ -792,17 +795,18 @@ class DotNetIlEmitter(
         if (
             enclosingClass != null &&
             enclosingClass.kind != ClassKind.CLASS &&
-            enclosingClass.kind != ClassKind.INTERFACE
+            enclosingClass.kind != ClassKind.INTERFACE &&
+            enclosingClass.kind != ClassKind.OBJECT
         ) {
-            val enclosingKind = if (enclosingClass.kind == ClassKind.OBJECT) "object" else "interface"
             val kind = when {
                 isValidatedCompanion -> "companion object"
                 irClass.kind == ClassKind.OBJECT -> "object"
                 else -> "class"
             }
             dotNetUnsupported(
-                "$kind '$name' is nested inside $enclosingKind '${enclosingClass.diagnosticName()}'; " +
-                        "nested declarations are supported only inside plain classes and interfaces"
+                "$kind '$name' is nested inside unsupported declaration " +
+                        "'${enclosingClass.diagnosticName()}'; nested declarations are supported only inside " +
+                        "classes, interfaces, and objects"
             )
         }
         if (enclosingClass != null && !isValidatedCompanion && !isNamedNestedClass && !isNamedNestedObject) {
