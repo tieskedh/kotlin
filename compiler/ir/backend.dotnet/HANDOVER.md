@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(explicit CLR delegate projection after the callable exact-path slice).
+(exception fidelity after the CLR delegate-projection boundary audit).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -715,7 +715,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   reference, local-function, and array-initializer contexts; CoreCLR coverage additionally pins
   parameter/open-generic calls, nullable primitives, variance, captures, bound references, Unit,
   explicit fallback, and receiver/argument/invocation order. Delegate projection remains a
-  separate export layer and is the next callable task.
+  separate export layer; the boundary audit follows below.
+- The delegate-projection audit deliberately lands no runtime helper or generated overload before
+  an owner boundary exists. The backend currently has no foreign-type mapper, export annotation,
+  or facade policy that can choose Func versus Action from logical Kotlin types and own names,
+  nullability metadata, and round trips. `delegateprojection_s1` nevertheless validates the
+  mechanism: an exact Func binds directly to InvokeExact; erased Func and Unit Action projections
+  close static generic thunks over the canonical FunctionN object. Repeated same-object/same-shape
+  projections compare delegate-equal and remove event registrations without caching. Both ILAsm
+  versions and all four modern/Framework runtime pairings agree. The callable draft ADR records
+  adapter and round-trip requirements. Do not invent a public source API or automatic overloads;
+  add an explicit export/interop boundary first and co-land the projection mechanism there.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -798,16 +808,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Implement and validate explicit CLR delegate projection.** Preserve erased
-   `Kotlin.Function0/1/2` as storage and identity. Define an explicit export/conversion boundary,
-   adapter reuse and delegate equality, callback add/remove behavior, repeated Kotlin-to-CLR and
-   CLR-to-Kotlin projection, nullability, Unit/void, and exception translation before choosing
-   codegen. A projected Func/Action may be another object; it must never participate in ordinary
-   Kotlin function-type conversion.
-2. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
+1. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
    the neutral negative-array-size fault only when its Kotlin-owned identity and catch policy are
    audited. Keep `contentEquals` and related content operations separate until their floating,
    nullable, primitive, and recursive semantics have been reviewed.
+2. **Add an explicit CLR export/interop boundary.** Only then co-land the already probe-validated
+   Func/Action projection mechanism. Preserve FunctionN storage/identity and define overload/facade
+   naming, nullability, Unit/void, exception translation, adapter round trips, and delegate equality
+   at that boundary.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
