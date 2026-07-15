@@ -509,10 +509,16 @@ internal class DotNetIlMethodCodegen(
     }
 
     private fun emitSetValue(expression: IrSetValue) {
-        val slot = methodContext.reference(expression.symbol) as? DotNetIlSlot.Local
-            ?: dotNetUnsupported("assignment to unsupported target '${expression.symbol.owner.name.asString()}'")
+        val slot = methodContext.reference(expression.symbol)
         expressionCodegen.emitExpression(expression.value, slot.type)
-        methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
+        val instruction = when (slot) {
+            is DotNetIlSlot.Local -> storeLocalInstruction(slot.index)
+            // Source parameters are immutable. This shape is produced by the common masked
+            // default stub, which replaces an omitted placeholder before dispatching to the
+            // original declaration. CLR `starg` is the direct JVM-local-slot counterpart.
+            is DotNetIlSlot.Parameter -> storeArgumentInstruction(slot.index)
+        }
+        methodContext.emit(instruction, pops = 1)
     }
 
     private fun emitWhenStatement(expression: IrWhen) {

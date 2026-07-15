@@ -219,11 +219,43 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Both ILAsm implementations accept the exact runtime/library/consumer shapes, and all four
   modern/Framework consumer-dependency
   pairings run identically. STAYS REJECTED, loudly: interface redeclarations of Any members,
-  data-class/data-object generated members, and `T : Any` generic constraints (CLR `class` would
-  wrongly exclude value instantiations; erasing the constraint would admit null). Kotlin-owned
-  exceptions and foreign-object import policy remain later consumers of this foundation. Pins:
+  data objects, unsupported data-class shapes described below, and `T : Any` generic constraints
+  (CLR `class` would wrongly exclude value instantiations; erasing the constraint would admit
+  null). Kotlin-owned exceptions and foreign-object import policy remain later consumers of this
+  foundation. Pins:
   `ilText/inheritanceAnyOverride.kt`, `ilText/interfaceEqualityWidening.kt`,
   `ilText/nullableRejected.kt`, `ilText/genericRejected.kt`; runtime: `box/anyMembers.kt`.
+- A bounded top-level data-class slice consumes the System.Object Any foundation without adding
+  another object identity or a backend-specific member generator. Fir2ir's shared
+  `DataClassMembersGenerator` already supplies `equals`, `hashCode`, `toString`, `componentN`,
+  and `copy` bodies. For a non-generic top-level class whose primary-constructor properties have
+  no array type or constructor default, those bodies compile through ordinary class machinery:
+  `Equals(object)` reuses the existing System.Object virtual slot and uses the checked
+  `isinst`/`castclass` path above; property equality and hash/string conversion reuse the
+  established Any/nullable helpers; `componentN` is a field read; and `copy` calls the primary
+  constructor. No generated member may fail independently: the shape gate rejects excluded data
+  classes before registration, so the class disappears whole rather than exposing a partial
+  generated API.
+  `copy`'s ordinary function defaults use the common/JVM masked-default algorithm after local
+  declaration lifting: a generated instance `copy$default` receives the original values plus one
+  `int32` mask per 32 defaultable parameters, tests bits with the intrinsic-registry `Int.and` ->
+  CLR `and`, resolves omitted values with `starg`, and calls the original member. The same model
+  supports defaults on ordinary top-level and non-interface class-member functions. Stated CLR
+  prototype deviation from the JVM's later staticization: a member stub remains a non-virtual
+  instance compiler helper, so its receiver stays the ordinary CLR `this` and the original
+  virtual call still owns dispatch. Constructor defaults stay on the old fail-loud call path: a
+  constructor stub needs a durable collision-safe marker ABI. Interface-owned defaults also stay
+  unlowered because an instance stub body on an interface would violate the Framework-compatible
+  all-abstract interface boundary. The cleaner retains those two kinds of default marker so later
+  gates/callers cannot silently mistake them for lowered support.
+  STAYS REJECTED, whole-class: generic data classes (CLR reified `isinst C<T>` would make equality
+  stricter than Kotlin/JVM erased class identity), array properties (the frontend emits dedicated
+  data-class array hash/string builtins whose content semantics are not implemented), primary
+  constructor defaults, nested/local data classes, and data objects. Pins:
+  `ilText/dataClasses.kt`, `ilText/dataClassesRejected.kt`,
+  `ilText/defaultArgumentsRejected.kt`; runtime: `box/dataClasses.kt`,
+  `box/defaultArguments.kt`. `dataclass_s1` assembled the positive golden under modern 10.0.9 and
+  Framework 4.8 ILAsm; the focused two-parser matrix is 10/0/0/0.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
@@ -535,8 +567,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   base-typed locals, parameters, returns): `isDotNetAssignableTo` walks the
   `DotNetIlClassInfo.baseType` chain (linked in a pre-pass AFTER all registrations — forward
   references are legal IL and legal Kotlin), and expression-position `IMPLICIT_CAST` that is
-  such an upcast emits just its operand; every other type operator (CAST, SAFE_CAST,
-  INSTANCEOF, IMPLICIT_NOTNULL, non-upcast IMPLICIT_CAST) stays rejected loudly. STAYS
+  such an upcast emits just its operand. A runtime type test against a non-generic module class
+  boxes/widens its operand to object, uses `isinst class 'C'`, then compares the returned
+  reference with null (`cgt.un` for `is`, `ceq` for `!is`); the checked IMPLICIT_CAST produced by
+  its positive smartcast is `castclass class 'C'`. This is the CLR spelling of JVM
+  INSTANCEOF/CHECKCAST and is intentionally narrower than generic CLR `isinst`: a reified
+  `C<T>` token would change Kotlin's erased type-test/equality semantics. IMPLICIT_NOTNULL keeps
+  its established checked nullability path. Explicit CAST/SAFE_CAST, generic type operands,
+  value-type tests, and every other non-upcast IMPLICIT_CAST stay rejected loudly. STAYS
   REJECTED, whole-class: exception supertypes (existing message; interface supertypes are
   SUPPORTED since the interface model, see its bullet), out-of-module bases,
   objects/companions with any supertype, covariant-return overrides
@@ -545,7 +583,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Roslyn's fix is `.override` + `PreserveBaseOverrides` machinery this backend does not emit;
   compared on MAPPED types in the member pre-pass, so `String?`-to-`String` covariance — same
   IL `string` — stays supported; pinned by `ilText/inheritanceCovariantReturnRejected.kt`),
-  and data-class/data-object generated member bodies. Overrides of `kotlin.Any`
+  and data-object plus unsupported data-class generated-member shapes. Overrides of `kotlin.Any`
   (`toString`/`equals`/`hashCode`) are supported by mapping to System.Object's reused virtual
   slots, pinned by `ilText/inheritanceAnyOverride.kt` and `box/anyMembers.kt`; detection walks
   `allOverridden()` against the TYPE-based `isAny`, because
@@ -784,8 +822,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   state stays on the instance, initialized by the merged private constructor — a stated
   deviation from the JVM's static-state hoist (`MoveOrCopyCompanionObjectFieldsLowering` makes
   every object-parented property field static), which the CLR-side real singleton makes
-  unnecessary. Rejections ride the existing gates, whole-class: `data object` (the same
-  Any-model gap as data classes — the gate message names both), local named objects, named
+  unnecessary. Rejections ride the existing gates, whole-class: `data object` (its generated
+  singleton equality/hash/string contract remains unaudited), local named objects, named
   objects inside an object/companion/interface, and IL accessor-identity clashes; `==` between
   objects stays rejected while `===` works via
   the existing reference `ceq`. The member pre-pass additionally gates IL FIELD-identity

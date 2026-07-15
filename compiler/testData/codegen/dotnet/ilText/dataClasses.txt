@@ -1,0 +1,424 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'dataClasses' {}
+.module 'main-dataClasses.il'
+
+.class public auto ansi sealed beforefieldinit 'Point'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'x'
+  .field private string 'label'
+  .field private valuetype [mscorlib]System.Nullable`1<int32> 'rank'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'x', string 'label', valuetype [mscorlib]System.Nullable`1<int32> 'rank') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Point'::'x'
+    ldarg.0
+    ldarg.2
+    stfld string 'Point'::'label'
+    ldarg.0
+    ldarg.3
+    stfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_x'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'Point'::'label'
+    ret
+  }
+  .method public hidebysig specialname instance valuetype [mscorlib]System.Nullable`1<int32> 'get_rank'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    ret
+  }
+  .method public hidebysig instance int32 'component1'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    ret
+  }
+  .method public hidebysig instance string 'component2'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'Point'::'label'
+    ret
+  }
+  .method public hidebysig instance valuetype [mscorlib]System.Nullable`1<int32> 'component3'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    ret
+  }
+  .method public hidebysig instance class 'Point' 'copy'(int32 'x', string 'label', valuetype [mscorlib]System.Nullable`1<int32> 'rank') cil managed
+  {
+    .maxstack 3
+    ldarg.1
+    ldarg.2
+    ldarg.3
+    newobj instance void 'Point'::.ctor(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
+    ret
+  }
+  .method public hidebysig instance class 'Point' 'copy$default'(int32 'x', string 'label', valuetype [mscorlib]System.Nullable`1<int32> 'rank', int32 '$mask0') cil managed
+  {
+    .maxstack 4
+    ldarg 4
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg 4
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldfld string 'Point'::'label'
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg 4
+    ldc.i4 4
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_5
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    starg 3
+    br IL_whenEnd_4
+IL_whenNext_5:
+IL_whenEnd_4:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    ldarg.3
+    call instance class 'Point' 'Point'::'copy'(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 4
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<str>'
+    )
+    ldstr "Point(x="
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", label="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    ldfld string 'Point'::'label'
+    dup
+    brtrue IL_stringValueNotNull_0
+    pop
+    ldstr "null"
+IL_stringValueNotNull_0:
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", rank="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    stloc.0
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_strValueNotNull_1
+    ldstr "null"
+    br IL_strValueEnd_2
+IL_strValueNotNull_1:
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+IL_strValueEnd_2:
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'result',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eq>'
+    )
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    box [mscorlib]System.Int32
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    stloc.0
+    ldloc.0
+    ldc.i4 31
+    mul
+    ldarg.0
+    ldfld string 'Point'::'label'
+    ldnull
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    ldc.i4 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    ldfld string 'Point'::'label'
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+IL_whenEnd_0:
+    add
+    stloc.0
+    ldloc.0
+    ldc.i4 31
+    mul
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldc.i4 0
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    box valuetype [mscorlib]System.Nullable`1<int32>
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+IL_whenEnd_2:
+    add
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'Point' 'tmp0_other_with_cast',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eqLeft>',
+      [2] valuetype [mscorlib]System.Nullable`1<int32> '<eqRight>'
+    )
+    ldarg.0
+    ldarg.1
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.1
+    ret
+IL_whenNext_1:
+    ldarg.1
+    isinst class 'Point'
+    ldnull
+    ceq
+    brfalse IL_whenNext_3
+    ldc.i4.0
+    ret
+IL_whenNext_3:
+    ldarg.1
+    castclass class 'Point'
+    stloc.0
+    ldarg.0
+    ldfld int32 'Point'::'x'
+    ldloc.0
+    ldfld int32 'Point'::'x'
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_5
+    ldc.i4.0
+    ret
+IL_whenNext_5:
+    ldarg.0
+    ldfld string 'Point'::'label'
+    ldloc.0
+    ldfld string 'Point'::'label'
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_7
+    ldc.i4.0
+    ret
+IL_whenNext_7:
+    ldarg.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    stloc.1
+    ldloc.0
+    ldfld valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'rank'
+    stloc.2
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    ceq
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ceq
+    and
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_9
+    ldc.i4.0
+    ret
+IL_whenNext_9:
+    ldc.i4.1
+    ret
+  }
+  .property instance int32 'x'()
+  {
+    .get instance int32 'Point'::'get_x'()
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'Point'::'get_label'()
+  }
+  .property instance valuetype [mscorlib]System.Nullable`1<int32> 'rank'()
+  {
+    .get instance valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'get_rank'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'dataClassesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static bool 'same'(class 'Point' 'left', object 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    ret
+  }
+  .method public hidebysig static class 'Point' 'duplicate'(class 'Point' 'value') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    ldarg.0
+    ldc.i4 9
+    ldnull
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    ldc.i4 2
+    call instance class 'Point' 'Point'::'copy$default'(int32, string, valuetype [mscorlib]System.Nullable`1<int32>, int32)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 4
+    .locals init (
+      [0] class 'Point' 'value',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<str>'
+    )
+    ldc.i4 7
+    ldstr "p"
+    ldc.i4 3
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    newobj instance void 'Point'::.ctor(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
+    stloc.0
+    ldloc.0
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 7
+    ldstr "p"
+    ldc.i4 3
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    newobj instance void 'Point'::.ctor(int32, string, valuetype [mscorlib]System.Nullable`1<int32>)
+    call bool 'dataClassesKt'::'same'(class 'Point', object)
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance int32 'Point'::'component1'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance string 'Point'::'component2'()
+    dup
+    brtrue IL_stringValueNotNull_2
+    pop
+    ldstr "null"
+IL_stringValueNotNull_2:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance valuetype [mscorlib]System.Nullable`1<int32> 'Point'::'component3'()
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_strValueNotNull_3
+    ldstr "null"
+    br IL_strValueEnd_4
+IL_strValueNotNull_3:
+    ldloca 1
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+IL_strValueEnd_4:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class 'Point' 'dataClassesKt'::'duplicate'(class 'Point')
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
