@@ -66,6 +66,28 @@ internal class DotNetIlExpressionCodegen(
      */
     fun toDotNetIlValueType(type: IrType): DotNetIlValueType? = typeMapper.toDotNetIlValueType(type)
 
+    /**
+     * The CLR type actually produced by [expression]. Most IR expression types map directly, but
+     * a generated member call may retain an open owner type in IR even when its dispatch receiver
+     * closes that owner. The common default-argument lowering has this shape for a generic data
+     * class's `copy$default`: its IR result is `C<T>`, while a call through `C<Int>` produces
+     * `C<Int>`. Use the same call resolution as emission so later coercion/cast decisions observe
+     * the substituted CLR result instead of inventing an illegal `C<!0>` to `C<int32>` cast.
+     * Erased callable `Invoke` is excluded: its physical result is always object, but its logical
+     * IR result remains authoritative for the call-specific cast/unbox performed by codegen.
+     */
+    private fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
+        if (
+            expression is IrCall &&
+            intrinsicMethods.getIntrinsic(expression.symbol) == null &&
+            !expression.symbol.owner.isDotNetErasedCallableInvoke()
+        ) {
+            val returnType = resolveCall(expression).returnType
+            if (returnType is DotNetIlReturnType.Value) return returnType.type
+        }
+        return typeMapper.toDotNetIlValueType(expression.type)
+    }
+
     fun nextLabel(prefix: String): String = methodContext.nextLabel(prefix)
 
     fun emitBranch(instruction: String, targetLabel: String, pops: Int = 0) {
@@ -112,7 +134,7 @@ internal class DotNetIlExpressionCodegen(
         // (see emitTypeOperatorCall) — so anything else falls through to the per-producer
         // assignability rejections below.
         if (expression != null) {
-            val naturalType = typeMapper.toDotNetIlValueType(expression.type)
+            val naturalType = mappedNaturalType(expression)
             if (naturalType != null && naturalType != expectedType) {
                 val kFunctionArity = expression.type.dotNetKFunctionExecutionArityOrNull()
                 if (kFunctionArity != null && DotNetRuntimeTypes.isFixedFunctionType(expectedType, kFunctionArity)) {
@@ -278,7 +300,7 @@ internal class DotNetIlExpressionCodegen(
      * and value-type tests — stays rejected loudly until its own audited model exists.
      */
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
-        val operandType = typeMapper.toDotNetIlValueType(expression.argument.type)
+        val operandType = mappedNaturalType(expression.argument)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
@@ -551,6 +573,50 @@ internal class DotNetIlExpressionCodegen(
      * model this backend does not have.
      */
     fun emitCall(call: IrCall): DotNetIlReturnType {
+        val resolved = resolveCall(call)
+        val constrainedReceiverType = resolved.receiverType as? DotNetIlValueType.TypeParameter
+        if (constrainedReceiverType != null) {
+            val expectedReceiverType = resolved.parameterTypes.firstOrNull()
+                ?: dotNetUnsupported("call to '${resolved.calleeName}' has an unsupported receiver shape")
+            if (!constrainedReceiverType.isConstrainedTo(expectedReceiverType)) {
+                dotNetUnsupported(
+                    "call to '${resolved.calleeName}' is outside the declared bounds of " +
+                            "type parameter ${constrainedReceiverType.nameInSignature}"
+                )
+            }
+            emitTypeParameterReceiverArguments(
+                call.arguments,
+                resolved.parameterTypes,
+                "'${resolved.calleeName}'",
+                constrainedReceiverType,
+                resolved.virtual,
+            )
+        } else {
+            emitArguments(call.arguments, resolved.parameterTypes, "'${resolved.calleeName}'")
+        }
+        if (constrainedReceiverType != null && resolved.virtual) {
+            // `constrained.` is a prefix and must be immediately adjacent to its `callvirt`.
+            methodContext.emit("constrained. ${constrainedReceiverType.nameInSignature}")
+        }
+        methodContext.emit(
+            resolved.info.renderCallInstruction(
+                resolved.callee.dotNetIlMethodName(),
+                virtual = resolved.virtual,
+                ownerToken = resolved.ownerToken,
+                methodInstantiation = resolved.methodInstantiation,
+            ),
+            pops = resolved.info.signature.parameterTypes.size,
+            pushes = if (resolved.info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
+        )
+        return resolved.returnType
+    }
+
+    /**
+     * Resolves both the member-reference token and its substituted value signature. Keeping this
+     * separate from instruction emission lets [mappedNaturalType] use exactly the same generic
+     * owner/method substitution when an enclosing IR cast asks what a call really produces.
+     */
+    private fun resolveCall(call: IrCall): ResolvedCall {
         call.superQualifierSymbol?.owner?.let { superQualifier ->
             if (superQualifier.isInterface) {
                 dotNetUnsupported(
@@ -649,38 +715,33 @@ internal class DotNetIlExpressionCodegen(
         val parameterTypes = info.signature.parameterTypes
             .map { it.substituteDotNetTypeParameters(classInstantiation, methodInstantiation) }
         val virtual = call.superQualifierSymbol == null && callee.isDotNetVirtual()
-        val constrainedReceiverType = receiverType as? DotNetIlValueType.TypeParameter
-        if (constrainedReceiverType != null) {
-            val expectedReceiverType = parameterTypes.firstOrNull()
-                ?: dotNetUnsupported("call to '$calleeName' has an unsupported receiver shape")
-            if (!constrainedReceiverType.isConstrainedTo(expectedReceiverType)) {
-                dotNetUnsupported(
-                    "call to '$calleeName' is outside the declared bounds of " +
-                            "type parameter ${constrainedReceiverType.nameInSignature}"
-                )
-            }
-            emitTypeParameterReceiverArguments(
-                call.arguments, parameterTypes, "'$calleeName'", constrainedReceiverType, virtual,
-            )
-        } else {
-            emitArguments(call.arguments, parameterTypes, "'$calleeName'")
-        }
-        if (constrainedReceiverType != null && virtual) {
-            // `constrained.` is a prefix and must be immediately adjacent to its `callvirt`.
-            methodContext.emit("constrained. ${constrainedReceiverType.nameInSignature}")
-        }
-        methodContext.emit(
-            info.renderCallInstruction(
-                callee.dotNetIlMethodName(),
-                virtual = virtual,
-                ownerToken = ownerToken,
-                methodInstantiation = methodInstantiation,
+        return ResolvedCall(
+            callee = callee,
+            calleeName = calleeName,
+            info = info,
+            methodInstantiation = methodInstantiation,
+            receiverType = receiverType,
+            ownerToken = ownerToken,
+            parameterTypes = parameterTypes,
+            virtual = virtual,
+            returnType = info.signature.returnType.substituteDotNetTypeParameters(
+                classInstantiation,
+                methodInstantiation,
             ),
-            pops = info.signature.parameterTypes.size,
-            pushes = if (info.signature.returnType is DotNetIlReturnType.Value) 1 else 0,
         )
-        return info.signature.returnType.substituteDotNetTypeParameters(classInstantiation, methodInstantiation)
     }
+
+    private data class ResolvedCall(
+        val callee: IrSimpleFunction,
+        val calleeName: String,
+        val info: DotNetIlFunctionInfo,
+        val methodInstantiation: List<DotNetIlValueType>,
+        val receiverType: DotNetIlValueType?,
+        val ownerToken: String,
+        val parameterTypes: List<DotNetIlValueType>,
+        val virtual: Boolean,
+        val returnType: DotNetIlReturnType,
+    )
 
     /**
      * Emits a call whose dispatch receiver is a constrained `!n`/`!!n`. Virtual/interface calls
