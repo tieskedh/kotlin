@@ -318,14 +318,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Local-class and anonymous-object model (probe series `localprobe_s1`–`_s2` and
   `anonprobe_s1`–`_s2`; common/JVM precedent): the DotNet wrappers run
   `InventNamesForLocalClasses`, `DotNetAnonymousObjectSuperConstructorLowering`,
-  `LocalDeclarationsLowering`, and `LocalDeclarationPopupLowering` before inner classes and
-  initializer merging. Closure conversion enters a body containing named local classes and/or
-  anonymous objects only when it contains NO explicit local function, so that still-unsupported
-  declaration family is never incidentally lifted. A local in a top-level function or property
-  becomes a module-private top-level CLR type; a local in a member or initializer becomes a
-  private nested CLR type. Constructors are widened to public metadata inside that inaccessible
-  type so the facade/enclosing type can instantiate them (`localprobe_s1`–`_s2`,
-  `anonprobe_s1`); source visibility is unchanged because the type itself is inaccessible.
+  `InventNamesForLocalFunctions`, `LocalDeclarationsLowering`, and
+  `LocalDeclarationPopupLowering` before inner classes and initializer merging. Closure conversion
+  enters a body containing named local classes, anonymous objects, and/or explicit named local
+  functions only when it contains NO lambda/function-reference callable-object shape. A local in
+  a top-level function or property becomes a module-private top-level CLR type; a local in a member
+  or initializer becomes a private nested CLR type. Constructors are widened to public metadata
+  inside that inaccessible type so the facade/enclosing type can instantiate them
+  (`localprobe_s1`–`_s2`, `anonprobe_s1`); source visibility is unchanged because the type itself is
+  inaccessible.
   Immutable parameters, locals, and receivers become explicit constructor parameters and private
   fields when a member body needs storage. Captured type parameters are duplicated on the local
   type by the common lowering, so a local below `Outer<T>` owns an independent `!n` space and its
@@ -343,15 +344,26 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   evaluation order relative to object initializers while the constructor separately receives
   immutable captures (`anonprobe_s2`). Captured type parameters are duplicated and substituted in
   the anonymous base link and lifted parameter types.
-  Mutable local captures STAY REJECTED with a class diagnostic because this backend has no
-  `SharedVariablesLowering`; copying a mutable value into a field would break aliasing. Crossinline
-  captures likewise stay rejected without an inline model. A body mixing an explicit local
-  function with either local-class family stays wholly unlowered, preserving its function-level
-  rejection rather than partially converting it. Unsupported anonymous supertypes reject that
-  metadata subtree and real users through the ordinary class gates. Pins: `ilText/localClasses.kt`,
-  `ilText/localClassesRejected.kt`, `ilText/anonymousObjects.kt`, and
-  `ilText/anonymousObjectsRejected.kt`; runtime: `box/localClasses.kt` and
-  `box/anonymousObjects.kt`.
+  Explicit local functions become static methods on the nearest CLR metadata owner
+  (`localfunprobe_s1`–`_s3`). A file-facade local is `assembly` because a lifted sibling class/object
+  may call it; a class-owned local is `private`, which CLR nested→enclosing access permits. Value,
+  extension-receiver, and dispatch-receiver captures become ordinary parameters. Captured type
+  parameters are duplicated into the method's independent `!!n` space before its own parameters;
+  a static local under a generic class still uses an INSTANTIATED owner token, derived from a
+  captured owner argument or the caller's open `Owner<!n>` view. Direct/nested recursion,
+  initializer locals, extensions, named-class/anonymous-object callers, and generic function/class
+  scopes compose. Common name invention supplies readable paths; the metadata gates reserve user
+  methods/accessors first and append the smallest `$n` suffix only to a colliding generated local.
+  Mutable local captures STAY REJECTED with a class/function diagnostic because this backend has
+  no `SharedVariablesLowering`; copying a mutable value would break aliasing. Crossinline, inline,
+  and suspend locals likewise stay rejected without their respective lowering models. A body
+  mixing a supported local declaration with a lambda or function reference stays wholly
+  unlowered, preserving its function-level rejection rather than partially converting callable
+  objects. Unsupported anonymous supertypes reject that metadata subtree and real users through
+  the ordinary class gates. Pins: `ilText/localClasses.kt`, `ilText/localClassesRejected.kt`,
+  `ilText/anonymousObjects.kt`, `ilText/anonymousObjectsRejected.kt`, `ilText/localFunctions.kt`,
+  and `ilText/localFunctionsRejected.kt`; runtime: `box/localClasses.kt`,
+  `box/anonymousObjects.kt`, and `box/localFunctions.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
   inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level,

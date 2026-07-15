@@ -7,12 +7,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Add anonymous object expressions",
+- Branch `dotnet`; latest functional work is "[DotNet] Add explicit local functions",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **364 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **370 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -32,7 +32,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   duplication/substitution.
   Named local classes and anonymous object expressions now use common closure conversion/popup
   with immutable value/receiver and duplicated type-parameter captures. Anonymous base arguments
-  are lifted at the expression call site; mutable captures and local-function mixtures remain
+  are lifted at the expression call site. Explicit named local functions now lift to static
+  facade/owner methods with parameterized captures; mutable captures and callable objects remain
   separate boundaries.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
@@ -315,6 +316,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `ilText/anonymousObjectsRejected.kt`, and `box/anonymousObjects.kt` pin both parsers. Positive
   output is `13,6,9,42,generic-super,generic,owner,12,11,9,true,10`; the rejection survivor prints
   `23`. The fresh full DotNet suite is 364/0/0/0 across eight XML files.
+- The explicit-local-function continuation adds common `InventNamesForLocalFunctions` immediately
+  before the shared closure conversion/popup pass and admits only named local functions, keeping
+  lambdas and function references wholly unlowered. Lifted functions on file facades are IL
+  `assembly static` so lifted sibling types can call them (`localfunprobe_s3`); class-owned locals
+  are `private static`. Immutable value, extension-receiver, and owner-receiver captures become
+  parameters. Captured type parameters precede own parameters in the independent `!!n` method
+  space. Static calls under generic classes now instantiate the containing type from a captured
+  owner argument or the current open `Owner<!n>` view (`localfunprobe_s2`), instead of emitting an
+  invalid bare generic owner. Direct and nested recursion, initializer locals, generic function
+  and class scopes, extension locals, and named/anonymous local-class callers compose. User
+  metadata names have priority; colliding generated methods alone receive the smallest `$n`
+  suffix. Mutable captures reject precisely, while lambda/reference mixtures remain at the
+  existing function boundary. `localfunprobe_s1`–`_s3` all print `42` on CoreCLR 10.0.9 and
+  Framework 4.8. `ilText/localFunctions.kt`, `ilText/localFunctionsRejected.kt`, and
+  `box/localFunctions.kt` pin both parsers. Positive output is
+  `15,-1,10,10,7,9,generic,owner,no-owner,12,12,-2,12,13`; the rejection survivor prints `29`.
+  The fresh full DotNet suite is 370/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -386,13 +404,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit explicit local functions.** Keep them separate from completed local classes and object
-   expressions: determine whether common local-function name invention/closure conversion can
-   lift non-inline, non-suspend local functions to private static facade/owner methods with stable
-   collision handling and duplicated generic parameters. Probe direct and recursive calls,
-   immutable value/receiver captures, generic function/class scopes, overloads, and references
-   from lifted local classes. Keep lambdas/function references, crossinline, and shared mutable
-   captures separate until their own lowering models exist.
+1. **Audit inner classes below generic outers.** The current explicit-outer lowering still rejects
+   them because CLR nested types do not inherit a metadata parent's `!n` space. Determine whether
+   the local-class captured-type-parameter strategy can duplicate every required outer parameter
+   onto the inner type and substitute the outer field, constructor parameter, inheritance links,
+   and call sites without changing non-generic inner metadata. Probe own+outer parameter ordering,
+   multi-level generic outers, generic inner bases, and the smallest rejection boundary before
+   lifting the gate. Keep lambdas/function references and shared mutable captures separate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
