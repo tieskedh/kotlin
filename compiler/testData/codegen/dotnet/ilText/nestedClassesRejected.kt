@@ -28,8 +28,8 @@ class BrokenInnerHost {
     }
 }
 
-class NestedDataHost {
-    data class Nested(val value: Int)
+class NestedAnnotationHost {
+    annotation class Nested(val value: Int)
 }
 
 class GenericCompanionHost<T> {
