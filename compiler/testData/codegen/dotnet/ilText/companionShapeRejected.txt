@@ -5,6 +5,36 @@
 .class interface public abstract auto ansi 'Marker'
 {
 }
+.class public auto ansi sealed 'WithNestedInCompanion'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+  {
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .field public static initonly class 'WithNestedInCompanion'/'Companion' 'Companion'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'WithNestedInCompanion'/'Companion'::.ctor()
+    stsfld class 'WithNestedInCompanion'/'Companion' 'WithNestedInCompanion'::'Companion'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
 .class public auto ansi sealed 'O'
        extends [mscorlib]System.Object
 {

@@ -32,17 +32,6 @@
     ret
   }
 }
-.class public auto ansi sealed beforefieldinit 'NestedInterfaceHost'
-       extends [mscorlib]System.Object
-{
-  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
-    ret
-  }
-}
 .class public auto ansi sealed beforefieldinit 'NestedDataHost'
        extends [mscorlib]System.Object
 {
