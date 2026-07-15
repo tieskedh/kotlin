@@ -57,8 +57,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
   The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
   for exact Kotlin-only exception identities and
-  `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. Their hybrid
-  exception policy is described in the exception-model bullet below.
+  `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. The first
+  source-visible exact type is `Kotlin.NumberFormatException : System.ArgumentException`. Their
+  hybrid exception policy is described in the exception-model bullet below.
   The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
@@ -939,17 +940,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   the cause-only form uses `cause?.toString()` and preserves the cause in `InnerException`.
   Source `kotlin.RuntimeException` still REJECTS: mapped logical children such as
   `IllegalStateException -> System.InvalidOperationException` are not physical children of the
-  runtime root, so enabling the parent would make its catch miss a legal child. `Error` and
-  `NumberFormatException` likewise resolve through the injected stdlib but REJECT for their own
-  hierarchy reasons. Every future migration requires an explicit native-fault/catch audit; the
-  presence of a similarly named runtime class is not sufficient.
-  Accepted deltas, documented on the registry: `message` keeps type `String?` but is never null
-  on mapped exceptions (no-arg `Exception()` yields the CLR default text); the constructor
+  runtime root, so enabling the parent would make its catch miss a legal child. `Error` also
+  resolves through the injected stdlib but REJECTS because the CLR has no fatal-error branch.
+  `NumberFormatException` is instead source-visible through exact runtime-owned
+  `Kotlin.NumberFormatException : System.ArgumentException`. This CLR-specific physical parent
+  preserves Kotlin's already-supported `NumberFormatException IS-A IllegalArgumentException`
+  value and catch edges; mapping to `System.FormatException` would break them. It exposes only the
+  mature `()`/`(String?)` forms and reuses the Exception message slot with a nullable backing field,
+  preserving a null no-arg message through parent-typed calls. A foreign `System.FormatException`
+  stays distinct until a parsing/interop boundary explicitly translates it or catch lowering owns
+  a union. The registry records physical mapped-supertype edges so its stack verifier accepts the
+  exact class's instruction-free widening to ArgumentException and System.Exception.
+  Every future migration requires an explicit native-fault/catch audit; the presence of a similarly
+  named runtime class is not sufficient. Accepted BCL-mapping deltas, documented on the registry:
+  `message` keeps type `String?` but is never null on BCL-mapped exceptions (no-arg `Exception()`
+  yields the CLR default text); the constructor
   whitelist is `()`/`(String?)` everywhere and `(String?, Throwable?)` where the registry's
   `hasMessageCauseCtor` flag is set — the flag mirrors the Kotlin stdlib's declared constructor
-  surface, not CLR availability (the CLR `(string, Exception)` overload exists on every mapped
-  type, probe-verified) — and the cause-only `(Throwable?)` constructor is rejected (no CLR
-  overload). `throw e` inside a catch is a plain `ldloc`/`throw` preserving object identity; the
+  surface, not CLR availability (the CLR `(string, Exception)` overload exists on every BCL-mapped
+  type, probe-verified; runtime mappings provide their exact flagged surface) — and the cause-only
+  `(Throwable?)` constructor is rejected when the mapped surface does not declare it. `throw e`
+  inside a catch is a plain `ldloc`/`throw` preserving object identity; the
   IL `rethrow` instruction is never emitted (Kotlin has no bare rethrow; stack-trace-restart
   delta is moot until traces are surfaced). The injected exception declarations are excluded from codegen
   entirely — the class-level parallel of an intrinsic's `excludesDeclarationFromCodegen` — and

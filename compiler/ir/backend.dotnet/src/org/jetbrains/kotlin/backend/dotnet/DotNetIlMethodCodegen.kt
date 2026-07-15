@@ -813,9 +813,10 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * The `catch` clause operand: the bare corelib-qualified reference of the caught type, which
-     * must be a [mapped exception type][DotNetIlValueType.MappedClass] — `catch (e: Throwable)`
-     * becomes a `catch` of the corelib `System.Exception`, catching everything the CLR throws.
+     * The `catch` clause operand: the bare assembly-qualified reference of the caught type, which
+     * must be a [mapped exception type][DotNetIlValueType.MappedClass]. `catch (e: Throwable)`
+     * becomes corelib `System.Exception`, while an exact runtime-owned exception names
+     * `Kotlin.Runtime`.
      */
     private fun catchTypeRef(irCatch: IrCatch): String {
         val parameter = irCatch.catchParameter
