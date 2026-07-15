@@ -2,9 +2,9 @@ package test
 
 import kotlin.io.println
 
-// Every Double-to-string conversion routes through the shared '<KotlinIl>'::DoubleToString
-// runtime helper, emitted once at the end of the module. Constants are deliberately NOT folded
-// at compile time (see DotNetFlattenStringConcatenationLowering), so constant and dynamic values
+// Every Double-to-string conversion routes through Kotlin.Runtime.Internal.DoubleFormatting.
+// Constants are deliberately NOT folded at compile time (see
+// DotNetFlattenStringConcatenationLowering), so constant and dynamic values
 // of the same Double print identically.
 fun main() {
     println(1.0)
@@ -31,7 +31,7 @@ fun main() {
 
     // A Double *constant* in a concatenation: must NOT be folded at compile time (the host
     // rendering would print "1.2345678E7" even where the runtime helper diverges) and must go
-    // through the same '<KotlinIl>'::DoubleToString helper as the dynamic values above; the
+    // through the same Kotlin.Runtime.Internal helper as the dynamic values above; the
     // value sits in the JVM-scientific/.NET-decimal notation gap [1e7, 1e15) that the helper
     // reshapes itself.
     println("v = " + 1.2345678E7)

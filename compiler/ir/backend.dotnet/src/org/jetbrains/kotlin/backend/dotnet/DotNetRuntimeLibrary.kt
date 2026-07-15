@@ -8,7 +8,8 @@ import java.io.File
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
  * the fixed, physically erased Function0/1/2 interfaces and the singleton Unit value required when
- * a callable result crosses their object-shaped invocation boundary.
+ * a callable result crosses their object-shaped invocation boundary. Compiler support shared by
+ * generated modules lives below the reserved `Kotlin.Runtime.Internal` namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
@@ -103,7 +104,7 @@ internal object DotNetRuntimeLibrary {
             }
           }
         }
-    """.trimIndent() + "\n"
+    """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }

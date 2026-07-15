@@ -454,13 +454,12 @@ internal class DotNetIlExpressionCodegen(
     /**
      * Converts the `float64` value on top of the stack to a string with Kotlin
      * `Double.toString()` shapes (`1.0`, `1.0E20`, `NaN`, `Infinity`, `-0.0`) by calling the
-     * shared [DotNetIlRuntimeHelper.DoubleToString] runtime helper, emitted once per module.
+     * shared [DotNetRuntimeLibraryHelpers] implementation in Kotlin.Runtime.
      * See that helper's documentation for the rendering algorithm and the consciously accepted
      * divergences from the JVM rendering.
      */
     private fun emitDoubleValueToString() {
-        methodContext.requireRuntimeHelper(DotNetIlRuntimeHelper.DoubleToString)
-        methodContext.emit(DotNetIlRuntimeHelper.DoubleToString.callInstruction, pops = 1, pushes = 1)
+        methodContext.emit(DotNetRuntimeLibraryHelpers.doubleToStringCallInstruction, pops = 1, pushes = 1)
     }
 
     /**
