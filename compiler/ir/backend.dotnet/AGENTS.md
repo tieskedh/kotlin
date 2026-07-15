@@ -228,8 +228,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
   vtable/class lowering machinery): top-level plain classes — final, open, abstract, or sealed;
   non-generic or, since the generics model (below), with reified type parameters — plus the
-  named nested and inner types described below, and, since the interface/generics models (below),
-  top-level or named nested non-generic/generic all-abstract interfaces pass the shape gate
+  named nested, inner, and lifted local types described below, and, since the interface/generics
+  models (below), top-level or named nested non-generic/generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
   Rejection granularity is the failing class's metadata subtree — a failing member (signature,
@@ -280,9 +280,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   IL-`assembly` widening. A failure OF a companion remains owner-sensitive because its field and
   `.cctor`
   live on the immediate owner; a separate failing child below a valid companion is its own
-  metadata subtree. STAYS REJECTED, per rejected metadata subtree: local/anonymous,
+  metadata subtree. STAYS REJECTED, per rejected metadata subtree: anonymous objects/interfaces,
   data/value/enum/annotation, an `inner` class whose immediate outer is generic, and a companion
-  whose immediate class/interface container is generic.
+  whose immediate class/interface container is generic. Named local classes follow their separate
+  closure-converted model below.
   Recursive render failures preserve the deepest declaration tag while
   unwinding, then subtree eviction removes that declaration and its descendants; independent
   metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
@@ -314,10 +315,33 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   requires duplicating and substituting the outer parameters on the nested type, not emitting an
   unbound `!n`. Pins: `ilText/innerClasses.kt`, `ilText/classShapeRejected.kt`,
   `ilText/nestedClassesRejected.kt`; runtime: `box/innerClasses.kt`.
+- Named-local-class model (probe series `localprobe_s1`–`_s2`; common/JVM precedent): the DotNet
+  wrappers run `InventNamesForLocalClasses`, `LocalDeclarationsLowering`, and
+  `LocalDeclarationPopupLowering` before inner classes and initializer merging. The first slice
+  invokes closure conversion only for a body containing named local classes and NO anonymous
+  object or explicit local function, so unsupported declaration families are never incidentally
+  lifted. A local in a top-level function becomes a module-private top-level CLR type; a local in
+  a member or initializer becomes a private nested CLR type. Constructors are widened to public
+  metadata inside that inaccessible type so the facade/enclosing type can instantiate them
+  (`localprobe_s1`–`_s2`); source visibility is unchanged because the type itself is inaccessible.
+  Immutable parameters, locals, and receivers become explicit constructor parameters and private
+  fields when a member body needs storage. Captured type parameters are duplicated on the local
+  type by the common lowering, so a local below `Outer<T>` owns an independent `!n` space and its
+  captured receiver is typed as `Outer<!n>` (`localprobe_s2`). Own and captured type parameters,
+  local inheritance/interface dispatch, initializer-local classes, and multiple same-named locals
+  compose through the existing class/generic model. Invented names use the enclosing JVM-style
+  path plus a per-base-name collision counter (`$1` only when needed); registration gives user
+  metadata names priority and defensively disambiguates a colliding local.
+  Mutable local captures STAY REJECTED with a class diagnostic because this backend has no
+  `SharedVariablesLowering`; copying a mutable value into a field would break aliasing. Crossinline
+  captures likewise stay rejected without an inline model. Anonymous objects and a body mixing an
+  explicit local function stay wholly unlowered in this slice, preserving their existing
+  function-level rejection rather than partially converting them. Pins: `ilText/localClasses.kt`,
+  `ilText/localClassesRejected.kt`; runtime: `box/localClasses.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
-  inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level or
-  named nested plain class may be `open` (drops `sealed` from the `.class` flags), `abstract`, or
+  inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level,
+  named nested, or lifted local plain class may be `open` (drops `sealed` from the `.class` flags), `abstract`, or
   `sealed` (both emit ordinary CLR
   `abstract`, never CLR `sealed`; Kotlin sealing remains frontend-enforced like the JVM's
   historical sealed-class model), and may extend EXACTLY ONE base class when the supertype

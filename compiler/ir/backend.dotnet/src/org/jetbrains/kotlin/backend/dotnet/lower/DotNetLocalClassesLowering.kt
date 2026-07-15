@@ -1,0 +1,170 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package org.jetbrains.kotlin.backend.dotnet.lower
+
+import org.jetbrains.kotlin.backend.common.ScopeWithIr
+import org.jetbrains.kotlin.backend.common.lower.InventNamesForLocalClasses
+import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationPopupLowering
+import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
+import org.jetbrains.kotlin.backend.common.lower.VisibilityPolicy
+import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.DescriptorVisibility
+import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.declarations.IrVariable
+import org.jetbrains.kotlin.ir.expressions.IrBody
+import org.jetbrains.kotlin.ir.irAttribute
+import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
+import org.jetbrains.kotlin.ir.util.file
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isAnonymousObject
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
+import org.jetbrains.kotlin.ir.util.parentAsClass
+import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
+
+internal var IrClass.dotNetInventedLocalClassName: String? by irAttribute(copyByDefault = false)
+internal var IrClass.dotNetLocalCaptureRejectionReason: String? by irAttribute(copyByDefault = false)
+
+/**
+ * Gives every source local class a deterministic CLR identity before closure conversion moves it.
+ * Top-level-function locals need an explicit file-facade prefix because this backend has no IR
+ * file-class lowering. A per-base-name counter distinguishes only real collisions (for example,
+ * same-named locals in overloads), so unrelated source movement does not churn metadata names.
+ * The emitter still disambiguates against every registered user metadata name defensively.
+ */
+internal class DotNetInventNamesForLocalClasses(
+    @Suppress("UNUSED_PARAMETER") context: DotNetBackendContext,
+) : InventNamesForLocalClasses() {
+    private val nextSuffixByBaseName = mutableMapOf<String, Int>()
+
+    override fun computeTopLevelClassName(clazz: IrClass): String =
+        clazz.fqNameWhenAvailable?.asString()
+            ?: error("Top-level class has no FqName: ${clazz.name}")
+
+    override fun sanitizeNameIfNeeded(name: String): String = name
+
+    override fun putLocalClassName(declaration: IrElement, localClassName: String) {
+        val localClass = declaration as? IrClass ?: return
+        if (localClass.dotNetInventedLocalClassName != null) return
+
+        val hasNonLocalClassAncestor = generateSequence(localClass.parent as? IrDeclaration) { parent ->
+            parent.parent as? IrDeclaration
+        }.any { parent ->
+            parent is IrClass && !parent.isAnonymousObject && parent.visibility != DescriptorVisibilities.LOCAL
+        }
+        val qualifiedName = if (hasNonLocalClassAncestor) {
+            localClassName
+        } else {
+            val file = localClass.file
+            val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
+            val facadeBaseName = if (file.packageFqName.isRoot) {
+                "${fileName}Kt"
+            } else {
+                "${file.packageFqName.asString()}.${fileName}Kt"
+            }
+            "$facadeBaseName\$$localClassName"
+        }
+        val suffix = nextSuffixByBaseName.getOrPut(qualifiedName) { 0 }
+        nextSuffixByBaseName[qualifiedName] = suffix + 1
+        localClass.dotNetInventedLocalClassName =
+            if (suffix == 0) qualifiedName else "$qualifiedName\$$suffix"
+    }
+}
+
+/**
+ * The first local-declaration slice deliberately invokes common closure conversion only for a
+ * body containing named local classes and no anonymous object or explicit local function. This
+ * prevents the common pass from incidentally lifting still-unsupported declaration families.
+ * Immutable captures become private fields/constructor parameters. Mutable and crossinline
+ * captures are marked for a precise class-gate rejection: SharedVariablesLowering and inline
+ * lowering do not exist on this backend yet, so copying either value would be wrong.
+ */
+internal class DotNetLocalDeclarationsLowering private constructor(
+    override val context: DotNetBackendContext,
+    private val capturedParameters: MutableMap<IrValueParameter, IrValueSymbol>,
+) : LocalDeclarationsLowering(
+    context,
+    visibilityPolicy = DotNetLocalClassVisibilityPolicy,
+    newParameterToCaptured = capturedParameters,
+) {
+    constructor(context: DotNetBackendContext) : this(context, mutableMapOf())
+
+    override fun lower(irBody: IrBody, container: IrDeclaration) {
+        if (!irBody.isEligibleNamedLocalClassBody()) return
+        val existingCapturedParameters = capturedParameters.keys.toHashSet()
+        super.lower(irBody, container)
+        for ([parameter, captured] in capturedParameters) {
+            if (parameter in existingCapturedParameters) continue
+            val localClass = (parameter.parent as? IrConstructor)?.parentAsClass ?: continue
+            val reason = when (val capturedDeclaration = captured.owner) {
+                is IrVariable -> if (capturedDeclaration.isVar) {
+                    "captures mutable local '${capturedDeclaration.name.asString()}'; shared mutable captures are not supported"
+                } else null
+                is IrValueParameter -> if (capturedDeclaration.isCrossinline) {
+                    "captures crossinline parameter '${capturedDeclaration.name.asString()}'; inline captures are not supported"
+                } else null
+                else -> null
+            }
+            if (reason != null && localClass.dotNetLocalCaptureRejectionReason == null) {
+                localClass.dotNetLocalCaptureRejectionReason = reason
+            }
+        }
+    }
+
+    private fun IrBody.isEligibleNamedLocalClassBody(): Boolean {
+        var hasNamedLocalClass = false
+        var hasAnonymousObject = false
+        var hasExplicitLocalFunction = false
+        acceptChildrenVoid(object : IrVisitorVoid() {
+            override fun visitElement(element: IrElement) {
+                element.acceptChildrenVoid(this)
+            }
+
+            override fun visitClass(declaration: IrClass) {
+                if (declaration.visibility == DescriptorVisibilities.LOCAL) {
+                    if (declaration.isAnonymousObject) hasAnonymousObject = true else hasNamedLocalClass = true
+                }
+                declaration.acceptChildrenVoid(this)
+            }
+
+            override fun visitSimpleFunction(declaration: IrSimpleFunction) {
+                if (declaration.visibility == DescriptorVisibilities.LOCAL) {
+                    hasExplicitLocalFunction = true
+                }
+                declaration.acceptChildrenVoid(this)
+            }
+        })
+        return hasNamedLocalClass && !hasAnonymousObject && !hasExplicitLocalFunction
+    }
+}
+
+/** Pops up only declarations actually transformed by [DotNetLocalDeclarationsLowering]. */
+internal class DotNetLocalDeclarationPopupLowering(context: DotNetBackendContext) :
+    LocalDeclarationPopupLowering(context) {
+    override fun shouldPopUp(declaration: IrDeclaration, currentScope: ScopeWithIr?): Boolean =
+        declaration.isOriginallyLocalDeclaration
+}
+
+private object DotNetLocalClassVisibilityPolicy : VisibilityPolicy {
+    override fun forClass(declaration: IrClass, inInlineFunctionScope: Boolean): DescriptorVisibility =
+        DescriptorVisibilities.PRIVATE
+
+    // The local type itself is private/notpublic. A public metadata constructor is needed for a
+    // containing facade or enclosing class to instantiate it (localprobe_s1/s2) and exposes no
+    // additional Kotlin source surface.
+    override fun forConstructor(declaration: IrConstructor, inInlineFunctionScope: Boolean): DescriptorVisibility =
+        DescriptorVisibilities.PUBLIC
+
+    override fun forCapturedField(value: IrValueSymbol): DescriptorVisibility = DescriptorVisibilities.PRIVATE
+
+    override fun forSimpleFunction(declaration: IrSimpleFunction): DescriptorVisibility = DescriptorVisibilities.PRIVATE
+}
