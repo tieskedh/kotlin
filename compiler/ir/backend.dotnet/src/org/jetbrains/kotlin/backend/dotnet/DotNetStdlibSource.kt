@@ -45,8 +45,8 @@ public val Char.code: Int
 // The full Kotlin subtype hierarchy is declared so frontend catch/assignment subtyping matches
 // the real stdlib, but the backend never emits these classes: each concrete class is either
 // TYPE-MAPPED onto a CLR exception type or rejected with a per-type reason — see
-// DotNetMappedExceptions, which also documents why RuntimeException, Error and
-// NumberFormatException resolve here and then fail loudly at any codegen use.
+// DotNetMappedExceptions, which also documents why RuntimeException and Error resolve here and
+// then fail loudly at any codegen use. NumberFormatException maps to its exact Kotlin.Runtime type.
 
 public open class Exception : Throwable {
     public constructor() : super()
