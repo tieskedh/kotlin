@@ -106,6 +106,13 @@ fun mutableLocalFunctionCapture(): Int {
     return local()
 }
 
+fun localFunctionReference(): Int {
+    fun local(): Int = 42
+    val reference = ::local
+
+    return if (reference.name == "local") reference() else -1
+}
+
 fun box(): String {
     if (localCapture(10) != 15) return "fail 1: immutable captures"
     if (`localCapture$add`(1, 2, 3) != -1) return "fail 2: facade user-name priority"
@@ -123,6 +130,7 @@ fun box(): String {
     if (localClassCallsFunction(9) != 12) return "fail 13: local class calls local function"
     if (anonymousObjectCallsFunction(9) != 13) return "fail 14: anonymous object calls local function"
     if (mutableLocalFunctionCapture() != 42) return "fail 15: mutable local-function capture"
+    if (localFunctionReference() != 42) return "fail 16: local KFunction reference"
     return "OK"
 }
 interface LocalFunctionIntValue {

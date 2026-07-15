@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesMemberBodyLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalClasses
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalFunctions
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
@@ -37,6 +38,7 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetCallableReferenceLowering,
+    ::DotNetKFunctionInvokeLowering,
     // JVM/common ordering: mutable locals become shared reference cells before closure conversion
     // captures the cell object in local classes and generated callable classes.
     ::DotNetSharedVariablesLowering,

@@ -185,7 +185,7 @@ internal class DotNetIlTypeMapper(
      * primitives into `object` (the whole point of the hybrid split).
      */
     fun toDotNetIlValueType(type: IrType): DotNetIlValueType? {
-        DotNetRuntimeTypes.mapFunctionType(type)?.let { return it }
+        DotNetRuntimeTypes.mapCallableType(type)?.let { return it }
         return when {
             type.isBoolean() -> DotNetIlValueType.Boolean
             type.isInt() -> DotNetIlValueType.Int32

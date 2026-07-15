@@ -82,6 +82,22 @@ Kotlin.Function1 : Kotlin.Function { object Invoke(object) }
 Kotlin.Function2 : Kotlin.Function { object Invoke(object, object) }
 ```
 
+Direct function references additionally expose this orthogonal reflection view:
+
+```text
+Kotlin.KCallable { string name }
+Kotlin.KFunction : Kotlin.KCallable, Kotlin.Function
+```
+
+`KFunction` deliberately has no `Invoke` member and no arity. A generated direct-reference object
+implements `KFunction` and exactly one erased `FunctionN` on the same object. Source
+`KFunction0`/`KFunction1`/`KFunction2` signatures map to the non-generic reflection view, while
+invocation and widening to a function type use a checked interface view change to the object's
+existing `FunctionN` implementation. That operation creates no adapter and preserves reference
+identity. Lambdas and adapted references without a KFunction source type remain FunctionN-only.
+The reflection view is therefore a capability of the canonical callable object, not another
+execution identity or fallback ABI.
+
 This identity is an invariant for subsequent callable work in this POC:
 
 - erased `Kotlin.Function0`/`Function1`/`Function2` remains the only Kotlin callable identity ABI;
@@ -117,8 +133,9 @@ instance is observed before and after every ordinary Kotlin function-type subtyp
 Logical parameter and result types remain in IR today and must be written to Kotlin metadata before
 the backend supports Kotlin cross-module consumption. The canonical `Kotlin.FunctionN` interface
 does not encode those types, and CLR reflection is not sufficient to reconstruct the Kotlin
-function type even if future optimization members are themselves visible. KFunction reflection
-metadata is a separate contract.
+function type even if future optimization members are themselves visible. The implemented
+KFunction reflection contract currently exposes only the stable common `name` property; complete
+signature/owner/parameter metadata is a separate contract.
 
 The candidate is only the Kotlin identity ABI and universal invocation fallback. It does not claim
 that erased invocation or untyped CLR signatures are sufficient final execution and export
@@ -189,27 +206,39 @@ Repository pins cover both FIR parsers and real CoreCLR execution:
 Probe series `captureabi_s3` then compiled the capturing implementation itself with both ILAsm
 versions. All four same-target and cross-runtime pairings executed immutable and mutable captures,
 a Unit-mutating closure, an open-generic cell, and primitive and reference bound receivers. The
-generated classes still implemented only the erased `Kotlin.FunctionN` interface. Captures and
-bound receivers appeared only as fields, mutable state used one invariant
+generated classes acquired no capture-specific callable interface: lambdas implemented only the
+erased `Kotlin.FunctionN`, while direct references could additionally carry the fixed KFunction
+reflection view described above. Captures and bound receivers appeared only as fields, mutable state used one invariant
 `Kotlin.Runtime.Internal.MutableRef<T>` cell, and no stateful callable had a singleton cache.
+
+Probe series `kfunction_s1` assembled a runtime and a direct reference implementing both
+`Kotlin.KFunction` and `Kotlin.Function1` with modern 10.0.9 and .NET Framework 4.8 ILAsm. All four
+same-target and cross-runtime pairings read `KCallable.name`, observed one object through the
+KFunction and Function1 views, and invoked the erased Function1 slot. Repository IL and CoreCLR
+pins cover non-capturing, bound, and local references, name metadata, erased invocation,
+KFunction-to-Function identity, KFunction variance identity, singleton reuse, and stateful
+freshness in `ilText/callableReferences.kt`, `box/callableReferences.kt`, and the local-function
+fixtures.
 
 ## Deferred decisions
 
 The POC currently uses generated fields for captures and bound receivers and one invariant generic
 mutable-reference cell. Those concrete layouts are implementation evidence, not additional
-callable identities and not standardized by this ADR. This ADR does not decide KFunction metadata,
-suspend callables, delegate adapters, exact-shape execution, CLR export, or the exact Kotlin
-metadata encoding. Those features must preserve the canonical ABI invariants above or explicitly
-revise this draft before they land. The POC's .NET Framework 4.8 compatibility is probe evidence
-for the candidate representation, not a decision about the eventual product support baseline.
+callable identities and not standardized by this ADR. This ADR does not decide KCallable metadata
+beyond `name`, property references, reflective lookup/call APIs, suspend callables, delegate
+adapters, exact-shape execution, CLR export, or the exact Kotlin metadata encoding. Those features
+must preserve the canonical ABI invariants above or explicitly revise this draft before they land.
+The POC's .NET Framework 4.8 compatibility is probe evidence for the candidate representation, not
+a decision about the eventual product support baseline.
 
 ## Promotion or revision
 
 Promote this draft only after all of the following validate the boundary:
 
 - cross-module Kotlin metadata preserves the logical callable types;
-- capturing closures, bound and adapted references, suspend callables, and KFunction coexist with
-  the candidate identity;
+- adapted references, suspend callables, property references, and fuller KCallable metadata
+  coexist with the candidate identity (capturing/bound function references and the minimal
+  KFunction name view are already validated);
 - a measured exact-shape invocation strategy avoids boxing in important monomorphic paths while
   retaining erased fallback behavior; and
 - representative typed CLR exports give host-language consumers a normal typed surface and define
