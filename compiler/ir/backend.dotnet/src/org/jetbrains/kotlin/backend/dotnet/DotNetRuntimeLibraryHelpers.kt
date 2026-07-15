@@ -70,11 +70,14 @@ internal object DotNetRuntimeLibraryHelpers {
      * the same `Double` must print identically, so both are routed through this helper.
      */
     /**
-     * Besides mutable capture storage and Double formatting, this text owns the universal Any
-     * operations. Their primitive branches are semantic, not optimizations: CLR boxed Boolean
-     * hashes/string text, boxed Char hashes, and boxed Double signed-zero/hash/string behavior
-     * differ from Kotlin's JVM-backed object contract, and Framework also preserves NaN payloads
-     * in Double.GetHashCode.
+     * Besides mutable capture storage and Double formatting, this text owns escaping array
+     * iterator storage and the universal Any operations. The iterator deliberately stores a
+     * `System.Array` and returns object: Kotlin's logical element type remains compiler metadata,
+     * while one erased object preserves identity across Kotlin's legal covariant iterator views.
+     * The Any primitive branches are semantic, not optimizations: CLR boxed Boolean hashes/string
+     * text, boxed Char hashes, and boxed Double signed-zero/hash/string behavior differ from
+     * Kotlin's JVM-backed object contract, and Framework also preserves NaN payloads in
+     * Double.GetHashCode.
      */
     val ilText: String = """
             |.namespace Kotlin.Runtime.Internal
@@ -101,6 +104,65 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .maxstack 1
             |      ldarg.0
             |      call instance void [mscorlib]System.Object::.ctor()
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class public auto ansi sealed beforefieldinit ArrayIterator
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Collections.Iterator
+            |  {
+            |    .field private class [mscorlib]System.Array 'array'
+            |    .field private int32 'index'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Array 'array') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Array Kotlin.Runtime.Internal.ArrayIterator::'array'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance bool HasNext() cil managed
+            |    {
+            |      .override method instance bool Kotlin.Collections.Iterator::HasNext()
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.ArrayIterator::'index'
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Array Kotlin.Runtime.Internal.ArrayIterator::'array'
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      clt
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Next() cil managed
+            |    {
+            |      .override method instance object Kotlin.Collections.Iterator::Next()
+            |      .maxstack 3
+            |      .locals init ([0] object 'result')
+            |      ldarg.0
+            |      call instance bool Kotlin.Runtime.Internal.ArrayIterator::HasNext()
+            |      brtrue.s IL_hasElement
+            |      newobj instance void Kotlin.NoSuchElementException::.ctor()
+            |      throw
+            |IL_hasElement:
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Array Kotlin.Runtime.Internal.ArrayIterator::'array'
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.ArrayIterator::'index'
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      stloc.0
+            |      ldarg.0
+            |      dup
+            |      ldfld int32 Kotlin.Runtime.Internal.ArrayIterator::'index'
+            |      ldc.i4.1
+            |      add
+            |      stfld int32 Kotlin.Runtime.Internal.ArrayIterator::'index'
+            |      ldloc.0
             |      ret
             |    }
             |  }
@@ -678,4 +740,10 @@ internal object DotNetRuntimeLibraryHelpers {
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayCopyInto".toIlIdentifier()}(" +
                 "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array, int32, int32, int32)"
+
+    /** Creates the shared erased iterator object over one CLR vector. */
+    val arrayIteratorConstructorInstruction: String =
+        "newobj instance void [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.ArrayIterator".toIlIdentifier()}::.ctor(" +
+                "class ${CORE_LIB_REF}System.Array)"
 }
