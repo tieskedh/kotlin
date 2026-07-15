@@ -226,7 +226,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Both ILAsm implementations accept the exact runtime/library/consumer shapes, and all four
   modern/Framework consumer-dependency
   pairings run identically. STAYS REJECTED, loudly: interface redeclarations of Any members,
-  data objects, unsupported data-class shapes described below, and `T : Any` generic constraints
+  unsupported data-class shapes described below, and `T : Any` generic constraints
   (CLR `class` would wrongly exclude value instantiations; erasing the constraint would admit
   null). Kotlin-owned exceptions and foreign-object import policy remain later consumers of this
   foundation. Pins:
@@ -289,24 +289,39 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   one semantic implementation. Null arrays hash to 0 and render `null`; empty arrays hash to 1 and
   render `[]`. The same boundary exposed the CLR Char hash difference, now normalized centrally
   for ordinary Any calls as well as array content.
+  A data object reuses the ordinary CLR singleton representation unchanged: a sealed class with a
+  private constructor, one public static initonly `INSTANCE`, and recursive initialization through
+  its `.cctor`. Fir2ir's shared generated bodies make `Equals(object)` true for every instance of
+  the same declaration after the reference fast path and `isinst`/`castclass`, not merely for
+  `INSTANCE`; this preserves the specified hostile-reflection/serialization behavior without a
+  delegate-like wrapper or another identity ABI. `GetHashCode()` returns the compile-time
+  `FqName.hashCode()` constant and `ToString()` returns the simple declaration name. Named data
+  objects below classes, generic classes, objects, and deeper supported metadata parents use the
+  existing static-nested model and capture no outer instance or type argument. This slice does not
+  broaden the separate object-supertype boundary: a data object with a proper class/interface
+  supertype is rejected by the same owning gate as an ordinary object with that supertype.
   STAYS REJECTED, whole-class: array shapes rejected by the primitive/generic vector mapper,
-  local data classes, and data objects. Pins:
+  and local data classes. Pins:
   `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassArrays.kt`,
   `ilText/genericDataClasses.kt`, `ilText/genericDataClassDefaults.kt`,
-  `ilText/constructorDefaultArguments.kt`, `ilText/dataClassesRejected.kt`, and
-  `ilText/defaultArgumentsRejected.kt`; runtime:
+  `ilText/constructorDefaultArguments.kt`, `ilText/dataObjects.kt`,
+  `ilText/dataClassesRejected.kt`, and `ilText/defaultArgumentsRejected.kt`; runtime:
   `box/dataClasses.kt`, `box/nestedDataClasses.kt`, `box/dataClassArrays.kt`,
   `box/genericDataClasses.kt`, `box/genericDataClassArrays.kt`,
   `box/genericDataClassShapes.kt`, `box/genericDataClassMultipleTypeParameters.kt`,
   `box/genericDataClassDefaults.kt`, `box/defaultArguments.kt`,
-  `box/constructorDefaultArguments.kt`, and `box/anyMembers.kt`.
+  `box/constructorDefaultArguments.kt`, `box/dataObjects.kt`, and `box/anyMembers.kt`.
   `dataclass_s1`, `dataclass_s2`, `dataclass_array_probe_s1`, and `ctor_default_probe_s1`
   assembled the relevant shapes under modern 10.0.9 and Framework 4.8 ILAsm; the array helper
   probe ran identically on both runtimes, and all four constructor consumer/runtime ILAsm
   pairings preserved the default and real-overload paths. `generic_data_probe_s1` assembled both
   generic equality goldens with both ILAsm versions; Framework-selected boxes executed every new
   runtime shape on CoreCLR, and reflection found only private view/bridge metadata while the public
-  property remained open `T`. The fresh full two-parser matrix is 434/0/0/0 across eight suites.
+  property remained open `T`. The data-object exact golden assembles under both ILAsm versions;
+  reflection over each assembly confirms the private-constructor singleton surface and that a
+  second reflectively constructed instance has the same equality, declaration hash, and text.
+  Both parsers execute the source pin with modern and Framework-selected ILAsm. The fresh full
+  two-parser matrix is 436/0/0/0 across eight suites.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
