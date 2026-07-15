@@ -87,11 +87,14 @@ fun box(): String {
     if (!directNanA.equals(directNanB)) return "fail 27: direct Double NaN equality"
     if ((-0.0).hashCode() == 0.0.hashCode()) return "fail 28: direct Double hash"
     if (true.hashCode() != 1231 || false.hashCode() != 1237) return "fail 29: direct Boolean hash"
+    val charValue: Any = 'a'
+    if (anyHash(charValue) != 97) return "fail 30: boxed Char hash"
+    if ('Z'.hashCode() != 90) return "fail 31: direct Char hash"
 
     val both = Both()
     val left: Left = both
     val right: Right = both
-    if (left !== right) return "fail 30: unrelated interface identity"
+    if (left !== right) return "fail 32: unrelated interface identity"
 
     return "OK"
 }
