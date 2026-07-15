@@ -321,12 +321,18 @@ IL_whenNext_5:
   }
   .method public hidebysig static object 'genericLocalData'<'T'>(int32 'seed', !!0 'value') cil managed
   {
-    .maxstack 2
+    .maxstack 3
+    .locals init (
+      [0] !!0 '<default>'
+    )
     ldarg.0
     ldarg.1
     newobj instance void class 'localDataClassesKt$genericLocalData$Local`1'<!!0>::.ctor(int32, !0)
-    ldarg.1
-    call instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> class 'localDataClassesKt$genericLocalData$Local`1'<!!0>::'copy'(!0)
+    ldloca 0
+    initobj !!0
+    ldloc.0
+    ldc.i4 1
+    call instance class 'localDataClassesKt$genericLocalData$Local`1'<!0> class 'localDataClassesKt$genericLocalData$Local`1'<!!0>::'copy$default'(!0, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

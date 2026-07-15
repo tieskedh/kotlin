@@ -14,7 +14,7 @@ fun <T> genericLocalData(seed: Int, value: T): Any {
         fun captured(): Int = seed
     }
 
-    return Local(value).copy(value = value)
+    return Local(value).copy()
 }
 
 fun main() {
