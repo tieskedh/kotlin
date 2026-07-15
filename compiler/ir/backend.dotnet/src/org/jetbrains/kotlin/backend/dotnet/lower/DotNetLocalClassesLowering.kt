@@ -81,9 +81,9 @@ internal class DotNetInventNamesForLocalClasses(
 }
 
 /**
- * The first local-declaration slice deliberately invokes common closure conversion only for a
- * body containing named local classes and no anonymous object or explicit local function. This
- * prevents the common pass from incidentally lifting still-unsupported declaration families.
+ * Invokes common closure conversion for a body containing named classes and/or anonymous objects,
+ * but no explicit local function. This prevents the common pass from incidentally lifting the
+ * still-unsupported local-function family.
  * Immutable captures become private fields/constructor parameters. Mutable and crossinline
  * captures are marked for a precise class-gate rejection: SharedVariablesLowering and inline
  * lowering do not exist on this backend yet, so copying either value would be wrong.
@@ -99,7 +99,7 @@ internal class DotNetLocalDeclarationsLowering private constructor(
     constructor(context: DotNetBackendContext) : this(context, mutableMapOf())
 
     override fun lower(irBody: IrBody, container: IrDeclaration) {
-        if (!irBody.isEligibleNamedLocalClassBody()) return
+        if (!irBody.isEligibleLocalClassBody()) return
         val existingCapturedParameters = capturedParameters.keys.toHashSet()
         super.lower(irBody, container)
         for ([parameter, captured] in capturedParameters) {
@@ -120,9 +120,8 @@ internal class DotNetLocalDeclarationsLowering private constructor(
         }
     }
 
-    private fun IrBody.isEligibleNamedLocalClassBody(): Boolean {
-        var hasNamedLocalClass = false
-        var hasAnonymousObject = false
+    private fun IrBody.isEligibleLocalClassBody(): Boolean {
+        var hasLocalClass = false
         var hasExplicitLocalFunction = false
         acceptChildrenVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
@@ -131,7 +130,7 @@ internal class DotNetLocalDeclarationsLowering private constructor(
 
             override fun visitClass(declaration: IrClass) {
                 if (declaration.visibility == DescriptorVisibilities.LOCAL) {
-                    if (declaration.isAnonymousObject) hasAnonymousObject = true else hasNamedLocalClass = true
+                    hasLocalClass = true
                 }
                 declaration.acceptChildrenVoid(this)
             }
@@ -143,7 +142,7 @@ internal class DotNetLocalDeclarationsLowering private constructor(
                 declaration.acceptChildrenVoid(this)
             }
         })
-        return hasNamedLocalClass && !hasAnonymousObject && !hasExplicitLocalFunction
+        return hasLocalClass && !hasExplicitLocalFunction
     }
 }
 

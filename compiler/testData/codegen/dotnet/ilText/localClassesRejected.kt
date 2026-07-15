@@ -1,6 +1,6 @@
-// Mutable captures require SharedVariablesLowering, and anonymous objects/local functions remain
-// outside the first named-local-class slice. Their functions disappear independently; main and
-// unrelated declarations survive.
+// Mutable captures require SharedVariablesLowering, and explicit local functions remain outside
+// the local-declaration slice. Their functions disappear independently; main and unrelated
+// declarations survive.
 
 fun mutableCaptureRejected(): Int {
     var value = 1
@@ -11,13 +11,6 @@ fun mutableCaptureRejected(): Int {
 
     value = 2
     return Local().value()
-}
-
-fun anonymousObjectRejected(): Int {
-    val value = object {
-        fun value(): Int = 2
-    }
-    return value.value()
 }
 
 fun localFunctionMixtureRejected(): Int {
