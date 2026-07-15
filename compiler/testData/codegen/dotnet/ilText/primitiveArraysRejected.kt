@@ -11,7 +11,11 @@ fun genericNullableArray(size: Int): Array<Int?> = Array(size) { null }
 
 fun initialized(size: Int): IntArray = IntArray(size) { it }
 
-fun spread(values: IntArray): IntArray = intArrayOf(*values)
+fun unsupportedVarargs(vararg values: Byte): Int = values.size
+
+fun unsupportedShortVarargs(vararg values: Short): Int = values.size
+
+fun unsupportedFloatVarargs(vararg values: Float): Int = values.size
 
 fun iteratorAsAny(values: IntArray): Any? = values.iterator()
 
