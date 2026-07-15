@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
-Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(escaping array-iterator audit after concrete array copying).
+Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
+(callable fast-path/CLR-interop audit after escaping array iterators).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -19,11 +19,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   the POC IL-assembly-pipeline direction (`1e9492c5f`), and general open-type-parameter default
   placeholders (`2c4bab040`), interface-owned argument-default helpers (`b9c83e0c2`), and general
   concrete varargs (`44ec10c33`) and concrete array initializer constructors (`fb8b20d0a`),
-  followed by concrete array copying in the current functional slice.
+  followed by concrete array copying (`afd686b1f`) and the escaping iterator slice described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **460 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **464 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -683,6 +683,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The exact golden assembles with modern 10.0.9 and Framework 4.8 ILAsm, and both parser boxes pass
   with modern and Framework-selected assemblers. The fresh full-suite count for this slice is
   recorded in Branch state above.
+  Escaping array iterators now follow the erased Kotlin-owned representation recorded in
+  `docs/decisions/draft-adr-erased-iterator-abi.md`. Source `Iterator<T>` and the five primitive
+  iterator classes share the non-generic runtime interface `Kotlin.Collections.Iterator` with
+  `bool HasNext()` and `object Next()`; logical element types remain in IR/metadata and call sites
+  cast or `unbox.any` the result. This preserves the same object/cursor across Kotlin covariance,
+  including `Iterator<Int> -> Iterator<Any>`, where CLR generic variance cannot help. Explicit
+  `iterator()` over the five primitive vectors and concrete reference arrays constructs the shared
+  internal ArrayIterator over System.Array; direct array `for` loops remain allocation-free.
+  Exhaustion uses exact runtime-owned `Kotlin.NoSuchElementException` rather than CLR
+  InvalidOperationException, which would create a false IllegalStateException edge.
+  `iteratorabi_s1` assembled generic/primitive/reference consumers and the exact catch with modern
+  and Framework ILAsm; all four same/cross-runtime pairings ran. Both parser IL/box pins pass on
+  CoreCLR. Open `Array<T>` producers and user Iterator implementations stay rejected pending a
+  deliberately designed erased bridge. The exact golden's dual-ILAsm result and the fresh full
+  suite count are recorded in Branch state above.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -765,14 +780,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Provide escaping array iterator objects.** Audit common/JVM iterator ownership first. Keep
-   direct array `for` loops allocation-free; add object-valued iterator behavior only for explicit
-   or escaping calls over the five primitive vectors and concrete reference arrays, with correct
-   exhaustion and erased-boundary boxing.
-2. **Measure the callable typed fast path and CLR interop boundary.** Preserve erased
+1. **Measure the callable typed fast path and CLR interop boundary.** Preserve erased
    `Kotlin.Function0/1/2` identity, then validate exact-shape optimization members and explicit
    delegate conversion without wrappers becoming a second Kotlin callable identity.
-3. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
+2. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
    the neutral negative-array-size fault only when its Kotlin-owned identity and catch policy are
    audited. Keep `contentEquals` and related content operations separate until their floating,
    nullable, primitive, and recursive semantics have been reviewed.

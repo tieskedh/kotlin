@@ -39,6 +39,11 @@ import org.jetbrains.kotlin.types.Variance
  *   Kotlin's `NumberFormatException IS-A IllegalArgumentException` catch and value-conversion
  *   edge. A foreign `System.FormatException` deliberately remains a distinct type until an
  *   interop or parsing intrinsic explicitly translates it.
+ * - `kotlin.NoSuchElementException` is runtime-owned because no CLR exception has its Kotlin
+ *   meaning. In particular `System.InvalidOperationException`, commonly thrown by an enumerator's
+ *   `Current` outside its valid state, maps to Kotlin IllegalStateException and would create a
+ *   false subtype edge. The exact identity lets an escaping Kotlin iterator preserve its specified
+ *   exhaustion contract without changing the broader exception mapping.
  * - `kotlin.ArithmeticException` -> `System.ArithmeticException` closes the divide-by-zero debt:
  *   the CLR's `DivideByZeroException` IS-A `System.ArithmeticException` (probe-verified), so
  *   `catch (e: ArithmeticException)` catches a CLR division fault. The message stays the CLR's
@@ -118,6 +123,15 @@ internal object DotNetMappedExceptions {
                 hasMessageCauseCtor = false,
                 hasCauseCtor = false,
                 physicalSupertypeRefs = setOf("${CORE_LIB_REF}System.ArgumentException", EXCEPTION_TYPE_REF),
+            )
+        )
+        put(
+            FqName("kotlin.NoSuchElementException"),
+            Entry.Mapped(
+                clrTypeRef = DotNetRuntimeLibrary.noSuchElementExceptionTypeRef,
+                hasMessageCauseCtor = false,
+                hasCauseCtor = false,
+                physicalSupertypeRefs = setOf(EXCEPTION_TYPE_REF),
             )
         )
         put(

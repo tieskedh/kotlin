@@ -72,8 +72,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
   for exact Kotlin-only exception identities and
   `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. The first
-  source-visible exact types are `Kotlin.NumberFormatException : System.ArgumentException` and
-  `Kotlin.Error : System.Exception`. Their hybrid exception policy is described in the
+  source-visible exact types are `Kotlin.NumberFormatException : System.ArgumentException`,
+  `Kotlin.NoSuchElementException : Kotlin.RuntimeException`, and `Kotlin.Error : System.Exception`.
+  Their hybrid exception policy is described in the
   exception-model bullet below.
   The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
@@ -143,6 +144,25 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   not a reason to split the canonical Kotlin representation in this first POC slice.
   Final raw library IL declares the exact runtime AssemblyRef whenever an emitted signature or
   body contains a `[Kotlin.Runtime]` token; it never relies on ILAsm assembly autodetection.
+- Iterator ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
+  series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an
+  object-shaped execution boundary, with CLR `object` replacing JVM Object): source
+  `Iterator<T>` and the supported primitive iterator classes map to one public non-generic
+  `[Kotlin.Runtime]Kotlin.Collections.Iterator` interface with `bool HasNext()` and
+  `object Next()`. Kotlin's logical covariant element type remains in IR/metadata, so
+  `Iterator<Int> -> Iterator<Any>` and reference-element covariance preserve the same object and
+  cursor state instead of relying on CLR generic variance, which excludes value instantiations.
+  Call sites cast or `unbox.any` the erased result, including `unbox.any !!n` in generic
+  consumers. Explicit `iterator()` over the five supported primitive vectors and concrete
+  reference arrays constructs `Kotlin.Runtime.Internal.ArrayIterator`, which stores System.Array
+  plus an index and observes later vector mutations. Exhaustion throws the exact runtime-owned
+  `Kotlin.NoSuchElementException`; mapping it to InvalidOperationException would falsely make it
+  an IllegalStateException. Direct array `for` loops keep the existing allocation-free indexed
+  lowering. STAYS REJECTED, loudly: open `Array<T>` producers, user-defined Iterator
+  implementations until typed-to-erased bridge generation exists, Iterable/collection/sequence
+  iteration, mutable iterators, CLR IEnumerator adapters, and typed fast-path entries. Pins:
+  `ilText/arrayIterators.kt`, `box/arrayIterators.kt`, and the iterator negatives in
+  `ilText/genericArraysRejected.kt`.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
   functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
   The erased callable `Invoke` boundary is the one exception: it materializes
@@ -182,9 +202,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `last = indexedObject.size`, then `while (inductionVariable < last)` load
   `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
-  the removed iterator loop. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), iterator values escaping as objects, user-facing content APIs, and
-  unsigned arrays.
+  the removed iterator loop. Explicit escaping iterator values use the erased runtime iterator
+  ABI described above. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
+  elements are unsupported), user-facing content APIs, and unsigned arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
@@ -211,8 +231,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   loudly: ordinary use-site projections/star projections (the concrete vararg-only normalization
   below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
   primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
-  including arrays of primitive arrays, iterator values escaping as objects, array casts/type
-  checks, resized/open-generic copying, and user-facing content APIs.
+  including arrays of primitive arrays, open-generic iterator producers, array casts/type checks,
+  resized/open-generic copying, and user-facing content APIs. Concrete reference-array iterator
+  values use the erased runtime iterator ABI above.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
 - Concrete array initializer constructors reuse the same backend.common

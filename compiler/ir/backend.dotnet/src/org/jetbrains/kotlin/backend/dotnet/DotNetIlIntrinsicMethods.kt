@@ -146,14 +146,15 @@ internal class DotNetIlIntrinsicMethods(
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
-            genericArrayIntrinsics() + arrayCopyIntrinsics()
+            genericArrayIntrinsics() + arrayCopyIntrinsics() + iteratorIntrinsics()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
      * the primitive `*ArrayOf` calls that JVM expects VarargLowering to remove. DotNet emits the
      * literal vararg directly because its lowering pipeline intentionally remains small. Entries
-     * for initializer constructors and iterator/clone values are present now and fail with their
-     * feature-specific reasons instead of falling into generic call handling.
+     * for initializer constructors and clone values are present now and fail with their
+     * feature-specific reasons instead of falling into generic call handling. Escaping iterator
+     * values cross the shared Kotlin.Runtime iterator boundary; direct for-loops are still lowered.
      */
     private fun primitiveArrayIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         val function1Fqn = FqName("kotlin.Function1")
@@ -187,10 +188,7 @@ internal class DotNetIlIntrinsicMethods(
             )
             add(
                 Key(info.arrayFqn, null, "iterator", emptyList())
-                        to DotNetIlUnsupportedIntrinsic(
-                            "primitive-array iterator values are not supported; " +
-                                    "direct 'for (element in array)' loops are lowered"
-                        )
+                        to DotNetIlArrayIteratorIntrinsic(info.arrayType)
             )
             add(
                 Key(info.arrayFqn, null, "clone", emptyList())
@@ -220,10 +218,7 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinFqn, null, "emptyArray", emptyList()) to DotNetIlGenericEmptyArrayIntrinsic,
             Key(kotlinFqn, null, "arrayOfNulls", listOf(intFqn)) to DotNetIlGenericArrayOfNullsIntrinsic,
             Key(arrayFqn, null, "iterator", emptyList()) to
-                    DotNetIlUnsupportedIntrinsic(
-                        "generic-array iterator values are not supported; " +
-                                "direct 'for (element in array)' loops are lowered"
-                    ),
+                    DotNetIlArrayIteratorIntrinsic(fixedArrayType = null),
             Key(arrayFqn, null, "clone", emptyList()) to
                     DotNetIlUnsupportedIntrinsic("generic-array clone is not supported; use copyOf"),
         )
@@ -272,6 +267,28 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinCollectionsFqn, arrayFqn, "copyOf", listOf(intFqn))
                     to DotNetIlArrayCopyOfIntrinsic(fixedArrayType = null, resized = true)
         )
+    }
+
+    /**
+     * The logical Iterator<T> API and supported primitive-specialized iterator APIs all dispatch
+     * through the same erased runtime slots. Registering the primitive owners is necessary because
+     * their final `next()` bridge and specialized `nextX()` calls retain that static owner in IR.
+     */
+    private fun iteratorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        val iteratorFqn = FqName("kotlin.collections.Iterator")
+        add(Key(iteratorFqn, null, "hasNext", emptyList()) to DotNetIlIteratorHasNextIntrinsic)
+        add(Key(iteratorFqn, null, "next", emptyList()) to DotNetIlIteratorNextIntrinsic)
+        for (info in listOf(
+            FqName("kotlin.collections.IntIterator") to "nextInt",
+            FqName("kotlin.collections.LongIterator") to "nextLong",
+            FqName("kotlin.collections.DoubleIterator") to "nextDouble",
+            FqName("kotlin.collections.BooleanIterator") to "nextBoolean",
+            FqName("kotlin.collections.CharIterator") to "nextChar",
+        )) {
+            add(Key(info.first, null, "hasNext", emptyList()) to DotNetIlIteratorHasNextIntrinsic)
+            add(Key(info.first, null, "next", emptyList()) to DotNetIlIteratorNextIntrinsic)
+            add(Key(info.first, null, info.second, emptyList()) to DotNetIlIteratorNextIntrinsic)
+        }
     }
 
     /**
@@ -910,6 +927,91 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
         codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
         codegen.emit(arrayType.storeElementInstruction, pops = 3)
+        return true
+    }
+}
+
+/**
+ * An explicit array `iterator()` value -> the shared runtime ArrayIterator object.
+ *
+ * The runtime takes System.Array, so primitive and concrete reference vectors use the same object.
+ * An open Array<T> producer remains outside this bounded slice: its physical `T[]` is valid, but
+ * landing it would silently broaden the current open-array feature boundary. Generic consumers of
+ * an already-created Iterator<T> are supported because Next narrows its object result with `!!n`.
+ */
+private class DotNetIlArrayIteratorIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetRuntimeTypes.iteratorType || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing array receiver for 'iterator'")
+        val arrayType = fixedArrayType ?: (
+                codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
+                ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
+        )
+        if (arrayType is DotNetIlValueType.GenericArray && arrayType.elementType is DotNetIlValueType.TypeParameter) {
+            dotNetUnsupported("iterator on an open generic Array<T> is not supported in the escaping iterator slice")
+        }
+        codegen.emitExpression(receiver, arrayType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayIteratorConstructorInstruction,
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Kotlin Iterator.hasNext -> the erased Kotlin.Runtime execution slot. */
+private object DotNetIlIteratorHasNextIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing iterator receiver for 'hasNext'")
+        codegen.emitExpression(receiver, DotNetRuntimeTypes.iteratorType)
+        codegen.emit(
+            "callvirt instance bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                    "${"Kotlin.Collections.Iterator".toIlIdentifier()}::${"HasNext".toIlIdentifier()}()",
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Kotlin Iterator.next/primitive nextX -> erased Next plus a logical result narrowing. */
+private object DotNetIlIteratorNextIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing iterator receiver for 'next'")
+        codegen.emitExpression(receiver, DotNetRuntimeTypes.iteratorType)
+        codegen.emit(
+            "callvirt instance object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                    "${"Kotlin.Collections.Iterator".toIlIdentifier()}::${"Next".toIlIdentifier()}()",
+            pops = 1,
+            pushes = 1,
+        )
+        if (expectedType != DotNetIlValueType.Object) {
+            val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull()
+                ?: dotNetUnsupported(
+                    "erased iterator result cannot be converted from object to ${expectedType.nameInSignature}"
+                )
+            codegen.emit(narrowing, pops = 1, pushes = 1)
+        }
         return true
     }
 }

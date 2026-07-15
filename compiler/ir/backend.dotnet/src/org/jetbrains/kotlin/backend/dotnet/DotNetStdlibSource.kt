@@ -113,7 +113,8 @@ public val Char.code: Int
 // the real stdlib, but the backend never emits these classes: each concrete class is either
 // TYPE-MAPPED onto a CLR exception type or rejected with a per-type reason — see
 // DotNetMappedExceptions, which also documents why RuntimeException resolves here and then fails
-// loudly at codegen use. Error and NumberFormatException map to exact Kotlin.Runtime types.
+// loudly at codegen use. Error, NumberFormatException, and NoSuchElementException map to exact
+// Kotlin.Runtime types.
 
 public open class Exception : Throwable {
     public constructor() : super()
@@ -155,6 +156,11 @@ public open class UnsupportedOperationException : RuntimeException {
     public constructor(message: String?) : super(message)
     public constructor(message: String?, cause: Throwable?) : super(message, cause)
     public constructor(cause: Throwable?) : super(cause)
+}
+
+public open class NoSuchElementException : RuntimeException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
 }
 
 public open class IndexOutOfBoundsException : RuntimeException {
