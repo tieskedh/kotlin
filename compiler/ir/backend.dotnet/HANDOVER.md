@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(RuntimeException fault-translation/catch-policy continuation).
+(data-class generated-member continuation).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -11,7 +11,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
   (`fb6d43448`), the System.Object Any foundation (`4a78533ad`), and the hybrid Kotlin/CLR
   exception-identity foundation (`a4a862e45`) and exact source-visible NumberFormatException
-  identity (`eb1fae21e`), followed by exact Kotlin Error identity in the current functional slice.
+  identity (`eb1fae21e`) and exact Kotlin Error identity (`b3fc89984`), followed by the
+  RuntimeException migration-gate decision in the current slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -515,6 +516,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and keeping a foreign OutOfMemoryException outside the exact catch. The exact golden assembles
   under both ILAsm versions, the embedded-runtime box passes through the Framework toolchain
   selection, and the fresh full DotNet suite is 398/0/0/0.
+- The RuntimeException representation audit keeps source use rejected and records why catch unions
+  alone do not solve it. A union can catch the exact root plus current BCL child mappings only by
+  binding a System.Exception-shaped value, which erases RuntimeException from signatures, collides
+  with Throwable/Exception, and admits arbitrary foreign exceptions. Pretending a caught BCL child
+  has exact Kotlin.RuntimeException storage is worse: `exceptionabi_s4` assembled that
+  unverifiable shape with both ILAsm versions, and both CoreCLR and Framework dispatched an
+  exact-root method on an actual InvalidOperationException, demonstrating live type confusion.
+  The draft ADR now requires either an exact owned-child hierarchy with comprehensive native-fault
+  and interop translation, or a different representation proven coherent for storage, signatures,
+  catches, rethrows, and type tests. Do not enable the source mapping piecemeal.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -597,14 +608,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Design the RuntimeException migration boundary before enabling source use.** Compare two
-   coherent strategies: translate every relevant CLR-native fault into runtime-owned Kotlin child
-   classes, or represent a Kotlin catch as a union/filter over the exact root and deliberate BCL
-   mappings. Account for catch-variable storage, rethrow identity, constructors, interop-thrown
-   faults, and parent/child type tests; a catch union alone does not make a BCL child storable as
-   exact `Kotlin.RuntimeException`. Do not publish a source mapping until one representation is
-   coherent end to end. Fuller callable reflection remains later work rather than expanding the
-   minimal name slice opportunistically.
+1. **Audit data-class generated members against the System.Object Any foundation.** Follow the JVM
+   lowerings for `equals`, `hashCode`, `toString`, `componentN`, and `copy`, but make a separate CLR
+   decision wherever boxed primitives or arrays cross the object boundary. Start with the smallest
+   supported field families, reuse the established Any runtime helpers, and reject unsupported
+   generated shapes loudly rather than emitting partial classes. RuntimeException source use stays
+   gated by the migration decision above. Fuller callable reflection remains later work rather than
+   expanding the minimal name slice opportunistically.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

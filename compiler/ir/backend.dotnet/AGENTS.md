@@ -941,7 +941,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   the cause-only form uses `cause?.toString()` and preserves the cause in `InnerException`.
   Source `kotlin.RuntimeException` still REJECTS: mapped logical children such as
   `IllegalStateException -> System.InvalidOperationException` are not physical children of the
-  runtime root, so enabling the parent would make its catch miss a legal child.
+  runtime root, so enabling the parent would make its catch miss a legal child. A catch union is
+  not sufficient: binding the union as System.Exception erases RuntimeException from signatures,
+  collides with Throwable/Exception, and admits arbitrary foreign exceptions; binding a BCL child
+  as exact Kotlin.RuntimeException emits unverifiable type-confused IL. `exceptionabi_s4` proved
+  the latter poison shape on both runtimes: a caught InvalidOperationException stored in an
+  exact-root local successfully dispatched a Kotlin.RuntimeException method. Source support must
+  therefore wait for an exact owned-child hierarchy plus comprehensive native-fault/interop
+  translation, or a different representation proven coherent at every ABI boundary.
   `Error` is source-visible through exact runtime-owned `Kotlin.Error : System.Exception`, with the
   mature four constructor forms and the same nullable-message/cause implementation as the dormant
   RuntimeException root. This preserves Kotlin-created Error identity without pretending the CLR
