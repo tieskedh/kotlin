@@ -12,8 +12,6 @@ fun unsupportedShortVarargs(vararg values: Short): Int = values.size
 
 fun unsupportedFloatVarargs(vararg values: Float): Int = values.size
 
-fun iteratorAsAny(values: IntArray): Any? = values.iterator()
-
 fun unsupportedElements(size: Int): ByteArray = ByteArray(size)
 
 fun unsupportedShortElements(size: Int): ShortArray = ShortArray(size)

@@ -1397,8 +1397,8 @@ internal fun dotNetWideningCoercionOrNull(from: DotNetIlValueType, to: DotNetIlV
     else -> null
 }
 
-/** The CLR conversion from an erased callable object slot to one supported logical value type. */
-private fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(): String? {
+/** The CLR conversion from an erased runtime object slot to one supported logical value type. */
+internal fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(): String? {
     dotNetBoxedCorelibRefOrNull()?.let { return "unbox.any $it" }
     return when (this) {
         DotNetIlValueType.Object -> null
