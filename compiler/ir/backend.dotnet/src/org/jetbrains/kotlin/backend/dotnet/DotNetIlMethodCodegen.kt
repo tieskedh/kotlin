@@ -45,15 +45,8 @@ import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 
-/**
- * A successfully rendered method: its IL text plus the [runtime helpers][DotNetIlRuntimeHelper]
- * the body called, which [DotNetIlEmitter] aggregates to decide whether to emit the shared
- * helper class.
- */
-internal class DotNetIlRenderedMethod(
-    val ilText: String,
-    val requiredRuntimeHelpers: Set<DotNetIlRuntimeHelper>,
-)
+/** A successfully rendered method and its complete IL text. */
+internal class DotNetIlRenderedMethod(val ilText: String)
 
 /**
  * Renders a single function — a top-level `static` one, a user-class constructor, an instance
@@ -196,7 +189,7 @@ internal class DotNetIlMethodCodegen(
             }
             appendLine("  }")
         }
-        return DotNetIlRenderedMethod(ilText, methodContext.requiredRuntimeHelpers)
+        return DotNetIlRenderedMethod(ilText)
     }
 
     /**
