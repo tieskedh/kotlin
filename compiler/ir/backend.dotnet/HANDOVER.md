@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(data-object audit after generic data-class equality).
+(local-data-class audit after data objects).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -15,11 +15,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   RuntimeException migration-gate decision (`acde56d80`) and the bounded top-level data-class and
   masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
   by array-backed data classes (`a43d3de4d`), constructor defaults (`d6deff4f5`), and generic
-  data-class equality in the current functional slice.
+  data-class equality (`c1597ef12`) and data objects in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **434 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **436 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -595,6 +595,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   bridges plus one private view in the two-property pin, and the ordinary public generic property
   remains open `T`. The focused two-parser generic/callable-regression matrix is 16/0/0/0, and the
   fresh `--rerun-tasks` full DotNet suite is 434/0/0/0 across eight XML files.
+  Data objects now consume the same common generated-member machinery and the established CLR
+  singleton shape. Top-level and named nested forms emit a sealed class, private constructor,
+  public static initonly `INSTANCE`, declaration-wide `Equals(object)`, compile-time
+  `FqName.hashCode()` constant, and simple-name text. A nested data object below a generic owner
+  remains static-style and captures no outer type argument. The separate general object-supertype
+  gate remains unchanged, so data objects with proper class/interface supertypes still reject for
+  the same reason as ordinary objects. The exact golden assembles with modern 10.0.9 and Framework
+  4.8 ILAsm. Reflection over both outputs confirms the singleton surface and that a second instance
+  created through the private constructor compares equal with the same hash/text. Both parser box
+  variants pass with modern and Framework-selected ILAsm, and the fresh full DotNet suite is
+  436/0/0/0 across eight XML files.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -679,9 +690,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 1. **Extend data classes one representation boundary at a time.** Generic data-class equality now
    preserves erased Kotlin declaration identity through a private CLR view without weakening the
-   backend's reified generic model. Next audit data objects: reuse the existing singleton identity
-   and shared generated-member machinery, verify their declaration-stable generated hash/text,
-   and keep them whole-class gated until both ILAsm versions and real runtime behavior agree.
+   backend's reified generic model, and data objects now reuse the existing singleton identity plus
+   shared generated-member machinery. Next audit local data classes: start from the common local-
+   declaration lifting/closure-conversion output, determine which capture and generated-member
+   shapes are already representable, and keep the class whole-gated until both ILAsm versions and
+   real runtime behavior agree.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 
