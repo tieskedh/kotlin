@@ -2,7 +2,7 @@
 .assembly 'classShapeRejected' {}
 .module 'main-classShapeRejected.il'
 
-.class public auto ansi sealed beforefieldinit 'C'
+.class public auto ansi sealed beforefieldinit 'C`1'<'T'>
        extends [mscorlib]System.Object
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed

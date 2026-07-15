@@ -2,9 +2,54 @@
 .assembly 'nestedClassesRejected' {}
 .module 'main-nestedClassesRejected.il'
 
-.class public auto ansi sealed beforefieldinit 'InnerHost'
+.class public auto ansi sealed beforefieldinit 'GenericInnerHost`1'<'T'>
        extends [mscorlib]System.Object
 {
+  .class nested public auto ansi sealed beforefieldinit 'Good'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 2
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BrokenInnerHost'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Good'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 3
+      ret
+    }
+  }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
@@ -160,6 +205,20 @@
   {
     .entrypoint
     .maxstack 3
+    newobj instance void 'GenericInnerHost`1'/'Good'::.ctor()
+    call instance int32 'GenericInnerHost`1'/'Good'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'BrokenInnerHost'/'Good'::.ctor()
+    call instance int32 'BrokenInnerHost'/'Good'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'UsesBroken'::.ctor()
     newobj instance void 'BrokenFamily'/'Good'::.ctor()
     call instance int32 'UsesBroken'::'use'(class 'BrokenFamily'/'Good')
