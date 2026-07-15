@@ -349,7 +349,7 @@ class DotNetIlEmitter(
             }
         }
 
-        // Member pre-pass: the instance methods and property accessors of every available class
+        // Member pre-pass: the constructors, instance methods, and property accessors of every available class
         // become call-resolvable before any body is rendered, so that a round-one caller finds a
         // member of a class rendered later in the same round. A member signature failure removes
         // the whole class — the same granularity as every other member failure. The same pass
@@ -381,6 +381,20 @@ class DotNetIlEmitter(
             // Already evicted with the subtree of an earlier failure in this snapshot.
             if (irClass !in availableClasses) continue
             try {
+                // CLR constructor identity is only the mapped parameter list. In particular,
+                // reference nullability erases, so reject the class instead of letting one
+                // source constructor or lowered default stub overwrite another in the maps.
+                val constructorsByIlIdentity = hashMapOf<String, IrConstructor>()
+                for (constructor in irClass.declarations.filterIsInstance<IrConstructor>()) {
+                    val signature = constructor.dotNetSignature(typeMapper)
+                    val ilIdentity = ".ctor(${signature.renderParameterTypes()})"
+                    constructorsByIlIdentity.put(ilIdentity, constructor)?.let {
+                        dotNetUnsupported(
+                            "constructors of '${irClass.diagnosticName()}' clash: " +
+                                    "both map to the same IL constructor '$ilIdentity'"
+                        )
+                    }
+                }
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions().sortedBy { it.isOriginallyLocalDeclaration }) {
                     val signature = member.dotNetSignature(typeMapper)

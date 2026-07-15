@@ -9,27 +9,34 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesSupport
 import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.languageVersionSettings
+import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.InternalSymbolFinderAPI
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
+import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFactory
+import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
+import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.SymbolTable
 
 internal class DotNetBackendContext(
     override val irBuiltIns: IrBuiltIns,
     override val configuration: CompilerConfiguration,
     symbolTable: SymbolTable,
+    irModuleFragment: IrModuleFragment,
 ) : CommonBackendContext {
     override val irFactory: IrFactory = symbolTable.irFactory
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)
-    override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns)
+    override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns, irFactory, irModuleFragment)
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager(irBuiltIns, irFactory)
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
@@ -47,7 +54,11 @@ private object DotNetInlineClassesUtils : InlineClassesUtils {
 }
 
 @OptIn(InternalSymbolFinderAPI::class)
-internal class DotNetSymbols(irBuiltIns: IrBuiltIns) : BackendSymbols(irBuiltIns) {
+internal class DotNetSymbols(
+    irBuiltIns: IrBuiltIns,
+    irFactory: IrFactory,
+    irModuleFragment: IrModuleFragment,
+) : BackendSymbols(irBuiltIns) {
     override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
     override val syntheticConstructorMarker: IrClassSymbol
         get() = unsupportedSymbol("syntheticConstructorMarker")
@@ -79,8 +90,18 @@ internal class DotNetSymbols(irBuiltIns: IrBuiltIns) : BackendSymbols(irBuiltIns
         get() = unsupportedSymbol("returnIfSuspended")
     override val functionAdapter: IrClassSymbol
         get() = unsupportedSymbol("functionAdapter")
-    override val defaultConstructorMarker: IrClassSymbol
-        get() = unsupportedSymbol("defaultConstructorMarker")
+    override val defaultConstructorMarker: IrClassSymbol = run {
+        val fqName = DotNetRuntimeTypes.DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME
+        val markerPackage = createEmptyExternalPackageFragment(irModuleFragment, fqName.parent())
+        irFactory.buildClass {
+            name = fqName.shortName()
+            kind = ClassKind.CLASS
+            modality = Modality.FINAL
+        }.apply {
+            parent = markerPackage
+            createThisReceiverParameter()
+        }.symbol
+    }
 
     private fun unsupportedSymbol(name: String): Nothing =
         error("DotNet backend symbol '$name' is not available yet")

@@ -11,12 +11,9 @@ import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.ir.declarations.IrClass
-import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
-import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
-import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrFunctionAccessExpression
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -45,10 +42,7 @@ internal class DotNetDefaultArgumentStubGenerator(
         factory,
         skipExternalMethods = true,
     ) {
-    // CLR constructor stubs need a durable marker/collision policy of their own. Keep omitted
-    // constructor arguments on the existing fail-loud path rather than minting an ad-hoc ABI.
     override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? {
-        if (declaration is IrConstructor) return null
         if (declaration is IrFunction && declaration.defaultOwnerIsInterface(factory)) return null
         return super.transformFlat(declaration)
     }
@@ -64,9 +58,7 @@ internal class DotNetDefaultParameterInjector(
         skipExternalMethods = true,
     ) {
     override fun shouldReplaceWithSyntheticFunction(functionAccess: IrFunctionAccessExpression): Boolean =
-        functionAccess !is IrConstructorCall &&
-                functionAccess !is IrDelegatingConstructorCall &&
-                super.shouldReplaceWithSyntheticFunction(functionAccess) &&
+        super.shouldReplaceWithSyntheticFunction(functionAccess) &&
                 !functionAccess.symbol.owner.defaultOwnerIsInterface(dotNetFactory)
 }
 
@@ -74,13 +66,11 @@ internal class DotNetDefaultParameterCleaner(
     context: DotNetBackendContext,
     private val factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
 ) : DefaultParameterCleaner(context) {
-    // Constructor defaults are intentionally not lowered. Retain their IR marker so the class
-    // shape gate can reject data classes that would otherwise expose an incomplete constructor
-    // ABI after this phase has cleaned ordinary function parameters.
+    // Interface defaults are intentionally not lowered. Retain their IR marker so their callers
+    // stay on the fail-loud path instead of mistaking the abstract declaration for full support.
     override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? =
         if (declaration is IrValueParameter && declaration.defaultValue != null &&
-            (declaration.parent is IrConstructor ||
-                    (declaration.parent as? IrFunction)?.defaultOwnerIsInterface(factory) == true)
+            (declaration.parent as? IrFunction)?.defaultOwnerIsInterface(factory) == true
         ) {
             null
         } else {

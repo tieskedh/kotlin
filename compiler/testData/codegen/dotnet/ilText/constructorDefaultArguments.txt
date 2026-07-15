@@ -1,0 +1,122 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'constructorDefaultArguments' {}
+.module 'main-constructorDefaultArguments.il'
+
+.class public auto ansi sealed beforefieldinit 'Defaulted'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Defaulted'::'value'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value', int32 '$mask0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker' '$marker') cil managed
+  {
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 7
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance void 'Defaulted'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Defaulted'::'value'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value', int32 'mask') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    ldc.i4 100
+    mul
+    add
+    call instance void 'Defaulted'::.ctor(int32)
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'Defaulted'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'constructorDefaultArgumentsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'defaultValue'() cil managed
+  {
+    .maxstack 3
+    ldc.i4 0
+    ldc.i4 1
+    ldnull
+    newobj instance void 'Defaulted'::.ctor(int32, int32, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker')
+    call instance int32 'Defaulted'::'get_value'()
+    ret
+  }
+  .method public hidebysig static int32 'explicitValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 2
+    newobj instance void 'Defaulted'::.ctor(int32)
+    call instance int32 'Defaulted'::'get_value'()
+    ret
+  }
+  .method public hidebysig static int32 'collisionValue'() cil managed
+  {
+    .maxstack 2
+    ldc.i4 2
+    ldc.i4 3
+    newobj instance void 'Defaulted'::.ctor(int32, int32)
+    call instance int32 'Defaulted'::'get_value'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    call int32 'constructorDefaultArgumentsKt'::'defaultValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'constructorDefaultArgumentsKt'::'explicitValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'constructorDefaultArgumentsKt'::'collisionValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

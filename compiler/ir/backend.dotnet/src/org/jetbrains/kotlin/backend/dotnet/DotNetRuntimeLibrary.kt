@@ -10,8 +10,8 @@ import java.io.File
  * the fixed, physically erased Function0/1/2 interfaces, the orthogonal KCallable/KFunction
  * reflection view, the singleton Unit value required when a callable result crosses the
  * object-shaped invocation boundary, and Kotlin-owned exception identities that have no faithful
- * BCL type. Compiler support shared by generated modules lives below the reserved
- * `Kotlin.Runtime.Internal` namespace.
+ * BCL type. Compiler support shared by generated modules, including the constructor-default ABI
+ * marker, lives below the reserved `Kotlin.Runtime.Internal` namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
