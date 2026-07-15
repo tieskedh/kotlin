@@ -1,21 +1,51 @@
-// Overriding a kotlin.Any member needs a virtual-slot relationship with System.Object's
-// members — an Any model that does not exist yet — so each class here is rejected whole at the
-// shape gate with a message naming the member, and only the file facade is emitted. The
-// rejection also covers indirect overrides in a derived class: `Indirect` both extends a
-// rejected base (cascade) and re-declares `toString` (its own gate rejection).
+// Kotlin Any is physically System.Object. These declarations therefore reuse the existing
+// Equals/GetHashCode/ToString virtual slots (`virtual`, no `newslot`), while calls through Any
+// name System.Object and still dispatch to the Kotlin overrides. `parentString` pins the
+// non-virtual `super.toString()` path. Null-safe `==` and string conversion call the helpers in
+// Kotlin.Runtime.Internal rather than duplicating them into this module.
 class Stringy {
     override fun toString(): String = "S"
+
+    fun parentString(): String = super.toString()
 }
 
-open class EqualsBase {
-    override fun equals(other: Any?): Boolean = other is EqualsBase
-    override fun hashCode(): Int = 1
+open class EqualsBase(val hash: Int) {
+    override fun equals(other: Any?): Boolean = other === this
+    override fun hashCode(): Int = hash
 }
 
-class Indirect : EqualsBase() {
+class Indirect : EqualsBase(7) {
     override fun toString(): String = "I"
 }
 
+fun same(left: Any?, right: Any?): Boolean = left == right
+
+fun render(value: Any?): String = "$value"
+
+fun explicitEquals(left: Any, right: Any?): Boolean = left.equals(right)
+
+fun hash(value: Any): Int = value.hashCode()
+
+fun mixedNullable(value: Int?, other: Any?): Boolean = value == other
+
+fun <T> genericSame(left: T, right: T): Boolean = left == right
+
+fun <T> genericRender(value: T): String = "$value"
+
+fun <T> genericString(value: T): String = value.toString()
+
 fun main() {
-    println("any-override")
+    val value = Indirect()
+    val any: Any = value
+    val missing: String? = null
+    println(any.toString())
+    println(any.hashCode())
+    println(same(any, value))
+    println(explicitEquals(any, value))
+    println(hash(any))
+    println(mixedNullable(7, any.hashCode()))
+    println(genericSame(7, 7))
+    println(genericRender(missing))
+    println(genericString(missing))
+    println(render(null))
 }
