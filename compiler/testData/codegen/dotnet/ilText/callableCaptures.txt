@@ -1,0 +1,356 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'callableCaptures' {}
+.module 'main-callableCaptures.il'
+
+.class public auto ansi sealed beforefieldinit 'Offset'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'delta'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'delta') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Offset'::'delta'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_delta'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Offset'::'delta'
+    ret
+  }
+  .method public hidebysig instance int32 'apply'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.0
+    call instance int32 'Offset'::'get_delta'()
+    add
+    ret
+  }
+  .property instance int32 'delta'()
+  {
+    .get instance int32 'Offset'::'get_delta'()
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableCapturesKt$immutableCapture$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field private int32 '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'callableCapturesKt$immutableCapture$1'::'$value'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'callableCapturesKt$immutableCapture$1'::'$value'
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableCapturesKt$mutableCapture$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$mutableCapture$1'::'$value'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$mutableCapture$1'::'$value'
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$mutableCapture$1'::'$value'
+    ldfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ldc.i4 1
+    add
+    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$mutableCapture$1'::'$value'
+    ldfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableCapturesKt$unitMutableCapture$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$unitMutableCapture$1'::'$value'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'next') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$unitMutableCapture$1'::'$value'
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableCapturesKt$genericMutableCapture$1`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> '$value'
+  .field private !0 '$replacement'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> '$value', !0 '$replacement') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'$value'
+    ldarg.0
+    ldarg.2
+    stfld !0 class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'$replacement'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'$value'
+    ldarg.0
+    ldfld !0 class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'$replacement'
+    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0>::'element'
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'$value'
+    ldfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0>::'element'
+    box !0
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundPrimitive$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field private int32 'f$0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'tmp0'
+    )
+    ldarg.0
+    ldfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
+    stloc.0
+    ldloc.0
+    ldc.i4.1
+    add
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundMember$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field private class 'Offset' 'f$0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Offset' 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'Offset' 'tmp0'
+    )
+    ldarg.0
+    ldfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
+    stloc.0
+    ldloc.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    call instance int32 'Offset'::'apply'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'callableCapturesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'immutableCapture'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'callableCapturesKt$immutableCapture$1'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'mutableCapture'(int32 'start') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'value'
+    )
+    newobj instance void class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::.ctor()
+    stloc.0
+    ldloc.0
+    ldarg.0
+    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ldloc.0
+    newobj instance void 'callableCapturesKt$mutableCapture$1'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'unitMutableCapture'(int32 'start') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'value'
+    )
+    newobj instance void class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::.ctor()
+    stloc.0
+    ldloc.0
+    ldarg.0
+    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ldloc.0
+    newobj instance void 'callableCapturesKt$unitMutableCapture$1'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'genericMutableCapture'<'T'>(!!0 'initial', !!0 'replacement') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!!0> 'value'
+    )
+    newobj instance void class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!!0>::.ctor()
+    stloc.0
+    ldloc.0
+    ldarg.0
+    stfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!!0>::'element'
+    ldloc.0
+    ldarg.1
+    newobj instance void class 'callableCapturesKt$genericMutableCapture$1`1'<!!0>::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0>, !0)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'boundPrimitive'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'callableCapturesKt$boundPrimitive$1'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'boundMember'(int32 'delta') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'Offset'::.ctor(int32)
+    newobj instance void 'callableCapturesKt$boundMember$1'::.ctor(class 'Offset')
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldc.i4 42
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'immutableCapture'(int32)
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 41
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'mutableCapture'(int32)
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'callableCapturesKt'::'unitMutableCapture'(int32)
+    ldc.i4 42
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    pop
+    ldc.i4 0
+    ldc.i4 42
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'genericMutableCapture'<int32>(!!0, !!0)
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 41
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'boundPrimitive'(int32)
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 2
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'callableCapturesKt'::'boundMember'(int32)
+    ldc.i4 40
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
