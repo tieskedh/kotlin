@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.properties
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.types.Variance
 
 /**
@@ -29,6 +30,8 @@ import org.jetbrains.kotlin.types.Variance
  * interop concern and never appear in Kotlin-to-Kotlin signatures.
  */
 internal object DotNetRuntimeTypes {
+    val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
+
     private val unitClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Unit",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
@@ -53,6 +56,11 @@ internal object DotNetRuntimeTypes {
     private val mutableRefClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Runtime.Internal.MutableRef`1",
         typeParameterVariances = listOf(Variance.INVARIANT),
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val defaultConstructorMarkerClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.DefaultConstructorMarker",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -111,6 +119,15 @@ internal object DotNetRuntimeTypes {
         // Projections, including Function<*>, affect only Kotlin's logical view. A marker or
         // fixed-arity value still has the same erased physical interface and reference identity.
         return DotNetIlValueType.UserClass(classInfo)
+    }
+
+    fun mapCompilerRuntimeType(type: IrType): DotNetIlValueType.UserClass? {
+        val simpleType = type as? IrSimpleType ?: return null
+        val irClass = simpleType.classifier.owner as? IrClass ?: return null
+        if (irClass.fqNameWhenAvailable == DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
+            return DotNetIlValueType.UserClass(defaultConstructorMarkerClass)
+        }
+        return mapCallableType(type)
     }
 
     fun registerCallableFunctions(

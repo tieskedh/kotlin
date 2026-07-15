@@ -55,6 +55,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The initial stable
   foundational type was the deliberately memberless static marker
   `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
+  Compiler-generated default constructors use the public-metadata, sealed
+  `Kotlin.Runtime.Internal.DefaultConstructorMarker`, whose constructor is private and whose only
+  emitted value is null. This follows the JVM's collision-marker boundary while keeping the type
+  out of Kotlin-facing namespaces; it is a compiler/runtime ABI type, not a source API.
   The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
   for exact Kotlin-only exception identities and
   `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. The first
@@ -232,26 +236,30 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   another object identity or a backend-specific member generator. Fir2ir's shared
   `DataClassMembersGenerator` already supplies `equals`, `hashCode`, `toString`, `componentN`,
   and `copy` bodies. For a non-generic top-level or named nested class whose primary-constructor
-  properties have supported mapped types and no constructor default, those bodies compile through
-  ordinary class machinery:
+  properties have supported mapped types, those bodies compile through ordinary class machinery:
   `Equals(object)` reuses the existing System.Object virtual slot and uses the checked
   `isinst`/`castclass` path above; property equality and hash/string conversion reuse the
   established Any/nullable helpers; `componentN` is a field read; and `copy` calls the primary
   constructor. No generated member may fail independently: the shape gate rejects excluded data
   classes before registration, so the class disappears whole rather than exposing a partial
   generated API.
-  `copy`'s ordinary function defaults use the common/JVM masked-default algorithm after local
-  declaration lifting: a generated instance `copy$default` receives the original values plus one
-  `int32` mask per 32 defaultable parameters, tests bits with the intrinsic-registry `Int.and` ->
-  CLR `and`, resolves omitted values with `starg`, and calls the original member. The same model
-  supports defaults on ordinary top-level and non-interface class-member functions. Stated CLR
-  prototype deviation from the JVM's later staticization: a member stub remains a non-virtual
-  instance compiler helper, so its receiver stays the ordinary CLR `this` and the original
-  virtual call still owns dispatch. Constructor defaults stay on the old fail-loud call path: a
-  constructor stub needs a durable collision-safe marker ABI. Interface-owned defaults also stay
-  unlowered because an instance stub body on an interface would violate the Framework-compatible
-  all-abstract interface boundary. The cleaner retains those two kinds of default marker so later
-  gates/callers cannot silently mistake them for lowered support.
+  Defaults use the common/JVM masked-default algorithm after local declaration lifting. A generated
+  function helper receives the original values plus one `int32` mask per 32 value parameters,
+  tests bits with the intrinsic-registry `Int.and` -> CLR `and`, resolves omitted values with
+  `starg`, and calls the original function. The same model supports ordinary top-level and
+  non-interface class-member functions, including data-class `copy`. Stated CLR prototype
+  deviation from the JVM's later staticization: a member helper remains a non-virtual instance
+  compiler helper, so its receiver stays the ordinary CLR `this` and the original virtual call
+  still owns dispatch. A default constructor stub likewise repeats the original parameters, then
+  carries the masks and a final nullable runtime-owned `DefaultConstructorMarker`; omitted calls
+  pass typed placeholders, the masks, and null before invoking that synthetic `.ctor`. The marker
+  keeps a valid stub distinct from user constructors whose trailing `Int` parameters resemble
+  masks. CLR constructor identity is still only the mapped parameter list, so the member pre-pass
+  rejects a class whole when two original or generated constructors erase to one identity (for
+  example `String` versus `String?`) instead of letting map insertion or ILAsm choose a survivor.
+  Interface-owned defaults stay unlowered because an instance stub body on an interface would
+  violate the Framework-compatible all-abstract interface boundary. The cleaner retains only
+  those interface default markers so later gates/callers cannot silently mistake them for support.
   A named nested data class follows the established JVM-static-nested CLR model unchanged. It
   captures no outer instance and owns only its own type parameters, so a non-generic data class
   inside `Outer<T>` remains the independently non-generic metadata type
@@ -269,14 +277,17 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   for ordinary Any calls as well as array content.
   STAYS REJECTED, whole-class: generic data classes (CLR reified `isinst C<T>` would make equality
   stricter than Kotlin/JVM erased class identity), array shapes rejected by the primitive/generic
-  vector mapper, primary constructor defaults, local data classes, and data objects. Pins:
+  vector mapper, local data classes, and data objects. Pins:
   `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassArrays.kt`,
-  `ilText/dataClassesRejected.kt`, `ilText/defaultArgumentsRejected.kt`; runtime:
+  `ilText/constructorDefaultArguments.kt`, `ilText/dataClassesRejected.kt`,
+  `ilText/defaultArgumentsRejected.kt`; runtime:
   `box/dataClasses.kt`, `box/nestedDataClasses.kt`, `box/dataClassArrays.kt`,
-  `box/defaultArguments.kt`, and `box/anyMembers.kt`. `dataclass_s1`, `dataclass_s2`, and
-  `dataclass_array_probe_s1` assembled the relevant shapes under modern 10.0.9 and Framework 4.8
-  ILAsm; the array helper probe ran identically on both runtimes. The fresh full two-parser matrix
-  is 416/0/0/0 across eight suites.
+  `box/defaultArguments.kt`, `box/constructorDefaultArguments.kt`, and `box/anyMembers.kt`.
+  `dataclass_s1`, `dataclass_s2`, `dataclass_array_probe_s1`, and `ctor_default_probe_s1`
+  assembled the relevant shapes under modern 10.0.9 and Framework 4.8 ILAsm; the array helper
+  probe ran identically on both runtimes, and all four constructor consumer/runtime ILAsm
+  pairings preserved the default and real-overload paths. The fresh full two-parser matrix is
+  420/0/0/0 across eight suites.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
