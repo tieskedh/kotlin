@@ -69,6 +69,12 @@ internal object DotNetRuntimeLibraryHelpers {
      * `DotNetIlExpressionCodegen.emitStringValueExpression`: constant and non-constant values of
      * the same `Double` must print identically, so both are routed through this helper.
      */
+    /**
+     * Besides mutable capture storage and Double formatting, this text owns the universal Any
+     * operations. Their primitive branches are semantic, not optimizations: CLR boxed Boolean
+     * hashes/string text and boxed Double signed-zero/hash/string behavior differ from Kotlin's
+     * JVM-backed object contract, and Framework also preserves NaN payloads in Double.GetHashCode.
+     */
     val ilText: String = """
             |.namespace Kotlin.Runtime.Internal
             |{
@@ -82,6 +88,154 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .maxstack 1
             |      ldarg.0
             |      call instance void [mscorlib]System.Object::.ctor()
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class public abstract sealed auto ansi beforefieldinit Intrinsics
+            |         extends [mscorlib]System.Object
+            |  {
+            |    .method public hidebysig static bool 'AreEqual'(object, object) cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init (
+            |        [0] float64 'leftDouble',
+            |        [1] float64 'rightDouble'
+            |      )
+            |      ldarg.0
+            |      brtrue.s IL_leftNotNull
+            |      ldarg.1
+            |      ldnull
+            |      ceq
+            |      ret
+            |IL_leftNotNull:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Double
+            |      brfalse.s IL_objectEquals
+            |      ldarg.1
+            |      isinst [mscorlib]System.Double
+            |      brfalse.s IL_notEqual
+            |      ldarg.0
+            |      unbox.any [mscorlib]System.Double
+            |      stloc.0
+            |      ldarg.1
+            |      unbox.any [mscorlib]System.Double
+            |      stloc.1
+            |      ldloc.0
+            |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'DoubleToLongBits'(float64)
+            |      ldloc.1
+            |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'DoubleToLongBits'(float64)
+            |      ceq
+            |      ret
+            |IL_notEqual:
+            |      ldc.i4.0
+            |      ret
+            |IL_objectEquals:
+            |      ldarg.0
+            |      ldarg.1
+            |      callvirt instance bool [mscorlib]System.Object::Equals(object)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'HashCode'(object) cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init ([0] int64 'bits')
+            |      ldarg.0
+            |      brtrue.s IL_hashNotNull
+            |      ldc.i4.0
+            |      ret
+            |IL_hashNotNull:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Double
+            |      brfalse.s IL_hashBoolean
+            |      ldarg.0
+            |      unbox.any [mscorlib]System.Double
+            |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'DoubleToLongBits'(float64)
+            |      stloc.0
+            |      ldloc.0
+            |      conv.i4
+            |      ldloc.0
+            |      ldc.i4.s 32
+            |      shr.un
+            |      conv.i4
+            |      xor
+            |      ret
+            |IL_hashBoolean:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Boolean
+            |      brfalse.s IL_objectHash
+            |      ldarg.0
+            |      unbox.any [mscorlib]System.Boolean
+            |      brtrue.s IL_hashTrue
+            |      ldc.i4 1237
+            |      ret
+            |IL_hashTrue:
+            |      ldc.i4 1231
+            |      ret
+            |IL_objectHash:
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Object::GetHashCode()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static string 'StringValueOf'(object) cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      brtrue.s IL_valueNotNull
+            |      ldstr "null"
+            |      ret
+            |IL_valueNotNull:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Boolean
+            |      brfalse.s IL_stringDouble
+            |      ldarg.0
+            |      unbox.any [mscorlib]System.Boolean
+            |      brtrue.s IL_stringTrue
+            |      ldstr "false"
+            |      ret
+            |IL_stringTrue:
+            |      ldstr "true"
+            |      ret
+            |IL_stringDouble:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Double
+            |      brfalse.s IL_stringInt
+            |      ldarg.0
+            |      unbox.any [mscorlib]System.Double
+            |      call string 'Kotlin.Runtime.Internal.DoubleFormatting'::'DoubleToString'(float64)
+            |      ret
+            |IL_stringInt:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Int32
+            |      brtrue.s IL_stringInvariant
+            |      ldarg.0
+            |      isinst [mscorlib]System.Int64
+            |      brtrue.s IL_stringInvariant
+            |      ldarg.0
+            |      callvirt instance string [mscorlib]System.Object::ToString()
+            |      ret
+            |IL_stringInvariant:
+            |      ldarg.0
+            |      ldnull
+            |      call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+            |      callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static int64 'DoubleToLongBits'(float64) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.0
+            |      ceq
+            |      brtrue.s IL_bitsNotNaN
+            |      ldc.i8 0x7ff8000000000000
+            |      ret
+            |IL_bitsNotNaN:
+            |      ldarg.0
+            |      call int64 [mscorlib]System.BitConverter::DoubleToInt64Bits(float64)
             |      ret
             |    }
             |  }
@@ -316,4 +470,22 @@ internal object DotNetRuntimeLibraryHelpers {
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.DoubleFormatting".toIlIdentifier()}::" +
                 "${"DoubleToString".toIlIdentifier()}(float64)"
+
+    /** JVM `Intrinsics.areEqual` semantics: null-safe left-biased virtual equality. */
+    val areEqualCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"AreEqual".toIlIdentifier()}(object, object)"
+
+    /** Kotlin object-boundary hash semantics, including Boolean and boxed Double differences. */
+    val hashCodeCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"HashCode".toIlIdentifier()}(object)"
+
+    /** JVM `String.valueOf(Object)` semantics for templates, concatenation, and `println(Any?)`. */
+    val stringValueOfCallInstruction: String =
+        "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"StringValueOf".toIlIdentifier()}(object)"
 }

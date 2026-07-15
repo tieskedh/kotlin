@@ -10,10 +10,8 @@
 //   uniform CLR representation — `T` may instantiate to a value type needing `Nullable<T>` and
 //   to a reference type needing nothing — the deferred ABI problem of the hybrid nullability
 //   model; the declaration is rejected loudly, never given an ad-hoc representation;
-// - `==`/`===` on `T` operands and `x == null` on `T`: an unconstrained `T` may instantiate to
-//   a value type where the reference `ceq` is meaningless — no lifted story without constraints;
-// - string templates and Any member calls on `T` (`x.toString()` resolves to kotlin.Any, for
-//   which this backend has no member model);
+// - `===` on `T` operands: an unconstrained `T` may instantiate to a value type with no stable
+//   reference identity, and boxing would manufacture two unrelated references;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
@@ -22,8 +20,10 @@
 //   their INSTANCE field lives on the independently non-generic object type;
 // - generic (extension) properties: the property metadata/accessor model does not cover generic
 //   accessors;
-// Widening an unconstrained `T` to `Any?` is now supported through CLR `box !!n`; the erased
-// callable bridge needs that same general conversion for an open logical result type.
+// Widening an unconstrained `T` to `Any?`, structural `==`/`== null`, templates, and `toString`
+// are supported through CLR `box !!n` plus the System.Object Any foundation. Other unconstrained
+// member calls still need a declared bound. The erased callable bridge needs the same general
+// object-boundary conversion for an open logical result.
 
 open class Gen<T>(val v: T)
 
@@ -44,15 +44,7 @@ fun <T> nullableLocal(x: T): Int {
     return if (y == null) 0 else 1
 }
 
-fun <T> eq(a: T, b: T): Boolean = a == b
-
 fun <T> identity(a: T, b: T): Boolean = a === b
-
-fun <T> eqNull(a: T): Boolean = a == null
-
-fun <T> render(a: T): String = "$a"
-
-fun <T> callMember(a: T): String = a.toString()
 
 fun <T> widen(a: T): Any? = a
 

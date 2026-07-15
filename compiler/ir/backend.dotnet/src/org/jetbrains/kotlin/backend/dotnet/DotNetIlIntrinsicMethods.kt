@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrPackageFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeParameter
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrCall
@@ -121,7 +122,7 @@ internal class DotNetIlIntrinsicMethods(
         Key(kotlinFqn, stringFqn, "plus", listOf(anyFqn)) to DotNetIlStringPlusIntrinsic,
         Key(stringFqn, null, "plus", listOf(anyFqn)) to DotNetIlStringPlusIntrinsic,
         Key(kotlinFqn, anyFqn, "toString", emptyList()) to DotNetIlToStringIntrinsic,
-        Key(anyFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
+        Key(anyFqn, null, "toString", emptyList()) to DotNetIlAnyToStringIntrinsic,
         Key(intFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(longFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
         Key(doubleFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
@@ -416,11 +417,23 @@ internal class DotNetIlIntrinsicMethods(
     fun getIntrinsic(symbol: IrFunctionSymbol): DotNetIlIntrinsicMethod? {
         val function = symbol.owner
         val name = function.name.asString()
-        val byName = intrinsicsMap[name] ?: return null
-        val receiverFqName = function.computeExtensionReceiverFqName()
-        val byReceiver = byName[receiverFqName] ?: return null
-        val ownerFqName = function.computeOwnerFqName() ?: return null
-        return byReceiver[Key(ownerFqName, receiverFqName, name, function.computeValueParameterFqNames())]
+        val registered = intrinsicsMap[name]?.let { byReceiverName ->
+            val receiverFqName = function.computeExtensionReceiverFqName()
+            val ownerFqName = function.computeOwnerFqName() ?: return@let null
+            byReceiverName[receiverFqName]
+                ?.get(Key(ownerFqName, receiverFqName, name, function.computeValueParameterFqNames()))
+        }
+        if (registered != null) return registered
+
+        // Calls through fake overrides and user overrides are owned by that class rather than by
+        // kotlin.Any, so an exact registry key cannot name them. The JVM resolves those calls to
+        // java.lang.Object slots; select the CLR counterpart from the transitive override chain.
+        return when ((function as? IrSimpleFunction)?.dotNetAnyMethodOrNull()) {
+            DotNetAnyMethod.EQUALS -> DotNetIlAnyEqualsIntrinsic
+            DotNetAnyMethod.HASH_CODE -> DotNetIlAnyHashCodeIntrinsic
+            DotNetAnyMethod.TO_STRING -> DotNetIlAnyToStringIntrinsic
+            null -> null
+        }
     }
 
     data class Key(
@@ -871,8 +884,9 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
  * JVM backend's Ieee754Equals intrinsic. User-class instances support reference equality
  * (`===`, a `ceq` on the object references) and `==` against the `null` literal, which Kotlin
  * defines as a pure reference check that never calls `equals` (the JVM backend's `Equals`
- * intrinsic special-cases `isNullConst` operands into an `ifnull` check the same way); general
- * `==` between two instances is rejected until an Any.equals model exists.
+ * intrinsic special-cases `isNullConst` operands into an `ifnull` check the same way). General
+ * reference-shaped `==` calls the runtime's null-safe, left-biased `AreEqual(object, object)`, the
+ * direct CLR counterpart of JVM `Intrinsics.areEqual(Object, Object)`.
  *
  * NULLABLE-PRIMITIVE operands (`Int?` and friends, the hybrid `Nullable<T>` representation) get
  * null-aware structural `==` without any boxing — the JVM precedent is the
@@ -894,7 +908,9 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
  * checks on boxed primitives for this reason).
  *
  * `Any?`-typed operands are reference-shaped storage: `===` (and `== null`) is the type-agnostic
- * reference `ceq`; general `==` stays rejected (no Any.equals model).
+ * reference `ceq`; general `==` uses `AreEqual`. A nullable primitive compared through an Any
+ * boundary boxes to the CLR's boxed-underlying-or-null representation before the same helper,
+ * while exact nullable-primitive pairs retain their existing unboxed lifted comparison.
  * Array operands are a closed exception to that general reference rule: Kotlin primitive and
  * generic arrays inherit identity-based `Any.equals`, so both `==` and `===` use reference
  * `ceq`. Structural comparison remains the separate, currently unsupported `contentEquals`
@@ -915,17 +931,29 @@ private class DotNetIlEqualityIntrinsic(
             ?: dotNetUnsupported("missing right operand of an equality comparison")
         val leftType = codegen.toDotNetIlValueType(left.type)
         val rightType = codegen.toDotNetIlValueType(right.type)
-        // Every equality with a type-parameter operand stays rejected: an unconstrained or
-        // interface-bound `T` may instantiate to a value type, where reference `ceq` is
-        // meaningless, while general `==` on a class-bound `T` still needs the missing Any.equals
-        // model. Stage-2 bound-member dispatch deliberately does not guess either equality shape.
+        // Structural equality on an open T uses the universal object fallback: each value is
+        // boxed if its CLR instantiation is value-shaped, then AreEqual dispatches its Equals
+        // implementation. Identity remains rejected because boxing would manufacture references
+        // rather than preserve a stable identity for value-type instantiations.
         if (leftType is DotNetIlValueType.TypeParameter || rightType is DotNetIlValueType.TypeParameter) {
-            dotNetUnsupported(
-                "equality comparison with a type-parameter-typed operand is not supported " +
-                        "(interface-bound parameters can be value types, and general equality requires Any.equals)"
-            )
+            if (referenceEquality) {
+                dotNetUnsupported(
+                    "identity comparison with a type-parameter-typed operand is not supported " +
+                            "(a CLR value-type instantiation has no stable reference identity)"
+                )
+            }
+            emitObjectEquality(codegen, left, right)
+            return true
         }
         if (leftType is DotNetIlValueType.NullableValue || rightType is DotNetIlValueType.NullableValue) {
+            val exactLiftedShape = left.isDotNetNullLike() || right.isDotNetNullLike() ||
+                    (leftType is DotNetIlValueType.NullableValue && leftType == rightType) ||
+                    (leftType is DotNetIlValueType.NullableValue && rightType == leftType.elementType) ||
+                    (rightType is DotNetIlValueType.NullableValue && leftType == rightType.elementType)
+            if (!referenceEquality && !exactLiftedShape && leftType != null && rightType != null) {
+                emitObjectEquality(codegen, left, right)
+                return true
+            }
             emitNullablePrimitiveEquality(codegen, left, right, leftType, rightType)
             return true
         }
@@ -946,8 +974,14 @@ private class DotNetIlEqualityIntrinsic(
             codegen.emit("ldc.i4.0", pushes = 1)
             return true
         }
-        val operandType = call.dotNetEqualityOperandType(codegen)
-            ?: dotNetUnsupported("equality comparison of unsupported operand types")
+        val operandType = call.dotNetEqualityOperandType(codegen) ?: if (
+            !referenceEquality && leftType != null && rightType != null
+        ) {
+            emitObjectEquality(codegen, left, right)
+            return true
+        } else {
+            dotNetUnsupported("equality comparison of unsupported operand types")
+        }
 
         codegen.emitExpression(left, operandType)
         codegen.emitExpression(right, operandType)
@@ -968,7 +1002,7 @@ private class DotNetIlEqualityIntrinsic(
             // Kotlin primitive arrays inherit identity-based Any.equals on the mature JVM
             // target; CLR vectors inherit the same identity behavior from System.Array/Object.
             // Therefore both `==` and `===` are the type-agnostic reference `ceq` here, with no
-            // general Any.equals model required (structural comparison remains contentEquals).
+            // helper call required (structural comparison remains contentEquals).
             is DotNetIlValueType.PrimitiveArray,
             is DotNetIlValueType.GenericArray,
                 -> codegen.emit("ceq", pops = 2, pushes = 1)
@@ -979,18 +1013,13 @@ private class DotNetIlEqualityIntrinsic(
                 // `object`-typed operands included, nullprobe_s8). `x == null` shares it: Kotlin
                 // defines a null-literal comparison as a pure reference check that never calls
                 // `equals` (JVM precedent: the Equals intrinsic rewrites `isNullConst` operands
-                // to an `ifnull` check), so no Any.equals model is involved. General instance
-                // `==` needs that model and is rejected loudly — never silently downgraded to a
-                // reference comparison. Mapped exception types follow the same rules; `===` on
-                // them is what makes rethrow identity observable. An INSTANTIATED generic class
-                // is an ordinary reference type and follows the UserClass rules unchanged (the
-                // reference `ceq` is type-agnostic).
+                // to an `ifnull` check). General `==` routes through the Kotlin runtime helper,
+                // which null-checks the left side before virtual System.Object::Equals dispatch.
+                // Mapped exceptions and instantiated generic classes follow the same rules.
                 if (referenceEquality || left.isNullConst() || right.isNullConst()) {
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
-                    dotNetUnsupported(
-                        "'==' between class instances is not supported yet (requires the Any.equals model); '===' compares references"
-                    )
+                    codegen.emit(DotNetRuntimeLibraryHelpers.areEqualCallInstruction, pops = 2, pushes = 1)
                 }
             }
             is DotNetIlValueType.NullableValue ->
@@ -999,6 +1028,17 @@ private class DotNetIlEqualityIntrinsic(
                 error("Internal .NET backend error: type-parameter equality operands rejected above")
         }
         return true
+    }
+
+    /** Boxes/widens two operands to System.Object and calls the null-safe runtime helper. */
+    private fun emitObjectEquality(
+        codegen: DotNetIlExpressionCodegen,
+        left: IrExpression,
+        right: IrExpression,
+    ) {
+        codegen.emitExpression(left, DotNetIlValueType.Object)
+        codegen.emitExpression(right, DotNetIlValueType.Object)
+        codegen.emit(DotNetRuntimeLibraryHelpers.areEqualCallInstruction, pops = 2, pushes = 1)
     }
 
     /** The nullable-primitive `==` shapes; see the class KDoc. Pushes the `bool` result. */
@@ -1683,6 +1723,91 @@ private object DotNetIlToStringIntrinsic : DotNetIlIntrinsicMethod() {
 }
 
 /**
+ * An explicit Kotlin `Any.equals` call, including calls through fake/user overrides. Kotlin Any
+ * is physically System.Object, so the ordinary path uses the runtime's null-safe object-boundary
+ * helper; that helper preserves Kotlin boxed-Double semantics before falling through to the
+ * existing virtual slot. A `super.equals` call deliberately uses non-virtual `call`, matching the
+ * backend's established superclass dispatch rule.
+ */
+private object DotNetIlAnyEqualsIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing receiver of 'Any.equals'")
+        val argument = call.arguments[1]
+            ?: dotNetUnsupported("missing argument of 'Any.equals'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        codegen.emitExpression(argument, DotNetIlValueType.Object)
+        if (call.superQualifierSymbol == null) {
+            codegen.emit(DotNetRuntimeLibraryHelpers.areEqualCallInstruction, pops = 2, pushes = 1)
+        } else {
+            codegen.emit(
+                "call instance bool ${CORE_LIB_REF}System.Object::Equals(object)",
+                pops = 2,
+                pushes = 1,
+            )
+        }
+        return true
+    }
+}
+
+/** Kotlin `Any.hashCode`, with boxed primitive differences normalized by the runtime helper. */
+private object DotNetIlAnyHashCodeIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing receiver of 'Any.hashCode'")
+        codegen.emitExpression(receiver, DotNetIlValueType.Object)
+        if (call.superQualifierSymbol == null) {
+            codegen.emit(DotNetRuntimeLibraryHelpers.hashCodeCallInstruction, pops = 1, pushes = 1)
+        } else {
+            codegen.emit(
+                "call instance int32 ${CORE_LIB_REF}System.Object::GetHashCode()",
+                pops = 1,
+                pushes = 1,
+            )
+        }
+        return true
+    }
+}
+
+/** Kotlin `Any.toString` bound to the existing virtual `System.Object::ToString()` slot. */
+private object DotNetIlAnyToStringIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.String || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing receiver of 'Any.toString'")
+        if (call.superQualifierSymbol == null) {
+            // FIR can keep the Any symbol even when the statically known receiver is primitive.
+            // Reuse the type-directed Kotlin conversion so Boolean stays lowercase and Double
+            // keeps Kotlin's formatting; reference-shaped receivers still dispatch through
+            // System.Object::ToString via the runtime's null-safe StringValueOf helper.
+            codegen.emitStringValueExpression(receiver)
+        } else {
+            codegen.emitExpression(receiver, DotNetIlValueType.Object)
+            codegen.emit(
+                "call instance string ${CORE_LIB_REF}System.Object::ToString()",
+                pops = 1,
+                pushes = 1,
+            )
+        }
+        return true
+    }
+}
+
+/**
  * `Throwable.message` -> a `callvirt` of the corelib `System.Exception::get_Message()`
  * (probe-verified). Documented platform delta: Kotlin's `message` keeps its `String?` type, but
  * the CLR `Message` property is never null for mapped exceptions — a no-arg `Exception()` yields
@@ -1792,12 +1917,13 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         // comparison sees two sibling classes) widen to the FIRST common supertype of the left
         // operand's supertype walk — deterministic (allSupertypes' breadth-first walk: direct
         // base class, then direct interfaces in declaration order, then the next level) and
-        // free for both sides (reference upcasts, ifaceprobe_s7). Operands with no common
-        // supertype stay rejected loudly (their only common supertype would need an Any model);
-        // both halves are pinned by ilText/interfaceEqualityWidening.kt.
+        // free for both sides (reference upcasts, ifaceprobe_s7). With the Any foundation, two
+        // unrelated reference-shaped interface views fall back to System.Object, Kotlin Any's
+        // physical root; the widening is still instruction-free and identity remains `ceq`.
         leftType.isDotNetUserClassLike() && rightType.isDotNetUserClassLike() ->
             leftType!!.dotNetAllSupertypes()
                 .firstOrNull { rightType!!.isDotNetAssignableTo(it) }
+                ?: DotNetIlValueType.Object
         else -> null
     }
 }

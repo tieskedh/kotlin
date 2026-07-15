@@ -351,7 +351,9 @@ internal class DotNetIlExpressionCodegen(
      * ([emitBooleanToString] keeps Kotlin's lowercase `"true"`/`"false"` rendering; `Int`/`Long`
      * values go through [emitBoxedInvariantToString], the invariant-culture rendering; `Char`
      * uses the static culture-free `Char::ToString(char)`; `Double` goes through
-     * [emitDoubleValueToString], the shared Kotlin-parity rendering helper).
+     * [emitDoubleValueToString], the shared Kotlin-parity rendering helper). Reference-shaped
+     * values and open type parameters use the runtime's null-safe `StringValueOf(object)`, the
+     * CLR counterpart of the JVM backend's `String.valueOf(Object)` path.
      */
     fun emitStringValueExpression(expression: IrExpression?) {
         when {
@@ -397,21 +399,24 @@ internal class DotNetIlExpressionCodegen(
                     emitPrimitiveValueToString(valueType.elementType)
                     methodContext.emitLabel(endLabel)
                 }
-                DotNetIlValueType.Object ->
-                    dotNetUnsupported("string conversion of Any-typed values is not supported yet (no Any.toString model)")
-                is DotNetIlValueType.UserClass, is DotNetIlValueType.GenericInstance ->
-                    dotNetUnsupported("string conversion of class instances is not supported yet (no Any.toString model)")
-                is DotNetIlValueType.PrimitiveArray, is DotNetIlValueType.GenericArray ->
-                    dotNetUnsupported("string conversion of arrays is not supported yet (no array toString model)")
-                is DotNetIlValueType.MappedClass ->
-                    dotNetUnsupported("string conversion of an exception type is not supported yet (no Any.toString model)")
-                // Even a constrained `T` inherits this member from Any, whose member model is
-                // deliberately still absent; user-declared bound members are handled by emitCall.
-                is DotNetIlValueType.TypeParameter ->
-                    dotNetUnsupported(
-                        "string conversion of a type-parameter-typed value is not supported " +
-                                "(no Any.toString model)"
+                DotNetIlValueType.Object,
+                is DotNetIlValueType.UserClass,
+                is DotNetIlValueType.GenericInstance,
+                is DotNetIlValueType.PrimitiveArray,
+                is DotNetIlValueType.GenericArray,
+                is DotNetIlValueType.MappedClass,
+                is DotNetIlValueType.TypeParameter,
+                    -> {
+                    // Every reference shape widens instruction-free; a reified open T is boxed.
+                    // The helper returns "null" for a null reference and otherwise dispatches
+                    // System.Object::ToString virtually, including to Kotlin overrides.
+                    emitExpression(expression, DotNetIlValueType.Object)
+                    methodContext.emit(
+                        DotNetRuntimeLibraryHelpers.stringValueOfCallInstruction,
+                        pops = 1,
+                        pushes = 1,
                     )
+                }
                 // A `null` mapping (unsupported type) also lands here so that emitExpression
                 // reports the standard unsupported-construct diagnostic.
                 DotNetIlValueType.String, null -> {
