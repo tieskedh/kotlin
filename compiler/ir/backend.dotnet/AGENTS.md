@@ -267,9 +267,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   masks. CLR constructor identity is still only the mapped parameter list, so the member pre-pass
   rejects a class whole when two original or generated constructors erase to one identity (for
   example `String` versus `String?`) instead of letting map insertion or ILAsm choose a survivor.
-  Interface-owned defaults stay unlowered because an instance stub body on an interface would
-  violate the Framework-compatible all-abstract interface boundary. The cleaner retains only
-  those interface default markers so later gates/callers cannot silently mistake them for support.
+  Interface-owned argument defaults use the JVM `DefaultImpls` ownership model described in the
+  interface section below. Their masked bodies live in a nested helper rather than on the
+  interface, so the source slot stays abstract and the Framework-compatible interface shape does
+  not change.
   A named nested data class follows the established JVM-static-nested CLR model unchanged. It
   captures no outer instance and owns only its own type parameters, so a non-generic data class
   inside `Outer<T>` remains the independently non-generic metadata type
@@ -806,6 +807,23 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   runtime capture/order/dispatch, and an evicted-interface cascade are pinned by
   `ilText/interfaceDelegation.kt`, `box/interfaceDelegation.kt`, and
   `ilText/interfaceDelegationRejected.kt`.
+  INTERFACE ARGUMENT DEFAULTS follow the JVM's pre-DIM `DefaultImpls` split. Common lowering first
+  creates the ordinary masked dispatcher; `DotNetInterfaceDefaultArgumentsLowering` then moves
+  each real interface dispatcher into one public, compiler-reserved nested `<DefaultImpls>` class.
+  Its static `$default` method takes the interface receiver as its first ordinary parameter,
+  evaluates defaults and masks in source order, and calls the unchanged abstract interface slot
+  through `callvirt`, so the implementing override still owns dispatch. The helper is public CLR
+  metadata because separately compiled callers must eventually be able to reference it, but its
+  angle-bracket name is not a Kotlin source declaration or callable identity. A generic
+  interface's owner parameters become invariant generic METHOD parameters on every helper method
+  (including copied constraints); the non-generic nested helper therefore captures no enclosing
+  CLR construction. Calls derive those arguments from the receiver's instantiated interface view,
+  then append ordinary method arguments. Direct class/interface, inherited, constrained,
+  delegated, variant, bounded, generic-method, member-extension, and nested-interface shapes all
+  share that path. `interfacedefaultprobe_s1` assembled and ran the generic nested-helper shape
+  under modern 10.0.9 and Framework 4.8 ILAsm. Pins: `ilText/interfaceDefaultArguments.kt`,
+  `box/interfaceDefaultArguments.kt`, `ilText/defaultArgumentsRejected.kt`, and
+  `ilText/interfaceDefaultBodyRejected.kt`.
   EVICTION: an evicted interface cascades whole-class to every
   implementing class and every sub-interface — the `implements` list is re-resolved from the
   LIVE class map at the top of every render round with chained reasons, the interface arm of
@@ -813,8 +831,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/interfaceDefaultBodyRejected.kt`); evicting an implementer never affects the
   interface. A rejected nested declaration removes only its metadata subtree and real dependents;
   the interface parent and independent siblings survive. STAYS REJECTED, loudly,
-  whole-interface/whole-class: interface members WITH bodies —
-  default methods and accessors with bodies (modern CoreCLR supports DIM, s8/`dimprobe_s1`, but
+  whole-interface/whole-class: SOURCE interface members WITH executable bodies —
+  default methods and accessors with bodies (distinct from compiler-owned argument dispatchers;
+  modern CoreCLR supports DIM, s8/`dimprobe_s1`, but
   Framework 4.8 ILAsm rejects the same body; lifting this would raise the backend's runtime
   floor), private callable interface members, companions on generic interfaces,
   `fun interface` (no SAM-conversion model),

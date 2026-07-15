@@ -10,13 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.DefaultParameterCleaner
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
-import org.jetbrains.kotlin.ir.declarations.IrClass
-import org.jetbrains.kotlin.ir.declarations.IrDeclaration
-import org.jetbrains.kotlin.ir.declarations.IrFunction
-import org.jetbrains.kotlin.ir.declarations.IrValueParameter
-import org.jetbrains.kotlin.ir.expressions.IrFunctionAccessExpression
 import org.jetbrains.kotlin.ir.types.IrType
-import org.jetbrains.kotlin.ir.util.isInterface
 
 /**
  * The common/JVM masked-default shape for ordinary functions and member functions. Missing
@@ -35,52 +29,24 @@ internal class DotNetDefaultArgumentFunctionFactory(context: DotNetBackendContex
 
 internal class DotNetDefaultArgumentStubGenerator(
     context: DotNetBackendContext,
-    private val factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
+    factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
 ) :
     DefaultArgumentStubGenerator<DotNetBackendContext>(
         context,
         factory,
         skipExternalMethods = true,
-    ) {
-    override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? {
-        if (declaration is IrFunction && declaration.defaultOwnerIsInterface(factory)) return null
-        return super.transformFlat(declaration)
-    }
-}
+    )
 
 internal class DotNetDefaultParameterInjector(
     context: DotNetBackendContext,
-    private val dotNetFactory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
+    factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
 ) :
     DefaultParameterInjector<DotNetBackendContext>(
         context,
-        dotNetFactory,
+        factory,
         skipExternalMethods = true,
-    ) {
-    override fun shouldReplaceWithSyntheticFunction(functionAccess: IrFunctionAccessExpression): Boolean =
-        super.shouldReplaceWithSyntheticFunction(functionAccess) &&
-                !functionAccess.symbol.owner.defaultOwnerIsInterface(dotNetFactory)
-}
+    )
 
 internal class DotNetDefaultParameterCleaner(
     context: DotNetBackendContext,
-    private val factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
-) : DefaultParameterCleaner(context) {
-    // Interface defaults are intentionally not lowered. Retain their IR marker so their callers
-    // stay on the fail-loud path instead of mistaking the abstract declaration for full support.
-    override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? =
-        if (declaration is IrValueParameter && declaration.defaultValue != null &&
-            (declaration.parent as? IrFunction)?.defaultOwnerIsInterface(factory) == true
-        ) {
-            null
-        } else {
-            super.transformFlat(declaration)
-        }
-}
-
-private fun IrFunction.defaultOwnerIsInterface(factory: DotNetDefaultArgumentFunctionFactory): Boolean =
-    (factory.findBaseFunctionWithDefaultArgumentsFor(
-        this,
-        skipInlineMethods = true,
-        skipExternalMethods = true,
-    )?.parent as? IrClass)?.isInterface == true
+) : DefaultParameterCleaner(context)

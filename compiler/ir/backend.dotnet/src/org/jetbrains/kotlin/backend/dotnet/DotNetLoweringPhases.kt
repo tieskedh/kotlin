@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericDataClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInterfaceDefaultArgumentsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassTypeParametersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
@@ -56,6 +57,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetDefaultArgumentStubGenerator,
     ::DotNetDefaultParameterInjector,
     ::DotNetDefaultParameterCleaner,
+    // JVM DefaultImpls ownership without CLR DIM: keep interface slots abstract, move their
+    // masked dispatchers into a compiler-reserved nested helper, and redirect calls to its static
+    // methods with the interface receiver explicit. This preserves the Framework 4.8 floor.
+    ::DotNetInterfaceDefaultArgumentsLowering,
     // CLR generics reify C<T>, unlike the erased class identity used by generated data-class
     // equality on the mature targets. Preserve reified storage/signatures, but give each generic
     // data class a private non-generic equality view before later lowerings inspect its members.

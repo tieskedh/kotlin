@@ -7,6 +7,8 @@
 // file facade survives here.
 interface WithBody {
     fun f(): Int = 1
+
+    fun withDefault(value: Int = 2): Int = value
 }
 
 interface SubOfBody : WithBody
