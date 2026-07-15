@@ -188,7 +188,8 @@ The repository pins are:
 
 This draft changes only a generic data class whose `equals` body was compiler-generated. A data
 class with a user-written equality implementation keeps that implementation and receives no
-erased view. This draft does not enable local data classes, data objects, unsupported property
-types, general generic `is`/`as` operations, Kotlin metadata serialization, or CLR-facing export
-projections. Those features must not weaken the reified generic representation or repurpose this
-private equality mechanism as a public protocol.
+erased view. This draft does not define local data classes, data-object equality, unsupported
+property types, general generic `is`/`as` operations, Kotlin metadata serialization, or CLR-facing
+export projections. Data objects are handled by a separate singleton slice and do not consume the
+private equality view. Later features must not weaken the reified generic representation or
+repurpose this private equality mechanism as a public protocol.

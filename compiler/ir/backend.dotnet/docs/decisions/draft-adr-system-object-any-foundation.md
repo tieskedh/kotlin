@@ -132,7 +132,7 @@ results.
 Compiler promotion requires exact-IL pins for slot names and flags, runtime boxes for virtual and
 null-safe behavior, and continued assembly under both ILAsm implementations.
 
-## Later consumers: bounded and generic data classes
+## Later consumers: bounded/generic data classes and data objects
 
 A later slice now consumes this foundation for non-generic top-level and named nested data classes
 with supported primary-constructor properties. It does not revise the Any decision. Fir2ir's shared
@@ -150,17 +150,24 @@ ordinary members, but generated equality cannot use CLR's stricter `isinst C<T>`
 later generic-data-class decision adds one private, non-generic nested equality view per data-class
 declaration and compares its object-valued components through the same `AreEqual` boundary. This
 is a class-local implementation detail, not another `Any` identity or runtime API; see
-`docs/decisions/draft-adr-generic-data-class-equality.md`. Local data classes and data objects
-remain gated. Unsupported classes are still removed whole before they can expose a partial
-generated API.
+`docs/decisions/draft-adr-generic-data-class-equality.md`.
+
+A later data-object slice also consumes the foundation without adding a representation. It reuses
+the ordinary sealed singleton class, private constructor, public static initonly `INSTANCE`, and
+static-nested metadata model. The shared generated `Equals(object)` accepts any instance of the
+same declaration, including one produced through hostile reflection or serialization;
+`GetHashCode()` returns the compile-time fully-qualified-name hash, and `ToString()` returns the
+simple declaration name. The object-supertype restriction remains a separate general object-model
+boundary. Local data classes remain gated, and unsupported classes are still removed whole before
+they can expose a partial generated API.
 
 ## Deliberate boundaries
 
-This foundation does not by itself enable data objects, unsupported data-class families, interface
-redeclarations of Any members, Kotlin-owned exception classes, general type tests/casts, or a
-complete foreign-object import model. The later bounded data-class consumer above adds only
-non-generic module-class tests/downcasts. Generic `T : Any` constraints remain deferred: mapping
-that bound to CLR `class` would
+This foundation does not by itself enable unsupported data-class families, interface
+redeclarations of Any members, general object supertypes, Kotlin-owned exception classes, general
+type tests/casts, or a complete foreign-object import model. The later bounded data-class consumer
+above adds only non-generic module-class tests/downcasts. Generic `T : Any` constraints remain
+deferred: mapping that bound to CLR `class` would
 incorrectly reject value-type instantiations, while erasing it entirely would admit null. Those
 features may consume this decision in later slices, but must keep the one physical System.Object
 root. Default `System.Object.ToString()` text is platform-specific and is not an ABI promise.
