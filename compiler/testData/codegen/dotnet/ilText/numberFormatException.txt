@@ -1,0 +1,101 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'numberFormatException' {}
+.module 'main-numberFormatException.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.numberFormatExceptionKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [mscorlib]System.ArgumentException 'asArgument'(string 'message') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor(string)
+    ret
+  }
+  .method public hidebysig static string 'messageThroughParent'(string 'message') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call class [mscorlib]System.ArgumentException 'test.numberFormatExceptionKt'::'asArgument'(string)
+    callvirt instance string [mscorlib]System.Exception::get_Message()
+    ret
+  }
+  .method public hidebysig static string 'exactCatch'(string 'message') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] string '<try>',
+      [1] class [Kotlin.Runtime]'Kotlin.NumberFormatException' 'failure'
+    )
+    .try {
+      ldarg.0
+      newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor(string)
+      throw
+    }
+    catch [Kotlin.Runtime]'Kotlin.NumberFormatException' {
+      stloc.1
+      ldloc.1
+      callvirt instance string [mscorlib]System.Exception::get_Message()
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'parentCatch'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] string '<try>',
+      [1] class [mscorlib]System.ArgumentException '<unused var>'
+    )
+    .try {
+      newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor()
+      throw
+    }
+    catch [mscorlib]System.ArgumentException {
+      stloc.1
+      ldstr "argument"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static class [mscorlib]System.Exception 'asThrowable'() cil managed
+  {
+    .maxstack 1
+    ldstr "root"
+    newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor(string)
+    ret
+  }
+  .method public hidebysig static bool 'hasNoDefaultState'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.NumberFormatException' 'failure'
+    )
+    newobj instance void [Kotlin.Runtime]'Kotlin.NumberFormatException'::.ctor()
+    stloc.0
+    ldloc.0
+    callvirt instance string [mscorlib]System.Exception::get_Message()
+    ldnull
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    ldloc.0
+    callvirt instance class [mscorlib]System.Exception [mscorlib]System.Exception::get_InnerException()
+    ldnull
+    ceq
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.0
+IL_whenEnd_0:
+    ret
+  }
+}

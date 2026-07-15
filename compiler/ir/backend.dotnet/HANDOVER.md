@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(exception fault-translation/catch-policy continuation).
+(Kotlin Error identity/fault-policy continuation).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -9,12 +9,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 - Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
   (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
-  (`fb6d43448`), and the System.Object Any foundation (`4a78533ad`), followed by the hybrid
-  Kotlin/CLR exception-identity foundation in the current functional slice.
+  (`fb6d43448`), the System.Object Any foundation (`4a78533ad`), and the hybrid Kotlin/CLR
+  exception-identity foundation (`a4a862e45`), followed by exact source-visible
+  NumberFormatException identity in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **390 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **394 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -481,8 +482,24 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parent catches, null default message, cause identity, and the boundary from a foreign
   `InvalidOperationException`. The draft rationale is
   `docs/decisions/draft-adr-hybrid-exception-identity.md`; the rejection pin keeps
-  `RuntimeException`, `Error`, and `NumberFormatException` unavailable until their distinct catch
-  policies are coherent. The fresh full DotNet suite is 390/0/0/0 across eight XML files.
+  `RuntimeException` and `Error` unavailable until their distinct catch policies are coherent.
+  The fresh full DotNet suite is 390/0/0/0 across eight XML files.
+- The exact NumberFormatException continuation is the first source-visible runtime-owned mapping.
+  It follows the JVM/Native two-constructor surface, but uses the CLR-specific physical hierarchy
+  `Kotlin.NumberFormatException : System.ArgumentException`: this preserves exact identity plus
+  Kotlin's already-supported `IllegalArgumentException` value/catch edge, whereas
+  `System.FormatException` is not an ArgumentException. A private nullable message field and reused
+  virtual Message slot preserve the Kotlin null default through parent-typed calls. Mapped entries
+  now record physical supertype refs, so the backend verifier handles the exact class's
+  instruction-free ArgumentException/Exception widenings generically. A foreign FormatException
+  remains distinct pending an explicit parsing/interop translation policy. Direct user use of
+  NoWhenBranchMatchedException was audited and deliberately not exposed: common Kotlin deprecates
+  it at error level as a compiler implementation exception. `exceptionabi_s2` assembled both
+  consumer/runtime combinations with both ILAsm versions and ran all eight combinations across
+  CoreCLR 10.0.9 and Framework 4.8. Exact IL and box pins cover constructors, exact/parent catches,
+  parent/root value widening, identity, virtual message dispatch, and default message/cause state.
+  The new exact golden assembles under both ILAsm versions, the embedded-runtime box also passes
+  through the Framework toolchain selection, and the fresh full DotNet suite is 394/0/0/0.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -565,13 +582,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Design the next exception catch/fault boundary before migrating another class.** Audit whether
-   the backend should translate native CLR faults at their operation sites or lower selected Kotlin
-   catches to unions/filters. Use `NumberFormatException`, negative-array-size failure, and the
-   mapped children of `RuntimeException` as concrete adversarial cases. Do not enable source
-   `RuntimeException` or move a BCL mapping until every affected native fault and parent catch keeps
-   its Kotlin behavior. Fuller callable reflection remains later work rather than expanding the
-   minimal name slice opportunistically.
+1. **Audit an exact source-visible Kotlin Error identity.** A Kotlin-created `Error` can own an
+   exact runtime class below System.Exception and preserve the currently supported Throwable edge,
+   but raw CLR fatal exceptions must remain distinct unless an explicit interop translation policy
+   is chosen. Probe all four mature constructor forms and nullable message/cause behavior; do not
+   map Error to deprecated `System.SystemException` or claim it catches OOM/stack-overflow faults.
+   Keep source `RuntimeException` rejected until its mapped-child catch policy is coherent. Fuller
+   callable reflection remains later work rather than expanding the minimal name slice
+   opportunistically.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

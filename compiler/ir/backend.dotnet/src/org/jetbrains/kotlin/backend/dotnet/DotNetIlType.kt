@@ -178,10 +178,11 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
 
     /**
      * A Kotlin exception class type-mapped onto a CLR exception type (see
-     * [DotNetMappedExceptions]). [ilTypeRef] is the bare corelib-qualified reference — the
-     * [CORE_LIB_REF]-prefixed `System.X`, the operand form a `catch` clause takes — while
-     * [nameInSignature] prefixes it with `class` for signature positions; both spellings are
-     * ilasm-probe-verified. A nullable `T?` maps to the same reference type, like [UserClass].
+     * [DotNetMappedExceptions]). [ilTypeRef] is the bare assembly-qualified reference — either a
+     * [CORE_LIB_REF]-prefixed `System.X` or a `Kotlin.Runtime` exact type, and the operand form a
+     * `catch` clause takes. [nameInSignature] prefixes it with `class` for signature positions;
+     * both spellings are ilasm-probe-verified. A nullable `T?` maps to the same reference type,
+     * like [UserClass].
      */
     data class MappedClass(val ilTypeRef: kotlin.String) : DotNetIlValueType("class $ilTypeRef")
 

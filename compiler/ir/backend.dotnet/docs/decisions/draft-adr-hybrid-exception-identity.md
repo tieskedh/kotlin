@@ -1,6 +1,6 @@
 # Draft ADR: Hybrid Kotlin and CLR exception identity
 
-- Status: **Draft candidate; first Kotlin-owned identity implemented in the prototype**
+- Status: **Draft candidate; first compiler-only and source-visible identities implemented**
 - Date: 2026-07-15
 - Scope: Kotlin exception ownership, CLR fault interop, and runtime hierarchy
 
@@ -29,7 +29,7 @@ The exception foundation must:
 
 1. keep raw CLR faults catchable through the Kotlin types that deliberately model them;
 2. provide stable Kotlin-owned identities where no faithful BCL type exists;
-3. preserve the logical Kotlin hierarchy for every runtime-owned type;
+3. preserve every supported logical Kotlin parent edge for a runtime-owned type;
 4. avoid broadening a Kotlin catch silently or allowing a logical child to escape its parent;
 5. preserve the established `Kotlin.Runtime` assembly identity across both CLR runtimes; and
 6. keep default message and cause behavior as close to Kotlin as the System.Exception base allows.
@@ -62,7 +62,9 @@ Use a hybrid physical hierarchy.
 `kotlin.Throwable` and `kotlin.Exception` remain mapped to `[mscorlib]System.Exception`, and the
 existing curated BCL mappings remain in place while they are responsible for catching native CLR
 faults. Kotlin-owned types live in the `Kotlin` namespace of `Kotlin.Runtime` when no faithful BCL
-identity exists.
+identity exists. Their physical parent is selected per type: the Kotlin-owned root when all
+supported parent edges are Kotlin-owned, or the faithful mapped BCL parent when that is necessary
+to preserve an already-supported Kotlin parent edge.
 
 The first runtime-owned root is:
 
@@ -93,6 +95,29 @@ versioned Kotlin.Runtime AssemblyRef. It remains catchable by the currently supp
 `Exception`/`Throwable` mapping, is not accidentally a mapped `IllegalStateException`, and has an
 exact identity available to future reflection/type-test support.
 
+This does not add a source declaration to the fake stdlib. Common Kotlin deprecates direct use of
+`NoWhenBranchMatchedException` at error level because it is a compiler implementation exception,
+so making it a new user-facing API on this target would be a compatibility mistake.
+
+The first source-visible exact mapping is:
+
+```text
+Kotlin.NumberFormatException : System.ArgumentException
+```
+
+It follows the JVM/Native Kotlin surface and exposes only `()` and `(String?)`. The class owns a
+nullable message field and reuses the virtual `System.Exception.get_Message` slot, so the no-arg
+constructor returns a null Kotlin message even through an `IllegalArgumentException`-typed value.
+Its BCL physical parent is intentional: `kotlin.IllegalArgumentException` already maps to
+`System.ArgumentException`, so exact values widen to and are caught by the Kotlin parent without
+an adapter, catch filter, or second object. The registry records that physical supertype edge
+explicitly for its IL stack verifier.
+
+`System.FormatException` remains distinct. It is not a `System.ArgumentException`, so mapping
+Kotlin `NumberFormatException` to it would break the parent edge; making the exact class also catch
+foreign format faults would require explicit translation at a parsing/interop boundary or a catch
+union. Neither behavior is claimed by this slice.
+
 Every later exception requires its own interop audit. A BCL-mapped child can move under the
 Kotlin-owned root only together with explicit fault translation or catch-union/filter lowering.
 No entry may migrate merely because a similarly named runtime class exists.
@@ -104,10 +129,18 @@ Probe series `exceptionabi_s1` assembled runtime and consumer artifacts with mod
 kept a foreign InvalidOperationException outside RuntimeException, preserved cause identity, and
 returned a null default message through a System.Exception-typed call.
 
+Probe series `exceptionabi_s2` assembled the exact NumberFormatException and a consumer with both
+ILAsm versions. Both consumer binaries ran with both runtime binaries on both CoreCLR 10.0.9 and
+.NET Framework 4.8. All eight executions preserved the null default message through the base slot,
+caught the exact value as System.ArgumentException, caught it by exact identity, and kept a foreign
+System.FormatException outside the exact catch.
+
 The compiler exact-IL pin covers both value and statement exhaustive-when throws and the
 Kotlin.Runtime type reference. The existing two-handler test keeps the sibling
-IllegalStateException boundary. A rejection pin keeps RuntimeException, Error, and
-NumberFormatException unavailable until their distinct hierarchy problems are solved.
+IllegalStateException boundary. NumberFormatException IL/box pins cover exact construction and
+catch, the mapped IllegalArgumentException value/catch edge, Throwable widening, identity, message
+dispatch, and default state. A rejection pin keeps RuntimeException and Error unavailable until
+their distinct hierarchy problems are solved.
 
 ## Consequences and boundaries
 
@@ -116,6 +149,9 @@ NumberFormatException unavailable until their distinct hierarchy problems are so
   is enabled; this is intentional ABI groundwork, not a claim that the hierarchy migration is
   complete.
 - Exception/Throwable remain physically collapsed at System.Exception for CLR interoperability.
-- RuntimeException source use, Kotlin-owned mapped children, Error, NumberFormatException,
-  negative-array-size identity, raw-fault translation, catch filters/unions, stack traces, and
-  non-Exception throw wrapping remain separate slices.
+- Runtime-owned identities need not share one physical base when doing so would break an existing
+  mapped-parent edge; the registry must state every such edge and every type needs its own interop
+  audit.
+- RuntimeException source use, other Kotlin-owned mapped children, Error, negative-array-size
+  identity, raw-fault translation, catch filters/unions, stack traces, and non-Exception throw
+  wrapping remain separate slices.

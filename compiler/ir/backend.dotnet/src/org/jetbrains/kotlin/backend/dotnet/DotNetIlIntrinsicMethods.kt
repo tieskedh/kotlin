@@ -1808,10 +1808,9 @@ private object DotNetIlAnyToStringIntrinsic : DotNetIlIntrinsicMethod() {
 
 /**
  * `Throwable.message` -> a `callvirt` of the corelib `System.Exception::get_Message()`
- * (probe-verified). Documented platform delta: Kotlin's `message` keeps its `String?` type, but
- * the CLR `Message` property is never null for mapped exceptions — a no-arg `Exception()` yields
- * the CLR default text `"Exception of type 'System.Exception' was thrown."` (probe-verified
- * verbatim), where Kotlin/JVM would yield null.
+ * (probe-verified). Kotlin's `message` keeps its `String?` type. BCL-mapped exceptions inherit the
+ * CLR's non-null default text (an accepted platform delta); exact runtime-owned exceptions can
+ * reuse this virtual slot and return their Kotlin-owned nullable backing value.
  */
 private object DotNetIlExceptionMessageIntrinsic : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(

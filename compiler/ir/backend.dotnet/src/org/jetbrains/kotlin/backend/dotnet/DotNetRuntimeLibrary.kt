@@ -23,6 +23,9 @@ internal object DotNetRuntimeLibrary {
     val noWhenBranchMatchedExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NoWhenBranchMatchedException".toIlIdentifier()}"
 
+    val numberFormatExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.NumberFormatException".toIlIdentifier()}"
+
     fun assembleNextTo(
         executableOutput: File,
         target: DotNetTarget,
@@ -175,6 +178,48 @@ internal object DotNetRuntimeLibrary {
               ldarg.1
               call instance void Kotlin.RuntimeException::.ctor(class [mscorlib]System.Exception)
               ret
+            }
+          }
+
+          .class public auto ansi beforefieldinit NumberFormatException
+                 extends [mscorlib]System.ArgumentException
+          {
+            .field private string '_message'
+
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              call instance void [mscorlib]System.ArgumentException::.ctor()
+              ldarg.0
+              ldnull
+              stfld string Kotlin.NumberFormatException::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void [mscorlib]System.ArgumentException::.ctor(string)
+              ldarg.0
+              ldarg.1
+              stfld string Kotlin.NumberFormatException::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname virtual instance string 'get_Message'() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              ldfld string Kotlin.NumberFormatException::'_message'
+              ret
+            }
+
+            .property instance string Message()
+            {
+              .get instance string Kotlin.NumberFormatException::'get_Message'()
             }
           }
 

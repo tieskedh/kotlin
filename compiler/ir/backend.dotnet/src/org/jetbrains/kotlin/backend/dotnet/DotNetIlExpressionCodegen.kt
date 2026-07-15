@@ -827,9 +827,9 @@ internal class DotNetIlExpressionCodegen(
      * checked against the registry's whitelist: `()` and `(String?)` exist on every mapped CLR
      * type, `(String?, Throwable?)` maps where
      * [hasMessageCauseCtor][DotNetMappedExceptions.Entry.Mapped.hasMessageCauseCtor] is set (a
-     * mirror of the Kotlin stdlib's declared constructor surface — the CLR `(string, Exception)`
-     * overload itself exists on every mapped type, probe-verified), and the cause-only
-     * `(Throwable?)` constructor has no CLR overload on any target.
+     * mirror of the Kotlin stdlib's declared constructor surface; every BCL mapping has the CLR
+     * `(string, Exception)` overload, probe-verified, while runtime mappings provide their exact
+     * flagged surface), and the cause-only `(Throwable?)` constructor has no mapped overload.
      */
     private fun emitMappedExceptionConstructorCall(
         call: IrConstructorCall,
