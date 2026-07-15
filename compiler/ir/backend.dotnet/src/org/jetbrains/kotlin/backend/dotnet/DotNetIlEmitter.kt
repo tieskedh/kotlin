@@ -898,7 +898,6 @@ class DotNetIlEmitter(
         if (irClass.isData) {
             when {
                 irClass.kind == ClassKind.OBJECT -> dotNetUnsupported("data object '$name' is not supported")
-                enclosingClass != null -> dotNetUnsupported("nested data class '$name' is not supported yet")
                 irClass.isOriginallyLocalDeclaration -> dotNetUnsupported("local data class '$name' is not supported yet")
                 irClass.typeParameters.isNotEmpty() -> dotNetUnsupported(
                     "generic data class '$name' is not supported: CLR reified generic type tests " +
