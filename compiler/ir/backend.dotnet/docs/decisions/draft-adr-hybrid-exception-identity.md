@@ -136,6 +136,32 @@ also means `catch (Exception)` catches Kotlin.Error because this POC already map
 Throwable and Exception to System.Exception. That is the existing documented root-collapse delta,
 not a new claim that Error logically extends Kotlin Exception.
 
+## RuntimeException source-migration gate
+
+Source `RuntimeException` remains rejected until one physical representation is coherent across
+catches, values, function signatures, rethrows, type tests, and CLR interop. Two tempting partial
+solutions are explicitly insufficient.
+
+Mapping RuntimeException to `System.Exception` makes a catch far too broad and collapses its public
+CLR signature with Kotlin Throwable and Exception. It would admit arbitrary foreign checked
+exceptions as RuntimeException values and create overload collisions; boundary checks cannot
+repair an ABI that has already erased the distinction.
+
+Keeping exact `Kotlin.RuntimeException` for values while lowering only a catch to the union of the
+exact root and current BCL child mappings catches the right objects, but cannot type the catch
+variable. Storing it as System.Exception has the same signature/assignability problem whenever the
+value escapes. Storing a BCL child in an exact-root local lies to the CLR type system. Probe series
+`exceptionabi_s4` demonstrated the poison shape: both ILAsm versions accepted a caught
+InvalidOperationException stored as Kotlin.RuntimeException, and both CoreCLR and Framework then
+dispatched an exact-root method on that unrelated object, printing the root method's result. JIT
+acceptance therefore does not make the IL type-safe.
+
+The default migration direction is an exact Kotlin-owned RuntimeException hierarchy, but it can
+replace a BCL-mapped child only together with translation of every relevant CLR-native language
+fault and an explicit policy for faults entering through CLR interop. A different union design
+would need a representation that preserves Kotlin type identity at every ABI boundary without
+wrappers or unverifiable locals. No such design is implemented or implied by this draft.
+
 Every later exception requires its own interop audit. A BCL-mapped child can move under the
 Kotlin-owned root only together with explicit fault translation or catch-union/filter lowering.
 No entry may migrate merely because a similarly named runtime class exists.
@@ -156,6 +182,11 @@ System.FormatException outside the exact catch.
 Probe series `exceptionabi_s3` applied the same eight-way matrix to Kotlin.Error. Every execution
 preserved null default message, exact identity, cause-only message/cause identity, and kept a
 foreign OutOfMemoryException outside the exact Error catch.
+
+Probe series `exceptionabi_s4` showed that catch-union control flow itself works when the result is
+stored as System.Exception, but an exact-root local containing a mapped BCL child is poison IL:
+both runtimes dispatched a Kotlin.RuntimeException member on an InvalidOperationException object.
+This evidence freezes the source-mapping gate above.
 
 The compiler exact-IL pin covers both value and statement exhaustive-when throws and the
 Kotlin.Runtime type reference. The existing two-handler test keeps the sibling
