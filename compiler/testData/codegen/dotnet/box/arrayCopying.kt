@@ -1,0 +1,165 @@
+private var trace: String = ""
+
+private class Item(val value: Int)
+
+private class GenericItem<T>(val value: T)
+
+private fun sourceExpression(): IntArray {
+    trace = trace + "source;"
+    return intArrayOf(4, 5, 6)
+}
+
+private fun destinationExpression(): IntArray {
+    trace = trace + "destination;"
+    return IntArray(4)
+}
+
+private fun recordedInt(label: String, value: Int): Int {
+    trace = trace + label + ";"
+    return value
+}
+
+private fun copyIntoFailureCategory(
+    destinationSize: Int,
+    destinationOffset: Int,
+    startIndex: Int,
+    endIndex: Int,
+): String = try {
+    intArrayOf(1, 2).copyInto(IntArray(destinationSize), destinationOffset, startIndex, endIndex)
+    "not-thrown"
+} catch (_: IllegalArgumentException) {
+    "argument"
+} catch (_: IndexOutOfBoundsException) {
+    "index"
+} catch (_: Exception) {
+    "other"
+}
+
+private fun negativeCopySizeCategory(): String = try {
+    intArrayOf(1).copyOf(-1)
+    "not-thrown"
+} catch (_: ArithmeticException) {
+    "arithmetic"
+} catch (_: IllegalArgumentException) {
+    "argument"
+} catch (_: IndexOutOfBoundsException) {
+    "index"
+} catch (_: Exception) {
+    "exception"
+}
+
+fun box(): String {
+    val original = intArrayOf(1, 2, 3)
+    val copied = original.copyOf()
+    if (copied === original || copied.size != 3 || copied[0] != 1 || copied[2] != 3) {
+        return "fail 1: Int copyOf"
+    }
+    original[0] = 9
+    if (copied[0] != 1) return "fail 2: independent copy"
+
+    val truncated = intArrayOf(1, 2, 3).copyOf(2)
+    val padded = intArrayOf(1, 2).copyOf(4)
+    if (truncated.size != 2 || truncated[1] != 2) return "fail 3: truncate"
+    if (padded.size != 4 || padded[0] != 1 || padded[1] != 2 || padded[2] != 0 || padded[3] != 0) {
+        return "fail 4: pad"
+    }
+    val empty = IntArray(0)
+    if (empty.copyOf() === empty) return "fail 5: empty alias"
+
+    val longs = longArrayOf(7L, 8L).copyOf(3)
+    val doubles = doubleArrayOf(1.5, 2.5).copyOf()
+    val booleans = booleanArrayOf(true).copyOf(2)
+    val chars = charArrayOf('A', 'B').copyOf()
+    if (longs[0] != 7L || longs[1] != 8L || longs[2] != 0L) return "fail 6: Long"
+    if (doubles[0] != 1.5 || doubles[1] != 2.5) return "fail 7: Double"
+    if (!booleans[0] || booleans[1]) return "fail 8: Boolean"
+    if (chars[0] != 'A' || chars[1] != 'B') return "fail 9: Char"
+
+    if (longArrayOf(3L).copyInto(LongArray(1))[0] != 3L) return "fail 10: Long copyInto"
+    if (doubleArrayOf(3.5).copyInto(DoubleArray(1))[0] != 3.5) return "fail 11: Double copyInto"
+    if (!booleanArrayOf(true).copyInto(BooleanArray(1))[0]) return "fail 12: Boolean copyInto"
+    if (charArrayOf('Z').copyInto(CharArray(1))[0] != 'Z') return "fail 13: Char copyInto"
+
+    val destination = IntArray(3)
+    val returned = intArrayOf(5, 6, 7).copyInto(destination)
+    if (returned !== destination || destination[0] != 5 || destination[1] != 6 || destination[2] != 7) {
+        return "fail 14: default copyInto"
+    }
+    val partial = IntArray(4)
+    intArrayOf(3, 4, 5).copyInto(partial, destinationOffset = 1, startIndex = 1)
+    if (partial[0] != 0 || partial[1] != 4 || partial[2] != 5 || partial[3] != 0) {
+        return "fail 15: partial defaults"
+    }
+
+    val overlapRight = intArrayOf(1, 2, 3, 4, 5)
+    overlapRight.copyInto(overlapRight, destinationOffset = 1, startIndex = 0, endIndex = 4)
+    if (overlapRight[0] != 1 || overlapRight[1] != 1 || overlapRight[2] != 2 ||
+        overlapRight[3] != 3 || overlapRight[4] != 4
+    ) return "fail 16: overlap right"
+    val overlapLeft = intArrayOf(1, 2, 3, 4, 5)
+    overlapLeft.copyInto(overlapLeft, destinationOffset = 0, startIndex = 1, endIndex = 5)
+    if (overlapLeft[0] != 2 || overlapLeft[1] != 3 || overlapLeft[2] != 4 ||
+        overlapLeft[3] != 5 || overlapLeft[4] != 5
+    ) return "fail 17: overlap left"
+
+    val strings = arrayOf("a", "b").copyOf()
+    val nullable = arrayOf<String?>(null, "x").copyOf()
+    val items = arrayOf(Item(9)).copyOf()
+    val genericItems = arrayOf(GenericItem("value")).copyOf()
+    val paddedStrings = arrayOf("first").copyOf(3)
+    val truncatedItems = arrayOf(Item(1), Item(2)).copyOf(1)
+    if (strings[0] != "a" || strings[1] != "b") return "fail 18: String copyOf"
+    if (nullable[0] != null || nullable[1] != "x") return "fail 19: nullable reference copyOf"
+    if (items[0].value != 9) return "fail 20: user class copyOf"
+    if (genericItems[0].value != "value") return "fail 21: generic class copyOf"
+    if (paddedStrings.size != 3 || paddedStrings[0] != "first" ||
+        paddedStrings[1] != null || paddedStrings[2] != null
+    ) return "fail 21a: padded String copyOf"
+    if (truncatedItems.size != 1 || truncatedItems[0]?.value != 1) return "fail 21b: truncated Item copyOf"
+
+    val anyDestination: Array<Any> = arrayOf("old", "old")
+    val stringSource: Array<String> = arrayOf("left", "right")
+    val anyResult = stringSource.copyInto(anyDestination)
+    if (anyResult !== anyDestination || anyDestination[0] != "left" || anyDestination[1] != "right") {
+        return "fail 22: projected source copyInto"
+    }
+
+    trace = ""
+    val evaluated = sourceExpression().copyInto(
+        destinationExpression(),
+        destinationOffset = recordedInt("offset", 1),
+        startIndex = recordedInt("start", 1),
+        endIndex = recordedInt("end", 3),
+    )
+    if (trace != "source;destination;offset;start;end;") return "fail 23: evaluation $trace"
+    if (evaluated[0] != 0 || evaluated[1] != 5 || evaluated[2] != 6 || evaluated[3] != 0) {
+        return "fail 24: evaluated result"
+    }
+
+    trace = ""
+    val namedOrder = sourceExpression().copyInto(
+        destination = destinationExpression(),
+        endIndex = recordedInt("end", 3),
+        startIndex = recordedInt("start", 1),
+        destinationOffset = recordedInt("offset", 1),
+    )
+    if (trace != "source;destination;end;start;offset;") return "fail 25: named evaluation $trace"
+    if (namedOrder[1] != 5 || namedOrder[2] != 6) return "fail 26: named result"
+
+    trace = ""
+    val evaluatedCopy = sourceExpression().copyOf(recordedInt("size", 2))
+    if (trace != "source;size;" || evaluatedCopy[0] != 4 || evaluatedCopy[1] != 5) {
+        return "fail 27: copyOf evaluation $trace"
+    }
+
+    if (copyIntoFailureCategory(1, 2, 0, 0) != "index") return "fail 28: destination offset"
+    if (copyIntoFailureCategory(1, 0, 1, 0) != "index") return "fail 29: reversed source"
+    if (copyIntoFailureCategory(2, 0, -1, 1) != "index") return "fail 30: negative source"
+    if (copyIntoFailureCategory(2, 0, 0, 3) != "index") return "fail 31: source end"
+    if (copyIntoFailureCategory(2, -1, 0, 1) != "index") return "fail 32: negative destination"
+    if (copyIntoFailureCategory(1, 0, 0, 2) != "index") return "fail 33: destination range"
+    val endEmpty = intArrayOf(1, 2).copyInto(IntArray(2), destinationOffset = 2, startIndex = 2, endIndex = 2)
+    if (endEmpty[0] != 0 || endEmpty[1] != 0) return "fail 34: empty end copy"
+    if (negativeCopySizeCategory() != "exception") return "fail 35: negative ${negativeCopySizeCategory()}"
+    return "OK"
+}

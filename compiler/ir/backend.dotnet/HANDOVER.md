@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(concrete array-copying audit after initializer constructors).
+(escaping array-iterator audit after concrete array copying).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -18,12 +18,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   data-class equality (`c1597ef12`), data objects (`a2a418bfd`), local data classes (`4deb5e208`),
   the POC IL-assembly-pipeline direction (`1e9492c5f`), and general open-type-parameter default
   placeholders (`2c4bab040`), interface-owned argument-default helpers (`b9c83e0c2`), and general
-  concrete varargs (`44ec10c33`), followed by concrete array initializer constructors in the
-  current functional slice.
+  concrete varargs (`44ec10c33`) and concrete array initializer constructors (`fb8b20d0a`),
+  followed by concrete array copying in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **456 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **460 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -668,6 +668,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   nested, and mapper-rejected families remain gated. The exact golden assembles with modern 10.0.9
   and Framework 4.8 ILAsm, and both parser boxes pass with both assembler selections. The fresh
   full-suite count for this slice is recorded in Branch state above.
+  Concrete array copying now follows the JVM stdlib's platform-operation boundary through the
+  DotNet registry. Resolution-only external declarations add `copyOf`/`copyInto` to the temporary
+  .NET stdlib without emitting a facade. Exact typed allocation plus `System.Array.Copy` gives
+  fresh copies for all five primitive vectors and concrete reference arrays, including
+  truncating/zero-or-null-padding resized copies. `copyInto` preserves defaults,
+  source evaluation, destination identity, projected concrete reference sources, and overlapping
+  self-copies. `arraycopyprobe_s1` found identical raw behavior on CoreCLR and Framework, but also
+  proved raw destination range failures map to CLR `ArgumentException`; the single runtime-owned
+  `Intrinsics.ArrayCopyInto` helper therefore performs overflow-safe source/destination validation
+  and throws the existing IndexOutOfBounds mapping before calling `System.Array.Copy`. Resized
+  open `Array<T>` copying (including its unrepresentable open `Array<T?>` resize result) and
+  content operations stay rejected; concrete nullable-reference resize results are supported.
+  The exact golden assembles with modern 10.0.9 and Framework 4.8 ILAsm, and both parser boxes pass
+  with modern and Framework-selected assemblers. The fresh full-suite count for this slice is
+  recorded in Branch state above.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -696,7 +711,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
    `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
    `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `localprobe`, `whenprobe`,
-   `arrprobe` are taken). Keep
+   `arrprobe`, `arraycopyprobe` are taken). Keep
    probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the class metadata subtree, the companion's immediate owner
@@ -750,17 +765,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Provide concrete array copying operations.** Audit the standard-library declarations and the
-   mature JVM/common intrinsic and lowering boundaries before choosing a CLR implementation. Start
-   with `copyOf`/`copyInto` for the five supported primitive vectors and concrete reference arrays;
-   preserve source/destination range checks, overlapping self-copies, allocation/alias behavior,
-   and evaluation/exception order. Use `System.Array.Copy` only where probes prove Kotlin-compatible
-   behavior on both runtimes; otherwise keep the algorithm in common IR or a single
-   `Kotlin.Runtime.Internal` helper. Do not erase generic-array invariance through CLR covariance,
-   and do not bundle `contentEquals`/hash/string operations until their primitive, nullable, NaN,
-   signed-zero, and recursive-array semantics have been audited independently.
-   RuntimeException source use stays gated. Fuller callable reflection remains later work rather
-   than expanding the minimal name slice opportunistically.
+1. **Provide escaping array iterator objects.** Audit common/JVM iterator ownership first. Keep
+   direct array `for` loops allocation-free; add object-valued iterator behavior only for explicit
+   or escaping calls over the five primitive vectors and concrete reference arrays, with correct
+   exhaustion and erased-boundary boxing.
+2. **Measure the callable typed fast path and CLR interop boundary.** Preserve erased
+   `Kotlin.Function0/1/2` identity, then validate exact-shape optimization members and explicit
+   delegate conversion without wrappers becoming a second Kotlin callable identity.
+3. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
+   the neutral negative-array-size fault only when its Kotlin-owned identity and catch policy are
+   audited. Keep `contentEquals` and related content operations separate until their floating,
+   nullable, primitive, and recursive semantics have been reviewed.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

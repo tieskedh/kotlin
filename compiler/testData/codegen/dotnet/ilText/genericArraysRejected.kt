@@ -47,6 +47,13 @@ inline fun <reified T> initializedOpen(size: Int, value: T): Array<T> = Array(si
 
 fun initializedNested(size: Int): Array<Array<String>> = Array(size) { arrayOf("x") }
 
+fun <T> openCopy(values: Array<T>): Array<T> = values.copyOf()
+
+fun <T> openResize(values: Array<T>, size: Int): Array<T?> = values.copyOf(size)
+
+fun <T> openCopyInto(source: Array<T>, destination: Array<T>): Array<T> =
+    source.copyInto(destination)
+
 fun iteratorAsStatement(values: Array<String>) {
     values.iterator()
 }
