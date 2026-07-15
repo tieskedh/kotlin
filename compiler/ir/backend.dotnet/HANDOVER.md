@@ -7,12 +7,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Narrow nested class failure eviction",
+- Branch `dotnet`; latest functional work is "[DotNet] Add nested interface declarations",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **336 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **342 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -25,7 +25,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interface delegation through FIR's frontend-owned forwarding artifacts, named nested classes
   with static-style JVM semantics and real CLR nested metadata, nested class modality and
   module-local nested-base inheritance, and recursive singleton initialization for named nested
-  objects and companions of ordinary nested classes.
+  objects and companions of ordinary nested classes, plus nested all-abstract interfaces and
+  static-style declarations inside interfaces.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
@@ -177,8 +178,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - Interim continuation landed `7f1f9acc6`: named nested classes now support the same final, open,
   abstract, and sealed modality set as top-level classes. After the nested accessibility prefix,
   final emits CLR `sealed`, open omits it, and abstract/sealed emit CLR `abstract`. The inheritance
-  gate now distinguishes every recursively declared module class from the still-top-level-only
-  interface set, so a top-level or nested class can extend any module-local nested class. This
+  gate at that slice distinguished every recursively declared module class from the interface set,
+  which was still top-level-only then, so a top-level or nested class could extend any module-local
+  nested class. This
   covers forward siblings, a nested metadata parent, deeper family members, independent generic
   bases under a generic outer, top-level-to-nested links, and cross-family links. Base resolution
   remains live: a nested base evicted during the member pre-pass takes both top-level and nested
@@ -195,7 +197,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   A companion declared directly in a generic container stays rejected because its field would be
   per constructed owner. A named object is safe there because its `INSTANCE` lives on its own
   independently non-generic type; the reviewed-semantic-gaps repair lifts that over-broad gate.
-  The gate also continues to reject declarations inside objects/companions/interfaces. The later
+  The gate at that slice also rejected declarations inside objects/companions/interfaces. The later
   narrow-eviction repair makes a nested singleton initializer that loses its callee evict its
   immediate singleton owner subtree while independent metadata ancestors survive.
   `nestedprobe_s4` verified direct/deep companions, a named object, a non-generic owner below a
@@ -222,6 +224,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
   render attribution, and singleton-owner eviction. The final 336-test FIR filter is clean across
   both parsers. All three changed rejection goldens assemble under modern 10.0.9 and Framework
   4.8 ILAsm; their Framework executions exit 0 with output `rejected`, `rejected`, and `1,17`.
+- The nested-interface continuation follows JVM static-nested semantics while preserving the
+  Framework-compatible all-abstract boundary. `nestedifaceprobe_s1`–`_s3` verified nested
+  interface flags and visibility, interface-owned nested classes/interfaces/objects/companions,
+  independent generic parameter spaces, forward references, inheritance, implementation, and
+  dispatch on modern CoreCLR 10.0.9 and .NET Framework 4.8. Named interfaces may now nest under
+  any supported class/interface/object/companion; interfaces may contain static-style named
+  classes, interfaces, objects, and a companion. A non-generic interface owns its companion field
+  and `.cctor`; a generic interface companion remains rejected because CLR statics are per
+  constructed owner, while a named object remains safe because it owns `INSTANCE`. Default
+  interface bodies/private callable members remain rejected at the Framework floor. Nested
+  declaration failures remove only their subtree and real dependents; only a failure OF a
+  companion promotes to its immediate owner. `ilText/nestedInterfaces.kt`,
+  `ilText/nestedInterfacesRejected.kt`, and `box/nestedInterfaces.kt` pin the feature and the
+  adjacent rejection edges. Both new goldens and both affected rejection goldens assemble under
+  modern and Framework ILAsm; Framework execution prints
+  `0,1,2,1,three,2,4,3,5,object,3`, `13`, `1,17`, and `rejected` respectively. The fresh full
+  DotNet suite is 342/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -238,8 +257,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
    `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
-   `nestedprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of the repo (use a temp
-   dir).
+   `nestedprobe`, `nestedifaceprobe`, `whenprobe`, `arrprobe` are taken). Keep probe files OUT of
+   the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the class metadata subtree, the companion's immediate owner
    subtree, or the property group where AGENTS.md says so; live-map eviction cascades to actual
@@ -292,11 +311,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit nested all-abstract interfaces and declarations inside interfaces.** Follow the JVM's
-   static-nested semantics but retain the Framework-compatible no-default-method boundary. Probe
-   CLR nested-interface flags, generic independence, visibility, implementation/dispatch, forward
-   references, and recursive metadata placement before lifting either gate. Keep `inner`, local/
-   anonymous, enum/data/value, and annotation classes separate.
+1. **Audit named classes and objects inside objects and companions.** Follow the same JVM
+   static-nested semantics as the class/interface work, but probe CLR placement, generic
+   independence, singleton initialization, enclosing/nested access, and narrow eviction before
+   lifting the remaining parent-kind gate. Keep `inner`, local/anonymous, enum/data/value, and
+   annotation classes separate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

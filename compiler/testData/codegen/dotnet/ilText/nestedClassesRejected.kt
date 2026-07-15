@@ -20,10 +20,6 @@ object ObjectHost {
     class Nested
 }
 
-class NestedInterfaceHost {
-    interface Nested
-}
-
 class NestedDataHost {
     data class Nested(val value: Int)
 }

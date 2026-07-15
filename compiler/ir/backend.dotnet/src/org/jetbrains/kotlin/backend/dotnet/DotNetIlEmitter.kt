@@ -113,13 +113,15 @@ class DotNetIlEmitter(
             }
             moduleTopLevelClasses.forEach(::collect)
         }
+        val moduleInterfaces = moduleClasses.filterTo(hashSetOf()) { it.isInterface }
 
         // A CLR nested type is registered independently for type/member resolution, while its
-        // metadata block renders recursively inside the enclosing class. Kotlin named nested
-        // classes are static-style classes (JVM precedent: ACC_STATIC unless `isInner`), so a
-        // nested class owns only its own generic parameters. The CLR accepts exactly that shape:
-        // the nested type's simple arity-suffixed name composes with the enclosing type reference
-        // without inheriting the enclosing class's `!n` parameter space (`nestedprobe_s1`).
+        // metadata block renders recursively inside the enclosing type. Kotlin named nested
+        // declarations are static-style types (JVM precedent: ACC_STATIC unless a class is
+        // `inner`), so a nested type owns only its own generic parameters. The CLR accepts exactly
+        // that shape: the nested type's simple arity-suffixed name composes with the enclosing
+        // type reference without inheriting the enclosing type's `!n` parameter space
+        // (`nestedprobe_s1`, `nestedifaceprobe_s3`).
         //
         // Registration is deliberately per declaration rather than all-or-nothing for the
         // top-level metadata family. A rejected nested class can simply be omitted from its
@@ -128,33 +130,23 @@ class DotNetIlEmitter(
         // dependencies are removed later by the live-map render fixpoint.
         fun registerClassTree(irClass: IrClass, enclosingClassInfo: DotNetIlClassInfo? = null) {
             try {
-                checkClassShapeSupported(irClass, moduleClasses, moduleTopLevelClasses)
+                checkClassShapeSupported(irClass, moduleClasses, moduleInterfaces)
             } catch (e: DotNetIlUnsupportedException) {
-                // A gate failure in a companion or anywhere below it invalidates the companion's
-                // immediate owner: that owner already contains the singleton field and `.cctor`.
-                // Other nested failures begin at the declaration itself.
-                var owningCompanion: IrClass? = irClass
-                while (owningCompanion != null && !owningCompanion.isCompanion) {
-                    owningCompanion = owningCompanion.parent as? IrClass
-                }
-                val companion = owningCompanion
+                // A gate failure OF a companion invalidates its immediate owner: that owner
+                // already contains the singleton field and `.cctor`. A separate declaration
+                // nested below an otherwise valid companion remains an independent metadata
+                // subtree and is omitted on its own.
+                val companion = irClass.takeIf { it.isCompanion }
                 val unavailableRoot = companion?.parent as? IrClass ?: irClass
-                val companionReason = when {
-                    companion == null -> null
-                    irClass === companion -> e.reason
-                    else ->
-                        "its nested declaration '${irClass.diagnosticName()}' could not be compiled: ${e.reason}"
-                }
                 val rootReason = if (companion == null) {
                     e.reason
                 } else {
-                    "its companion object '${companion.diagnosticName()}' could not be compiled: $companionReason"
+                    "its companion object '${companion.diagnosticName()}' could not be compiled: ${e.reason}"
                 }
                 fun removeAndRecordUnavailableSubtree(unavailableClass: IrClass) {
                     availableClasses.remove(unavailableClass)
                     val unavailableReason = when {
                         unavailableClass === irClass -> e.reason
-                        unavailableClass === companion -> companionReason!!
                         unavailableClass === unavailableRoot -> rootReason
                         else ->
                             "its enclosing class '${unavailableRoot.diagnosticName()}' could not be compiled: $rootReason"
@@ -184,8 +176,8 @@ class DotNetIlEmitter(
             availableClasses[irClass] = classInfo
             for (nestedClass in irClass.declarations.filterIsInstance<IrClass>()) {
                 registerClassTree(nestedClass, classInfo)
-                // A companion (or one of its invalid descendants) can promote a nested failure
-                // to this owner. Do not register later siblings under an owner that was removed.
+                // A companion can promote its own failure to this owner. Do not register later
+                // siblings under an owner that was removed.
                 if (irClass !in availableClasses) return
             }
         }
@@ -740,7 +732,7 @@ class DotNetIlEmitter(
      * deliberately NOT checked here — the render re-resolves it every fixpoint round, so a
      * failing base cascades to its derived classes with a carried reason, see
      * [renderUserClass]) and any number of interface supertypes when each resolves to a
-     * top-level interface of the module (real CLR interface types — see
+     * recursively declared interface of the module (real CLR interface types — see
      * [checkInterfaceShapeSupported] for the interface half of the gate; the `implements` list
      * is re-resolved live like the base). Interface slots satisfied through inherited members
      * must resolve to VIRTUAL members (`ifaceprobe_s5a`/`_s5b` — the non-virtual shape
@@ -752,28 +744,31 @@ class DotNetIlEmitter(
      * `kotlin.Any` members stay rejected. Abstract and sealed plain classes map to CLR `abstract`;
      * Kotlin sealing is frontend-enforced like sealed interfaces. Objects and companions stay
      * on the sole-supertype-`kotlin.Any`, final-only model. A plain named class nested directly
-     * in another plain class is also supported recursively at every class modality, including
-     * under a generic outer and with its own independent generic parameters. This follows the
-     * JVM's static nested-class model (`ACC_STATIC` unless `isInner`) and maps directly to a CLR
-     * nested type; the metadata and generic spelling is probe-verified by
+     * in another plain class or interface is also supported recursively at every class modality,
+     * including under a generic outer and with its own independent generic parameters. This
+     * follows the JVM's static nested-class model (`ACC_STATIC` unless `isInner`) and maps directly
+     * to a CLR nested type; the metadata and generic spelling is probe-verified by
      * `nestedprobe_s1`/`_s3`. Nested classes may be public, private, internal, or protected
      * (`nested public/private/assembly/family`).
      * A top-level or nested class may derive from a module-local nested class, including a
      * sibling, enclosing metadata parent, forward declaration, generic instantiation, or class
      * in another top-level family (`nestedprobe_s3`). Companion objects of non-generic ordinary
-     * nested classes and named objects in plain classes are supported by the recursive
-     * static-initializer sweep (`nestedprobe_s4`). A companion's singleton field lives on its
-     * immediate owner, so that owner must be non-generic; a named object's `INSTANCE` lives on the
-     * non-generic object type itself and is safe below a generic metadata parent. Inner classes,
-     * nested interfaces, and any class
-     * or object inside an object, companion, or interface stay rejected. Each violation throws
+     * nested classes/interfaces and named objects in plain classes/interfaces are supported by
+     * the recursive static-initializer sweep (`nestedprobe_s4`, `nestedifaceprobe_s2`). A
+     * companion's singleton field lives on its immediate owner, so that owner must be non-generic;
+     * a named object's `INSTANCE` lives on the non-generic object type itself and is safe below a
+     * generic metadata parent. All-abstract interfaces may nest inside any supported named class,
+     * interface, object, or companion, with the same independent generic parameter and visibility
+     * model. Classes, objects, and companions inside interfaces are likewise static-style nested
+     * declarations. Inner classes and class/object declarations inside an object or companion
+     * stay rejected. Each violation throws
      * [DotNetIlUnsupportedException]; registration drops that declaration's metadata subtree,
      * while its valid enclosing classes and siblings remain available.
      */
     private fun checkClassShapeSupported(
         irClass: IrClass,
         moduleClasses: Set<IrClass>,
-        moduleTopLevelClasses: Set<IrClass>,
+        moduleInterfaces: Set<IrClass>,
     ) {
         val name = irClass.diagnosticName()
         val enclosingClass = irClass.parent as? IrClass
@@ -784,7 +779,7 @@ class DotNetIlEmitter(
             enclosingClass != null && !irClass.isCompanion && irClass.kind == ClassKind.OBJECT
         when (irClass.kind) {
             ClassKind.INTERFACE -> {
-                checkInterfaceShapeSupported(irClass, moduleTopLevelClasses)
+                checkInterfaceShapeSupported(irClass, moduleInterfaces)
                 return
             }
             ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY -> dotNetUnsupported("enum class '$name' is not supported")
@@ -794,7 +789,11 @@ class DotNetIlEmitter(
         if (enclosingClass == null && irClass.parent !is IrFile) {
             dotNetUnsupported("class '$name' is not top-level; nested/inner/local classes are not supported")
         }
-        if (enclosingClass != null && enclosingClass.kind != ClassKind.CLASS) {
+        if (
+            enclosingClass != null &&
+            enclosingClass.kind != ClassKind.CLASS &&
+            enclosingClass.kind != ClassKind.INTERFACE
+        ) {
             val enclosingKind = if (enclosingClass.kind == ClassKind.OBJECT) "object" else "interface"
             val kind = when {
                 isValidatedCompanion -> "companion object"
@@ -803,7 +802,7 @@ class DotNetIlEmitter(
             }
             dotNetUnsupported(
                 "$kind '$name' is nested inside $enclosingKind '${enclosingClass.diagnosticName()}'; " +
-                        "nested declarations are supported only inside plain classes"
+                        "nested declarations are supported only inside plain classes and interfaces"
             )
         }
         if (enclosingClass != null && !isValidatedCompanion && !isNamedNestedClass && !isNamedNestedObject) {
@@ -852,10 +851,10 @@ class DotNetIlEmitter(
         // supported module-local classes/interfaces, and any supported generic/non-generic
         // class or interface supertype. A named nested class carries only its own parameters,
         // independently of a generic outer (`nestedprobe_s1`). A companion whose immediate
-        // plain-class container is generic remains outside the model: its field lives on that
+        // class/interface container is generic remains outside the model: its field lives on that
         // container and would be per constructed owner. A named object's `INSTANCE` field instead
         // lives on the non-generic object type itself, so it remains one singleton even when the
-        // immediate metadata parent is generic (`nestedprobe_s4`).
+        // immediate metadata parent is generic (`nestedprobe_s4`, `nestedifaceprobe_s2`–`_s3`).
         // Generic base links retain their full open instantiation, so
         // constructor calls, owner lookup, and override substitution compose through arbitrary
         // module-local chains (probe-verified, geninheritprobe_s1).
@@ -897,15 +896,15 @@ class DotNetIlEmitter(
                 ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
             }
-            // A class may implement any number of module-local top-level interfaces next to its
+            // A class may implement any number of recursively declared module-local interfaces next to its
             // (at most one) base class; whether each interface itself compiles is deliberately
             // NOT checked here — the render re-resolves the `implements` list every fixpoint
             // round, so an evicted interface cascades whole-class with a carried reason, exactly
             // like an evicted base class.
             for (superInterface in superClasses.filter { it.isInterface }) {
-                if (superInterface !in moduleTopLevelClasses) {
+                if (superInterface !in moduleInterfaces) {
                     dotNetUnsupported(
-                        "class '$name' implements '${superInterface.diagnosticName()}', which is not a top-level " +
+                        "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +
                                 "interface of the compiled module; only module-local interfaces are supported"
                     )
                 }
@@ -994,31 +993,52 @@ class DotNetIlEmitter(
     /**
      * The interface half of the shape gate (probe series `ifaceprobe_s1`–`_s10`; JVM precedent:
      * the CLR has real interface types, so like classes there is no vtable/interface lowering —
-     * a Kotlin `interface` becomes a CLR `.class interface abstract`): a top-level plain
-     * interface whose members are ALL abstract (abstract functions and abstract `val`/`var`
-     * properties) is compilable, and it may extend any number of module-local top-level
-     * interfaces (`ifaceprobe_s6`: interface inheritance is the same `implements` list; whether
+     * a Kotlin `interface` becomes a CLR `.class interface abstract`): a top-level or named
+     * nested interface whose callable members are ALL abstract (abstract functions and abstract
+     * `val`/`var` properties) is compilable, and it may extend any number of recursively declared
+     * module-local interfaces (`ifaceprobe_s6`: interface inheritance is the same `implements`
+     * list; whether
      * each super-interface itself compiles is re-resolved live every render round, so an evicted
      * interface cascades to its sub-interfaces). A `sealed interface` is deliberately ACCEPTED
      * and emitted as a plain interface. Like the sealed-class model, interface sealedness is
      * pure frontend-enforced metadata with no CLR counterpart needed (JVM precedent: the JVM
      * backend emits an ordinary interface too),
      * and the exhaustive `when` it enables is `is`-gated by the type-operator rejection anyway;
-     * pinned by ilText/interfaceEqualityWidening.kt. Everything else stays rejected, whole-interface:
-     * `fun interface` (no SAM-conversion model), non-top-level interfaces,
+     * pinned by ilText/interfaceEqualityWidening.kt. A named nested interface may appear in any
+     * supported named class, interface, object, or companion, owns only its own generic
+     * parameters, and maps its visibility to `nested public/private/assembly/family`. Interfaces
+     * may themselves contain static-style named classes, interfaces, objects, and companions.
+     * Everything else stays rejected,
+     * whole-interface: `fun interface` (no SAM-conversion model), local interfaces or interfaces
+     * that do not have a supported named metadata parent,
      * out-of-module super-interfaces, members WITH bodies — default methods and accessors with
      * bodies — (modern CoreCLR supports Default Interface Methods, but Framework 4.8 ILAsm
      * rejects their bodies, `dimprobe_s1`), private interface members, overrides of
      * `kotlin.Any` members (the same
-     * no-Any-model gap as on classes), and nested declarations including companion objects.
+     * no-Any-model gap as on classes). A generic interface cannot own a companion because the CLR
+     * static field would be duplicated per constructed owner; named objects own their own field
+     * and remain safe.
      */
-    private fun checkInterfaceShapeSupported(irClass: IrClass, moduleTopLevelClasses: Set<IrClass>) {
+    private fun checkInterfaceShapeSupported(irClass: IrClass, moduleInterfaces: Set<IrClass>) {
         val name = irClass.diagnosticName()
+        val enclosingClass = irClass.parent as? IrClass
         if (irClass.isFun) {
             dotNetUnsupported("fun interface '$name' is not supported (no SAM-conversion model)")
         }
-        if (irClass.parent !is IrFile) {
-            dotNetUnsupported("interface '$name' is not top-level; nested/local interfaces are not supported")
+        if (enclosingClass == null && irClass.parent !is IrFile) {
+            dotNetUnsupported("interface '$name' is local or anonymous; only named interfaces are supported")
+        }
+        if (enclosingClass != null) {
+            when (irClass.visibility) {
+                DescriptorVisibilities.PUBLIC,
+                DescriptorVisibilities.PRIVATE,
+                DescriptorVisibilities.INTERNAL,
+                DescriptorVisibilities.PROTECTED,
+                    -> {}
+                else -> dotNetUnsupported(
+                    "nested interface '$name' has unsupported visibility '${irClass.visibility}'"
+                )
+            }
         }
         if (irClass.isExpect) dotNetUnsupported("expect interface '$name' is not supported")
         checkDotNetTypeParametersSupported(
@@ -1026,34 +1046,43 @@ class DotNetIlEmitter(
             "interface '$name'",
             allowDeclarationSiteVariance = true,
         )
+        if (irClass.typeParameters.isNotEmpty()) {
+            val nestedCompanion = irClass.declarations.filterIsInstance<IrClass>()
+                .firstOrNull { it.kind == ClassKind.OBJECT && it.isCompanion }
+            if (nestedCompanion != null) {
+                dotNetUnsupported(
+                    "generic interface '$name' contains companion object '${nestedCompanion.name.asString()}'; " +
+                            "a companion field on a generic CLR owner would be duplicated per constructed type"
+                )
+            }
+        }
         for (superType in irClass.superTypes) {
             if (superType.isAny()) continue
             val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                 ?: dotNetUnsupported("interface '$name' has an unsupported supertype")
-            if (!superInterface.isInterface || superInterface !in moduleTopLevelClasses) {
+            if (!superInterface.isInterface || superInterface !in moduleInterfaces) {
                 dotNetUnsupported(
-                    "interface '$name' extends '${superInterface.diagnosticName()}', which is not a top-level " +
-                            "interface of the compiled module; only module-local super-interfaces are supported"
+                    "interface '$name' extends '${superInterface.diagnosticName()}', which is not an interface " +
+                            "of the compiled module; only module-local super-interfaces are supported"
                 )
             }
         }
         for (declaration in irClass.declarations) {
             when (declaration) {
-                is IrClass -> {
-                    val kindWord = when {
-                        declaration.isCompanion -> "companion object"
-                        declaration.kind == ClassKind.OBJECT -> "object"
-                        declaration.kind == ClassKind.INTERFACE -> "interface"
-                        else -> "class"
+                // The recursive registration pass validates nested declarations independently.
+                is IrClass -> {}
+                is IrSimpleFunction ->
+                    if (declaration.origin != DOTNET_STATIC_INITIALIZER) {
+                        checkInterfaceMemberSupported(
+                            declaration, name, "member '${declaration.name.asString()}'"
+                        )
                     }
-                    dotNetUnsupported(
-                        "interface '$name' contains nested $kindWord '${declaration.name.asString()}'; " +
-                                "nested declarations in interfaces are not supported"
-                    )
-                }
-                is IrSimpleFunction -> checkInterfaceMemberSupported(
-                    declaration, name, "member '${declaration.name.asString()}'"
-                )
+                is IrField ->
+                    if (declaration.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) {
+                        dotNetUnsupported(
+                            "unsupported field '${declaration.name.asString()}' of interface '$name'"
+                        )
+                    }
                 is IrProperty -> {
                     if (declaration.isFakeOverride) continue
                     val propertyName = declaration.name.asString()
@@ -1569,8 +1598,8 @@ class DotNetIlEmitter(
     }
 
     /**
-     * The accessibility flag of an ordinary named CLR nested class or object (`nestedprobe_s1`,
-     * `nestedprobe_s4`). Companions keep
+     * The accessibility flag of an ordinary named CLR nested class, interface, or object
+     * (`nestedprobe_s1`, `nestedprobe_s4`, `nestedifaceprobe_s1`–`_s3`). Companions keep
      * the established public metadata shape; Kotlin controls their source visibility through
      * the enclosing declaration and the singleton field/accessors. The shape gate has already
      * rejected every ordinary named nested-type visibility outside these four source forms.

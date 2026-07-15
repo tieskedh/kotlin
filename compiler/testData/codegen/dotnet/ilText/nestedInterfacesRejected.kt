@@ -1,0 +1,44 @@
+// Nested interfaces retain the Framework-compatible all-abstract boundary: BrokenContract is
+// omitted for its default body while its metadata parent and Good sibling survive. Likewise, an
+// unsupported data class inside an interface removes only its own subtree. A companion failure
+// remains owner-sensitive, and a generic interface cannot own a companion because CLR statics are
+// per constructed generic owner.
+
+interface NestedInterfaceMarker
+
+class NestedDefaultBodyHost {
+    interface BrokenContract {
+        fun broken(): Int = 1
+    }
+
+    class Good {
+        fun value(): Int = 6
+    }
+}
+
+interface BrokenDeclarationHost {
+    data class Broken(val value: Int)
+
+    class Good {
+        fun value(): Int = 7
+    }
+}
+
+interface GenericCompanionInterface<T> {
+    companion object
+}
+
+interface MarkedCompanionInterface {
+    companion object : NestedInterfaceMarker
+}
+
+class UsesNestedInterfaceSurvivors {
+    fun first(value: NestedDefaultBodyHost.Good): Int = value.value()
+
+    fun second(value: BrokenDeclarationHost.Good): Int = value.value()
+}
+
+fun main() {
+    val uses = UsesNestedInterfaceSurvivors()
+    println(uses.first(NestedDefaultBodyHost.Good()) + uses.second(BrokenDeclarationHost.Good()))
+}
