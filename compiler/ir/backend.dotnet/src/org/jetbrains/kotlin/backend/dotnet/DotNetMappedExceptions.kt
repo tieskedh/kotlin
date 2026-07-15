@@ -21,10 +21,11 @@ import org.jetbrains.kotlin.types.Variance
  *   split, so `catch (e: Exception)` is equivalent to `catch (e: Throwable)`; the only pure-Kotlin
  *   drift is a literal `throw Throwable(...)` being caught by `catch (e: Exception)`. Interop is
  *   decisive: C# throws `new Exception()` directly, which must stay catchable.
- * - `kotlin.RuntimeException` is REJECTED, not mapped: the CLR has no Exception/RuntimeException
- *   split, `System.SystemException` is deprecated and would catch OOM/StackOverflow while missing
- *   plain `Exception`s, and mapping to `System.Exception` would make `catch (RuntimeException)`
- *   catch a plain `Exception()` — observable drift inside the supported subset.
+ * - `kotlin.RuntimeException` is REJECTED, not mapped: Kotlin.Runtime now owns its durable physical
+ *   root for exact Kotlin-only identities, but enabling source use before migrating or translating
+ *   its BCL-mapped logical children would make a parent catch miss those children. The CLR itself
+ *   has no honest mapping: `System.SystemException` is deprecated and would catch
+ *   OOM/StackOverflow while missing plain Exceptions, while `System.Exception` is too broad.
  * - `kotlin.Error` is REJECTED: the CLR has no fatal-error branch of the hierarchy at all.
  * - `kotlin.NumberFormatException` is REJECTED: the only CLR candidate `System.FormatException`
  *   IS-NOT-A `System.ArgumentException` (probe-verified), so Kotlin's
@@ -92,7 +93,8 @@ internal object DotNetMappedExceptions {
             FqName("kotlin.RuntimeException"),
             Entry.Rejected(
                 "'kotlin.RuntimeException' has no CLR exception mapping (the CLR has no " +
-                        "Exception/RuntimeException split); rejected until Kotlin-owned exception classes exist"
+                        "Exception/RuntimeException split); its Kotlin.Runtime type is reserved for exact " +
+                        "Kotlin-owned identities, but source use stays rejected until mapped-child catches are coherent"
             )
         )
         put(

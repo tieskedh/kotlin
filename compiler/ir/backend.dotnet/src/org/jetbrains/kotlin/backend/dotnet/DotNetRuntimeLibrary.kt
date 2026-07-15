@@ -8,9 +8,10 @@ import java.io.File
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
  * the fixed, physically erased Function0/1/2 interfaces, the orthogonal KCallable/KFunction
- * reflection view, and the singleton Unit value required when a callable result crosses the
- * object-shaped invocation boundary. Compiler support shared by generated modules lives below the
- * reserved `Kotlin.Runtime.Internal` namespace.
+ * reflection view, the singleton Unit value required when a callable result crosses the
+ * object-shaped invocation boundary, and Kotlin-owned exception identities that have no faithful
+ * BCL type. Compiler support shared by generated modules lives below the reserved
+ * `Kotlin.Runtime.Internal` namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
@@ -18,6 +19,9 @@ internal object DotNetRuntimeLibrary {
     const val ASSEMBLY_NAME = "Kotlin.Runtime"
     const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
     const val ASSEMBLY_VERSION_IL = "1:0:0:0"
+
+    val noWhenBranchMatchedExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.NoWhenBranchMatchedException".toIlIdentifier()}"
 
     fun assembleNextTo(
         executableOutput: File,
@@ -56,6 +60,124 @@ internal object DotNetRuntimeLibrary {
 
         .namespace Kotlin
         {
+          .class public auto ansi beforefieldinit RuntimeException
+                 extends [mscorlib]System.Exception
+          {
+            .field private string '_message'
+
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              call instance void [mscorlib]System.Exception::.ctor()
+              ldarg.0
+              ldnull
+              stfld string Kotlin.RuntimeException::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void [mscorlib]System.Exception::.ctor(string)
+              ldarg.0
+              ldarg.1
+              stfld string Kotlin.RuntimeException::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class [mscorlib]System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              ldarg.0
+              ldarg.1
+              ldarg.2
+              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              ldarg.0
+              ldarg.1
+              stfld string Kotlin.RuntimeException::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              .locals init ([0] string 'message')
+              ldarg.1
+              brtrue.s IL_causeNotNull
+              ldnull
+              br.s IL_messageReady
+        IL_causeNotNull:
+              ldarg.1
+              callvirt instance string [mscorlib]System.Object::ToString()
+        IL_messageReady:
+              stloc.0
+              ldarg.0
+              ldloc.0
+              ldarg.1
+              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              ldarg.0
+              ldloc.0
+              stfld string Kotlin.RuntimeException::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname virtual instance string 'get_Message'() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              ldfld string Kotlin.RuntimeException::'_message'
+              ret
+            }
+
+            .property instance string Message()
+            {
+              .get instance string Kotlin.RuntimeException::'get_Message'()
+            }
+          }
+
+          .class public auto ansi beforefieldinit NoWhenBranchMatchedException
+                 extends Kotlin.RuntimeException
+          {
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void Kotlin.RuntimeException::.ctor()
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.RuntimeException::.ctor(string)
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class [mscorlib]System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              ldarg.0
+              ldarg.1
+              ldarg.2
+              call instance void Kotlin.RuntimeException::.ctor(string, class [mscorlib]System.Exception)
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Exception 'cause') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.RuntimeException::.ctor(class [mscorlib]System.Exception)
+              ret
+            }
+          }
+
           .class interface public abstract auto ansi Function
           {
           }

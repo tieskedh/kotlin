@@ -55,6 +55,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The initial stable
   foundational type was the deliberately memberless static marker
   `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
+  The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
+  for exact Kotlin-only exception identities and
+  `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. Their hybrid
+  exception policy is described in the exception-model bullet below.
   The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
@@ -155,7 +159,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   a Kotlin negative-array-size failure. Constructors therefore branch on a negative size and
   throw plain `System.Exception`: the supported Kotlin catch edges (`Exception`/`Throwable`)
   remain correct without inventing an `ArithmeticException` or `IllegalArgumentException` edge;
-  exact `NegativeArraySizeException` identity is deferred with Kotlin-owned exception classes.
+  exact negative-array-size identity is deferred until that synthetic guard has an audited
+  Kotlin-owned exception and catch policy.
   Direct `for (x in array)` iteration is lowered without iterator allocation: evaluate the array
   expression once into `indexedObject`, initialize `inductionVariable = 0`, cache immutable
   `last = indexedObject.size`, then `while (inductionVariable < last)` load
@@ -909,7 +914,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   never emitted as classes of their own. Injected declarations must compile without any diagnostics,
   including warnings: the FIR test infrastructure maps every reported diagnostic back to a test
   file and crashes on diagnostics in injected files (suppress e.g. deprecations locally).
-- Exceptions follow the JVM model: `IrThrow` and `IrTry` map 1:1 onto the platform's
+- Exceptions use the hybrid identity policy recorded in
+  `docs/decisions/draft-adr-hybrid-exception-identity.md` (probe series `exceptionabi_s1`).
+  `IrThrow` and `IrTry` follow the JVM model and map 1:1 onto the platform's
   exception machinery with NO lowering (no WASM/JS TryCatchCanonicalization or
   MultipleCatchesLowering). Built-in exception classes are TYPE-MAPPED onto the CLR hierarchy
   (JVM analogue: `JavaToKotlinClassMap`) via the curated `DotNetMappedExceptions` registry, so
@@ -921,9 +928,21 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   CLR's DivideByZeroException IS-A System.ArithmeticException, probe-verified; its message
   "Attempted to divide by zero." is kept verbatim — JVM precedent, "/ by zero" IS the JVM's
   platform message); IndexOutOfBoundsException → IndexOutOfRangeException; NullPointerException
-  → NullReferenceException; ClassCastException → InvalidCastException. RuntimeException, Error
-  and NumberFormatException resolve (declared in the injected stdlib) but are REJECTED with
-  per-type reasons — mapping them would observably break catch semantics (see the registry KDoc).
+  → NullReferenceException; ClassCastException → InvalidCastException. Those mappings remain
+  deliberate because raw CLR division, null, vector-bounds, and cast faults must stay catchable.
+  Replacing only the classes would lose those catch edges unless codegen translated the faults or
+  catch lowering supported union/filter semantics.
+  `Kotlin.Runtime` separately owns public `Kotlin.RuntimeException : System.Exception` as the
+  durable physical root for exact Kotlin-only identities. It exposes the mature four constructor
+  forms: `()`, `(String?)`, `(String?, Throwable?)`, and `(Throwable?)`. A private nullable message
+  field plus a reused virtual `System.Exception.get_Message` slot preserves a null default message;
+  the cause-only form uses `cause?.toString()` and preserves the cause in `InnerException`.
+  Source `kotlin.RuntimeException` still REJECTS: mapped logical children such as
+  `IllegalStateException -> System.InvalidOperationException` are not physical children of the
+  runtime root, so enabling the parent would make its catch miss a legal child. `Error` and
+  `NumberFormatException` likewise resolve through the injected stdlib but REJECT for their own
+  hierarchy reasons. Every future migration requires an explicit native-fault/catch audit; the
+  presence of a similarly named runtime class is not sufficient.
   Accepted deltas, documented on the registry: `message` keeps type `String?` but is never null
   on mapped exceptions (no-arg `Exception()` yields the CLR default text); the constructor
   whitelist is `()`/`(String?)` everywhere and `(String?, Throwable?)` where the registry's
@@ -944,15 +963,19 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `System.Runtime.CompilerServices.SwitchExpressionException`, but `whenprobe_s1` proved that the
   type requires the `[System.Runtime]` scope on CoreCLR 10.0.9 (`[mscorlib]` assembles but fails
   with `TypeLoadException`), and the .NET Framework `System.Runtime` facade does not contain it.
-  Emitted IL must stay target-independent, so until Kotlin-owned exception classes exist the
-  backend throws `[mscorlib]System.Exception` directly. This preserves the supported
-  `Throwable`/`Exception` catch edges without falsely making `NoWhenBranchMatchedException`
-  catchable as the sibling Kotlin `IllegalStateException`. `ilText/exhaustiveWhen.kt` pins both
-  emission positions and the two-handler boundary; `box/exhaustiveWhen.kt` runs all
-  reachable Boolean/Boolean? arms on CoreCLR. `whenprobe_s2` links against that exact golden and
+  Emitted IL must stay target-independent, so the intrinsic now constructs the exact runtime-owned
+  `[Kotlin.Runtime]Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`. This preserves
+  the supported `Throwable`/`Exception` catch edges without falsely making the exception a mapped
+  `IllegalStateException`. The open runtime class follows JVM/Native and exposes the same four
+  constructor forms as its root. `exceptionabi_s1` assembled the hierarchy and consumers with
+  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings preserved the exact
+  catch, the RuntimeException parent edge, null default message, cause identity, and the boundary
+  from a foreign `InvalidOperationException`. `ilText/exhaustiveWhen.kt` pins both emission
+  positions and the two-handler boundary; `box/exhaustiveWhen.kt` runs all reachable
+  Boolean/Boolean? arms on CoreCLR. `whenprobe_s2` links against that exact golden and
   passes the noncanonical CLR `bool` value `2` to force the otherwise unreachable fallthrough in
   a second call-argument position (a prior string remains below the exception on the evaluation
-  stack), runtime-pinning both the throw and target-neutral catchability.
+  stack), runtime-pinning both the throw and cross-target catchability.
 - try/catch follows the JVM model: `IrTry` maps 1:1 onto the CLR exception table — one `.try`
   block plus consecutive typed `catch` handlers in Kotlin source order (the CLR matches strictly
   first-to-last, probe-verified; the frontend owns unreachable-catch diagnostics) — with no
