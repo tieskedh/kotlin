@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowerin
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
 import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
 import org.jetbrains.kotlin.config.phaser.PhaseConfig
@@ -40,6 +41,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // then move only transformed declarations to the nearest metadata container. This precedes
     // inner classes and initializer merging, as on the JVM (localprobe_s1/s2, anonprobe_s1/s2).
     ::DotNetUpgradeCallableReferences,
+    // Match the mature backends before closure conversion and default stubs: normalize concrete
+    // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread
+    // copies to ordinary array operations. Open `vararg T` keeps its unsupported projection.
+    ::DotNetVarargLowering,
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetCallableReferenceLowering,

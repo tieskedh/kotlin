@@ -604,7 +604,13 @@ private fun emitArrayLiteral(
     val varargElements = when (vararg) {
         null -> emptyList()
         is IrVararg -> vararg.elements
-        else -> dotNetUnsupported("$functionName requires a literal vararg argument")
+        else -> {
+            // General vararg lowering has already materialized spread-bearing calls as a fresh
+            // vector. Keep the builtin `arrayOf`/`*ArrayOf` call as an identity boundary so the
+            // optimized no-spread literal path remains unchanged.
+            codegen.emitExpression(vararg, arrayType)
+            return true
+        }
     }
     val elements = varargElements.mapIndexed { index, element ->
         when (element) {

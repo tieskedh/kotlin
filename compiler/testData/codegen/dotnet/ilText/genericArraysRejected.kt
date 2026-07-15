@@ -38,7 +38,9 @@ fun <T> nullableTypeParameter(values: Array<T?>): T? = values[0]
 
 fun initialized(size: Int): Array<String> = Array(size) { "x" }
 
-fun spread(values: Array<String>): Array<String> = arrayOf(*values)
+fun nullablePrimitiveVarargs(vararg values: Int?): Int? = values[0]
+
+fun nestedVarargs(vararg values: IntArray): IntArray = values[0]
 
 fun nullPrimitive(size: Int): Array<Int?> = arrayOfNulls(size)
 
