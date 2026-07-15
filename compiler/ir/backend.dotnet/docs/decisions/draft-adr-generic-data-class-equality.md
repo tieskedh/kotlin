@@ -123,6 +123,14 @@ case, supplies the substituted CLR return type to coercion and implicit-cast dec
 default copying composable with all generic member-return shapes and avoids an invalid
 `C<!0>`-to-`C<int32>` cast.
 
+The same ownership rule applies to an omitted generic copy argument. Common/JVM default injection
+marks an unobservable placeholder with `IrStatementOrigin.DEFAULT_VALUE`; when its mask bit is set,
+the helper replaces it before the source body can observe it. The shared .NET call emitter uses the
+resolved parameter type for that placeholder: concrete zero/null/empty-nullable values where the
+shape is known and an `initobj !n`/`!!n` local for an open CLR type parameter. Generic data copying
+therefore consumes the general default-argument ABI and does not define a data-class-only wrapper
+or representation.
+
 Common local-declaration lowering may also prepend bound receiver/value capture parameters to a
 lifted local data class's primary constructor. They are implementation state, not data properties.
 The generic-data lowering therefore excludes only the `BOUND_RECEIVER_PARAMETER` and

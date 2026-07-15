@@ -299,9 +299,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   from the same lifted declaration compare only their data properties even when their captured
   state differs. A generic local data class keeps the ordinary reified class plus its private
   erased equality view; the generic-data lowering filters `BOUND_RECEIVER_PARAMETER` and
-  `BOUND_VALUE_PARAMETER` before constructing that view. Open-type-parameter default
-  placeholders remain a separate general default-argument boundary: explicit `copy(value =
-  value)` works, while an omitted `T` still needs a target-neutral `default(T)` emission strategy.
+  `BOUND_VALUE_PARAMETER` before constructing that view. Omitted generic arguments use the
+  common/JVM default-injector marker rather than a data-class special case. The injector's
+  `DEFAULT_VALUE` null composite is unobservable whenever its mask bit is set, but an open CLR
+  type parameter cannot always carry the reference-shaped null found in that IR. Call emission
+  therefore materializes the resolved parameter's physical default: zero for a known primitive,
+  null for a reference, an empty `Nullable<V>`, or a synthetic local initialized with
+  `initobj !n`/`!!n` for an open class/method type parameter. This shared call path covers
+  functions, members, constructors, and generated `copy$default` calls while preserving explicit
+  argument evaluation. It does not legalize observable `T?` in a generic declaration; the
+  nullable-open-type rejection below remains unchanged.
   Array properties preserve the JVM asymmetry deliberately: generated equality remains ordinary
   array reference identity, while only hashCode/toString inspect content. Fir2ir emits its
   `dataClassArrayMemberHashCode`/`dataClassArrayMemberToString` builtins; the intrinsic registry
