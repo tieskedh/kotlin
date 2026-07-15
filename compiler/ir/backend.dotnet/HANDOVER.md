@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(generic data-class representation audit after constructor defaults).
+(data-object audit after generic data-class equality).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -14,12 +14,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   identity (`eb1fae21e`) and exact Kotlin Error identity (`b3fc89984`), followed by the
   RuntimeException migration-gate decision (`acde56d80`) and the bounded top-level data-class and
   masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
-  by array-backed data classes (`a43d3de4d`) and constructor defaults in the current functional
-  slice.
+  by array-backed data classes (`a43d3de4d`), constructor defaults (`d6deff4f5`), and generic
+  data-class equality in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **420 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **434 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -531,7 +531,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The draft ADR now requires either an exact owned-child hierarchy with comprehensive native-fault
   and interop translation, or a different representation proven coherent for storage, signatures,
   catches, rethrows, and type tests. Do not enable the source mapping piecemeal.
-- The bounded data-class model enables non-generic top-level and named nested classes whose
+- The data-class model enables top-level and named nested classes whose
   primary-constructor properties have supported mapped types.
   Fir2ir's mature generated bodies are used unchanged: Equals reuses the System.Object slot
   through CLR `isinst`/`castclass`, hash/string behavior reuses the Any runtime helpers,
@@ -548,13 +548,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   still collide, such as `String` versus `String?`. Primary/secondary, delegating, data, generic,
   named nested, inner, lifted local/capturing, multi-mask, named-argument, and evaluation-order
   paths run on CoreCLR. Interface defaults remain unlowered so Framework interfaces stay
-  all-abstract. Generic data classes are not mapped to reified CLR `isinst C<T>` because that would
-  make equality stricter than Kotlin/JVM erased class identity. A named nested data class follows
-  the established static-nested model: it captures no outer instance and owns only its own type
-  parameters, so even below `GenericOuter<T>` its independently non-generic metadata identity and
-  every generated member token are `'GenericOuter`1'/'Entry'` with no outer `!0`. Runtime coverage
-  composes that shape below classes, generic classes, interfaces, objects, companions, data
-  classes, and deeper named parents. Array properties now follow the JVM-generated-member split:
+  all-abstract. Generic data classes keep normal reified CLR `C<T>` storage, signatures,
+  constructors, component members, and copying, but generated equality uses the CLR-specific split
+  in `docs/decisions/draft-adr-generic-data-class-equality.md`. Each declaration owns a private,
+  non-generic nested equality interface with one object-valued slot per primary property. Private
+  explicit MethodImpl bridges expose those values only to `Equals`; all constructed `C<T>` types
+  share that declaration-local view, so Kotlin/JVM's erased equality identity survives without a
+  public runtime protocol. The call resolver also reports the receiver-substituted CLR return type
+  for generated member calls: `C<Int>.copy$default` produces `C<Int>` even when common IR retains
+  the open `C<T>` result. A named nested data class follows the established static-nested model: it
+  captures no outer instance and owns only its own type parameters, so even below
+  `GenericOuter<T>` its independently non-generic metadata identity and every generated member
+  token are `'GenericOuter`1'/'Entry'` with no outer `!0`. Runtime coverage composes that shape
+  below classes, generic classes, interfaces, objects, companions, data classes, and deeper named
+  parents. Array properties now follow the JVM-generated-member split:
   equality remains reference identity, while fir2ir's dedicated array hash/string builtins route
   through the DotNet intrinsic registry to runtime-owned `System.Array` helpers. The helpers fold
   elements with the established Kotlin object-boundary hash/string operations, giving null 0/
@@ -581,6 +588,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The exact constructor golden assembles with both ILAsm versions, both parser variants execute
   the comprehensive box on CoreCLR, the Framework-selected ILAsm also executes it, and the fresh
   full DotNet suite is 420/0/0/0.
+  `generic_data_probe_s1` established the selected private nested-interface shape before codegen.
+  Both generic equality goldens assemble with modern 10.0.9 and Framework 4.8 ILAsm; all five new
+  runtime boxes execute when Framework ILAsm is selected as well as under the normal modern path.
+  Reflection sees zero public component bridges and zero public erased-view types, two private
+  bridges plus one private view in the two-property pin, and the ordinary public generic property
+  remains open `T`. The focused two-parser generic/callable-regression matrix is 16/0/0/0, and the
+  fresh `--rerun-tasks` full DotNet suite is 434/0/0/0 across eight XML files.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -663,12 +677,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Extend data classes one representation boundary at a time.** Constructor defaults now have
-   the durable JVM-shaped runtime marker ABI. Next audit generic data-class equality before
-   codegen: Kotlin/JVM equality tests erased class identity, whereas CLR `isinst C<T>` observes the
-   reified type arguments. Choose and probe a representation that preserves Kotlin equality
-   without weakening the backend's real CLR generic identity elsewhere; do not simply emit
-   `isinst C<T>`.
+1. **Extend data classes one representation boundary at a time.** Generic data-class equality now
+   preserves erased Kotlin declaration identity through a private CLR view without weakening the
+   backend's reified generic model. Next audit data objects: reuse the existing singleton identity
+   and shared generated-member machinery, verify their declaration-stable generated hash/text,
+   and keep them whole-class gated until both ILAsm versions and real runtime behavior agree.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 

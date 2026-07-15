@@ -232,7 +232,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   foundation. Pins:
   `ilText/inheritanceAnyOverride.kt`, `ilText/interfaceEqualityWidening.kt`,
   `ilText/nullableRejected.kt`, `ilText/genericRejected.kt`; runtime: `box/anyMembers.kt`.
-- A bounded data-class slice consumes the System.Object Any foundation without adding
+- Data-class slices consume the System.Object Any foundation without adding
   another object identity or a backend-specific member generator. Fir2ir's shared
   `DataClassMembersGenerator` already supplies `equals`, `hashCode`, `toString`, `componentN`,
   and `copy` bodies. For a non-generic top-level or named nested class whose primary-constructor
@@ -266,6 +266,20 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `'Outer`1'/'Entry'`: its generated `isinst`/`castclass`, fields, constructor, members, and
   `copy$default` tokens carry no outer `!0`. The same shape composes below supported classes,
   interfaces, objects, companions, data classes, and deeper named metadata parents.
+  A generic data class follows the CLR-specific split recorded in
+  `docs/decisions/draft-adr-generic-data-class-equality.md`. Ordinary class identity, storage,
+  signatures, construction, `componentN`, and copying stay the real reified `C<T>` model. Only
+  compiler-generated equality needs an erased class view: each declaration owns one private,
+  non-generic nested interface with an object-returning slot per primary-constructor property.
+  Every `C<T>` implements those slots through private final methods plus explicit CLR MethodImpl
+  `.override` entries. Generated `Equals(object)` tests that declaration-unique view, reads the
+  other components through it, and compares boxed/widened values via `Intrinsics.AreEqual`.
+  Different instantiations of one class therefore retain Kotlin/JVM's erased equality identity,
+  while different data-class declarations remain distinct and no public runtime protocol is
+  added. A user-written `equals` is left untouched and receives no view. Generic member calls also
+  expose their substituted CLR result to coercion decisions: common default lowering leaves a
+  `copy$default` call's IR result open as `C<T>`, but a receiver `C<Int>` really produces
+  `C<Int>` and must not trigger an invalid `C<!0>`-to-`C<int32>` cast.
   Array properties preserve the JVM asymmetry deliberately: generated equality remains ordinary
   array reference identity, while only hashCode/toString inspect content. Fir2ir emits its
   `dataClassArrayMemberHashCode`/`dataClassArrayMemberToString` builtins; the intrinsic registry
@@ -275,19 +289,24 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   one semantic implementation. Null arrays hash to 0 and render `null`; empty arrays hash to 1 and
   render `[]`. The same boundary exposed the CLR Char hash difference, now normalized centrally
   for ordinary Any calls as well as array content.
-  STAYS REJECTED, whole-class: generic data classes (CLR reified `isinst C<T>` would make equality
-  stricter than Kotlin/JVM erased class identity), array shapes rejected by the primitive/generic
-  vector mapper, local data classes, and data objects. Pins:
+  STAYS REJECTED, whole-class: array shapes rejected by the primitive/generic vector mapper,
+  local data classes, and data objects. Pins:
   `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassArrays.kt`,
-  `ilText/constructorDefaultArguments.kt`, `ilText/dataClassesRejected.kt`,
+  `ilText/genericDataClasses.kt`, `ilText/genericDataClassDefaults.kt`,
+  `ilText/constructorDefaultArguments.kt`, `ilText/dataClassesRejected.kt`, and
   `ilText/defaultArgumentsRejected.kt`; runtime:
   `box/dataClasses.kt`, `box/nestedDataClasses.kt`, `box/dataClassArrays.kt`,
-  `box/defaultArguments.kt`, `box/constructorDefaultArguments.kt`, and `box/anyMembers.kt`.
+  `box/genericDataClasses.kt`, `box/genericDataClassArrays.kt`,
+  `box/genericDataClassShapes.kt`, `box/genericDataClassMultipleTypeParameters.kt`,
+  `box/genericDataClassDefaults.kt`, `box/defaultArguments.kt`,
+  `box/constructorDefaultArguments.kt`, and `box/anyMembers.kt`.
   `dataclass_s1`, `dataclass_s2`, `dataclass_array_probe_s1`, and `ctor_default_probe_s1`
   assembled the relevant shapes under modern 10.0.9 and Framework 4.8 ILAsm; the array helper
   probe ran identically on both runtimes, and all four constructor consumer/runtime ILAsm
-  pairings preserved the default and real-overload paths. The fresh full two-parser matrix is
-  420/0/0/0 across eight suites.
+  pairings preserved the default and real-overload paths. `generic_data_probe_s1` assembled both
+  generic equality goldens with both ILAsm versions; Framework-selected boxes executed every new
+  runtime shape on CoreCLR, and reflection found only private view/bridge metadata while the public
+  property remained open `T`. The fresh full two-parser matrix is 434/0/0/0 across eight suites.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure

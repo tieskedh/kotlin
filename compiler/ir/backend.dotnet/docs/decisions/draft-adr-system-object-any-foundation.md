@@ -132,7 +132,7 @@ results.
 Compiler promotion requires exact-IL pins for slot names and flags, runtime boxes for virtual and
 null-safe behavior, and continued assembly under both ILAsm implementations.
 
-## Later consumer: bounded data classes
+## Later consumers: bounded and generic data classes
 
 A later slice now consumes this foundation for non-generic top-level and named nested data classes
 with supported primary-constructor properties. It does not revise the Any decision. Fir2ir's shared
@@ -145,9 +145,14 @@ defaults use the common/JVM masks plus the runtime-owned nullable marker. Neithe
 root or callable identity. A named nested data class uses the existing static-nested metadata
 identity and captures no outer type argument, including below a generic outer.
 
-The slice rejects generic data classes because CLR reified `isinst C<T>` is stricter than Kotlin's
-erased class identity. Local data classes and data objects also remain gated. The gate runs before
-class registration, so an unsupported generated body cannot leave behind a partial class.
+Generic data classes preserve the established reified CLR `C<T>` representation for storage and
+ordinary members, but generated equality cannot use CLR's stricter `isinst C<T>` literally. The
+later generic-data-class decision adds one private, non-generic nested equality view per data-class
+declaration and compares its object-valued components through the same `AreEqual` boundary. This
+is a class-local implementation detail, not another `Any` identity or runtime API; see
+`docs/decisions/draft-adr-generic-data-class-equality.md`. Local data classes and data objects
+remain gated. Unsupported classes are still removed whole before they can expose a partial
+generated API.
 
 ## Deliberate boundaries
 
