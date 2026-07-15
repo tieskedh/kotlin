@@ -58,7 +58,7 @@
     ret
   }
 }
-.class public auto ansi sealed beforefieldinit 'NestedDataHost'
+.class public auto ansi sealed beforefieldinit 'NestedAnnotationHost'
        extends [mscorlib]System.Object
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed

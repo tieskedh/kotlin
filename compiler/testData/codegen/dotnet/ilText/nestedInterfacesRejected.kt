@@ -1,8 +1,8 @@
 // Nested interfaces retain the Framework-compatible all-abstract boundary: BrokenContract is
 // omitted for its default body while its metadata parent and Good sibling survive. Likewise, an
-// unsupported data class inside an interface removes only its own subtree. A companion failure
-// remains owner-sensitive, and a generic interface cannot own a companion because CLR statics are
-// per constructed generic owner.
+// unsupported annotation class inside an interface removes only its own subtree. A companion
+// failure remains owner-sensitive, and a generic interface cannot own a companion because CLR
+// statics are per constructed generic owner.
 
 interface NestedInterfaceMarker
 
@@ -17,7 +17,7 @@ class NestedDefaultBodyHost {
 }
 
 interface BrokenDeclarationHost {
-    data class Broken(val value: Int)
+    annotation class Broken(val value: Int)
 
     class Good {
         fun value(): Int = 7
