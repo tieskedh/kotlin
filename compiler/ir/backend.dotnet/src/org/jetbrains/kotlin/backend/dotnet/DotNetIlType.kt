@@ -464,8 +464,9 @@ internal class DotNetIlFunctionInfo(
 }
 
 /**
- * A user class currently considered compilable to .NET IL — top-level, or, with [enclosingClass]
- * set, a recursively nested named class, named object, or companion object. The counterpart of
+ * A user class currently considered compilable to .NET IL — top-level (including a popped-up
+ * module-private local class), or, with [enclosingClass] set, a recursively nested named/local
+ * class, named object, or companion object. The counterpart of
  * [DotNetIlFunctionInfo] for classes; it carries the IL class name ([ilClassName] — the dotted
  * FqName for a top-level class, the simple arity-suffixed name for a nested one, i.e. what the
  * `.class` directive declares) and renders the member references of the class model.

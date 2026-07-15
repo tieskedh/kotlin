@@ -1,6 +1,9 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -27,7 +30,9 @@ import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
+import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
@@ -105,6 +110,7 @@ class DotNetIlEmitter(
         // frontend resolution only and must be neither emitted nor skip-warned.
         val availableClasses = LinkedHashMap<IrClass, DotNetIlClassInfo>()
         val classSkipReasons = LinkedHashMap<IrClass, String>()
+        val usedIlTypeRefs = hashSetOf<String>()
         val moduleTopLevelClasses = topLevelClassesByFile.values.flatten().toHashSet()
         val moduleClasses = buildSet {
             fun collect(irClass: IrClass) {
@@ -162,19 +168,36 @@ class DotNetIlEmitter(
                 removeAndRecordUnavailableSubtree(unavailableRoot)
                 return
             }
-            val arity = irClass.typeParameters.size
-            val baseName = if (enclosingClassInfo == null) {
+            val aritySuffix = irClass.typeParameters.size.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
+            val baseName = irClass.dotNetInventedLocalClassName ?: if (enclosingClassInfo == null) {
                 irClass.fqNameWhenAvailable!!.asString()
             } else {
                 irClass.name.asString()
             }
-            val classInfo = DotNetIlClassInfo(
-                baseName + if (arity > 0) "`$arity" else "",
-                enclosingClass = enclosingClassInfo,
-                typeParameterVariances = irClass.typeParameters.map { it.variance },
-            )
+            var collisionSuffix = 0
+            var classInfo: DotNetIlClassInfo
+            while (true) {
+                val disambiguatedBaseName =
+                    if (collisionSuffix == 0) baseName else "$baseName\$$collisionSuffix"
+                classInfo = DotNetIlClassInfo(
+                    disambiguatedBaseName + aritySuffix,
+                    enclosingClass = enclosingClassInfo,
+                    typeParameterVariances = irClass.typeParameters.map { it.variance },
+                )
+                if (usedIlTypeRefs.add(classInfo.ilTypeRef)) break
+                if (!irClass.isOriginallyLocalDeclaration) {
+                    classSkipReasons.putIfAbsent(
+                        irClass,
+                        "class '${irClass.diagnosticName()}' maps to duplicate IL type '${classInfo.ilTypeRef}'",
+                    )
+                    return
+                }
+                collisionSuffix++
+            }
             availableClasses[irClass] = classInfo
-            for (nestedClass in irClass.declarations.filterIsInstance<IrClass>()) {
+            val nestedClasses = irClass.declarations.filterIsInstance<IrClass>()
+                .sortedBy { it.isOriginallyLocalDeclaration }
+            for (nestedClass in nestedClasses) {
                 registerClassTree(nestedClass, classInfo)
                 // A companion can promote its own failure to this owner. Do not register later
                 // siblings under an owner that was removed.
@@ -182,7 +205,7 @@ class DotNetIlEmitter(
             }
         }
 
-        for (irClass in topLevelClassesByFile.values.flatten()) {
+        for (irClass in topLevelClassesByFile.values.flatten().sortedBy { it.isOriginallyLocalDeclaration }) {
             if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) continue
             // A generic class's IL name carries the CLS `` `n `` arity suffix INSIDE the
             // quoted identifier ('demo.Box`1' — outside the quotes is an ilasm syntax error,
@@ -792,6 +815,17 @@ class DotNetIlEmitter(
             ClassKind.ENUM_CLASS, ClassKind.ENUM_ENTRY -> dotNetUnsupported("enum class '$name' is not supported")
             ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
+        }
+        if (irClass.isAnonymousObject) {
+            dotNetUnsupported("anonymous object '$name' is not supported; only named local classes are supported")
+        }
+        if (irClass.isOriginallyLocalDeclaration) {
+            if (irClass.dotNetInventedLocalClassName == null) {
+                dotNetUnsupported("local class '$name' has no invented CLR metadata name")
+            }
+            irClass.dotNetLocalCaptureRejectionReason?.let { reason ->
+                dotNetUnsupported("local class '$name' $reason")
+            }
         }
         if (enclosingClass == null && irClass.parent !is IrFile) {
             dotNetUnsupported("class '$name' is not top-level; nested/inner/local classes are not supported")
@@ -1480,13 +1514,14 @@ class DotNetIlEmitter(
                             renderedFields += renderObjectInstanceField(declaration, typeMapper)
                         IrDeclarationOrigin.DELEGATE,
                         IrDeclarationOrigin.FIELD_FOR_OUTER_THIS,
+                        LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE,
                             -> {
                             if (declaration.isStatic) {
                                 val fieldKind =
-                                    if (declaration.origin == IrDeclarationOrigin.FIELD_FOR_OUTER_THIS) {
-                                        "outer-instance"
-                                    } else {
-                                        "interface-delegate"
+                                    when (declaration.origin) {
+                                        IrDeclarationOrigin.FIELD_FOR_OUTER_THIS -> "outer-instance"
+                                        LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE -> "captured-value"
+                                        else -> "interface-delegate"
                                     }
                                 dotNetUnsupported(
                                     "internal: $fieldKind field '${declaration.name.asString()}' " +
@@ -1554,6 +1589,7 @@ class DotNetIlEmitter(
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
                 nestedVisibility = irClass.dotNetNestedTypeVisibility(),
+                exported = !irClass.isOriginallyLocalDeclaration,
                 renderedNestedClasses = renderedNestedClasses,
                 // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
                 // the JVM's ACC_FINAL); companions and objects never reach here as open — the
@@ -1627,6 +1663,7 @@ class DotNetIlEmitter(
      */
     private fun IrClass.dotNetNestedTypeVisibility(): String = when {
         parent !is IrClass || isCompanion -> "public"
+        isOriginallyLocalDeclaration -> "private"
         visibility == DescriptorVisibilities.PUBLIC -> "public"
         visibility == DescriptorVisibilities.PRIVATE -> "private"
         visibility == DescriptorVisibilities.INTERNAL -> "assembly"
@@ -1637,12 +1674,14 @@ class DotNetIlEmitter(
     /**
      * One `.field` line: the instance backing field of a member property, FIR's loose private
      * interface-delegate field, the common inner-class lowering's private outer-instance field,
-     * or, with [isStatic], the static backing field of a top-level property on its file facade.
+     * a local class's immutable captured-value field, or, with [isStatic], the static backing
+     * field of a top-level property on its file facade.
      * These fields are always `private` (the JVM `final` analogue `initonly` is deliberately
      * omitted — a pure metadata nicety with no semantic need, and a `var`'s `stsfld` from the
      * static setter must stay legal); the delegation shape is ilasm-probe-verified by
-     * `delegationprobe_s1`, the outer-instance shape by `innerprobe_s1`–`_s2`, and both
-     * backing-field spellings by `statprobe_s1`/`_s2` (including a user-class-typed static field).
+     * `delegationprobe_s1`, the outer-instance shape by `innerprobe_s1`–`_s2`, the local capture
+     * shape by `localprobe_s1`–`_s2`, and both backing-field spellings by `statprobe_s1`/`_s2`
+     * (including a user-class-typed static field).
      */
     private fun renderField(field: IrField, typeMapper: DotNetIlTypeMapper, isStatic: Boolean = false): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
@@ -1785,9 +1824,9 @@ class DotNetIlEmitter(
      * field named after the companion that [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * parents to a companion-bearing class (so a user field named `Companion` with the
      * companion's type clashes, whole-owner-subtree) — FIR's loose interface-delegate field,
-     * the inner-class lowering's outer-instance field, plus the backing fields of the declared
-     * properties, including `const val`s, whose `literal` fields share the class's field
-     * namespace like any other field.
+     * the inner-class lowering's outer-instance field, local-class captured-value fields, plus
+     * the backing fields of the declared properties, including `const val`s, whose `literal`
+     * fields share the class's field namespace like any other field.
      */
     private fun IrClass.dotNetMemberFields(): List<IrField> =
         declarations.flatMap { declaration ->
@@ -1808,6 +1847,8 @@ class DotNetIlEmitter(
     private fun IrField.dotNetFieldDescription(): String = when {
         origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE -> "the synthesized '${name.asString()}' singleton field"
         origin == IrDeclarationOrigin.FIELD_FOR_OUTER_THIS -> "the synthesized outer-instance field"
+        origin == LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE ->
+            "the synthesized captured-value field '${name.asString()}'"
         correspondingPropertySymbol != null -> "the backing field of property '${name.asString()}'"
         else -> "field '${name.asString()}'"
     }

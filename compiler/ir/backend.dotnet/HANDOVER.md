@@ -7,12 +7,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Add inner class outer capture",
+- Branch `dotnet`; latest functional work is "[DotNet] Add named local classes",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **352 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **358 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -30,6 +30,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Inner classes whose immediate outer is non-generic now use the common/JVM explicit-outer
   representation on CLR nested metadata; generic-outers remain rejected pending parameter-space
   duplication/substitution.
+  Named local classes now use common closure conversion/popup with immutable value/receiver and
+  duplicated type-parameter captures; anonymous objects, mutable captures, and local-function
+  mixtures remain separate boundaries.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
@@ -276,6 +279,24 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ILAsm; the positive golden runs identically on CoreCLR and Framework with output
   `12,17,true,generic,10,22,19,13,15,13,22`. The fresh full DotNet suite is 352/0/0/0
   across eight XML files.
+- The named-local-class continuation reuses common name invention, closure conversion, and popup
+  before the inner/initializer phases, but deliberately enters the pipeline only for bodies with
+  named locals and no anonymous object or explicit local function. Top-level-function locals emit
+  as module-private top-level types; member/initializer locals emit as private nested types with
+  public metadata constructors. Immutable parameter/local/receiver captures become constructor
+  inputs and private fields as needed. Captured type parameters are duplicated on the local type,
+  including a generic-owner receiver typed through the local's independent slot. Invented names
+  use readable enclosing paths and add `$1` only on a real collision; the emitter also reserves
+  user metadata names first. Mutable captures reject precisely because shared-variable boxing is
+  absent, while anonymous objects and local-function mixtures remain wholly unlowered.
+  `localprobe_s1` verifies facade construction of a private top-level local/captured field;
+  `localprobe_s2` verifies a private nested local under `Outer<T>` with a duplicated generic slot.
+  Both probes and both exact goldens assemble and run identically on CoreCLR 10.0.9 and Framework
+  4.8. `ilText/localClasses.kt`, `ilText/localClassesRejected.kt`, and `box/localClasses.kt` pin
+  top-level/member/initializer locals, same-named overload locals, immutable captures, generic
+  function/owner captures, inheritance/interface dispatch, and the adjacent rejection boundaries.
+  Positive output is `15,7,9,21,generic,owner,12`; the rejection survivor prints `17`. The fresh
+  full DotNet suite is 358/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -292,8 +313,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
    `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
-   `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `whenprobe`, `arrprobe` are
-   taken). Keep
+   `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `localprobe`, `whenprobe`,
+   `arrprobe` are taken). Keep
    probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the class metadata subtree, the companion's immediate owner
@@ -347,11 +368,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit local and anonymous classes.** Keep them separate from the completed named-inner model:
-   determine which common local-declaration lowering can give CLR-addressable names and explicit
-   captures without widening scope or silently accepting anonymous objects with unsupported
-   supertypes. Probe constructor/capture order, recursive locals, visibility, generic-function and
-   generic-class captures, and the smallest sound rejection boundary before lifting any gate.
+1. **Audit anonymous objects.** Keep them separate from the completed named-local model: determine
+   whether common closure conversion plus the JVM anonymous-super-constructor argument lowering
+   can preserve constructor evaluation order for the currently supported module-local class and
+   interface supertypes. Probe capture/super-argument interleaving, object-expression identity,
+   generic captures, visibility, and smallest-subtree rejection. Keep explicit local functions
+   and shared mutable captures separate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
