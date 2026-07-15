@@ -1,0 +1,467 @@
+.assembly extern mscorlib {}
+.assembly 'localFunctions' {}
+.module 'main-localFunctions.il'
+
+.class interface public abstract auto ansi 'LocalFunctionIntValue'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'value'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericLocalFunctionOwner`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericLocalFunctionOwner`1'<!0>::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericLocalFunctionOwner`1'<!0>::'seed'
+    ret
+  }
+  .method public hidebysig instance !0 'value'() cil managed
+  {
+    .maxstack 2
+    ldstr "receiver"
+    ldarg.0
+    call !!0 class 'GenericLocalFunctionOwner`1'<!0>::'value$local'<!0, string>(!!1, class 'GenericLocalFunctionOwner`1'<!!0>)
+    ret
+  }
+  .method private hidebysig static !!0 'value$local'<'T', 'U'>(!!1 '<this>', class 'GenericLocalFunctionOwner`1'<!!0> 'this$0') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance !0 class 'GenericLocalFunctionOwner`1'<!!0>::'get_seed'()
+    ret
+  }
+  .property instance !0 'seed'()
+  {
+    .get instance !0 'GenericLocalFunctionOwner`1'::'get_seed'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericLocalFunctionNoReceiver`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance !0 'value'(!0 'input') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call !!0 class 'GenericLocalFunctionNoReceiver`1'<!0>::'value$local'<!0>(!!0)
+    ret
+  }
+  .method private hidebysig static !!0 'value$local'<'T'>(!!0 'item') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'LocalFunctionInInitializer'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    call int32 'LocalFunctionInInitializer'::'_init_$compute'(int32)
+    stfld int32 'LocalFunctionInInitializer'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'LocalFunctionInInitializer'::'value'
+    ret
+  }
+  .method private hidebysig static int32 '_init_$compute'(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 4
+    add
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'LocalFunctionInInitializer'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'MemberLocalFunctionCollision'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'run$local'(int32 'captured', int32 'value') cil managed
+  {
+    .maxstack 1
+    ldc.i4 -2
+    ret
+  }
+  .method public hidebysig instance int32 'run'(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 3
+    call int32 'MemberLocalFunctionCollision'::'run$local$1'(int32, int32)
+    ret
+  }
+  .method private hidebysig static int32 'run$local$1'(int32 '$seed', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'localFunctionsKt$localClassCallsFunction$Local'
+       extends [mscorlib]System.Object
+{
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'localFunctionsKt$localClassCallsFunction$Local'::'$seed'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld int32 'localFunctionsKt$localClassCallsFunction$Local'::'$seed'
+    ldc.i4 3
+    call int32 'localFunctionsKt'::'localClassCallsFunction$compute'(int32, int32)
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'localFunctionsKt$anonymousObjectCallsFunction$source$1'
+       extends [mscorlib]System.Object
+       implements 'LocalFunctionIntValue'
+{
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'localFunctionsKt$anonymousObjectCallsFunction$source$1'::'$seed'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld int32 'localFunctionsKt$anonymousObjectCallsFunction$source$1'::'$seed'
+    ldc.i4 4
+    call int32 'localFunctionsKt'::'anonymousObjectCallsFunction$compute$1'(int32, int32)
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'localFunctionsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'localCapture'(int32 'seed') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'offset'
+    )
+    ldc.i4 2
+    stloc.0
+    ldarg.0
+    ldloc.0
+    ldc.i4 3
+    call int32 'localFunctionsKt'::'localCapture$add$1'(int32, int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'localCapture$add'(int32 'seed', int32 'offset', int32 'value') cil managed
+  {
+    .maxstack 1
+    ldc.i4 -1
+    ret
+  }
+  .method public hidebysig static int32 'recursiveLocal'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 'localFunctionsKt'::'recursiveLocal$sum'(int32)
+    ret
+  }
+  .method public hidebysig static int32 'nestedLocal'(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 2
+    call int32 'localFunctionsKt'::'nestedLocal$outer'(int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'overloadedLocalFunction'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 'localFunctionsKt'::'overloadedLocalFunction$same'(int32)
+    ret
+  }
+  .method public hidebysig static int32 'overloadedLocalFunction'(int32 'value', int32 'extra') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call int32 'localFunctionsKt'::'overloadedLocalFunction$same$0'(int32, int32)
+    ret
+  }
+  .method public hidebysig static !!0 'genericLocalFunction'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 5
+    call !!0 'localFunctionsKt'::'genericLocalFunction$choose'<!!0, int32>(!!0, !!1)
+    ret
+  }
+  .method public hidebysig static int32 'localClassCallsFunction'(int32 'seed') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'localFunctionsKt$localClassCallsFunction$Local'::.ctor(int32)
+    call instance int32 'localFunctionsKt$localClassCallsFunction$Local'::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'anonymousObjectCallsFunction'(int32 'seed') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'LocalFunctionIntValue' 'source'
+    )
+    ldarg.0
+    newobj instance void 'localFunctionsKt$anonymousObjectCallsFunction$source$1'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    callvirt instance int32 'LocalFunctionIntValue'::'value'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'MemberLocalFunctionCollision' 'collision'
+    )
+    ldc.i4 10
+    call int32 'localFunctionsKt'::'localCapture'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldc.i4 2
+    ldc.i4 3
+    call int32 'localFunctionsKt'::'localCapture$add'(int32, int32, int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 4
+    call int32 'localFunctionsKt'::'recursiveLocal'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    call int32 'localFunctionsKt'::'nestedLocal'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 6
+    call int32 'localFunctionsKt'::'overloadedLocalFunction'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 6
+    ldc.i4 3
+    call int32 'localFunctionsKt'::'overloadedLocalFunction'(int32, int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    call !!0 'localFunctionsKt'::'genericLocalFunction'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "owner"
+    newobj instance void class 'GenericLocalFunctionOwner`1'<string>::.ctor(!0)
+    call instance !0 class 'GenericLocalFunctionOwner`1'<string>::'value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void class 'GenericLocalFunctionNoReceiver`1'<string>::.ctor()
+    ldstr "no-owner"
+    call instance !0 class 'GenericLocalFunctionNoReceiver`1'<string>::'value'(!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    newobj instance void 'LocalFunctionInInitializer'::.ctor(int32)
+    call instance int32 'LocalFunctionInInitializer'::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'MemberLocalFunctionCollision'::.ctor()
+    stloc.0
+    ldloc.0
+    ldc.i4 9
+    call instance int32 'MemberLocalFunctionCollision'::'run'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 1
+    ldc.i4 2
+    call instance int32 'MemberLocalFunctionCollision'::'run$local'(int32, int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    call int32 'localFunctionsKt'::'localClassCallsFunction'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    call int32 'localFunctionsKt'::'anonymousObjectCallsFunction'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static int32 'localCapture$add$1'(int32 '$seed', int32 'offset', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ldarg.2
+    add
+    ret
+  }
+  .method assembly hidebysig static int32 'recursiveLocal$sum'(int32 'current') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    ldarg.0
+    ldc.i4 1
+    sub
+    call int32 'localFunctionsKt'::'recursiveLocal$sum'(int32)
+    add
+IL_whenEnd_0:
+    ret
+  }
+  .method assembly hidebysig static int32 'nestedLocal$outer$inner'(int32 '$seed', int32 '$extra', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ldarg.2
+    add
+    ret
+  }
+  .method assembly hidebysig static int32 'nestedLocal$outer'(int32 '$seed', int32 'extra') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldc.i4 3
+    call int32 'localFunctionsKt'::'nestedLocal$outer$inner'(int32, int32, int32)
+    ret
+  }
+  .method assembly hidebysig static int32 'overloadedLocalFunction$same'(int32 '$value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 1
+    add
+    ret
+  }
+  .method assembly hidebysig static int32 'overloadedLocalFunction$same$0'(int32 '$value', int32 '$extra') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ret
+  }
+  .method assembly hidebysig static !!0 'genericLocalFunction$choose'<'T', 'U'>(!!0 '$value', !!1 'ignored') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method assembly hidebysig static int32 'localClassCallsFunction$compute'(int32 '$seed', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ret
+  }
+  .method assembly hidebysig static int32 'anonymousObjectCallsFunction$compute$1'(int32 '$seed', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ret
+  }
+}

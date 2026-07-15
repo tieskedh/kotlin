@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
@@ -51,6 +52,7 @@ internal class DotNetIlExpressionCodegen(
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
     private val facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
+    private val currentOwner: DotNetIlClassInfo,
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
@@ -541,6 +543,36 @@ internal class DotNetIlExpressionCodegen(
                 ?: dotNetUnsupported(
                     "call to '$calleeName' through a receiver that is not an instantiation of its declaring class"
                 )
+            ownerToken = ownerView.nameInSignature
+            classInstantiation = ownerView.arguments
+        } else if (
+            !info.isInstance &&
+            info.owner.typeParameterCount > 0 &&
+            callee.isOriginallyLocalDeclaration &&
+            callee.parent is IrClass
+        ) {
+            // A lifted local function is static even when its metadata owner is a generic class.
+            // CLR member references must still instantiate that owner (`Owner<!0>::local`), or
+            // the runtime rejects the call as an open containing type. Prefer an explicit
+            // captured-owner argument; a direct call from another method of the same owner uses
+            // the owner's open `!n` instantiation (localfunprobe_s2).
+            val capturedOwnerView = call.arguments.asSequence()
+                .filterNotNull()
+                .mapNotNull { argument -> typeMapper.toDotNetIlValueType(argument.type) }
+                .mapNotNull { argumentType -> argumentType.dotNetViewAsGenericOwner(info.owner) }
+                .firstOrNull()
+            val ownerView = capturedOwnerView ?: if (currentOwner == info.owner) {
+                DotNetIlValueType.GenericInstance(
+                    info.owner,
+                    List(info.owner.typeParameterCount) { index ->
+                        DotNetIlValueType.TypeParameter(index, isMethodParameter = false)
+                    },
+                )
+            } else {
+                null
+            } ?: dotNetUnsupported(
+                "call to lifted local function '$calleeName' cannot determine the generic owner instantiation"
+            )
             ownerToken = ownerView.nameInSignature
             classInstantiation = ownerView.arguments
         }

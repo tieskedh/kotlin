@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
+import org.jetbrains.kotlin.name.Name
 
 class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
@@ -260,7 +261,7 @@ class DotNetIlEmitter(
                     // methods, `!!n`-indexed — no monomorphization or erasure machinery); the
                     // gate rejects the unsupported flavors (inline/reified, variance,
                     // constraints) loudly before the signature maps.
-                    function.checkDotNetGenericFunctionSupported()
+                    function.checkDotNetFunctionShapeSupported()
                     availableFunctions[function] = DotNetIlFunctionInfo(facadeClassInfo, function.dotNetSignature(typeMapper))
                 } catch (e: DotNetIlUnsupportedException) {
                     skipReasons[function] = e.reason
@@ -378,14 +379,13 @@ class DotNetIlEmitter(
             if (irClass !in availableClasses) continue
             try {
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
-                for (member in irClass.dotNetMemberFunctions()) {
+                for (member in irClass.dotNetMemberFunctions().sortedBy { it.isOriginallyLocalDeclaration }) {
                     val signature = member.dotNetSignature(typeMapper)
                     checkOverrideKeepsIlReturnType(member, signature, typeMapper)
                     // CLR method identity includes the generic ARITY (see
                     // dotNetIlGenericAritySuffix), for member methods as well as the facade gate
                     // below (genmemberprobe_s1).
-                    val ilIdentity =
-                        "${member.dotNetIlMethodName()}${member.dotNetIlGenericAritySuffix()}(${signature.renderParameterTypes()})"
+                    val ilIdentity = member.reserveLocalFunctionIlIdentity(signature, membersByIlIdentity)
                     membersByIlIdentity.put(ilIdentity, member)?.let { clashing ->
                         dotNetUnsupported(
                             "member '${member.name.asString()}' clashes with '${clashing.name.asString()}': " +
@@ -476,6 +476,7 @@ class DotNetIlEmitter(
                     else -> {}
                 }
             }
+            facadeCallables.sortBy { it.isOriginallyLocalDeclaration }
             val callablesByIlIdentity = hashMapOf<String, IrSimpleFunction>()
             for (callable in facadeCallables) {
                 // Already evicted as the partner of an earlier clash in this file.
@@ -483,8 +484,7 @@ class DotNetIlEmitter(
                 // The generic-arity marker keeps a generic `fun <T> f(x: Int)` distinct from a
                 // plain `fun f(x: Int)` — CLR method identity includes the arity (the Roslyn
                 // overload rule), so both are legal IL methods on one facade.
-                val ilIdentity =
-                    "${callable.dotNetIlMethodName()}${callable.dotNetIlGenericAritySuffix()}(${functionInfo.signature.renderParameterTypes()})"
+                val ilIdentity = callable.reserveLocalFunctionIlIdentity(functionInfo.signature, callablesByIlIdentity)
                 val clashing = callablesByIlIdentity.putIfAbsent(ilIdentity, callable) ?: continue
                 // A previous accessor clash may have failed the file's whole backing-property
                 // group, removing accessors that were indexed earlier in this snapshot. Such a
@@ -795,6 +795,46 @@ class DotNetIlEmitter(
      * [DotNetIlUnsupportedException]; registration drops that declaration's metadata subtree,
      * while its valid enclosing classes and siblings remain available.
      */
+    private fun IrSimpleFunction.checkDotNetFunctionShapeSupported() {
+        if (isOriginallyLocalDeclaration) {
+            val functionName = name.asString()
+            dotNetLocalCaptureRejectionReason?.let { reason ->
+                dotNetUnsupported("local function '$functionName' $reason")
+            }
+            if (isSuspend) {
+                dotNetUnsupported("local function '$functionName' is suspend; coroutine lowering is not available")
+            }
+            if (isInline) {
+                dotNetUnsupported("local function '$functionName' is inline; inline lowering is not available")
+            }
+        }
+        checkDotNetGenericFunctionSupported()
+    }
+
+    /**
+     * Gives a lifted local function the user's metadata namespace without letting it evict a
+     * source-declared method/accessor. Non-local callables are visited first; a colliding local
+     * appends the smallest free `$n` suffix, and every call observes the same mutated IR name.
+     */
+    private fun IrSimpleFunction.reserveLocalFunctionIlIdentity(
+        signature: DotNetIlMethodSignature,
+        claimed: Map<String, IrSimpleFunction>,
+    ): String {
+        fun identity(): String =
+            "${dotNetIlMethodName()}${dotNetIlGenericAritySuffix()}(${signature.renderParameterTypes()})"
+
+        var ilIdentity = identity()
+        if (!isOriginallyLocalDeclaration || ilIdentity !in claimed) return ilIdentity
+
+        val baseName = name.asString()
+        var suffix = 1
+        do {
+            name = Name.identifier("$baseName\$${suffix++}")
+            ilIdentity = identity()
+        } while (ilIdentity in claimed)
+        return ilIdentity
+    }
+
     private fun checkClassShapeSupported(
         irClass: IrClass,
         moduleClasses: Set<IrClass>,
@@ -982,7 +1022,7 @@ class DotNetIlEmitter(
             // top-level generic function. On a generic owner, `!n` and `!!n` remain independent
             // positional spaces (probe-verified, genmemberprobe_s1). Any unsupported method
             // parameter shape rejects the whole owning class before registration.
-            member.checkDotNetGenericFunctionSupported()
+            member.checkDotNetFunctionShapeSupported()
             if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
                 dotNetUnsupported(
                     "member '${member.name.asString()}' of class '$name' overrides a member of kotlin.Any; " +
@@ -1165,7 +1205,7 @@ class DotNetIlEmitter(
         // Abstract generic interface slots are ordinary CLR generic virtual methods. The same
         // gate as class/top-level methods owns reified, inline, and unsupported constraint shapes
         // (probe-verified together with a generic-class implementation, genmemberprobe_s1).
-        member.checkDotNetGenericFunctionSupported()
+        member.checkDotNetFunctionShapeSupported()
         if (member.visibility == DescriptorVisibilities.PRIVATE) {
             dotNetUnsupported("private $description of interface '$interfaceName' is not supported")
         }

@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ScopeWithIr
 import org.jetbrains.kotlin.backend.common.lower.InventNamesForLocalClasses
+import org.jetbrains.kotlin.backend.common.lower.InventNamesForLocalFunctions
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.VisibilityPolicy
@@ -17,10 +18,14 @@ import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBody
+import org.jetbrains.kotlin.ir.expressions.IrFunctionReference
+import org.jetbrains.kotlin.ir.expressions.IrRawFunctionReference
+import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.util.file
@@ -33,6 +38,7 @@ import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 
 internal var IrClass.dotNetInventedLocalClassName: String? by irAttribute(copyByDefault = false)
 internal var IrClass.dotNetLocalCaptureRejectionReason: String? by irAttribute(copyByDefault = false)
+internal var IrSimpleFunction.dotNetLocalCaptureRejectionReason: String? by irAttribute(copyByDefault = false)
 
 /**
  * Gives every source local class a deterministic CLR identity before closure conversion moves it.
@@ -80,10 +86,20 @@ internal class DotNetInventNamesForLocalClasses(
     }
 }
 
+/** Gives lifted explicit local functions stable, container-wise unique metadata names. */
+internal class DotNetInventNamesForLocalFunctions(
+    @Suppress("UNUSED_PARAMETER") context: DotNetBackendContext,
+) : InventNamesForLocalFunctions() {
+    override val suggestUniqueNames: Boolean get() = true
+    override val compatibilityModeForInlinedLocalDelegatedPropertyAccessors: Boolean get() = false
+
+    override fun sanitizeNameIfNeeded(name: String): String = name
+}
+
 /**
- * Invokes common closure conversion for a body containing named classes and/or anonymous objects,
- * but no explicit local function. This prevents the common pass from incidentally lifting the
- * still-unsupported local-function family.
+ * Invokes common closure conversion for a body containing named classes, anonymous objects,
+ * and/or explicit named local functions, but no lambda or function-reference shape. This keeps
+ * callable objects separate until the backend has a representation for them.
  * Immutable captures become private fields/constructor parameters. Mutable and crossinline
  * captures are marked for a precise class-gate rejection: SharedVariablesLowering and inline
  * lowering do not exist on this backend yet, so copying either value would be wrong.
@@ -99,12 +115,11 @@ internal class DotNetLocalDeclarationsLowering private constructor(
     constructor(context: DotNetBackendContext) : this(context, mutableMapOf())
 
     override fun lower(irBody: IrBody, container: IrDeclaration) {
-        if (!irBody.isEligibleLocalClassBody()) return
+        if (!irBody.isEligibleLocalDeclarationBody()) return
         val existingCapturedParameters = capturedParameters.keys.toHashSet()
         super.lower(irBody, container)
         for ([parameter, captured] in capturedParameters) {
             if (parameter in existingCapturedParameters) continue
-            val localClass = (parameter.parent as? IrConstructor)?.parentAsClass ?: continue
             val reason = when (val capturedDeclaration = captured.owner) {
                 is IrVariable -> if (capturedDeclaration.isVar) {
                     "captures mutable local '${capturedDeclaration.name.asString()}'; shared mutable captures are not supported"
@@ -114,15 +129,25 @@ internal class DotNetLocalDeclarationsLowering private constructor(
                 } else null
                 else -> null
             }
-            if (reason != null && localClass.dotNetLocalCaptureRejectionReason == null) {
-                localClass.dotNetLocalCaptureRejectionReason = reason
+            if (reason != null) {
+                when (val parent = parameter.parent) {
+                    is IrConstructor -> {
+                        val localClass = parent.parentAsClass
+                        if (localClass.dotNetLocalCaptureRejectionReason == null) {
+                            localClass.dotNetLocalCaptureRejectionReason = reason
+                        }
+                    }
+                    is IrSimpleFunction -> if (parent.dotNetLocalCaptureRejectionReason == null) {
+                        parent.dotNetLocalCaptureRejectionReason = reason
+                    }
+                }
             }
         }
     }
 
-    private fun IrBody.isEligibleLocalClassBody(): Boolean {
-        var hasLocalClass = false
-        var hasExplicitLocalFunction = false
+    private fun IrBody.isEligibleLocalDeclarationBody(): Boolean {
+        var hasSupportedLocalDeclaration = false
+        var hasCallableObjectShape = false
         acceptChildrenVoid(object : IrVisitorVoid() {
             override fun visitElement(element: IrElement) {
                 element.acceptChildrenVoid(this)
@@ -130,19 +155,38 @@ internal class DotNetLocalDeclarationsLowering private constructor(
 
             override fun visitClass(declaration: IrClass) {
                 if (declaration.visibility == DescriptorVisibilities.LOCAL) {
-                    hasLocalClass = true
+                    hasSupportedLocalDeclaration = true
                 }
                 declaration.acceptChildrenVoid(this)
             }
 
             override fun visitSimpleFunction(declaration: IrSimpleFunction) {
                 if (declaration.visibility == DescriptorVisibilities.LOCAL) {
-                    hasExplicitLocalFunction = true
+                    if (declaration.origin == IrDeclarationOrigin.LOCAL_FUNCTION) {
+                        hasSupportedLocalDeclaration = true
+                    } else {
+                        hasCallableObjectShape = true
+                    }
                 }
                 declaration.acceptChildrenVoid(this)
             }
+
+            override fun visitFunctionReference(expression: IrFunctionReference) {
+                hasCallableObjectShape = true
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitRawFunctionReference(expression: IrRawFunctionReference) {
+                hasCallableObjectShape = true
+                expression.acceptChildrenVoid(this)
+            }
+
+            override fun visitRichFunctionReference(expression: IrRichFunctionReference) {
+                hasCallableObjectShape = true
+                expression.acceptChildrenVoid(this)
+            }
         })
-        return hasLocalClass && !hasExplicitLocalFunction
+        return hasSupportedLocalDeclaration && !hasCallableObjectShape
     }
 }
 
