@@ -183,9 +183,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
   the removed iterator loop. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), primitive-array initializer-lambda constructors, spread elements in
-  `*ArrayOf`, iterator values escaping as objects, user-facing copying/content APIs, and unsigned
-  arrays.
+  elements are unsupported), primitive-array initializer-lambda constructors, iterator values
+  escaping as objects, user-facing copying/content APIs, and unsigned arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
@@ -209,13 +208,35 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `set`; allocation/store operands spill exactly like primitive arrays, and dynamic sizes share
   the negative-size guard. Direct `for` iteration shares the indexed lowering. Array identity
   equality/null tests use `ceq`, and widening to `Any`/`Any?` is instruction-free. STAYS REJECTED,
-  loudly: use-site projections/star projections (never erase Kotlin invariance into CLR
-  covariance), concrete primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
-  including arrays of primitive arrays, initializer-lambda constructors, spread elements,
-  iterator values escaping as objects, array casts/type checks, and user-facing copying/content
-  APIs.
+  loudly: ordinary use-site projections/star projections (the concrete vararg-only normalization
+  below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
+  primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
+  including arrays of primitive arrays, initializer-lambda constructors, iterator values escaping
+  as objects, array casts/type checks, and user-facing copying/content APIs.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
+- Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
+  delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
+  stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the
+  invariant vector ABI already used for `Array<E>`, and updates parameter/local aliases and
+  captures consistently. Primitive `Int`/`Long`/`Double`/`Boolean`/`Char` varargs use their exact
+  primitive vectors; supported concrete reference, nullable-reference, object, user-class, and
+  instantiated-generic elements use typed reference vectors. No `ParamArrayAttribute` is emitted:
+  Kotlin permits a non-final vararg and this slice is Kotlin-to-Kotlin ABI/codegen, not a public
+  C# `params` export policy. Omitted non-default varargs allocate an empty vector. Expanded calls
+  allocate a fresh vector; spread and ordinary expressions are evaluated once in source order,
+  spread sizes are cached, and ordinary array `get`/`set` loops copy into the destination without
+  aliasing the source. A vararg with its own default uses the JVM-style physical null placeholder
+  plus the existing default mask. Existing no-spread `arrayOf`/supported `*ArrayOf` calls keep
+  their compact literal intrinsic, while spread-bearing forms go through the general lowering.
+  Top-level, member, extension, constructor, interface, local/captured, non-final, default-adjacent,
+  multiple/empty-spread, evaluation/exception-order, and aliasing shapes are pinned by
+  `ilText/varargs.kt` and `box/varargs.kt`; both modern 10.0.9 and Framework 4.8 ILAsm accept the
+  exact output and both runtimes execute it. STAYS REJECTED, loudly: `vararg T` or an element type
+  containing an open type parameter (the projected generic-array ABI remains undecided), concrete
+  nullable-primitive elements, nested/array elements, and every scalar/array family the mapper
+  already rejects. Negative pins remain in `ilText/genericRejected.kt`,
+  `ilText/genericArraysRejected.kt`, and `ilText/primitiveArraysRejected.kt`.
 - Kotlin `Any` foundation (draft ADR
   `docs/decisions/draft-adr-system-object-any-foundation.md`; probe series `dotnet-any_s1`; JVM
   `kotlin.Any -> java.lang.Object` precedent): `kotlin.Any`/`Any?` have no standalone CLR type.
