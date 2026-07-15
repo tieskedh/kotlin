@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -179,6 +180,9 @@ internal class DotNetIlMethodCodegen(
                 )
             }
             appendLine("  {")
+            if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
+                appendGenericDataClassComponentOverride()
+            }
             if (!isAbstractMember) {
                 if (isEntryPoint) {
                     appendLine("    .entrypoint")
@@ -213,6 +217,7 @@ internal class DotNetIlMethodCodegen(
      *   nested code are fine at IL private visibility (objprobe_s7a, nestedprobe_s2).
      */
     private fun IrFunction.dotNetMemberVisibility(): String? {
+        if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
         if (visibility != DescriptorVisibilities.PRIVATE) return null
         return when {
@@ -220,6 +225,20 @@ internal class DotNetIlMethodCodegen(
             this is IrConstructor -> "private"
             else -> null
         }
+    }
+
+    /** Emits the MethodImpl row that keeps a generic data-class component bridge private. */
+    private fun StringBuilder.appendGenericDataClassComponentOverride() {
+        val bridge = function as? IrSimpleFunction
+            ?: error("Internal .NET backend error: a data-class component bridge is not a simple function")
+        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
+            ?: error("Internal .NET backend error: a data-class component bridge has no unique interface slot")
+        val interfaceClass = overridden.parent as? IrClass
+            ?: error("Internal .NET backend error: a data-class component bridge slot has no interface owner")
+        val interfaceInfo = typeMapper.classInfoOrNull(interfaceClass)
+            ?: dotNetUnsupported("generic data-class erased-view interface is unavailable")
+        val overrideInfo = DotNetIlFunctionInfo(interfaceInfo, overridden.dotNetSignature(typeMapper))
+        appendLine("    .override method ${overrideInfo.renderMethodReference(overridden.dotNetIlMethodName())}")
     }
 
     /**

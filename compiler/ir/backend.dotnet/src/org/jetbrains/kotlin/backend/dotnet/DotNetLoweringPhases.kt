@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericDataClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
@@ -55,6 +56,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetDefaultArgumentStubGenerator,
     ::DotNetDefaultParameterInjector,
     ::DotNetDefaultParameterCleaner,
+    // CLR generics reify C<T>, unlike the erased class identity used by generated data-class
+    // equality on the mature targets. Preserve reified storage/signatures, but give each generic
+    // data class a private non-generic equality view before later lowerings inspect its members.
+    ::DotNetGenericDataClassLowering,
     // Follow the common/JVM inner-class pipeline before initializer merging: first make a generic
     // outer's implicit type arguments explicit on the independent CLR nested type, then add the
     // outer field/constructor argument, rewrite outer-this reads into field chains, and move
