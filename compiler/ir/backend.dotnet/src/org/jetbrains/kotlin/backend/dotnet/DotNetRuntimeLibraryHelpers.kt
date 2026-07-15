@@ -72,8 +72,9 @@ internal object DotNetRuntimeLibraryHelpers {
     /**
      * Besides mutable capture storage and Double formatting, this text owns the universal Any
      * operations. Their primitive branches are semantic, not optimizations: CLR boxed Boolean
-     * hashes/string text and boxed Double signed-zero/hash/string behavior differ from Kotlin's
-     * JVM-backed object contract, and Framework also preserves NaN payloads in Double.GetHashCode.
+     * hashes/string text, boxed Char hashes, and boxed Double signed-zero/hash/string behavior
+     * differ from Kotlin's JVM-backed object contract, and Framework also preserves NaN payloads
+     * in Double.GetHashCode.
      */
     val ilText: String = """
             |.namespace Kotlin.Runtime.Internal
@@ -164,7 +165,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_hashBoolean:
             |      ldarg.0
             |      isinst [mscorlib]System.Boolean
-            |      brfalse.s IL_objectHash
+            |      brfalse.s IL_hashChar
             |      ldarg.0
             |      unbox.any [mscorlib]System.Boolean
             |      brtrue.s IL_hashTrue
@@ -172,6 +173,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_hashTrue:
             |      ldc.i4 1231
+            |      ret
+            |IL_hashChar:
+            |      ldarg.0
+            |      isinst [mscorlib]System.Char
+            |      brfalse.s IL_objectHash
+            |      ldarg.0
+            |      unbox.any [mscorlib]System.Char
+            |      conv.i4
             |      ret
             |IL_objectHash:
             |      ldarg.0
@@ -221,6 +230,108 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldnull
             |      call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
             |      callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'DataClassArrayHashCode'(class [mscorlib]System.Array 'value') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] int32 'result',
+            |        [1] int32 'index',
+            |        [2] int32 'length'
+            |      )
+            |      ldarg.0
+            |      brtrue.s IL_arrayHashNotNull
+            |      ldc.i4.0
+            |      ret
+            |IL_arrayHashNotNull:
+            |      ldc.i4.1
+            |      stloc.0
+            |      ldc.i4.0
+            |      stloc.1
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      stloc.2
+            |IL_arrayHashLoop:
+            |      ldloc.1
+            |      ldloc.2
+            |      clt
+            |      brfalse.s IL_arrayHashEnd
+            |      ldloc.0
+            |      ldc.i4.s 31
+            |      mul
+            |      ldarg.0
+            |      ldloc.1
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+            |      add
+            |      stloc.0
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br.s IL_arrayHashLoop
+            |IL_arrayHashEnd:
+            |      ldloc.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static string 'DataClassArrayToString'(class [mscorlib]System.Array 'value') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] class [mscorlib]System.Text.StringBuilder 'builder',
+            |        [1] int32 'index',
+            |        [2] int32 'length'
+            |      )
+            |      ldarg.0
+            |      brtrue.s IL_arrayStringNotNull
+            |      ldstr "null"
+            |      ret
+            |IL_arrayStringNotNull:
+            |      newobj instance void [mscorlib]System.Text.StringBuilder::.ctor()
+            |      stloc.0
+            |      ldloc.0
+            |      ldstr "["
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      ldc.i4.0
+            |      stloc.1
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      stloc.2
+            |IL_arrayStringLoop:
+            |      ldloc.1
+            |      ldloc.2
+            |      clt
+            |      brfalse.s IL_arrayStringEnd
+            |      ldloc.1
+            |      brfalse.s IL_arrayStringElement
+            |      ldloc.0
+            |      ldstr ", "
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |IL_arrayStringElement:
+            |      ldloc.0
+            |      ldarg.0
+            |      ldloc.1
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br.s IL_arrayStringLoop
+            |IL_arrayStringEnd:
+            |      ldloc.0
+            |      ldstr "]"
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      ldloc.0
+            |      callvirt instance string [mscorlib]System.Object::ToString()
             |      ret
             |    }
             |
@@ -477,7 +588,7 @@ internal object DotNetRuntimeLibraryHelpers {
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"AreEqual".toIlIdentifier()}(object, object)"
 
-    /** Kotlin object-boundary hash semantics, including Boolean and boxed Double differences. */
+    /** Kotlin object-boundary hash semantics, including Boolean, Char, and boxed Double differences. */
     val hashCodeCallInstruction: String =
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
@@ -488,4 +599,16 @@ internal object DotNetRuntimeLibraryHelpers {
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"StringValueOf".toIlIdentifier()}(object)"
+
+    /** Content hash for the CLR vector behind an array property of a generated data class. */
+    val dataClassArrayHashCodeCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"DataClassArrayHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+
+    /** Content rendering for the CLR vector behind an array property of a generated data class. */
+    val dataClassArrayToStringCallInstruction: String =
+        "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"DataClassArrayToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
 }
