@@ -54,8 +54,11 @@ fun <T> openResize(values: Array<T>, size: Int): Array<T?> = values.copyOf(size)
 fun <T> openCopyInto(source: Array<T>, destination: Array<T>): Array<T> =
     source.copyInto(destination)
 
-fun iteratorAsStatement(values: Array<String>) {
-    values.iterator()
+fun <T> openIterator(values: Array<T>): Iterator<T> = values.iterator()
+
+class CustomIterator : Iterator<String> {
+    override fun hasNext(): Boolean = false
+    override fun next(): String = "unused"
 }
 
 fun main() {

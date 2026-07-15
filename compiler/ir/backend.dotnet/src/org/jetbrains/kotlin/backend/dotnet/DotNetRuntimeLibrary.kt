@@ -8,10 +8,11 @@ import java.io.File
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
  * the fixed, physically erased Function0/1/2 interfaces, the orthogonal KCallable/KFunction
- * reflection view, the singleton Unit value required when a callable result crosses the
- * object-shaped invocation boundary, and Kotlin-owned exception identities that have no faithful
- * BCL type. Compiler support shared by generated modules, including the constructor-default ABI
- * marker, lives below the reserved `Kotlin.Runtime.Internal` namespace.
+ * reflection view, the erased Iterator execution interface, the singleton Unit value required
+ * when a callable result crosses the object-shaped invocation boundary, and Kotlin-owned
+ * exception identities that have no faithful BCL type. Compiler support shared by generated
+ * modules, including the constructor-default ABI marker, lives below the reserved
+ * `Kotlin.Runtime.Internal` namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
@@ -22,6 +23,9 @@ internal object DotNetRuntimeLibrary {
 
     val noWhenBranchMatchedExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NoWhenBranchMatchedException".toIlIdentifier()}"
+
+    val noSuchElementExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.NoSuchElementException".toIlIdentifier()}"
 
     val numberFormatExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NumberFormatException".toIlIdentifier()}"
@@ -180,6 +184,27 @@ internal object DotNetRuntimeLibrary {
               ldarg.0
               ldarg.1
               call instance void Kotlin.RuntimeException::.ctor(class [mscorlib]System.Exception)
+              ret
+            }
+          }
+
+          .class public auto ansi beforefieldinit NoSuchElementException
+                 extends Kotlin.RuntimeException
+          {
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void Kotlin.RuntimeException::.ctor()
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.RuntimeException::.ctor(string)
               ret
             }
           }
@@ -366,6 +391,20 @@ internal object DotNetRuntimeLibrary {
               newobj instance void Kotlin.Unit::.ctor()
               stsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
               ret
+            }
+          }
+        }
+
+        .namespace Kotlin.Collections
+        {
+          .class interface public abstract auto ansi Iterator
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Next() cil managed
+            {
             }
           }
         }
