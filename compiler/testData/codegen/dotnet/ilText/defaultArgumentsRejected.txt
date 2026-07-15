@@ -2,45 +2,13 @@
 .assembly 'defaultArgumentsRejected' {}
 .module 'main-defaultArgumentsRejected.il'
 
-.class interface public abstract auto ansi 'InterfaceDefault'
-{
-  .method public hidebysig newslot abstract virtual instance int32 'value'(int32 'number') cil managed
-  {
-  }
-}
-.class public auto ansi sealed beforefieldinit 'InterfaceDefaultImpl'
-       extends [mscorlib]System.Object
-       implements 'InterfaceDefault'
-{
-  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
-    ret
-  }
-  .method public hidebysig newslot virtual instance int32 'value'(int32 'number') cil managed
-  {
-    .maxstack 1
-    ldarg.1
-    ret
-  }
-}
 .class public abstract sealed auto ansi beforefieldinit 'defaultArgumentsRejectedKt'
        extends [mscorlib]System.Object
 {
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 3
-    newobj instance void 'InterfaceDefaultImpl'::.ctor()
-    ldc.i4 8
-    callvirt instance int32 'InterfaceDefaultImpl'::'value'(int32)
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-    call void [mscorlib]System.Console::WriteLine(string)
+    .maxstack 1
     ret
   }
 }
