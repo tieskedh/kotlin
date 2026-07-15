@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrBody
 import org.jetbrains.kotlin.ir.expressions.IrFunctionReference
+import org.jetbrains.kotlin.ir.expressions.IrFunctionExpression
 import org.jetbrains.kotlin.ir.expressions.IrRawFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.irAttribute
@@ -36,7 +37,7 @@ import org.jetbrains.kotlin.ir.util.parentAsClass
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 
-internal var IrClass.dotNetInventedLocalClassName: String? by irAttribute(copyByDefault = false)
+internal var IrElement.dotNetInventedLocalClassName: String? by irAttribute(copyByDefault = false)
 internal var IrClass.dotNetLocalCaptureRejectionReason: String? by irAttribute(copyByDefault = false)
 internal var IrSimpleFunction.dotNetLocalCaptureRejectionReason: String? by irAttribute(copyByDefault = false)
 
@@ -59,10 +60,15 @@ internal class DotNetInventNamesForLocalClasses(
     override fun sanitizeNameIfNeeded(name: String): String = name
 
     override fun putLocalClassName(declaration: IrElement, localClassName: String) {
-        val localClass = declaration as? IrClass ?: return
-        if (localClass.dotNetInventedLocalClassName != null) return
+        if (declaration.dotNetInventedLocalClassName != null) return
+        val anchor = when (declaration) {
+            is IrClass -> declaration
+            is IrRichFunctionReference -> declaration.invokeFunction
+            is IrFunctionExpression -> declaration.function
+            else -> return
+        }
 
-        val hasNonLocalClassAncestor = generateSequence(localClass.parent as? IrDeclaration) { parent ->
+        val hasNonLocalClassAncestor = generateSequence(anchor.parent as? IrDeclaration) { parent ->
             parent.parent as? IrDeclaration
         }.any { parent ->
             parent is IrClass && !parent.isAnonymousObject && parent.visibility != DescriptorVisibilities.LOCAL
@@ -70,7 +76,7 @@ internal class DotNetInventNamesForLocalClasses(
         val qualifiedName = if (hasNonLocalClassAncestor) {
             localClassName
         } else {
-            val file = localClass.file
+            val file = anchor.file
             val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
             val facadeBaseName = if (file.packageFqName.isRoot) {
                 "${fileName}Kt"
@@ -81,7 +87,7 @@ internal class DotNetInventNamesForLocalClasses(
         }
         val suffix = nextSuffixByBaseName.getOrPut(qualifiedName) { 0 }
         nextSuffixByBaseName[qualifiedName] = suffix + 1
-        localClass.dotNetInventedLocalClassName =
+        declaration.dotNetInventedLocalClassName =
             if (suffix == 0) qualifiedName else "$qualifiedName\$$suffix"
     }
 }

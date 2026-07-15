@@ -83,6 +83,13 @@ internal class DotNetIlMethodCodegen(
         signature.parameterTypes,
         typeMapper,
         firstArgumentIndex = if (function is IrConstructor) 1 else 0,
+        erasedCallableParameters = if (
+            function is IrSimpleFunction && function.isDotNetErasedCallableInvoke()
+        ) {
+            function.parameters.drop(if (signature.hasThis) 1 else 0).mapTo(linkedSetOf()) { it.symbol }
+        } else {
+            emptySet()
+        },
     ).apply {
         if (function is IrConstructor) {
             val constructedClass = function.constructedClass
@@ -289,8 +296,8 @@ internal class DotNetIlMethodCodegen(
             }
             is IrExpressionBody -> when (val returnType = signature.returnType) {
                 is DotNetIlReturnType.Value -> {
-                    expressionCodegen.emitExpression(body.expression, returnType.type)
-                    methodContext.emitReturn(pops = 1)
+                    emitReturnValue(body.expression, returnType.type)
+                    if (!methodContext.isTerminated) methodContext.emitReturn(pops = 1)
                 }
                 DotNetIlReturnType.Void -> {
                     emitVoidExpression(body.expression)
@@ -385,7 +392,8 @@ internal class DotNetIlMethodCodegen(
         }
         when (val returnType = signature.returnType) {
             is DotNetIlReturnType.Value -> {
-                expressionCodegen.emitExpression(expression.value, returnType.type)
+                emitReturnValue(expression.value, returnType.type)
+                if (methodContext.isTerminated) return
                 methodContext.emitReturn(pops = 1)
             }
             DotNetIlReturnType.Void -> {
@@ -406,7 +414,7 @@ internal class DotNetIlMethodCodegen(
     private fun emitReturnAcrossRegions(expression: IrReturn) {
         when (val returnType = signature.returnType) {
             is DotNetIlReturnType.Value -> {
-                expressionCodegen.emitExpression(expression.value, returnType.type)
+                emitReturnValue(expression.value, returnType.type)
                 if (methodContext.isTerminated) return // the value itself threw; nothing returns
                 val slot = returnValueSlot
                     ?: methodContext.declareSyntheticLocal(returnType.type, "<return>").also { returnValueSlot = it }
@@ -420,6 +428,25 @@ internal class DotNetIlMethodCodegen(
         val label = returnJoinLabel
             ?: methodContext.nextLabel("returnJoin").also { returnJoinLabel = it }
         methodContext.emitLeave(label)
+    }
+
+    /**
+     * Ordinary Kotlin Unit functions remain CLR-void. A fixed-function erased `Invoke` override
+     * instead executes its Unit expression for effects, then returns the runtime singleton through
+     * the object-shaped ABI slot.
+     */
+    private fun emitReturnValue(expression: IrExpression, expectedType: DotNetIlValueType) {
+        if (
+            function is IrSimpleFunction &&
+            function.isDotNetErasedCallableInvoke() &&
+            expectedType == DotNetIlValueType.Object &&
+            expression.type.isUnit()
+        ) {
+            emitVoidExpression(expression)
+            if (!methodContext.isTerminated) expressionCodegen.emitRuntimeUnitInstance()
+        } else {
+            expressionCodegen.emitExpression(expression, expectedType)
+        }
     }
 
     /**

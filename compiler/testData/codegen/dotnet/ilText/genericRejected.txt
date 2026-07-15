@@ -34,6 +34,13 @@
 .class public abstract sealed auto ansi beforefieldinit 'genericRejectedKt'
        extends [mscorlib]System.Object
 {
+  .method public hidebysig static object 'widen'<'T'>(!!0 'a') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box !!0
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint

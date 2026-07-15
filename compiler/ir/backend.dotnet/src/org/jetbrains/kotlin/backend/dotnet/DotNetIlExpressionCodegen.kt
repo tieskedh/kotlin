@@ -93,6 +93,11 @@ internal class DotNetIlExpressionCodegen(
         }
     }
 
+    /** Loads the canonical object used when Kotlin Unit occupies a real CLR value slot. */
+    fun emitRuntimeUnitInstance() {
+        methodContext.emit(DotNetRuntimeTypes.unitInstanceLoadInstruction, pushes = 1)
+    }
+
     fun emitExpression(expression: IrExpression?, expectedType: DotNetIlValueType) {
         // Widening-coercion interception, the hybrid nullability model's conversion layer (JVM
         // precedent: the JVM backend coerces at codegen time through StackValue — boxing is
@@ -974,12 +979,28 @@ internal class DotNetIlExpressionCodegen(
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
         val returnType = emitCall(call)
-        if ((returnType as? DotNetIlReturnType.Value)?.type?.isDotNetAssignableTo(expectedType) != true) {
+        val producedType = (returnType as? DotNetIlReturnType.Value)?.type
+        if (
+            producedType == DotNetIlValueType.Object &&
+            call.symbol.owner.isDotNetErasedCallableInvoke()
+        ) {
+            emitErasedCallableObjectAs(expectedType)
+        } else if (producedType?.isDotNetAssignableTo(expectedType) != true) {
             dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
+    }
+
+    /** Narrows an erased callable result from object to the logical Kotlin call result type. */
+    private fun emitErasedCallableObjectAs(expectedType: DotNetIlValueType) {
+        if (expectedType == DotNetIlValueType.Object) return
+        val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull()
+            ?: dotNetUnsupported(
+                "erased callable result cannot be converted from object to ${expectedType.nameInSignature}"
+            )
+        methodContext.emit(instruction, pops = 1, pushes = 1)
     }
 
     private fun emitConstant(expression: IrConst, expectedType: DotNetIlValueType) {
@@ -1072,6 +1093,16 @@ internal class DotNetIlExpressionCodegen(
         val slot = methodContext.reference(expression.symbol)
         val slotType = slot.type
         if (!slotType.isDotNetAssignableTo(expectedType)) {
+            if (slotType == DotNetIlValueType.Object && methodContext.isErasedCallableParameter(expression.symbol)) {
+                val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull()
+                    ?: dotNetUnsupported(
+                        "erased callable parameter '${expression.symbol.owner.name.asString()}' cannot be converted " +
+                                "from object to ${expectedType.nameInSignature}"
+                    )
+                emitLoadSlot(slot)
+                methodContext.emit(instruction, pops = 1, pushes = 1)
+                return
+            }
             // A NARROWED read of a nullable-primitive slot: the frontend types a null-test-
             // narrowed access at the element type WITHOUT a cast node — the elvis/safe-call
             // temporary in its non-null branch is the canonical shape (`tmp0_elvis_lhs` read as
@@ -1170,7 +1201,27 @@ internal fun storeLocalInstruction(index: Int): String =
 internal fun dotNetWideningCoercionOrNull(from: DotNetIlValueType, to: DotNetIlValueType): String? = when {
     to is DotNetIlValueType.NullableValue && from == to.elementType -> to.ctorInstruction
     to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
-    from is DotNetIlValueType.TypeParameter && from.isConstrainedTo(to) -> "box ${from.nameInSignature}"
+    from is DotNetIlValueType.TypeParameter && (to == DotNetIlValueType.Object || from.isConstrainedTo(to)) ->
+        "box ${from.nameInSignature}"
     to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull()?.let { "box $it" }
     else -> null
+}
+
+/** The CLR conversion from an erased callable object slot to one supported logical value type. */
+private fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(): String? {
+    dotNetBoxedCorelibRefOrNull()?.let { return "unbox.any $it" }
+    return when (this) {
+        DotNetIlValueType.Object -> null
+        DotNetIlValueType.String -> "castclass ${CORE_LIB_REF}System.String"
+        is DotNetIlValueType.NullableValue,
+        is DotNetIlValueType.TypeParameter,
+            -> "unbox.any $nameInSignature"
+        is DotNetIlValueType.UserClass -> "castclass ${classInfo.ilTypeRef}"
+        is DotNetIlValueType.MappedClass -> "castclass $ilTypeRef"
+        is DotNetIlValueType.GenericInstance,
+        is DotNetIlValueType.PrimitiveArray,
+        is DotNetIlValueType.GenericArray,
+            -> "castclass $nameInSignature"
+        else -> null
+    }
 }

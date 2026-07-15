@@ -14,7 +14,6 @@
 //   a value type where the reference `ceq` is meaningless — no lifted story without constraints;
 // - string templates and Any member calls on `T` (`x.toString()` resolves to kotlin.Any, for
 //   which this backend has no member model);
-// - widening an unconstrained `T` to `Any?`;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
@@ -23,6 +22,8 @@
 //   their INSTANCE field lives on the independently non-generic object type;
 // - generic (extension) properties: the property metadata/accessor model does not cover generic
 //   accessors;
+// Widening an unconstrained `T` to `Any?` is now supported through CLR `box !!n`; the erased
+// callable bridge needs that same general conversion for an open logical result type.
 
 open class Gen<T>(val v: T)
 
