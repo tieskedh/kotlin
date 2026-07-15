@@ -143,8 +143,9 @@ private fun <T> genericValueCapture(seed: Int, value: T): String? {
         fun captured(): Int = seed
     }
 
-    val copied = Local(value).copy(value = value)
-    if (copied.captured() != seed) return "generic value capture"
+    val original = Local(value)
+    val copied = original.copy()
+    if (copied != original || copied.captured() != seed) return "generic value capture"
     return null
 }
 
@@ -159,6 +160,8 @@ private fun localGenericEquality(): String? {
     val ownInt: Any = Local(1)
     val ownAny: Any = Local<Any>(1)
     if (!ownInt.equals(ownAny) || !ownAny.equals(ownInt)) return "own generic equality"
+    val genericInt = genericValueCapture(40, 7)
+    if (genericInt != null) return genericInt
     return genericValueCapture(41, "value")
 }
 

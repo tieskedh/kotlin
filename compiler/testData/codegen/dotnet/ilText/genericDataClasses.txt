@@ -251,6 +251,23 @@ IL_whenNext_7:
     call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
     ret
   }
+  .method public hidebysig static class 'GenericData`1'<!!0> 'duplicateGenericData'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 4
+    .locals init (
+      [0] !!0 '<default>'
+    )
+    ldarg.0
+    ldc.i4 2
+    newobj instance void class 'GenericData`1'<!!0>::.ctor(!0, int32)
+    ldloca 0
+    initobj !!0
+    ldloc.0
+    ldc.i4 0
+    ldc.i4 3
+    call instance class 'GenericData`1'<!0> class 'GenericData`1'<!!0>::'copy$default'(!0, int32, int32)
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint

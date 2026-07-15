@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(open-type-parameter default-placeholder audit after local data classes).
+(interface-owned default-argument helper audit after general `default(T)` call emission).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -16,11 +16,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
   by array-backed data classes (`a43d3de4d`), constructor defaults (`d6deff4f5`), and generic
   data-class equality (`c1597ef12`), data objects (`a2a418bfd`), local data classes (`4deb5e208`),
-  and the POC IL-assembly-pipeline direction in the current decision slice.
+  the POC IL-assembly-pipeline direction (`1e9492c5f`), and general open-type-parameter default
+  placeholders in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **440 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **444 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -621,9 +622,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   common `BOUND_RECEIVER_PARAMETER`/`BOUND_VALUE_PARAMETER` constructor state before selecting
   equality properties. The exact golden assembles with modern 10.0.9 and Framework 4.8 ILAsm, both
   parser boxes pass with modern and Framework-selected ILAsm, and the fresh full DotNet suite is
-  440/0/0/0 across eight XML files. A deliberately separate boundary surfaced: an omitted default
-  argument whose mapped type is an open `T` still lacks a CLR `default(T)` placeholder emission;
-  explicit generic copy arguments work and preserve captures.
+  440/0/0/0 across eight XML files. The follow-up now handles the deliberately separate omitted-
+  generic-default boundary in the shared call emitter. It recognizes only the common/JVM
+  `DEFAULT_VALUE` null composite, then emits the resolved parameter's physical zero/null/empty
+  nullable or an `initobj !0`/`!!0` temporary. Functions, constructors, members, local/generic
+  data `copy`, class and method type parameters, concrete primitive/reference/nullable
+  substitutions, and explicit-argument non-evaluation are pinned. The exact golden assembles
+  with modern 10.0.9 and Framework 4.8 ILAsm, and both parser boxes pass with both assembler
+  selections. The fresh full-suite count for this slice is recorded in Branch state above.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -706,14 +712,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Provide a general open-type-parameter default placeholder.** Local generic data classes expose
-   the remaining default-argument boundary cleanly: a generated omitted argument of mapped type
-   `T` needs an unobservable CLR `default(T)` value before the mask-owning helper overwrites it.
-   Audit every default-call site rather than special-casing data-class `copy`; likely emission is a
-   temporary local initialized with `initobj !!0`/`!0`, then loaded as the placeholder. Prove value-
-   and reference-type instantiations, constructors/functions/copy, both generic owners and generic
-   methods, evaluation order, both ILAsm implementations, and real runtime behavior before lifting
-   the current nullable-open-type rejection.
+1. **Provide interface-owned default-argument helpers without DIM.** The common/JVM lowering leaves
+   default markers on abstract interface members because an instance `$default` body would violate
+   the Framework-compatible all-abstract interface boundary. Audit the JVM `DefaultImpls` shape and
+   introduce a CLR helper owner outside the interface, with the interface receiver explicit, so
+   inherited defaults dispatch to the implementing override without raising the runtime floor.
+   Cover direct/interface/generic-interface receivers, masks and evaluation order, clashes and
+   metadata nesting, both ILAsm implementations, and real runtime dispatch. Keep actual default
+   interface method bodies and `super<I>` gated; this task is only argument-default ownership.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 
