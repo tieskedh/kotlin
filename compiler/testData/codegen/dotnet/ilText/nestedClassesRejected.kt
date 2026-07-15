@@ -12,8 +12,24 @@
 // its callee disappears: Nested owns the companion field/.cctor and is removed, but its parent
 // survives.
 
-class InnerHost {
-    inner class Nested
+class GenericInnerHost<T> {
+    inner class Nested {
+        fun value(): Int = 1
+    }
+
+    class Good {
+        fun value(): Int = 2
+    }
+}
+
+class BrokenInnerHost {
+    inner class Bad {
+        fun unsupported(value: Byte): Byte = value
+    }
+
+    class Good {
+        fun value(): Int = 3
+    }
 }
 
 class NestedDataHost {
@@ -91,6 +107,8 @@ class Survives {
 }
 
 fun main() {
+    println(GenericInnerHost.Good().value())
+    println(BrokenInnerHost.Good().value())
     println(UsesBroken().use(BrokenFamily.Good()))
     println(Survives().value())
 }
