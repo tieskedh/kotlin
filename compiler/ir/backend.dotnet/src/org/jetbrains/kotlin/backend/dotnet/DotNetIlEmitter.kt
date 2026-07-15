@@ -27,12 +27,10 @@ import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.classFqName
-import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
-import org.jetbrains.kotlin.ir.util.isArrayOrPrimitiveArray
 import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
@@ -912,16 +910,6 @@ class DotNetIlEmitter(
             ) {
                 dotNetUnsupported(
                     "data class '$name' has default primary-constructor arguments, which are not supported yet"
-                )
-            }
-            if (primaryConstructor.parameters.any { parameter ->
-                    parameter.kind == IrParameterKind.Regular &&
-                            parameter.type.classifierOrNull.isArrayOrPrimitiveArray(irBuiltIns)
-                }
-            ) {
-                dotNetUnsupported(
-                    "data class '$name' has an array property; generated array hashCode/toString members " +
-                            "are not supported yet"
                 )
             }
         }

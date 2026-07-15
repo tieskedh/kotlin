@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(array data-class continuation).
+(constructor-default data-class continuation).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -13,12 +13,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exception-identity foundation (`a4a862e45`) and exact source-visible NumberFormatException
   identity (`eb1fae21e`) and exact Kotlin Error identity (`b3fc89984`), followed by the
   RuntimeException migration-gate decision (`acde56d80`) and the bounded top-level data-class and
-  masked-default implementation (`2660cc58e`), followed by named nested data classes in the current
-  functional slice.
+  masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
+  by array-backed data classes in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **412 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **416 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -66,8 +66,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `OverflowException` from creating a false Kotlin `ArithmeticException` catch edge. Literal and
   indexed operands spill to locals because CLR protected regions require an empty entry stack.
   Nullable/object/generic storage and array identity equality work; generic `Array<T>`, unsupported
-  scalar arrays, initializer constructors, spreads, escaping iterators, and copy/content helpers
-  reject. Contrary to the old task-menu guess, no fake-stdlib declarations were needed: fir2ir
+  scalar arrays, initializer constructors, spreads, escaping iterators, and copy operations reject.
+  Data-class content hash/string support now consumes these vectors through fir2ir's dedicated
+  builtins. Contrary to the old task-menu guess, no fake-stdlib declarations were needed: fir2ir
   already supplies the primitive-array builtins and `*ArrayOf` calls.
 - Interim continuation landed `1767fe982`: supported direct, non-null, non-generic module-local
   class and all-abstract interface bounds now remain on CLR generic method/class metadata and on
@@ -88,8 +89,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   structural kind stays distinct from `PrimitiveArray`, so backend assignability never admits CLR
   covariance. Concrete primitive elements reject because CLR would collapse `Array<Int>` and
   `IntArray` to the same `int32[]` ABI; projections, nullable value elements/`Array<T?>`, nested
-  arrays, initializer lambdas, spreads, iterator escape, casts, and copy/content helpers also stay
-  out. `genarrayprobe_s1` verified `T[]` metadata, typed element opcodes for reference and value
+  arrays, initializer lambdas, spreads, iterator escape, casts, and copy operations also stay out.
+  Data-class content hash/string support consumes the supported concrete reference-element vectors.
+  `genarrayprobe_s1` verified `T[]` metadata, typed element opcodes for reference and value
   instantiations, bounded dispatch, and the CLR covariant-store check on CoreCLR 10.0.9 and
   Framework 4.8. Both final goldens assemble and execute on both runtimes. The feature also closes
   the existing main-detector gap: `main(args: Array<String>)` now emits the valid CLR
@@ -529,7 +531,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and interop translation, or a different representation proven coherent for storage, signatures,
   catches, rethrows, and type tests. Do not enable the source mapping piecemeal.
 - The bounded data-class model enables non-generic top-level and named nested classes whose
-  primary-constructor properties are supported non-array types and have no constructor defaults.
+  primary-constructor properties have supported mapped types and no constructor defaults.
   Fir2ir's mature generated bodies are used unchanged: Equals reuses the System.Object slot
   through CLR `isinst`/`castclass`, hash/string behavior reuses the Any runtime helpers,
   componentN reads fields, and copy calls the primary constructor. Ordinary top-level/member
@@ -544,14 +546,28 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parameters, so even below `GenericOuter<T>` its independently non-generic metadata identity and
   every generated member token are `'GenericOuter`1'/'Entry'` with no outer `!0`. Runtime coverage
   composes that shape below classes, generic classes, interfaces, objects, companions, data
-  classes, and deeper named parents. Arrays need their dedicated content hash/string intrinsics.
-  Local classes and data objects remain gated whole-class.
+  classes, and deeper named parents. Array properties now follow the JVM-generated-member split:
+  equality remains reference identity, while fir2ir's dedicated array hash/string builtins route
+  through the DotNet intrinsic registry to runtime-owned `System.Array` helpers. The helpers fold
+  elements with the established Kotlin object-boundary hash/string operations, giving null 0/
+  `null`, empty 1/`[]`, Kotlin Boolean/Double/Char semantics, and content rendering for all five
+  supported primitive vectors plus supported reference-element `Array<E>`. Unsupported vector
+  shapes still reject through their owning mapper and evict the data class whole. The Char-array
+  pin exposed CLR's duplicated-bits boxed Char hash; `Intrinsics.HashCode` now restores the Kotlin
+  numeric code centrally, with direct Any coverage. Local classes and data objects remain gated
+  whole-class.
   `dataclass_s1` assembled the exact positive golden with modern 10.0.9 and Framework 4.8 ILAsm;
   the focused positive/hostile two-parser matrix is 10/0/0/0, including real CoreCLR execution,
   and the fresh full DotNet suite is 408/0/0/0.
   `dataclass_s2` assembled the generic-outer nested golden and the updated rejection golden under
   both ILAsm implementations; its focused two-parser IL/CoreCLR matrix is 6/0/0/0, and the fresh
   full DotNet suite is 412/0/0/0.
+  `dataclass_array_probe_s1` assembled and ran the runtime-helper signatures/loops under modern
+  10.0.9 and Framework 4.8 ILAsm/CLR with identical null, primitive, and reference-vector output.
+  The exact array golden pins primitive/generic helper calls and identity equality; runtime pins
+  cover all five primitive vectors, reference/null/empty arrays, canonical Double/Boolean/Char
+  hashes, and content text. Both parser variants run on CoreCLR, and the Framework-selected ILAsm
+  also assembles and runs the new box. The fresh full DotNet suite is 416/0/0/0.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -634,10 +650,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Extend data classes one representation boundary at a time.** Next design the array content
-   hash/string intrinsics through the JVM registry precedent; do not reuse array identity helpers.
-   Generic data classes need an erased runtime class-identity strategy before CLR reified
-   `isinst C<T>` can be considered, and constructor defaults need a collision-safe marker ABI.
+1. **Extend data classes one representation boundary at a time.** Next design constructor defaults
+   around a durable collision-safe marker ABI; do not expose the temporary ordinary-function
+   instance-helper shape as constructor ABI. Generic data classes need an erased runtime class-
+   identity strategy before CLR reified `isinst C<T>` can be considered.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 

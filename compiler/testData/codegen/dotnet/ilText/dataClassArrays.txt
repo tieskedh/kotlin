@@ -1,0 +1,303 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'dataClassArrays' {}
+.module 'main-dataClassArrays.il'
+
+.class public auto ansi sealed beforefieldinit 'ArrayRecord'
+       extends [mscorlib]System.Object
+{
+  .field private int32[] 'numbers'
+  .field private string[] 'labels'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32[] 'numbers', string[] 'labels') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32[] 'ArrayRecord'::'numbers'
+    ldarg.0
+    ldarg.2
+    stfld string[] 'ArrayRecord'::'labels'
+    ret
+  }
+  .method public hidebysig specialname instance int32[] 'get_numbers'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    ret
+  }
+  .method public hidebysig specialname instance string[] 'get_labels'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    ret
+  }
+  .method public hidebysig instance int32[] 'component1'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    ret
+  }
+  .method public hidebysig instance string[] 'component2'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    ret
+  }
+  .method public hidebysig instance class 'ArrayRecord' 'copy'(int32[] 'numbers', string[] 'labels') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.2
+    newobj instance void 'ArrayRecord'::.ctor(int32[], string[])
+    ret
+  }
+  .method public hidebysig instance class 'ArrayRecord' 'copy$default'(int32[] 'numbers', string[] 'labels', int32 '$mask0') cil managed
+  {
+    .maxstack 3
+    ldarg.3
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.3
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance class 'ArrayRecord' 'ArrayRecord'::'copy'(int32[], string[])
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 2
+    ldstr "ArrayRecord(numbers="
+    ldarg.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayToString'(class [mscorlib]System.Array)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ", labels="
+    call string [mscorlib]System.String::Concat(string, string)
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayToString'(class [mscorlib]System.Array)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'result'
+    )
+    ldarg.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayHashCode'(class [mscorlib]System.Array)
+    stloc.0
+    ldloc.0
+    ldc.i4 31
+    mul
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayHashCode'(class [mscorlib]System.Array)
+    add
+    stloc.0
+    ldloc.0
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'ArrayRecord' 'tmp0_other_with_cast'
+    )
+    ldarg.0
+    ldarg.1
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.1
+    ret
+IL_whenNext_1:
+    ldarg.1
+    isinst class 'ArrayRecord'
+    ldnull
+    ceq
+    brfalse IL_whenNext_3
+    ldc.i4.0
+    ret
+IL_whenNext_3:
+    ldarg.1
+    castclass class 'ArrayRecord'
+    stloc.0
+    ldarg.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    ldloc.0
+    ldfld int32[] 'ArrayRecord'::'numbers'
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_5
+    ldc.i4.0
+    ret
+IL_whenNext_5:
+    ldarg.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    ldloc.0
+    ldfld string[] 'ArrayRecord'::'labels'
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_7
+    ldc.i4.0
+    ret
+IL_whenNext_7:
+    ldc.i4.1
+    ret
+  }
+  .property instance int32[] 'numbers'()
+  {
+    .get instance int32[] 'ArrayRecord'::'get_numbers'()
+  }
+  .property instance string[] 'labels'()
+  {
+    .get instance string[] 'ArrayRecord'::'get_labels'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'dataClassArraysKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 5
+    .locals init (
+      [0] class 'ArrayRecord' 'value',
+      [1] int32[] '<arrayOf>',
+      [2] int32 '<arrayElement>',
+      [3] string[] '<arrayOf>@3',
+      [4] string '<arrayElement>@4',
+      [5] int32[] '<arrayOf>@5',
+      [6] int32 '<arrayElement>@6',
+      [7] string[] '<arrayOf>@7',
+      [8] string '<arrayElement>@8'
+    )
+    ldc.i4 2
+    newarr int32
+    stloc.1
+    ldc.i4 1
+    stloc.2
+    ldloc.1
+    ldc.i4 0
+    ldloc.2
+    stelem.i4
+    ldc.i4 2
+    stloc.2
+    ldloc.1
+    ldc.i4 1
+    ldloc.2
+    stelem.i4
+    ldloc.1
+    ldc.i4 2
+    newarr string
+    stloc.3
+    ldstr "a"
+    stloc 4
+    ldloc.3
+    ldc.i4 0
+    ldloc 4
+    stelem string
+    ldnull
+    stloc 4
+    ldloc.3
+    ldc.i4 1
+    ldloc 4
+    stelem string
+    ldloc.3
+    newobj instance void 'ArrayRecord'::.ctor(int32[], string[])
+    stloc.0
+    ldloc.0
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 2
+    newarr int32
+    stloc 5
+    ldc.i4 1
+    stloc 6
+    ldloc 5
+    ldc.i4 0
+    ldloc 6
+    stelem.i4
+    ldc.i4 2
+    stloc 6
+    ldloc 5
+    ldc.i4 1
+    ldloc 6
+    stelem.i4
+    ldloc 5
+    ldc.i4 2
+    newarr string
+    stloc 7
+    ldstr "a"
+    stloc 8
+    ldloc 7
+    ldc.i4 0
+    ldloc 8
+    stelem string
+    ldnull
+    stloc 8
+    ldloc 7
+    ldc.i4 1
+    ldloc 8
+    stelem string
+    ldloc 7
+    newobj instance void 'ArrayRecord'::.ctor(int32[], string[])
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

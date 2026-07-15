@@ -170,7 +170,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
   the removed iterator loop. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
   elements are unsupported), primitive-array initializer-lambda constructors, spread elements in
-  `*ArrayOf`, iterator values escaping as objects, copying/content helpers, and unsigned arrays.
+  `*ArrayOf`, iterator values escaping as objects, user-facing copying/content APIs, and unsigned
+  arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
@@ -197,7 +198,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   loudly: use-site projections/star projections (never erase Kotlin invariance into CLR
   covariance), concrete primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
   including arrays of primitive arrays, initializer-lambda constructors, spread elements,
-  iterator values escaping as objects, array casts/type checks, and copying/content helpers.
+  iterator values escaping as objects, array casts/type checks, and user-facing copying/content
+  APIs.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
 - Kotlin `Any` foundation (draft ADR
@@ -212,9 +214,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Runtime.Internal.Intrinsics.AreEqual(object, object)` (null-safe, left-biased virtual
   equality), `HashCode(object)`, and `StringValueOf(object)` (`"null"` or virtual ToString).
   Primitive-aware branches are required at that boundary: both CLRs equate boxed signed zero,
-  collapse its hashes, and render boxed Double/Boolean with CLR text; Framework also hashes NaN
-  payloads differently. The helpers restore Kotlin/JVM object semantics (canonical Double bits,
-  Boolean hash constants/lowercase text, invariant integer text, shared Double formatting) before
+  collapse its hashes, render boxed Double/Boolean with CLR text, and give boxed Char a duplicated-
+  bits hash instead of Kotlin's numeric code; Framework also hashes NaN payloads differently. The
+  helpers restore Kotlin/JVM object semantics (canonical Double bits, Boolean hash constants/
+  lowercase text, numeric Char hashes, invariant integer text, shared Double formatting) before
   virtual fallback. Values and open type parameters box only at that universal object boundary.
   Both ILAsm implementations accept the exact runtime/library/consumer shapes, and all four
   modern/Framework consumer-dependency
@@ -229,8 +232,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   another object identity or a backend-specific member generator. Fir2ir's shared
   `DataClassMembersGenerator` already supplies `equals`, `hashCode`, `toString`, `componentN`,
   and `copy` bodies. For a non-generic top-level or named nested class whose primary-constructor
-  properties have no array type or constructor default, those bodies compile through ordinary
-  class machinery:
+  properties have supported mapped types and no constructor default, those bodies compile through
+  ordinary class machinery:
   `Equals(object)` reuses the existing System.Object virtual slot and uses the checked
   `isinst`/`castclass` path above; property equality and hash/string conversion reuse the
   established Any/nullable helpers; `componentN` is a field read; and `copy` calls the primary
@@ -255,15 +258,25 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `'Outer`1'/'Entry'`: its generated `isinst`/`castclass`, fields, constructor, members, and
   `copy$default` tokens carry no outer `!0`. The same shape composes below supported classes,
   interfaces, objects, companions, data classes, and deeper named metadata parents.
+  Array properties preserve the JVM asymmetry deliberately: generated equality remains ordinary
+  array reference identity, while only hashCode/toString inspect content. Fir2ir emits its
+  `dataClassArrayMemberHashCode`/`dataClassArrayMemberToString` builtins; the intrinsic registry
+  maps them to compiler-internal runtime helpers accepting `System.Array`. `GetValue(int32)` boxes
+  each vector element into the established `HashCode(object)`/`StringValueOf(object)` boundary, so
+  all five supported primitive vectors and supported invariant reference-element `Array<E>` share
+  one semantic implementation. Null arrays hash to 0 and render `null`; empty arrays hash to 1 and
+  render `[]`. The same boundary exposed the CLR Char hash difference, now normalized centrally
+  for ordinary Any calls as well as array content.
   STAYS REJECTED, whole-class: generic data classes (CLR reified `isinst C<T>` would make equality
-  stricter than Kotlin/JVM erased class identity), array properties (the frontend emits dedicated
-  data-class array hash/string builtins whose content semantics are not implemented), primary
-  constructor defaults, local data classes, and data objects. Pins:
-  `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassesRejected.kt`,
-  `ilText/defaultArgumentsRejected.kt`; runtime: `box/dataClasses.kt`,
-  `box/nestedDataClasses.kt`, `box/defaultArguments.kt`. `dataclass_s1` and `dataclass_s2`
-  assembled the positive goldens under modern 10.0.9 and Framework 4.8 ILAsm; the nested slice's
-  focused two-parser matrix is 6/0/0/0 and the fresh full matrix is 412/0/0/0.
+  stricter than Kotlin/JVM erased class identity), array shapes rejected by the primitive/generic
+  vector mapper, primary constructor defaults, local data classes, and data objects. Pins:
+  `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassArrays.kt`,
+  `ilText/dataClassesRejected.kt`, `ilText/defaultArgumentsRejected.kt`; runtime:
+  `box/dataClasses.kt`, `box/nestedDataClasses.kt`, `box/dataClassArrays.kt`,
+  `box/defaultArguments.kt`, and `box/anyMembers.kt`. `dataclass_s1`, `dataclass_s2`, and
+  `dataclass_array_probe_s1` assembled the relevant shapes under modern 10.0.9 and Framework 4.8
+  ILAsm; the array helper probe ran identically on both runtimes. The fresh full two-parser matrix
+  is 416/0/0/0 across eight suites.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure

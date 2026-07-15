@@ -116,6 +116,13 @@ internal class DotNetIlIntrinsicMethods(
         // like on the JVM, whose backend intrinsifies it as checkNotNull (Intrinsics.checkNotNull
         // at runtime); here the null test + throw is emitted inline (see the intrinsic's KDoc).
         irBuiltIns.checkNotNullSymbol.toKey()!! to DotNetIlCheckNotNullIntrinsic,
+        // MethodsFromAnyGeneratorForLowerings uses these synthetic builtins only for array-backed
+        // data-class properties. Match the JVM intrinsic-registry boundary: equality remains the
+        // array's ordinary identity equality, while generated hashCode/toString use content.
+        irBuiltIns.dataClassArrayMemberHashCodeSymbol.toKey()!!
+                to DotNetIlDataClassArrayMemberHashCodeIntrinsic,
+        irBuiltIns.dataClassArrayMemberToStringSymbol.toKey()!!
+                to DotNetIlDataClassArrayMemberToStringIntrinsic,
         // fir2ir appends this synthetic call as the final branch of an exhaustive `when`
         // without a source `else`, exactly the symbol the JVM backend intrinsifies.
         irBuiltIns.noWhenBranchMatchedExceptionSymbol.toKey()!! to DotNetIlNoWhenBranchMatchedIntrinsic,
@@ -479,6 +486,64 @@ internal abstract class DotNetIlIntrinsicMethod {
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
     ): Boolean = false
+}
+
+private fun IrCall.dataClassArrayArgument(
+    codegen: DotNetIlExpressionCodegen,
+    memberName: String,
+): Pair<IrExpression, DotNetIlValueType> {
+    if (arguments.size != 1) {
+        dotNetUnsupported("data-class array $memberName intrinsic requires exactly one argument")
+    }
+    val argument = arguments.single()
+        ?: dotNetUnsupported("missing array argument of data-class '$memberName'")
+    val argumentType = codegen.toDotNetIlValueType(argument.type)
+    if (argumentType !is DotNetIlValueType.PrimitiveArray &&
+        argumentType !is DotNetIlValueType.GenericArray
+    ) {
+        dotNetUnsupported(
+            "data-class array $memberName has unsupported argument type ${argument.type.render()}"
+        )
+    }
+    return argument to argumentType
+}
+
+/** JVM `Arrays.hashCode` semantics for the array-member builtin emitted into data classes. */
+private object DotNetIlDataClassArrayMemberHashCodeIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32) return false
+        val [argument, argumentType] = call.dataClassArrayArgument(codegen, "hashCode")
+        codegen.emitExpression(argument, argumentType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.dataClassArrayHashCodeCallInstruction,
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** JVM `Arrays.toString` semantics for the array-member builtin emitted into data classes. */
+private object DotNetIlDataClassArrayMemberToStringIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.String) return false
+        val [argument, argumentType] = call.dataClassArrayArgument(codegen, "toString")
+        codegen.emitExpression(argument, argumentType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.dataClassArrayToStringCallInstruction,
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
 }
 
 /** Emits a dynamic-size vector allocation with the Kotlin negative-size exception boundary. */
