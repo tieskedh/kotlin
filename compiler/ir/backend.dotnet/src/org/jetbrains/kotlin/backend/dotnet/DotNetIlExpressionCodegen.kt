@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetField
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrSetField
+import org.jetbrains.kotlin.ir.expressions.IrStatementOrigin
 import org.jetbrains.kotlin.ir.expressions.IrThrow
 import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
@@ -122,6 +123,10 @@ internal class DotNetIlExpressionCodegen(
     }
 
     fun emitExpression(expression: IrExpression?, expectedType: DotNetIlValueType) {
+        if (expression.isNullDefaultArgumentPlaceholder()) {
+            emitDefaultArgumentPlaceholder(expectedType)
+            return
+        }
         // Widening-coercion interception, the hybrid nullability model's conversion layer (JVM
         // precedent: the JVM backend coerces at codegen time through StackValue — boxing is
         // never an IR node — and Roslyn converts `T -> T?` / `-> object` at every use site the
@@ -260,6 +265,46 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
         methodContext.emit(type.initInstruction, pops = 1)
         methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+    }
+
+    private fun IrExpression?.isNullDefaultArgumentPlaceholder(): Boolean {
+        val composite = this as? IrContainerExpression ?: return false
+        if (composite.origin != IrStatementOrigin.DEFAULT_VALUE) return false
+        val constant = composite.statements.singleOrNull() as? IrConst ?: return false
+        return constant.value == null
+    }
+
+    /**
+     * Emits the ignored value carried beside a set default-argument mask bit. Common default
+     * lowering represents every reference-shaped placeholder as a null constant, including an
+     * open `T` that may become a CLR value type after substitution. The mask-owning stub replaces
+     * this value before source code can observe it, so emit the parameter's physical default:
+     * null for references, zero for known primitives, and `initobj` for open or nullable values.
+     */
+    private fun emitDefaultArgumentPlaceholder(type: DotNetIlValueType) {
+        when (type) {
+            DotNetIlValueType.Boolean,
+            DotNetIlValueType.Int32,
+            DotNetIlValueType.Char,
+            -> methodContext.emit("ldc.i4 0", pushes = 1)
+            DotNetIlValueType.Int64 -> methodContext.emit("ldc.i8 0", pushes = 1)
+            DotNetIlValueType.Float64 -> methodContext.emit("ldc.r8 0.0", pushes = 1)
+            is DotNetIlValueType.NullableValue -> emitEmptyNullable(type)
+            is DotNetIlValueType.TypeParameter -> {
+                val slot = methodContext.declareSyntheticLocal(type, "<default>")
+                methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
+                methodContext.emit("initobj ${type.nameInSignature}", pops = 1)
+                methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+            }
+            DotNetIlValueType.String,
+            DotNetIlValueType.Object,
+            is DotNetIlValueType.UserClass,
+            is DotNetIlValueType.MappedClass,
+            is DotNetIlValueType.GenericInstance,
+            is DotNetIlValueType.PrimitiveArray,
+            is DotNetIlValueType.GenericArray,
+            -> methodContext.emit("ldnull", pushes = 1)
+        }
     }
 
     fun emitBranchIfFalse(condition: IrExpression, targetLabel: String) {
