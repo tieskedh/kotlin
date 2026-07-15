@@ -1,0 +1,44 @@
+.assembly extern mscorlib {}
+.assembly 'anonymousObjectsRejected' {}
+.module 'main-anonymousObjectsRejected.il'
+
+.class interface public abstract auto ansi 'RejectedAnonymousValue'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'value'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SurvivingAnonymousSibling'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 23
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'anonymousObjectsRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    newobj instance void 'SurvivingAnonymousSibling'::.ctor()
+    call instance int32 'SurvivingAnonymousSibling'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
