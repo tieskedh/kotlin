@@ -239,14 +239,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   maps then cascade to actual users of the removed class. Companion failures are owner-sensitive:
   the singleton field and `.cctor` live on the immediate enclosing type, so that owner subtree is
   the minimum safe eviction boundary.
-- Named nested-type model (probe series `nestedprobe_s1`–`_s4`, `nestedifaceprobe_s1`–`_s3`;
+- Named nested-type model (probe series `nestedprobe_s1`–`_s4`, `nestedifaceprobe_s1`–`_s3`,
+  `nestedownerprobe_s1`–`_s2`;
   JVM precedent: a Kotlin named nested declaration is static unless it is an `inner` class,
   represented by JVM `ACC_STATIC`; the CLR analogue is a real nested metadata type): a final,
   open, abstract, or sealed plain `ClassKind.CLASS`, an all-abstract interface, or a final named
-  object declared directly inside a plain class or interface passes the shape gate recursively.
-  An interface may additionally nest inside a named object or companion. Each nested declaration
-  owns no outer instance and only its OWN generic parameters; a named class inside generic
-  `Outer<T>` is therefore
+  object declared directly inside any supported named class, interface, object, or companion
+  passes the shape gate recursively. Each nested declaration owns no outer instance and only its
+  OWN generic parameters; a named class inside generic `Outer<T>` is therefore
   referenced as `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic
   nested class is `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted
   simple names. A companion of a non-generic plain class or interface is also supported.
@@ -257,9 +257,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   companion's immediate class/interface container must be non-generic because its field would be
   per constructed generic owner. An interface owner may legally carry that static singleton field
   and `.cctor` while retaining the interface flag rule that omits `beforefieldinit`
-  (`nestedifaceprobe_s2`). A named object's `INSTANCE` field is owned by the independently
+  (`nestedifaceprobe_s2`). Named objects may recursively contain named classes/objects, and a
+  named class below an object/companion may own its own companion. A named object's `INSTANCE`
+  field is owned by the independently
   non-generic object type, so it stays singular even under an immediately generic metadata parent
-  (`nestedprobe_s4`).
+  (`nestedprobe_s4`, `nestedownerprobe_s1`).
   Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
   rendering remains recursive inside the enclosing `.class` block. Public/private/internal/
   protected source visibility maps to `nested public`/`nested private`/`nested assembly`/
@@ -271,19 +273,25 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   may extend, any recursively declared module-local interface. All
   spellings, construction, member/field references, virtual/interface dispatch, forward links,
   cross-depth links, singleton initialization, and family shapes assemble and run on CoreCLR and
-  Framework. A failure OF a companion remains owner-sensitive because its field and `.cctor`
+  Framework. The CLR grants nested→enclosing private access, but not the reverse; the Kotlin
+  frontend does not allow an enclosing declaration to call a private MEMBER of an ordinary nested
+  class, while a private nested TYPE's public constructor remains callable by its enclosing type
+  (`nestedprobe_s2`, `nestedownerprobe_s2`). Companion-private members retain their established
+  IL-`assembly` widening. A failure OF a companion remains owner-sensitive because its field and
+  `.cctor`
   live on the immediate owner; a separate failing child below a valid companion is its own
   metadata subtree. STAYS REJECTED, per rejected metadata subtree: `inner`, local/anonymous,
-  data/value/enum/annotation, a class/object inside an object or companion, and a companion whose
-  immediate class/interface container is generic.
+  data/value/enum/annotation, and a companion whose immediate class/interface container is generic.
   Recursive render failures preserve the deepest declaration tag while
   unwinding, then subtree eviction removes that declaration and its descendants; independent
   metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
   Pins: `ilText/nestedClasses.kt`,
   `ilText/nestedInheritance.kt`, `ilText/nestedSingletons.kt`,
   `ilText/nestedInterfaces.kt`, `ilText/nestedInterfacesRejected.kt`,
+  `ilText/nestedObjectDeclarations.kt`, `ilText/nestedObjectDeclarationsRejected.kt`,
   `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
-  `box/nestedInheritance.kt`, `box/nestedSingletons.kt`, `box/nestedInterfaces.kt`.
+  `box/nestedInheritance.kt`, `box/nestedSingletons.kt`, `box/nestedInterfaces.kt`,
+  `box/nestedObjectDeclarations.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
   inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level or
@@ -661,8 +669,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/companionFixpointEviction.kt`. The companion gate accepts the direct companion of any
   non-generic plain class or interface, including an ordinary named nested class, recursively
   validated with the same constraint chain (sole supertype `Any`, final, non-generic, not data).
-  A companion may contain a nested all-abstract interface; other class/object children remain
-  rejected independently. The recursive postfix static-initializer sweep puts the companion
+  A companion may contain static-style named classes, interfaces, and objects; each is validated
+  and evicted independently. The recursive postfix static-initializer sweep puts the companion
   field initialization on that actual owner (`nestedprobe_s4`, pinned by
   `ilText/nestedSingletons.kt` and
   `box/nestedSingletons.kt`). For an interface companion, that field and `.cctor` live on the
