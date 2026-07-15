@@ -2,32 +2,6 @@
 .assembly 'defaultArgumentsRejected' {}
 .module 'main-defaultArgumentsRejected.il'
 
-.class public auto ansi sealed beforefieldinit 'ConstructorDefault'
-       extends [mscorlib]System.Object
-{
-  .field private int32 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
-  {
-    .maxstack 2
-    ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
-    ldarg.0
-    ldarg.1
-    stfld int32 'ConstructorDefault'::'value'
-    ret
-  }
-  .method public hidebysig specialname instance int32 'get_value'() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    ldfld int32 'ConstructorDefault'::'value'
-    ret
-  }
-  .property instance int32 'value'()
-  {
-    .get instance int32 'ConstructorDefault'::'get_value'()
-  }
-}
 .class interface public abstract auto ansi 'InterfaceDefault'
 {
   .method public hidebysig newslot abstract virtual instance int32 'value'(int32 'number') cil managed
@@ -59,13 +33,9 @@
   {
     .entrypoint
     .maxstack 3
-    ldc.i4 7
-    newobj instance void 'ConstructorDefault'::.ctor(int32)
-    call instance int32 'ConstructorDefault'::'get_value'()
     newobj instance void 'InterfaceDefaultImpl'::.ctor()
     ldc.i4 8
     callvirt instance int32 'InterfaceDefaultImpl'::'value'(int32)
-    add
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

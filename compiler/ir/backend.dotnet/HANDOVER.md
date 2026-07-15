@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(constructor-default data-class continuation).
+(generic data-class representation audit after constructor defaults).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -14,11 +14,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   identity (`eb1fae21e`) and exact Kotlin Error identity (`b3fc89984`), followed by the
   RuntimeException migration-gate decision (`acde56d80`) and the bounded top-level data-class and
   masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
-  by array-backed data classes in the current functional slice.
+  by array-backed data classes (`a43d3de4d`) and constructor defaults in the current functional
+  slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **416 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **420 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -531,15 +532,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and interop translation, or a different representation proven coherent for storage, signatures,
   catches, rethrows, and type tests. Do not enable the source mapping piecemeal.
 - The bounded data-class model enables non-generic top-level and named nested classes whose
-  primary-constructor properties have supported mapped types and no constructor defaults.
+  primary-constructor properties have supported mapped types.
   Fir2ir's mature generated bodies are used unchanged: Equals reuses the System.Object slot
   through CLR `isinst`/`castclass`, hash/string behavior reuses the Any runtime helpers,
   componentN reads fields, and copy calls the primary constructor. Ordinary top-level/member
-  defaults now follow
-  the common masked-stub algorithm; `copy(x = ...)` reaches an instance `copy$default`, whose
-  `int32` mask uses intrinsic `Int.and`/CLR `and` and whose selected defaults update generated
-  argument slots with `starg` before dispatch. Constructor defaults remain rejected pending a
-  collision-safe marker ABI, and interface defaults remain unlowered so Framework interfaces stay
+  defaults follow the common masked-stub algorithm; `copy(x = ...)` reaches an instance
+  `copy$default`, whose `int32` mask uses intrinsic `Int.and`/CLR `and` and whose selected defaults
+  update generated argument slots with `starg` before dispatch. Constructor defaults now use the
+  same common/JVM algorithm: the synthetic `.ctor` repeats the original parameters, appends one
+  `int32` mask per 32 value parameters, and ends with nullable
+  `[Kotlin.Runtime]Kotlin.Runtime.Internal.DefaultConstructorMarker`. The runtime type is public
+  metadata with a private constructor, and generated calls pass only null; it is a compiler ABI,
+  not a Kotlin-facing API. This keeps the stub distinct from real mask-shaped overloads. The CLR
+  constructor-identity pre-pass rejects a class whole when mapped original/generated signatures
+  still collide, such as `String` versus `String?`. Primary/secondary, delegating, data, generic,
+  named nested, inner, lifted local/capturing, multi-mask, named-argument, and evaluation-order
+  paths run on CoreCLR. Interface defaults remain unlowered so Framework interfaces stay
   all-abstract. Generic data classes are not mapped to reified CLR `isinst C<T>` because that would
   make equality stricter than Kotlin/JVM erased class identity. A named nested data class follows
   the established static-nested model: it captures no outer instance and owns only its own type
@@ -568,6 +576,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   cover all five primitive vectors, reference/null/empty arrays, canonical Double/Boolean/Char
   hashes, and content text. Both parser variants run on CoreCLR, and the Framework-selected ILAsm
   also assembles and runs the new box. The fresh full DotNet suite is 416/0/0/0.
+  `ctor_default_probe_s1` assembled a runtime marker plus default/real-overload consumer with
+  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings executed both paths.
+  The exact constructor golden assembles with both ILAsm versions, both parser variants execute
+  the comprehensive box on CoreCLR, the Framework-selected ILAsm also executes it, and the fresh
+  full DotNet suite is 420/0/0/0.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -650,10 +663,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Extend data classes one representation boundary at a time.** Next design constructor defaults
-   around a durable collision-safe marker ABI; do not expose the temporary ordinary-function
-   instance-helper shape as constructor ABI. Generic data classes need an erased runtime class-
-   identity strategy before CLR reified `isinst C<T>` can be considered.
+1. **Extend data classes one representation boundary at a time.** Constructor defaults now have
+   the durable JVM-shaped runtime marker ABI. Next audit generic data-class equality before
+   codegen: Kotlin/JVM equality tests erased class identity, whereas CLR `isinst C<T>` observes the
+   reified type arguments. Choose and probe a representation that preserves Kotlin equality
+   without weakening the backend's real CLR generic identity elsewhere; do not simply emit
+   `isinst C<T>`.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 
