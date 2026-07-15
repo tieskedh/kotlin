@@ -347,6 +347,54 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
+            |    .method public hidebysig static void 'ArrayCopyInto'(
+            |        class [mscorlib]System.Array 'source',
+            |        class [mscorlib]System.Array 'destination',
+            |        int32 'destinationOffset',
+            |        int32 'startIndex',
+            |        int32 'endIndex') cil managed
+            |    {
+            |      .maxstack 6
+            |      ldarg.3
+            |      ldc.i4.0
+            |      blt.s IL_arrayCopyInvalid
+            |      ldarg.s endIndex
+            |      ldarg.3
+            |      blt.s IL_arrayCopyInvalid
+            |      ldarg.s endIndex
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      bgt.s IL_arrayCopyInvalid
+            |      ldarg.2
+            |      ldc.i4.0
+            |      blt.s IL_arrayCopyInvalid
+            |      ldarg.2
+            |      ldarg.1
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      ldarg.s endIndex
+            |      ldarg.3
+            |      sub
+            |      sub
+            |      bgt.s IL_arrayCopyInvalid
+            |      ldarg.0
+            |      ldarg.3
+            |      ldarg.1
+            |      ldarg.2
+            |      ldarg.s endIndex
+            |      ldarg.3
+            |      sub
+            |      call void [mscorlib]System.Array::Copy(
+            |          class [mscorlib]System.Array,
+            |          int32,
+            |          class [mscorlib]System.Array,
+            |          int32,
+            |          int32)
+            |      ret
+            |IL_arrayCopyInvalid:
+            |      newobj instance void [mscorlib]System.IndexOutOfRangeException::.ctor()
+            |      throw
+            |    }
+            |
             |    .method private hidebysig static int64 'DoubleToLongBits'(float64) cil managed
             |    {
             |      .maxstack 2
@@ -623,4 +671,11 @@ internal object DotNetRuntimeLibraryHelpers {
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"DataClassArrayToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+
+    /** Kotlin range validation plus overlap-safe CLR copying for `Array.copyInto`. */
+    val arrayCopyIntoCallInstruction: String =
+        "call void [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayCopyInto".toIlIdentifier()}(" +
+                "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array, int32, int32, int32)"
 }

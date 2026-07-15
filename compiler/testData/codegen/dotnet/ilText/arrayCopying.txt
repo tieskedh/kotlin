@@ -1,0 +1,319 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'arrayCopying' {}
+.module 'main-arrayCopying.il'
+
+.class public auto ansi sealed beforefieldinit 'Item'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Item'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Item'::'value'
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'Item'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'arrayCopyingKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32[] 'copyInts'(int32[] 'values') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] int32[] '<copySource>',
+      [1] int32 '<copySize>',
+      [2] int32[] '<copyDestination>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc.1
+    ldloc.1
+    newarr int32
+    stloc.2
+    ldloc.0
+    ldc.i4.0
+    ldloc.2
+    ldc.i4.0
+    ldloc.1
+    call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32[] 'resizeInts'(int32[] 'values', int32 'size') cil managed
+  {
+    .maxstack 6
+    .locals init (
+      [0] int32[] '<copySource>',
+      [1] int32 '<copySize>',
+      [2] int32[] '<copyDestination>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int32
+    stloc.2
+    ldloc.0
+    ldc.i4.0
+    ldloc.2
+    ldc.i4.0
+    ldloc.0
+    ldlen
+    conv.i4
+    ldloc.1
+    call int32 [mscorlib]System.Math::Min(int32, int32)
+    call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static string[] 'copyStrings'(string[] 'values') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] string[] '<copySource>',
+      [1] int32 '<copySize>',
+      [2] string[] '<copyDestination>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc.1
+    ldloc.1
+    newarr string
+    stloc.2
+    ldloc.0
+    ldc.i4.0
+    ldloc.2
+    ldc.i4.0
+    ldloc.1
+    call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static string[] 'resizeStrings'(string[] 'values', int32 'size') cil managed
+  {
+    .maxstack 6
+    .locals init (
+      [0] string[] '<copySource>',
+      [1] int32 '<copySize>',
+      [2] string[] '<copyDestination>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr string
+    stloc.2
+    ldloc.0
+    ldc.i4.0
+    ldloc.2
+    ldc.i4.0
+    ldloc.0
+    ldlen
+    conv.i4
+    ldloc.1
+    call int32 [mscorlib]System.Math::Min(int32, int32)
+    call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static class 'Item'[] 'copyItems'(class 'Item'[] 'values') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] class 'Item'[] '<copySource>',
+      [1] int32 '<copySize>',
+      [2] class 'Item'[] '<copyDestination>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc.1
+    ldloc.1
+    newarr class 'Item'
+    stloc.2
+    ldloc.0
+    ldc.i4.0
+    ldloc.2
+    ldc.i4.0
+    ldloc.1
+    call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32[] 'copyIntsInto'(int32[] 'source', int32[] 'destination', int32 'destinationOffset', int32 'startIndex', int32 'endIndex') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] int32[] '<copySource>',
+      [1] int32[] '<copyDestination>',
+      [2] int32 '<copyDestinationOffset>',
+      [3] int32 '<copyStartIndex>',
+      [4] int32 '<copyEndIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldarg.3
+    stloc.3
+    ldarg 4
+    stloc 4
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    ldloc.3
+    ldloc 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayCopyInto'(class [mscorlib]System.Array, class [mscorlib]System.Array, int32, int32, int32)
+    ldloc.1
+    ret
+  }
+  .method public hidebysig static int32[] 'copyIntsIntoDefaults'(int32[] 'source', int32[] 'destination') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] int32[] '<copySource>',
+      [1] int32[] '<copyDestination>',
+      [2] int32 '<copyDestinationOffset>',
+      [3] int32 '<copyStartIndex>',
+      [4] int32 '<copyEndIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldc.i4.0
+    stloc.2
+    ldc.i4.0
+    stloc.3
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc 4
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    ldloc.3
+    ldloc 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayCopyInto'(class [mscorlib]System.Array, class [mscorlib]System.Array, int32, int32, int32)
+    ldloc.1
+    ret
+  }
+  .method public hidebysig static string[] 'copyStringsInto'(string[] 'source', string[] 'destination') cil managed
+  {
+    .maxstack 5
+    .locals init (
+      [0] string[] '<copySource>',
+      [1] string[] '<copyDestination>',
+      [2] int32 '<copyDestinationOffset>',
+      [3] int32 '<copyStartIndex>',
+      [4] int32 '<copyEndIndex>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldc.i4.0
+    stloc.2
+    ldc.i4.0
+    stloc.3
+    ldloc.0
+    ldlen
+    conv.i4
+    stloc 4
+    ldloc.0
+    ldloc.1
+    ldloc.2
+    ldloc.3
+    ldloc 4
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayCopyInto'(class [mscorlib]System.Array, class [mscorlib]System.Array, int32, int32, int32)
+    ldloc.1
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOf>',
+      [1] int32 '<arrayElement>',
+      [2] int32[] '<arrayGet>',
+      [3] int32 '<arrayIndex>'
+    )
+    ldc.i4 2
+    newarr int32
+    stloc.0
+    ldc.i4 1
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem.i4
+    ldc.i4 2
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem.i4
+    ldloc.0
+    call int32[] 'arrayCopyingKt'::'copyInts'(int32[])
+    stloc.2
+    ldc.i4 1
+    stloc.3
+    ldloc.2
+    ldloc.3
+    ldelem.i4
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

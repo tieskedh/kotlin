@@ -183,8 +183,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
   the removed iterator loop. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), iterator values escaping as objects, user-facing copying/content
-  APIs, and unsigned arrays.
+  elements are unsupported), iterator values escaping as objects, user-facing content APIs, and
+  unsigned arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
@@ -212,7 +212,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
   primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
   including arrays of primitive arrays, iterator values escaping as objects, array casts/type
-  checks, and user-facing copying/content APIs.
+  checks, resized/open-generic copying, and user-facing content APIs.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
 - Concrete array initializer constructors reuse the same backend.common
@@ -239,6 +239,34 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   arrays, and open/reified `Array<T>` construction (non-reified source is rejected by the frontend;
   inline-reified generics remain outside this backend's inlining model). Negative pins remain in
   `ilText/primitiveArraysRejected.kt` and `ilText/genericArraysRejected.kt`.
+- Concrete array copying (probe series `arraycopyprobe_s1`; JVM stdlib platform-operation
+  precedent plus the DotNet intrinsic registry) is introduced through resolution-only external
+  declarations in the temporary `kotlin.collections` source, because this POC has no real .NET
+  stdlib or IR inliner yet. The registry excludes those declarations from emitted facades.
+  `copyOf()` allocates the exact known vector element type and calls `System.Array.Copy`;
+  `copyOf(newSize)` reuses the guarded negative-size boundary, copies
+  `min(oldSize, newSize)`, and leaves CLR zero/null initialization to supply padding. The five
+  supported primitive vectors and concrete reference/nullable-reference/user/instantiated-generic
+  arrays therefore return fresh, independent arrays for both ordinary and resized copies.
+  `copyInto` evaluates receiver, destination, and explicit arguments once in
+  Kotlin source order, materializes omitted zero/size defaults from the already-spilled receiver,
+  returns the exact destination object, and preserves overlapping self-copies through
+  `System.Array.Copy`.
+  Raw `System.Array.Copy` cannot own `copyInto` validation: both CoreCLR and Framework report
+  negative indexes as `ArgumentOutOfRangeException` and oversized source/destination ranges as
+  `ArgumentException`, which would expose destination failures as Kotlin
+  `IllegalArgumentException`. One metadata-public compiler/runtime helper,
+  `Kotlin.Runtime.Internal.Intrinsics.ArrayCopyInto(System.Array, System.Array, Int, Int, Int)`,
+  validates non-negative/ordered/in-bounds source and destination ranges without overflow and
+  throws `System.IndexOutOfRangeException`, the existing Kotlin `IndexOutOfBoundsException`
+  mapping, before delegating the move. The helper does not erase Kotlin array invariance: the
+  frontend still checks the `Array<out T>`/`Array<T>` source API and generated signatures remain
+  exact vectors. A concrete `Array<String?>`-like result shares its exact reference vector with
+  `Array<String>`; only open `Array<T?>` remains unrepresentable because `T` may be a value type.
+  STAYS REJECTED, loudly: copying an open `Array<T>`, `copyOfRange`, mapper-rejected array families,
+  and content operations. Pins: `ilText/arrayCopying.kt`, `box/arrayCopying.kt`, and the negative
+  additions in `ilText/genericArraysRejected.kt`. The exact golden assembles under modern 10.0.9
+  and Framework 4.8 ILAsm; both parser boxes execute with modern and Framework-selected ILAsm.
 - Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
   delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
   stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the

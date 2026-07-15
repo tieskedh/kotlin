@@ -29,6 +29,73 @@ public fun println(message: Boolean) {}
 
 public fun println(message: Any?) {}
 """,
+    "DotNetStdlibCollections.kt" to """package kotlin.collections
+
+// Resolution-only declarations for the first array-copying slice. The backend intercepts every
+// call through DotNetIlIntrinsicMethods and excludes these declarations from emitted facades.
+// Keeping them external also leaves omitted defaults visible on the original call, so the
+// intrinsic can preserve Kotlin's receiver/argument/default-expression evaluation order without
+// generating a fake Kotlin implementation into each consumer assembly.
+
+public external fun <T> Array<out T>.copyInto(
+    destination: Array<T>,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): Array<T>
+
+public external fun IntArray.copyInto(
+    destination: IntArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): IntArray
+
+public external fun LongArray.copyInto(
+    destination: LongArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): LongArray
+
+public external fun DoubleArray.copyInto(
+    destination: DoubleArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): DoubleArray
+
+public external fun BooleanArray.copyInto(
+    destination: BooleanArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): BooleanArray
+
+public external fun CharArray.copyInto(
+    destination: CharArray,
+    destinationOffset: Int = 0,
+    startIndex: Int = 0,
+    endIndex: Int = size,
+): CharArray
+
+public external fun <T> Array<T>.copyOf(): Array<T>
+public external fun IntArray.copyOf(): IntArray
+public external fun LongArray.copyOf(): LongArray
+public external fun DoubleArray.copyOf(): DoubleArray
+public external fun BooleanArray.copyOf(): BooleanArray
+public external fun CharArray.copyOf(): CharArray
+
+public external fun IntArray.copyOf(newSize: Int): IntArray
+public external fun LongArray.copyOf(newSize: Int): LongArray
+public external fun DoubleArray.copyOf(newSize: Int): DoubleArray
+public external fun BooleanArray.copyOf(newSize: Int): BooleanArray
+public external fun CharArray.copyOf(newSize: Int): CharArray
+
+// Concrete reference substitutions map Array<T?> to the same exact CLR reference vector and are
+// supported. An open T? still reaches the owning generic-array gate and fails explicitly.
+public external fun <T> Array<T>.copyOf(newSize: Int): Array<T?>
+""",
     "DotNetStdlibKotlin.kt" to """package kotlin
 
 // The real stdlib's `Char.code` is an `@InlineOnly` extension property; it is declared here as
