@@ -1,8 +1,7 @@
 package test.genericarrays.rejected
 
-// A supported non-capturing initializer lambda is lowered independently before its unsupported
-// Array(size, init) call is rejected. Its unreferenced callable class may therefore remain while
-// the containing function is absent; no fallback array-construction IL is emitted.
+// Every declaration below remains outside the supported invariant concrete-array model. No
+// fallback array-construction IL may be emitted.
 
 open class Base
 
@@ -36,8 +35,6 @@ fun star(values: Array<*>): Any? = values[0]
 
 fun <T> nullableTypeParameter(values: Array<T?>): T? = values[0]
 
-fun initialized(size: Int): Array<String> = Array(size) { "x" }
-
 fun nullablePrimitiveVarargs(vararg values: Int?): Int? = values[0]
 
 fun nestedVarargs(vararg values: IntArray): IntArray = values[0]
@@ -45,6 +42,10 @@ fun nestedVarargs(vararg values: IntArray): IntArray = values[0]
 fun nullPrimitive(size: Int): Array<Int?> = arrayOfNulls(size)
 
 fun emptyPrimitive(): Array<Int> = emptyArray()
+
+inline fun <reified T> initializedOpen(size: Int, value: T): Array<T> = Array(size) { value }
+
+fun initializedNested(size: Int): Array<Array<String>> = Array(size) { arrayOf("x") }
 
 fun iteratorAsStatement(values: Array<String>) {
     values.iterator()
