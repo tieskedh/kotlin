@@ -911,21 +911,9 @@ class DotNetIlEmitter(
             when {
                 irClass.kind == ClassKind.OBJECT -> dotNetUnsupported("data object '$name' is not supported")
                 irClass.isOriginallyLocalDeclaration -> dotNetUnsupported("local data class '$name' is not supported yet")
-                irClass.typeParameters.isNotEmpty() -> dotNetUnsupported(
-                    "generic data class '$name' is not supported: CLR reified generic type tests " +
-                            "do not preserve Kotlin's erased data-class equality"
-                )
             }
-            val primaryConstructor = irClass.primaryConstructor
+            irClass.primaryConstructor
                 ?: dotNetUnsupported("data class '$name' has no primary constructor")
-            if (primaryConstructor.parameters.any { parameter ->
-                    parameter.kind == IrParameterKind.Regular && parameter.defaultValue != null
-                }
-            ) {
-                dotNetUnsupported(
-                    "data class '$name' has default primary-constructor arguments, which are not supported yet"
-                )
-            }
         }
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
