@@ -1,0 +1,53 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'callableObjectsRejected' {}
+.module 'main-callableObjectsRejected.il'
+
+.class private auto ansi sealed 'callableObjectsRejectedKt$reflected$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsRejectedKt$reflected$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsRejectedKt$reflected$1'::.ctor()
+    stsfld class 'callableObjectsRejectedKt$reflected$1' 'callableObjectsRejectedKt$reflected$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    call int32 'callableObjectsRejectedKt'::'identityValue'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'callableObjectsRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'identityValue'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static string 'survivor'() cil managed
+  {
+    .maxstack 1
+    ldstr "OK"
+    ret
+  }
+}

@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetCallableObject
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -251,6 +252,7 @@ class DotNetIlEmitter(
         val facadeClassInfoByFile = files.associateWith { DotNetIlClassInfo(fileClassNames.getValue(it)) }
 
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
+        DotNetRuntimeTypes.registerInvokeFunctions(irBuiltIns, typeMapper, availableFunctions)
         val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
         for ([file, functions] in topLevelFunctionsByFile) {
             val facadeClassInfo = facadeClassInfoByFile.getValue(file)
@@ -674,8 +676,7 @@ class DotNetIlEmitter(
             return null
         }
 
-        return buildString {
-            appendHeader()
+        val moduleBody = buildString {
             val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
             for (file in files) {
                 // Per file: user classes first, then the file facade (the deterministic order
@@ -739,6 +740,16 @@ class DotNetIlEmitter(
                     exported = false,
                 ).generate(this)
             }
+        }
+        return buildString {
+            // Executables retain the runtime-foundation AssemblyRef unconditionally. Raw library
+            // IL acquires it once the final fixpoint output contains a physical runtime type;
+            // derive that from the rendered body so an evicted callable cannot leave a stale ref.
+            appendHeader(
+                referencesRuntimeAssembly = producesExecutable ||
+                        "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody
+            )
+            append(moduleBody)
         }
     }
 
@@ -857,12 +868,26 @@ class DotNetIlEmitter(
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
         }
         if (irClass.isOriginallyLocalDeclaration) {
-            val localKind = if (irClass.isAnonymousObject) "anonymous object" else "local class"
+            val localKind = when {
+                irClass.isDotNetCallableObject -> "callable object"
+                irClass.isAnonymousObject -> "anonymous object"
+                else -> "local class"
+            }
             if (irClass.dotNetInventedLocalClassName == null) {
                 dotNetUnsupported("$localKind '$name' has no invented CLR metadata name")
             }
             irClass.dotNetLocalCaptureRejectionReason?.let { reason ->
                 dotNetUnsupported("$localKind '$name' $reason")
+            }
+            if (
+                irClass.isDotNetCallableObject &&
+                irClass.declarations.filterIsInstance<IrField>().any {
+                    it.origin == LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE
+                }
+            ) {
+                dotNetUnsupported(
+                    "callable object '$name' captures state; capturing callable objects are not supported yet"
+                )
             }
         } else if (irClass.isAnonymousObject) {
             dotNetUnsupported("anonymous object '$name' was not closure-converted")
@@ -983,7 +1008,7 @@ class DotNetIlEmitter(
             // round, so an evicted interface cascades whole-class with a carried reason, exactly
             // like an evicted base class.
             for (superInterface in superClasses.filter { it.isInterface }) {
-                if (superInterface !in moduleInterfaces) {
+                if (superInterface !in moduleInterfaces && superInterface.dotNetFixedFunctionArityOrNull() == null) {
                     dotNetUnsupported(
                         "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +
                                 "interface of the compiled module; only module-local interfaces are supported"
@@ -1948,9 +1973,9 @@ class DotNetIlEmitter(
     private fun IrDeclarationWithName.diagnosticName(): String =
         fqNameWhenAvailable?.asString() ?: name.asString()
 
-    private fun StringBuilder.appendHeader() {
+    private fun StringBuilder.appendHeader(referencesRuntimeAssembly: Boolean) {
         appendLine(".assembly extern $CORE_LIB {}")
-        if (producesExecutable) {
+        if (referencesRuntimeAssembly) {
             appendLine(".assembly extern ${DotNetRuntimeLibrary.ASSEMBLY_NAME}")
             appendLine("{")
             appendLine("  .ver ${DotNetRuntimeLibrary.ASSEMBLY_VERSION_IL}")

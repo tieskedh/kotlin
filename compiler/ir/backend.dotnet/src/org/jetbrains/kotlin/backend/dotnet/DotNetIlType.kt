@@ -475,6 +475,7 @@ internal class DotNetIlClassInfo(
     val ilClassName: String,
     private val enclosingClass: DotNetIlClassInfo? = null,
     val typeParameterVariances: List<Variance> = emptyList(),
+    private val assemblyName: String? = null,
 ) {
     val typeParameterCount: Int
         get() = typeParameterVariances.size
@@ -556,8 +557,15 @@ internal class DotNetIlClassInfo(
      * [UserClass][DotNetIlValueType.UserClass] signature name routes through this single
      * property, so the nested spelling exists in exactly one place.
      */
-    val ilTypeRef: String =
-        enclosingClass?.let { "${it.ilTypeRef}/${ilClassName.toIlIdentifier()}" } ?: ilClassName.toIlIdentifier()
+    val ilTypeRef: String = run {
+        require(assemblyName == null || enclosingClass == null) {
+            "External CLR type '$ilClassName' cannot also be a nested module-local type"
+        }
+        val localRef = enclosingClass
+            ?.let { "${it.ilTypeRef}/${ilClassName.toIlIdentifier()}" }
+            ?: ilClassName.toIlIdentifier()
+        assemblyName?.let { "[$it]$localRef" } ?: localRef
+    }
 
     /**
      * The `instance void 'C'::.ctor(<params>)` member reference shared by every constructor use:

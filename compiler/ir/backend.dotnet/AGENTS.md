@@ -52,15 +52,55 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings ran, while both
   runtime binaries reported the exact identity above. Namespace ownership is reserved now:
   Kotlin language ABI types live under `Kotlin`, runtime services under `Kotlin.Runtime`, and
-  compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The first stable
-  foundational type is the deliberately memberless static marker
-  `Kotlin.Runtime.RuntimeInfo`; no callable interface/delegate ABI or compatibility-call hook is
-  implied yet. The compiler reserves the runtime assembly name, creates no runtimeconfig for the
-  library, and removes stale program outputs when either ILAsm path fails. The existing
-  module-local `<KotlinIl>` helper remains in generated assemblies until the callable ABI is
-  chosen; moving it is a later, explicit migration.
+  compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The initial stable
+  foundational type was the deliberately memberless static marker
+  `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
+  The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
+  removes stale program outputs when either ILAsm path fails. The existing module-local
+  `<KotlinIl>` helper remains in generated assemblies pending its own explicit runtime migration.
+- Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
+  series `callableabi_s2`; follows the JVM split between logical generic function types and erased
+  executable descriptors, with CLR `object` replacing JVM Object):
+  Kotlin-to-Kotlin callable storage uses the public non-generic runtime interfaces
+  `Kotlin.Function`, `Kotlin.Function0`, `Kotlin.Function1`, and `Kotlin.Function2`; it never uses
+  `System.Func`/`System.Action`. The fixed interfaces expose exactly `object Invoke(...)`, with one
+  `object` parameter per logical argument. Source `kotlin.Function<R>` and `Function<*>` map to the
+  non-invokable `Kotlin.Function` marker without changing identity. Nullable callable references
+  keep the same physical interface. Kotlin's `in`/`out` type arguments remain compiler-level
+  type information rather than CLR-reified interface identity, so every legal variance conversion
+  — including `() -> Int` to `() -> Any` and `(Any) -> String` to `(Int) -> Any` — is an
+  instruction-free copy of the same object and preserves `===`. Invoke entry casts reference
+  arguments and uses `unbox.any` for primitives, nullable primitives, and open `T`; invoke exit
+  boxes values into the canonical object result. A Unit result executes the ordinary CLR-void
+  body and then returns the singleton `Kotlin.Unit.INSTANCE`. As a prototype implementation policy,
+  non-capturing lambda/reference classes cache one instance in their own `INSTANCE` field; the
+  field is created after initializer cleanup and the normal static-initializer sweep emits its
+  `.cctor`. Extension receivers occupy
+  the first ordinary erased argument, and explicit user classes implementing a function type emit
+  the same erased override. FIR keeps a direct reference
+  expression typed as `KFunctionN` even when consumed through `FunctionN`; the callable lowering
+  drops only that generated class's unimplemented reflective view, while an actual KFunction-typed
+  storage/API position remains rejected. Erasure makes overloads differing only in logical
+  function arguments collide; the existing CLR method-identity gate rejects both overloads and
+  lets unrelated declarations survive, matching the JVM platform-clash category. `callableabi_s2`
+  assembled an erased consumer/runtime pair with modern 10.0.9 and Framework 4.8 ILAsm and all
+  four same/cross-runtime pairings ran with identity and boxed-Int invocation intact. Pins:
+  `ilText/callableObjects.kt`, `ilText/callableObjectsRejected.kt`, and
+  `box/callableObjects.kt`. STAYS REJECTED, loudly: capturing/bound callable objects, mutable
+  reference cells, suspend callables, callable arity above 2, KFunction storage/reflection
+  metadata, delegate adapters, and typed fast-path entry points. Kotlin metadata serialization and
+  .NET-facing typed export surfaces must preserve the logical function arguments in later slices;
+  the canonical interface encodes none of those arguments, so CLR reflection alone cannot
+  reconstruct the Kotlin type even if later optimization members are visible. Promotion of the
+  candidate requires both a measured exact-shape non-boxing execution path and representative
+  typed CLR exports. Those are mandatory validation layers around the erased identity/fallback,
+  not a reason to split the canonical Kotlin representation in this first POC slice.
+  Final raw library IL declares the exact runtime AssemblyRef whenever an emitted signature or
+  body contains a `[Kotlin.Runtime]` token; it never relies on ILAsm assembly autodetection.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
   functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
+  The erased callable `Invoke` boundary is the one exception: it materializes
+  `Kotlin.Unit.INSTANCE` into its mandatory `object` result slot.
 - Local `val`/`var` follows the JVM/WASM model conceptually: the method context maps IR value
   symbols to slots. CLR keeps argument slots (`ldarg`) separate from `.locals init` slots
   (`ldloc`/`stloc`).

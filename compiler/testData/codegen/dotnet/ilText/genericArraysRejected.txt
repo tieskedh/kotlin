@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericArraysRejected' {}
 .module 'main-genericArraysRejected.il'
 
@@ -10,6 +14,32 @@
     .maxstack 1
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class private auto ansi sealed 'test.genericarrays.rejected.genericArraysRejectedKt$initialized$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'test.genericarrays.rejected.genericArraysRejectedKt$initialized$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'test.genericarrays.rejected.genericArraysRejectedKt$initialized$1'::.ctor()
+    stsfld class 'test.genericarrays.rejected.genericArraysRejectedKt$initialized$1' 'test.genericarrays.rejected.genericArraysRejectedKt$initialized$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 1
+    ldstr "x"
     ret
   }
 }

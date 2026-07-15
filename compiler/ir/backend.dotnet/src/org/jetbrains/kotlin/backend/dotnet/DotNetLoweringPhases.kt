@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
@@ -17,7 +18,9 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowe
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
 import org.jetbrains.kotlin.config.phaser.PhaseConfig
@@ -29,8 +32,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // anonymous-super arguments to the call site, make immutable value/type captures explicit,
     // then move only transformed declarations to the nearest metadata container. This precedes
     // inner classes and initializer merging, as on the JVM (localprobe_s1/s2, anonprobe_s1/s2).
+    ::DotNetUpgradeCallableReferences,
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
+    ::DotNetCallableReferenceLowering,
     ::DotNetInventNamesForLocalFunctions,
     ::DotNetLocalDeclarationsLowering,
     ::DotNetLocalDeclarationPopupLowering,
@@ -49,12 +54,13 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // block must already have been inlined into a constructor before the loop rewrite runs.
     ::DotNetInitializersLowering,
     ::DotNetInitializersCleanupLowering,
-    // Object singletons after the initializer merge — the object's private `.ctor` must be
-    // merged/complete before the `.cctor` calls it — and before the static-initializer sweep,
-    // so the synthesized singleton-field initializer (INSTANCE, or the companion field on the
-    // enclosing class) exists when the sweep moves it into the owning class's `<clinit>`.
-    // Matches the JVM phase order (the singleton passes run before StaticInitializersLowering).
+    // Object and callable singletons after initializer cleanup — each private `.ctor` must be
+    // merged/complete before a `.cctor` calls it, and cleanup nulls pre-existing field
+    // initializers indiscriminately. Create both singleton fields only now, immediately before
+    // the static-initializer sweep moves them into their owning classes' `<clinit>` functions.
+    // This matches the JVM shape: singleton caching precedes StaticInitializersLowering.
     ::DotNetObjectClassLowering,
+    ::DotNetStaticCallableReferenceLowering,
     // Top-level property initializers move into the synthetic per-file `<clinit>` (and static
     // class fields — object INSTANCE and companion fields at any supported nesting depth — into
     // the owning class's `<clinit>`) before the loop/concat rewrites for the same reason the

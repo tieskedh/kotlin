@@ -12,7 +12,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **374 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **380 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -356,13 +356,48 @@ session state, process, and a curated task menu. Keep both files updated as you 
   releases do not change AssemblyVersion, strong naming requires a new identity/major, and the API
   floor stays inside .NET Framework 4.8 `mscorlib` while remaining CoreCLR-compatible. Namespace
   ownership is `Kotlin` for language ABI, `Kotlin.Runtime` for runtime services, and
-  `Kotlin.Runtime.Internal` for compiler support. The only public type is a deliberately memberless
-  `Kotlin.Runtime.RuntimeInfo` marker: there is still no callable ABI or bootstrap-call contract.
+  `Kotlin.Runtime.Internal` for compiler support. The initial public type was a deliberately
+  memberless `Kotlin.Runtime.RuntimeInfo` marker; the callable continuation below adds the first
+  language ABI types without changing this assembly policy.
   `runtimeprobe_s1` resolved that type in consumers assembled by modern 10.0.9 and Framework 4.8
   ILAsm; all same-target and cross-runtime pairings ran, and both runtime binaries reported the
   same logical identity. Box infrastructure now requires both the sibling runtime and program
   AssemblyRef. The compiler reserves the runtime identity, omits a library runtimeconfig, and
   propagates ILAsm success so stale program artifacts cannot masquerade as fresh output.
+- The callable continuation chose a physically erased Kotlin-owned ABI candidate rather than
+  CLR-reified generic interfaces or permanent reference-only variance. `Kotlin.Runtime` now exposes
+  non-generic `Kotlin.Function` plus fixed `Function0`/`Function1`/`Function2`, whose sole call
+  slots are `object Invoke(...)`. Logical Kotlin function arguments stay in compiler IR (and must
+  later be serialized in Kotlin metadata), while CLR signatures erase by arity. Primitive,
+  nullable-primitive, and open-generic values box at Invoke exit and unbox at entry; references
+  cast at entry; Unit returns the real `Kotlin.Unit.INSTANCE`. Consequently both result covariance
+  and parameter contravariance, including value types, are instruction-free reference copies and
+  preserve `===`. Non-capturing lambdas and direct top-level references lower to local callable
+  classes, cache one instance through a generated `.cctor`, and invoke through the runtime
+  interface. Direct references consumed as FunctionN drop FIR's otherwise retained KFunctionN
+  view; actual KFunction-typed storage still rejects. Erased overload collisions use the existing
+  method-identity gate. `callableabi_s2` assembled the runtime/consumer with modern 10.0.9 and
+  Framework 4.8 ILAsm; all four same/cross-runtime pairings ran. Focused PSI/LightTree IL and
+  CoreCLR box coverage passes for Function0/1/2, direct references, Unit, singleton reuse,
+  reference/value variance, Boolean, nullable Int, reference casts, open T, Function/Function<*>
+  marker storage, extension receivers, explicit implementations, nullable callable storage, and
+  overload-clash survival. Negative pins also cover captures, bound references, suspend callables,
+  arity above 2, and inferred KFunction storage. Pins: `ilText/callableObjects.kt`,
+  `ilText/callableObjectsRejected.kt`, and
+  `box/callableObjects.kt`. Captures/bound references, KFunction metadata, suspend callables,
+  arity above 2, delegates, Kotlin metadata serialization, and typed fast paths remain separate.
+  The repo-local `docs/decisions/draft-adr-erased-callable-abi.md` records the decision drivers,
+  rejected alternatives, costs, invariants, and the evidence required to promote or revise the
+  draft; it is deliberately not presented as a public KEEP or an accepted Kotlin project ADR.
+  Promotion requires three layers to be validated separately: the erased Kotlin identity/fallback,
+  a measured exact-shape non-boxing execution path, and typed CLR export projections. Only ordinary
+  Kotlin subtype upcasts must preserve identity; SAM/adapted references and foreign projections may
+  allocate wrappers. Framework 4.8 is probe coverage for this POC, not a product-support promise.
+  The final assembly sanity check also caught that non-executable ilText output referenced runtime
+  callable types without declaring the runtime AssemblyRef. Header emission now derives that ref
+  from the final post-eviction IL body, so both ILAsm versions assemble callable-bearing library IL
+  without autodetection; executables keep the runtime-foundation ref unconditionally.
+  The fresh full DotNet suite is 380/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -434,21 +469,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Choose the callable ABI inside the landed runtime boundary.** The representation audit and
-   `callable_s1` prove that non-capturing `System.Func`/`System.Action` delegates are mechanically
-   viable, but that is not yet an ABI decision. `callableabi_s1` now proves the stronger hybrid
-   candidate on both runtimes: variant Kotlin-owned `Function0`/`Function1`/`Function2` interfaces,
-   primitive instantiations, a real singleton `Kotlin.Unit` result, cached callable-object identity,
-   direct `Func` adaptation, and the necessarily explicit `(P) -> Unit` ⇄ `Action<P>` adapters all
-   assemble and print `42,10,True,action,True,variance,True` identically on CoreCLR 10.0.9 and
-   Framework 4.8. The likely decision is therefore Kotlin-owned interfaces as the canonical
-   Kotlin-to-Kotlin ABI, with delegates only as interop/optimization views; confirm the frontend
-   type mapping and exact lowering shape before declaring those public types. Then pin direct
-   calls, function-typed parameters/locals, top-level and member references, bound versus unbound
-   owners, overload identity, generic signatures, and singleton reuse. Keep captured lambdas,
-   mutable shared captures, suspend conversion, and reflection metadata separate. After the
-   callable slice lands, migrate `<KotlinIl>` helpers into `Kotlin.Runtime.Internal` rather than
-   leaving duplicate module-local copies.
+1. **Move `<KotlinIl>` helpers into `Kotlin.Runtime.Internal`.** The runtime assembly and canonical
+   callable boundary are now available; migrate shared helper IL without changing behavior or
+   leaving a compatibility call back into generated modules. Preserve the Framework-4.8 API floor,
+   probe every moved member reference on both runtimes, and keep helper methods compiler-internal.
+2. **Add capturing callable objects and mutable reference cells.** Reuse the common/JVM closure
+   conversion shape, keep the erased Invoke ABI unchanged, and separate immutable capture fields
+   from Kotlin mutable local cells. Bound references belong in this slice; KFunction metadata,
+   suspend callables, delegate adapters, and typed fast paths still remain later decisions.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

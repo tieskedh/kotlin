@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.render
 
 /**
@@ -76,14 +77,34 @@ internal fun dotNetUnsupported(reason: String): Nothing =
     throw DotNetIlUnsupportedException(reason)
 
 internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature {
-    val ilReturnType = typeMapper.toDotNetIlReturnType(returnType)
-        ?: dotNetUnsupported("return type ${returnType.render()} is not supported")
+    val isErasedCallableInvoke = isDotNetErasedCallableInvoke()
+    val ilReturnType = if (isErasedCallableInvoke) {
+        DotNetIlReturnType.Value(DotNetIlValueType.Object)
+    } else {
+        typeMapper.toDotNetIlReturnType(returnType)
+            ?: dotNetUnsupported("return type ${returnType.render()} is not supported")
+    }
     // A member function's dispatch receiver is parameters[0]; its type (the owning user class)
     // stays in the mapped parameter list so argument zipping and call-site pop counts stay
     // uniform, while `hasThis` makes signature rendering and slot numbering treat it as the
     // implicit CLR argument 0 (see DotNetIlMethodSignature).
     val hasThis = parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver
-    return DotNetIlMethodSignature(ilReturnType, parameters.dotNetParameterTypes(typeMapper), hasThis)
+    val parameterTypes = if (isErasedCallableInvoke) {
+        parameters.map { parameter ->
+            if (parameter.kind == IrParameterKind.DispatchReceiver) {
+                typeMapper.toDotNetIlValueType(parameter.type)
+                    ?: dotNetUnsupported(
+                        "callable dispatch receiver '${parameter.name.asString()}' has unsupported " +
+                                "type ${parameter.type.render()}"
+                    )
+            } else {
+                DotNetIlValueType.Object
+            }
+        }
+    } else {
+        parameters.dotNetParameterTypes(typeMapper)
+    }
+    return DotNetIlMethodSignature(ilReturnType, parameterTypes, hasThis)
 }
 
 /**
@@ -94,9 +115,19 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
  * through [toIlIdentifier] wherever it is printed.
  */
 internal fun IrSimpleFunction.dotNetIlMethodName(): String {
+    if (isDotNetErasedCallableInvoke()) return "Invoke"
     val property = correspondingPropertySymbol?.owner ?: return name.asString()
     val prefix = if (isGetter) "get_" else "set_"
     return prefix + property.name.asString()
+}
+
+/** Whether this is a fixed-arity callable member physically emitted as erased CLR `Invoke`. */
+internal fun IrSimpleFunction.isDotNetErasedCallableInvoke(): Boolean {
+    if (name.asString() != "invoke") return false
+    if ((parent as? IrClass)?.dotNetFixedFunctionArityOrNull() != null) return true
+    return allOverridden().any { overridden ->
+        (overridden.parent as? IrClass)?.dotNetFixedFunctionArityOrNull() != null
+    }
 }
 
 /**
@@ -129,7 +160,8 @@ internal class DotNetIlTypeMapper(
      * removed it — member references (`newobj`, `this(...)` delegations, `ldfld`/`stfld`) go
      * through this lookup so a removed class fails its users instead of leaving stale IL text.
      */
-    fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? = availableClasses[irClass]
+    fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? =
+        availableClasses[irClass] ?: DotNetRuntimeTypes.classInfoFor(irClass)
 
     /** Maps [type] in return position; CLR `void` is the return encoding of Kotlin `Unit`. */
     fun toDotNetIlReturnType(type: IrType): DotNetIlReturnType? {
@@ -152,25 +184,28 @@ internal class DotNetIlTypeMapper(
      * stays unmapped: its ABI is a future generics problem and must not force concrete nullable
      * primitives into `object` (the whole point of the hybrid split).
      */
-    fun toDotNetIlValueType(type: IrType): DotNetIlValueType? = when {
-        type.isBoolean() -> DotNetIlValueType.Boolean
-        type.isInt() -> DotNetIlValueType.Int32
-        type.isLong() -> DotNetIlValueType.Int64
-        type.isDouble() -> DotNetIlValueType.Float64
-        type.isChar() -> DotNetIlValueType.Char
-        type.isDotNetStringType() -> DotNetIlValueType.String
-        type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
-        type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
-        type.isDotNetGenericArray() -> toGenericArrayTypeOrNull(type)
-        // `Nothing?` — the type of the null literal, and of values the frontend narrowed to
-        // definitely-null (e.g. a when-subject temporary initialized from a known-null value) —
-        // is reference-shaped storage whose only value is `ldnull`. Plain `Nothing` (no values
-        // at all) deliberately stays unmapped.
-        type.isNullableNothing() -> DotNetIlValueType.Object
-        else -> toNullablePrimitiveTypeOrNull(type)
-            ?: toMappedExceptionTypeOrNull(type)
-            ?: toUserClassTypeOrNull(type)
-            ?: toTypeParameterTypeOrNull(type)
+    fun toDotNetIlValueType(type: IrType): DotNetIlValueType? {
+        DotNetRuntimeTypes.mapFunctionType(type)?.let { return it }
+        return when {
+            type.isBoolean() -> DotNetIlValueType.Boolean
+            type.isInt() -> DotNetIlValueType.Int32
+            type.isLong() -> DotNetIlValueType.Int64
+            type.isDouble() -> DotNetIlValueType.Float64
+            type.isChar() -> DotNetIlValueType.Char
+            type.isDotNetStringType() -> DotNetIlValueType.String
+            type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
+            type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
+            type.isDotNetGenericArray() -> toGenericArrayTypeOrNull(type)
+            // `Nothing?` — the type of the null literal, and of values the frontend narrowed to
+            // definitely-null (e.g. a when-subject temporary initialized from a known-null value) —
+            // is reference-shaped storage whose only value is `ldnull`. Plain `Nothing` (no values
+            // at all) deliberately stays unmapped.
+            type.isNullableNothing() -> DotNetIlValueType.Object
+            else -> toNullablePrimitiveTypeOrNull(type)
+                ?: toMappedExceptionTypeOrNull(type)
+                ?: toUserClassTypeOrNull(type)
+                ?: toTypeParameterTypeOrNull(type)
+        }
     }
 
     /**
