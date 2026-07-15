@@ -183,8 +183,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `indexedObject[inductionVariable]`, increment before the user body, and run the body. Increment
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
   the removed iterator loop. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), primitive-array initializer-lambda constructors, iterator values
-  escaping as objects, user-facing copying/content APIs, and unsigned arrays.
+  elements are unsupported), iterator values escaping as objects, user-facing copying/content
+  APIs, and unsigned arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
@@ -211,10 +211,34 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   loudly: ordinary use-site projections/star projections (the concrete vararg-only normalization
   below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
   primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
-  including arrays of primitive arrays, initializer-lambda constructors, iterator values escaping
-  as objects, array casts/type checks, and user-facing copying/content APIs.
+  including arrays of primitive arrays, iterator values escaping as objects, array casts/type
+  checks, and user-facing copying/content APIs.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
+- Concrete array initializer constructors reuse the same backend.common
+  `ArrayConstructorLowering` as JVM/JS/Wasm/Native; IL emission has no initializer-specific path.
+  The phase runs while rich direct lambdas/references can still be inlined, before generated
+  callable classes and closure conversion. A non-direct function value or explicit concrete class
+  implementing `(Int) -> E` uses the unchanged erased `Kotlin.Function1.Invoke(object)` ABI. The
+  common indexed fill loop evaluates the size and then any callable/bound-value expression before
+  performing one existing guarded allocation, and invokes/stores in ascending index order. Even a
+  `Nothing`-typed initializer retains the preceding size evaluation. Its inlined returnable blocks
+  go through the mature `ReturnableBlockTransformer`, so local returns become ordinary blocks or
+  `do/while(false)` plus `break`, not a new IL control-flow case. The common loop retains
+  `Int.inc()` for mature built-ins and falls back to the equivalent `Int.plus(1)` only for a minimal
+  built-ins surface without that member; concrete invokable-class arguments derive their result
+  from their actual `invoke` declaration instead of assuming the receiver itself is a parameterized
+  function-interface type.
+  The five supported primitive vectors and concrete reference, nullable-reference, user-class,
+  and instantiated-generic `Array<E>` families preserve zero/negative sizes, size/initializer
+  single evaluation, captures, local returns, and exception timing. `ilText/arrayInitializers.kt`
+  and `box/arrayInitializers.kt` pin direct/local lambdas, direct/local references, function-typed
+  parameters, and explicit callable objects; modern 10.0.9 and Framework 4.8 ILAsm accept the
+  exact output, and both parser boxes execute with both assembler selections. STAYS REJECTED,
+  loudly: initializer constructors for mapper-rejected primitive/element/array families, nested
+  arrays, and open/reified `Array<T>` construction (non-reified source is rejected by the frontend;
+  inline-reified generics remain outside this backend's inlining model). Negative pins remain in
+  `ilText/primitiveArraysRejected.kt` and `ilText/genericArraysRejected.kt`.
 - Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
   delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
   stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the

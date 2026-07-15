@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
@@ -23,6 +24,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLowering
@@ -45,6 +47,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread
     // copies to ordinary array operations. Open `vararg T` keeps its unsupported projection.
     ::DotNetVarargLowering,
+    // Reuse the common JVM/JS/Wasm/Native fill-loop shape while rich direct lambdas and callable
+    // references can still be inlined. Non-direct initializers retain the erased Function1 ABI.
+    ::ArrayConstructorLowering,
+    ::DotNetReturnableBlockLowering,
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetCallableReferenceLowering,

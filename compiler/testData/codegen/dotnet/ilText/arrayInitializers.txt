@@ -1,0 +1,725 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'arrayInitializers' {}
+.module 'main-arrayInitializers.il'
+
+.class public auto ansi sealed beforefieldinit 'Item'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Item'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Item'::'value'
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'Item'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Initializer'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field private int32 'offset'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'offset') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Initializer'::'offset'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_offset'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Initializer'::'offset'
+    ret
+  }
+  .method public hidebysig newslot virtual instance object 'Invoke'(object 'index') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 'Initializer'::'get_offset'()
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    add
+    box [mscorlib]System.Int32
+    ret
+  }
+  .property instance int32 'offset'()
+  {
+    .get instance int32 'Initializer'::'get_offset'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'arrayInitializersKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32[] 'ints'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] int32[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] int32[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] int32 '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int32
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldloc.3
+    ldc.i4 1
+    add
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem.i4
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int64[] 'longs'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] int64[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] int64[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] int64 '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int64
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldc.i8 5
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem.i8
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static float64[] 'doubles'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] float64[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] float64[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] float64 '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr float64
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldc.r8 1.5
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem.r8
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static bool[] 'booleans'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] bool[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] bool[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] bool '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr bool
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldloc.3
+    ldc.i4 0
+    ceq
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem.i1
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static char[] 'chars'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] char[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] char[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] char '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr char
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldc.i4 65
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem.i2
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static string[] 'strings'(int32 'size', string 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] string[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] string[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] string '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr string
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldarg.1
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem string
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static string[] 'nullableStrings'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] string[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] string[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] string '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr string
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldloc.3
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_4
+    ldstr "first"
+    br IL_whenEnd_3
+IL_whenNext_4:
+    ldnull
+IL_whenEnd_3:
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem string
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static class 'Item'[] 'items'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] class 'Item'[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] class 'Item'[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] class 'Item' '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr class 'Item'
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldloc.3
+    newobj instance void 'Item'::.ctor(int32)
+    stloc 6
+    ldloc 4
+    ldloc 5
+    ldloc 6
+    stelem class 'Item'
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32[] 'callable'(int32 'size', class [Kotlin.Runtime]'Kotlin.Function1' 'initializer') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] class [Kotlin.Runtime]'Kotlin.Function1' 'tmp0',
+      [3] int32[] 'tmp@3',
+      [4] int32 'tmp@4',
+      [5] int32[] '<arraySet>',
+      [6] int32 '<arrayIndex>',
+      [7] int32 '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldarg.1
+    stloc.2
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int32
+    stloc.3
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldloc 4
+    stloc 6
+    ldloc.2
+    ldloc 4
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc 7
+    ldloc 5
+    ldloc 6
+    ldloc 7
+    stelem.i4
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32[] 'implemented'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] class 'Initializer' 'tmp0',
+      [3] int32[] 'tmp@3',
+      [4] int32 'tmp@4',
+      [5] int32[] '<arraySet>',
+      [6] int32 '<arrayIndex>',
+      [7] int32 '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldc.i4 10
+    newobj instance void 'Initializer'::.ctor(int32)
+    stloc.2
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int32
+    stloc.3
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc 4
+    ldloc.3
+    stloc 5
+    ldloc 4
+    stloc 6
+    ldloc.2
+    ldloc 4
+    box [mscorlib]System.Int32
+    callvirt instance object 'Initializer'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc 7
+    ldloc 5
+    ldloc 6
+    ldloc 7
+    stelem.i4
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32[] 'localReturn'(int32 'size') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'tmp',
+      [1] int32 'tmp@1',
+      [2] int32[] 'tmp@2',
+      [3] int32 'tmp@3',
+      [4] int32[] '<arraySet>',
+      [5] int32 '<arrayIndex>',
+      [6] int32 'tmp$ret$0',
+      [7] int32 '<arrayValue>'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.1
+    dup
+    ldc.i4.0
+    clt
+    brfalse IL_arraySizeNonNegative_0
+    pop
+    newobj instance void [mscorlib]System.Exception::.ctor()
+    throw
+IL_arraySizeNonNegative_0:
+    newarr int32
+    stloc.2
+IL_whileCond_1:
+    ldloc.0
+    ldloc.1
+    clt
+    brfalse IL_whileEnd_2
+    ldloc.0
+    stloc.3
+    ldloc.2
+    stloc 4
+    ldloc.3
+    stloc 5
+IL_doWhileBody_3:
+    ldloc.3
+    ldc.i4 1
+    ceq
+    brfalse IL_whenNext_7
+    ldc.i4 9
+    stloc 6
+    br IL_doWhileEnd_5
+IL_whenNext_7:
+    ldloc.3
+    stloc 6
+    ldc.i4.0
+    brtrue IL_doWhileBody_3
+IL_doWhileEnd_5:
+    ldloc 6
+    stloc 7
+    ldloc 4
+    ldloc 5
+    ldloc 7
+    stelem.i4
+    ldloc.0
+    ldc.i4.1
+    add
+    stloc.0
+    br IL_whileCond_1
+IL_whileEnd_2:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayGet>',
+      [1] int32 '<arrayIndex>'
+    )
+    ldc.i4 2
+    call int32[] 'arrayInitializersKt'::'ints'(int32)
+    stloc.0
+    ldc.i4 1
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ldelem.i4
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

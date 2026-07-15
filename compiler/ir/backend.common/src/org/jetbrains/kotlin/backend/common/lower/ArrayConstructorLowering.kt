@@ -61,20 +61,27 @@ private class ArrayConstructorTransformer(
         // (and similar for primitive arrays)
         val size = expression.arguments[0]!!.transform(this, null)
         val invokable = expression.arguments[1]!!.transform(this, null)
-        if (invokable.type.isNothing()) {
-            // Expressions of type 'Nothing' don't terminate.
-            return invokable
-        }
         val scope = (currentScope ?: createScope(container)).scope
-        return context.createIrBuilder(scope.scopeOwnerSymbol).irBlock(expression.startOffset, expression.endOffset) {
+        val irBuilder = context.createIrBuilder(scope.scopeOwnerSymbol)
+        if (invokable.type.isNothing()) {
+            // Expressions of type 'Nothing' don't terminate, but the preceding size argument
+            // must still be evaluated first.
+            return irBuilder.irBlock(expression.startOffset, expression.endOffset) {
+                +size
+                +invokable
+            }
+        }
+        return irBuilder.irBlock(expression.startOffset, expression.endOffset) {
             val index = createTmpVariable(irInt(0), isMutable = true)
             val sizeVar = createTmpVariable(size)
+            // Preserve constructor argument evaluation before entering the allocation/fill body.
+            // Direct lambdas add no temporary; callable expressions and bound values do.
+            val generator = invokable.asInlinable(this)
             val result = createTmpVariable(irCall(sizeConstructor, expression.type).apply {
                 copyTypeArgumentsFrom(expression)
                 arguments[0] = irGet(sizeVar)
             })
 
-            val generator = invokable.asInlinable(this)
             +irWhile().apply {
                 condition = irCall(context.irBuiltIns.lessFunByOperandType[index.type.classifierOrFail]!!).apply {
                     arguments[0] = irGet(index)
@@ -87,10 +94,20 @@ private class ArrayConstructorTransformer(
                         arguments[1] = irGet(tempIndex)
                         arguments[2] = generator.inline(parent, listOf(tempIndex))
                     }
-                    val inc = index.type.getClass()!!.functions.single { it.name == OperatorNameConventions.INC }
+                    val indexClass = index.type.getClass()!!
+                    val increment = indexClass.functions.singleOrNull { it.name == OperatorNameConventions.INC }
+                        ?.let { inc -> irCallOp(inc.symbol, index.type, irGet(index)) }
+                        ?: irCall(indexClass.functions.single { function ->
+                            function.name == OperatorNameConventions.PLUS &&
+                                    function.parameters.singleOrNull { it.kind == IrParameterKind.Regular }
+                                        ?.type?.isInt() == true
+                        }.symbol).apply {
+                            arguments[0] = irGet(index)
+                            arguments[1] = irInt(1)
+                        }
                     +irSet(
                         index.symbol,
-                        irCallOp(inc.symbol, index.type, irGet(index)),
+                        increment,
                         origin = IrStatementOrigin.PREFIX_INCR
                     )
                 }
