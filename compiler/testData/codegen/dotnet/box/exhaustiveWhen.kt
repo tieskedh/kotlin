@@ -1,7 +1,7 @@
 // Exhaustive Boolean/Boolean? `when` without a source `else` compiles through the registered
 // noWhenBranchMatchedException intrinsic. Well-typed Kotlin values cover every reachable arm;
 // whenprobe_s2 separately forces the fallthrough with a noncanonical CLR bool and runtime-pins
-// its target-neutral System.Exception catchability on CoreCLR 10.0.9.
+// its exact Kotlin.NoWhenBranchMatchedException identity/catchability on both CLR runtimes.
 private fun describe(flag: Boolean): String = when (flag) {
     true -> "true"
     false -> "false"

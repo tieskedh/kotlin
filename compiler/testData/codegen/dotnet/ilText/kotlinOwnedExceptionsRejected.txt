@@ -1,0 +1,16 @@
+.assembly extern mscorlib {}
+.assembly 'kotlinOwnedExceptionsRejected' {}
+.module 'main-kotlinOwnedExceptionsRejected.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'kotlinOwnedExceptionsRejectedKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "owned-exception-boundary"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
