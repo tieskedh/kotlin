@@ -267,18 +267,40 @@ internal class DotNetIlExpressionCodegen(
      * - [IrTypeOperator.IMPLICIT_NOTNULL]: the `!!` shape — a HasValue-branch + mapped-NPE throw
      *   on nullable primitives, a `dup`/`brtrue` null check on references (JVM precedent: the
      *   checkNotNull intrinsic shape).
-     * Everything else — `as` (CAST), `as?` (SAFE_CAST), `is` (INSTANCEOF), and any IMPLICIT_CAST
-     * outside the shapes above (e.g. the `Any? -> C` downcast a positive `is` smartcast would
-     * produce) — stays rejected loudly until a downcast/type-test model exists.
+     * - [IrTypeOperator.INSTANCEOF]/[IrTypeOperator.NOT_INSTANCEOF] against a non-generic
+     *   module-local class: box/widen the operand to object, use CLR `isinst`, then compare the
+     *   resulting reference with null. This is the JVM `INSTANCEOF` shape expressed with the
+     *   CLR instruction that also returns the checked reference.
+     * - IMPLICIT_CAST from a reference-shaped value to such a class: CLR `castclass`. Fir2ir
+     *   emits this checked downcast after a successful smartcast test, including generated data
+     *   class `equals` bodies.
+     * Everything else — explicit `as` (CAST), `as?` (SAFE_CAST), generic runtime type operands,
+     * and value-type tests — stays rejected loudly until its own audited model exists.
      */
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
-        if (expression.operator != IrTypeOperator.IMPLICIT_CAST && expression.operator != IrTypeOperator.IMPLICIT_NOTNULL) {
-            dotNetUnsupported("type operator ${expression.operator} is not supported")
-        }
         val operandType = typeMapper.toDotNetIlValueType(expression.argument.type)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (expression.operator == IrTypeOperator.INSTANCEOF || expression.operator == IrTypeOperator.NOT_INSTANCEOF) {
+            if (expectedType != DotNetIlValueType.Boolean || castType !is DotNetIlValueType.UserClass) {
+                dotNetUnsupported(
+                    "runtime type test against ${castType.nameInSignature} is not supported"
+                )
+            }
+            emitExpression(expression.argument, DotNetIlValueType.Object)
+            methodContext.emit("isinst ${castType.nameInSignature}", pops = 1, pushes = 1)
+            methodContext.emit("ldnull", pushes = 1)
+            methodContext.emit(
+                if (expression.operator == IrTypeOperator.INSTANCEOF) "cgt.un" else "ceq",
+                pops = 2,
+                pushes = 1,
+            )
+            return
+        }
+        if (expression.operator != IrTypeOperator.IMPLICIT_CAST && expression.operator != IrTypeOperator.IMPLICIT_NOTNULL) {
+            dotNetUnsupported("type operator ${expression.operator} is not supported")
+        }
         if (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL) {
             emitExpression(expression.argument, operandType)
             when {
@@ -305,6 +327,10 @@ internal class DotNetIlExpressionCodegen(
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
                 operandType.isDotNetAssignableTo(castType) -> emitExpression(expression.argument, operandType)
+                operandType.isDotNetReferenceShaped() && castType is DotNetIlValueType.UserClass -> {
+                    emitExpression(expression.argument, operandType)
+                    methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
+                }
                 else -> {
                     val coercion = dotNetWideningCoercionOrNull(operandType, castType)
                     when {
@@ -1225,6 +1251,9 @@ internal class DotNetIlExpressionCodegen(
 
 internal fun loadArgumentInstruction(index: Int): String =
     if (index in 0..3) "ldarg.$index" else "ldarg $index"
+
+/** Stores a generated mutable parameter, currently the masked-default stub's resolved value. */
+internal fun storeArgumentInstruction(index: Int): String = "starg $index"
 
 internal fun loadLocalInstruction(index: Int): String =
     if (index in 0..3) "ldloc.$index" else "ldloc $index"
