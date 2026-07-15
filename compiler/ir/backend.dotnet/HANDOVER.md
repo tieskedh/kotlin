@@ -1,19 +1,20 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(Kotlin-owned exception foundation/harness).
+(exception fault-translation/catch-policy continuation).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
 ## Branch state
 
 - Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
-  (`b54578fab`), capturing-callable state (`131161ca5`), and callable-reference metadata
-  (`fb6d43448`), followed by the System.Object Any foundation in the current functional slice.
+  (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
+  (`fb6d43448`), and the System.Object Any foundation (`4a78533ad`), followed by the hybrid
+  Kotlin/CLR exception-identity foundation in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **388 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **390 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -466,6 +467,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `docs/decisions/draft-adr-system-object-any-foundation.md`. Both changed exact goldens assemble
   with modern 10.0.9 and Framework 4.8 ILAsm; the new box runs through both toolchain selections.
   The fresh full DotNet suite is 388/0/0/0 across eight XML files.
+- The hybrid exception-identity continuation keeps deliberate BCL mappings for faults the CLR
+  raises natively, while adding runtime-owned identities only where no faithful BCL class exists.
+  `Kotlin.Runtime` now contains public `Kotlin.RuntimeException : System.Exception` with the mature
+  four constructor shapes, nullable default-message behavior through a reused `get_Message` slot,
+  and cause identity through `InnerException`. Source `RuntimeException` remains rejected because
+  existing mapped logical children are not physical subclasses and would escape a parent catch.
+  The first exact child is open `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`;
+  exhaustive-when fallthrough now constructs it through the existing JVM-shaped intrinsic rather
+  than throwing plain `System.Exception`. Existing mappings for divide-by-zero, null, bounds, and
+  invalid-cast faults have not moved. `exceptionabi_s1` assembled runtime/consumer pairs with
+  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings preserved exact and
+  parent catches, null default message, cause identity, and the boundary from a foreign
+  `InvalidOperationException`. The draft rationale is
+  `docs/decisions/draft-adr-hybrid-exception-identity.md`; the rejection pin keeps
+  `RuntimeException`, `Error`, and `NumberFormatException` unavailable until their distinct catch
+  policies are coherent. The fresh full DotNet suite is 390/0/0/0 across eight XML files.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -548,13 +565,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit the Kotlin-owned exception foundation.** Decide which Kotlin exception identities need
-   runtime-owned CLR classes versus direct mappings, how constructors/cause/message and catch edges
-   compose with the System.Object Any root, and how synthetic throws (`!!`, exhaustive `when`,
-   negative arrays) migrate without creating false sibling catches. Probe cross-assembly type
-   identity and constructor shapes on both runtimes before changing the existing mapping table.
-   Fuller callable reflection remains later work rather than expanding the minimal name slice
-   opportunistically.
+1. **Design the next exception catch/fault boundary before migrating another class.** Audit whether
+   the backend should translate native CLR faults at their operation sites or lower selected Kotlin
+   catches to unions/filters. Use `NumberFormatException`, negative-array-size failure, and the
+   mapped children of `RuntimeException` as concrete adversarial cases. Do not enable source
+   `RuntimeException` or move a BCL mapping until every affected native fault and parent catch keeps
+   its Kotlin behavior. Fuller callable reflection remains later work rather than expanding the
+   minimal name slice opportunistically.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

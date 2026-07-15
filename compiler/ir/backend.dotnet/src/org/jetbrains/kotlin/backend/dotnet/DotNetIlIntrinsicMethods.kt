@@ -836,13 +836,12 @@ private object DotNetIlBooleanNotIntrinsic : DotNetIlIntrinsicMethod() {
  * intrinsic registry and emitted as an inline throw).
  *
  * Roslyn throws `System.Runtime.CompilerServices.SwitchExpressionException`, but that type is
- * scoped through `System.Runtime` and is absent from the .NET Framework facade. The DotNet
- * backend instead emits `System.Exception` until it can own an exact
- * `NoWhenBranchMatchedException`: this is target-independent, preserves the supported Kotlin
- * `Throwable`/`Exception` catch edges, and—unlike `System.InvalidOperationException`—does not
- * create a false `NoWhenBranchMatchedException is IllegalStateException` edge. `whenprobe_s1`
- * verified on CoreCLR 10.0.9 that the Roslyn type needs the non-corelib scope; the legacy CLR's
- * `System.Runtime` facade was also verified not to contain it.
+ * scoped through `System.Runtime` and is absent from the .NET Framework facade. The DotNet runtime
+ * instead owns exact `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException`; this is
+ * target-independent, preserves the supported Kotlin `Throwable`/`Exception` catch edges, and
+ * does not create a false sibling edge to mapped `IllegalStateException`. `whenprobe_s1` verified
+ * the Roslyn limitation; `exceptionabi_s1` verified the Kotlin-owned hierarchy and cross-runtime
+ * assembly identity.
  */
 private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
@@ -852,7 +851,7 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
     ): Boolean {
         requireNoArguments(call)
         codegen.emitParameterlessExceptionThrow(
-            exceptionTypeRef = DotNetMappedExceptions.EXCEPTION_TYPE_REF,
+            exceptionTypeRef = DotNetRuntimeLibrary.noWhenBranchMatchedExceptionTypeRef,
             valuePosition = true,
         )
         return true
@@ -864,7 +863,7 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
     ): Boolean {
         requireNoArguments(call)
         codegen.emitParameterlessExceptionThrow(
-            exceptionTypeRef = DotNetMappedExceptions.EXCEPTION_TYPE_REF,
+            exceptionTypeRef = DotNetRuntimeLibrary.noWhenBranchMatchedExceptionTypeRef,
             valuePosition = false,
         )
         return true
