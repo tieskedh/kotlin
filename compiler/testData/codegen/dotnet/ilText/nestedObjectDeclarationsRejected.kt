@@ -4,7 +4,7 @@
 // companion remains rejected because that class would own a per-instantiation singleton field.
 
 object BrokenObjectOwner {
-    data class BrokenData(val value: Int)
+    annotation class BrokenAnnotation(val value: Int)
 
     class Good {
         fun value(): Int = 1
@@ -31,7 +31,7 @@ object BrokenObjectOwner {
 
 class BrokenCompanionOwner {
     companion object {
-        data class BrokenData(val value: Int)
+        annotation class BrokenAnnotation(val value: Int)
 
         class Good {
             fun value(): Int = 3

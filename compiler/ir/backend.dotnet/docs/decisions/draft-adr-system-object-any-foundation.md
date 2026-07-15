@@ -134,19 +134,21 @@ null-safe behavior, and continued assembly under both ILAsm implementations.
 
 ## Later consumer: bounded data classes
 
-A later slice now consumes this foundation for non-generic top-level data classes with supported
-non-array primary-constructor properties and no constructor defaults. It does not revise the Any
-decision. Fir2ir's shared generated bodies reuse the physical System.Object slots and runtime Any
-helpers: `equals` adds a CLR `isinst` plus checked `castclass`, `hashCode` and `toString` use the
-existing normalized helper/conversion paths, and `componentN`/`copy` remain ordinary members.
-Ordinary function defaults, including `copy`, use a masked instance `$default` helper; this adds no
-object root or callable identity.
+A later slice now consumes this foundation for non-generic top-level and named nested data classes
+with supported non-array primary-constructor properties and no constructor defaults. It does not
+revise the Any decision. Fir2ir's shared generated bodies reuse the physical System.Object slots
+and runtime Any helpers: `equals` adds a CLR `isinst` plus checked `castclass`, `hashCode` and
+`toString` use the existing normalized helper/conversion paths, and `componentN`/`copy` remain
+ordinary members. Ordinary function defaults, including `copy`, use a masked instance `$default`
+helper; this adds no object root or callable identity. A named nested data class uses the existing
+static-nested metadata identity and captures no outer type argument, including below a generic
+outer.
 
 The slice rejects generic data classes because CLR reified `isinst C<T>` is stricter than Kotlin's
 erased class identity, and rejects array properties until the dedicated data-class content
-hash/string builtins exist. Nested/local data classes, constructor defaults, and data objects also
-remain gated. The gate runs before class registration, so an unsupported generated body cannot
-leave behind a partial class.
+hash/string builtins exist. Local data classes, constructor defaults, and data objects also remain
+gated. The gate runs before class registration, so an unsupported generated body cannot leave
+behind a partial class.
 
 ## Deliberate boundaries
 

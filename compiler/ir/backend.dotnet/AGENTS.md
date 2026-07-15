@@ -225,11 +225,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   foundation. Pins:
   `ilText/inheritanceAnyOverride.kt`, `ilText/interfaceEqualityWidening.kt`,
   `ilText/nullableRejected.kt`, `ilText/genericRejected.kt`; runtime: `box/anyMembers.kt`.
-- A bounded top-level data-class slice consumes the System.Object Any foundation without adding
+- A bounded data-class slice consumes the System.Object Any foundation without adding
   another object identity or a backend-specific member generator. Fir2ir's shared
   `DataClassMembersGenerator` already supplies `equals`, `hashCode`, `toString`, `componentN`,
-  and `copy` bodies. For a non-generic top-level class whose primary-constructor properties have
-  no array type or constructor default, those bodies compile through ordinary class machinery:
+  and `copy` bodies. For a non-generic top-level or named nested class whose primary-constructor
+  properties have no array type or constructor default, those bodies compile through ordinary
+  class machinery:
   `Equals(object)` reuses the existing System.Object virtual slot and uses the checked
   `isinst`/`castclass` path above; property equality and hash/string conversion reuse the
   established Any/nullable helpers; `componentN` is a field read; and `copy` calls the primary
@@ -248,14 +249,21 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   unlowered because an instance stub body on an interface would violate the Framework-compatible
   all-abstract interface boundary. The cleaner retains those two kinds of default marker so later
   gates/callers cannot silently mistake them for lowered support.
+  A named nested data class follows the established JVM-static-nested CLR model unchanged. It
+  captures no outer instance and owns only its own type parameters, so a non-generic data class
+  inside `Outer<T>` remains the independently non-generic metadata type
+  `'Outer`1'/'Entry'`: its generated `isinst`/`castclass`, fields, constructor, members, and
+  `copy$default` tokens carry no outer `!0`. The same shape composes below supported classes,
+  interfaces, objects, companions, data classes, and deeper named metadata parents.
   STAYS REJECTED, whole-class: generic data classes (CLR reified `isinst C<T>` would make equality
   stricter than Kotlin/JVM erased class identity), array properties (the frontend emits dedicated
   data-class array hash/string builtins whose content semantics are not implemented), primary
-  constructor defaults, nested/local data classes, and data objects. Pins:
-  `ilText/dataClasses.kt`, `ilText/dataClassesRejected.kt`,
+  constructor defaults, local data classes, and data objects. Pins:
+  `ilText/dataClasses.kt`, `ilText/nestedDataClasses.kt`, `ilText/dataClassesRejected.kt`,
   `ilText/defaultArgumentsRejected.kt`; runtime: `box/dataClasses.kt`,
-  `box/defaultArguments.kt`. `dataclass_s1` assembled the positive golden under modern 10.0.9 and
-  Framework 4.8 ILAsm; the focused two-parser matrix is 10/0/0/0.
+  `box/nestedDataClasses.kt`, `box/defaultArguments.kt`. `dataclass_s1` and `dataclass_s2`
+  assembled the positive goldens under modern 10.0.9 and Framework 4.8 ILAsm; the nested slice's
+  focused two-parser matrix is 6/0/0/0 and the fresh full matrix is 412/0/0/0.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
@@ -432,10 +440,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   IL-`assembly` widening. A failure OF a companion remains owner-sensitive because its field and
   `.cctor`
   live on the immediate owner; a separate failing child below a valid companion is its own
-  metadata subtree. STAYS REJECTED, per rejected metadata subtree: data/value/enum/annotation, an
+  metadata subtree. STAYS REJECTED, per rejected metadata subtree: value/enum/annotation classes,
+  data objects and the data-class shapes excluded by the bounded data-class model above, an
   `inner` class whose immediate outer is generic, and a companion whose immediate class/interface
-  container is generic. Named local classes and anonymous object expressions follow their separate
-  closure-converted model below.
+  container is generic. Named local classes and anonymous object expressions follow their
+  separate closure-converted model below.
   Recursive render failures preserve the deepest declaration tag while
   unwinding, then subtree eviction removes that declaration and its descendants; independent
   metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
