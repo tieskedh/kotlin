@@ -1,0 +1,545 @@
+.assembly extern mscorlib {}
+.assembly 'innerClasses' {}
+.module 'main-innerClasses.il'
+
+.class interface public abstract auto ansi 'InnerValue'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'value'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'InnerOuter'
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi beforefieldinit 'Base'
+         extends [mscorlib]System.Object
+         implements 'InnerValue'
+  {
+    .field private int32 'delta'
+    .field private int32 'initialized'
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', int32 'delta') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'Base'::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld int32 'InnerOuter'/'Base'::'delta'
+      ldarg.0
+      ldarg.0
+      ldfld class 'InnerOuter' 'InnerOuter'/'Base'::'this$0'
+      call instance int32 'InnerOuter'::'get_seed'()
+      ldarg.0
+      call instance int32 'InnerOuter'/'Base'::'get_delta'()
+      add
+      stfld int32 'InnerOuter'/'Base'::'initialized'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_delta'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'InnerOuter'/'Base'::'delta'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_initialized'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'InnerOuter'/'Base'::'initialized'
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'InnerOuter'/'Base'::'get_initialized'()
+      ret
+    }
+    .method public hidebysig instance bool 'owns'(class 'InnerOuter' 'outer') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld class 'InnerOuter' 'InnerOuter'/'Base'::'this$0'
+      ldarg.1
+      ceq
+      ret
+    }
+    .property instance int32 'delta'()
+    {
+      .get instance int32 'InnerOuter'/'Base'::'get_delta'()
+    }
+    .property instance int32 'initialized'()
+    {
+      .get instance int32 'InnerOuter'/'Base'::'get_initialized'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Derived'
+         extends 'InnerOuter'/'Base'
+  {
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', int32 'delta') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'Derived'::'this$0'
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      call instance void 'InnerOuter'/'Base'::.ctor(class 'InnerOuter', int32)
+      ret
+    }
+    .method public hidebysig virtual instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance int32 'InnerOuter'/'Base'::'value'()
+      ldarg.0
+      ldfld class 'InnerOuter' 'InnerOuter'/'Derived'::'this$0'
+      call instance int32 'InnerOuter'::'get_offset'()
+      add
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Generic`1'<'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'item'
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', !0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' class 'InnerOuter'/'Generic`1'<!0>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld !0 class 'InnerOuter'/'Generic`1'<!0>::'item'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'InnerOuter'/'Generic`1'<!0>::'item'
+      ret
+    }
+    .method public hidebysig instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'InnerOuter'/'Generic`1'<!0>::'get_item'()
+      ret
+    }
+    .method public hidebysig instance int32 'outerSeed'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'InnerOuter' class 'InnerOuter'/'Generic`1'<!0>::'this$0'
+      call instance int32 'InnerOuter'::'get_seed'()
+      ret
+    }
+    .property instance !0 'item'()
+    {
+      .get instance !0 'InnerOuter'/'Generic`1'::'get_item'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'First'
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Second'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'second'
+      .field private class 'InnerOuter'/'First' 'this$0'
+      .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter'/'First' 'this$0', int32 'second') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        ldarg.1
+        stfld class 'InnerOuter'/'First' 'InnerOuter'/'First'/'Second'::'this$0'
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        ldarg.2
+        stfld int32 'InnerOuter'/'First'/'Second'::'second'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_second'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'InnerOuter'/'First'/'Second'::'second'
+        ret
+      }
+      .method public hidebysig instance int32 'total'() cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        ldfld class 'InnerOuter'/'First' 'InnerOuter'/'First'/'Second'::'this$0'
+        ldfld class 'InnerOuter' 'InnerOuter'/'First'::'this$0'
+        call instance int32 'InnerOuter'::'get_seed'()
+        ldarg.0
+        ldfld class 'InnerOuter'/'First' 'InnerOuter'/'First'/'Second'::'this$0'
+        call instance int32 'InnerOuter'/'First'::'get_first'()
+        add
+        ldarg.0
+        call instance int32 'InnerOuter'/'First'/'Second'::'get_second'()
+        add
+        ret
+      }
+      .property instance int32 'second'()
+      {
+        .get instance int32 'InnerOuter'/'First'/'Second'::'get_second'()
+      }
+    }
+    .field private int32 'first'
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', int32 'first') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'First'::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld int32 'InnerOuter'/'First'::'first'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_first'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'InnerOuter'/'First'::'first'
+      ret
+    }
+    .property instance int32 'first'()
+    {
+      .get instance int32 'InnerOuter'/'First'::'get_first'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'UsesLater'
+         extends [mscorlib]System.Object
+  {
+    .field private class 'InnerOuter'/'Later' 'later'
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', class 'InnerOuter'/'Later' 'later') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'UsesLater'::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld class 'InnerOuter'/'Later' 'InnerOuter'/'UsesLater'::'later'
+      ret
+    }
+    .method public hidebysig specialname instance class 'InnerOuter'/'Later' 'get_later'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'InnerOuter'/'Later' 'InnerOuter'/'UsesLater'::'later'
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld class 'InnerOuter' 'InnerOuter'/'UsesLater'::'this$0'
+      call instance int32 'InnerOuter'::'get_seed'()
+      ldarg.0
+      call instance class 'InnerOuter'/'Later' 'InnerOuter'/'UsesLater'::'get_later'()
+      call instance int32 'InnerOuter'/'Later'::'get_value'()
+      add
+      ret
+    }
+    .property instance class 'InnerOuter'/'Later' 'later'()
+    {
+      .get instance class 'InnerOuter'/'Later' 'InnerOuter'/'UsesLater'::'get_later'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Later'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'Later'::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld int32 'InnerOuter'/'Later'::'value'
+      ret
+    }
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'InnerOuter'/'Later'::'value'
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'InnerOuter'/'Later'::'get_value'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'ConstructorPaths'
+         extends [mscorlib]System.Object
+  {
+    .field private int32 'value'
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld int32 'InnerOuter'/'ConstructorPaths'::'value'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0', int32 'value') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'ConstructorPaths'::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.1
+      call instance int32 'InnerOuter'::'get_seed'()
+      ldarg.2
+      add
+      stfld int32 'InnerOuter'/'ConstructorPaths'::'value'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      ldarg.1
+      call instance int32 'InnerOuter'::'get_offset'()
+      call instance void 'InnerOuter'/'ConstructorPaths'::.ctor(class 'InnerOuter', int32)
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'InnerOuter'/'ConstructorPaths'::'get_value'()
+      ret
+    }
+    .property instance int32 'value'()
+    {
+      .get instance int32 'InnerOuter'/'ConstructorPaths'::'get_value'()
+    }
+  }
+  .class nested private auto ansi sealed beforefieldinit 'Hidden'
+         extends [mscorlib]System.Object
+  {
+    .field private class 'InnerOuter' 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'InnerOuter' 'this$0') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'InnerOuter' 'InnerOuter'/'Hidden'::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld class 'InnerOuter' 'InnerOuter'/'Hidden'::'this$0'
+      call instance int32 'InnerOuter'::'get_seed'()
+      ldarg.0
+      ldfld class 'InnerOuter' 'InnerOuter'/'Hidden'::'this$0'
+      call instance int32 'InnerOuter'::'get_offset'()
+      add
+      ret
+    }
+  }
+  .field private int32 'seed'
+  .field private int32 'offset'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'InnerOuter'::'seed'
+    ldarg.0
+    ldc.i4 3
+    stfld int32 'InnerOuter'::'offset'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'InnerOuter'::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_offset'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'InnerOuter'::'offset'
+    ret
+  }
+  .method public hidebysig instance int32 'hiddenValue'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'InnerOuter'/'Hidden'::.ctor(class 'InnerOuter')
+    call instance int32 'InnerOuter'/'Hidden'::'value'()
+    ret
+  }
+  .property instance int32 'seed'()
+  {
+    .get instance int32 'InnerOuter'::'get_seed'()
+  }
+  .property instance int32 'offset'()
+  {
+    .get instance int32 'InnerOuter'::'get_offset'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'innerClassesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'InnerOuter' 'outer',
+      [1] class 'InnerValue' 'base',
+      [2] class 'InnerOuter'/'Base' 'derivedAsBase',
+      [3] class 'InnerOuter'/'Generic`1'<string> 'generic'
+    )
+    ldc.i4 10
+    newobj instance void 'InnerOuter'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    ldc.i4 2
+    newobj instance void 'InnerOuter'/'Base'::.ctor(class 'InnerOuter', int32)
+    stloc.1
+    ldloc.0
+    ldc.i4 4
+    newobj instance void 'InnerOuter'/'Derived'::.ctor(class 'InnerOuter', int32)
+    stloc.2
+    ldloc.0
+    ldstr "generic"
+    newobj instance void class 'InnerOuter'/'Generic`1'<string>::.ctor(class 'InnerOuter', !0)
+    stloc.3
+    ldloc.1
+    callvirt instance int32 'InnerValue'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance int32 'InnerOuter'/'Base'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    ldloc.0
+    call instance bool 'InnerOuter'/'Base'::'owns'(class 'InnerOuter')
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    call instance !0 class 'InnerOuter'/'Generic`1'<string>::'item'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    call instance int32 class 'InnerOuter'/'Generic`1'<string>::'outerSeed'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 5
+    newobj instance void 'InnerOuter'/'First'::.ctor(class 'InnerOuter', int32)
+    ldc.i4 7
+    newobj instance void 'InnerOuter'/'First'/'Second'::.ctor(class 'InnerOuter'/'First', int32)
+    call instance int32 'InnerOuter'/'First'/'Second'::'total'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldloc.0
+    ldc.i4 9
+    newobj instance void 'InnerOuter'/'Later'::.ctor(class 'InnerOuter', int32)
+    newobj instance void 'InnerOuter'/'UsesLater'::.ctor(class 'InnerOuter', class 'InnerOuter'/'Later')
+    call instance int32 'InnerOuter'/'UsesLater'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance int32 'InnerOuter'::'hiddenValue'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 5
+    newobj instance void 'InnerOuter'/'ConstructorPaths'::.ctor(class 'InnerOuter', int32)
+    call instance int32 'InnerOuter'/'ConstructorPaths'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    newobj instance void 'InnerOuter'/'ConstructorPaths'::.ctor(class 'InnerOuter')
+    call instance int32 'InnerOuter'/'ConstructorPaths'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 20
+    newobj instance void 'InnerOuter'::.ctor(int32)
+    ldc.i4 2
+    newobj instance void 'InnerOuter'/'Base'::.ctor(class 'InnerOuter', int32)
+    callvirt instance int32 'InnerOuter'/'Base'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

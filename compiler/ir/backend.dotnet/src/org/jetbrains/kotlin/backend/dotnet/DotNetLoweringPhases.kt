@@ -6,6 +6,9 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenatio
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesMemberBodyLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
@@ -16,6 +19,13 @@ import org.jetbrains.kotlin.config.phaser.PhaserState
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
+    // Follow the common/JVM inner-class pipeline before initializer merging: add the explicit
+    // outer field/constructor argument, rewrite outer-this reads into field chains, then move
+    // constructor-call dispatch receivers into the new leading argument. The CLR accepts the
+    // common pre-base-call outer-field store unchanged (innerprobe_s1/s2).
+    ::DotNetInnerClassesLowering,
+    ::DotNetInnerClassesMemberBodyLowering,
+    ::DotNetInnerClassConstructorCallsLowering,
     // Initializer merging first — a stated deviation from the JVM phase order for a CLR-neutral
     // reason: DotNetForLoopLowering is an IrBuildingTransformer whose builder only exists inside
     // functions (LowerUtils installs it in visitFunction), so a `for` loop inside an `init {}`
