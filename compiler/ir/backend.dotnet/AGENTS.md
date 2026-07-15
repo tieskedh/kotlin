@@ -151,6 +151,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   capturing, bound, KFunction, local, array-initializer, nullable, generic, evaluation-order, and
   explicit-fallback shapes on CoreCLR. This is an execution capability only: never use it in
   fields, parameters, returns, ordinary Kotlin subtype conversion, or CLR delegate projection.
+  `delegateprojection_s1` validates the later CLR projection mechanism without landing a surface:
+  exact Func delegates can bind directly to InvokeExact; erased Func and Unit Action delegates can
+  close static generic thunks over the canonical FunctionN object. Repeated same-shape projections
+  compare equal and support event removal because their target and method match on both runtimes.
+  Do not add those helpers or automatic public overloads yet. This POC has no explicit source
+  interop/export owner that can choose Func versus Action from logical types or own overload names,
+  nullability metadata, and round-trip policy. Add that boundary first, then keep every projection
+  outside ordinary Kotlin function conversion. The detailed decision and round-trip requirements
+  are in the draft ADR.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
   delegate adapters, and Unit exact entry points. Kotlin metadata serialization and
