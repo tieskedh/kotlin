@@ -37,6 +37,7 @@ internal class DotNetIlIntrinsicMethods(
 ) {
     private val kotlinFqn = StandardNames.BUILT_INS_PACKAGE_FQ_NAME
     private val kotlinIoFqn = FqName("kotlin.io")
+    private val kotlinCollectionsFqn = FqName("kotlin.collections")
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
     private val arrayFqn = StandardNames.FqNames.array.toSafe()
@@ -145,7 +146,7 @@ internal class DotNetIlIntrinsicMethods(
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
-            genericArrayIntrinsics()
+            genericArrayIntrinsics() + arrayCopyIntrinsics()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -193,7 +194,7 @@ internal class DotNetIlIntrinsicMethods(
             )
             add(
                 Key(info.arrayFqn, null, "clone", emptyList())
-                        to DotNetIlUnsupportedIntrinsic("primitive-array clone/copy operations are not supported yet")
+                        to DotNetIlUnsupportedIntrinsic("primitive-array clone is not supported; use copyOf")
             )
         }
     }
@@ -224,7 +225,52 @@ internal class DotNetIlIntrinsicMethods(
                                 "direct 'for (element in array)' loops are lowered"
                     ),
             Key(arrayFqn, null, "clone", emptyList()) to
-                    DotNetIlUnsupportedIntrinsic("generic-array clone/copy operations are not supported yet"),
+                    DotNetIlUnsupportedIntrinsic("generic-array clone is not supported; use copyOf"),
+        )
+    }
+
+    /**
+     * The injected `kotlin.collections.copyInto`/`copyOf` declarations follow the JVM stdlib's
+     * platform-operation boundary: calls are registry-owned and never emit their resolution-only
+     * declarations. CLR `System.Array.Copy` supplies the overlap-safe bulk move, while
+     * `copyInto` first crosses the Kotlin-owned range-check helper because the raw CLR method
+     * reports destination range failures as `ArgumentException` (mapped IllegalArgumentException)
+     * instead of Kotlin's required IndexOutOfBoundsException category.
+     */
+    private fun arrayCopyIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        for (info in primitiveArrays) {
+            add(
+                Key(
+                    kotlinCollectionsFqn,
+                    info.arrayFqn,
+                    "copyInto",
+                    listOf(info.arrayFqn, intFqn, intFqn, intFqn),
+                ) to DotNetIlArrayCopyIntoIntrinsic(info.arrayType)
+            )
+            add(
+                Key(kotlinCollectionsFqn, info.arrayFqn, "copyOf", emptyList())
+                        to DotNetIlArrayCopyOfIntrinsic(info.arrayType, resized = false)
+            )
+            add(
+                Key(kotlinCollectionsFqn, info.arrayFqn, "copyOf", listOf(intFqn))
+                        to DotNetIlArrayCopyOfIntrinsic(info.arrayType, resized = true)
+            )
+        }
+        add(
+            Key(
+                kotlinCollectionsFqn,
+                arrayFqn,
+                "copyInto",
+                listOf(arrayFqn, intFqn, intFqn, intFqn),
+            ) to DotNetIlArrayCopyIntoIntrinsic(fixedArrayType = null)
+        )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "copyOf", emptyList())
+                    to DotNetIlArrayCopyOfIntrinsic(fixedArrayType = null, resized = false)
+        )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "copyOf", listOf(intFqn))
+                    to DotNetIlArrayCopyOfIntrinsic(fixedArrayType = null, resized = true)
         )
     }
 
@@ -556,8 +602,16 @@ private fun emitGuardedArrayAllocation(
     // negative-array-size failure is not arithmetic, so branch first and use the neutral
     // System.Exception approximation documented in AGENTS.md. Keep the size on the stack
     // across the test so the non-negative path feeds newarr without a synthetic local.
-    val nonNegativeLabel = codegen.nextLabel("arraySizeNonNegative")
     codegen.emitExpression(size, DotNetIlValueType.Int32)
+    emitGuardedArrayAllocationFromStack(newArrayInstruction, codegen)
+}
+
+/** The stack-input form shared by constructors and `copyOf(newSize)`. */
+private fun emitGuardedArrayAllocationFromStack(
+    newArrayInstruction: String,
+    codegen: DotNetIlExpressionCodegen,
+) {
+    val nonNegativeLabel = codegen.nextLabel("arraySizeNonNegative")
     codegen.emit("dup", pops = 1, pushes = 2)
     codegen.emit("ldc.i4.0", pushes = 1)
     codegen.emit("clt", pops = 2, pushes = 1)
@@ -856,6 +910,163 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
         codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
         codegen.emit(arrayType.storeElementInstruction, pops = 3)
+        return true
+    }
+}
+
+/**
+ * `copyInto` for the five primitive vectors and supported concrete reference arrays.
+ *
+ * Arguments are evaluated and spilled in Kotlin order before the helper call. Omitted external
+ * defaults remain null in IR: the two zero defaults are materialized directly, while the default
+ * `endIndex = size` reads the already-evaluated source once. The runtime helper owns validation
+ * because raw `System.Array.Copy` exposes the wrong Kotlin exception category for destination
+ * range failures; after validation it delegates to that overlap-safe CLR primitive.
+ */
+private class DotNetIlArrayCopyIntoIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.size != 5) return false
+        val source = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'copyInto'")
+        val destination = call.arguments[1]
+            ?: dotNetUnsupported("missing destination array for 'copyInto'")
+        val sourceType = fixedArrayType ?: (
+                codegen.toDotNetIlValueType(source.type) as? DotNetIlValueType.GenericArray
+                ?: dotNetUnsupported("'copyInto' has unsupported source type ${source.type.render()}")
+        )
+        val destinationType = fixedArrayType ?: (
+                codegen.toDotNetIlValueType(destination.type) as? DotNetIlValueType.GenericArray
+                ?: dotNetUnsupported("'copyInto' has unsupported destination type ${destination.type.render()}")
+        )
+        if (sourceType is DotNetIlValueType.GenericArray &&
+            (sourceType.elementType is DotNetIlValueType.TypeParameter ||
+                    (destinationType as DotNetIlValueType.GenericArray).elementType is DotNetIlValueType.TypeParameter)
+        ) {
+            dotNetUnsupported("copyInto on an open generic Array<T> is not supported in the concrete array-copying slice")
+        }
+        if (expectedType != destinationType) return false
+
+        codegen.emitExpression(source, sourceType)
+        val sourceSlot = codegen.spillToSyntheticLocal(sourceType, "<copySource>")
+        codegen.emitExpression(destination, destinationType)
+        val destinationSlot = codegen.spillToSyntheticLocal(destinationType, "<copyDestination>")
+
+        val destinationOffset = call.arguments[2]
+        if (destinationOffset == null) {
+            codegen.emit("ldc.i4.0", pushes = 1)
+        } else {
+            codegen.emitExpression(destinationOffset, DotNetIlValueType.Int32)
+        }
+        val destinationOffsetSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copyDestinationOffset>")
+
+        val startIndex = call.arguments[3]
+        if (startIndex == null) {
+            codegen.emit("ldc.i4.0", pushes = 1)
+        } else {
+            codegen.emitExpression(startIndex, DotNetIlValueType.Int32)
+        }
+        val startIndexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copyStartIndex>")
+
+        val endIndex = call.arguments[4]
+        if (endIndex == null) {
+            codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+            codegen.emit("ldlen", pops = 1, pushes = 1)
+            codegen.emit("conv.i4", pops = 1, pushes = 1)
+        } else {
+            codegen.emitExpression(endIndex, DotNetIlValueType.Int32)
+        }
+        val endIndexSlot = codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copyEndIndex>")
+
+        codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(destinationOffsetSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(startIndexSlot.index), pushes = 1)
+        codegen.emit(loadLocalInstruction(endIndexSlot.index), pushes = 1)
+        codegen.emit(DotNetRuntimeLibraryHelpers.arrayCopyIntoCallInstruction, pops = 5)
+        codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+        return true
+    }
+}
+
+/** `copyOf()` and concrete `copyOf(newSize)` with an exact typed-vector result. */
+private class DotNetIlArrayCopyOfIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+    private val resized: Boolean,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        val expectedArgumentCount = if (resized) 2 else 1
+        if (call.arguments.size != expectedArgumentCount) return false
+        val source = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'copyOf'")
+        val arrayType = fixedArrayType ?: (
+                codegen.toDotNetIlValueType(source.type) as? DotNetIlValueType.GenericArray
+                ?: dotNetUnsupported("'copyOf' has unsupported source type ${source.type.render()}")
+        )
+        if (arrayType is DotNetIlValueType.GenericArray && arrayType.elementType is DotNetIlValueType.TypeParameter) {
+            dotNetUnsupported("copyOf on an open generic Array<T> is not supported in the concrete array-copying slice")
+        }
+        if (expectedType != arrayType) return false
+        val newArrayInstruction = when (arrayType) {
+            is DotNetIlValueType.PrimitiveArray -> arrayType.newArrayInstruction
+            is DotNetIlValueType.GenericArray -> arrayType.newArrayInstruction
+            else -> error("Internal .NET backend error: non-array copy type ${arrayType.nameInSignature}")
+        }
+
+        codegen.emitExpression(source, arrayType)
+        val sourceSlot = codegen.spillToSyntheticLocal(arrayType, "<copySource>")
+        val sizeSlot = if (resized) {
+            val newSize = call.arguments[1]
+                ?: dotNetUnsupported("missing new size for 'copyOf'")
+            codegen.emitExpression(newSize, DotNetIlValueType.Int32)
+            codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copySize>")
+        } else {
+            codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+            codegen.emit("ldlen", pops = 1, pushes = 1)
+            codegen.emit("conv.i4", pops = 1, pushes = 1)
+            codegen.spillToSyntheticLocal(DotNetIlValueType.Int32, "<copySize>")
+        }
+
+        codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+        if (resized) {
+            emitGuardedArrayAllocationFromStack(newArrayInstruction, codegen)
+        } else {
+            codegen.emit(newArrayInstruction, pops = 1, pushes = 1)
+        }
+        val destinationSlot = codegen.spillToSyntheticLocal(arrayType, "<copyDestination>")
+
+        codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+        codegen.emit("ldc.i4.0", pushes = 1)
+        codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+        codegen.emit("ldc.i4.0", pushes = 1)
+        if (resized) {
+            codegen.emit(loadLocalInstruction(sourceSlot.index), pushes = 1)
+            codegen.emit("ldlen", pops = 1, pushes = 1)
+            codegen.emit("conv.i4", pops = 1, pushes = 1)
+            codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+            codegen.emit("call int32 ${CORE_LIB_REF}System.Math::Min(int32, int32)", pops = 2, pushes = 1)
+        } else {
+            codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
+        }
+        codegen.emit(
+            "call void ${CORE_LIB_REF}System.Array::Copy(" +
+                    "class ${CORE_LIB_REF}System.Array, int32, class ${CORE_LIB_REF}System.Array, int32, int32)",
+            pops = 5,
+        )
+        codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
         return true
     }
 }
