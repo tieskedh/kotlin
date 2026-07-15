@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCall
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesMemberBodyLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalClasses
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalFunctions
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
@@ -29,6 +30,7 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // inner classes and initializer merging, as on the JVM (localprobe_s1/s2, anonprobe_s1/s2).
     ::DotNetInventNamesForLocalClasses,
     ::DotNetAnonymousObjectSuperConstructorLowering,
+    ::DotNetInventNamesForLocalFunctions,
     ::DotNetLocalDeclarationsLowering,
     ::DotNetLocalDeclarationPopupLowering,
     // Follow the common/JVM inner-class pipeline before initializer merging: add the explicit

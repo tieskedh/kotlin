@@ -41,6 +41,7 @@ import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 
@@ -100,6 +101,7 @@ internal class DotNetIlMethodCodegen(
     private val expressionCodegen =
         DotNetIlExpressionCodegen(
             methodContext, availableFunctions, intrinsicMethods, typeMapper, facadeClassInfoByFile,
+            functionInfo.owner,
             object : DotNetIlStatementScopeEmitter {
                 override fun emitTryExpression(expression: IrTry, expectedType: DotNetIlValueType) =
                     this@DotNetIlMethodCodegen.emitTryExpression(expression, expectedType)
@@ -194,6 +196,8 @@ internal class DotNetIlMethodCodegen(
      * The non-default IL visibility of a Kotlin-`private` member, or null for the historical
      * default (`public` for methods and accessors; constructors map Kotlin `private` to IL
      * `private`, the singleton guarantee — see the `.ctor` render):
+     * - A lifted local function is IL `assembly` on a file facade so lifted sibling types can
+     *   call it, and IL `private` under a class because CLR nested→enclosing private access works.
      * - Every Kotlin-private member OF A COMPANION is IL `assembly` (uniform rule). The CLR
      *   grants nested→enclosing private access but NOT the reverse (objprobe_s7a/objprobe_s7b):
      *   the enclosing class's `.cctor` must `newobj` the companion's Kotlin-private constructor
@@ -209,6 +213,7 @@ internal class DotNetIlMethodCodegen(
      *   nested code are fine at IL private visibility (objprobe_s7a, nestedprobe_s2).
      */
     private fun IrFunction.dotNetMemberVisibility(): String? {
+        if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
         if (visibility != DescriptorVisibilities.PRIVATE) return null
         return when {
             (parent as? IrClass)?.isCompanion == true -> "assembly"
