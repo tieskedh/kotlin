@@ -285,6 +285,19 @@ internal class DotNetIlMethodCodegen(
                 // A dead trailing ret after a mid-body return is harmless.
                 if (signature.returnType == DotNetIlReturnType.Void) {
                     methodContext.emitReturn()
+                } else if (
+                    !methodContext.isTerminated &&
+                    function is IrSimpleFunction &&
+                    function.isDotNetErasedCallableInvoke() &&
+                    function.returnType.isUnit()
+                ) {
+                    // A Unit lambda whose final operation is already a statement (not an
+                    // IrReturn) falls through its block body. The physical erased slot still
+                    // returns object, so materialize Unit exactly as emitReturnValue does for an
+                    // explicit return. Without this epilogue ILAsm accepts the method, but the
+                    // CLR rejects it as an invalid program when invoked.
+                    expressionCodegen.emitRuntimeUnitInstance()
+                    methodContext.emitReturn(pops = 1)
                 }
             }
             is IrExpressionBody -> when (val returnType = signature.returnType) {

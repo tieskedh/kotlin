@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.FileLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.AbstractFunctionReferenceLowering
+import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
@@ -93,6 +94,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
 
     override fun postprocessClass(functionReferenceClass: IrClass, functionReference: IrRichFunctionReference) {
         functionReferenceClass.dotNetInventedLocalClassName = functionReference.dotNetInventedLocalClassName
+        // Common function-reference lowering creates bound-value fields without a specialized
+        // origin. Mark them as ordinary captured-value fields so the strict CLR class renderer
+        // accepts exactly the same private state shape that closure conversion produces.
+        functionReferenceClass.declarations.filterIsInstance<IrField>().forEach { field ->
+            if (field.correspondingPropertySymbol == null && field.origin == IrDeclarationOrigin.DEFINED) {
+                field.origin = LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE
+            }
+        }
         if (
             functionReference.type.isKFunction() &&
             !functionReference.type.isKSuspendFunction()
@@ -114,8 +123,6 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             }
         }
         functionReferenceClass.dotNetLocalCaptureRejectionReason = when {
-            functionReference.boundValues.isNotEmpty() ->
-                "has a bound receiver or captured value; capturing callable objects are not supported yet"
             functionReference.invokeFunction.isSuspend ->
                 "is suspend; the suspend-callable ABI is deliberately reserved"
             functionReference.type.isKSuspendFunction() ->

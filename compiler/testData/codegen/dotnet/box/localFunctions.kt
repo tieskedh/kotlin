@@ -97,6 +97,15 @@ fun anonymousObjectCallsFunction(seed: Int): Int {
     return source.value()
 }
 
+fun mutableLocalFunctionCapture(): Int {
+    var value = 1
+
+    fun local(): Int = value
+
+    value = 42
+    return local()
+}
+
 fun box(): String {
     if (localCapture(10) != 15) return "fail 1: immutable captures"
     if (`localCapture$add`(1, 2, 3) != -1) return "fail 2: facade user-name priority"
@@ -113,6 +122,7 @@ fun box(): String {
     if (collision.`run$local`(1, 2) != -2) return "fail 12: member user-name priority"
     if (localClassCallsFunction(9) != 12) return "fail 13: local class calls local function"
     if (anonymousObjectCallsFunction(9) != 13) return "fail 14: anonymous object calls local function"
+    if (mutableLocalFunctionCapture() != 42) return "fail 15: mutable local-function capture"
     return "OK"
 }
 interface LocalFunctionIntValue {

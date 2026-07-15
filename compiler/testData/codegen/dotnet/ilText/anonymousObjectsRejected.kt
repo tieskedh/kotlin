@@ -1,11 +1,12 @@
-// Shared mutable captures remain outside anonymous-object closure conversion. Unsupported base
-// classes reject only the containing function; unrelated metadata and the entry point survive.
+// Shared mutable captures now compose with anonymous-object closure conversion. Unsupported base
+// classes still reject only the containing function; unrelated metadata and the entry point
+// survive.
 
 interface RejectedAnonymousValue {
     fun value(): Int
 }
 
-fun mutableAnonymousCaptureRejected(): Int {
+fun mutableAnonymousCaptureSupported(): Int {
     var value = 1
     val source: RejectedAnonymousValue = object : RejectedAnonymousValue {
         override fun value(): Int = value

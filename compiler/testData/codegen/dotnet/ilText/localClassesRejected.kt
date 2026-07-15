@@ -1,7 +1,7 @@
-// Mutable captures require SharedVariablesLowering. Their functions disappear independently;
-// main and unrelated declarations survive.
+// Mutable captures now use the runtime shared cell and survive. This file retains the historical
+// rejection-boundary sibling to pin that newly supported shape independently.
 
-fun mutableCaptureRejected(): Int {
+fun mutableCaptureSupported(): Int {
     var value = 1
 
     class Local {

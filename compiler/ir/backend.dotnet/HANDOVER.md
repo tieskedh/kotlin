@@ -7,12 +7,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Establish runtime assembly boundary",
+- Branch `dotnet`; latest functional work is the capturing-callable state slice on top of
+  `b54578fab` (`[DotNet] Move compiler helpers into runtime`),
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **380 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **382 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -33,8 +34,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Named local classes and anonymous object expressions now use common closure conversion/popup
   with immutable value/receiver and duplicated type-parameter captures. Anonymous base arguments
   are lifted at the expression call site. Explicit named local functions now lift to static
-  facade/owner methods with parameterized captures; mutable captures and callable objects remain
-  separate boundaries.
+  facade/owner methods with parameterized captures. Callable classes now use that closure
+  conversion together with shared mutable-reference cells; bound receivers use the same generated
+  field model without introducing another callable ABI.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
@@ -289,8 +291,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   inputs and private fields as needed. Captured type parameters are duplicated on the local type,
   including a generic-owner receiver typed through the local's independent slot. Invented names
   use readable enclosing paths and add `$1` only on a real collision; the emitter also reserves
-  user metadata names first. Mutable captures reject precisely because shared-variable boxing is
-  absent, while anonymous objects and local-function mixtures remain wholly unlowered.
+  user metadata names first. At that slice, mutable captures rejected because shared-variable
+  boxing was absent, while anonymous objects and local-function mixtures remained wholly
+  unlowered; the later capturing-callable continuation removes that historical boundary.
   `localprobe_s1` verifies facade construction of a private top-level local/captured field;
   `localprobe_s2` verifies a private nested local under `Outer<T>` with a duplicated generic slot.
   Both probes and both exact goldens assemble and run identically on CoreCLR 10.0.9 and Framework
@@ -308,8 +311,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   top-level/member/init property contexts, generic-function and generic-owner captures, recursive
   object expressions, fresh-instance identity, and bodies mixing named and anonymous classes all
   compose. Lifted types remain module-private top-level or private nested metadata with public
-  metadata constructors. Mutable captures still reject precisely, explicit-local-function
-  mixtures remain wholly unlowered, and unsupported exception bases reject only their subtree and
+  metadata constructors. At that slice, mutable captures still rejected and
+  explicit-local-function mixtures remained wholly unlowered; the later shared-cell continuation
+  removes those historical boundaries. Unsupported exception bases reject only their subtree and
   real users. `anonprobe_s1` verifies an inaccessible captured interface implementation;
   `anonprobe_s2` verifies captured-field storage plus a lifted base argument. Both produce `42` on
   CoreCLR 10.0.9 and Framework 4.8. `ilText/anonymousObjects.kt`,
@@ -327,8 +331,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   invalid bare generic owner. Direct and nested recursion, initializer locals, generic function
   and class scopes, extension locals, and named/anonymous local-class callers compose. User
   metadata names have priority; colliding generated methods alone receive the smallest `$n`
-  suffix. Mutable captures reject precisely, while lambda/reference mixtures remain at the
-  existing function boundary. `localfunprobe_s1`–`_s3` all print `42` on CoreCLR 10.0.9 and
+  suffix. At that slice, mutable captures rejected and lambda/reference mixtures remained at the
+  existing function boundary; the later callable/shared-cell continuation removes those
+  historical boundaries. `localfunprobe_s1`–`_s3` all print `42` on CoreCLR 10.0.9 and
   Framework 4.8. `ilText/localFunctions.kt`, `ilText/localFunctionsRejected.kt`, and
   `box/localFunctions.kt` pin both parsers. Positive output is
   `15,-1,10,10,7,9,generic,owner,no-owner,12,12,-2,12,13`; the rejection survivor prints `29`.
@@ -381,11 +386,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   CoreCLR box coverage passes for Function0/1/2, direct references, Unit, singleton reuse,
   reference/value variance, Boolean, nullable Int, reference casts, open T, Function/Function<*>
   marker storage, extension receivers, explicit implementations, nullable callable storage, and
-  overload-clash survival. Negative pins also cover captures, bound references, suspend callables,
-  arity above 2, and inferred KFunction storage. Pins: `ilText/callableObjects.kt`,
-  `ilText/callableObjectsRejected.kt`, and
-  `box/callableObjects.kt`. Captures/bound references, KFunction metadata, suspend callables,
-  arity above 2, delegates, Kotlin metadata serialization, and typed fast paths remain separate.
+  overload-clash survival. Negative pins cover suspend callables, arity above 2, and inferred
+  KFunction storage. Pins: `ilText/callableObjects.kt`, `ilText/callableObjectsRejected.kt`, and
+  `box/callableObjects.kt`.
   The repo-local `docs/decisions/draft-adr-erased-callable-abi.md` records the decision drivers,
   rejected alternatives, costs, invariants, and the evidence required to promote or revise the
   draft; it is deliberately not presented as a public KEEP or an accepted Kotlin project ADR.
@@ -397,6 +400,31 @@ session state, process, and a curated task menu. Keep both files updated as you 
   callable types without declaring the runtime AssemblyRef. Header emission now derives that ref
   from the final post-eviction IL body, so both ILAsm versions assemble callable-bearing library IL
   without autodetection; executables keep the runtime-foundation ref unconditionally.
+- The capturing-callable continuation freezes erased `Kotlin.Function0`/`Function1`/`Function2`
+  as the only Kotlin callable identity ABI. Immutable captures and bound receivers are private
+  fields on freshly allocated generated callable classes; there are no delegate-like wrappers or
+  additional callable interfaces. `SharedVariablesLowering` now runs between callable-reference
+  lowering and local-declaration closure conversion. It rewrites each captured mutable variable to
+  one invariant `Kotlin.Runtime.Internal.MutableRef<T>` cell whose public `element` field is the
+  compiler/runtime cross-assembly layout. Closures capture the cell reference, so sibling closures
+  and outer writes share storage; the generic element retains primitive, nullable-primitive,
+  reference, and open-`T` storage shapes. Only constructor-empty non-capturing callables receive an
+  `INSTANCE` cache. Generated generic callable construction recovers the instantiated class from
+  the common lowering's constructor type arguments, and fall-through Unit bridges explicitly
+  return `Kotlin.Unit.INSTANCE` from erased `Invoke`.
+  `captureabi_s3` assembled compiler-produced consumers and runtimes with modern 10.0.9 and
+  Framework 4.8 ILAsm. All four same-target/cross-runtime pairings printed the expected five
+  `42` values. Focused PSI/LightTree IL and CoreCLR box coverage passes for immutable and multiple
+  captures, mutable counters, sibling-cell sharing, outer writes, Unit mutation, nullable and
+  generic cells, primitive/class bound receivers, allocation behavior, and variance identity.
+  The same common phase also enables shared mutable captures in named local classes, anonymous
+  objects, and lifted local functions; their existing exact fixtures now pin the cell shape and
+  their box suites execute later outer writes through the captured cell.
+  `ilText/callableCaptures.kt` pins the exact fields, cell type, generic construction, Unit bridge,
+  erased interfaces, and absence of stateful singleton caches. KFunction metadata, suspend
+  callables, arity above 2, delegate adapters, Kotlin metadata serialization, and typed fast paths
+  remain separate decisions. All four new/changed exact goldens assemble under modern 10.0.9 and
+  Framework 4.8 ILAsm. The fresh full DotNet suite is 382/0/0/0 across eight XML files.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -479,10 +507,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Add capturing callable objects and mutable reference cells.** Reuse the common/JVM closure
-   conversion shape, keep the erased Invoke ABI unchanged, and separate immutable capture fields
-   from Kotlin mutable local cells. Bound references belong in this slice; KFunction metadata,
-   suspend callables, delegate adapters, and typed fast paths still remain later decisions.
+1. **Add callable-reference metadata without changing callable identity.** Determine the minimum
+   Kotlin-owned KFunction/reference metadata contract and keep it orthogonal to erased
+   `Function0`/`Function1`/`Function2` invocation. Do not add CLR delegates or typed interfaces as
+   Kotlin callable identities; suspend callables, arity above 2, adapters, typed fast paths,
+   metadata serialization, `Any`, and Kotlin-owned exceptions remain later slices.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

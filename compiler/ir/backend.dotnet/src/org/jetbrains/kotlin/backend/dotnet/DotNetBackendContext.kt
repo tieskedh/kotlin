@@ -15,15 +15,9 @@ import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFactory
-import org.jetbrains.kotlin.ir.declarations.IrVariable
-import org.jetbrains.kotlin.ir.expressions.IrExpression
-import org.jetbrains.kotlin.ir.expressions.IrGetValue
-import org.jetbrains.kotlin.ir.expressions.IrSetValue
-import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
-import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.util.SymbolTable
@@ -36,7 +30,7 @@ internal class DotNetBackendContext(
     override val irFactory: IrFactory = symbolTable.irFactory
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)
     override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns)
-    override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager
+    override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager(irBuiltIns, irFactory)
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
         configuration.diagnosticsCollector,
@@ -90,21 +84,4 @@ internal class DotNetSymbols(irBuiltIns: IrBuiltIns) : BackendSymbols(irBuiltIns
 
     private fun unsupportedSymbol(name: String): Nothing =
         error("DotNet backend symbol '$name' is not available yet")
-}
-
-private object DotNetSharedVariablesManager : SharedVariablesManager() {
-    override fun declareSharedVariable(originalDeclaration: IrVariable): IrVariable =
-        unsupportedSharedVariables()
-
-    override fun defineSharedValue(originalDeclaration: IrVariable, sharedVariableDeclaration: IrVariable): IrStatement =
-        unsupportedSharedVariables()
-
-    override fun getSharedValue(sharedVariableSymbol: IrValueSymbol, originalGet: IrGetValue): IrExpression =
-        unsupportedSharedVariables()
-
-    override fun setSharedValue(sharedVariableSymbol: IrValueSymbol, originalSet: IrSetValue): IrExpression =
-        unsupportedSharedVariables()
-
-    private fun unsupportedSharedVariables(): Nothing =
-        error("DotNet backend shared variable lowering is not available yet")
 }

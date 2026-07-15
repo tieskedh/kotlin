@@ -309,7 +309,8 @@ internal class DotNetIlTypeMapper(
         }
 
     /**
-     * A user-class type maps only while its class is available; `C?` maps to the same
+     * A class-like type maps while its user class is available or when it is a registered runtime
+     * classifier; `C?` maps to the same
      * `class 'C'` as `C` (the classifier lookup ignores nullability, like `string`). A GENERIC
      * user-class or interface type maps to a full [instantiation][DotNetIlValueType.GenericInstance]
      * (real CLR reified generics, the Roslyn shape — never erasure), with
@@ -323,7 +324,7 @@ internal class DotNetIlTypeMapper(
     private fun toUserClassTypeOrNull(type: IrType): DotNetIlValueType? {
         if (type !is IrSimpleType) return null
         val irClass = (type.classifier as? IrClassSymbol)?.owner ?: return null
-        val classInfo = availableClasses[irClass] ?: return null
+        val classInfo = classInfoOrNull(irClass) ?: return null
         if (irClass.typeParameters.isEmpty()) {
             return DotNetIlValueType.UserClass(classInfo)
         }

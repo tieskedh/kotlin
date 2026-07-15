@@ -865,16 +865,6 @@ class DotNetIlEmitter(
             irClass.dotNetLocalCaptureRejectionReason?.let { reason ->
                 dotNetUnsupported("$localKind '$name' $reason")
             }
-            if (
-                irClass.isDotNetCallableObject &&
-                irClass.declarations.filterIsInstance<IrField>().any {
-                    it.origin == LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE
-                }
-            ) {
-                dotNetUnsupported(
-                    "callable object '$name' captures state; capturing callable objects are not supported yet"
-                )
-            }
         } else if (irClass.isAnonymousObject) {
             dotNetUnsupported("anonymous object '$name' was not closure-converted")
         }

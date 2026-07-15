@@ -82,6 +82,20 @@ Kotlin.Function1 : Kotlin.Function { object Invoke(object) }
 Kotlin.Function2 : Kotlin.Function { object Invoke(object, object) }
 ```
 
+This identity is an invariant for subsequent callable work in this POC:
+
+- erased `Kotlin.Function0`/`Function1`/`Function2` remains the only Kotlin callable identity ABI;
+- captured values, mutable-capture cells, and bound-reference receivers are fields of generated
+  callable classes and do not introduce another callable ABI shape; and
+- optional exact-shape members or foreign delegate projections added later are execution or export
+  layers only. They cannot replace the erased interface identity or participate in ordinary Kotlin
+  function-type conversions.
+
+In particular, a bound reference must not be represented by a specialized delegate-like wrapper.
+Its generated callable object may store a receiver and may later expose an exact-shape entry point,
+but its Kotlin-facing identity remains the erased `Kotlin.FunctionN` interface and its erased
+`Invoke` remains the universal fallback.
+
 The first implementation supports arities zero through two; later arities must follow the same
 shape. A Kotlin function type maps to `Kotlin.FunctionN` solely by arity, while its common
 `kotlin.Function<R>` view maps to the non-invokable `Kotlin.Function` marker. Projections such as
@@ -168,17 +182,26 @@ object identity and executed a boxed `Int` result.
 Repository pins cover both FIR parsers and real CoreCLR execution:
 
 - `compiler/testData/codegen/dotnet/ilText/callableObjects.kt`;
+- `compiler/testData/codegen/dotnet/ilText/callableCaptures.kt`;
 - `compiler/testData/codegen/dotnet/ilText/callableObjectsRejected.kt`; and
 - `compiler/testData/codegen/dotnet/box/callableObjects.kt`.
 
+Probe series `captureabi_s3` then compiled the capturing implementation itself with both ILAsm
+versions. All four same-target and cross-runtime pairings executed immutable and mutable captures,
+a Unit-mutating closure, an open-generic cell, and primitive and reference bound receivers. The
+generated classes still implemented only the erased `Kotlin.FunctionN` interface. Captures and
+bound receivers appeared only as fields, mutable state used one invariant
+`Kotlin.Runtime.Internal.MutableRef<T>` cell, and no stateful callable had a singleton cache.
+
 ## Deferred decisions
 
-This ADR does not decide capturing and bound callable layouts, mutable reference cells, KFunction
-metadata, suspend callables, delegate adapters, exact-shape execution, CLR export, or the exact
-Kotlin metadata encoding. Those features must preserve the canonical ABI invariants above or
-explicitly revise this draft before they land. The POC's .NET Framework 4.8 compatibility is probe
-evidence for the candidate representation, not a decision about the eventual product support
-baseline.
+The POC currently uses generated fields for captures and bound receivers and one invariant generic
+mutable-reference cell. Those concrete layouts are implementation evidence, not additional
+callable identities and not standardized by this ADR. This ADR does not decide KFunction metadata,
+suspend callables, delegate adapters, exact-shape execution, CLR export, or the exact Kotlin
+metadata encoding. Those features must preserve the canonical ABI invariants above or explicitly
+revise this draft before they land. The POC's .NET Framework 4.8 compatibility is probe evidence
+for the candidate representation, not a decision about the eventual product support baseline.
 
 ## Promotion or revision
 

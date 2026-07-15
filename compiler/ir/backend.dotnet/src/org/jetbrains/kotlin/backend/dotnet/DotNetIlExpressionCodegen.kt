@@ -740,10 +740,25 @@ internal class DotNetIlExpressionCodegen(
         val [producedType, ownerToken, classInstantiation] = if (irClass.typeParameters.isEmpty()) {
             Triple(DotNetIlValueType.UserClass(classInfo) as DotNetIlValueType, classInfo.ilTypeRef, emptyList<DotNetIlValueType>())
         } else {
-            // The constructed IrType carries the (inferred or explicit) instantiation.
-            val instanceType = typeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance
+            // Source generic calls carry the instantiation on call.type. Common local-declaration
+            // lowering instead leaves the generated class type bare and appends captured outer
+            // type parameters to the constructor call's typeArguments. Both are authoritative IR
+            // encodings of the same constructed CLR owner.
+            val argumentsFromCall = call.typeArguments.map { argument ->
+                argument?.let(typeMapper::toDotNetIlValueType)
+            }
+            val instanceType = (typeMapper.toDotNetIlValueType(call.type) as? DotNetIlValueType.GenericInstance)
+                ?: argumentsFromCall
+                    .takeIf { arguments ->
+                        arguments.size == irClass.typeParameters.size && arguments.all { it != null }
+                    }
+                    ?.let { arguments ->
+                        DotNetIlValueType.GenericInstance(classInfo, arguments.filterNotNull())
+                    }
                 ?: dotNetUnsupported(
-                    "constructor call of generic class '${irClass.name.asString()}' with an unsupported instantiation"
+                    "constructor call of generic class '${irClass.name.asString()}' with unsupported " +
+                            "instantiation ${call.type.render()} and type arguments " +
+                            call.typeArguments.joinToString(prefix = "<", postfix = ">") { it?.render() ?: "_" }
                 )
             Triple(instanceType as DotNetIlValueType, instanceType.nameInSignature, instanceType.arguments)
         }
