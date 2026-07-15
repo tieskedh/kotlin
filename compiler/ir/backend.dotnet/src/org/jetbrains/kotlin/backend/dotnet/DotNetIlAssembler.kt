@@ -7,26 +7,48 @@ import java.io.File
 object DotNetIlAssembler {
     private const val PROVISION_SCRIPT = "compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
 
-    fun assembleExecutable(ilFile: File, output: File, target: DotNetTarget, messageCollector: MessageCollector) {
-        when (target) {
-            DotNetTarget.NET_FRAMEWORK -> assembleForNetFramework(ilFile, output, messageCollector)
-            DotNetTarget.NET -> assembleForNet(ilFile, output, messageCollector)
+    fun assembleExecutable(ilFile: File, output: File, target: DotNetTarget, messageCollector: MessageCollector): Boolean {
+        output.delete()
+        if (target == DotNetTarget.NET) runtimeConfigFile(output).delete()
+        return when (target) {
+            DotNetTarget.NET_FRAMEWORK -> assembleForNetFramework(ilFile, output, dll = false, messageCollector)
+            DotNetTarget.NET -> assembleForNet(ilFile, output, writeExecutableConfig = true, messageCollector)
         }
     }
 
-    private fun assembleForNetFramework(ilFile: File, output: File, messageCollector: MessageCollector) {
+    /** Assembles a non-entry-point assembly without creating an executable runtimeconfig. */
+    fun assembleLibrary(ilFile: File, output: File, target: DotNetTarget, messageCollector: MessageCollector): Boolean {
+        output.delete()
+        runtimeConfigFile(output).delete()
+        return when (target) {
+            DotNetTarget.NET_FRAMEWORK -> assembleForNetFramework(ilFile, output, dll = true, messageCollector)
+            DotNetTarget.NET -> assembleForNet(ilFile, output, writeExecutableConfig = false, messageCollector)
+        }
+    }
+
+    private fun assembleForNetFramework(
+        ilFile: File,
+        output: File,
+        dll: Boolean,
+        messageCollector: MessageCollector,
+    ): Boolean {
         val ilasm = findFrameworkIlasm()
         if (ilasm == null) {
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
                 "Cannot assemble ${output.path}: ilasm was not found. Install a .NET Framework SDK or set ILASM to ilasm.exe."
             )
-            return
+            return false
         }
-        runIlasm(ilasm, ilFile, output, dll = false, messageCollector)
+        return runIlasm(ilasm, ilFile, output, dll, messageCollector)
     }
 
-    private fun assembleForNet(ilFile: File, output: File, messageCollector: MessageCollector) {
+    private fun assembleForNet(
+        ilFile: File,
+        output: File,
+        writeExecutableConfig: Boolean,
+        messageCollector: MessageCollector,
+    ): Boolean {
         val ilasm = findModernIlasm()
         if (ilasm == null) {
             messageCollector.report(
@@ -35,10 +57,11 @@ object DotNetIlAssembler {
                         "Provision the toolchain with $PROVISION_SCRIPT, " +
                         "or set KOTLIN_DOTNET_ILASM to an ilasm.exe / KOTLIN_DOTNET_ROOT to a toolchain root."
             )
-            return
+            return false
         }
-        if (!runIlasm(ilasm, ilFile, output, dll = true, messageCollector)) return
-        writeRuntimeConfig(output)
+        if (!runIlasm(ilasm, ilFile, output, dll = true, messageCollector)) return false
+        if (writeExecutableConfig) writeRuntimeConfig(output)
+        return true
     }
 
     private fun runIlasm(ilasm: File, ilFile: File, output: File, dll: Boolean, messageCollector: MessageCollector): Boolean {
@@ -76,7 +99,7 @@ object DotNetIlAssembler {
     private fun writeRuntimeConfig(dll: File) {
         val runtimeVersion = findModernDotNetHost()?.let(::newestInstalledRuntimeVersion)
         val [major, minor] = runtimeVersion ?: listOf(10, 0)
-        val configFile = (dll.parentFile ?: File(".")).resolve("${dll.nameWithoutExtension}.runtimeconfig.json")
+        val configFile = runtimeConfigFile(dll)
         configFile.writeText(
             """
             {
@@ -92,6 +115,9 @@ object DotNetIlAssembler {
             """.trimIndent()
         )
     }
+
+    private fun runtimeConfigFile(dll: File): File =
+        (dll.parentFile ?: File(".")).resolve("${dll.nameWithoutExtension}.runtimeconfig.json")
 
     /** Returns `[major, minor]` of the newest `shared/Microsoft.NETCore.App/<version>` in [dotnetHost]'s root, or null. */
     private fun newestInstalledRuntimeVersion(dotnetHost: File): List<Int>? {

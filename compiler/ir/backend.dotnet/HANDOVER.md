@@ -7,7 +7,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Add generic-outer inner classes",
+- Branch `dotnet`; latest functional work is "[DotNet] Establish runtime assembly boundary",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
@@ -349,6 +349,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   secondary construction. The golden prints
   `outer,true,7,outer,9,11,outer,13,outer,outer,middle,17,outer,19` identically on both runtimes.
   The fresh full DotNet suite is 374/0/0/0 across eight XML files.
+- The runtime-foundation continuation deliberately precedes callable lowering. Every assembled
+  executable now carries an AssemblyRef to and is emitted beside `Kotlin.Runtime.dll`, built from
+  one TFM-neutral IL definition by the selected target's ILAsm. ABI-major-1 identity is fixed as
+  culture-neutral, unsigned `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null`; compatible
+  releases do not change AssemblyVersion, strong naming requires a new identity/major, and the API
+  floor stays inside .NET Framework 4.8 `mscorlib` while remaining CoreCLR-compatible. Namespace
+  ownership is `Kotlin` for language ABI, `Kotlin.Runtime` for runtime services, and
+  `Kotlin.Runtime.Internal` for compiler support. The only public type is a deliberately memberless
+  `Kotlin.Runtime.RuntimeInfo` marker: there is still no callable ABI or bootstrap-call contract.
+  `runtimeprobe_s1` resolved that type in consumers assembled by modern 10.0.9 and Framework 4.8
+  ILAsm; all same-target and cross-runtime pairings ran, and both runtime binaries reported the
+  same logical identity. Box infrastructure now requires both the sibling runtime and program
+  AssemblyRef. The compiler reserves the runtime identity, omits a library runtimeconfig, and
+  propagates ILAsm success so stale program artifacts cannot masquerade as fresh output.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -420,13 +434,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit the smallest callable-object slice.** Start with non-capturing, non-suspend lambdas and
-   direct function references without reflection. Determine which common callable-reference/name/
-   popup phases can produce stable synthetic classes, how their `invoke` surface maps without a
-   Kotlin runtime class library, and whether singleton reuse is observable. Probe direct calls,
-   function-typed parameters/locals, top-level and member references, bound versus unbound owners,
-   overload identity, and generic signatures before lifting any gate. Keep captured lambdas,
-   mutable shared captures, suspend conversion, and reflection metadata separate.
+1. **Choose the callable ABI inside the landed runtime boundary.** The representation audit and
+   `callable_s1` prove that non-capturing `System.Func`/`System.Action` delegates are mechanically
+   viable, but that is not yet an ABI decision. `callableabi_s1` now proves the stronger hybrid
+   candidate on both runtimes: variant Kotlin-owned `Function0`/`Function1`/`Function2` interfaces,
+   primitive instantiations, a real singleton `Kotlin.Unit` result, cached callable-object identity,
+   direct `Func` adaptation, and the necessarily explicit `(P) -> Unit` ⇄ `Action<P>` adapters all
+   assemble and print `42,10,True,action,True,variance,True` identically on CoreCLR 10.0.9 and
+   Framework 4.8. The likely decision is therefore Kotlin-owned interfaces as the canonical
+   Kotlin-to-Kotlin ABI, with delegates only as interop/optimization views; confirm the frontend
+   type mapping and exact lowering shape before declaring those public types. Then pin direct
+   calls, function-typed parameters/locals, top-level and member references, bound versus unbound
+   owners, overload identity, generic signatures, and singleton reuse. Keep captured lambdas,
+   mutable shared captures, suspend conversion, and reflection metadata separate. After the
+   callable slice lands, migrate `<KotlinIl>` helpers into `Kotlin.Runtime.Internal` rather than
+   leaving duplicate module-local copies.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
