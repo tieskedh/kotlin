@@ -677,15 +677,11 @@ class DotNetIlEmitter(
         }
 
         val moduleBody = buildString {
-            val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
             for (file in files) {
                 // Per file: user classes first, then the file facade (the deterministic order
                 // the goldens freeze).
                 for (irClass in topLevelClassesByFile.getValue(file)) {
-                    renderedClasses[irClass]?.let { rendered ->
-                        requiredHelpers += rendered.requiredRuntimeHelpers
-                        append(rendered.ilText)
-                    }
+                    renderedClasses[irClass]?.let { rendered -> append(rendered.ilText) }
                 }
                 // Facade members in declaration order, the `.cctor` first: static backing
                 // fields (const `literal` fields interleaved in declaration order), then the
@@ -722,22 +718,12 @@ class DotNetIlEmitter(
                     }
                 }
                 if (facadeMethods.isEmpty() && facadeFields.isEmpty() && facadePropertyBlocks.isEmpty()) continue
-                facadeMethods.flatMapTo(requiredHelpers) { it.requiredRuntimeHelpers }
                 DotNetIlClassCodegen(
                     fileClassNames.getValue(file),
                     facadeMethods.map { it.ilText },
                     facadeFields,
                     facadePropertyBlocks,
                     hasClassInitializer = renderedStaticInitializers.containsKey(file),
-                ).generate(this)
-            }
-            // The shared runtime helper class (see DotNetIlRuntimeHelper) comes last, and only
-            // when some emitted method actually called one of its helpers.
-            if (requiredHelpers.isNotEmpty()) {
-                DotNetIlClassCodegen(
-                    DOTNET_RUNTIME_HELPER_CLASS_NAME,
-                    requiredHelpers.map { it.methodIlText },
-                    exported = false,
                 ).generate(this)
             }
         }
@@ -1500,7 +1486,6 @@ class DotNetIlEmitter(
         val renderedFields = mutableListOf<String>()
         val renderedMethods = mutableListOf<String>()
         val renderedProperties = mutableListOf<String>()
-        val requiredHelpers = linkedSetOf<DotNetIlRuntimeHelper>()
         var hasClassInitializer = false
 
         fun renderMemberFunction(member: IrSimpleFunction) {
@@ -1516,7 +1501,6 @@ class DotNetIlEmitter(
                 facadeClassInfoByFile = facadeClassInfoByFile,
             ).render()
             renderedMethods += rendered.ilText
-            requiredHelpers += rendered.requiredRuntimeHelpers
         }
 
         for (declaration in irClass.declarations) {
@@ -1532,7 +1516,6 @@ class DotNetIlEmitter(
                         facadeClassInfoByFile = facadeClassInfoByFile,
                     ).render()
                     renderedMethods += rendered.ilText
-                    requiredHelpers += rendered.requiredRuntimeHelpers
                 }
                 is IrAnonymousInitializer ->
                     dotNetUnsupported("internal: init block of class '$name' survived InitializersLowering")
@@ -1561,7 +1544,6 @@ class DotNetIlEmitter(
                         throw DotNetIlUnsupportedClassException(declaration, e.reason)
                     }
                     renderedNestedClasses += rendered.ilText.trimEnd('\n').prependIndent("  ") + "\n"
-                    requiredHelpers += rendered.requiredRuntimeHelpers
                 }
                 is IrField -> {
                     // JVM precedent: FIR's interface-delegation field is an ordinary private
@@ -1610,7 +1592,6 @@ class DotNetIlEmitter(
                             facadeClassInfoByFile = facadeClassInfoByFile,
                         ).render()
                         renderedMethods.add(0, rendered.ilText)
-                        requiredHelpers += rendered.requiredRuntimeHelpers
                         hasClassInitializer = true
                     }
                     !declaration.isFakeOverride -> renderMemberFunction(declaration)
@@ -1673,7 +1654,7 @@ class DotNetIlEmitter(
                 genericParameters = irClass.typeParameters.renderDotNetIlGenericParameters(typeMapper),
             ).generate(this)
         }
-        return RenderedClass(ilText, requiredHelpers)
+        return RenderedClass(ilText)
     }
 
     /**
@@ -1912,14 +1893,8 @@ class DotNetIlEmitter(
         else -> "field '${name.asString()}'"
     }
 
-    /**
-     * A successfully rendered user class: its IL text plus the [runtime helpers][DotNetIlRuntimeHelper]
-     * its member bodies called, the class-level counterpart of [DotNetIlRenderedMethod].
-     */
-    private class RenderedClass(
-        val ilText: String,
-        val requiredRuntimeHelpers: Set<DotNetIlRuntimeHelper>,
-    )
+    /** A successfully rendered user class and its complete IL text. */
+    private class RenderedClass(val ilText: String)
 
     /**
      * A [DotNetIlUnsupportedException] tagged with the nested class whose recursive render

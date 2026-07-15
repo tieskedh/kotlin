@@ -56,8 +56,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   foundational type was the deliberately memberless static marker
   `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
   The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
-  removes stale program outputs when either ILAsm path fails. The existing module-local
-  `<KotlinIl>` helper remains in generated assemblies pending its own explicit runtime migration.
+  removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
+  once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`; follows the JVM split between logical generic function types and erased
   executable descriptors, with CLR `object` replacing JVM Object):
@@ -1106,12 +1106,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     member extensions), `box/genericInheritanceChains.kt` (multi-hop constructor/state flow,
     generic virtual/super dispatch, inherited generic-interface mapping, open base/interface
     upcasts, cross-view identity and every supported composite base-argument family).
-- Shared runtime code (e.g. the Kotlin-parity `Double.toString` rendering) is hand-written IL on the
-  synthetic module-private `'<KotlinIl>'` class (`DotNetIlRuntimeHelpers`) — the CLR-side stand-in
-  for the JVM's `kotlin.jvm.internal.Intrinsics` runtime until a real .NET stdlib exists. The class
-  is emitted at most once per module and only when a rendered method required one of its helpers.
-  Every mscorlib member signature used in helper IL must be verified by assembling and running an
-  ilasm probe before it lands in codegen.
+- Shared compiler support (currently Kotlin-parity `Double.toString` rendering) is hand-written IL
+  in `Kotlin.Runtime`. Generated modules call the public CLR member
+  `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; metadata visibility must be public for
+  cross-assembly access, while the reserved namespace keeps it outside the Kotlin-facing API.
+  `runtimehelper_s1` assembled the runtime and a calling consumer with modern 10.0.9 and Framework
+  4.8 ILAsm; all four same-target/cross-runtime pairings printed identical Kotlin-shaped values.
+  Generated modules contain neither the helper body nor a synthetic `<KotlinIl>` type, and the old
+  per-method/per-class helper-requirement bookkeeping no longer exists. Every mscorlib member
+  signature used in helper IL must still be verified by assembling and running an ILAsm probe
+  before it lands in codegen.
 
 ## Box tests
 

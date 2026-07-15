@@ -1,7 +1,7 @@
-// Executable twin of the doubleToString.kt ilText golden: the '<KotlinIl>'::DoubleToString
-// runtime helper must render Kotlin/JVM Double.toString shapes on real CoreCLR, which natively
-// renders -0.0 as "-0", NaN as "NaN" but infinities as the unicode symbol, and uses a different
-// decimal/E-notation switch than Kotlin's [1e-3, 1e7) window.
+// Executable twin of the doubleToString.kt ilText golden: the Kotlin.Runtime.Internal
+// DoubleFormatting helper must render Kotlin/JVM Double.toString shapes on real CoreCLR, which
+// natively renders -0.0 as "-0", NaN as "NaN" but infinities as the unicode symbol, and uses a
+// different decimal/E-notation switch than Kotlin's [1e-3, 1e7) window.
 
 fun render(d: Double): String = "" + d
 

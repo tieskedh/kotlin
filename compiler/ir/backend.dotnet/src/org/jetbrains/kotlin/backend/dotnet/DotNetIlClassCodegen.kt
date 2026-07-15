@@ -11,8 +11,8 @@ package org.jetbrains.kotlin.backend.dotnet
  * interface
  * ([isInterface]: `.class interface public abstract
  * auto ansi` with NO `extends` line, no `sealed`, no `beforefieldinit` — the exact flag set
- * probe-verified, `ifaceprobe_s1`), or, with [exported] = false, the module-private runtime
- * helper class (see [DotNetIlRuntimeHelper]). [baseClassRef] is the already-rendered IL type
+ * probe-verified, `ifaceprobe_s1`), or a compiler-synthesized local class with [exported] = false.
+ * [baseClassRef] is the already-rendered IL type
  * reference of the base class of the inheritance model (`extends 'demo.Base'`; assembly-local,
  * forward references legal — probe-verified, `inheritprobe_s1`); without one the class extends
  * the corelib `System.Object`, the IL spelling of `kotlin.Any`. [interfaceRefs] are the

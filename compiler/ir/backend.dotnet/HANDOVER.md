@@ -397,7 +397,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   callable types without declaring the runtime AssemblyRef. Header emission now derives that ref
   from the final post-eviction IL body, so both ILAsm versions assemble callable-bearing library IL
   without autodetection; executables keep the runtime-foundation ref unconditionally.
-  The fresh full DotNet suite is 380/0/0/0 across eight XML files.
+- The last module-local runtime helper has moved into the established runtime boundary. Generated
+  code now calls the cross-assembly member
+  `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
+  because consumers live in other assemblies, but the reserved namespace identifies it as a
+  compiler/runtime contract rather than Kotlin-facing API. The runtime owns the helper body once,
+  generated modules no longer contain `<KotlinIl>`, and the now-empty method/class helper-tracking
+  path has been removed. `runtimehelper_s1` compiled the same caller and runtime with modern 10.0.9
+  and Framework 4.8 ILAsm; all four same-target/cross-runtime pairings printed
+  `1.0,-0.0,1.0E20,1.0E-5`. All seven affected exact goldens assemble cleanly under both ILAsm
+  versions, and the read-only PSI/LightTree IL matrix is clean. The fresh full DotNet suite remains
+  380/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -469,11 +479,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Move `<KotlinIl>` helpers into `Kotlin.Runtime.Internal`.** The runtime assembly and canonical
-   callable boundary are now available; migrate shared helper IL without changing behavior or
-   leaving a compatibility call back into generated modules. Preserve the Framework-4.8 API floor,
-   probe every moved member reference on both runtimes, and keep helper methods compiler-internal.
-2. **Add capturing callable objects and mutable reference cells.** Reuse the common/JVM closure
+1. **Add capturing callable objects and mutable reference cells.** Reuse the common/JVM closure
    conversion shape, keep the erased Invoke ABI unchanged, and separate immutable capture fields
    from Kotlin mutable local cells. Bound references belong in this slice; KFunction metadata,
    suspend callables, delegate adapters, and typed fast paths still remain later decisions.
