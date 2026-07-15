@@ -1,7 +1,8 @@
 // Non-capturing callable objects use Kotlin-owned, arity-erased interfaces in Kotlin.Runtime.
-// Invoke boxes its logical arguments/results through object slots, Unit uses its singleton there,
-// and one static field caches each source callable expression. The common Function marker,
-// extension receivers, explicit implementations, and nullable callable storage share that ABI.
+// Generated non-Unit callables also expose an optional typed capability on the same object;
+// guarded calls use it when the static shape matches and otherwise use erased Invoke. Unit uses
+// its singleton at the erased boundary, and one static field caches each source expression. The
+// common Function marker, explicit implementations, and nullable storage share the identity ABI.
 
 private class Doubler : (Int) -> Int {
     override fun invoke(value: Int): Int = value + value
@@ -16,6 +17,10 @@ fun mark(): Unit {
 fun cached(): () -> Int = { 7 }
 
 fun <T> preserve(function: () -> T): () -> T = function
+
+fun callOne(function: (Int) -> Int, value: Int): Int = function(value)
+
+fun <T> callGeneric(function: (T) -> T, value: T): T = function(value)
 
 fun main() {
     val zero: () -> Int = { 40 }
@@ -34,6 +39,7 @@ fun main() {
     val broad: (Any) -> String = { "variance" }
     val narrow: (String) -> Any = broad
     println(broad === narrow)
+    println(narrow("reference variance"))
 
     val primitive: () -> Int = { 42 }
     val widened: () -> Any = primitive
@@ -63,6 +69,8 @@ fun main() {
 
     val implemented: (Int) -> Int = Doubler()
     println(implemented(21))
+    println(callOne(one, 40))
+    println(callGeneric({ value: String -> value }, "generic exact"))
 
     val nullableCallable: (() -> Int)? = null
     println(nullableCallable == null)

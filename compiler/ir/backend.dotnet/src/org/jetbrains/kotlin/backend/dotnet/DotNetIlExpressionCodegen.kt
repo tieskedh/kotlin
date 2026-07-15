@@ -18,8 +18,11 @@ import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
@@ -1165,6 +1168,7 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
+        if (emitExactCallableCallOrNull(call, expectedType)) return
         val returnType = emitCall(call)
         val producedType = (returnType as? DotNetIlReturnType.Value)?.type
         if (
@@ -1178,6 +1182,102 @@ internal class DotNetIlExpressionCodegen(
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
+    }
+
+    /**
+     * Calls the optional typed capability of a Kotlin FunctionN when the receiver provides the
+     * exact static shape, otherwise falls back to the stable object-shaped Invoke slot. The
+     * receiver and every argument are evaluated once into locals before the runtime test, so
+     * both branches preserve source order and side effects. An older module or an explicit user
+     * implementation simply fails `isinst` and takes the erased path.
+     */
+    private fun emitExactCallableCallOrNull(call: IrCall, expectedType: DotNetIlValueType): Boolean {
+        if (!call.symbol.owner.isDotNetErasedCallableInvoke()) return false
+        val receiver = call.arguments.firstOrNull() ?: return false
+        val receiverType = receiver.type as? IrSimpleType ?: return false
+        val receiverClass = (receiverType.classifier as? IrClassSymbol)?.owner ?: return false
+        val arity = receiverClass.dotNetFixedFunctionArityOrNull() ?: return false
+        if (call.arguments.size != arity + 1 || receiverType.arguments.size != arity + 1) return false
+        val callArguments = (0 until arity).map { index ->
+            call.arguments[index + 1] ?: return false
+        }
+
+        val logicalIrTypes = receiverType.arguments.map { argument ->
+            (argument as? IrTypeProjection)?.type ?: return false
+        }
+        // A default FunctionN<P..., R> view introduced only as a KFunction execution cast still
+        // contains the interface's own uninstantiated type parameters. It is not an exact static
+        // shape; the erased path remains correct until that lowering preserves its arguments.
+        if (logicalIrTypes.any { type ->
+                val classifier = (type as? IrSimpleType)?.classifier
+                classifier is IrTypeParameterSymbol &&
+                        classifier.owner.parent == receiverClass
+            }
+        ) {
+            return false
+        }
+
+        val logicalTypes = logicalIrTypes.map { type ->
+            typeMapper.toDotNetIlValueType(type) ?: return false
+        }
+        val resultType = logicalTypes.last()
+        if (resultType != expectedType && !resultType.isDotNetAssignableTo(expectedType)) return false
+        val exactType = DotNetRuntimeTypes.exactFunctionType(logicalTypes) ?: return false
+        val erasedReceiverType = DotNetRuntimeTypes.fixedFunctionType(arity)
+
+        emitExpression(receiver, erasedReceiverType)
+        val receiverSlot = spillToSyntheticLocal(erasedReceiverType, "<callableReceiver>")
+        val argumentSlots = callArguments.mapIndexed { index, argument ->
+            val parameterType = logicalTypes[index]
+            emitExpression(argument, parameterType)
+            spillToSyntheticLocal(parameterType, "<callableArgument>")
+        }
+
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        methodContext.emit("isinst ${exactType.nameInSignature}", pops = 1, pushes = 1)
+        val exactReceiverSlot = spillToSyntheticLocal(exactType, "<exactCallable>")
+        val fallbackLabel = methodContext.nextLabel("callableErasedFallback")
+        val joinLabel = methodContext.nextLabel("callableExactEnd")
+        methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
+        methodContext.emitBranch("brfalse", fallbackLabel, pops = 1)
+
+        methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
+        argumentSlots.forEach { slot ->
+            methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+        }
+        methodContext.emit(
+            DotNetRuntimeTypes.exactInvokeCallInstruction(exactType),
+            pops = arity + 1,
+            pushes = 1,
+        )
+        val resultSlot = spillToSyntheticLocal(resultType, "<callableResult>")
+        methodContext.emitGoto(joinLabel)
+
+        methodContext.emitLabel(fallbackLabel)
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        argumentSlots.zip(logicalTypes.take(arity)).forEach { entry ->
+            val slot = entry.first
+            val parameterType = entry.second
+            methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+            if (!parameterType.isDotNetAssignableTo(DotNetIlValueType.Object)) {
+                val coercion = dotNetWideningCoercionOrNull(parameterType, DotNetIlValueType.Object)
+                    ?: dotNetUnsupported(
+                        "callable argument cannot be converted from ${parameterType.nameInSignature} to object"
+                    )
+                methodContext.emit(coercion, pops = 1, pushes = 1)
+            }
+        }
+        methodContext.emit(
+            DotNetRuntimeTypes.erasedInvokeCallInstruction(arity),
+            pops = arity + 1,
+            pushes = 1,
+        )
+        emitErasedCallableObjectAs(resultType)
+        methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+
+        methodContext.emitLabel(joinLabel)
+        methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+        return true
     }
 
     /** Narrows an erased callable result from object to the logical Kotlin call result type. */
