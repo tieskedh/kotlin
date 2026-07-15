@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(local-data-class audit after data objects).
+(open-type-parameter default-placeholder audit after local data classes).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -15,11 +15,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   RuntimeException migration-gate decision (`acde56d80`) and the bounded top-level data-class and
   masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
   by array-backed data classes (`a43d3de4d`), constructor defaults (`d6deff4f5`), and generic
-  data-class equality (`c1597ef12`) and data objects in the current functional slice.
+  data-class equality (`c1597ef12`), data objects (`a2a418bfd`), and local data classes in the
+  current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **436 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **440 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -569,8 +570,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   supported primitive vectors plus supported reference-element `Array<E>`. Unsupported vector
   shapes still reject through their owning mapper and evict the data class whole. The Char-array
   pin exposed CLR's duplicated-bits boxed Char hash; `Intrinsics.HashCode` now restores the Kotlin
-  numeric code centrally, with direct Any coverage. Local classes and data objects remain gated
-  whole-class.
+  numeric code centrally, with direct Any coverage. Ordinary unsupported local classes remain
+  gated whole-class.
   `dataclass_s1` assembled the exact positive golden with modern 10.0.9 and Framework 4.8 ILAsm;
   the focused positive/hostile two-parser matrix is 10/0/0/0, including real CoreCLR execution,
   and the fresh full DotNet suite is 408/0/0/0.
@@ -606,6 +607,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   created through the private constructor compares equal with the same hash/text. Both parser box
   variants pass with modern and Framework-selected ILAsm, and the fresh full DotNet suite is
   436/0/0/0 across eight XML files.
+  Local data classes now compose with common local-declaration lifting and closure conversion.
+  Their private lifted CLR class stores immutable, mutable-cell, outer-receiver, and local-function
+  captures, and constructor/default/copy paths propagate that state. Generated components,
+  equality, hash, and text still observe only source primary-constructor properties. Generic local
+  data classes keep the reified class/private-erased-view split; the generic-data lowering filters
+  common `BOUND_RECEIVER_PARAMETER`/`BOUND_VALUE_PARAMETER` constructor state before selecting
+  equality properties. The exact golden assembles with modern 10.0.9 and Framework 4.8 ILAsm, both
+  parser boxes pass with modern and Framework-selected ILAsm, and the fresh full DotNet suite is
+  440/0/0/0 across eight XML files. A deliberately separate boundary surfaced: an omitted default
+  argument whose mapped type is an open `T` still lacks a CLR `default(T)` placeholder emission;
+  explicit generic copy arguments work and preserve captures.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -688,13 +700,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Extend data classes one representation boundary at a time.** Generic data-class equality now
-   preserves erased Kotlin declaration identity through a private CLR view without weakening the
-   backend's reified generic model, and data objects now reuse the existing singleton identity plus
-   shared generated-member machinery. Next audit local data classes: start from the common local-
-   declaration lifting/closure-conversion output, determine which capture and generated-member
-   shapes are already representable, and keep the class whole-gated until both ILAsm versions and
-   real runtime behavior agree.
+1. **Provide a general open-type-parameter default placeholder.** Local generic data classes expose
+   the remaining default-argument boundary cleanly: a generated omitted argument of mapped type
+   `T` needs an unobservable CLR `default(T)` value before the mask-owning helper overwrites it.
+   Audit every default-call site rather than special-casing data-class `copy`; likely emission is a
+   temporary local initialized with `initobj !!0`/`!0`, then loaded as the placeholder. Prove value-
+   and reference-type instantiations, constructors/functions/copy, both generic owners and generic
+   methods, evaluation order, both ILAsm implementations, and real runtime behavior before lifting
+   the current nullable-open-type rejection.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 

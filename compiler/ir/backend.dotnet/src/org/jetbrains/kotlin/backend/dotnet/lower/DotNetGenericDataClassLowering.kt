@@ -6,6 +6,8 @@
 package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.ModuleLoweringPass
+import org.jetbrains.kotlin.backend.common.lower.BOUND_RECEIVER_PARAMETER
+import org.jetbrains.kotlin.backend.common.lower.BOUND_VALUE_PARAMETER
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
@@ -96,8 +98,14 @@ internal class DotNetGenericDataClassLowering(private val context: DotNetBackend
         } ?: return
         val primaryConstructor = irClass.primaryConstructor
             ?: error("Internal .NET backend error: data class '${irClass.name}' has no primary constructor")
+        // Local-declaration lowering prepends closure state to the constructor. It
+        // belongs to the generated class, but not to the source data-class identity.
         val properties = primaryConstructor.parameters
-            .filter { it.kind == IrParameterKind.Regular }
+            .filter { parameter ->
+                parameter.kind == IrParameterKind.Regular &&
+                        parameter.origin != BOUND_VALUE_PARAMETER &&
+                        parameter.origin != BOUND_RECEIVER_PARAMETER
+            }
             .map { parameter ->
                 irClass.properties.single { property ->
                     property.name == parameter.name
