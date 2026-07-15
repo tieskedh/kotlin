@@ -59,7 +59,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
-  series `callableabi_s2`; follows the JVM split between logical generic function types and erased
+  series `callableabi_s2` and `captureabi_s3`; follows the JVM split between logical generic
+  function types and erased
   executable descriptors, with CLR `object` replacing JVM Object):
   Kotlin-to-Kotlin callable storage uses the public non-generic runtime interfaces
   `Kotlin.Function`, `Kotlin.Function0`, `Kotlin.Function1`, and `Kotlin.Function2`; it never uses
@@ -73,7 +74,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   arguments and uses `unbox.any` for primitives, nullable primitives, and open `T`; invoke exit
   boxes values into the canonical object result. A Unit result executes the ordinary CLR-void
   body and then returns the singleton `Kotlin.Unit.INSTANCE`. As a prototype implementation policy,
-  non-capturing lambda/reference classes cache one instance in their own `INSTANCE` field; the
+  constructor-empty non-capturing lambda/reference classes cache one instance in their own
+  `INSTANCE` field; stateful callable classes are always freshly constructed. The
   field is created after initializer cleanup and the normal static-initializer sweep emits its
   `.cctor`. Extension receivers occupy
   the first ordinary erased argument, and explicit user classes implementing a function type emit
@@ -84,11 +86,25 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   function arguments collide; the existing CLR method-identity gate rejects both overloads and
   lets unrelated declarations survive, matching the JVM platform-clash category. `callableabi_s2`
   assembled an erased consumer/runtime pair with modern 10.0.9 and Framework 4.8 ILAsm and all
-  four same/cross-runtime pairings ran with identity and boxed-Int invocation intact. Pins:
-  `ilText/callableObjects.kt`, `ilText/callableObjectsRejected.kt`, and
-  `box/callableObjects.kt`. STAYS REJECTED, loudly: capturing/bound callable objects, mutable
-  reference cells, suspend callables, callable arity above 2, KFunction storage/reflection
-  metadata, delegate adapters, and typed fast-path entry points. Kotlin metadata serialization and
+  four same/cross-runtime pairings ran with identity and boxed-Int invocation intact.
+  Capturing lambda and bound-reference classes keep exactly that callable identity. Immutable
+  captured values and bound receivers are private fields of the generated class, never delegate
+  wrappers or additional callable ABI shapes. `SharedVariablesLowering` runs before local
+  declaration closure conversion and replaces each captured mutable variable with one shared,
+  invariant `[Kotlin.Runtime]Kotlin.Runtime.Internal.MutableRef<T>` cell. Generated callables
+  capture the cell reference, so sibling closures and later outer writes share storage without
+  boxing the cell's primitive, nullable-primitive, reference, or open-`T` element. The cell and
+  generated fields are compiler/runtime layout details, not Kotlin callable identity.
+  Common closure conversion adds captured type arguments to constructor calls even when their IR
+  class type is bare; codegen reconstructs that generated generic instance from the constructor
+  type arguments. An erased Unit `Invoke` whose lowered block falls through materializes
+  `Kotlin.Unit.INSTANCE` before returning its mandatory object result. `captureabi_s3` assembled
+  compiler-produced capturing consumers/runtimes with modern 10.0.9 and Framework 4.8 ILAsm; all
+  four same/cross-runtime pairings executed immutable, mutable, Unit, generic-cell, and bound
+  receiver cases. Pins: `ilText/callableObjects.kt`, `ilText/callableCaptures.kt`,
+  `ilText/callableObjectsRejected.kt`, and `box/callableObjects.kt`. STAYS REJECTED, loudly:
+  suspend callables, callable arity above 2, KFunction storage/reflection metadata, delegate
+  adapters, and typed fast-path entry points. Kotlin metadata serialization and
   .NET-facing typed export surfaces must preserve the logical function arguments in later slices;
   the canonical interface encodes none of those arguments, so CLR reflection alone cannot
   reconstruct the Kotlin type even if later optimization members are visible. Promotion of the
@@ -386,10 +402,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Local-class and anonymous-object model (probe series `localprobe_s1`–`_s2` and
   `anonprobe_s1`–`_s2`; common/JVM precedent): the DotNet wrappers run
   `InventNamesForLocalClasses`, `DotNetAnonymousObjectSuperConstructorLowering`,
-  `InventNamesForLocalFunctions`, `LocalDeclarationsLowering`, and
+  `InventNamesForLocalFunctions`, callable-reference lowering, `SharedVariablesLowering`,
+  `LocalDeclarationsLowering`, and
   `LocalDeclarationPopupLowering` before inner classes and initializer merging. Closure conversion
-  enters a body containing named local classes, anonymous objects, and/or explicit named local
-  functions only when it contains NO lambda/function-reference callable-object shape. A local in
+  handles named local classes, anonymous objects, explicit named local functions, and lowered
+  lambda/function-reference callable classes in the same phase order used by the common/JVM
+  pipeline. A local in
   a top-level function or property becomes a module-private top-level CLR type; a local in a member
   or initializer becomes a private nested CLR type. Constructors are widened to public metadata
   inside that inaccessible type so the facade/enclosing type can instantiate them
@@ -422,12 +440,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   initializer locals, extensions, named-class/anonymous-object callers, and generic function/class
   scopes compose. Common name invention supplies readable paths; the metadata gates reserve user
   methods/accessors first and append the smallest `$n` suffix only to a colliding generated local.
-  Mutable local captures STAY REJECTED with a class/function diagnostic because this backend has
-  no `SharedVariablesLowering`; copying a mutable value would break aliasing. Crossinline, inline,
-  and suspend locals likewise stay rejected without their respective lowering models. A body
-  mixing a supported local declaration with a lambda or function reference stays wholly
-  unlowered, preserving its function-level rejection rather than partially converting callable
-  objects. Unsupported anonymous supertypes reject that metadata subtree and real users through
+  Shared-variable lowering rewrites captured mutable locals to one invariant runtime cell before
+  closure conversion, preventing value copies from breaking aliasing; a raw mutable capture that
+  somehow survives that phase is still rejected defensively. Crossinline, inline, and suspend
+  locals likewise stay rejected without their respective lowering models. Unsupported anonymous
+  supertypes reject that metadata subtree and real users through
   the ordinary class gates. Pins: `ilText/localClasses.kt`, `ilText/localClassesRejected.kt`,
   `ilText/anonymousObjects.kt`, `ilText/anonymousObjectsRejected.kt`, `ilText/localFunctions.kt`,
   and `ilText/localFunctionsRejected.kt`; runtime: `box/localClasses.kt`,

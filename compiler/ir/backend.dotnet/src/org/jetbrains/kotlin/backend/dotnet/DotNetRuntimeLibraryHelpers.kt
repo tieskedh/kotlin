@@ -72,6 +72,20 @@ internal object DotNetRuntimeLibraryHelpers {
     val ilText: String = """
             |.namespace Kotlin.Runtime.Internal
             |{
+            |  .class public auto ansi sealed beforefieldinit 'MutableRef`1'<'T'>
+            |         extends [mscorlib]System.Object
+            |  {
+            |    .field public !0 'element'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ret
+            |    }
+            |  }
+            |
             |  .class public abstract sealed auto ansi beforefieldinit DoubleFormatting
             |         extends [mscorlib]System.Object
             |  {

@@ -1,13 +1,18 @@
 // Fixed Function0/1/2 objects on CoreCLR: erased invocation bridges, direct invocation,
 // function-typed plumbing, direct top-level references, Unit materialization, singleton reuse,
 // Kotlin variance across both reference and primitive slots, open generic type arguments, the
-// Function marker, extension receivers, explicit implementations, and nullable callable storage.
-// Captures, KFunction reflection, suspend callables, and delegate adapters remain separate.
+// Function marker, extension receivers, explicit implementations, nullable callable storage,
+// immutable/mutable captures, and bound references. KFunction reflection, suspend callables, and
+// delegate adapters remain separate.
 
 private var unitCalls: Int = 0
 
 private class Doubler : (Int) -> Int {
     override fun invoke(value: Int): Int = value + value
+}
+
+private class Offset(private val delta: Int) {
+    fun apply(value: Int): Int = value + delta
 }
 
 fun increment(value: Int): Int = value + 1
@@ -17,6 +22,30 @@ fun mark(): Unit {
 }
 
 fun cached(): () -> Int = { 7 }
+
+fun captured(value: Int): () -> Int = { value }
+
+fun capturedPair(left: Int, right: Int): () -> Int = { left + right }
+
+fun mutableCounter(start: Int): () -> Int {
+    var value = start
+    return {
+        value = value + 1
+        value
+    }
+}
+
+fun boundIncrement(value: Int): () -> Int = value::inc
+
+fun boundOffset(delta: Int): (Int) -> Int = Offset(delta)::apply
+
+fun <T> genericMutable(initial: T, replacement: T): () -> T {
+    var value = initial
+    return {
+        value = replacement
+        value
+    }
+}
 
 fun call0(function: () -> Int): Int = function()
 
@@ -91,5 +120,44 @@ fun box(): String {
 
     val nullableCallable: (() -> Int)? = null
     if (nullableCallable != null) return "fail 23: nullable callable"
+
+    val immutable = captured(42)
+    if (immutable() != 42) return "fail 24: immutable primitive capture"
+    if (captured(42) === captured(42)) return "fail 25: capturing callable was cached"
+    val immutableWidened: () -> Any = immutable
+    if (immutable !== immutableWidened) return "fail 26: capture variance identity"
+    if (capturedPair(20, 22)() != 42) return "fail 27: multiple captures"
+
+    val capturedTextValue = "captured reference"
+    val capturedText: () -> String = { capturedTextValue }
+    if (capturedText() != capturedTextValue) return "fail 28: reference capture"
+
+    val counter = mutableCounter(40)
+    if (counter() != 41 || counter() != 42) return "fail 29: mutable capture"
+
+    var shared = 1
+    val readShared: () -> Int = { shared }
+    val writeShared: (Int) -> Unit = { value -> shared = value }
+    shared = 20
+    if (readShared() != 20) return "fail 30: outer write did not reach shared cell"
+    writeShared(42)
+    if (readShared() != 42 || shared != 42) return "fail 31: closures do not share one cell"
+
+    var nullableCell: Int? = null
+    val setNullable: () -> Int? = {
+        nullableCell = 42
+        nullableCell
+    }
+    if (setNullable() != 42 || nullableCell != 42) return "fail 32: nullable primitive cell"
+
+    if (genericMutable(1, 42)() != 42) return "fail 33: open generic primitive cell"
+    if (genericMutable("before", "after")() != "after") return "fail 34: open generic reference cell"
+
+    val boundPrimitive = boundIncrement(41)
+    if (boundPrimitive() != 42) return "fail 35: bound primitive receiver"
+    val boundWidened: () -> Any = boundPrimitive
+    if (boundPrimitive !== boundWidened) return "fail 36: bound reference variance identity"
+    if (boundIncrement(1) === boundIncrement(1)) return "fail 37: bound reference was cached"
+    if (boundOffset(2)(40) != 42) return "fail 38: bound class receiver"
     return "OK"
 }

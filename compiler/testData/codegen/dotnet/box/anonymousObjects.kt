@@ -122,6 +122,15 @@ fun mixedNamedAndAnonymous(seed: Int): Int {
     return value.value()
 }
 
+fun mutableAnonymousCapture(): Int {
+    var value = 1
+    val source: AnonymousIntValue = object : AnonymousIntValue {
+        override fun value(): Int = value
+    }
+    value = 42
+    return source.value()
+}
+
 fun box(): String {
     if (topLevelAnonymous.value() != 13) return "fail 1: top-level property object"
     if (bareAnonymous(5) != 6) return "fail 2: bare anonymous object"
@@ -135,5 +144,6 @@ fun box(): String {
     if (nestedAnonymous(6) != 9) return "fail 10: nested object expressions"
     if (!freshAnonymousObjects()) return "fail 11: identity"
     if (mixedNamedAndAnonymous(9) != 10) return "fail 12: mixed locals"
+    if (mutableAnonymousCapture() != 42) return "fail 13: mutable anonymous capture"
     return "OK"
 }
