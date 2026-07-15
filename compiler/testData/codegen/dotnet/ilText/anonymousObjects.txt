@@ -1,0 +1,847 @@
+.assembly extern mscorlib {}
+.assembly 'anonymousObjects' {}
+.module 'main-anonymousObjects.il'
+
+.class interface public abstract auto ansi 'AnonymousIntValue'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'value'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'AnonymousValue`1'<'T'>
+{
+  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'AnonymousBase'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'left'
+  .field private int32 'right'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'left', int32 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'AnonymousBase'::'left'
+    ldarg.0
+    ldarg.2
+    stfld int32 'AnonymousBase'::'right'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_left'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'AnonymousBase'::'left'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_right'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'AnonymousBase'::'right'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 'AnonymousBase'::'get_left'()
+    ldc.i4 10
+    mul
+    ldarg.0
+    call instance int32 'AnonymousBase'::'get_right'()
+    add
+    ret
+  }
+  .property instance int32 'left'()
+  {
+    .get instance int32 'AnonymousBase'::'get_left'()
+  }
+  .property instance int32 'right'()
+  {
+    .get instance int32 'AnonymousBase'::'get_right'()
+  }
+}
+.class public auto ansi beforefieldinit 'GenericAnonymousBase`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'base'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'base') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericAnonymousBase`1'<!0>::'base'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_base'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericAnonymousBase`1'<!0>::'base'
+    ret
+  }
+  .property instance !0 'base'()
+  {
+    .get instance !0 'GenericAnonymousBase`1'::'get_base'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AnonymousOwner`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested private auto ansi sealed beforefieldinit 'AnonymousOwner$source$1`1'<'T'>
+         extends [mscorlib]System.Object
+         implements class 'AnonymousValue`1'<!0>
+  {
+    .field private class 'AnonymousOwner`1'<!0> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'AnonymousOwner`1'<!0> 'this$0') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'AnonymousOwner`1'<!0> class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig newslot virtual instance !0 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'AnonymousOwner`1'<!0> class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'this$0'
+      call instance !0 class 'AnonymousOwner`1'<!0>::'get_seed'()
+      ret
+    }
+  }
+  .field private !0 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'AnonymousOwner`1'<!0>::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'AnonymousOwner`1'<!0>::'seed'
+    ret
+  }
+  .method public hidebysig instance class 'AnonymousValue`1'<!0> 'source'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::.ctor(class 'AnonymousOwner`1'<!0>)
+    ret
+  }
+  .property instance !0 'seed'()
+  {
+    .get instance !0 'AnonymousOwner`1'::'get_seed'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AnonymousInInitializer'
+       extends [mscorlib]System.Object
+{
+  .class nested private auto ansi sealed beforefieldinit 'AnonymousInInitializer$1'
+         extends [mscorlib]System.Object
+         implements 'AnonymousIntValue'
+  {
+    .field private int32 '$seed'
+    .field private int32 '$offset'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 '$offset') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld int32 'AnonymousInInitializer'/'AnonymousInInitializer$1'::'$seed'
+      ldarg.0
+      ldarg.2
+      stfld int32 'AnonymousInInitializer'/'AnonymousInInitializer$1'::'$offset'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld int32 'AnonymousInInitializer'/'AnonymousInInitializer$1'::'$seed'
+      ldarg.0
+      ldfld int32 'AnonymousInInitializer'/'AnonymousInInitializer$1'::'$offset'
+      add
+      ret
+    }
+  }
+  .field private class 'AnonymousIntValue' 'source'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 'offset'
+    )
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldc.i4 4
+    stloc.0
+    ldarg.0
+    ldarg.1
+    ldloc.0
+    newobj instance void 'AnonymousInInitializer'/'AnonymousInInitializer$1'::.ctor(int32, int32)
+    stfld class 'AnonymousIntValue' 'AnonymousInInitializer'::'source'
+    ret
+  }
+  .method public hidebysig specialname instance class 'AnonymousIntValue' 'get_source'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'AnonymousIntValue' 'AnonymousInInitializer'::'source'
+    ret
+  }
+  .property instance class 'AnonymousIntValue' 'source'()
+  {
+    .get instance class 'AnonymousIntValue' 'AnonymousInInitializer'::'get_source'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AnonymousPropertyInitializer'
+       extends [mscorlib]System.Object
+{
+  .class nested private auto ansi sealed beforefieldinit 'AnonymousPropertyInitializer$source$1'
+         extends [mscorlib]System.Object
+         implements 'AnonymousIntValue'
+  {
+    .field private int32 '$seed'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld int32 'AnonymousPropertyInitializer'/'AnonymousPropertyInitializer$source$1'::'$seed'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld int32 'AnonymousPropertyInitializer'/'AnonymousPropertyInitializer$source$1'::'$seed'
+      ldc.i4 3
+      add
+      ret
+    }
+  }
+  .field private class 'AnonymousIntValue' 'source'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    newobj instance void 'AnonymousPropertyInitializer'/'AnonymousPropertyInitializer$source$1'::.ctor(int32)
+    stfld class 'AnonymousIntValue' 'AnonymousPropertyInitializer'::'source'
+    ret
+  }
+  .method public hidebysig specialname instance class 'AnonymousIntValue' 'get_source'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'AnonymousIntValue' 'AnonymousPropertyInitializer'::'source'
+    ret
+  }
+  .property instance class 'AnonymousIntValue' 'source'()
+  {
+    .get instance class 'AnonymousIntValue' 'AnonymousPropertyInitializer'::'get_source'()
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$topLevelAnonymous$1'
+       extends [mscorlib]System.Object
+       implements 'AnonymousIntValue'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 13
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$bareAnonymous$value$1'
+       extends [mscorlib]System.Object
+{
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'anonymousObjectsKt$bareAnonymous$value$1'::'$seed'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$bareAnonymous$value$1'::'$seed'
+    ldc.i4 1
+    add
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$interfaceAnonymous$value$1'
+       extends [mscorlib]System.Object
+       implements 'AnonymousIntValue'
+{
+  .field private int32 '$seed'
+  .field private int32 '$offset'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 '$offset') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'anonymousObjectsKt$interfaceAnonymous$value$1'::'$seed'
+    ldarg.0
+    ldarg.2
+    stfld int32 'anonymousObjectsKt$interfaceAnonymous$value$1'::'$offset'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$interfaceAnonymous$value$1'::'$seed'
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$interfaceAnonymous$value$1'::'$offset'
+    add
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$superArguments$value$1'
+       extends 'AnonymousBase'
+{
+  .field private int32 'own'
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed', int32 '$super_call_param$1', int32 '$super_call_param$2') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    stfld int32 'anonymousObjectsKt$superArguments$value$1'::'$seed'
+    ldarg.0
+    ldarg.3
+    ldarg.2
+    call instance void 'AnonymousBase'::.ctor(int32, int32)
+    ldarg.0
+    ldstr "I"
+    ldarg.1
+    call int32 'anonymousObjectsKt'::'markAnonymous'(string, int32)
+    stfld int32 'anonymousObjectsKt$superArguments$value$1'::'own'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_own'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$superArguments$value$1'::'own'
+    ret
+  }
+  .method public hidebysig virtual instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 'AnonymousBase'::'value'()
+    ldarg.0
+    call instance int32 'anonymousObjectsKt$superArguments$value$1'::'get_own'()
+    add
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$superArguments$value$1'::'$seed'
+    add
+    ret
+  }
+  .property instance int32 'own'()
+  {
+    .get instance int32 'anonymousObjectsKt$superArguments$value$1'::'get_own'()
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericSuperArgument$source$1`1'<'T'>
+       extends class 'GenericAnonymousBase`1'<!0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$super_call_param$1') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'GenericAnonymousBase`1'<!0>::.ctor(!0)
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericAnonymous$source$1`1'<'T'>
+       extends [mscorlib]System.Object
+       implements class 'AnonymousValue`1'<!0>
+{
+  .field private !0 '$value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'$value'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'$value'
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$nestedAnonymous$outer$1'
+       extends [mscorlib]System.Object
+       implements 'AnonymousIntValue'
+{
+  .class nested private auto ansi sealed beforefieldinit 'anonymousObjectsKt$nestedAnonymous$outer$1$value$inner$1'
+         extends [mscorlib]System.Object
+         implements 'AnonymousIntValue'
+  {
+    .field private int32 '$seed'
+    .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld int32 'anonymousObjectsKt$nestedAnonymous$outer$1'/'anonymousObjectsKt$nestedAnonymous$outer$1$value$inner$1'::'$seed'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'() cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld int32 'anonymousObjectsKt$nestedAnonymous$outer$1'/'anonymousObjectsKt$nestedAnonymous$outer$1$value$inner$1'::'$seed'
+      ldc.i4 2
+      add
+      ret
+    }
+  }
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'anonymousObjectsKt$nestedAnonymous$outer$1'::'$seed'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'AnonymousIntValue' 'inner'
+    )
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$nestedAnonymous$outer$1'::'$seed'
+    newobj instance void 'anonymousObjectsKt$nestedAnonymous$outer$1'/'anonymousObjectsKt$nestedAnonymous$outer$1$value$inner$1'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    ldc.i4 1
+    add
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$freshAnonymousObjects$first$1'
+       extends [mscorlib]System.Object
+       implements 'AnonymousIntValue'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 1
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$freshAnonymousObjects$second$1'
+       extends [mscorlib]System.Object
+       implements 'AnonymousIntValue'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 1
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$mixedNamedAndAnonymous$Local'
+       extends [mscorlib]System.Object
+{
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'anonymousObjectsKt$mixedNamedAndAnonymous$Local'::'$seed'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$mixedNamedAndAnonymous$Local'::'$seed'
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$mixedNamedAndAnonymous$value$1'
+       extends [mscorlib]System.Object
+       implements 'AnonymousIntValue'
+{
+  .field private int32 '$seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'anonymousObjectsKt$mixedNamedAndAnonymous$value$1'::'$seed'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldfld int32 'anonymousObjectsKt$mixedNamedAndAnonymous$value$1'::'$seed'
+    newobj instance void 'anonymousObjectsKt$mixedNamedAndAnonymous$Local'::.ctor(int32)
+    call instance int32 'anonymousObjectsKt$mixedNamedAndAnonymous$Local'::'value'()
+    ldc.i4 1
+    add
+    ret
+  }
+}
+.class public abstract sealed auto ansi 'anonymousObjectsKt'
+       extends [mscorlib]System.Object
+{
+  .field private static class 'AnonymousIntValue' 'topLevelAnonymous'
+  .field private static string 'anonymousOrder'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'anonymousObjectsKt$topLevelAnonymous$1'::.ctor()
+    stsfld class 'AnonymousIntValue' 'anonymousObjectsKt'::'topLevelAnonymous'
+    ldstr ""
+    stsfld string 'anonymousObjectsKt'::'anonymousOrder'
+    ret
+  }
+  .method public hidebysig specialname static class 'AnonymousIntValue' 'get_topLevelAnonymous'() cil managed
+  {
+    .maxstack 1
+    ldsfld class 'AnonymousIntValue' 'anonymousObjectsKt'::'topLevelAnonymous'
+    ret
+  }
+  .method public hidebysig static int32 'bareAnonymous'(int32 'seed') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'anonymousObjectsKt$bareAnonymous$value$1' 'value'
+    )
+    ldarg.0
+    newobj instance void 'anonymousObjectsKt$bareAnonymous$value$1'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    call instance int32 'anonymousObjectsKt$bareAnonymous$value$1'::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'interfaceAnonymous'(int32 'seed') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'offset',
+      [1] class 'AnonymousIntValue' 'value'
+    )
+    ldc.i4 2
+    stloc.0
+    ldarg.0
+    ldloc.0
+    newobj instance void 'anonymousObjectsKt$interfaceAnonymous$value$1'::.ctor(int32, int32)
+    stloc.1
+    ldloc.1
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    ret
+  }
+  .method public hidebysig specialname static string 'get_anonymousOrder'() cil managed
+  {
+    .maxstack 1
+    ldsfld string 'anonymousObjectsKt'::'anonymousOrder'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_anonymousOrder'(string '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld string 'anonymousObjectsKt'::'anonymousOrder'
+    ret
+  }
+  .method public hidebysig static int32 'markAnonymous'(string 'tag', int32 'value') cil managed
+  {
+    .maxstack 2
+    call string 'anonymousObjectsKt'::'get_anonymousOrder'()
+    ldarg.0
+    call string [mscorlib]System.String::Concat(string, string)
+    call void 'anonymousObjectsKt'::'set_anonymousOrder'(string)
+    ldarg.1
+    ret
+  }
+  .method public hidebysig static int32 'superArguments'(int32 'seed') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class 'anonymousObjectsKt$superArguments$value$1' 'value',
+      [1] int32 'tmp0',
+      [2] int32 'tmp1'
+    )
+    ldstr ""
+    call void 'anonymousObjectsKt'::'set_anonymousOrder'(string)
+    ldstr "R"
+    ldc.i4 2
+    call int32 'anonymousObjectsKt'::'markAnonymous'(string, int32)
+    stloc.1
+    ldstr "L"
+    ldc.i4 3
+    call int32 'anonymousObjectsKt'::'markAnonymous'(string, int32)
+    stloc.2
+    ldarg.0
+    ldloc.1
+    ldloc.2
+    newobj instance void 'anonymousObjectsKt$superArguments$value$1'::.ctor(int32, int32, int32)
+    stloc.0
+    call string 'anonymousObjectsKt'::'get_anonymousOrder'()
+    ldstr "RLI"
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 -1
+    ret
+IL_whenNext_1:
+    ldloc.0
+    callvirt instance int32 'anonymousObjectsKt$superArguments$value$1'::'value'()
+    ret
+  }
+  .method public hidebysig static !!0 'passAnonymous'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static !!0 'genericSuperArgument'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'anonymousObjectsKt$genericSuperArgument$source$1`1'<!!0> 'source',
+      [1] !!0 'tmp0'
+    )
+    ldarg.0
+    call !!0 'anonymousObjectsKt'::'passAnonymous'<!!0>(!!0)
+    stloc.1
+    ldloc.1
+    newobj instance void class 'anonymousObjectsKt$genericSuperArgument$source$1`1'<!!0>::.ctor(!0)
+    stloc.0
+    ldloc.0
+    call instance !0 class 'GenericAnonymousBase`1'<!!0>::'get_base'()
+    ret
+  }
+  .method public hidebysig static !!0 'genericAnonymous'<'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'AnonymousValue`1'<!!0> 'source'
+    )
+    ldarg.0
+    newobj instance void class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!!0>::.ctor(!0)
+    stloc.0
+    ldloc.0
+    callvirt instance !0 class 'AnonymousValue`1'<!!0>::'value'()
+    ret
+  }
+  .method public hidebysig static int32 'nestedAnonymous'(int32 'seed') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'AnonymousIntValue' 'outer'
+    )
+    ldarg.0
+    newobj instance void 'anonymousObjectsKt$nestedAnonymous$outer$1'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    ret
+  }
+  .method public hidebysig static bool 'freshAnonymousObjects'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'AnonymousIntValue' 'first',
+      [1] class 'AnonymousIntValue' 'second'
+    )
+    newobj instance void 'anonymousObjectsKt$freshAnonymousObjects$first$1'::.ctor()
+    stloc.0
+    newobj instance void 'anonymousObjectsKt$freshAnonymousObjects$second$1'::.ctor()
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ceq
+    ldc.i4.0
+    ceq
+    ret
+  }
+  .method public hidebysig static int32 'mixedNamedAndAnonymous'(int32 'seed') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'AnonymousIntValue' 'value'
+    )
+    ldarg.0
+    newobj instance void 'anonymousObjectsKt$mixedNamedAndAnonymous$value$1'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    call class 'AnonymousIntValue' 'anonymousObjectsKt'::'get_topLevelAnonymous'()
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    call int32 'anonymousObjectsKt'::'bareAnonymous'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    call int32 'anonymousObjectsKt'::'interfaceAnonymous'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 5
+    call int32 'anonymousObjectsKt'::'superArguments'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic-super"
+    call !!0 'anonymousObjectsKt'::'genericSuperArgument'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    call !!0 'anonymousObjectsKt'::'genericAnonymous'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "owner"
+    newobj instance void class 'AnonymousOwner`1'<string>::.ctor(!0)
+    call instance class 'AnonymousValue`1'<!0> class 'AnonymousOwner`1'<string>::'source'()
+    callvirt instance !0 class 'AnonymousValue`1'<string>::'value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    newobj instance void 'AnonymousInInitializer'::.ctor(int32)
+    call instance class 'AnonymousIntValue' 'AnonymousInInitializer'::'get_source'()
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    newobj instance void 'AnonymousPropertyInitializer'::.ctor(int32)
+    call instance class 'AnonymousIntValue' 'AnonymousPropertyInitializer'::'get_source'()
+    callvirt instance int32 'AnonymousIntValue'::'value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 6
+    call int32 'anonymousObjectsKt'::'nestedAnonymous'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    call bool 'anonymousObjectsKt'::'freshAnonymousObjects'()
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 9
+    call int32 'anonymousObjectsKt'::'mixedNamedAndAnonymous'(int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .property class 'AnonymousIntValue' 'topLevelAnonymous'()
+  {
+    .get class 'AnonymousIntValue' 'anonymousObjectsKt'::'get_topLevelAnonymous'()
+  }
+  .property string 'anonymousOrder'()
+  {
+    .get string 'anonymousObjectsKt'::'get_anonymousOrder'()
+    .set void 'anonymousObjectsKt'::'set_anonymousOrder'(string)
+  }
+}

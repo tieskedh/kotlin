@@ -7,12 +7,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Add named local classes",
+- Branch `dotnet`; latest functional work is "[DotNet] Add anonymous object expressions",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **358 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **364 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -30,9 +30,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Inner classes whose immediate outer is non-generic now use the common/JVM explicit-outer
   representation on CLR nested metadata; generic-outers remain rejected pending parameter-space
   duplication/substitution.
-  Named local classes now use common closure conversion/popup with immutable value/receiver and
-  duplicated type-parameter captures; anonymous objects, mutable captures, and local-function
-  mixtures remain separate boundaries.
+  Named local classes and anonymous object expressions now use common closure conversion/popup
+  with immutable value/receiver and duplicated type-parameter captures. Anonymous base arguments
+  are lifted at the expression call site; mutable captures and local-function mixtures remain
+  separate boundaries.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
@@ -297,6 +298,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
   function/owner captures, inheritance/interface dispatch, and the adjacent rejection boundaries.
   Positive output is `15,7,9,21,generic,owner,12`; the rejection survivor prints `17`. The fresh
   full DotNet suite is 358/0/0/0 across eight XML files.
+- The anonymous-object continuation inserts a CLR-neutral adaptation of the JVM
+  `AnonymousObjectSuperConstructorLowering` between name invention and closure conversion, then
+  admits anonymous object expressions to the same local-class pipeline. Complex and
+  named/reordered base arguments are evaluated into call-site temporaries and passed separately
+  from immutable captures; object initializers retain their source position after the base call.
+  Bare objects, interface implementations, supported module-local and generic base classes,
+  top-level/member/init property contexts, generic-function and generic-owner captures, recursive
+  object expressions, fresh-instance identity, and bodies mixing named and anonymous classes all
+  compose. Lifted types remain module-private top-level or private nested metadata with public
+  metadata constructors. Mutable captures still reject precisely, explicit-local-function
+  mixtures remain wholly unlowered, and unsupported exception bases reject only their subtree and
+  real users. `anonprobe_s1` verifies an inaccessible captured interface implementation;
+  `anonprobe_s2` verifies captured-field storage plus a lifted base argument. Both produce `42` on
+  CoreCLR 10.0.9 and Framework 4.8. `ilText/anonymousObjects.kt`,
+  `ilText/anonymousObjectsRejected.kt`, and `box/anonymousObjects.kt` pin both parsers. Positive
+  output is `13,6,9,42,generic-super,generic,owner,12,11,9,true,10`; the rejection survivor prints
+  `23`. The fresh full DotNet suite is 364/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -368,12 +386,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit anonymous objects.** Keep them separate from the completed named-local model: determine
-   whether common closure conversion plus the JVM anonymous-super-constructor argument lowering
-   can preserve constructor evaluation order for the currently supported module-local class and
-   interface supertypes. Probe capture/super-argument interleaving, object-expression identity,
-   generic captures, visibility, and smallest-subtree rejection. Keep explicit local functions
-   and shared mutable captures separate.
+1. **Audit explicit local functions.** Keep them separate from completed local classes and object
+   expressions: determine whether common local-function name invention/closure conversion can
+   lift non-inline, non-suspend local functions to private static facade/owner methods with stable
+   collision handling and duplicated generic parameters. Probe direct and recursive calls,
+   immutable value/receiver captures, generic function/class scopes, overloads, and references
+   from lifted local classes. Keep lambdas/function references, crossinline, and shared mutable
+   captures separate until their own lowering models exist.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

@@ -816,16 +816,16 @@ class DotNetIlEmitter(
             ClassKind.ANNOTATION_CLASS -> dotNetUnsupported("annotation class '$name' is not supported")
             ClassKind.CLASS, ClassKind.OBJECT -> Unit
         }
-        if (irClass.isAnonymousObject) {
-            dotNetUnsupported("anonymous object '$name' is not supported; only named local classes are supported")
-        }
         if (irClass.isOriginallyLocalDeclaration) {
+            val localKind = if (irClass.isAnonymousObject) "anonymous object" else "local class"
             if (irClass.dotNetInventedLocalClassName == null) {
-                dotNetUnsupported("local class '$name' has no invented CLR metadata name")
+                dotNetUnsupported("$localKind '$name' has no invented CLR metadata name")
             }
             irClass.dotNetLocalCaptureRejectionReason?.let { reason ->
-                dotNetUnsupported("local class '$name' $reason")
+                dotNetUnsupported("$localKind '$name' $reason")
             }
+        } else if (irClass.isAnonymousObject) {
+            dotNetUnsupported("anonymous object '$name' was not closure-converted")
         }
         if (enclosingClass == null && irClass.parent !is IrFile) {
             dotNetUnsupported("class '$name' is not top-level; nested/inner/local classes are not supported")
