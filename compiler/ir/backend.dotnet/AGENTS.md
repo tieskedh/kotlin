@@ -29,6 +29,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   (expressions), `DotNetIlMethodContext` (slots/labels/maxstack/stack verification),
   `DotNetIlCodegenSupport` (type mapping, signatures, escaping), `DotNetIlType` (value types vs
   return types).
+- POC assembly pipeline (argumentation:
+  `docs/decisions/draft-adr-il-assembly-pipeline.md`): textual IL plus modern ILAsm remains the
+  normal `net` assembly path while representation and runtime ABI are moving; Framework ILAsm is
+  the Framework target assembler and an independent compatibility-floor oracle. This is not a
+  permanent distribution commitment. Before productionization, interpose a structured
+  compiler-owned CIL/metadata model and add a JVM-hosted direct PE writer behind it, while
+  retaining deterministic text rendering and ILAsm conformance tests. Do not introduce a .NET
+  sidecar merely to call `System.Reflection.Metadata`: the compiler is JVM-hosted, so that keeps
+  the external-process boundary and adds another private protocol without solving the core writer
+  ownership problem.
 - String concatenation follows the mature target shape: `FlattenStringConcatenationLowering`, then
   `DotNetStringConcatenationLowering`, then IL codegen handles `String.plus`/`toString` intrinsics.
   Avoid ad-hoc IrWhen/boolean handling inside string emission.
