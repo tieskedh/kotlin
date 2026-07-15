@@ -1,5 +1,9 @@
 package test.genericarrays.rejected
 
+// A supported non-capturing initializer lambda is lowered independently before its unsupported
+// Array(size, init) call is rejected. Its unreferenced callable class may therefore remain while
+// the containing function is absent; no fallback array-construction IL is emitted.
+
 open class Base
 
 class Broken {

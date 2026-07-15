@@ -1,0 +1,198 @@
+# Draft ADR: Erased Kotlin callable ABI on CLR
+
+- Status: **Draft candidate; implemented in the prototype for evaluation**
+- Date: 2026-07-15
+- Scope: Kotlin-to-Kotlin callable storage and invocation across CLR assembly boundaries
+
+This is a repository-local decision record for the experimental .NET backend. The entire `dotnet`
+branch is a proof of concept; this document keeps that POC internally coherent while evidence is
+collected. It does not claim acceptance by the Kotlin project and is not a public KEEP.
+
+## Context
+
+Kotlin function types are logically generic and variant: parameters are contravariant and the
+result is covariant. Those rules apply when a type argument is a primitive, a nullable primitive,
+or an open type parameter as well as when it is a reference type. A valid conversion such as
+`() -> Int` to `() -> Any` or `(Any) -> String` to `(Int) -> Any` must keep the same callable
+object so that Kotlin reference identity (`===`) remains true.
+
+The CLR does not provide that model directly. Generic interface and delegate variance is supported
+only for reference-type arguments. `System.Func` and `System.Action` also divide value-returning
+and void-returning callables into different type families. Adapters can bridge those gaps, but an
+adapter is another object and therefore changes observable identity. Making reference-only cases
+cheap while wrapping value-type cases would also give one Kotlin rule two physical ABIs.
+
+The callable representation would become a public cross-assembly contract if this draft were
+promoted. Once emitted in field, parameter, return, or interface signatures it cannot be replaced
+without an ABI break. A candidate canonical form therefore has to preserve all Kotlin subtype
+conversions before optimizing common CLR shapes.
+
+## Decision drivers
+
+The canonical ABI must:
+
+1. represent every legal Kotlin function-type variance conversion, including value types and open
+   type parameters;
+2. preserve callable reference identity across those conversions without allocation;
+3. have one stable physical shape across compiler versions and module boundaries;
+4. keep Kotlin-owned semantics independent from delegate-specific CLR rules;
+5. run on both .NET Framework 4.8 and modern CoreCLR; and
+6. admit typed execution paths and .NET-facing adapters without changing the
+   canonical Kotlin representation.
+
+## Considered alternatives
+
+### `System.Func` and `System.Action` as the permanent ABI
+
+This is attractive for C# interop and typed calls, but it cannot be canonical. CLR delegate
+variance excludes value-type substitutions, `Action` gives Unit-returning callables a different
+physical family, and bridging the unsupported cases requires identity-breaking wrapper objects.
+It also makes a CLR library type, rather than Kotlin semantics, own the cross-module contract.
+
+### Generic `Kotlin.FunctionN<in ..., out R>` interfaces
+
+Kotlin-owned generic interfaces avoid dependence on `Func`/`Action`, but CLR variance still applies
+only when every changed argument is reference-shaped. Primitive and open-generic conversions would
+need wrappers or additional representations, so this option does not satisfy the identity and
+single-ABI drivers.
+
+### A hybrid canonical representation
+
+A hybrid could use typed delegates or generic interfaces when the CLR admits the conversion and an
+erased form otherwise. It may improve selected call sites, but it makes representation depend on
+the current instantiation and requires conversion rules at storage, return, and module boundaries.
+Some conversions would allocate and lose `===`. The optimization is therefore unsuitable as the
+semantic ABI, although separate typed views remain possible and must be validated before
+promotion.
+
+### Non-generic, Kotlin-owned interfaces with erased invocation
+
+This is the selected candidate canonical representation. Erasing the physical signature by arity
+makes all logical function types of one arity share the same CLR identity. Kotlin's logical type
+arguments stay compiler and metadata information rather than CLR generic arguments.
+
+## Candidate decision
+
+The POC currently evaluates these candidate public types in `Kotlin.Runtime`:
+
+```text
+Kotlin.Function
+Kotlin.Function0 : Kotlin.Function { object Invoke() }
+Kotlin.Function1 : Kotlin.Function { object Invoke(object) }
+Kotlin.Function2 : Kotlin.Function { object Invoke(object, object) }
+```
+
+The first implementation supports arities zero through two; later arities must follow the same
+shape. A Kotlin function type maps to `Kotlin.FunctionN` solely by arity, while its common
+`kotlin.Function<R>` view maps to the non-invokable `Kotlin.Function` marker. Projections such as
+`Function<*>` do not change that physical marker. A variance conversion is an instruction-free
+reference copy and never creates an adapter.
+
+Generated callable classes implement one erased `Invoke` bridge:
+
+- reference arguments are cast on entry;
+- primitive, nullable-primitive, and open-type arguments use `unbox.any` on entry;
+- value results are boxed on exit; and
+- a Kotlin Unit result executes the ordinary void body and returns `Kotlin.Unit.INSTANCE` from the
+  erased bridge.
+
+The prototype may cache non-capturing callable objects as singletons. That is an implementation
+policy, not part of this ABI candidate. Regardless of allocation strategy, the same physical
+instance is observed before and after every ordinary Kotlin function-type subtype conversion.
+
+Logical parameter and result types remain in IR today and must be written to Kotlin metadata before
+the backend supports Kotlin cross-module consumption. The canonical `Kotlin.FunctionN` interface
+does not encode those types, and CLR reflection is not sufficient to reconstruct the Kotlin
+function type even if future optimization members are themselves visible. KFunction reflection
+metadata is a separate contract.
+
+The candidate is only the Kotlin identity ABI and universal invocation fallback. It does not claim
+that erased invocation or untyped CLR signatures are sufficient final execution and export
+surfaces.
+
+## Required layers before promotion
+
+An upstream-quality design needs three distinct layers:
+
+1. **Canonical Kotlin identity ABI.** Non-generic `Kotlin.FunctionN` is the stable storage identity,
+   and erased `Invoke` is the universal fallback.
+2. **Exact-shape execution ABI.** The compiler needs a demonstrated non-boxing path for important
+   monomorphic calls whose logical argument and result shapes are known exactly. This may use a
+   separate optional typed interface, an extra implementation member, or direct knowledge of a
+   generated class. A typed invocation is admissible only when the compiler proves both the exact
+   logical call shape and that the runtime callable implementation provides the matching typed
+   entry point. Otherwise it must use erased `Invoke`. The optimization must not change callable
+   identity or add required members to the candidate interfaces.
+3. **CLR export ABI.** Ordinary public APIs intended for C# and other CLR languages need typed
+   projections, such as generated `Func`/`Action` adapters or typed facade members. Those
+   projections do not participate in Kotlin subtype conversion and may allocate wrappers.
+
+The exact designs of layers 2 and 3 remain open, but representative implementations and evidence
+for both are requirements for promoting this draft rather than optional post-promotion work.
+
+## Identity boundary
+
+Identity preservation applies to ordinary Kotlin subtype conversions, for example assigning a
+`() -> Int` value to `() -> Any`. That operation is a reference upcast and must not allocate.
+
+The requirement does not cover semantic callable adaptations such as SAM conversion or adapted
+callable references, nor foreign-language export projections. Those operations may create another
+object because they are not Kotlin function-type upcasts. A projected delegate is not required to
+be reference-identical to the canonical Kotlin callable it wraps.
+
+## Consequences
+
+Benefits:
+
+- all Kotlin variance conversions, including primitive and open-generic cases, preserve `===`;
+- the candidate public ABI has one predictable shape for fields, parameters, returns, and module
+  boundaries;
+- callable semantics stay under the Kotlin runtime namespace; and
+- typed CLR adapters can evolve separately from the Kotlin-to-Kotlin ABI.
+
+Costs:
+
+- erased invocation boxes value arguments and results and casts or unboxes on entry;
+- the raw POC interface is untyped to C# and is not proposed as the final CLR export surface;
+- overloads that differ only in logical function type arguments have the same CLR signature and
+  must be rejected as platform clashes; and
+- logical callable types cannot be reconstructed from CLR signatures alone, so Kotlin metadata is
+  mandatory for future cross-module Kotlin compilation.
+
+## Validation
+
+Probe series `callableabi_s2` assembled an erased runtime/consumer pair with modern 10.0.9 and
+.NET Framework 4.8 ILAsm. All four same-assembler and cross-assembler runtime pairings preserved
+object identity and executed a boxed `Int` result.
+
+Repository pins cover both FIR parsers and real CoreCLR execution:
+
+- `compiler/testData/codegen/dotnet/ilText/callableObjects.kt`;
+- `compiler/testData/codegen/dotnet/ilText/callableObjectsRejected.kt`; and
+- `compiler/testData/codegen/dotnet/box/callableObjects.kt`.
+
+## Deferred decisions
+
+This ADR does not decide capturing and bound callable layouts, mutable reference cells, KFunction
+metadata, suspend callables, delegate adapters, exact-shape execution, CLR export, or the exact
+Kotlin metadata encoding. Those features must preserve the canonical ABI invariants above or
+explicitly revise this draft before they land. The POC's .NET Framework 4.8 compatibility is probe
+evidence for the candidate representation, not a decision about the eventual product support
+baseline.
+
+## Promotion or revision
+
+Promote this draft only after all of the following validate the boundary:
+
+- cross-module Kotlin metadata preserves the logical callable types;
+- capturing closures, bound and adapted references, suspend callables, and KFunction coexist with
+  the candidate identity;
+- a measured exact-shape invocation strategy avoids boxing in important monomorphic paths while
+  retaining erased fallback behavior; and
+- representative typed CLR exports give host-language consumers a normal typed surface and define
+  adapter reuse/delegate equality, callback registration and removal, repeated Kotlin-to-CLR and
+  CLR-to-Kotlin projection, nullability translation, and exception translation.
+
+Revise the draft if a concrete implementation, benchmark, interop experiment, or runtime probe
+shows that those requirements cannot be met. Mere convenience for a reference-only CLR fast path
+is not enough to split the canonical representation.

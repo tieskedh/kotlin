@@ -1,6 +1,7 @@
-// Shared mutable captures, lambdas, and function references remain outside the explicit named
-// local-function slice. Their containing functions disappear independently; unrelated metadata
-// and the entry point survive.
+// Mutable captures remain unsupported. A non-capturing lambda now composes with an explicit named
+// local function. An inferred `::local` variable still has KFunction type and remains rejected
+// until the reflection ABI exists; its independently valid generated Function0 class and lifted
+// target can remain unreferenced. Unrelated metadata and the entry point survive.
 
 fun mutableLocalFunctionCaptureRejected(): Int {
     var value = 1
@@ -11,7 +12,7 @@ fun mutableLocalFunctionCaptureRejected(): Int {
     return local()
 }
 
-fun lambdaMixtureRejected(): Int {
+fun lambdaMixtureSupported(): Int {
     fun local(): Int = 2
     val lambda = { 3 }
 
@@ -30,5 +31,6 @@ class SurvivingLocalFunctionSibling {
 }
 
 fun main() {
+    println(lambdaMixtureSupported())
     println(SurvivingLocalFunctionSibling().value())
 }

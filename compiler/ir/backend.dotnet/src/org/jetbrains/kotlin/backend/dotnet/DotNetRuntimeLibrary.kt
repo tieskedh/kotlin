@@ -6,10 +6,11 @@ import java.io.File
 /**
  * The first physical Kotlin/.NET runtime boundary.
  *
- * This deliberately contains no callable ABI yet. It establishes the durable assembly identity
- * and namespace/type ownership before function objects start depending on it. The same TFM-neutral
- * IL source is assembled with the selected target's ILAsm, so both targets produce their own PE
- * while exposing exactly the same logical assembly identity.
+ * The assembly boundary was established before its first public ABI candidate types. It now owns
+ * the fixed, physically erased Function0/1/2 interfaces and the singleton Unit value required when
+ * a callable result crosses their object-shaped invocation boundary.
+ * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
+ * produce their own PE while exposing exactly the same logical assembly identity.
  */
 internal object DotNetRuntimeLibrary {
     const val ASSEMBLY_NAME = "Kotlin.Runtime"
@@ -48,6 +49,58 @@ internal object DotNetRuntimeLibrary {
           .class public abstract sealed auto ansi beforefieldinit RuntimeInfo
                  extends [mscorlib]System.Object
           {
+          }
+        }
+
+        .namespace Kotlin
+        {
+          .class interface public abstract auto ansi Function
+          {
+          }
+
+          .class interface public abstract auto ansi Function0
+                 implements Kotlin.Function
+          {
+            .method public hidebysig newslot abstract virtual instance object Invoke() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi Function1
+                 implements Kotlin.Function
+          {
+            .method public hidebysig newslot abstract virtual instance object Invoke(object p1) cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi Function2
+                 implements Kotlin.Function
+          {
+            .method public hidebysig newslot abstract virtual instance object Invoke(object p1, object p2) cil managed
+            {
+            }
+          }
+
+          .class public sealed auto ansi Unit extends [mscorlib]System.Object
+          {
+            .field public static initonly class Kotlin.Unit INSTANCE
+
+            .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void [mscorlib]System.Object::.ctor()
+              ret
+            }
+
+            .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+            {
+              .maxstack 1
+              newobj instance void Kotlin.Unit::.ctor()
+              stsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
+              ret
+            }
           }
         }
     """.trimIndent() + "\n"
