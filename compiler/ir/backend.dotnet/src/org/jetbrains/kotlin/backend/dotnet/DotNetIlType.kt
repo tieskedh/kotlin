@@ -33,8 +33,9 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * probe-verified, `nullprobe_s8`: string into object locals/params/fields, `ldnull`, and the
      * type-agnostic reference `ceq`), while value types ([Boolean]..[Char] and [NullableValue])
      * reach it only through an explicit `box` coercion (see
-     * [DotNetIlExpressionCodegen]'s coercion layer). Member calls on `Any` stay rejected — this
-     * is storage-and-identity only, not an Any model.
+     * [DotNetIlExpressionCodegen]'s coercion layer). This is also the physical Kotlin `Any`
+     * root: its three virtual members reuse System.Object's existing slots, while Kotlin
+     * metadata retains the logical type.
      */
     object Object : DotNetIlValueType("object")
 

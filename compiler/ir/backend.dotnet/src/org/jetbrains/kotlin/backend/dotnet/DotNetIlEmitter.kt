@@ -893,8 +893,8 @@ class DotNetIlEmitter(
             dotNetUnsupported("nested $kind '$name' is not supported")
         }
         if (irClass.isData) {
-            // `data object` lands here too: its generated toString/equals/hashCode overrides
-            // need an Any model just like a data class's members.
+            // `data object` lands here too. The Any slots now exist, but the frontend-generated
+            // equality/hash/string bodies still use constructs that need their own audited slice.
             val kindWord = if (irClass.kind == ClassKind.OBJECT) "data object" else "data class"
             dotNetUnsupported("$kindWord '$name' is not supported")
         }
@@ -1007,27 +1007,16 @@ class DotNetIlEmitter(
                 )
             }
         }
-        // Overriding a kotlin.Any member (toString/equals/hashCode) needs a virtual-slot
-        // relationship with System.Object's members — an Any model that does not exist yet
-        // (the same gap that keeps data classes and general `==` rejected). Declared overrides
-        // are rejected whole-class; fake overrides stay exempt — they are skipped at render and
-        // calls to them stay rejected at the availableFunctions miss. The override chain is
-        // walked with the TYPE-based isAny (an FqName comparison, like the supertype checks
-        // above): the ir.util findOverriddenMethodOfAny shortcut relies on IrClass.isAny,
-        // an IdSignature comparison, and this pipeline's symbols carry no signatures, so
-        // it never matches here.
+        // Kotlin Any is physically System.Object. dotNetIlMethodName maps declared overrides to
+        // Equals/GetHashCode/ToString, and the ordinary override flags reuse those existing CLR
+        // slots (no newslot). Data classes remain a separate feature gate below: accepting the
+        // foundational slots does not imply every generated data-member body is supported.
         for (member in irClass.dotNetMemberFunctions()) {
             // A generic member method uses the same real CLR method parameter model as a
             // top-level generic function. On a generic owner, `!n` and `!!n` remain independent
             // positional spaces (probe-verified, genmemberprobe_s1). Any unsupported method
             // parameter shape rejects the whole owning class before registration.
             member.checkDotNetFunctionShapeSupported()
-            if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
-                dotNetUnsupported(
-                    "member '${member.name.asString()}' of class '$name' overrides a member of kotlin.Any; " +
-                            "kotlin.Any member overrides are not supported (no Any model)"
-                )
-            }
         }
         // Interface slots bound through INHERITED members (the Kotlin fake-override shape:
         // a base-class member satisfies an interface the derived class declares) work on the
@@ -1218,7 +1207,7 @@ class DotNetIlEmitter(
         if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
             dotNetUnsupported(
                 "$description of interface '$interfaceName' overrides a member of kotlin.Any; " +
-                        "kotlin.Any member overrides are not supported (no Any model)"
+                        "interface redeclarations of kotlin.Any members are not supported yet"
             )
         }
     }

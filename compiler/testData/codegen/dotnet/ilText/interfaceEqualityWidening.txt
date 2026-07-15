@@ -46,6 +46,18 @@
     ret
   }
 }
+.class public auto ansi sealed beforefieldinit 'OtherLeaf'
+       extends [mscorlib]System.Object
+       implements 'Other'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
 .class public auto ansi sealed beforefieldinit 'Marked'
        extends [mscorlib]System.Object
        implements 'Marker'
@@ -75,6 +87,14 @@
     ceq
     ret
   }
+  .method public hidebysig static bool 'unrelated'(class 'Root' 'r', class 'Other' 'o') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    ceq
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
@@ -91,6 +111,16 @@
 IL_boolStrTrue_0:
     ldstr "true"
 IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'LeafA'::.ctor()
+    newobj instance void 'OtherLeaf'::.ctor()
+    call bool 'interfaceEqualityWideningKt'::'unrelated'(class 'Root', class 'Other')
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'Marked'::.ctor()
     stloc.0

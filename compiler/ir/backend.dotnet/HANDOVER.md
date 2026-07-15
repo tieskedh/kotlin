@@ -1,20 +1,19 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(any model/harness).
+(Kotlin-owned exception foundation/harness).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work comprises the capturing-callable state slice
-  (`131161ca5`) and this callable-reference metadata slice, on top of
-  `b54578fab` (`[DotNet] Move compiler helpers into runtime`),
-  based directly on
-  `origin/master` (`995cf26a0`, rebased 2026-07-13).
+- Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
+  (`b54578fab`), capturing-callable state (`131161ca5`), and callable-reference metadata
+  (`fb6d43448`), followed by the System.Object Any foundation in the current functional slice.
+  The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **386 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **388 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -447,6 +446,26 @@ session state, process, and a curated task menu. Keep both files updated as you 
   references, reflective lookup/call APIs, suspend callables, arity above 2, adapters, typed fast
   paths, and Kotlin metadata serialization remain later slices. The fresh full DotNet suite is
   386/0/0/0 across eight XML files.
+- The System.Object Any-foundation continuation follows the mature JVM representation choice:
+  logical `kotlin.Any` has no standalone CLR type and is physically `[mscorlib]System.Object`.
+  Generated `equals`/`hashCode`/`toString` overrides reuse CLR's existing
+  `Equals`/`GetHashCode`/`ToString` slots (`virtual`, no `newslot`); ordinary calls use the same
+  object boundary, while `super` calls remain non-virtual. Cross-assembly
+  `Kotlin.Runtime.Internal.Intrinsics` now owns `AreEqual`, `HashCode`, and `StringValueOf`.
+  They are deliberately primitive-aware rather than thin Object wrappers: `dotnet-any_s1` first
+  proved the root/override/exception hierarchy across all four modern/Framework pairings, then a
+  hostile boxed-value probe found that both CLRs equate signed-zero Doubles, collapse their hashes,
+  and print boxed Double/Boolean as `2E+19`/`True`; Framework also hashes different NaN payloads
+  differently. The helpers restore Kotlin's canonical Double equality/hash/string, Boolean hash
+  constants/lowercase text, and invariant integer text before virtual fallback. General reference
+  and open-`T` structural equality, nullable-primitive-to-Any equality, Any string conversion, Any
+  member calls, unrelated-interface identity, and class Any overrides are enabled. Generic
+  `T : Any` constraints remain rejected because CLR `class` would exclude value instantiations and
+  erasing the constraint would admit null; interface Any redeclarations and data generated members
+  remain separate audited slices. The draft rationale is
+  `docs/decisions/draft-adr-system-object-any-foundation.md`. Both changed exact goldens assemble
+  with modern 10.0.9 and Framework 4.8 ILAsm; the new box runs through both toolchain selections.
+  The fresh full DotNet suite is 388/0/0/0 across eight XML files.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -529,12 +548,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit the Kotlin-owned `Any` foundation before implementing it.** Determine how Kotlin Any,
-   ordinary CLR `System.Object`, generated class bases, virtual `equals`/`hashCode`/`toString`, and
-   cross-assembly identity should compose. Probe the smallest viable runtime base and do not change
-   every generated class hierarchy until the representation and migration consequences are
-   explicit. Kotlin-owned exceptions follow that foundation; fuller callable reflection remains a
-   later feature rather than expanding the minimal name slice opportunistically.
+1. **Audit the Kotlin-owned exception foundation.** Decide which Kotlin exception identities need
+   runtime-owned CLR classes versus direct mappings, how constructors/cause/message and catch edges
+   compose with the System.Object Any root, and how synthetic throws (`!!`, exhaustive `when`,
+   negative arrays) migrate without creating false sibling catches. Probe cross-assembly type
+   identity and constructor shapes on both runtimes before changing the existing mapping table.
+   Fuller callable reflection remains later work rather than expanding the minimal name slice
+   opportunistically.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

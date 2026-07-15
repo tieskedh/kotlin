@@ -193,6 +193,30 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   iterator values escaping as objects, array casts/type checks, and copying/content helpers.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
+- Kotlin `Any` foundation (draft ADR
+  `docs/decisions/draft-adr-system-object-any-foundation.md`; probe series `dotnet-any_s1`; JVM
+  `kotlin.Any -> java.lang.Object` precedent): `kotlin.Any`/`Any?` have no standalone CLR type.
+  Their physical root is `[mscorlib]System.Object`, which already includes generated classes,
+  strings, arrays, boxed primitives, mapped exceptions, and foreign CLR objects in one hierarchy.
+  Generated overrides map Kotlin `equals`/`hashCode`/`toString` to the existing CLR
+  `Equals(object)`/`GetHashCode()`/`ToString()` slots and emit `virtual` without `newslot`;
+  ordinary calls dispatch through those System.Object signatures and `super` stays a non-virtual
+  `call`. The cross-assembly runtime owns metadata-public, compiler-internal
+  `Kotlin.Runtime.Internal.Intrinsics.AreEqual(object, object)` (null-safe, left-biased virtual
+  equality), `HashCode(object)`, and `StringValueOf(object)` (`"null"` or virtual ToString).
+  Primitive-aware branches are required at that boundary: both CLRs equate boxed signed zero,
+  collapse its hashes, and render boxed Double/Boolean with CLR text; Framework also hashes NaN
+  payloads differently. The helpers restore Kotlin/JVM object semantics (canonical Double bits,
+  Boolean hash constants/lowercase text, invariant integer text, shared Double formatting) before
+  virtual fallback. Values and open type parameters box only at that universal object boundary.
+  Both ILAsm implementations accept the exact runtime/library/consumer shapes, and all four
+  modern/Framework consumer-dependency
+  pairings run identically. STAYS REJECTED, loudly: interface redeclarations of Any members,
+  data-class/data-object generated members, and `T : Any` generic constraints (CLR `class` would
+  wrongly exclude value instantiations; erasing the constraint would admit null). Kotlin-owned
+  exceptions and foreign-object import policy remain later consumers of this foundation. Pins:
+  `ilText/inheritanceAnyOverride.kt`, `ilText/interfaceEqualityWidening.kt`,
+  `ilText/nullableRejected.kt`, `ilText/genericRejected.kt`; runtime: `box/anyMembers.kt`.
 - Equality follows JVM's intrinsic-registry shape: `Int`/`Boolean` use `ceq`, `String ==` uses
   `System.String::op_Equality`, `String ===` uses reference `ceq`. On user-class instances, `===`
   and `==` against the `null` literal are a reference `ceq` (Kotlin defines `x == null` as a pure
@@ -207,12 +231,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   declaration order, then the same per level, NOT the whole base chain first). Two FINAL
   sibling classes are not expressible operands — the frontend rejects them with
   EQUALITY_NOT_APPLICABLE (empty intersection type) — so the user-reachable sibling shape is
-  two sibling INTERFACE views of an object; the widening and the no-common-supertype
-  rejection are pinned by `ilText/interfaceEqualityWidening.kt` and runtime-pinned (true and
-  false cases) by `box/interfaceHierarchy.kt`. Pairs with no common supertype (e.g. two
-  unrelated interface types, whose only common supertype would need an Any model) stay
-  rejected loudly. General `==` between two
-  class instances stays rejected until an Any.equals model exists.
+  two sibling INTERFACE views of an object. Pairs with no module-local common supertype (for
+  example two unrelated interface views) widen instruction-free to System.Object. Identity stays
+  `ceq`; structural reference/`Any?` equality calls the runtime's null-safe `AreEqual` helper.
+  Open type parameters use that helper after `box !!n`; identity on open `T` remains rejected
+  because value-type instantiations have no stable reference identity. Exact primitive, string,
+  array, and nullable-primitive paths remain specialized. Pins:
+  `ilText/interfaceEqualityWidening.kt`, `ilText/inheritanceAnyOverride.kt`; runtime:
+  `box/interfaceHierarchy.kt`, `box/anyMembers.kt`.
 - Nullability model (hybrid representation; probe series `boxprobe_s1`–`_s7`, `nullprobe_s8` —
   a deliberate user-decided design): a concrete nullable CLR VALUE type uses
   `System.Nullable<T>` in exact typed positions and converts to boxed-underlying-or-null when
@@ -286,16 +312,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   ilasm rejects; the facade gate evicts EVERY callable of a clashing identity (keeping one
   half would be an arbitrary pick between legal Kotlin overloads) at facade granularity — a
   plain function per-function, an accessor with its whole property, a backing-field-bearing
-  property with the file's whole property group. STAYS
-  REJECTED, loudly: generic `T?`, Any member calls and Any string conversion (`object` is
-  storage-only, no Any model), general `==` between reference/`Any?` operands, identity between
-  two nullable-primitive values (the operands would box; identity of separately boxed values is
-  unrelated to value equality — `ceq` on two boxed equal int32s is False, boxprobe_s6 — and
-  Kotlin deprecates boxed identity; identity against null is supported as a HasValue test), `==`
-  mixing a nullable
-  primitive with `Any?` (cross-primitive `Int? == Long?` needs no backend gate: the FRONTEND
-  rejects it with EQUALITY_NOT_APPLICABLE, like `==` between unrelated final classes — not
-  expressible in compilable Kotlin, so not pinnable in an ilText test), `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
+  property with the file's whole property group. The System.Object Any foundation now supports
+  Any member calls, Any/string-template conversion, general structural reference equality, and
+  nullable-primitive-to-Any equality by boxing to the CLR boxed-underlying-or-null boundary.
+  STAYS REJECTED, loudly: generic `T?`, identity between two nullable-primitive values (the
+  operands would box; identity of separately boxed values is unrelated to value equality — `ceq`
+  on two boxed equal int32s is False, boxprobe_s6 — and Kotlin deprecates boxed identity; identity
+  against null is supported as a HasValue test). Cross-primitive `Int? == Long?` needs no backend
+  gate: the FRONTEND rejects it with EQUALITY_NOT_APPLICABLE, like `==` between unrelated final
+  classes — not expressible in compilable Kotlin, so not pinnable in an ilText test),
+  `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
   boxprobe_s3, but no supported IR shape produces the cast — rejected like every downcast),
   `is`/`as`/safe-cast (existing type-operator rejections stay authoritative), `const val`
   of nullable type (defensive; frontend-rejected anyway). Exhaustive `when` without a source
@@ -512,12 +538,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Roslyn's fix is `.override` + `PreserveBaseOverrides` machinery this backend does not emit;
   compared on MAPPED types in the member pre-pass, so `String?`-to-`String` covariance — same
   IL `string` — stays supported; pinned by `ilText/inheritanceCovariantReturnRejected.kt`),
-  and overrides of `kotlin.Any`
-  members (`toString`/`equals`/`hashCode` — no Any model; pinned by
-  `ilText/inheritanceAnyOverride.kt`; detected by walking `allOverridden()` against the
-  TYPE-based `isAny`, because `IrClass.isAny`/`findOverriddenMethodOfAny` compare IdSignatures
-  and this pipeline's symbols carry none). `protected` visibility is untouched (renders with
-  the historical default like before). End-to-end: `box/inheritanceBasic.kt` (three-level
+  and data-class/data-object generated member bodies. Overrides of `kotlin.Any`
+  (`toString`/`equals`/`hashCode`) are supported by mapping to System.Object's reused virtual
+  slots, pinned by `ilText/inheritanceAnyOverride.kt` and `box/anyMembers.kt`; detection walks
+  `allOverridden()` against the TYPE-based `isAny`, because
+  `IrClass.isAny`/`findOverriddenMethodOfAny` compare IdSignatures and this pipeline's symbols
+  carry none. `protected` visibility is untouched (renders with the historical default like
+  before). End-to-end: `box/inheritanceBasic.kt` (three-level
   chain: polymorphic dispatch through base-typed values, super chains, final override,
   inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
   before derived init; `beforefieldinit` semantics unchanged — instance init order is a
@@ -650,10 +677,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `emitCall`),
   `is`/`as`/safe-cast on interface types (the existing type-operator rejection stays
   authoritative — including the IMPLICIT_CAST downcast a positive `===` smartcast inserts
-  afterwards), and interface members overriding `kotlin.Any` members (no Any model). Failure-
-  mode calibration: every interface-mapping mistake (missing virtual, wrong operand interface)
-  assembles CLEAN and fails only lazily at runtime, so box coverage is mandatory per dispatch
-  shape — `box/interfaceBasic.kt` (dispatch through interface-typed values, abstract property
+  afterwards), and interface members redeclaring `kotlin.Any` members (the System.Object class
+  slots exist, but the exact CLR interface contract/MethodImpl policy is not yet audited).
+  Failure-mode calibration: every interface-mapping mistake (missing virtual, wrong operand
+  interface) assembles CLEAN and fails only lazily at runtime, so box coverage is mandatory per
+  dispatch shape — `box/interfaceBasic.kt` (dispatch through interface-typed values, abstract property
   access, multiple interfaces + base class, final override, derived override via interface
   dispatch, the s5a inherited-member shape, interface-typed fields/returns, identity and
   null checks) and `box/interfaceHierarchy.kt` (inherited members through sub-interface
@@ -666,10 +694,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   independence, interface-owned singleton initialization, dispatch, forward references, and
   narrow rejection are pinned by `ilText/nestedInterfaces.kt`,
   `ilText/nestedInterfacesRejected.kt`, and `box/nestedInterfaces.kt`.
-  Sibling widening, no-common-supertype rejection, and sealed-interface acceptance are pinned by
-  `ilText/interfaceEqualityWidening.kt`. Abstract redeclaration metadata, owner-token
-  dispatch, mutable properties, generic composition, diamonds, and mapped-covariance rejection
-  are pinned by `ilText/interfaceRedeclarations.kt`,
+  Sibling widening, System.Object fallback for unrelated interface views, and sealed-interface
+  acceptance are pinned by `ilText/interfaceEqualityWidening.kt`. Abstract redeclaration metadata,
+  owner-token dispatch, mutable properties, generic composition, diamonds, and mapped-covariance
+  rejection are pinned by `ilText/interfaceRedeclarations.kt`,
   `ilText/interfaceRedeclarationsRejected.kt`, and `box/interfaceRedeclarations.kt`. Generic
   metadata, open/closed/permuted edges,
   owner-token dispatch and reference variance are pinned by `ilText/genericInterfaces.kt` and
@@ -1067,17 +1095,18 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     interface model, `T?` ANYWHERE in a generic declaration (NO uniform CLR representation for
     the supported interface-bound case: a CLR caller can instantiate it with a value type needing
     `Nullable<T>` or a reference type needing nothing; the declaration is rejected, never given an
-    ad-hoc representation), `==`/`===` on `T` operands and `x == null` on `T` (a
-    value-type instantiation makes reference `ceq` meaningless; no lifted story without
-    constraints), string templates/toString and other `Any` member calls on `T` (no Any model),
-    member calls on an unconstrained `T` or outside its declared bounds, widening an unconstrained
-    `T` to `Any?`, `is`/`as` on `T` or generic types (existing type-operator
+    ad-hoc representation), identity `===` on `T` operands (a value-type instantiation has no
+    stable reference identity, and boxing would manufacture unrelated references), other member
+    calls on an unconstrained `T` or outside its declared bounds, `is`/`as` on `T` or generic types
+    (existing type-operator
     rejections stay authoritative), inline/reified generic functions (no inlining model), declared
     varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
     generic (extension) properties (the property metadata/accessor binding model does not cover
     generic accessors), and a companion declared directly in a generic class (its field would be
     per constructed owner; a named object owns its `INSTANCE` on its independent non-generic type
-    and is supported below a generic metadata parent). A
+    and is supported below a generic metadata parent). Structural `==`/`== null`, string
+    templates/`toString`, and widening an unconstrained `T` to `Any?` are supported by boxing at
+    the System.Object boundary and using the Any runtime helpers. A
     generic base instantiation whose argument does not map (`T?`, an unsupported external
     generic/primitive/array shape, or an evicted class) rejects the whole derived chain;
     an unrelated valid instantiation of the same base survives.
