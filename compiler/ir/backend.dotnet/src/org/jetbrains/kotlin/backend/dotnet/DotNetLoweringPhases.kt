@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassTypeParametersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesMemberBodyLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInventNamesForLocalClasses
@@ -33,10 +34,12 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetInventNamesForLocalFunctions,
     ::DotNetLocalDeclarationsLowering,
     ::DotNetLocalDeclarationPopupLowering,
-    // Follow the common/JVM inner-class pipeline before initializer merging: add the explicit
-    // outer field/constructor argument, rewrite outer-this reads into field chains, then move
+    // Follow the common/JVM inner-class pipeline before initializer merging: first make a generic
+    // outer's implicit type arguments explicit on the independent CLR nested type, then add the
+    // outer field/constructor argument, rewrite outer-this reads into field chains, and move
     // constructor-call dispatch receivers into the new leading argument. The CLR accepts the
-    // common pre-base-call outer-field store unchanged (innerprobe_s1/s2).
+    // common pre-base-call outer-field store unchanged (innerprobe_s1/s2, genericinner_s1-s3).
+    ::DotNetInnerClassTypeParametersLowering,
     ::DotNetInnerClassesLowering,
     ::DotNetInnerClassesMemberBodyLowering,
     ::DotNetInnerClassConstructorCallsLowering,

@@ -294,9 +294,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
   `box/nestedInheritance.kt`, `box/nestedSingletons.kt`, `box/nestedInterfaces.kt`,
   `box/nestedObjectDeclarations.kt`.
-- Inner-class model (probe series `innerprobe_s1`–`_s2`; common/JVM precedent): a Kotlin `inner`
-  class whose immediate outer class is non-generic uses the common backend's explicit-outer
-  representation on real CLR nested metadata. `DotNetInnerClassesLowering` adds one private
+- Inner-class model (probe series `innerprobe_s1`–`_s2`, `genericinner_s1`–`_s3`; common/JVM
+  precedent): a Kotlin `inner` class uses the common backend's explicit-outer representation on
+  real CLR nested metadata. `DotNetInnerClassesLowering` adds one private
   `this$0` field and replaces each constructor's dispatch receiver with a leading regular outer
   argument; `DotNetInnerClassesMemberBodyLowering` rewrites outer-`this` reads into field chains;
   `DotNetInnerClassConstructorCallsLowering` moves the source call's dispatch receiver into that
@@ -305,16 +305,23 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   base `.ctor` call (`innerprobe_s1`); no CLR-specific reorder is needed. Each inner subclass owns
   its own outer field and forwards the same outer argument to an inner base constructor. Arbitrary
   inner depth composes through field chains, and an inner class may own independent generic
-  parameters. Primary constructors, classes with only secondary constructors, and delegating
-  secondary constructors all preserve the outer argument; a delegating constructor lets its
-  target perform the single outer-field store. Source visibility uses the existing nested-type
-  mapping, and an unsupported inner member evicts only that inner metadata subtree and real users.
-  An inner class whose IMMEDIATE outer is generic stays rejected before rendering even when its
-  body does not mention the outer type parameter: its outer field type would refer to the metadata
-  parent's `!n`, but CLR nested types do not inherit that parameter space. Supporting it later
-  requires duplicating and substituting the outer parameters on the nested type, not emitting an
-  unbound `!n`. Pins: `ilText/innerClasses.kt`, `ilText/classShapeRejected.kt`,
-  `ilText/nestedClassesRejected.kt`; runtime: `box/innerClasses.kt`.
+  parameters. When the immediate outer is generic, `DotNetInnerClassTypeParametersLowering` first
+  appends copies of its COMPLETE parameter list after the inner's own parameters and remaps the
+  inner subtree: `Outer<T>.First<U>.Second<V>` owns `Second<V, U, T>`. Processing is outer-first,
+  so each deeper level copies an already-complete immediate-outer space. FIR use-site types already
+  carry that `own, outer...` argument order. The retained copy map types the later synthetic outer
+  field/constructor parameter, missing constructor/super-call arguments are expanded before the
+  common call rewrite, and synthetic multi-level field reads substitute through their receiver.
+  Non-generic inners take none of these generic-only repairs. Duplicate copied/own parameter names
+  are legal positional CLR metadata; generic inner inheritance and generic non-inner bases retain
+  their fully substituted links (`genericinner_s2`–`_s3`). Primary constructors, classes with only
+  secondary constructors, and delegating secondary constructors all preserve the outer argument;
+  a delegating constructor lets its target perform the single outer-field store. Source visibility
+  uses the existing nested-type mapping, and an unsupported inner member evicts only that inner
+  metadata subtree and real users.
+  Pins: `ilText/innerClasses.kt`, `ilText/genericInnerClasses.kt`,
+  `ilText/classShapeRejected.kt`, `ilText/nestedClassesRejected.kt`; runtime:
+  `box/innerClasses.kt` and `box/genericInnerClasses.kt`.
 - Local-class and anonymous-object model (probe series `localprobe_s1`–`_s2` and
   `anonprobe_s1`–`_s2`; common/JVM precedent): the DotNet wrappers run
   `InventNamesForLocalClasses`, `DotNetAnonymousObjectSuperConstructorLowering`,
