@@ -1,0 +1,914 @@
+.assembly extern mscorlib {}
+.assembly 'interfaceDefaultArguments' {}
+.module 'main-interfaceDefaultArguments.il'
+
+.class interface public abstract auto ansi 'Defaults'
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig static int32 'apply$default'(class 'Defaults' '$this', int32 'value', int32 '$mask0') cil managed
+    {
+      .maxstack 2
+      ldarg.2
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.0
+      callvirt instance int32 'Defaults'::'seed'()
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      callvirt instance int32 'Defaults'::'apply'(int32)
+      ret
+    }
+    .method public hidebysig static int32 'combine$default'(class 'Defaults' '$this', int32 'first', int32 'second', int32 '$mask0') cil managed
+    {
+      .maxstack 3
+      ldarg.3
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.0
+      callvirt instance int32 'Defaults'::'seed'()
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.3
+      ldc.i4 2
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_3
+      ldarg.1
+      ldc.i4 1
+      add
+      starg 2
+      br IL_whenEnd_2
+  IL_whenNext_3:
+  IL_whenEnd_2:
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      callvirt instance int32 'Defaults'::'combine'(int32, int32)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'seed'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'apply'(int32 'value') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'combine'(int32 'first', int32 'second') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DefaultsImpl'
+       extends [mscorlib]System.Object
+       implements 'Defaults'
+{
+  .field private int32 'base'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'base') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'DefaultsImpl'::'base'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_base'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'DefaultsImpl'::'base'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'DefaultsImpl'::'get_base'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'apply'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 2
+    mul
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'combine'(int32 'first', int32 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 100
+    mul
+    ldarg.2
+    add
+    ret
+  }
+  .property instance int32 'base'()
+  {
+    .get instance int32 'DefaultsImpl'::'get_base'()
+  }
+}
+.class interface public abstract auto ansi 'DerivedDefaults'
+       implements 'Defaults'
+{
+}
+.class public auto ansi sealed beforefieldinit 'DerivedDefaultsImpl'
+       extends [mscorlib]System.Object
+       implements 'DerivedDefaults'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'seed'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 9
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'apply'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'combine'(int32 'first', int32 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 100
+    mul
+    ldarg.2
+    add
+    ret
+  }
+}
+.class interface public abstract auto ansi 'RedeclaredDefaults'
+       implements 'Defaults'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'apply'(int32 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'RedeclaredDefaultsImpl'
+       extends [mscorlib]System.Object
+       implements 'RedeclaredDefaults'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'seed'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 10
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'apply'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 2
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'combine'(int32 'first', int32 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 100
+    mul
+    ldarg.2
+    add
+    ret
+  }
+}
+.class interface public abstract auto ansi 'GenericDefaults`1'<'T'>
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig static !!0 'choose$default'<'T'>(class 'GenericDefaults`1'<!!0> '$this', !!0 'value', int32 '$mask0') cil managed
+    {
+      .maxstack 2
+      ldarg.2
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.0
+      callvirt instance !0 class 'GenericDefaults`1'<!!0>::'fallback'()
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      callvirt instance !0 class 'GenericDefaults`1'<!!0>::'choose'(!0)
+      ret
+    }
+    .method public hidebysig static !!1 'echo$default'<'T', 'R'>(class 'GenericDefaults`1'<!!0> '$this', !!1 'value', !!1 'selected', int32 '$mask0') cil managed
+    {
+      .maxstack 3
+      ldarg.3
+      ldc.i4 2
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.1
+      starg 2
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      callvirt instance !!0 class 'GenericDefaults`1'<!!0>::'echo'<!!1>(!!0, !!0)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'fallback'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'choose'(!0 'value') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'R'>(!!0 'value', !!0 'selected') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericDefaultsImpl`1'<'T'>
+       extends [mscorlib]System.Object
+       implements class 'GenericDefaults`1'<!0>
+{
+  .field private !0 'fallback'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'fallback') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericDefaultsImpl`1'<!0>::'fallback'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_fallback'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericDefaultsImpl`1'<!0>::'fallback'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'fallback'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'GenericDefaultsImpl`1'<!0>::'get_fallback'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'choose'(!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'R'>(!!0 'value', !!0 'selected') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+  .property instance !0 'fallback'()
+  {
+    .get instance !0 'GenericDefaultsImpl`1'::'get_fallback'()
+  }
+}
+.class interface public abstract auto ansi 'StringDefaults'
+       implements class 'GenericDefaults`1'<string>
+{
+  .method public hidebysig newslot abstract virtual instance string 'choose'(string 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'StringDefaultsImpl'
+       extends [mscorlib]System.Object
+       implements 'StringDefaults'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'fallback'() cil managed
+  {
+    .maxstack 1
+    ldstr "fixed"
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'choose'(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldstr "!"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig newslot virtual instance !!0 'echo'<'R'>(!!0 'value', !!0 'selected') cil managed
+  {
+    .maxstack 1
+    ldarg.2
+    ret
+  }
+}
+.class interface public abstract auto ansi 'VariantDefaults`1'<+ 'T'>
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig static !!0 'value$default'<'T'>(class 'VariantDefaults`1'<!!0> '$this', int32 'index', int32 '$mask0') cil managed
+    {
+      .maxstack 2
+      ldarg.2
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldc.i4 0
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      callvirt instance !0 class 'VariantDefaults`1'<!!0>::'value'(int32)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'value'(int32 'index') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'StringVariantDefaults'
+       extends [mscorlib]System.Object
+       implements class 'VariantDefaults`1'<string>
+{
+  .field private string 'text'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'text') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'StringVariantDefaults'::'text'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_text'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'StringVariantDefaults'::'text'
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'value'(int32 'index') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    call instance string 'StringVariantDefaults'::'get_text'()
+    ldarg.1
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .property instance string 'text'()
+  {
+    .get instance string 'StringVariantDefaults'::'get_text'()
+  }
+}
+.class interface public abstract auto ansi 'BoundValue'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'number'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BoundValueImpl'
+       extends [mscorlib]System.Object
+       implements 'BoundValue'
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'BoundValueImpl'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'BoundValueImpl'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'number'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'BoundValueImpl'::'get_value'()
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'BoundValueImpl'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'BoundedDefaults`1'<(class 'BoundValue') 'T'>
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig static !!0 'choose$default'<(class 'BoundValue') 'T'>(class 'BoundedDefaults`1'<!!0> '$this', !!0 'value', int32 '$mask0') cil managed
+    {
+      .maxstack 2
+      ldarg.2
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.0
+      callvirt instance !0 class 'BoundedDefaults`1'<!!0>::'fallback'()
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      callvirt instance !0 class 'BoundedDefaults`1'<!!0>::'choose'(!0)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'fallback'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'choose'(!0 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'BoundedDefaultsImpl`1'<(class 'BoundValue') 'T'>
+       extends [mscorlib]System.Object
+       implements class 'BoundedDefaults`1'<!0>
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'BoundedDefaultsImpl`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'BoundedDefaultsImpl`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'fallback'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'BoundedDefaultsImpl`1'<!0>::'get_value'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'choose'(!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'BoundedDefaultsImpl`1'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'ExtensionDefaults'
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .method public hidebysig static string 'decorate$default'(class 'ExtensionDefaults' '$this', string '$receiver', string 'extra', int32 '$mask0') cil managed
+    {
+      .maxstack 3
+      ldarg.3
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldarg.0
+      callvirt instance string 'ExtensionDefaults'::'suffix'()
+      starg 2
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      callvirt instance string 'ExtensionDefaults'::'decorate'(string, string)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance string 'suffix'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance string 'decorate'(string '<this>', string 'extra') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ExtensionDefaultsImpl'
+       extends [mscorlib]System.Object
+       implements 'ExtensionDefaults'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'suffix'() cil managed
+  {
+    .maxstack 1
+    ldstr "!"
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'decorate'(string '<this>', string 'extra') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.2
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DefaultContainer'
+       extends [mscorlib]System.Object
+{
+  .class nested public interface abstract auto ansi 'NestedDefaults'
+  {
+    .class nested public auto ansi sealed beforefieldinit 'DefaultImpls'
+           extends [mscorlib]System.Object
+    {
+      .field private int32 'marker'
+      .method public hidebysig specialname rtspecialname instance void .ctor(int32 'marker') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        ldarg.1
+        stfld int32 'DefaultContainer'/'NestedDefaults'/'DefaultImpls'::'marker'
+        ret
+      }
+      .method public hidebysig specialname instance int32 'get_marker'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld int32 'DefaultContainer'/'NestedDefaults'/'DefaultImpls'::'marker'
+        ret
+      }
+      .property instance int32 'marker'()
+      {
+        .get instance int32 'DefaultContainer'/'NestedDefaults'/'DefaultImpls'::'get_marker'()
+      }
+    }
+    .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+           extends [mscorlib]System.Object
+    {
+      .method public hidebysig static int32 'value$default'(class 'DefaultContainer'/'NestedDefaults' '$this', int32 'number', int32 '$mask0') cil managed
+      {
+        .maxstack 2
+        ldarg.2
+        ldc.i4 1
+        and
+        ldc.i4 0
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldarg.0
+        callvirt instance int32 'DefaultContainer'/'NestedDefaults'::'seed'()
+        starg 1
+        br IL_whenEnd_0
+    IL_whenNext_1:
+    IL_whenEnd_0:
+        ldarg.0
+        ldarg.1
+        callvirt instance int32 'DefaultContainer'/'NestedDefaults'::'value'(int32)
+        ret
+      }
+    }
+    .method public hidebysig newslot abstract virtual instance int32 'seed'() cil managed
+    {
+    }
+    .method public hidebysig newslot abstract virtual instance int32 'value'(int32 'number') cil managed
+    {
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Impl'
+         extends [mscorlib]System.Object
+         implements 'DefaultContainer'/'NestedDefaults'
+  {
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'seed'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 31
+      ret
+    }
+    .method public hidebysig newslot virtual instance int32 'value'(int32 'number') cil managed
+    {
+      .maxstack 2
+      ldarg.1
+      ldc.i4 1
+      add
+      ret
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'interfaceDefaultArgumentsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'directDefault'(class 'DefaultsImpl' 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldc.i4 0
+    ldc.i4 1
+    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'interfaceDefault'(class 'Defaults' 'value') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldc.i4 0
+    ldc.i4 20
+    ldc.i4 1
+    call int32 'Defaults'/'<DefaultImpls>'::'combine$default'(class 'Defaults', int32, int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'inheritedDefault'(class 'DerivedDefaults' 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldc.i4 0
+    ldc.i4 1
+    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'redeclaredDefault'(class 'RedeclaredDefaults' 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldc.i4 0
+    ldc.i4 1
+    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'constrainedDefault'<(class 'Defaults') 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    box !!0
+    ldc.i4 0
+    ldc.i4 1
+    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    ret
+  }
+  .method public hidebysig static !!0 'genericDefault'<'T'>(class 'GenericDefaults`1'<!!0> 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !!0 '<default>'
+    )
+    ldarg.0
+    ldloca 0
+    initobj !!0
+    ldloc.0
+    ldc.i4 1
+    call !!0 'GenericDefaults`1'/'<DefaultImpls>'::'choose$default'<!!0>(class 'GenericDefaults`1'<!!0>, !!0, int32)
+    ret
+  }
+  .method public hidebysig static !!0 'genericMethodDefault'<'T'>(class 'GenericDefaults`1'<!!0> 'value', !!0 'item') cil managed
+  {
+    .maxstack 4
+    .locals init (
+      [0] !!0 '<default>'
+    )
+    ldarg.0
+    ldarg.1
+    ldloca 0
+    initobj !!0
+    ldloc.0
+    ldc.i4 2
+    call !!1 'GenericDefaults`1'/'<DefaultImpls>'::'echo$default'<!!0, !!0>(class 'GenericDefaults`1'<!!0>, !!1, !!1, int32)
+    ret
+  }
+  .method public hidebysig static string 'redeclaredGenericDefault'(class 'StringDefaults' 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldnull
+    ldc.i4 1
+    call !!0 'GenericDefaults`1'/'<DefaultImpls>'::'choose$default'<string>(class 'GenericDefaults`1'<!!0>, !!0, int32)
+    ret
+  }
+  .method public hidebysig static string 'variantDefault'(class 'VariantDefaults`1'<string> 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldc.i4 0
+    ldc.i4 1
+    call !!0 'VariantDefaults`1'/'<DefaultImpls>'::'value$default'<string>(class 'VariantDefaults`1'<!!0>, int32, int32)
+    ret
+  }
+  .method public hidebysig static !!0 'boundedDefault'<(class 'BoundValue') 'T'>(class 'BoundedDefaults`1'<!!0> 'value') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !!0 '<default>'
+    )
+    ldarg.0
+    ldloca 0
+    initobj !!0
+    ldloc.0
+    ldc.i4 1
+    call !!0 'BoundedDefaults`1'/'<DefaultImpls>'::'choose$default'<!!0>(class 'BoundedDefaults`1'<!!0>, !!0, int32)
+    ret
+  }
+  .method public hidebysig static string 'extensionDefault'(class 'ExtensionDefaults' '<this>', string 'value') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    ldnull
+    ldc.i4 1
+    call string 'ExtensionDefaults'/'<DefaultImpls>'::'decorate$default'(class 'ExtensionDefaults', string, string, int32)
+    ret
+  }
+  .method public hidebysig static int32 'nestedDefault'(class 'DefaultContainer'/'NestedDefaults' 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldc.i4 0
+    ldc.i4 1
+    call int32 'DefaultContainer'/'NestedDefaults'/'<DefaultImpls>'::'value$default'(class 'DefaultContainer'/'NestedDefaults', int32, int32)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldc.i4 7
+    newobj instance void 'DefaultsImpl'::.ctor(int32)
+    call int32 'interfaceDefaultArgumentsKt'::'directDefault'(class 'DefaultsImpl')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 7
+    newobj instance void 'DefaultsImpl'::.ctor(int32)
+    call int32 'interfaceDefaultArgumentsKt'::'interfaceDefault'(class 'Defaults')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'DerivedDefaultsImpl'::.ctor()
+    call int32 'interfaceDefaultArgumentsKt'::'inheritedDefault'(class 'DerivedDefaults')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'RedeclaredDefaultsImpl'::.ctor()
+    call int32 'interfaceDefaultArgumentsKt'::'redeclaredDefault'(class 'RedeclaredDefaults')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "text"
+    newobj instance void class 'GenericDefaultsImpl`1'<string>::.ctor(!0)
+    call !!0 'interfaceDefaultArgumentsKt'::'genericDefault'<string>(class 'GenericDefaults`1'<!!0>)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newobj instance void class 'GenericDefaultsImpl`1'<int32>::.ctor(!0)
+    ldc.i4 2
+    call !!0 'interfaceDefaultArgumentsKt'::'genericMethodDefault'<int32>(class 'GenericDefaults`1'<!!0>, !!0)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'StringDefaultsImpl'::.ctor()
+    call string 'interfaceDefaultArgumentsKt'::'redeclaredGenericDefault'(class 'StringDefaults')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "item"
+    newobj instance void 'StringVariantDefaults'::.ctor(string)
+    call string 'interfaceDefaultArgumentsKt'::'variantDefault'(class 'VariantDefaults`1'<string>)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 17
+    newobj instance void 'BoundValueImpl'::.ctor(int32)
+    newobj instance void class 'BoundedDefaultsImpl`1'<class 'BoundValueImpl'>::.ctor(!0)
+    call !!0 'interfaceDefaultArgumentsKt'::'boundedDefault'<class 'BoundValueImpl'>(class 'BoundedDefaults`1'<!!0>)
+    callvirt instance int32 'BoundValueImpl'::'number'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ExtensionDefaultsImpl'::.ctor()
+    ldstr "ok"
+    call string 'interfaceDefaultArgumentsKt'::'extensionDefault'(class 'ExtensionDefaults', string)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'DefaultContainer'/'Impl'::.ctor()
+    call int32 'interfaceDefaultArgumentsKt'::'nestedDefault'(class 'DefaultContainer'/'NestedDefaults')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
