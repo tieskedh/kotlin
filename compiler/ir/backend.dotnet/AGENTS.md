@@ -80,7 +80,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
-  series `callableabi_s2`, `captureabi_s3`, and `kfunction_s1`; follows the JVM split between logical generic
+  series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
   executable descriptors, with CLR `object` replacing JVM Object):
   Kotlin-to-Kotlin callable storage uses the public non-generic runtime interfaces
@@ -133,9 +133,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   object through KCallable, KFunction, and Function1 and invoked the erased slot. Pins:
   `ilText/callableObjects.kt`, `ilText/callableCaptures.kt`, `ilText/callableReferences.kt`,
   `ilText/callableObjectsRejected.kt`, `box/callableObjects.kt`, and
-  `box/callableReferences.kt`. STAYS REJECTED, loudly: suspend callables, callable arity above 2,
+  `box/callableReferences.kt`.
+  Generated non-Unit callables now follow the JVM typed-body-plus-erased-bridge pattern while
+  retaining the sole FunctionN identity. The original typed body is `InvokeExact`; the erased
+  bridge calls it. The CLR-specific discovery mechanism is one optional, variant
+  `[Kotlin.Runtime]Kotlin.Runtime.Internal.ExactFunctionN<P..., R>` interface on that same object.
+  It is metadata-public only because generated modules consume it across the runtime assembly
+  boundary; it is neither a Kotlin source declaration nor a storage/interface identity. A
+  statically shaped FunctionN call evaluates receiver and arguments once, probes the closed exact
+  interface, invokes it without argument/result boxing on a hit, and otherwise uses the stable
+  erased slot. Explicit user implementations and older modules therefore remain valid. CLR
+  reference variance may make a compatible exact probe succeed; widened value-type shapes miss
+  and fall back because CLR variance does not apply to value types. Unit stays erased because void
+  cannot close a generic result slot; do not invent a second Action-like capability casually.
+  `callableexact_s1` assembled and ran identical, erased-only, reference-variant, and value-variant
+  cases with both ILAsm versions and all four runtime pairings. Repository pins cover ordinary,
+  capturing, bound, KFunction, local, array-initializer, nullable, generic, evaluation-order, and
+  explicit-fallback shapes on CoreCLR. This is an execution capability only: never use it in
+  fields, parameters, returns, ordinary Kotlin subtype conversion, or CLR delegate projection.
+  STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
-  delegate adapters, and typed fast-path entry points. Kotlin metadata serialization and
+  delegate adapters, and Unit exact entry points. Kotlin metadata serialization and
   .NET-facing typed export surfaces must preserve the logical function arguments in later slices;
   the canonical interface encodes none of those arguments, so CLR reflection alone cannot
   reconstruct the Kotlin type even if later optimization members are visible. Promotion of the

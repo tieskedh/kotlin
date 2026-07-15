@@ -103,12 +103,12 @@ This identity is an invariant for subsequent callable work in this POC:
 - erased `Kotlin.Function0`/`Function1`/`Function2` remains the only Kotlin callable identity ABI;
 - captured values, mutable-capture cells, and bound-reference receivers are fields of generated
   callable classes and do not introduce another callable ABI shape; and
-- optional exact-shape members or foreign delegate projections added later are execution or export
+- optional exact-shape members or foreign delegate projections are execution or export
   layers only. They cannot replace the erased interface identity or participate in ordinary Kotlin
   function-type conversions.
 
 In particular, a bound reference must not be represented by a specialized delegate-like wrapper.
-Its generated callable object may store a receiver and may later expose an exact-shape entry point,
+Its generated callable object may store a receiver and may expose an exact-shape entry point,
 but its Kotlin-facing identity remains the erased `Kotlin.FunctionN` interface and its erased
 `Invoke` remains the universal fallback.
 
@@ -141,25 +141,55 @@ The candidate is only the Kotlin identity ABI and universal invocation fallback.
 that erased invocation or untyped CLR signatures are sufficient final execution and export
 surfaces.
 
+The POC now evaluates a first exact-shape execution layer without changing that identity. A
+compiler-generated, non-Unit callable object also implements one metadata-public interface in the
+reserved compiler/runtime namespace:
+
+```text
+Kotlin.Runtime.Internal.ExactFunction0<out R> { R InvokeExact() }
+Kotlin.Runtime.Internal.ExactFunction1<in P0, out R> { R InvokeExact(P0) }
+Kotlin.Runtime.Internal.ExactFunction2<in P0, in P1, out R> { R InvokeExact(P0, P1) }
+```
+
+These interfaces are not Kotlin source declarations or a storage ABI. They are public in CLR
+metadata only because generated modules must implement and call them across the runtime assembly
+boundary. The generated object's original typed body becomes `InvokeExact`; its erased `Invoke`
+bridge calls that body and retains the universal `Kotlin.FunctionN` contract.
+
+When the logical parameter and result types at a call site are known, codegen evaluates the
+receiver and arguments once, probes the corresponding closed `ExactFunctionN` interface, and
+calls `InvokeExact` if present. Otherwise it calls erased `Invoke` and performs the established
+boxing, casting, and unboxing. This makes older modules and explicit user-written function
+implementations valid fallback providers. CLR reference-type variance can make a compatible exact
+view succeed; CLR value-type variance cannot, so those widened calls safely use the erased path.
+Unit callables deliberately remain erased in this first slice because CLR `void` cannot be a
+generic result argument; introducing a separate Action-like capability before its identity and
+interop consequences are measured would weaken the invariant.
+
+This follows the JVM pattern of a typed implementation member plus an erased bridge. The shared
+optional interface is CLR-specific: it lets a call through the non-generic identity discover a
+typed cross-assembly member without knowing the generated implementation class.
+
 ## Required layers before promotion
 
 An upstream-quality design needs three distinct layers:
 
 1. **Canonical Kotlin identity ABI.** Non-generic `Kotlin.FunctionN` is the stable storage identity,
    and erased `Invoke` is the universal fallback.
-2. **Exact-shape execution ABI.** The compiler needs a demonstrated non-boxing path for important
-   monomorphic calls whose logical argument and result shapes are known exactly. This may use a
-   separate optional typed interface, an extra implementation member, or direct knowledge of a
-   generated class. A typed invocation is admissible only when the compiler proves both the exact
-   logical call shape and that the runtime callable implementation provides the matching typed
-   entry point. Otherwise it must use erased `Invoke`. The optimization must not change callable
-   identity or add required members to the candidate interfaces.
+2. **Exact-shape execution ABI.** The implemented candidate uses the optional internal
+   `ExactFunctionN` interfaces described above. A typed invocation is admissible only when the
+   compiler knows the logical call shape and the runtime object proves that it provides the
+   matching closed capability. Otherwise it uses erased `Invoke`. The optimization does not
+   change callable identity or add required members to the candidate `Kotlin.FunctionN`
+   interfaces. Unit, higher arities, benchmark-guided call-site selection, and any future direct
+   generated-class call remain deliberate follow-ups rather than alternate identities.
 3. **CLR export ABI.** Ordinary public APIs intended for C# and other CLR languages need typed
    projections, such as generated `Func`/`Action` adapters or typed facade members. Those
    projections do not participate in Kotlin subtype conversion and may allocate wrappers.
 
-The exact designs of layers 2 and 3 remain open, but representative implementations and evidence
-for both are requirements for promoting this draft rather than optional post-promotion work.
+The exact design of layer 3 and performance validation of layer 2 remain open. Representative
+implementations and evidence for both are requirements for promoting this draft rather than
+optional post-promotion work.
 
 ## Identity boundary
 
@@ -183,7 +213,10 @@ Benefits:
 
 Costs:
 
-- erased invocation boxes value arguments and results and casts or unboxes on entry;
+- calls whose object does not provide the matching exact capability still box value arguments and
+  results and cast or unbox at the erased boundary;
+- exact-capable calls add a guarded interface probe until profiling justifies a narrower direct
+  path;
 - the raw POC interface is untyped to C# and is not proposed as the final CLR export surface;
 - overloads that differ only in logical function type arguments have the same CLR signature and
   must be rejected as platform clashes; and
@@ -206,9 +239,11 @@ Repository pins cover both FIR parsers and real CoreCLR execution:
 Probe series `captureabi_s3` then compiled the capturing implementation itself with both ILAsm
 versions. All four same-target and cross-runtime pairings executed immutable and mutable captures,
 a Unit-mutating closure, an open-generic cell, and primitive and reference bound receivers. The
-generated classes acquired no capture-specific callable interface: lambdas implemented only the
-erased `Kotlin.FunctionN`, while direct references could additionally carry the fixed KFunction
-reflection view described above. Captures and bound receivers appeared only as fields, mutable state used one invariant
+generated classes acquired no capture-specific callable interface: at that stage lambdas
+implemented only the erased `Kotlin.FunctionN`, while direct references could additionally carry
+the fixed KFunction reflection view described above. The later exact-capability slice adds the
+same optional execution interface to eligible capturing and non-capturing objects; it is unrelated
+to capture layout. Captures and bound receivers appeared only as fields, mutable state used one invariant
 `Kotlin.Runtime.Internal.MutableRef<T>` cell, and no stateful callable had a singleton cache.
 
 Probe series `kfunction_s1` assembled a runtime and a direct reference implementing both
@@ -220,13 +255,23 @@ KFunction-to-Function identity, KFunction variance identity, singleton reuse, an
 freshness in `ilText/callableReferences.kt`, `box/callableReferences.kt`, and the local-function
 fixtures.
 
+Probe series `callableexact_s1` assembled the optional interfaces, exact-capable and erased-only
+implementations, and one guarded consumer with modern 10.0.9 and .NET Framework 4.8 ILAsm. All
+four same-target and cross-runtime pairings took the exact path for an identical primitive shape,
+fell back for an erased-only implementation, used CLR variance for a compatible reference shape,
+and rejected value-type variance so the erased fallback remained available. Repository goldens
+pin generated exact members and guarded calls in ordinary, capturing, reference, local-function,
+and array-initializer contexts. CoreCLR pins additionally cover parameters, open generics,
+nullable primitives, reference and primitive variance, captures, bound references, evaluation
+order, Unit erasure, and explicit user implementations.
+
 ## Deferred decisions
 
 The POC currently uses generated fields for captures and bound receivers and one invariant generic
 mutable-reference cell. Those concrete layouts are implementation evidence, not additional
 callable identities and not standardized by this ADR. This ADR does not decide KCallable metadata
 beyond `name`, property references, reflective lookup/call APIs, suspend callables, delegate
-adapters, exact-shape execution, CLR export, or the exact Kotlin metadata encoding. Those features
+adapters, Unit exact execution, CLR export, or the exact Kotlin metadata encoding. Those features
 must preserve the canonical ABI invariants above or explicitly revise this draft before they land.
 The POC's .NET Framework 4.8 compatibility is probe evidence for the candidate representation, not
 a decision about the eventual product support baseline.
@@ -239,8 +284,8 @@ Promote this draft only after all of the following validate the boundary:
 - adapted references, suspend callables, property references, and fuller KCallable metadata
   coexist with the candidate identity (capturing/bound function references and the minimal
   KFunction name view are already validated);
-- a measured exact-shape invocation strategy avoids boxing in important monomorphic paths while
-  retaining erased fallback behavior; and
+- the implemented exact-shape strategy is benchmarked and either retained or revised while its
+  erased fallback and single-object identity remain intact; and
 - representative typed CLR exports give host-language consumers a normal typed surface and define
   adapter reuse/delegate equality, callback registration and removal, repeated Kotlin-to-CLR and
   CLR-to-Kotlin projection, nullability translation, and exception translation.

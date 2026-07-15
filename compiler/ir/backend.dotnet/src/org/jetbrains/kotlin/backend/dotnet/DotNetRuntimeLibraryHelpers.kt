@@ -94,6 +94,27 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  .class interface public abstract auto ansi 'ExactFunction0`1'<+ R>
+            |  {
+            |    .method public hidebysig newslot abstract virtual instance !0 InvokeExact() cil managed
+            |    {
+            |    }
+            |  }
+            |
+            |  .class interface public abstract auto ansi 'ExactFunction1`2'<- P0, + R>
+            |  {
+            |    .method public hidebysig newslot abstract virtual instance !1 InvokeExact(!0 p1) cil managed
+            |    {
+            |    }
+            |  }
+            |
+            |  .class interface public abstract auto ansi 'ExactFunction2`3'<- P0, - P1, + R>
+            |  {
+            |    .method public hidebysig newslot abstract virtual instance !2 InvokeExact(!0 p1, !1 p2) cil managed
+            |    {
+            |    }
+            |  }
+            |
             |  .class public auto ansi sealed beforefieldinit 'MutableRef`1'<'T'>
             |         extends [mscorlib]System.Object
             |  {
