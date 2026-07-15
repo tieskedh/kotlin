@@ -1950,6 +1950,12 @@ class DotNetIlEmitter(
 
     private fun StringBuilder.appendHeader() {
         appendLine(".assembly extern $CORE_LIB {}")
+        if (producesExecutable) {
+            appendLine(".assembly extern ${DotNetRuntimeLibrary.ASSEMBLY_NAME}")
+            appendLine("{")
+            appendLine("  .ver ${DotNetRuntimeLibrary.ASSEMBLY_VERSION_IL}")
+            appendLine("}")
+        }
         appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
         appendLine(".module ${moduleFileName.toIlIdentifier()}")
         appendLine()

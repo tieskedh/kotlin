@@ -316,6 +316,15 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         if (!file.isFile) {
             assertions.fail { "Expected .NET assembly was not produced: ${file.path}" }
         }
+        val runtimeFile = (file.parentFile ?: File(".")).resolve("Kotlin.Runtime.dll")
+        if (!runtimeFile.isFile) {
+            assertions.fail { "Expected Kotlin/.NET runtime assembly was not produced: ${runtimeFile.path}" }
+        }
+        val ilFile = (file.parentFile ?: File(".")).resolve("${file.nameWithoutExtension}.il")
+        val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()
+        if (".assembly extern Kotlin.Runtime" !in ilText || ".ver 1:0:0:0" !in ilText) {
+            assertions.fail { "Expected .NET assembly to reference Kotlin.Runtime: ${ilFile.path}" }
+        }
 
         // The box artifact is a dll (target `net`), launched via the signed `dotnet` host —
         // see 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.

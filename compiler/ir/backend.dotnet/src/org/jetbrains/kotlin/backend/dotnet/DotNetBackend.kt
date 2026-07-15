@@ -53,6 +53,27 @@ object DotNetBackend {
         }
         ilTarget.parentFile?.mkdirs()
 
+        if (assemblyName.equals(DotNetRuntimeLibrary.ASSEMBLY_NAME, ignoreCase = true) ||
+            (emitsExecutable && binaryOutput.name.equals(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME, ignoreCase = true))
+        ) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "'${DotNetRuntimeLibrary.ASSEMBLY_NAME}' is reserved for the Kotlin/.NET runtime assembly; " +
+                        "choose a different module name and output file."
+            )
+            if (emitsExecutable) binaryOutput.delete()
+            ilTarget.delete()
+            return if (emitsExecutable) binaryOutput else ilTarget
+        }
+        if (emitsExecutable) {
+            // Clear module-specific artifacts before lowering. A lowering/emission/runtime/ILAsm
+            // failure must never leave a previous successful program looking current. The shared
+            // runtime is intentionally not removed: another valid program in the directory may
+            // still depend on it.
+            binaryOutput.delete()
+            if (target == DotNetTarget.NET) binaryOutput.runtimeConfigFile().delete()
+        }
+
         val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable)
         try {
             configuration.perfManager.tryMeasurePhaseTime(PhaseType.IrLowering) {
@@ -90,6 +111,7 @@ object DotNetBackend {
         ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
 
         if (emitsExecutable) {
+            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, target, messageCollector) == null) return binaryOutput
             DotNetIlAssembler.assembleExecutable(ilTarget, binaryOutput, target, messageCollector)
             return binaryOutput
         }
@@ -100,6 +122,9 @@ object DotNetBackend {
     private fun File.siblingWithExtension(extension: String): File {
         return (parentFile ?: File(".")).resolve("$nameWithoutExtension.$extension")
     }
+
+    private fun File.runtimeConfigFile(): File =
+        (parentFile ?: File(".")).resolve("$nameWithoutExtension.runtimeconfig.json")
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }

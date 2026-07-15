@@ -38,6 +38,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Kotlin's mature enhanced-main detector. No wrapper is generated when the selected Kotlin `main`
   shape already maps to a valid CLR `.entrypoint` method (ECMA-335 allows parameterless or
   `string[]` entry points); add a wrapper only when a supported source shape needs one.
+- Runtime assembly foundation (probe series `runtimeprobe_s1`; follows the JVM separation between
+  generated programs and a Kotlin-owned runtime, with CLR assembly identity replacing JVM jar
+  identity): every assembled executable carries an AssemblyRef to, and is emitted beside,
+  `Kotlin.Runtime.dll`. The logical identity is permanently culture-neutral
+  `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null` for ABI major 1. Assembly version stays
+  fixed throughout compatible ABI-1 releases; product/package versions must be tracked outside
+  AssemblyVersion. ABI 1 is deliberately unsigned: strong naming is part of CLR identity, so a
+  future signed runtime requires a new assembly identity/ABI major rather than silently breaking
+  binding. One TFM-neutral ECMA-335 IL definition is assembled by the selected target's ILAsm;
+  runtime APIs remain within the .NET Framework 4.8 `mscorlib` surface so the same ABI also runs on
+  modern CoreCLR. `runtimeprobe_s1` assembled the runtime and a type-resolving consumer with both
+  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings ran, while both
+  runtime binaries reported the exact identity above. Namespace ownership is reserved now:
+  Kotlin language ABI types live under `Kotlin`, runtime services under `Kotlin.Runtime`, and
+  compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The first stable
+  foundational type is the deliberately memberless static marker
+  `Kotlin.Runtime.RuntimeInfo`; no callable interface/delegate ABI or compatibility-call hook is
+  implied yet. The compiler reserves the runtime assembly name, creates no runtimeconfig for the
+  library, and removes stale program outputs when either ILAsm path fails. The existing
+  module-local `<KotlinIl>` helper remains in generated assemblies until the callable ABI is
+  chosen; moving it is a later, explicit migration.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
   functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
 - Local `val`/`var` follows the JVM/WASM model conceptually: the method context maps IR value
