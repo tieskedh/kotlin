@@ -1,0 +1,683 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'callableObjects' {}
+.module 'main-callableObjects.il'
+
+.class public auto ansi sealed beforefieldinit 'Doubler'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance object 'Invoke'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    add
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$cached$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field public static initonly class 'callableObjectsKt$cached$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$cached$1'::.ctor()
+    stsfld class 'callableObjectsKt$cached$1' 'callableObjectsKt$cached$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 7
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$zero$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field public static initonly class 'callableObjectsKt$main$zero$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$zero$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$zero$1' 'callableObjectsKt$main$zero$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 40
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$one$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsKt$main$one$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$one$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$one$1' 'callableObjectsKt$main$one$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    ldc.i4 2
+    add
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$two$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function2'
+{
+  .field public static initonly class 'callableObjectsKt$main$two$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$two$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$two$1' 'callableObjectsKt$main$two$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'left', object 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    ldarg.2
+    unbox.any [mscorlib]System.Int32
+    add
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$reference$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsKt$main$reference$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$reference$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    call int32 'callableObjectsKt'::'increment'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$unit$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field public static initonly class 'callableObjectsKt$main$unit$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$unit$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    call void 'callableObjectsKt'::'mark'()
+    ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$broad$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsKt$main$broad$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$broad$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$broad$1' 'callableObjectsKt$main$broad$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 1
+    ldstr "variance"
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$primitive$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field public static initonly class 'callableObjectsKt$main$primitive$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$primitive$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 42
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$text$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsKt$main$text$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$text$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    castclass [mscorlib]System.String
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$nullablePresent$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field public static initonly class 'callableObjectsKt$main$nullablePresent$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$nullablePresent$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$nullablePresent$1' 'callableObjectsKt$main$nullablePresent$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 42
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$nullableAbsent$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field public static initonly class 'callableObjectsKt$main$nullableAbsent$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$nullableAbsent$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$nullableAbsent$1' 'callableObjectsKt$main$nullableAbsent$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldnull
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$boolean$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsKt$main$boolean$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$boolean$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    unbox.any [mscorlib]System.Boolean
+    ldc.i4.0
+    ceq
+    box [mscorlib]System.Boolean
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$extension$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableObjectsKt$main$extension$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$extension$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$extension$1' 'callableObjectsKt$main$extension$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object '<this>') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    castclass [mscorlib]System.String
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'callableObjectsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'increment'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig static void 'mark'() cil managed
+  {
+    .maxstack 1
+    ldstr "unit"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'cached'() cil managed
+  {
+    .maxstack 1
+    ldsfld class 'callableObjectsKt$cached$1' 'callableObjectsKt$cached$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'preserve'<'T'>(class [Kotlin.Runtime]'Kotlin.Function0' 'function') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function0' 'zero',
+      [1] class [Kotlin.Runtime]'Kotlin.Function1' 'one',
+      [2] class [Kotlin.Runtime]'Kotlin.Function2' 'two',
+      [3] class [Kotlin.Runtime]'Kotlin.Function1' 'reference',
+      [4] class [Kotlin.Runtime]'Kotlin.Function0' 'unit',
+      [5] class [Kotlin.Runtime]'Kotlin.Function1' 'broad',
+      [6] class [Kotlin.Runtime]'Kotlin.Function1' 'narrow',
+      [7] class [Kotlin.Runtime]'Kotlin.Function0' 'primitive',
+      [8] class [Kotlin.Runtime]'Kotlin.Function0' 'widened',
+      [9] class [Kotlin.Runtime]'Kotlin.Function1' 'text',
+      [10] class [Kotlin.Runtime]'Kotlin.Function0' 'nullablePresent',
+      [11] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableAbsent',
+      [12] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [13] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [14] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
+      [15] valuetype [mscorlib]System.Nullable`1<int32> '<eq>@15',
+      [16] class [Kotlin.Runtime]'Kotlin.Function1' 'boolean',
+      [17] class [Kotlin.Runtime]'Kotlin.Function0' 'preserved',
+      [18] class [Kotlin.Runtime]'Kotlin.Function' 'marker',
+      [19] class [Kotlin.Runtime]'Kotlin.Function' 'starMarker',
+      [20] class [Kotlin.Runtime]'Kotlin.Function1' 'extension',
+      [21] class [Kotlin.Runtime]'Kotlin.Function1' 'implemented',
+      [22] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableCallable'
+    )
+    ldsfld class 'callableObjectsKt$main$zero$1' 'callableObjectsKt$main$zero$1'::'INSTANCE'
+    stloc.0
+    ldsfld class 'callableObjectsKt$main$one$1' 'callableObjectsKt$main$one$1'::'INSTANCE'
+    stloc.1
+    ldsfld class 'callableObjectsKt$main$two$1' 'callableObjectsKt$main$two$1'::'INSTANCE'
+    stloc.2
+    ldsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
+    stloc.3
+    ldsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
+    stloc 4
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldc.i4 40
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    ldc.i4 20
+    box [mscorlib]System.Int32
+    ldc.i4 22
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function2'::'Invoke'(object, object)
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    ldc.i4 41
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    pop
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'cached'()
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'cached'()
+    ceq
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$broad$1' 'callableObjectsKt$main$broad$1'::'INSTANCE'
+    stloc 5
+    ldloc 5
+    stloc 6
+    ldloc 5
+    ldloc 6
+    ceq
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
+    stloc 7
+    ldloc 7
+    stloc 8
+    ldloc 7
+    ldloc 8
+    ceq
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
+    stloc 9
+    ldloc 9
+    ldstr "reference cast"
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$nullablePresent$1' 'callableObjectsKt$main$nullablePresent$1'::'INSTANCE'
+    stloc 10
+    ldsfld class 'callableObjectsKt$main$nullableAbsent$1' 'callableObjectsKt$main$nullableAbsent$1'::'INSTANCE'
+    stloc 11
+    ldloc 10
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    stloc 12
+    ldloc 12
+    stloc 13
+    ldloca 13
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_7
+    ldc.i4 -1
+    br IL_whenEnd_6
+IL_whenNext_7:
+    ldloc 12
+    stloc 14
+    ldloca 14
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_8
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_8:
+    ldloca 14
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_6:
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 11
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    stloc 15
+    ldloca 15
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brtrue IL_boolStrTrue_9
+    ldstr "false"
+    br IL_boolStrEnd_10
+IL_boolStrTrue_9:
+    ldstr "true"
+IL_boolStrEnd_10:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
+    stloc 16
+    ldloc 16
+    ldc.i4.0
+    box [mscorlib]System.Boolean
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Boolean
+    brtrue IL_boolStrTrue_11
+    ldstr "false"
+    br IL_boolStrEnd_12
+IL_boolStrTrue_11:
+    ldstr "true"
+IL_boolStrEnd_12:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'preserve'<int32>(class [Kotlin.Runtime]'Kotlin.Function0')
+    stloc 17
+    ldloc 7
+    ldloc 17
+    ceq
+    brtrue IL_boolStrTrue_13
+    ldstr "false"
+    br IL_boolStrEnd_14
+IL_boolStrTrue_13:
+    ldstr "true"
+IL_boolStrEnd_14:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    stloc 18
+    ldloc 18
+    stloc 19
+    ldloc 18
+    ldloc 7
+    ceq
+    brtrue IL_boolStrTrue_15
+    ldstr "false"
+    br IL_boolStrEnd_16
+IL_boolStrTrue_15:
+    ldstr "true"
+IL_boolStrEnd_16:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 19
+    ldloc 7
+    ceq
+    brtrue IL_boolStrTrue_17
+    ldstr "false"
+    br IL_boolStrEnd_18
+IL_boolStrTrue_17:
+    ldstr "true"
+IL_boolStrEnd_18:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$extension$1' 'callableObjectsKt$main$extension$1'::'INSTANCE'
+    stloc 20
+    ldloc 20
+    ldstr "extension receiver"
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'Doubler'::.ctor()
+    stloc 21
+    ldloc 21
+    ldc.i4 21
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldnull
+    stloc 22
+    ldloc 22
+    ldnull
+    ceq
+    brtrue IL_boolStrTrue_19
+    ldstr "false"
+    br IL_boolStrEnd_20
+IL_boolStrTrue_19:
+    ldstr "true"
+IL_boolStrEnd_20:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
