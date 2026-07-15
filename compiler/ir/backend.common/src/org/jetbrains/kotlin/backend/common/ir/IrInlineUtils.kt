@@ -130,7 +130,15 @@ fun IrInlinable.inline(target: IrDeclarationParent, arguments: List<IrValueDecla
 
         is IrInvokable -> {
             val invoke = invokable.type.getClass()!!.functions.single { it.name == OperatorNameConventions.INVOKE }
-            val returnType = (invokable.type as IrSimpleType).arguments.last().typeOrFail
+            // An argument can retain its concrete class type when that class directly implements
+            // a function interface. Such a type has no logical function arguments; its concrete
+            // invoke declaration still provides the exact result type.
+            val invokableType = invokable.type as IrSimpleType
+            val returnType = if (invokableType.isFunctionOrKFunction()) {
+                invokableType.arguments.last().typeOrFail
+            } else {
+                invoke.returnType
+            }
             IrCallImpl(
                 UNDEFINED_OFFSET, UNDEFINED_OFFSET, returnType, invoke.symbol,
                 typeArgumentsCount = 0,
