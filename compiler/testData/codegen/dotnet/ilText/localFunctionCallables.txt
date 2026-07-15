@@ -25,7 +25,7 @@
 }
 .class private auto ansi sealed 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field public static initonly class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -42,17 +42,24 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 1
     ldc.i4 3
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
 }
 .class private auto ansi sealed 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field public static initonly class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -69,10 +76,17 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 1
     call int32 'localFunctionCallablesKt'::'functionReferenceMixtureSupported$local$1'()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
@@ -112,14 +126,32 @@
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Function0' 'lambda'
+      [0] class [Kotlin.Runtime]'Kotlin.Function0' 'lambda',
+      [1] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
     )
     ldsfld class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1'::'INSTANCE'
     stloc.0
     call int32 'localFunctionCallablesKt'::'lambdaMixtureSupported$local$0'()
     ldloc.0
+    stloc.1
+    ldloc.1
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.1
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
     add
     ret
   }
@@ -127,7 +159,10 @@
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.KFunction' 'reference'
+      [0] class [Kotlin.Runtime]'Kotlin.KFunction' 'reference',
+      [1] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
     )
     ldsfld class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1'::'INSTANCE'
     stloc.0
@@ -138,8 +173,23 @@
     brfalse IL_whenNext_1
     ldloc.0
     castclass class [Kotlin.Runtime]'Kotlin.Function0'
+    stloc.1
+    ldloc.1
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_2
+    ldloc.2
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc.3
+    br IL_callableExactEnd_3
+IL_callableErasedFallback_2:
+    ldloc.1
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_3:
+    ldloc.3
     br IL_whenEnd_0
 IL_whenNext_1:
     ldc.i4 -1

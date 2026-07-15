@@ -1,4 +1,4 @@
-// Fixed Function0/1/2 objects on CoreCLR: erased invocation bridges, direct invocation,
+// Fixed Function0/1/2 objects on CoreCLR: optional exact invocation with erased fallback,
 // function-typed plumbing, direct top-level references, Unit materialization, singleton reuse,
 // Kotlin variance across both reference and primitive slots, open generic type arguments, the
 // Function marker, extension receivers, explicit implementations, nullable callable storage,
@@ -6,6 +6,7 @@
 // delegate adapters remain separate.
 
 private var unitCalls: Int = 0
+private var callableEvaluationOrder: String = ""
 
 private class Doubler : (Int) -> Int {
     override fun invoke(value: Int): Int = value + value
@@ -57,6 +58,19 @@ fun <T> applyExact(value: T, function: (T) -> T): T = function(value)
 
 fun <T> preserve(function: () -> T): () -> T = function
 
+fun orderedCallable(): (Int) -> Int {
+    callableEvaluationOrder = callableEvaluationOrder + "R"
+    return { value ->
+        callableEvaluationOrder = callableEvaluationOrder + "I"
+        value + 1
+    }
+}
+
+fun orderedArgument(): Int {
+    callableEvaluationOrder = callableEvaluationOrder + "A"
+    return 41
+}
+
 fun acceptAny(value: Any): Int = 42
 
 fun box(): String {
@@ -79,6 +93,7 @@ fun box(): String {
     val broad: (Any) -> String = { "variance" }
     val narrow: (String) -> Any = broad
     if (broad !== narrow) return "fail 7: reference variance"
+    if (narrow("ignored") != "variance") return "fail 39: reference variance invocation"
 
     val primitive: () -> Int = { 42 }
     val widened: () -> Any = primitive
@@ -159,5 +174,10 @@ fun box(): String {
     if (boundPrimitive !== boundWidened) return "fail 36: bound reference variance identity"
     if (boundIncrement(1) === boundIncrement(1)) return "fail 37: bound reference was cached"
     if (boundOffset(2)(40) != 42) return "fail 38: bound class receiver"
+
+    callableEvaluationOrder = ""
+    if (orderedCallable()(orderedArgument()) != 42 || callableEvaluationOrder != "RAI") {
+        return "fail 40: callable evaluation order"
+    }
     return "OK"
 }

@@ -521,7 +521,11 @@ IL_whileEnd_2:
       [4] int32 'tmp@4',
       [5] int32[] '<arraySet>',
       [6] int32 '<arrayIndex>',
-      [7] int32 '<arrayValue>'
+      [7] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [8] int32 '<callableArgument>',
+      [9] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [10] int32 '<callableResult>',
+      [11] int32 '<arrayValue>'
     )
     ldc.i4 0
     stloc.0
@@ -552,14 +556,32 @@ IL_whileCond_1:
     ldloc 4
     stloc 6
     ldloc.2
+    stloc 7
     ldloc 4
+    stloc 8
+    ldloc 7
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc 9
+    ldloc 9
+    brfalse IL_callableErasedFallback_3
+    ldloc 9
+    ldloc 8
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc 10
+    br IL_callableExactEnd_4
+IL_callableErasedFallback_3:
+    ldloc 7
+    ldloc 8
     box [mscorlib]System.Int32
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     unbox.any [mscorlib]System.Int32
-    stloc 7
+    stloc 10
+IL_callableExactEnd_4:
+    ldloc 10
+    stloc 11
     ldloc 5
     ldloc 6
-    ldloc 7
+    ldloc 11
     stelem.i4
     ldloc.0
     ldc.i4.1

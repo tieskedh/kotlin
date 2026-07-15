@@ -15,11 +15,14 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
+import org.jetbrains.kotlin.ir.builders.declarations.addFunction
 import org.jetbrains.kotlin.ir.builders.declarations.addGetter
 import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.irDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.builders.irBlockBody
+import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -45,6 +48,7 @@ import org.jetbrains.kotlin.ir.types.classOrFail
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
+import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
@@ -52,6 +56,7 @@ import org.jetbrains.kotlin.ir.util.isLambda
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.properties
+import org.jetbrains.kotlin.ir.util.removeProjectionsToMakeValidSuperType
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
@@ -105,23 +110,77 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     override fun getConstructorCallOrigin(reference: IrRichFunctionReference): IrStatementOrigin? = null
 
     override fun getAdditionalInterfaces(reference: IrRichFunctionReference): List<IrType> {
+        val executionType = reference.type.removeProjectionsToMakeValidSuperType()
+        val exactType = context.exactCallableSymbols.typeFor(executionType)
         val reflectiveType = reference.type.takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
-            ?: return emptyList()
-        val arity = reflectiveType.arguments.size - 1
-        if (arity !in 0..2) return emptyList()
-        return listOf(context.irBuiltIns.functionN(arity).symbol.typeWithArguments(reflectiveType.arguments))
+        val erasedExecutionType = reflectiveType?.let {
+            val arity = it.arguments.size - 1
+            if (arity !in 0..2) null
+            else context.irBuiltIns.functionN(arity).symbol.typeWithArguments(it.arguments)
+        }
+        return listOfNotNull(erasedExecutionType, exactType)
     }
 
     override fun postprocessInvoke(invokeFunction: IrSimpleFunction, functionReference: IrRichFunctionReference) {
         val reflectiveType = functionReference.type
             .takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
-            ?: return
-        val arity = reflectiveType.arguments.size - 1
-        if (arity !in 0..2) return
-        val executionInvoke = context.irBuiltIns.functionN(arity).invokeFun
-            ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
-        if (executionInvoke.symbol !in invokeFunction.overriddenSymbols) {
-            invokeFunction.overriddenSymbols += executionInvoke.symbol
+        if (reflectiveType != null) {
+            val arity = reflectiveType.arguments.size - 1
+            if (arity in 0..2) {
+                val executionInvoke = context.irBuiltIns.functionN(arity).invokeFun
+                    ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
+                if (executionInvoke.symbol !in invokeFunction.overriddenSymbols) {
+                    invokeFunction.overriddenSymbols += executionInvoke.symbol
+                }
+            }
+        }
+
+        val executionType = functionReference.type.removeProjectionsToMakeValidSuperType()
+        if (context.exactCallableSymbols.typeFor(executionType) == null) return
+        val arity = (executionType as IrSimpleType).arguments.size - 1
+        splitExactInvokeFromErasedBridge(invokeFunction, arity)
+    }
+
+    /**
+     * Keeps the original typed body as InvokeExact and makes the Kotlin FunctionN override a
+     * small erased bridge which calls it. Both slots live on the same generated object: the
+     * bridge is the stable identity ABI, while InvokeExact is an optional execution capability.
+     */
+    private fun splitExactInvokeFromErasedBridge(invokeFunction: IrSimpleFunction, arity: Int) {
+        val functionReferenceClass = invokeFunction.parent as IrClass
+        val erasedOverrides = invokeFunction.overriddenSymbols.toList()
+        val originalName = invokeFunction.name
+        val originalOperator = invokeFunction.isOperator
+        val exactInvoke = context.exactCallableSymbols.invokeForArity(arity)
+
+        invokeFunction.name = exactInvoke.name
+        invokeFunction.isOperator = false
+        invokeFunction.overriddenSymbols = listOf(exactInvoke.symbol)
+
+        functionReferenceClass.addFunction {
+            startOffset = invokeFunction.startOffset
+            endOffset = invokeFunction.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = originalName
+            visibility = invokeFunction.visibility
+            modality = invokeFunction.modality
+            returnType = invokeFunction.returnType
+            isOperator = originalOperator
+        }.apply bridge@{
+            annotations = invokeFunction.annotations
+            overriddenSymbols = erasedOverrides
+            parameters += createDispatchReceiverParameterWithClassParent()
+            invokeFunction.parameters.drop(1).forEach { parameter ->
+                parameters += parameter.copyTo(this)
+            }
+            body = context.createIrBuilder(symbol).irBlockBody {
+                +irReturn(irCall(invokeFunction).apply {
+                    arguments[0] = irGet(this@bridge.parameters[0])
+                    this@bridge.parameters.drop(1).forEachIndexed { index, parameter ->
+                        arguments[index + 1] = irGet(parameter)
+                    }
+                })
+            }
         }
     }
 

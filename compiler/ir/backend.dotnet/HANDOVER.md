@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(callable fast-path/CLR-interop audit after escaping array iterators).
+(explicit CLR delegate projection after the callable exact-path slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -19,7 +19,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   the POC IL-assembly-pipeline direction (`1e9492c5f`), and general open-type-parameter default
   placeholders (`2c4bab040`), interface-owned argument-default helpers (`b9c83e0c2`), and general
   concrete varargs (`44ec10c33`) and concrete array initializer constructors (`fb8b20d0a`),
-  followed by concrete array copying (`afd686b1f`) and the escaping iterator slice described below.
+  followed by concrete array copying (`afd686b1f`), escaping array iterators (`603b6f46d`), and
+  the callable exact-path slice described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -698,6 +699,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
   CoreCLR. Open `Array<T>` producers and user Iterator implementations stay rejected pending a
   deliberately designed erased bridge. The exact golden's dual-ILAsm result and the fresh full
   suite count are recorded in Branch state above.
+- The callable exact-path slice preserves erased `Kotlin.Function0/1/2` as the only Kotlin
+  callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge
+  pattern, eligible generated non-Unit callables keep their original typed body as `InvokeExact`
+  and make erased `Invoke` call it. A CLR-specific optional
+  `Kotlin.Runtime.Internal.ExactFunctionN<P..., R>` interface on the same object lets calls through
+  FunctionN discover that typed member across assemblies. It is metadata-public for assembly
+  access, but is not a Kotlin source or storage ABI. Call sites with a complete logical shape
+  evaluate receiver/arguments once, use a closed-interface `isinst`, call without value boxing on
+  a hit, and otherwise use erased Invoke. This naturally preserves older-module and explicit-user
+  implementations. Reference variance can hit through CLR generic variance; value-type variance
+  misses and falls back. Unit remains erased because CLR void cannot close the generic result.
+  `callableexact_s1` assembled exact, fallback, reference-variant, and value-variant cases with
+  modern and Framework ILAsm and ran all four runtime pairings. Goldens cover ordinary, capture,
+  reference, local-function, and array-initializer contexts; CoreCLR coverage additionally pins
+  parameter/open-generic calls, nullable primitives, variance, captures, bound references, Unit,
+  explicit fallback, and receiver/argument/invocation order. Delegate projection remains a
+  separate export layer and is the next callable task.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -780,9 +798,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Measure the callable typed fast path and CLR interop boundary.** Preserve erased
-   `Kotlin.Function0/1/2` identity, then validate exact-shape optimization members and explicit
-   delegate conversion without wrappers becoming a second Kotlin callable identity.
+1. **Implement and validate explicit CLR delegate projection.** Preserve erased
+   `Kotlin.Function0/1/2` as storage and identity. Define an explicit export/conversion boundary,
+   adapter reuse and delegate equality, callback add/remove behavior, repeated Kotlin-to-CLR and
+   CLR-to-Kotlin projection, nullability, Unit/void, and exception translation before choosing
+   codegen. A projected Func/Action may be another object; it must never participate in ordinary
+   Kotlin function-type conversion.
 2. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
    the neutral negative-array-size fault only when its Kotlin-owned identity and catch policy are
    audited. Keep `contentEquals` and related content operations separate until their floating,

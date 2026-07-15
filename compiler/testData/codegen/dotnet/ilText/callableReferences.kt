@@ -1,5 +1,6 @@
 // KFunction is an orthogonal reflection view on the same erased FunctionN callable object.
-// KCallable.name is the first metadata member; invocation still dispatches through FunctionN.
+// KCallable.name is the first metadata member; invocation retains the FunctionN identity while
+// using the same optional exact capability and erased fallback as ordinary function values.
 
 import kotlin.reflect.KFunction1
 

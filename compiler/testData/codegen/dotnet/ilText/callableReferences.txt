@@ -41,7 +41,7 @@
 }
 .class private auto ansi sealed 'callableReferencesKt$reflectedReference$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
 {
   .field public static initonly class 'callableReferencesKt$reflectedReference$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -58,12 +58,20 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
   {
     .maxstack 1
     ldarg.1
-    unbox.any [mscorlib]System.Int32
     call int32 'callableReferencesKt'::'incrementReference'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'callableReferencesKt$reflectedReference$1'::'InvokeExact'(int32)
     box [mscorlib]System.Int32
     ret
   }
@@ -80,7 +88,7 @@
 }
 .class private auto ansi sealed 'callableReferencesKt$main$narrow$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<object, string>
 {
   .field public static initonly class 'callableReferencesKt$main$narrow$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -97,11 +105,19 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  .method public hidebysig newslot virtual final instance string 'InvokeExact'(object 'p0') cil managed
   {
     .maxstack 1
     ldarg.1
     call string 'callableReferencesKt'::'labelReference'(object)
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance string 'callableReferencesKt$main$narrow$1'::'InvokeExact'(object)
     ret
   }
   .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
@@ -117,7 +133,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'callableReferencesKt$main$bound$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private class 'BoundValue' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'BoundValue' 'p0') cil managed
@@ -130,7 +146,7 @@
     stfld class 'BoundValue' 'callableReferencesKt$main$bound$1'::'f$0'
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 1
     .locals init (
@@ -141,6 +157,13 @@
     stloc.0
     ldloc.0
     call instance int32 'BoundValue'::'read'()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'callableReferencesKt$main$bound$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
@@ -157,7 +180,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'callableReferencesKt$main$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private class 'BoundValue' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'BoundValue' 'p0') cil managed
@@ -170,7 +193,7 @@
     stfld class 'BoundValue' 'callableReferencesKt$main$1'::'f$0'
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 1
     .locals init (
@@ -181,6 +204,13 @@
     stloc.0
     ldloc.0
     call instance int32 'BoundValue'::'read'()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'callableReferencesKt$main$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
@@ -228,12 +258,36 @@
   .method public hidebysig static int32 'callReference'(class [Kotlin.Runtime]'Kotlin.KFunction' 'reference', int32 'value') cil managed
   {
     .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
     ldarg.0
     castclass class [Kotlin.Runtime]'Kotlin.Function1'
+    stloc.0
     ldarg.1
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
     box [mscorlib]System.Int32
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -245,7 +299,10 @@
       [1] class [Kotlin.Runtime]'Kotlin.Function1' 'callable',
       [2] class [Kotlin.Runtime]'Kotlin.KFunction' 'narrow',
       [3] class [Kotlin.Runtime]'Kotlin.KFunction' 'wide',
-      [4] class [Kotlin.Runtime]'Kotlin.KFunction' 'bound'
+      [4] class [Kotlin.Runtime]'Kotlin.KFunction' 'bound',
+      [5] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [6] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [7] int32 '<callableResult>'
     )
     call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
     stloc.0
@@ -306,8 +363,23 @@ IL_boolStrEnd_5:
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
     castclass class [Kotlin.Runtime]'Kotlin.Function0'
+    stloc 5
+    ldloc 5
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc 6
+    ldloc 6
+    brfalse IL_callableErasedFallback_6
+    ldloc 6
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc 7
+    br IL_callableExactEnd_7
+IL_callableErasedFallback_6:
+    ldloc 5
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc 7
+IL_callableExactEnd_7:
+    ldloc 7
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -320,12 +392,12 @@ IL_boolStrEnd_5:
     ceq
     ldc.i4.0
     ceq
-    brtrue IL_boolStrTrue_6
+    brtrue IL_boolStrTrue_8
     ldstr "false"
-    br IL_boolStrEnd_7
-IL_boolStrTrue_6:
+    br IL_boolStrEnd_9
+IL_boolStrTrue_8:
     ldstr "true"
-IL_boolStrEnd_7:
+IL_boolStrEnd_9:
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

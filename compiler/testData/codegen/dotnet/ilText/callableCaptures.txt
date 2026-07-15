@@ -43,7 +43,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$immutableCapture$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private int32 '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$value') cil managed
@@ -56,18 +56,25 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'callableCapturesKt$immutableCapture$1'::'$value'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'callableCapturesKt$immutableCapture$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$mutableCapture$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> '$value') cil managed
@@ -80,7 +87,7 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 3
     ldarg.0
@@ -94,6 +101,13 @@
     ldarg.0
     ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32> 'callableCapturesKt$mutableCapture$1'::'$value'
     ldfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<int32>::'element'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'callableCapturesKt$mutableCapture$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
@@ -127,7 +141,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$genericMutableCapture$1`1'<'T'>
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<!0>
 {
   .field private class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> '$value'
   .field private !0 '$replacement'
@@ -144,7 +158,7 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance !0 'InvokeExact'() cil managed
   {
     .maxstack 2
     ldarg.0
@@ -155,13 +169,20 @@
     ldarg.0
     ldfld class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0> class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'$value'
     ldfld !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.MutableRef`1'<!0>::'element'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'callableCapturesKt$genericMutableCapture$1`1'<!0>::'InvokeExact'()
     box !0
     ret
   }
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundPrimitive$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private int32 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'p0') cil managed
@@ -174,7 +195,7 @@
     stfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
   {
     .maxstack 2
     .locals init (
@@ -186,6 +207,13 @@
     ldloc.0
     ldc.i4.1
     add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'callableCapturesKt$boundPrimitive$1'::'InvokeExact'()
     box [mscorlib]System.Int32
     ret
   }
@@ -202,7 +230,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundMember$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
 {
   .field private class 'Offset' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Offset' 'p0') cil managed
@@ -215,7 +243,7 @@
     stfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
     ret
   }
-  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
   {
     .maxstack 2
     .locals init (
@@ -226,8 +254,16 @@
     stloc.0
     ldloc.0
     ldarg.1
-    unbox.any [mscorlib]System.Int32
     call instance int32 'Offset'::'apply'(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'callableCapturesKt$boundMember$1'::'InvokeExact'(int32)
     box [mscorlib]System.Int32
     ret
   }
@@ -317,10 +353,43 @@
   {
     .entrypoint
     .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [2] int32 '<callableResult>',
+      [3] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@3',
+      [4] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@4',
+      [5] int32 '<callableResult>@5',
+      [6] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@6',
+      [7] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@7',
+      [8] int32 '<callableResult>@8',
+      [9] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@9',
+      [10] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@10',
+      [11] int32 '<callableResult>@11',
+      [12] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@12',
+      [13] int32 '<callableArgument>',
+      [14] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@14',
+      [15] int32 '<callableResult>@15'
+    )
     ldc.i4 42
     call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'immutableCapture'(int32)
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_callableErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc.2
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_callableExactEnd_1:
+    ldloc.2
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -328,8 +397,23 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 41
     call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'mutableCapture'(int32)
+    stloc.3
+    ldloc.3
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc 4
+    ldloc 4
+    brfalse IL_callableErasedFallback_2
+    ldloc 4
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc 5
+    br IL_callableExactEnd_3
+IL_callableErasedFallback_2:
+    ldloc.3
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc 5
+IL_callableExactEnd_3:
+    ldloc 5
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -344,8 +428,23 @@
     ldc.i4 0
     ldc.i4 42
     call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'genericMutableCapture'<int32>(!!0, !!0)
+    stloc 6
+    ldloc 6
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc 7
+    ldloc 7
+    brfalse IL_callableErasedFallback_4
+    ldloc 7
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc 8
+    br IL_callableExactEnd_5
+IL_callableErasedFallback_4:
+    ldloc 6
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc 8
+IL_callableExactEnd_5:
+    ldloc 8
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -353,8 +452,23 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 41
     call class [Kotlin.Runtime]'Kotlin.Function0' 'callableCapturesKt'::'boundPrimitive'(int32)
+    stloc 9
+    ldloc 9
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc 10
+    ldloc 10
+    brfalse IL_callableErasedFallback_6
+    ldloc 10
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc 11
+    br IL_callableExactEnd_7
+IL_callableErasedFallback_6:
+    ldloc 9
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
+    stloc 11
+IL_callableExactEnd_7:
+    ldloc 11
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -362,10 +476,28 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 2
     call class [Kotlin.Runtime]'Kotlin.Function1' 'callableCapturesKt'::'boundMember'(int32)
+    stloc 12
     ldc.i4 40
+    stloc 13
+    ldloc 12
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc 14
+    ldloc 14
+    brfalse IL_callableErasedFallback_8
+    ldloc 14
+    ldloc 13
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc 15
+    br IL_callableExactEnd_9
+IL_callableErasedFallback_8:
+    ldloc 12
+    ldloc 13
     box [mscorlib]System.Int32
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     unbox.any [mscorlib]System.Int32
+    stloc 15
+IL_callableExactEnd_9:
+    ldloc 15
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

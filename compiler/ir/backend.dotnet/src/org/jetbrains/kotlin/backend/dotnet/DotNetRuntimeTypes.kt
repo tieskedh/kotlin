@@ -82,6 +82,14 @@ internal object DotNetRuntimeTypes {
         functionClassInfo(arity = 2),
     )
 
+    private val exactFunctionClasses = List(3) { arity ->
+        DotNetIlClassInfo(
+            ilClassName = "Kotlin.Runtime.Internal.ExactFunction$arity`${arity + 1}",
+            typeParameterVariances = List(arity) { Variance.IN_VARIANCE } + Variance.OUT_VARIANCE,
+            assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+        )
+    }
+
     init {
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),
@@ -94,6 +102,7 @@ internal object DotNetRuntimeTypes {
 
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? = when {
         irClass.isDotNetMutableRefStub == true -> mutableRefClass
+        irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
         irClass.isDotNetIteratorBase || irClass.isDotNetSupportedPrimitiveIterator -> iteratorBase
         irClass.isDotNetKCallableBase -> kCallableBase
         irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
@@ -174,6 +183,29 @@ internal object DotNetRuntimeTypes {
 
     fun isFixedFunctionType(type: DotNetIlValueType, arity: Int): Boolean =
         arity in fixedFunctionClasses.indices && type == DotNetIlValueType.UserClass(fixedFunctionClasses[arity])
+
+    fun fixedFunctionType(arity: Int): DotNetIlValueType.UserClass =
+        DotNetIlValueType.UserClass(fixedFunctionClasses[arity])
+
+    /** Closed optional execution capability for the logical parameter types followed by result. */
+    fun exactFunctionType(argumentTypes: List<DotNetIlValueType>): DotNetIlValueType.GenericInstance? {
+        val arity = argumentTypes.size - 1
+        if (arity !in exactFunctionClasses.indices) return null
+        return DotNetIlValueType.GenericInstance(exactFunctionClasses[arity], argumentTypes)
+    }
+
+    /** Member-reference spelling of ExactFunctionN.InvokeExact on one closed owner view. */
+    fun exactInvokeCallInstruction(exactType: DotNetIlValueType.GenericInstance): String {
+        val arity = exactType.arguments.size - 1
+        val parameterTypes = (0 until arity).joinToString(", ") { "!$it" }
+        return "callvirt instance !$arity ${exactType.nameInSignature}::'InvokeExact'($parameterTypes)"
+    }
+
+    /** Member-reference spelling of the stable physically erased FunctionN.Invoke slot. */
+    fun erasedInvokeCallInstruction(arity: Int): String {
+        val parameterTypes = List(arity) { "object" }.joinToString(", ")
+        return "callvirt instance object ${fixedFunctionClasses[arity].ilTypeRef}::'Invoke'($parameterTypes)"
+    }
 
     private fun functionClassInfo(arity: Int): DotNetIlClassInfo = DotNetIlClassInfo(
         ilClassName = "Kotlin.Function$arity",
