@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.ir.types.isNullableString
 import org.jetbrains.kotlin.ir.types.isString
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.allOverridden
+import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.render
 
 /**
@@ -111,14 +112,45 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
  * The IL method name of a function: property accessors get the CLR-conventional `get_x`/`set_x`
  * derived from the property name (the JVM backend derives `getX`/`setX` the same way in
  * `MethodSignatureMapper`; the underscore spelling is what `.property` metadata conventionally
- * binds to, probe-verified), everything else keeps its Kotlin name. The result is still rendered
- * through [toIlIdentifier] wherever it is printed.
+ * binds to, probe-verified). Kotlin Any's three virtuals use their existing System.Object slot
+ * names; everything else keeps its Kotlin name. The result is still rendered through
+ * [toIlIdentifier] wherever it is printed.
  */
 internal fun IrSimpleFunction.dotNetIlMethodName(): String {
     if (isDotNetErasedCallableInvoke()) return "Invoke"
+    dotNetAnyMethodOrNull()?.let { return it.clrName }
     val property = correspondingPropertySymbol?.owner ?: return name.asString()
     val prefix = if (isGetter) "get_" else "set_"
     return prefix + property.name.asString()
+}
+
+/** The Kotlin Any member and the CLR System.Object virtual slot that physically represents it. */
+internal enum class DotNetAnyMethod(
+    val kotlinName: String,
+    val clrName: String,
+) {
+    EQUALS("equals", "Equals"),
+    HASH_CODE("hashCode", "GetHashCode"),
+    TO_STRING("toString", "ToString"),
+}
+
+/**
+ * The [DotNetAnyMethod] overridden by this declaration, or null for an unrelated member.
+ *
+ * The JVM backend maps kotlin.Any itself to java.lang.Object. DotNet follows that precedent with
+ * System.Object, whose method names differ from Kotlin's. This pipeline's builtin symbols do not
+ * carry usable IdSignatures, so the relationship is found with the same type-based
+ * [allOverridden] walk used by the class-shape gate: either the function is declared directly on
+ * kotlin.Any, or one of its transitive overridden declarations is. The frontend has already
+ * checked the three Kotlin signatures, so the name is sufficient after that ownership check.
+ */
+internal fun IrSimpleFunction.dotNetAnyMethodOrNull(): DotNetAnyMethod? {
+    val declaredOnAny = (parent as? IrClass)?.defaultType?.isAny() == true
+    val overridesAny = allOverridden().any { overridden ->
+        (overridden.parent as? IrClass)?.defaultType?.isAny() == true
+    }
+    if (!declaredOnAny && !overridesAny) return null
+    return DotNetAnyMethod.entries.singleOrNull { it.kotlinName == name.asString() }
 }
 
 /** Whether this is a fixed-arity callable member physically emitted as erased CLR `Invoke`. */
