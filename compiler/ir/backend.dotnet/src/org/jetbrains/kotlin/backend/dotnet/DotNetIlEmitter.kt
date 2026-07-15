@@ -763,7 +763,11 @@ class DotNetIlEmitter(
      * interface, object, or companion, with the same independent generic parameter and visibility
      * model. Named classes and objects may likewise nest recursively in any supported class,
      * interface, object, or companion; all use the JVM static-nested model and the same recursive
-     * metadata/initializer machinery (`nestedownerprobe_s1`–`_s2`). Inner classes stay rejected.
+     * metadata/initializer machinery (`nestedownerprobe_s1`–`_s2`). An inner class below a
+     * non-generic outer is represented by the common/JVM explicit-outer model: a private
+     * `this$0` field plus a leading constructor argument, with outer-`this` reads rewritten to
+     * field chains (`innerprobe_s1`–`_s2`). Inner classes below generic outers stay rejected:
+     * CLR nested types do not inherit their metadata parent's generic-parameter space.
      * Each violation throws
      * [DotNetIlUnsupportedException]; registration drops that declaration's metadata subtree,
      * while its valid enclosing classes and siblings remain available.
@@ -819,7 +823,12 @@ class DotNetIlEmitter(
             val kindWord = if (irClass.kind == ClassKind.OBJECT) "data object" else "data class"
             dotNetUnsupported("$kindWord '$name' is not supported")
         }
-        if (irClass.isInner) dotNetUnsupported("inner class '$name' is not supported")
+        if (irClass.isInner && enclosingClass?.typeParameters?.isNotEmpty() == true) {
+            dotNetUnsupported(
+                "inner class '$name' has generic outer class '${enclosingClass.diagnosticName()}'; " +
+                        "CLR nested types do not inherit their metadata parent's generic parameters"
+            )
+        }
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")
         // Modality maps directly onto CLR metadata like the JVM's class access flags: FINAL
@@ -1469,10 +1478,18 @@ class DotNetIlEmitter(
                     when (declaration.origin) {
                         IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE ->
                             renderedFields += renderObjectInstanceField(declaration, typeMapper)
-                        IrDeclarationOrigin.DELEGATE -> {
+                        IrDeclarationOrigin.DELEGATE,
+                        IrDeclarationOrigin.FIELD_FOR_OUTER_THIS,
+                            -> {
                             if (declaration.isStatic) {
+                                val fieldKind =
+                                    if (declaration.origin == IrDeclarationOrigin.FIELD_FOR_OUTER_THIS) {
+                                        "outer-instance"
+                                    } else {
+                                        "interface-delegate"
+                                    }
                                 dotNetUnsupported(
-                                    "internal: interface-delegate field '${declaration.name.asString()}' " +
+                                    "internal: $fieldKind field '${declaration.name.asString()}' " +
                                             "in class '$name' is unexpectedly static"
                                 )
                             }
@@ -1619,12 +1636,13 @@ class DotNetIlEmitter(
 
     /**
      * One `.field` line: the instance backing field of a member property, FIR's loose private
-     * interface-delegate field, or, with [isStatic], the static backing field of a top-level
-     * property on its file facade. These fields are always `private` (the JVM `final` analogue
-     * `initonly` is deliberately omitted — a pure metadata nicety with no semantic need, and a
-     * `var`'s `stsfld` from the static setter must stay legal); the delegation shape is
-     * ilasm-probe-verified by `delegationprobe_s1`, and both backing-field spellings by
-     * `statprobe_s1`/`_s2` (including a user-class-typed static field).
+     * interface-delegate field, the common inner-class lowering's private outer-instance field,
+     * or, with [isStatic], the static backing field of a top-level property on its file facade.
+     * These fields are always `private` (the JVM `final` analogue `initonly` is deliberately
+     * omitted — a pure metadata nicety with no semantic need, and a `var`'s `stsfld` from the
+     * static setter must stay legal); the delegation shape is ilasm-probe-verified by
+     * `delegationprobe_s1`, the outer-instance shape by `innerprobe_s1`–`_s2`, and both
+     * backing-field spellings by `statprobe_s1`/`_s2` (including a user-class-typed static field).
      */
     private fun renderField(field: IrField, typeMapper: DotNetIlTypeMapper, isStatic: Boolean = false): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
@@ -1766,9 +1784,10 @@ class DotNetIlEmitter(
      * field-identity clash gate: the loose singleton field — `INSTANCE` on an `object`, or the
      * field named after the companion that [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
      * parents to a companion-bearing class (so a user field named `Companion` with the
-     * companion's type clashes, whole-owner-subtree) — FIR's loose interface-delegate field, plus the
-     * backing fields of the declared properties, including `const val`s, whose `literal` fields
-     * share the class's field namespace like any other field.
+     * companion's type clashes, whole-owner-subtree) — FIR's loose interface-delegate field,
+     * the inner-class lowering's outer-instance field, plus the backing fields of the declared
+     * properties, including `const val`s, whose `literal` fields share the class's field
+     * namespace like any other field.
      */
     private fun IrClass.dotNetMemberFields(): List<IrField> =
         declarations.flatMap { declaration ->
@@ -1783,11 +1802,12 @@ class DotNetIlEmitter(
 
     /**
      * How one IL field is described in the field-identity clash diagnostic: the synthesized
-     * singleton field is named as such — the user never declared it — while a backing field is
-     * attributed to its property.
+     * singleton and outer-instance fields are named as such — the user never declared them —
+     * while a backing field is attributed to its property.
      */
     private fun IrField.dotNetFieldDescription(): String = when {
         origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE -> "the synthesized '${name.asString()}' singleton field"
+        origin == IrDeclarationOrigin.FIELD_FOR_OUTER_THIS -> "the synthesized outer-instance field"
         correspondingPropertySymbol != null -> "the backing field of property '${name.asString()}'"
         else -> "field '${name.asString()}'"
     }

@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.backend.common.InlineClassesUtils
 import org.jetbrains.kotlin.backend.common.ir.BackendSymbols
 import org.jetbrains.kotlin.backend.common.ir.SharedVariablesManager
 import org.jetbrains.kotlin.backend.common.lower.InnerClassesSupport
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesSupport
 import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.languageVersionSettings
@@ -13,9 +14,7 @@ import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
 import org.jetbrains.kotlin.ir.declarations.IrClass
-import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrFactory
-import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrGetValue
@@ -38,7 +37,7 @@ internal class DotNetBackendContext(
     override val typeSystem: IrTypeSystemContext = IrTypeSystemContextImpl(irBuiltIns)
     override val symbols: DotNetSymbols = DotNetSymbols(irBuiltIns)
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager
-    override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport
+    override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
         configuration.diagnosticsCollector,
         configuration.languageVersionSettings,
@@ -108,18 +107,4 @@ private object DotNetSharedVariablesManager : SharedVariablesManager() {
 
     private fun unsupportedSharedVariables(): Nothing =
         error("DotNet backend shared variable lowering is not available yet")
-}
-
-private object DotNetInnerClassesSupport : InnerClassesSupport {
-    override fun getOuterThisField(innerClass: org.jetbrains.kotlin.ir.declarations.IrClass): IrField =
-        unsupportedInnerClasses()
-
-    override fun getInnerClassConstructorWithOuterThisParameter(innerClassConstructor: IrConstructor): IrConstructor =
-        unsupportedInnerClasses()
-
-    override fun getInnerClassOriginalPrimaryConstructorOrNull(innerClass: org.jetbrains.kotlin.ir.declarations.IrClass): IrConstructor? =
-        unsupportedInnerClasses()
-
-    private fun unsupportedInnerClasses(): Nothing =
-        error("DotNet backend inner class lowering is not available yet")
 }

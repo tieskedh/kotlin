@@ -7,12 +7,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Add object-owned nested declarations",
+- Branch `dotnet`; latest functional work is "[DotNet] Add inner class outer capture",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **348 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **352 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -27,6 +27,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   module-local nested-base inheritance, and recursive singleton initialization for named nested
   objects and companions of ordinary nested classes, plus nested all-abstract interfaces and
   static-style declarations inside interfaces, objects, and companions.
+  Inner classes whose immediate outer is non-generic now use the common/JVM explicit-outer
+  representation on CLR nested metadata; generic-outers remain rejected pending parameter-space
+  duplication/substitution.
   Each has a design bullet in `AGENTS.md` — the bullets are accurate; trust but verify.
 - Interim continuation landed `dff037283`: JVM-shaped intrinsic registration for fir2ir's
   `noWhenBranchMatchedException`, originally emitting `[mscorlib]InvalidOperationException`
@@ -258,6 +261,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and Framework ILAsm; Framework outputs end at singleton count `6`, print `10` for rejection
   survivors, and preserve the existing `1,17`/`rejected` outputs. The fresh full DotNet suite is
   348/0/0/0 across eight XML files.
+- The inner-class continuation reuses the common/JVM three-phase pipeline before initializer
+  merging: synthesize a private `this$0` field plus leading constructor argument, rewrite
+  outer-`this` reads into field chains, and rewrite constructor calls. `innerprobe_s1` proves the
+  common pre-base-call outer-field store on both runtimes; `innerprobe_s2` covers inner inheritance,
+  virtual dispatch, inner-owned generics, multi-level capture, and outer-dependent initialization.
+  The committed tests additionally pin private/forward inner declarations, distinct outer
+  instances, a class with only secondary constructors, delegated secondary construction, and
+  narrow rejection of a bad inner member. An immediate generic outer stays shape-gate-rejected:
+  the nested type cannot implicitly use its metadata parent's `!n` space, so support requires a
+  later duplicate-and-substitute generic model. `ilText/innerClasses.kt`,
+  `ilText/classShapeRejected.kt`, `ilText/nestedClassesRejected.kt`, and `box/innerClasses.kt`
+  cover both parsers. All three changed goldens assemble under modern 10.0.9 and Framework 4.8
+  ILAsm; the positive golden runs identically on CoreCLR and Framework with output
+  `12,17,true,generic,10,22,19,13,15,13,22`. The fresh full DotNet suite is 352/0/0/0
+  across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -274,7 +292,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
    `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
-   `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `whenprobe`, `arrprobe` are taken). Keep
+   `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `whenprobe`, `arrprobe` are
+   taken). Keep
    probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the class metadata subtree, the companion's immediate owner
@@ -328,11 +347,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit `inner` classes.** Start from the JVM's explicit outer-instance model and determine
-   which FIR/common lowerings can supply the synthetic outer field/constructor argument for CLR
-   nested metadata. Probe construction, outer-member access, initialization order, inheritance,
-   generic outer capture, and visibility before lifting the gate. Keep local/anonymous,
-   enum/data/value, and annotation classes separate.
+1. **Audit local and anonymous classes.** Keep them separate from the completed named-inner model:
+   determine which common local-declaration lowering can give CLR-addressable names and explicit
+   captures without widening scope or silently accepting anonymous objects with unsupported
+   supertypes. Probe constructor/capture order, recursive locals, visibility, generic-function and
+   generic-class captures, and the smallest sound rejection boundary before lifting any gate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

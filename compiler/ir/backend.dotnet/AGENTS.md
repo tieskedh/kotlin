@@ -228,8 +228,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
   vtable/class lowering machinery): top-level plain classes — final, open, abstract, or sealed;
   non-generic or, since the generics model (below), with reified type parameters — plus the
-  named nested types described below, and, since the interface/generics models (below), top-level
-  or named nested non-generic/generic all-abstract interfaces pass the shape gate
+  named nested and inner types described below, and, since the interface/generics models (below),
+  top-level or named nested non-generic/generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
   Rejection granularity is the failing class's metadata subtree — a failing member (signature,
@@ -280,8 +280,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   IL-`assembly` widening. A failure OF a companion remains owner-sensitive because its field and
   `.cctor`
   live on the immediate owner; a separate failing child below a valid companion is its own
-  metadata subtree. STAYS REJECTED, per rejected metadata subtree: `inner`, local/anonymous,
-  data/value/enum/annotation, and a companion whose immediate class/interface container is generic.
+  metadata subtree. STAYS REJECTED, per rejected metadata subtree: local/anonymous,
+  data/value/enum/annotation, an `inner` class whose immediate outer is generic, and a companion
+  whose immediate class/interface container is generic.
   Recursive render failures preserve the deepest declaration tag while
   unwinding, then subtree eviction removes that declaration and its descendants; independent
   metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
@@ -292,6 +293,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
   `box/nestedInheritance.kt`, `box/nestedSingletons.kt`, `box/nestedInterfaces.kt`,
   `box/nestedObjectDeclarations.kt`.
+- Inner-class model (probe series `innerprobe_s1`–`_s2`; common/JVM precedent): a Kotlin `inner`
+  class whose immediate outer class is non-generic uses the common backend's explicit-outer
+  representation on real CLR nested metadata. `DotNetInnerClassesLowering` adds one private
+  `this$0` field and replaces each constructor's dispatch receiver with a leading regular outer
+  argument; `DotNetInnerClassesMemberBodyLowering` rewrites outer-`this` reads into field chains;
+  `DotNetInnerClassConstructorCallsLowering` moves the source call's dispatch receiver into that
+  argument. All three run before `DotNetInitializersLowering`, matching the common/JVM pipeline.
+  Both CoreCLR 10.0.9 and Framework 4.8 accept the common lowering's `stfld this$0` before the
+  base `.ctor` call (`innerprobe_s1`); no CLR-specific reorder is needed. Each inner subclass owns
+  its own outer field and forwards the same outer argument to an inner base constructor. Arbitrary
+  inner depth composes through field chains, and an inner class may own independent generic
+  parameters. Primary constructors, classes with only secondary constructors, and delegating
+  secondary constructors all preserve the outer argument; a delegating constructor lets its
+  target perform the single outer-field store. Source visibility uses the existing nested-type
+  mapping, and an unsupported inner member evicts only that inner metadata subtree and real users.
+  An inner class whose IMMEDIATE outer is generic stays rejected before rendering even when its
+  body does not mention the outer type parameter: its outer field type would refer to the metadata
+  parent's `!n`, but CLR nested types do not inherit that parameter space. Supporting it later
+  requires duplicating and substituting the outer parameters on the nested type, not emitting an
+  unbound `!n`. Pins: `ilText/innerClasses.kt`, `ilText/classShapeRejected.kt`,
+  `ilText/nestedClassesRejected.kt`; runtime: `box/innerClasses.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
   inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level or
