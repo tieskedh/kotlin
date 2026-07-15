@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'exhaustiveWhen' {}
 .module 'main-exhaustiveWhen.il'
 
@@ -27,7 +31,7 @@ IL_whenNext_1:
     ldstr "false"
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -79,7 +83,7 @@ IL_whenNext_2:
     ldstr "null"
     br IL_whenEnd_0
 IL_whenNext_3:
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -108,7 +112,7 @@ IL_whenNext_1:
     call void [mscorlib]System.Console::WriteLine(string)
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
@@ -139,7 +143,7 @@ IL_whenNext_2:
       ldstr "false"
       br IL_whenEnd_1
 IL_whenNext_3:
-      newobj instance void [mscorlib]System.Exception::.ctor()
+      newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
       throw
 IL_whenEnd_1:
       stloc.0
@@ -192,7 +196,7 @@ IL_whenNext_1:
     ldstr "false"
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
     throw
 IL_whenEnd_0:
     call string 'test.exhaustiveWhenKt'::'join'(string, string)
@@ -220,7 +224,7 @@ IL_whenNext_1:
     ldarg.2
     br IL_whenEnd_0
 IL_whenNext_2:
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoWhenBranchMatchedException'::.ctor()
     throw
 IL_whenEnd_0:
     ret
