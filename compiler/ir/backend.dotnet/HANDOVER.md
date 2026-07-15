@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(general concrete-vararg audit after interface-owned default-argument helpers).
+(concrete array-initializer audit after general concrete varargs).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -17,12 +17,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   by array-backed data classes (`a43d3de4d`), constructor defaults (`d6deff4f5`), and generic
   data-class equality (`c1597ef12`), data objects (`a2a418bfd`), local data classes (`4deb5e208`),
   the POC IL-assembly-pipeline direction (`1e9492c5f`), and general open-type-parameter default
-  placeholders (`2c4bab040`), followed by interface-owned argument-default helpers in the current
-  functional slice.
+  placeholders (`2c4bab040`) and interface-owned argument-default helpers (`b9c83e0c2`), followed
+  by general concrete varargs in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **448 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **452 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -642,6 +642,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   collision shapes are pinned. `interfacedefaultprobe_s1`, the exact golden, and both parser boxes
   pass with modern 10.0.9 and Framework 4.8 ILAsm. The fresh full-suite count for this slice is
   recorded in Branch state above.
+  General concrete varargs now lower before closure conversion/default stubs into the established
+  vector ABI. Reference vararg parameters lose only their source `out` projection; aliases and
+  captures follow the invariant physical array while `vararg T` remains rejected. Omitted and
+  expanded arguments allocate fresh arrays, spread values/sizes are evaluated once and copied by
+  ordinary typed array loops, and no-spread `arrayOf` calls retain their compact intrinsic. The
+  JVM-style null placeholder also makes a vararg's own default interoperate with masked defaults.
+  Primitive/reference/nullable/user/generic-class elements; empty/literal/multiple/empty spreads;
+  alias, evaluation and exception order; top-level/member/extension/constructor/interface/local/
+  captured/non-final/default shapes; and spread-bearing `arrayOf` are pinned. The exact golden and
+  both parser boxes pass with modern 10.0.9 and Framework 4.8 ILAsm. The fresh full-suite count for
+  this slice is recorded in Branch state above.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -724,14 +735,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Provide general concrete vararg declarations and calls.** Audit the common/JVM
-   `VarargLowering` rather than extending the existing `*ArrayOf` literal intrinsics ad hoc. Lower
-   supported primitive/reference/nullable element families into the established CLR vectors,
-   preserving left-to-right evaluation and spread-copy order across top-level, member, extension,
-   constructor, and default-argument call sites. Keep `vararg T` rejected until its projected
-   `Array<out T>` ABI has a deliberate representation, and keep mapper-rejected scalar/array
-   families out. Prove empty/literal/spread mixes, aliasing, exception order, both ILAsm
-   implementations, and real runtime behavior.
+1. **Provide concrete array initializer-lambda constructors.** Audit and reuse the common
+   `ArrayConstructorLowering` shape rather than teaching IL emission to invoke initializer lambdas
+   specially. Lower the five supported primitive vectors and supported concrete reference arrays
+   to one guarded allocation plus an indexed fill loop, preserving single evaluation of size,
+   index order, captures, exception timing, and negative-size behavior. Cover direct and local
+   lambdas plus supported callable objects where their existing erased `Function1` ABI suffices;
+   keep open/reified `Array<T>` construction and mapper-rejected element/array families gated.
+   Prove exact IL with both assemblers and runtime behavior through both parsers.
    RuntimeException source use stays gated. Fuller callable reflection remains later work rather
    than expanding the minimal name slice opportunistically.
 

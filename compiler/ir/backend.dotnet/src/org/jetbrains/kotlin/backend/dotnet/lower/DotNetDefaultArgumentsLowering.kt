@@ -10,6 +10,8 @@ import org.jetbrains.kotlin.backend.common.lower.DefaultParameterCleaner
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.types.IrType
 
 /**
@@ -45,7 +47,12 @@ internal class DotNetDefaultParameterInjector(
         context,
         factory,
         skipExternalMethods = true,
-    )
+    ) {
+    // The common injector intentionally leaves omitted vararg defaults absent. Like the JVM,
+    // DotNet needs a physical null placeholder for the masked dispatcher array parameter.
+    override fun nullConst(startOffset: Int, endOffset: Int, irParameter: IrValueParameter): IrExpression =
+        nullConst(startOffset, endOffset, irParameter.type)
+}
 
 internal class DotNetDefaultParameterCleaner(
     context: DotNetBackendContext,
