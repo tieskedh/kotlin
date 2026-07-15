@@ -146,7 +146,7 @@
 }
 .class private auto ansi sealed 'callableObjectsKt$main$reference$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
 {
   .field public static initonly class 'callableObjectsKt$main$reference$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -172,10 +172,20 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "increment"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableObjectsKt$main$reference$1'::'get_name'()
+  }
 }
 .class private auto ansi sealed 'callableObjectsKt$main$unit$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
 {
   .field public static initonly class 'callableObjectsKt$main$unit$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -198,6 +208,16 @@
     call void 'callableObjectsKt'::'mark'()
     ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
     ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "mark"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableObjectsKt$main$unit$1'::'get_name'()
   }
 }
 .class private auto ansi sealed 'callableObjectsKt$main$broad$1'

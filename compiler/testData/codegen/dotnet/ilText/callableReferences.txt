@@ -1,0 +1,332 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'callableReferences' {}
+.module 'main-callableReferences.il'
+
+.class public auto ansi sealed beforefieldinit 'BoundValue'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'BoundValue'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'BoundValue'::'value'
+    ret
+  }
+  .method public hidebysig instance int32 'read'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'BoundValue'::'get_value'()
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'BoundValue'::'get_value'()
+  }
+}
+.class private auto ansi sealed 'callableReferencesKt$reflectedReference$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableReferencesKt$reflectedReference$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableReferencesKt$reflectedReference$1'::.ctor()
+    stsfld class 'callableReferencesKt$reflectedReference$1' 'callableReferencesKt$reflectedReference$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    call int32 'callableReferencesKt'::'incrementReference'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "incrementReference"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableReferencesKt$reflectedReference$1'::'get_name'()
+  }
+}
+.class private auto ansi sealed 'callableReferencesKt$main$narrow$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'callableReferencesKt$main$narrow$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableReferencesKt$main$narrow$1'::.ctor()
+    stsfld class 'callableReferencesKt$main$narrow$1' 'callableReferencesKt$main$narrow$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call string 'callableReferencesKt'::'labelReference'(object)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "labelReference"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableReferencesKt$main$narrow$1'::'get_name'()
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableReferencesKt$main$bound$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field private class 'BoundValue' 'f$0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'BoundValue' 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'BoundValue' 'callableReferencesKt$main$bound$1'::'f$0'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'BoundValue' 'tmp0'
+    )
+    ldarg.0
+    ldfld class 'BoundValue' 'callableReferencesKt$main$bound$1'::'f$0'
+    stloc.0
+    ldloc.0
+    call instance int32 'BoundValue'::'read'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "read"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableReferencesKt$main$bound$1'::'get_name'()
+  }
+}
+.class private auto ansi sealed beforefieldinit 'callableReferencesKt$main$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
+{
+  .field private class 'BoundValue' 'f$0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'BoundValue' 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'BoundValue' 'callableReferencesKt$main$1'::'f$0'
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'BoundValue' 'tmp0'
+    )
+    ldarg.0
+    ldfld class 'BoundValue' 'callableReferencesKt$main$1'::'f$0'
+    stloc.0
+    ldloc.0
+    call instance int32 'BoundValue'::'read'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "read"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableReferencesKt$main$1'::'get_name'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'callableReferencesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'incrementReference'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig static string 'labelReference'(object 'ignored') cil managed
+  {
+    .maxstack 1
+    ldstr "label"
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.KFunction' 'reflectedReference'() cil managed
+  {
+    .maxstack 1
+    ldsfld class 'callableReferencesKt$reflectedReference$1' 'callableReferencesKt$reflectedReference$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig static string 'referenceName'(class [Kotlin.Runtime]'Kotlin.KFunction' 'reference') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
+    ret
+  }
+  .method public hidebysig static int32 'callReference'(class [Kotlin.Runtime]'Kotlin.KFunction' 'reference', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    castclass class [Kotlin.Runtime]'Kotlin.Function1'
+    ldarg.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.KFunction' 'reference',
+      [1] class [Kotlin.Runtime]'Kotlin.Function1' 'callable',
+      [2] class [Kotlin.Runtime]'Kotlin.KFunction' 'narrow',
+      [3] class [Kotlin.Runtime]'Kotlin.KFunction' 'wide',
+      [4] class [Kotlin.Runtime]'Kotlin.KFunction' 'bound'
+    )
+    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
+    stloc.0
+    ldloc.0
+    call string 'callableReferencesKt'::'referenceName'(class [Kotlin.Runtime]'Kotlin.KFunction')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    ldc.i4 41
+    call int32 'callableReferencesKt'::'callReference'(class [Kotlin.Runtime]'Kotlin.KFunction', int32)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    castclass class [Kotlin.Runtime]'Kotlin.Function1'
+    stloc.1
+    ldloc.0
+    ldloc.1
+    ceq
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
+    call class [Kotlin.Runtime]'Kotlin.KFunction' 'callableReferencesKt'::'reflectedReference'()
+    ceq
+    brtrue IL_boolStrTrue_2
+    ldstr "false"
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
+    ldstr "true"
+IL_boolStrEnd_3:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableReferencesKt$main$narrow$1' 'callableReferencesKt$main$narrow$1'::'INSTANCE'
+    stloc.2
+    ldloc.2
+    stloc.3
+    ldloc.2
+    ldloc.3
+    ceq
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 42
+    newobj instance void 'BoundValue'::.ctor(int32)
+    newobj instance void 'callableReferencesKt$main$bound$1'::.ctor(class 'BoundValue')
+    stloc 4
+    ldloc 4
+    callvirt instance string [Kotlin.Runtime]'Kotlin.KCallable'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    castclass class [Kotlin.Runtime]'Kotlin.Function0'
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    ldc.i4 42
+    newobj instance void 'BoundValue'::.ctor(int32)
+    newobj instance void 'callableReferencesKt$main$1'::.ctor(class 'BoundValue')
+    ceq
+    ldc.i4.0
+    ceq
+    brtrue IL_boolStrTrue_6
+    ldstr "false"
+    br IL_boolStrEnd_7
+IL_boolStrTrue_6:
+    ldstr "true"
+IL_boolStrEnd_7:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

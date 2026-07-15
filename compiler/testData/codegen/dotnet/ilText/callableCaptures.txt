@@ -161,7 +161,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundPrimitive$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function0'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
 {
   .field private int32 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'p0') cil managed
@@ -189,10 +189,20 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "inc"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableCapturesKt$boundPrimitive$1'::'get_name'()
+  }
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundMember$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1'
 {
   .field private class 'Offset' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Offset' 'p0') cil managed
@@ -220,6 +230,16 @@
     call instance int32 'Offset'::'apply'(int32)
     box [mscorlib]System.Int32
     ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "apply"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableCapturesKt$boundMember$1'::'get_name'()
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'callableCapturesKt'
