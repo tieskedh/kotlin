@@ -27,7 +27,12 @@ import org.jetbrains.kotlin.types.Variance
  *   its BCL-mapped logical children would make a parent catch miss those children. The CLR itself
  *   has no honest mapping: `System.SystemException` is deprecated and would catch
  *   OOM/StackOverflow while missing plain Exceptions, while `System.Exception` is too broad.
- * - `kotlin.Error` is REJECTED: the CLR has no fatal-error branch of the hierarchy at all.
+ * - `kotlin.Error` maps to exact runtime-owned `Kotlin.Error : System.Exception`. The CLR has no
+ *   faithful fatal-error root: deprecated `System.SystemException` contains non-fatal failures and
+ *   misses plain exceptions, so Kotlin-created Error values get exact identity while foreign
+ *   OutOfMemoryException/StackOverflowException values remain distinct. Because Throwable and
+ *   Exception already collapse to System.Exception, the existing accepted delta means a Kotlin
+ *   Error is also caught by `catch (Exception)` on this target.
  * - `kotlin.NumberFormatException` is the first source-visible exact runtime-owned mapping. It
  *   extends `System.ArgumentException`, not `System.FormatException`: the latter IS-NOT-A
  *   `System.ArgumentException` (probe-verified), while the selected physical parent preserves
@@ -48,12 +53,12 @@ import org.jetbrains.kotlin.types.Variance
  *   catches `ObjectDisposedException`; a BCL `ArgumentOutOfRangeException` lands in
  *   `IllegalArgumentException`, not `IndexOutOfBoundsException`.
  * - Constructor whitelist: `()` and `(String?)` map on every entry; `(String?, Throwable?)` maps
- *   where [Entry.Mapped.hasMessageCauseCtor] is set. That flag mirrors the Kotlin stdlib's
+ *   where [Entry.Mapped.hasMessageCauseCtor] is set. Cause-only `(Throwable?)` maps only where
+ *   [Entry.Mapped.hasCauseCtor] is set. Those flags mirror the Kotlin stdlib's
  *   declared constructor surface, NOT CLR availability — the CLR `(string, Exception)` overload
  *   exists on every BCL-mapped type (probe-verified); runtime-owned mappings provide exactly the
- *   constructor surface declared by Kotlin. The flag is `false` for Kotlin classes that declare
- *   only `()`/`(String?)` and can never resolve a `(message, cause)` call.
- *   The cause-only `(Throwable?)` constructor has NO CLR overload anywhere and is rejected.
+ *   constructor surface declared by Kotlin. Both flags are `false` for Kotlin classes that
+ *   declare only `()`/`(String?)`; the exact Kotlin.Error mapping enables both.
  *
  * The injected stdlib declarations of these classes (see [DOTNET_STDLIB_SOURCES]) exist only so
  * the frontend resolves them; [DotNetIlEmitter] excludes them from codegen entirely — the
@@ -68,14 +73,16 @@ internal object DotNetMappedExceptions {
     internal sealed class Entry {
         /**
          * A Kotlin exception class mapped onto the physical CLR type [clrTypeRef], either in
-         * corelib or `Kotlin.Runtime`. [hasMessageCauseCtor] mirrors the Kotlin stdlib's declared
-         * constructor surface. [physicalSupertypeRefs] lists the additional mapped CLR types to
-         * which values widen without an instruction; every mapping includes `System.Exception`,
-         * and a runtime-owned child of a mapped parent includes that parent's physical type too.
+         * corelib or `Kotlin.Runtime`. [hasMessageCauseCtor] and [hasCauseCtor] mirror the Kotlin
+         * stdlib's declared constructor surface. [physicalSupertypeRefs] lists the additional
+         * mapped CLR types to which values widen without an instruction; every mapping includes
+         * `System.Exception`, and a runtime-owned child of a mapped parent includes that parent's
+         * physical type too.
          */
         class Mapped(
             val clrTypeRef: String,
             val hasMessageCauseCtor: Boolean,
+            val hasCauseCtor: Boolean,
             val physicalSupertypeRefs: Set<String>,
         ) : Entry()
 
@@ -90,6 +97,7 @@ internal object DotNetMappedExceptions {
                 Entry.Mapped(
                     clrTypeRef = "${CORE_LIB_REF}System.$clrName",
                     hasMessageCauseCtor = hasMessageCauseCtor,
+                    hasCauseCtor = false,
                     physicalSupertypeRefs = setOf(EXCEPTION_TYPE_REF),
                 )
             )
@@ -108,7 +116,17 @@ internal object DotNetMappedExceptions {
             Entry.Mapped(
                 clrTypeRef = DotNetRuntimeLibrary.numberFormatExceptionTypeRef,
                 hasMessageCauseCtor = false,
+                hasCauseCtor = false,
                 physicalSupertypeRefs = setOf("${CORE_LIB_REF}System.ArgumentException", EXCEPTION_TYPE_REF),
+            )
+        )
+        put(
+            FqName("kotlin.Error"),
+            Entry.Mapped(
+                clrTypeRef = DotNetRuntimeLibrary.errorTypeRef,
+                hasMessageCauseCtor = true,
+                hasCauseCtor = true,
+                physicalSupertypeRefs = setOf(EXCEPTION_TYPE_REF),
             )
         )
         put(
@@ -118,10 +136,6 @@ internal object DotNetMappedExceptions {
                         "Exception/RuntimeException split); its Kotlin.Runtime type is reserved for exact " +
                         "Kotlin-owned identities, but source use stays rejected until mapped-child catches are coherent"
             )
-        )
-        put(
-            FqName("kotlin.Error"),
-            Entry.Rejected("'kotlin.Error' has no CLR fatal-error hierarchy to map onto; rejected")
         )
     }
 

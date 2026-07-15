@@ -1,9 +1,9 @@
 // Kotlin.Runtime now contains the physical RuntimeException root needed by exact Kotlin-owned
 // exceptions, but source use remains rejected until all existing mapped children have a coherent
 // catch policy. Enabling it now would make a thrown IllegalStateException (currently mapped to
-// System.InvalidOperationException) escape catch (RuntimeException). Error still has no CLR fatal
-// branch. Each function below is therefore skipped; main survives. NumberFormatException is
-// covered separately by its exact Kotlin.Runtime mapping.
+// System.InvalidOperationException) escape catch (RuntimeException). Each function below is
+// therefore skipped; main survives. Error and NumberFormatException are covered separately by
+// their exact Kotlin.Runtime mappings.
 fun runtimeValue(): Throwable = RuntimeException()
 
 fun catchRuntime(): String = try {
@@ -11,8 +11,6 @@ fun catchRuntime(): String = try {
 } catch (failure: RuntimeException) {
     "caught"
 }
-
-fun errorValue(): Throwable = Error()
 
 fun main() {
     println("owned-exception-boundary")

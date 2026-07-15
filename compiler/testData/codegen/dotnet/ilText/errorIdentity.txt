@@ -1,0 +1,122 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'errorIdentity' {}
+.module 'main-errorIdentity.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'test.errorIdentityKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [mscorlib]System.Exception 'asThrowable'(string 'message') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+    ret
+  }
+  .method public hidebysig static string 'exactCatch'(string 'message') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] string '<try>',
+      [1] class [Kotlin.Runtime]'Kotlin.Error' 'failure'
+    )
+    .try {
+      ldarg.0
+      newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+      throw
+    }
+    catch [Kotlin.Runtime]'Kotlin.Error' {
+      stloc.1
+      ldloc.1
+      callvirt instance string [mscorlib]System.Exception::get_Message()
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'throwableCatch'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] string '<try>',
+      [1] class [mscorlib]System.Exception '<unused var>'
+    )
+    .try {
+      newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
+      throw
+    }
+    catch [mscorlib]System.Exception {
+      stloc.1
+      ldstr "throwable"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'collapsedExceptionCatch'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] string '<try>',
+      [1] class [mscorlib]System.Exception '<unused var>'
+    )
+    .try {
+      newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
+      throw
+    }
+    catch [mscorlib]System.Exception {
+      stloc.1
+      ldstr "exception"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Error' 'withCause'(class [mscorlib]System.Exception 'cause') cil managed
+  {
+    .maxstack 2
+    ldstr "message"
+    ldarg.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string, class [mscorlib]System.Exception)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Error' 'fromCause'(class [mscorlib]System.Exception 'cause') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(class [mscorlib]System.Exception)
+    ret
+  }
+  .method public hidebysig static bool 'hasNoDefaultState'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Error' 'failure'
+    )
+    newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
+    stloc.0
+    ldloc.0
+    callvirt instance string [mscorlib]System.Exception::get_Message()
+    ldnull
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    ldloc.0
+    callvirt instance class [mscorlib]System.Exception [mscorlib]System.Exception::get_InnerException()
+    ldnull
+    ceq
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldc.i4.0
+IL_whenEnd_0:
+    ret
+  }
+}
