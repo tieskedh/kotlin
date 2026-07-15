@@ -908,9 +908,6 @@ class DotNetIlEmitter(
             dotNetUnsupported("nested $kind '$name' is not supported")
         }
         if (irClass.isData) {
-            when {
-                irClass.isOriginallyLocalDeclaration -> dotNetUnsupported("local data class '$name' is not supported yet")
-            }
             irClass.primaryConstructor
                 ?: dotNetUnsupported("data class '$name' has no primary constructor")
         }

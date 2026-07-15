@@ -123,6 +123,14 @@ case, supplies the substituted CLR return type to coercion and implicit-cast dec
 default copying composable with all generic member-return shapes and avoids an invalid
 `C<!0>`-to-`C<int32>` cast.
 
+Common local-declaration lowering may also prepend bound receiver/value capture parameters to a
+lifted local data class's primary constructor. They are implementation state, not data properties.
+The generic-data lowering therefore excludes only the `BOUND_RECEIVER_PARAMETER` and
+`BOUND_VALUE_PARAMETER` origins before it creates the erased view. The lifted generic class still
+stores and copies those captures normally; its view exposes only the source primary-constructor
+properties. This preserves both closure behavior and declaration-local data identity without a
+second equality representation.
+
 ## Visibility and ABI boundary
 
 The view and its component methods are compiler-generated layout inside the produced class. They
@@ -171,7 +179,9 @@ Probe series `generic_data_probe_s1` assembled both exact goldens with modern 10
 Framework 4.8 ILAsm. Framework-selected builds of every new runtime box also executed on CoreCLR.
 Reflection over the two-property exact pin found no public component bridge or public erased-view
 type, two private bridges, one private nested view, and an unchanged public property type `T`. The
-fresh full PSI/LightTree .NET matrix is 434 tests with no failures, errors, or skips across eight
+local-data follow-up exact pin proves that a bound capture does not create another view slot, and
+its runtime pin exercises cross-instantiation equality plus capture propagation. The fresh full
+PSI/LightTree .NET matrix is 440 tests with no failures, errors, or skips across eight
 suites.
 
 The repository pins are:
@@ -181,15 +191,18 @@ The repository pins are:
 - `compiler/testData/codegen/dotnet/box/genericDataClasses.kt`;
 - `compiler/testData/codegen/dotnet/box/genericDataClassArrays.kt`;
 - `compiler/testData/codegen/dotnet/box/genericDataClassShapes.kt`;
-- `compiler/testData/codegen/dotnet/box/genericDataClassMultipleTypeParameters.kt`; and
-- `compiler/testData/codegen/dotnet/box/genericDataClassDefaults.kt`.
+- `compiler/testData/codegen/dotnet/box/genericDataClassMultipleTypeParameters.kt`;
+- `compiler/testData/codegen/dotnet/box/genericDataClassDefaults.kt`;
+- `compiler/testData/codegen/dotnet/ilText/localDataClasses.kt`; and
+- `compiler/testData/codegen/dotnet/box/localDataClasses.kt`.
 
 ## Deliberate boundaries
 
 This draft changes only a generic data class whose `equals` body was compiler-generated. A data
 class with a user-written equality implementation keeps that implementation and receives no
-erased view. This draft does not define local data classes, data-object equality, unsupported
-property types, general generic `is`/`as` operations, Kotlin metadata serialization, or CLR-facing
-export projections. Data objects are handled by a separate singleton slice and do not consume the
-private equality view. Later features must not weaken the reified generic representation or
-repurpose this private equality mechanism as a public protocol.
+erased view. Local data classes consume this decision only after closure conversion, as described
+above. This draft does not define data-object equality, unsupported property types, general
+generic `is`/`as` operations, Kotlin metadata serialization, or CLR-facing export projections.
+Data objects are handled by a separate singleton slice and do not consume the private equality
+view. Later features must not weaken the reified generic representation or repurpose this private
+equality mechanism as a public protocol.

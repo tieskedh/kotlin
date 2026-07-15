@@ -158,8 +158,15 @@ static-nested metadata model. The shared generated `Equals(object)` accepts any 
 same declaration, including one produced through hostile reflection or serialization;
 `GetHashCode()` returns the compile-time fully-qualified-name hash, and `ToString()` returns the
 simple declaration name. The object-supertype restriction remains a separate general object-model
-boundary. Local data classes remain gated, and unsupported classes are still removed whole before
-they can expose a partial generated API.
+boundary.
+
+Local data classes subsequently compose with the same foundation after common closure conversion.
+Their lifted private CLR classes store receiver/value captures and propagate them through copying,
+but generated data identity still contains only source primary-constructor properties. Generic
+local declarations use the same private erased equality view as other generic data classes; bound
+capture parameters are deliberately excluded when that view is built. This adds neither an object
+root nor a public runtime protocol. Unsupported classes are still removed whole before they can
+expose a partial generated API.
 
 ## Deliberate boundaries
 
