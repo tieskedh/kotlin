@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetFlattenStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetForLoopLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
@@ -22,11 +23,12 @@ import org.jetbrains.kotlin.config.phaser.PhaserState
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
-    // Common/JVM local-class closure conversion, scoped to named classes by the DotNet wrapper:
-    // invent collision-resistant CLR names, make immutable value/type captures explicit, then
-    // move only transformed declarations to the nearest metadata container. This precedes inner
-    // classes and initializer merging, as on the JVM (localprobe_s1/s2).
+    // Common/JVM local-class closure conversion: invent collision-resistant CLR names, move
+    // anonymous-super arguments to the call site, make immutable value/type captures explicit,
+    // then move only transformed declarations to the nearest metadata container. This precedes
+    // inner classes and initializer merging, as on the JVM (localprobe_s1/s2, anonprobe_s1/s2).
     ::DotNetInventNamesForLocalClasses,
+    ::DotNetAnonymousObjectSuperConstructorLowering,
     ::DotNetLocalDeclarationsLowering,
     ::DotNetLocalDeclarationPopupLowering,
     // Follow the common/JVM inner-class pipeline before initializer merging: add the explicit
