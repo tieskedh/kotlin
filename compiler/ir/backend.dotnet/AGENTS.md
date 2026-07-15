@@ -59,7 +59,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
-  series `callableabi_s2` and `captureabi_s3`; follows the JVM split between logical generic
+  series `callableabi_s2`, `captureabi_s3`, and `kfunction_s1`; follows the JVM split between logical generic
   function types and erased
   executable descriptors, with CLR `object` replacing JVM Object):
   Kotlin-to-Kotlin callable storage uses the public non-generic runtime interfaces
@@ -79,10 +79,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   field is created after initializer cleanup and the normal static-initializer sweep emits its
   `.cctor`. Extension receivers occupy
   the first ordinary erased argument, and explicit user classes implementing a function type emit
-  the same erased override. FIR keeps a direct reference
-  expression typed as `KFunctionN` even when consumed through `FunctionN`; the callable lowering
-  drops only that generated class's unimplemented reflective view, while an actual KFunction-typed
-  storage/API position remains rejected. Erasure makes overloads differing only in logical
+  the same erased override. FIR keeps a direct reference expression typed as `KFunctionN` even
+  when consumed through `FunctionN`. The orthogonal reflection view follows the JVM mapping:
+  the runtime exposes non-generic `Kotlin.KCallable` with only `string get_name()` and the
+  memberless `Kotlin.KFunction : KCallable, Function` marker. A direct function-reference object
+  implements that marker AND exactly one erased `Kotlin.FunctionN`; lambdas and adapted references
+  without a KFunction source type remain FunctionN-only. KFunction declares no invocation member.
+  Source `KFunction0`/`KFunction1`/`KFunction2` storage maps to the non-generic KFunction view, and
+  invocation or widening to FunctionN performs a checked interface view change on the SAME object
+  before calling the unchanged erased `Invoke`. This is reflection capability, not a second
+  callable execution/identity ABI and never creates a wrapper. Erasure makes overloads differing only in logical
   function arguments collide; the existing CLR method-identity gate rejects both overloads and
   lets unrelated declarations survive, matching the JVM platform-clash category. `callableabi_s2`
   assembled an erased consumer/runtime pair with modern 10.0.9 and Framework 4.8 ILAsm and all
@@ -101,10 +107,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Unit.INSTANCE` before returning its mandatory object result. `captureabi_s3` assembled
   compiler-produced capturing consumers/runtimes with modern 10.0.9 and Framework 4.8 ILAsm; all
   four same/cross-runtime pairings executed immutable, mutable, Unit, generic-cell, and bound
-  receiver cases. Pins: `ilText/callableObjects.kt`, `ilText/callableCaptures.kt`,
-  `ilText/callableObjectsRejected.kt`, and `box/callableObjects.kt`. STAYS REJECTED, loudly:
-  suspend callables, callable arity above 2, KFunction storage/reflection metadata, delegate
-  adapters, and typed fast-path entry points. Kotlin metadata serialization and
+  receiver cases. `kfunction_s1` assembled a runtime plus a dual-interface reference object under
+  modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings observed the same
+  object through KCallable, KFunction, and Function1 and invoked the erased slot. Pins:
+  `ilText/callableObjects.kt`, `ilText/callableCaptures.kt`, `ilText/callableReferences.kt`,
+  `ilText/callableObjectsRejected.kt`, `box/callableObjects.kt`, and
+  `box/callableReferences.kt`. STAYS REJECTED, loudly: suspend callables, callable arity above 2,
+  KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
+  delegate adapters, and typed fast-path entry points. Kotlin metadata serialization and
   .NET-facing typed export surfaces must preserve the logical function arguments in later slices;
   the canonical interface encodes none of those arguments, so CLR reflection alone cannot
   reconstruct the Kotlin type even if later optimization members are visible. Promotion of the
@@ -447,7 +457,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   supertypes reject that metadata subtree and real users through
   the ordinary class gates. Pins: `ilText/localClasses.kt`, `ilText/localClassesRejected.kt`,
   `ilText/anonymousObjects.kt`, `ilText/anonymousObjectsRejected.kt`, `ilText/localFunctions.kt`,
-  and `ilText/localFunctionsRejected.kt`; runtime: `box/localClasses.kt`,
+  and `ilText/localFunctionCallables.kt`; runtime: `box/localClasses.kt`,
   `box/anonymousObjects.kt`, and `box/localFunctions.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform

@@ -7,9 +7,10 @@ import java.io.File
  * The first physical Kotlin/.NET runtime boundary.
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
- * the fixed, physically erased Function0/1/2 interfaces and the singleton Unit value required when
- * a callable result crosses their object-shaped invocation boundary. Compiler support shared by
- * generated modules lives below the reserved `Kotlin.Runtime.Internal` namespace.
+ * the fixed, physically erased Function0/1/2 interfaces, the orthogonal KCallable/KFunction
+ * reflection view, and the singleton Unit value required when a callable result crosses the
+ * object-shaped invocation boundary. Compiler support shared by generated modules lives below the
+ * reserved `Kotlin.Runtime.Internal` namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
@@ -56,6 +57,22 @@ internal object DotNetRuntimeLibrary {
         .namespace Kotlin
         {
           .class interface public abstract auto ansi Function
+          {
+          }
+
+          .class interface public abstract auto ansi KCallable
+          {
+            .method public hidebysig specialname newslot abstract virtual instance string 'get_name'() cil managed
+            {
+            }
+            .property instance string name()
+            {
+              .get instance string Kotlin.KCallable::'get_name'()
+            }
+          }
+
+          .class interface public abstract auto ansi KFunction
+                 implements Kotlin.KCallable, Kotlin.Function
           {
           }
 

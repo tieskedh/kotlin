@@ -7,13 +7,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is the capturing-callable state slice on top of
+- Branch `dotnet`; latest functional work comprises the capturing-callable state slice
+  (`131161ca5`) and this callable-reference metadata slice, on top of
   `b54578fab` (`[DotNet] Move compiler helpers into runtime`),
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **382 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **386 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -334,7 +335,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   suffix. At that slice, mutable captures rejected and lambda/reference mixtures remained at the
   existing function boundary; the later callable/shared-cell continuation removes those
   historical boundaries. `localfunprobe_s1`–`_s3` all print `42` on CoreCLR 10.0.9 and
-  Framework 4.8. `ilText/localFunctions.kt`, `ilText/localFunctionsRejected.kt`, and
+  Framework 4.8. `ilText/localFunctions.kt`, the now-renamed
+  `ilText/localFunctionCallables.kt`, and
   `box/localFunctions.kt` pin both parsers. Positive output is
   `15,-1,10,10,7,9,generic,owner,no-owner,12,12,-2,12,13`; the rejection survivor prints `29`.
   The fresh full DotNet suite is 370/0/0/0 across eight XML files.
@@ -379,16 +381,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and parameter contravariance, including value types, are instruction-free reference copies and
   preserve `===`. Non-capturing lambdas and direct top-level references lower to local callable
   classes, cache one instance through a generated `.cctor`, and invoke through the runtime
-  interface. Direct references consumed as FunctionN drop FIR's otherwise retained KFunctionN
-  view; actual KFunction-typed storage still rejects. Erased overload collisions use the existing
+  interface. At that slice, direct references consumed as FunctionN dropped FIR's otherwise
+  retained KFunctionN view and actual KFunction-typed storage rejected; the metadata continuation
+  below supersedes that temporary boundary. Erased overload collisions use the existing
   method-identity gate. `callableabi_s2` assembled the runtime/consumer with modern 10.0.9 and
   Framework 4.8 ILAsm; all four same/cross-runtime pairings ran. Focused PSI/LightTree IL and
   CoreCLR box coverage passes for Function0/1/2, direct references, Unit, singleton reuse,
   reference/value variance, Boolean, nullable Int, reference casts, open T, Function/Function<*>
   marker storage, extension receivers, explicit implementations, nullable callable storage, and
-  overload-clash survival. Negative pins cover suspend callables, arity above 2, and inferred
-  KFunction storage. Pins: `ilText/callableObjects.kt`, `ilText/callableObjectsRejected.kt`, and
-  `box/callableObjects.kt`.
+  overload-clash survival. Negative pins cover suspend callables and arity above 2. Pins:
+  `ilText/callableObjects.kt`, `ilText/callableObjectsRejected.kt`, and `box/callableObjects.kt`.
   The repo-local `docs/decisions/draft-adr-erased-callable-abi.md` records the decision drivers,
   rejected alternatives, costs, invariants, and the evidence required to promote or revise the
   draft; it is deliberately not presented as a public KEEP or an accepted Kotlin project ADR.
@@ -421,10 +423,30 @@ session state, process, and a curated task menu. Keep both files updated as you 
   objects, and lifted local functions; their existing exact fixtures now pin the cell shape and
   their box suites execute later outer writes through the captured cell.
   `ilText/callableCaptures.kt` pins the exact fields, cell type, generic construction, Unit bridge,
-  erased interfaces, and absence of stateful singleton caches. KFunction metadata, suspend
-  callables, arity above 2, delegate adapters, Kotlin metadata serialization, and typed fast paths
-  remain separate decisions. All four new/changed exact goldens assemble under modern 10.0.9 and
+  erased interfaces, and absence of stateful singleton caches. At that slice KFunction metadata,
+  suspend callables, arity above 2, delegate adapters, Kotlin metadata serialization, and typed fast
+  paths remained separate decisions; the metadata continuation below implements only the minimal
+  KFunction name view. All four new/changed exact goldens assemble under modern 10.0.9 and
   Framework 4.8 ILAsm. The fresh full DotNet suite is 382/0/0/0 across eight XML files.
+- The callable-reference metadata continuation keeps the Phase-0 invariant explicit: erased
+  `Kotlin.Function0`/`Function1`/`Function2` remains the sole Kotlin callable execution/identity
+  ABI, and bound receivers remain private generated-class fields. Following JVM's KFunction
+  mapping and `ReplaceKFunctionInvokeWithFunctionInvoke`, `Kotlin.Runtime` now exposes the
+  orthogonal non-generic reflection interfaces `Kotlin.KCallable` (only `string get_name()`) and
+  memberless `Kotlin.KFunction : KCallable, Function`. A direct function-reference object
+  implements KFunction plus exactly one erased FunctionN on the same object. KFunctionN signatures
+  map to KFunction; calls and KFunctionN-to-FunctionN widenings perform a checked interface view
+  change and still execute only `object Invoke(...)`. No delegate, wrapper, specialized bound
+  reference, or second execution slot exists. Lambdas remain FunctionN-only.
+  `kfunction_s1` assembled a dual-interface runtime/consumer with modern 10.0.9 and Framework 4.8
+  ILAsm; all four same/cross-runtime pairings read the name, invoked Function1, and preserved object
+  identity. `ilText/callableReferences.kt` and `box/callableReferences.kt` pin name metadata,
+  invocation, reflection/function identity, KFunction variance identity, non-capturing caching,
+  bound receiver freshness, and private receiver storage. The local-function fixtures now pin and
+  execute `::local.name` through the same view. Full signature/owner/parameter metadata, property
+  references, reflective lookup/call APIs, suspend callables, arity above 2, adapters, typed fast
+  paths, and Kotlin metadata serialization remain later slices. The fresh full DotNet suite is
+  386/0/0/0 across eight XML files.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -507,11 +529,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Add callable-reference metadata without changing callable identity.** Determine the minimum
-   Kotlin-owned KFunction/reference metadata contract and keep it orthogonal to erased
-   `Function0`/`Function1`/`Function2` invocation. Do not add CLR delegates or typed interfaces as
-   Kotlin callable identities; suspend callables, arity above 2, adapters, typed fast paths,
-   metadata serialization, `Any`, and Kotlin-owned exceptions remain later slices.
+1. **Audit the Kotlin-owned `Any` foundation before implementing it.** Determine how Kotlin Any,
+   ordinary CLR `System.Object`, generated class bases, virtual `equals`/`hashCode`/`toString`, and
+   cross-assembly identity should compose. Probe the smallest viable runtime base and do not change
+   every generated class hierarchy until the representation and migration consequences are
+   explicit. Kotlin-owned exceptions follow that foundation; fuller callable reflection remains a
+   later feature rather than expanding the minimal name slice opportunistically.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

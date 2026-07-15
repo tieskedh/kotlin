@@ -9,19 +9,27 @@ import org.jetbrains.kotlin.backend.common.FileLoweringPass
 import org.jetbrains.kotlin.backend.common.lower.AbstractFunctionReferenceLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
+import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
+import org.jetbrains.kotlin.ir.builders.declarations.addGetter
+import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.irDelegatingConstructorCall
+import org.jetbrains.kotlin.ir.builders.irBlockBody
+import org.jetbrains.kotlin.ir.builders.irReturn
+import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createExpressionBody
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
@@ -36,11 +44,14 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classOrFail
 import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.ir.types.typeWithArguments
+import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isLambda
+import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.primaryConstructor
+import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
@@ -60,8 +71,9 @@ internal class DotNetUpgradeCallableReferences(context: DotNetBackendContext) :
 
 /**
  * Turns a rich callable into the same local-class shape used by the common JS lowering: an Any
- * subclass implementing its fixed-arity function interface with one invoke override. The CLR
- * representation is Kotlin-owned; `System.Func`/`System.Action` adapters belong at future
+ * subclass implementing its fixed-arity function interface with one invoke override. Direct
+ * references additionally implement the orthogonal non-generic KFunction reflection view. The
+ * CLR representation is Kotlin-owned; `System.Func`/`System.Action` adapters belong at future
  * interop boundaries.
  */
 internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
@@ -92,34 +104,83 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
 
     override fun getConstructorCallOrigin(reference: IrRichFunctionReference): IrStatementOrigin? = null
 
+    override fun getAdditionalInterfaces(reference: IrRichFunctionReference): List<IrType> {
+        val reflectiveType = reference.type.takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
+            ?: return emptyList()
+        val arity = reflectiveType.arguments.size - 1
+        if (arity !in 0..2) return emptyList()
+        return listOf(context.irBuiltIns.functionN(arity).symbol.typeWithArguments(reflectiveType.arguments))
+    }
+
+    override fun postprocessInvoke(invokeFunction: IrSimpleFunction, functionReference: IrRichFunctionReference) {
+        val reflectiveType = functionReference.type
+            .takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
+            ?: return
+        val arity = reflectiveType.arguments.size - 1
+        if (arity !in 0..2) return
+        val executionInvoke = context.irBuiltIns.functionN(arity).invokeFun
+            ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
+        if (executionInvoke.symbol !in invokeFunction.overriddenSymbols) {
+            invokeFunction.overriddenSymbols += executionInvoke.symbol
+        }
+    }
+
+    override fun generateExtraMethods(functionReferenceClass: IrClass, reference: IrRichFunctionReference) {
+        if (!reference.type.isKFunction() || reference.type.isKSuspendFunction()) return
+        val reflectionTarget = reference.reflectionTargetSymbol?.owner ?: return
+        val superProperty = context.irBuiltIns.kCallableClass.owner.properties
+            .single { it.name.asString() == "name" }
+        val superGetter = superProperty.getter
+            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.name has no getter")
+
+        val nameProperty = functionReferenceClass.addProperty {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = superProperty.name
+            visibility = superProperty.visibility
+        }.apply {
+            overriddenSymbols = listOf(superProperty.symbol)
+        }
+        nameProperty.addGetter {
+            startOffset = reference.startOffset
+            endOffset = reference.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            returnType = context.irBuiltIns.stringType
+            visibility = superGetter.visibility
+        }.apply {
+            overriddenSymbols = listOf(superGetter.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            body = context.createIrBuilder(symbol).irBlockBody {
+                +irReturn(irString(reflectionTarget.metadata?.name?.asString() ?: reflectionTarget.name.asString()))
+            }
+        }
+    }
+
     override fun postprocessClass(functionReferenceClass: IrClass, functionReference: IrRichFunctionReference) {
         functionReferenceClass.dotNetInventedLocalClassName = functionReference.dotNetInventedLocalClassName
+        if (functionReference.type.isKFunction() && !functionReference.type.isKSuspendFunction()) {
+            // AbstractFunctionReferenceLowering adds fake overrides after generateExtraMethods.
+            // Its KFunctionN view does not recognize the concrete KCallable.name property above
+            // as satisfying the inherited property, so discard only that redundant fake pair.
+            // The concrete getter remains the single CLR implementation of KCallable.get_name.
+            val name = context.irBuiltIns.kCallableClass.owner.properties
+                .single { it.name.asString() == "name" }
+                .name
+            functionReferenceClass.declarations.removeAll { declaration ->
+                declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE && when (declaration) {
+                    is IrProperty -> declaration.name == name
+                    is IrSimpleFunction -> declaration.correspondingPropertySymbol?.owner?.name == name
+                    else -> false
+                }
+            }
+        }
         // Common function-reference lowering creates bound-value fields without a specialized
         // origin. Mark them as ordinary captured-value fields so the strict CLR class renderer
         // accepts exactly the same private state shape that closure conversion produces.
         functionReferenceClass.declarations.filterIsInstance<IrField>().forEach { field ->
             if (field.correspondingPropertySymbol == null && field.origin == IrDeclarationOrigin.DEFINED) {
                 field.origin = LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE
-            }
-        }
-        if (
-            functionReference.type.isKFunction() &&
-            !functionReference.type.isKSuspendFunction()
-        ) {
-            // FIR retains KFunctionN as the expression type even when the reference is consumed
-            // through an explicitly declared FunctionN slot. Reflection metadata is a later
-            // slice, so make the generated class implement only its invokable FunctionN view.
-            // A value that is actually stored/passed as KFunctionN still fails in type mapping;
-            // this does not silently claim that the reflective ABI exists.
-            val reflectiveType = functionReference.type as? IrSimpleType
-                ?: error("Internal .NET backend error: KFunction reference has a non-simple type")
-            val arity = reflectiveType.arguments.size - 1
-            val functionType = context.irBuiltIns.functionN(arity).symbol.typeWithArguments(reflectiveType.arguments)
-            functionReferenceClass.superTypes = functionReferenceClass.superTypes.map { superType ->
-                if (superType.isKFunction()) functionType else superType
-            }
-            functionReferenceClass.declarations.removeAll { declaration ->
-                declaration.origin == IrDeclarationOrigin.FAKE_OVERRIDE
             }
         }
         functionReferenceClass.dotNetLocalCaptureRejectionReason = when {

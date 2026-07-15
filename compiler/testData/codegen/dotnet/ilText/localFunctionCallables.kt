@@ -1,7 +1,6 @@
-// Mutable captures now use the runtime shared cell. A non-capturing lambda composes with an
-// explicit named local function. An inferred `::local` variable still has KFunction type and
-// remains rejected until the reflection ABI exists; its independently valid generated Function0
-// class and lifted target can remain unreferenced. Unrelated metadata and the entry point survive.
+// Mutable captures use the runtime shared cell. A non-capturing lambda composes with an
+// explicit named local function. An inferred `::local` variable now keeps its KFunction view and
+// can invoke the lifted target. Unrelated metadata and the entry point survive.
 
 fun mutableLocalFunctionCaptureSupported(): Int {
     var value = 1
@@ -19,11 +18,11 @@ fun lambdaMixtureSupported(): Int {
     return local() + lambda()
 }
 
-fun functionReferenceMixtureRejected(): Int {
+fun functionReferenceMixtureSupported(): Int {
     fun local(): Int = 4
     val reference = ::local
 
-    return reference()
+    return if (reference.name == "local") reference() else -1
 }
 
 class SurvivingLocalFunctionSibling {
@@ -32,5 +31,6 @@ class SurvivingLocalFunctionSibling {
 
 fun main() {
     println(lambdaMixtureSupported())
+    println(functionReferenceMixtureSupported())
     println(SurvivingLocalFunctionSibling().value())
 }

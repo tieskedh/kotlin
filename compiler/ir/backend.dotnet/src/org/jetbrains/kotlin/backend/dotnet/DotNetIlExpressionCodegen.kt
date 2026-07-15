@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.ir.expressions.IrTry
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperator
 import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
+import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
@@ -113,6 +114,15 @@ internal class DotNetIlExpressionCodegen(
         if (expression != null) {
             val naturalType = typeMapper.toDotNetIlValueType(expression.type)
             if (naturalType != null && naturalType != expectedType) {
+                val kFunctionArity = expression.type.dotNetKFunctionExecutionArityOrNull()
+                if (kFunctionArity != null && DotNetRuntimeTypes.isFixedFunctionType(expectedType, kFunctionArity)) {
+                    // KFunctionN is a logical subtype of FunctionN, while the erased CLR views
+                    // are sibling interfaces on the same generated object. Materialize that
+                    // source-level widening as a checked interface view change.
+                    emitExpression(expression, naturalType)
+                    methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
+                    return
+                }
                 if (naturalType.isDotNetAssignableTo(expectedType)) {
                     emitExpression(expression, naturalType)
                     return
@@ -281,23 +291,36 @@ internal class DotNetIlExpressionCodegen(
                             "to ${castType.nameInSignature} is not supported"
                 )
             }
-        } else when {
-            operandType.isDotNetAssignableTo(castType) -> emitExpression(expression.argument, operandType)
-            else -> {
-                val coercion = dotNetWideningCoercionOrNull(operandType, castType)
-                when {
-                    coercion != null -> {
-                        emitExpression(expression.argument, operandType)
-                        methodContext.emit(coercion, pops = 1, pushes = 1)
+        } else {
+            val kFunctionArity = expression.argument.type.dotNetKFunctionExecutionArityOrNull()
+            when {
+                kFunctionArity != null &&
+                        kFunctionArity == expression.typeOperand.dotNetFunctionExecutionArityOrNull() -> {
+                    // KFunctionN is physically the non-generic KFunction reflection view, while
+                    // execution remains exclusively on the erased FunctionN interface. The same
+                    // generated object implements both interfaces. This checked cross-interface
+                    // view change is the CLR counterpart of JVM's KFunction-to-Function CHECKCAST;
+                    // it does not introduce a second callable execution ABI.
+                    emitExpression(expression.argument, operandType)
+                    methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
+                }
+                operandType.isDotNetAssignableTo(castType) -> emitExpression(expression.argument, operandType)
+                else -> {
+                    val coercion = dotNetWideningCoercionOrNull(operandType, castType)
+                    when {
+                        coercion != null -> {
+                            emitExpression(expression.argument, operandType)
+                            methodContext.emit(coercion, pops = 1, pushes = 1)
+                        }
+                        operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType -> {
+                            emitExpression(expression.argument, operandType)
+                            emitNullableUnwrapOrThrowNpe(operandType)
+                        }
+                        else -> dotNetUnsupported(
+                            "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
+                                    "is not a reference upcast and is not supported"
+                        )
                     }
-                    operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType -> {
-                        emitExpression(expression.argument, operandType)
-                        emitNullableUnwrapOrThrowNpe(operandType)
-                    }
-                    else -> dotNetUnsupported(
-                        "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
-                                "is not a reference upcast and is not supported"
-                    )
                 }
             }
         }
@@ -310,6 +333,16 @@ internal class DotNetIlExpressionCodegen(
             methodContext.emit(outerCoercion, pops = 1, pushes = 1)
         }
     }
+
+    private fun IrType.dotNetKFunctionExecutionArityOrNull(): Int? =
+        (this as? IrSimpleType)?.classifier?.owner
+            ?.let { it as? IrClass }
+            ?.dotNetFixedKFunctionArityOrNull()
+
+    private fun IrType.dotNetFunctionExecutionArityOrNull(): Int? =
+        (this as? IrSimpleType)?.classifier?.owner
+            ?.let { it as? IrClass }
+            ?.dotNetFixedFunctionArityOrNull()
 
     /**
      * Emits [expression] as a non-null string suitable for printing or concatenation: constants

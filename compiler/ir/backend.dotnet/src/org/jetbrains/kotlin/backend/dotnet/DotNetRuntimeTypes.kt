@@ -12,18 +12,21 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
+import org.jetbrains.kotlin.ir.util.isKFunction
+import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.types.Variance
 
 /**
  * The callable portion of the Kotlin.Runtime ABI candidate evaluated by this POC.
  *
- * Common IR still speaks in synthetic `kotlin.Function$arity` classifiers. This registry maps
- * only fixed arities 0..2 to physical Kotlin-owned CLR interfaces. The CLR interfaces are erased
- * by arity and use object-shaped Invoke slots, following the JVM executable descriptor rather
- * than CLR generic variance: Kotlin's logical type arguments remain in IR/metadata, while every
- * legal source variance conversion is the same object reference at runtime. It deliberately does
- * not model the JVM's unrelated high-arity `FunctionN` fallback. CLR delegates remain an interop
- * concern and never appear in Kotlin-to-Kotlin signatures.
+ * Common IR speaks in synthetic `kotlin.Function$arity` and `kotlin.reflect.KFunction$arity`
+ * classifiers. This registry maps fixed execution arities 0..2 to erased Kotlin-owned CLR
+ * interfaces and every supported KFunction arity to one orthogonal, non-generic reflection view.
+ * FunctionN uses object-shaped Invoke slots, following the JVM executable descriptor rather than
+ * CLR generic variance: Kotlin's logical type arguments remain in IR/metadata, while every legal
+ * function-type variance conversion is the same object reference at runtime. It deliberately
+ * does not model the JVM's unrelated high-arity `FunctionN` fallback. CLR delegates remain an
+ * interop concern and never appear in Kotlin-to-Kotlin signatures.
  */
 internal object DotNetRuntimeTypes {
     private val unitClass = DotNetIlClassInfo(
@@ -34,6 +37,16 @@ internal object DotNetRuntimeTypes {
 
     private val functionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.Function",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val kCallableBase = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KCallable",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val kFunctionBase = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KFunction",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -50,6 +63,10 @@ internal object DotNetRuntimeTypes {
     )
 
     init {
+        kFunctionBase.interfaces = listOf(
+            DotNetIlValueType.UserClass(kCallableBase),
+            DotNetIlValueType.UserClass(functionBase),
+        )
         fixedFunctionClasses.forEach { classInfo ->
             classInfo.interfaces = listOf(DotNetIlValueType.UserClass(functionBase))
         }
@@ -57,27 +74,46 @@ internal object DotNetRuntimeTypes {
 
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? = when {
         irClass.isDotNetMutableRefStub == true -> mutableRefClass
+        irClass.isDotNetKCallableBase -> kCallableBase
+        irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
         irClass.isDotNetFunctionBase -> functionBase
         else -> irClass.dotNetFixedFunctionArityOrNull()?.let(fixedFunctionClasses::get)
     }
 
-    fun mapFunctionType(type: IrType): DotNetIlValueType.UserClass? {
+    fun mapCallableType(type: IrType): DotNetIlValueType.UserClass? {
         val simpleType = type as? IrSimpleType ?: return null
         val irClass = simpleType.classifier.owner as? IrClass ?: return null
-        val classInfo = if (irClass.isDotNetFunctionBase) {
-            if (simpleType.arguments.size != 1) return null
-            functionBase
-        } else {
-            val arity = irClass.dotNetFixedFunctionArityOrNull() ?: return null
-            if (simpleType.arguments.size != arity + 1) return null
-            fixedFunctionClasses[arity]
+        val classInfo = when {
+            irClass.isDotNetFunctionBase -> {
+                if (simpleType.arguments.size != 1) return null
+                functionBase
+            }
+            irClass.isDotNetKCallableBase -> {
+                if (simpleType.arguments.size != 1) return null
+                kCallableBase
+            }
+            irClass.isDotNetKFunctionBase -> {
+                if (simpleType.arguments.size != 1) return null
+                kFunctionBase
+            }
+            else -> {
+                val functionArity = irClass.dotNetFixedFunctionArityOrNull()
+                if (functionArity != null) {
+                    if (simpleType.arguments.size != functionArity + 1) return null
+                    fixedFunctionClasses[functionArity]
+                } else {
+                    val kFunctionArity = irClass.dotNetFixedKFunctionArityOrNull() ?: return null
+                    if (simpleType.arguments.size != kFunctionArity + 1) return null
+                    kFunctionBase
+                }
+            }
         }
         // Projections, including Function<*>, affect only Kotlin's logical view. A marker or
         // fixed-arity value still has the same erased physical interface and reference identity.
         return DotNetIlValueType.UserClass(classInfo)
     }
 
-    fun registerInvokeFunctions(
+    fun registerCallableFunctions(
         irBuiltIns: IrBuiltIns,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
@@ -90,11 +126,22 @@ internal object DotNetRuntimeTypes {
                 invoke.dotNetSignature(typeMapper),
             )
         }
+        val nameGetter = irBuiltIns.kCallableClass.owner.properties
+            .single { it.name.asString() == "name" }
+            .getter
+            ?: error("Internal .NET backend error: kotlin.reflect.KCallable.name has no getter")
+        availableFunctions[nameGetter] = DotNetIlFunctionInfo(
+            kCallableBase,
+            nameGetter.dotNetSignature(typeMapper),
+        )
     }
 
     val unitInstanceLoadInstruction: String
         get() = "ldsfld ${unitType.nameInSignature} " +
                 "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]'Kotlin.Unit'::INSTANCE"
+
+    fun isFixedFunctionType(type: DotNetIlValueType, arity: Int): Boolean =
+        arity in fixedFunctionClasses.indices && type == DotNetIlValueType.UserClass(fixedFunctionClasses[arity])
 
     private fun functionClassInfo(arity: Int): DotNetIlClassInfo = DotNetIlClassInfo(
         ilClassName = "Kotlin.Function$arity",
@@ -105,8 +152,24 @@ internal object DotNetRuntimeTypes {
 private val IrClass.isDotNetFunctionBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.Function" && typeParameters.size == 1
 
+private val IrClass.isDotNetKCallableBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KCallable" && typeParameters.size == 1
+
+private val IrClass.isDotNetKFunctionBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KFunction" && typeParameters.size == 1
+
 internal fun IrClass.dotNetFixedFunctionArityOrNull(): Int? {
     val fqName = fqNameWhenAvailable?.asString() ?: return null
     val arity = fqName.removePrefix("kotlin.Function").toIntOrNull() ?: return null
     return arity.takeIf { it in 0..2 && typeParameters.size == it + 1 }
+}
+
+internal fun IrClass.dotNetFixedKFunctionArityOrNull(): Int? {
+    if (!symbol.isKFunction()) return null
+    val arity = name.asString().removePrefix("KFunction").toIntOrNull() ?: return null
+    // Unlike kotlin.FunctionN, the synthetic KFunctionN classifiers exposed by the common
+    // built-ins do not reliably carry their logical type parameters on the IrClass itself.
+    // The instantiated IrSimpleType still carries, and mapCallableType validates, arity + 1
+    // arguments. Class identity therefore comes from the canonical built-in FQ name here.
+    return arity.takeIf { it in 0..2 }
 }
