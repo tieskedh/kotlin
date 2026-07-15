@@ -74,7 +74,7 @@ object DotNetBackend {
             if (target == DotNetTarget.NET) binaryOutput.runtimeConfigFile().delete()
         }
 
-        val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable)
+        val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable, irModuleFragment)
         try {
             configuration.perfManager.tryMeasurePhaseTime(PhaseType.IrLowering) {
                 DotNetLoweringPhases.lower(irModuleFragment, context)

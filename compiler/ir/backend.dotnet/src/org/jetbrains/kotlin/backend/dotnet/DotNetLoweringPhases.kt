@@ -50,8 +50,8 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetLocalDeclarationPopupLowering,
     // JVM/common masked-default dispatch after local declarations are lifted: generated
     // `$default` functions see final metadata owners, and every call with omitted ordinary
-    // function arguments is redirected before later lowerings inspect its body. Constructor
-    // defaults deliberately remain outside this slice.
+    // function or constructor arguments is redirected before later lowerings inspect its body.
+    // Constructor stubs carry the runtime-owned collision marker used by the JVM-shaped ABI.
     ::DotNetDefaultArgumentStubGenerator,
     ::DotNetDefaultParameterInjector,
     ::DotNetDefaultParameterCleaner,
