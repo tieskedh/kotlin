@@ -228,8 +228,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - Class model (JVM precedent: the CLR has real classes, so like `JvmLoweringPhases` there is NO
   vtable/class lowering machinery): top-level plain classes — final, open, abstract, or sealed;
   non-generic or, since the generics model (below), with reified type parameters — plus the
-  named nested classes described below, and, since the interface/generics models (below), top-level
-  non-generic or generic all-abstract interfaces pass the shape gate
+  named nested types described below, and, since the interface/generics models (below), top-level
+  or named nested non-generic/generic all-abstract interfaces pass the shape gate
   (`DotNetIlEmitter.checkClassShapeSupported` / `checkInterfaceShapeSupported`); objects and
   companions stay final-only with sole supertype `kotlin.Any`.
   Rejection granularity is the failing class's metadata subtree — a failing member (signature,
@@ -237,22 +237,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   nested declaration, because CLR nested metadata cannot outlive its parent. A failing ordinary
   nested class does NOT remove independent enclosing classes or siblings. The live type/function
   maps then cascade to actual users of the removed class. Companion failures are owner-sensitive:
-  the singleton field and `.cctor` live on the immediate enclosing class, so that owner subtree is
+  the singleton field and `.cctor` live on the immediate enclosing type, so that owner subtree is
   the minimum safe eviction boundary.
-- Named nested-type model (probe series `nestedprobe_s1`–`_s4`; JVM precedent: a Kotlin named
-  nested class is static unless `isInner`, represented by JVM `ACC_STATIC`; the CLR analogue is a
-  real nested metadata type): a final, open, abstract, or sealed plain `ClassKind.CLASS` declared
-  directly inside another plain class passes the shape gate recursively. It owns no outer instance
-  and only its OWN generic parameters; a named class inside generic `Outer<T>` is therefore
+- Named nested-type model (probe series `nestedprobe_s1`–`_s4`, `nestedifaceprobe_s1`–`_s3`;
+  JVM precedent: a Kotlin named nested declaration is static unless it is an `inner` class,
+  represented by JVM `ACC_STATIC`; the CLR analogue is a real nested metadata type): a final,
+  open, abstract, or sealed plain `ClassKind.CLASS`, an all-abstract interface, or a final named
+  object declared directly inside a plain class or interface passes the shape gate recursively.
+  An interface may additionally nest inside a named object or companion. Each nested declaration
+  owns no outer instance and only its OWN generic parameters; a named class inside generic
+  `Outer<T>` is therefore
   referenced as `'Outer`1'/'Nested'` with no outer instantiation, while an independently generic
   nested class is `'Outer`1'/'Nested`1'<U>`. Arbitrary depth composes by slash-separated quoted
-  simple names. A final named `ClassKind.OBJECT` inside a plain class and the companion of a
-  non-generic ordinary nested class are also supported. `DotNetStaticInitializersLowering`
+  simple names. A companion of a non-generic plain class or interface is also supported.
+  `DotNetStaticInitializersLowering`
   matches the common/JVM `ClassLoweringPass.runOnFilePostfix` recursion: it visits every class
   child before its metadata parent, moving a named object's `INSTANCE` initializer into the
   object's own `.cctor` and a companion initializer into its immediate owner's `.cctor`. A
-  companion's immediate plain-class container must be non-generic because its field would be per
-  constructed generic owner. A named object's `INSTANCE` field is owned by the independently
+  companion's immediate class/interface container must be non-generic because its field would be
+  per constructed generic owner. An interface owner may legally carry that static singleton field
+  and `.cctor` while retaining the interface flag rule that omits `beforefieldinit`
+  (`nestedifaceprobe_s2`). A named object's `INSTANCE` field is owned by the independently
   non-generic object type, so it stays singular even under an immediately generic metadata parent
   (`nestedprobe_s4`).
   Registration and type/member resolution use a separate `DotNetIlClassInfo` per declaration, but
@@ -262,19 +267,23 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `sealed`, open omits it, and abstract/sealed Kotlin classes carry CLR `abstract`. A top-level or
   nested class may extend any module-local top-level or nested class, including a forward sibling,
   its metadata parent, a deeper family member, an independently generic instantiation under a
-  generic outer, or a class in another top-level family. Interfaces remain top-level-only. All
+  generic outer, or a class in another top-level family. A class may implement, and an interface
+  may extend, any recursively declared module-local interface. All
   spellings, construction, member/field references, virtual/interface dispatch, forward links,
   cross-depth links, singleton initialization, and family shapes assemble and run on CoreCLR and
-  Framework. STAYS REJECTED, per rejected metadata subtree: `inner`, local/anonymous,
-  data/value/enum/annotation, nested interfaces, any class/object inside an
-  object/companion/interface, and a companion whose immediate plain-class container is generic.
+  Framework. A failure OF a companion remains owner-sensitive because its field and `.cctor`
+  live on the immediate owner; a separate failing child below a valid companion is its own
+  metadata subtree. STAYS REJECTED, per rejected metadata subtree: `inner`, local/anonymous,
+  data/value/enum/annotation, a class/object inside an object or companion, and a companion whose
+  immediate class/interface container is generic.
   Recursive render failures preserve the deepest declaration tag while
   unwinding, then subtree eviction removes that declaration and its descendants; independent
   metadata ancestors/siblings survive and live-map re-rendering removes only real dependents.
   Pins: `ilText/nestedClasses.kt`,
   `ilText/nestedInheritance.kt`, `ilText/nestedSingletons.kt`,
+  `ilText/nestedInterfaces.kt`, `ilText/nestedInterfacesRejected.kt`,
   `ilText/nestedClassesRejected.kt`; runtime: `box/nestedClasses.kt`,
-  `box/nestedInheritance.kt`, `box/nestedSingletons.kt`.
+  `box/nestedInheritance.kt`, `box/nestedSingletons.kt`, `box/nestedInterfaces.kt`.
 - Inheritance/abstract-class model (probe series `inheritprobe_s1`–`_s3`,
   `abstractprobe_s1`–`_s2`, `nestedprobe_s3`; JVM precedent: real CLR classes = real platform
   inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level or
@@ -343,13 +352,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `box/abstractClasses.kt`; `ilText/classShapeRejected.kt` retains the neighboring variance and
   nested-class rejection boundaries.
 - Interface model (probe series `ifaceprobe_s1`–`_s10`, `genifaceprobe_s1`,
-  `genmemberprobe_s1`, `ifaceredeclareprobe_s1`, `delegationprobe_s1`; JVM precedent: real CLR
+  `genmemberprobe_s1`, `ifaceredeclareprobe_s1`, `delegationprobe_s1`,
+  `nestedifaceprobe_s1`–`_s3`; JVM precedent: real CLR
   interface types = no vtable/interface lowering, the same argument as the class and inheritance
   bullets): a
-  top-level Kotlin `interface` whose members are ALL abstract (abstract functions and abstract
-  `val`/`var` properties; empty interfaces included) is emitted as
+  top-level or named nested Kotlin `interface` whose callable members are ALL abstract (abstract
+  functions and abstract `val`/`var` properties; empty interfaces included) is emitted as
   `.class interface public abstract auto ansi` — no `extends` line, no `sealed`, no
-  `beforefieldinit` (s1). A `sealed interface` is deliberately ACCEPTED and emitted as the
+  `beforefieldinit` (s1), or with the corresponding `nested public/private/assembly/family`
+  accessibility prefix (`nestedifaceprobe_s1`–`_s3`). A `sealed interface` is deliberately
+  ACCEPTED and emitted as the
   same plain interface. Like the sealed-class model, interface sealedness is pure
   frontend-enforced metadata with no CLR counterpart needed (JVM precedent: the JVM backend
   emits an ordinary interface too), and the exhaustive
@@ -373,7 +385,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   closed instantiation, and a generic interface may extend another with composed or permuted
   arguments. An interface member may independently declare method parameters (`!!n`), including
   supported constraints; its implementing class method uses the same open generic method slot
-  (`genmemberprobe_s1`). A class
+  (`genmemberprobe_s1`). NESTING uses the JVM static-nested model: an interface may appear inside
+  any supported named class, interface, object, or companion, and may itself contain named
+  classes, interfaces, objects, and a companion. Every child has an independent generic-parameter
+  space; a generic interface's named object is safe because `INSTANCE` lives on the independently
+  non-generic object type. A non-generic interface's companion singleton field and `.cctor` live
+  on the interface owner and assemble/run on both runtimes. A generic interface companion is
+  rejected because CLR statics are per constructed owner (`nestedifaceprobe_s2`/`_s3`). A class
   lists its DIRECT interfaces comma-separated on an `implements` line after `extends`
   (`extends 'Base'` / `implements 'A', 'B'`, s3; a generic edge is the FULL token
   `implements class 'Producer`1'<!0>`, genifaceprobe_s1); interface-extends-interface is the same
@@ -445,13 +463,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   LIVE class map at the top of every render round with chained reasons, the interface arm of
   the base-class cascade (pinned by `ilText/interfaceEvicted.kt` and
   `ilText/interfaceDefaultBodyRejected.kt`); evicting an implementer never affects the
-  interface. STAYS REJECTED, loudly, whole-interface/whole-class: interface members WITH bodies —
+  interface. A rejected nested declaration removes only its metadata subtree and real dependents;
+  the interface parent and independent siblings survive. STAYS REJECTED, loudly,
+  whole-interface/whole-class: interface members WITH bodies —
   default methods and accessors with bodies (modern CoreCLR supports DIM, s8/`dimprobe_s1`, but
   Framework 4.8 ILAsm rejects the same body; lifting this would raise the backend's runtime
-  floor), private interface members, companion objects and any nested declaration in an interface,
+  floor), private callable interface members, companions on generic interfaces,
   `fun interface` (no SAM-conversion model),
-  out-of-module or non-top-level
-  interfaces,
+  out-of-module interfaces and local/anonymous interfaces,
   `super<I>.f()` (needs DIM and therefore exceeds the Framework 4.8 floor; rejected up front in
   `emitCall`),
   `is`/`as`/safe-cast on interface types (the existing type-operator rejection stays
@@ -468,9 +487,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   final` spellings of a Kotlin `final override` implementing only interface members) and
   `ilText/interfaceHierarchy.kt` pin every new spelling,
   `ilText/interfaceNonVirtualImplRejected.kt` pins the s5b gate,
-  `ilText/interfaceCovariantImplRejected.kt` the s10 gate,
-  `ilText/interfaceEqualityWidening.kt` the sibling widening, the no-common-supertype
-  rejection and the sealed-interface acceptance. Abstract redeclaration metadata, owner-token
+  `ilText/interfaceCovariantImplRejected.kt` the s10 gate; nested metadata, visibility, generic
+  independence, interface-owned singleton initialization, dispatch, forward references, and
+  narrow rejection are pinned by `ilText/nestedInterfaces.kt`,
+  `ilText/nestedInterfacesRejected.kt`, and `box/nestedInterfaces.kt`.
+  Sibling widening, no-common-supertype rejection, and sealed-interface acceptance are pinned by
+  `ilText/interfaceEqualityWidening.kt`. Abstract redeclaration metadata, owner-token
   dispatch, mutable properties, generic composition, diamonds, and mapped-covariance rejection
   are pinned by `ilText/interfaceRedeclarations.kt`,
   `ilText/interfaceRedeclarationsRejected.kt`, and `box/interfaceRedeclarations.kt`. Generic
@@ -622,26 +644,32 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `.method assembly hidebysig specialname` spelling is golden-pinned by
   `ilText/companionObject.kt`). `const val` in a companion is a `literal` field on the NESTED class (literal
   fields on a nested class probe-verified, objprobe_s9b), the same no-copy-to-enclosing
-  deviation as objects. The enclosing class and its companion are separate `availableClasses`
+  deviation as objects. The enclosing type and its companion are separate `availableClasses`
   entries (the companion needs its own identity for type mapping and member resolution), but a
   companion failure removes its immediate owner subtree — the singleton field on the enclosing
-  class is typed as the companion and the enclosing `.cctor` news it. Metadata ancestors and
+  type is typed as the companion and the enclosing `.cctor` news it. Metadata ancestors and
   siblings outside that owner remain independent. The warnings attribute a
   failure to the declaration that actually failed: a
-  companion failure surfaces out of the enclosing class's render (the companion renders only
+  companion failure surfaces out of the enclosing type's render (the companion renders only
   recursively inside it), so the render fixpoint re-tags it with the companion
-  (`DotNetIlUnsupportedClassException`) before evicting. Companion eviction is pinned in both
+  (`DotNetIlUnsupportedClassException`) before evicting. A separate invalid declaration nested
+  below an otherwise valid companion is not companion state and is therefore omitted as its own
+  subtree while the companion and owner survive. Companion eviction is pinned in both
   phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
   companion member body failing only after its callee's round-one eviction, plus the extra
   round that re-fails an already-rendered user of the evicted companion owner) by
   `ilText/companionFixpointEviction.kt`. The companion gate accepts the direct companion of any
-  non-generic plain class, including an ordinary named nested class, recursively validated with the
-  same constraint chain (sole supertype `Any`, final, non-generic, no nested classes of its own,
-  not data). The recursive postfix static-initializer sweep puts the companion field initialization
-  on that actual owner (`nestedprobe_s4`, pinned by `ilText/nestedSingletons.kt` and
-  `box/nestedSingletons.kt`). A companion whose immediate owner is generic remains rejected, and a
-  companion inside an `object` cannot reach the gate (frontend-rejected).
-  The companion singleton field participates in the ENCLOSING class's field-identity gate, but
+  non-generic plain class or interface, including an ordinary named nested class, recursively
+  validated with the same constraint chain (sole supertype `Any`, final, non-generic, not data).
+  A companion may contain a nested all-abstract interface; other class/object children remain
+  rejected independently. The recursive postfix static-initializer sweep puts the companion
+  field initialization on that actual owner (`nestedprobe_s4`, pinned by
+  `ilText/nestedSingletons.kt` and
+  `box/nestedSingletons.kt`). For an interface companion, that field and `.cctor` live on the
+  interface owner (`nestedifaceprobe_s2`, `ilText/nestedInterfaces.kt`). A companion whose
+  immediate owner is generic remains rejected, and a companion inside an `object` cannot reach
+  the gate (frontend-rejected).
+  The companion singleton field participates in the ENCLOSING type's field-identity gate, but
   the colliding source shape (a user property named after the companion) is itself a frontend
   REDECLARATION — a companion also occupies the value namespace — so that slice is
   defense-in-depth; a same-named FIELD legally coexists with the nested TYPE (objprobe_s6,
