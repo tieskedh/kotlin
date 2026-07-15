@@ -6,8 +6,9 @@ package org.jetbrains.kotlin.backend.dotnet
  * ([isStaticHolder] = false: instantiable, `sealed` for a final Kotlin class, unsealed with
  * [isOpen], or non-instantiable `abstract` with [isAbstract] — the CLR expresses Kotlin modality
  * directly in metadata, unlike the JVM access flags which the JVM backend derives from the same
- * modality), a named nested class or companion object ([isNested] = true: a real CLR nested
- * type declared inside the enclosing class's body, with [nestedVisibility]), a Kotlin interface
+ * modality), a named nested class, interface, or companion object ([isNested] = true: a real CLR
+ * nested type declared inside the enclosing type's body, with [nestedVisibility]), a Kotlin
+ * interface
  * ([isInterface]: `.class interface public abstract
  * auto ansi` with NO `extends` line, no `sealed`, no `beforefieldinit` — the exact flag set
  * probe-verified, `ifaceprobe_s1`), or, with [exported] = false, the module-private runtime
@@ -33,7 +34,9 @@ package org.jetbrains.kotlin.backend.dotnet
  * exactly on classes that receive a `.cctor` and kept everywhere else, so classes without static
  * state keep the relaxed (cheaper) semantics and their goldens. A companion never has one — its
  * singleton field and the `newobj`/`stsfld` live on the ENCLOSING class (which therefore drops
- * `beforefieldinit`), while the companion itself has no statics and keeps the flag.
+ * `beforefieldinit`), while the companion itself has no statics and keeps the flag. An interface
+ * with a companion may likewise own the singleton field and `.cctor`; interfaces never carry
+ * `beforefieldinit`, which preserves the required first-active-use behavior.
  */
 internal class DotNetIlClassCodegen(
     private val className: String,
@@ -62,8 +65,9 @@ internal class DotNetIlClassCodegen(
         val beforeFieldInit = if (hasClassInitializer) "" else " beforefieldinit"
         val sealed = if (isOpen) "" else " sealed"
         val flags = when {
-            // An interface carries neither `sealed` nor `beforefieldinit` (it has no `.cctor`
-            // and cannot be instantiated) and, per ECMA-335, no `extends` line at all.
+            // An interface carries neither `sealed` nor `beforefieldinit` (including one that
+            // owns a companion `.cctor`) and, per ECMA-335, no `extends` line at all.
+            isInterface && isNested -> "nested $nestedVisibility interface abstract auto ansi"
             isInterface -> "interface $visibility abstract auto ansi"
             // A nested class is never a static holder here. Its modality uses the same flags as
             // a top-level class after the nested accessibility prefix: abstract/sealed Kotlin
