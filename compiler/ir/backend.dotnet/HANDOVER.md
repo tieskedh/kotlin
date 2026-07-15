@@ -7,12 +7,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Branch state
 
-- Branch `dotnet`; latest functional work is "[DotNet] Add explicit local functions",
+- Branch `dotnet`; latest functional work is "[DotNet] Add generic-outer inner classes",
   based directly on
   `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **370 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **374 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -27,9 +27,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   module-local nested-base inheritance, and recursive singleton initialization for named nested
   objects and companions of ordinary nested classes, plus nested all-abstract interfaces and
   static-style declarations inside interfaces, objects, and companions.
-  Inner classes whose immediate outer is non-generic now use the common/JVM explicit-outer
-  representation on CLR nested metadata; generic-outers remain rejected pending parameter-space
-  duplication/substitution.
+  Inner classes use the common/JVM explicit-outer representation on CLR nested metadata. Below a
+  generic immediate outer, copied/remapped `Inner<own, outer...>` parameters provide the nested
+  type's independent CLR slot space across inheritance, multi-level capture, and construction.
   Named local classes and anonymous object expressions now use common closure conversion/popup
   with immutable value/receiver and duplicated type-parameter captures. Anonymous base arguments
   are lifted at the expression call site. Explicit named local functions now lift to static
@@ -333,6 +333,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `box/localFunctions.kt` pin both parsers. Positive output is
   `15,-1,10,10,7,9,generic,owner,no-owner,12,12,-2,12,13`; the rejection survivor prints `29`.
   The fresh full DotNet suite is 370/0/0/0 across eight XML files.
+- The generic-outer-inner continuation inserts `DotNetInnerClassTypeParametersLowering` before the
+  existing common/JVM inner pipeline. It appends the immediate outer's complete parameter list
+  after the inner's own parameters, remaps the inner subtree, and processes outer-first, yielding
+  positional shapes such as `Second<V, U, T>`. The copy map also types the later `this$0` field and
+  leading constructor parameter. A narrow pre-call repair fills the source-implicit outer type
+  arguments on ordinary, super, and `this(...)` constructor calls; a post-body repair substitutes
+  synthetic multi-level outer-field reads through their instantiated receiver. Non-generic inners
+  remain on the unchanged path. `genericinner_s1` verifies basic `Inner<U,T>` construction and
+  outer access; `_s2` proves duplicate parameter names are legal; `_s3` verifies three-level
+  ordering plus a generic base link. All assemble/run on CoreCLR 10.0.9 and Framework 4.8, with
+  `_s1` printing `item,42` and `_s3` printing `42`. `ilText/genericInnerClasses.kt` and
+  `box/genericInnerClasses.kt` pin both parsers, generic factories, inner inheritance, generic
+  non-inner bases, outer identity, duplicate names, multi-level field chains, and delegated
+  secondary construction. The golden prints
+  `outer,true,7,outer,9,11,outer,13,outer,outer,middle,17,outer,19` identically on both runtimes.
+  The fresh full DotNet suite is 374/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
@@ -404,13 +420,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit inner classes below generic outers.** The current explicit-outer lowering still rejects
-   them because CLR nested types do not inherit a metadata parent's `!n` space. Determine whether
-   the local-class captured-type-parameter strategy can duplicate every required outer parameter
-   onto the inner type and substitute the outer field, constructor parameter, inheritance links,
-   and call sites without changing non-generic inner metadata. Probe own+outer parameter ordering,
-   multi-level generic outers, generic inner bases, and the smallest rejection boundary before
-   lifting the gate. Keep lambdas/function references and shared mutable captures separate.
+1. **Audit the smallest callable-object slice.** Start with non-capturing, non-suspend lambdas and
+   direct function references without reflection. Determine which common callable-reference/name/
+   popup phases can produce stable synthetic classes, how their `invoke` surface maps without a
+   Kotlin runtime class library, and whether singleton reuse is observable. Probe direct calls,
+   function-typed parameters/locals, top-level and member references, bound versus unbound owners,
+   overload identity, and generic signatures before lifting any gate. Keep captured lambdas,
+   mutable shared captures, suspend conversion, and reflection metadata separate.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

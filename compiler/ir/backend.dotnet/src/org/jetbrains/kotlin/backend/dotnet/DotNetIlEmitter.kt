@@ -789,8 +789,8 @@ class DotNetIlEmitter(
      * metadata/initializer machinery (`nestedownerprobe_s1`–`_s2`). An inner class below a
      * non-generic outer is represented by the common/JVM explicit-outer model: a private
      * `this$0` field plus a leading constructor argument, with outer-`this` reads rewritten to
-     * field chains (`innerprobe_s1`–`_s2`). Inner classes below generic outers stay rejected:
-     * CLR nested types do not inherit their metadata parent's generic-parameter space.
+     * field chains (`innerprobe_s1`–`_s2`). Below a generic outer, explicit copied parameters make
+     * that independent CLR space `Inner<own, outer...>` (`genericinner_s1`–`_s3`).
      * Each violation throws
      * [DotNetIlUnsupportedException]; registration drops that declaration's metadata subtree,
      * while its valid enclosing classes and siblings remain available.
@@ -896,12 +896,6 @@ class DotNetIlEmitter(
             // need an Any model just like a data class's members.
             val kindWord = if (irClass.kind == ClassKind.OBJECT) "data object" else "data class"
             dotNetUnsupported("$kindWord '$name' is not supported")
-        }
-        if (irClass.isInner && enclosingClass?.typeParameters?.isNotEmpty() == true) {
-            dotNetUnsupported(
-                "inner class '$name' has generic outer class '${enclosingClass.diagnosticName()}'; " +
-                        "CLR nested types do not inherit their metadata parent's generic parameters"
-            )
         }
         if (irClass.isValue) dotNetUnsupported("value class '$name' is not supported")
         if (irClass.isExpect) dotNetUnsupported("expect class '$name' is not supported")

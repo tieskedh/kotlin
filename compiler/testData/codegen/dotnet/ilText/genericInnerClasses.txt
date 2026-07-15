@@ -1,0 +1,581 @@
+.assembly extern mscorlib {}
+.assembly 'genericInnerClasses' {}
+.module 'main-genericInnerClasses.il'
+
+.class public auto ansi beforefieldinit 'GenericInnerPairBase`2'<'A', 'B'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'first'
+  .field private !1 'second'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !1 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericInnerPairBase`2'<!0, !1>::'first'
+    ldarg.0
+    ldarg.2
+    stfld !1 class 'GenericInnerPairBase`2'<!0, !1>::'second'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericInnerPairBase`2'<!0, !1>::'first'
+    ret
+  }
+  .method public hidebysig specialname instance !1 'get_second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !1 class 'GenericInnerPairBase`2'<!0, !1>::'second'
+    ret
+  }
+  .method public hidebysig instance !0 'first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !0 class 'GenericInnerPairBase`2'<!0, !1>::'get_first'()
+    ret
+  }
+  .method public hidebysig instance !1 'second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance !1 class 'GenericInnerPairBase`2'<!0, !1>::'get_second'()
+    ret
+  }
+  .property instance !0 'first'()
+  {
+    .get instance !0 'GenericInnerPairBase`2'::'get_first'()
+  }
+  .property instance !1 'second'()
+  {
+    .get instance !1 'GenericInnerPairBase`2'::'get_second'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericInnerOuter`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Plain`1'<'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private class 'GenericInnerOuter`1'<!0> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!0> 'this$0') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!0> class 'GenericInnerOuter`1'/'Plain`1'<!0>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method public hidebysig instance !0 'outer'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'GenericInnerOuter`1'<!0> class 'GenericInnerOuter`1'/'Plain`1'<!0>::'this$0'
+      call instance !0 class 'GenericInnerOuter`1'<!0>::'get_seed'()
+      ret
+    }
+    .method public hidebysig instance bool 'owns'(class 'GenericInnerOuter`1'<!0> 'outer') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldfld class 'GenericInnerOuter`1'<!0> class 'GenericInnerOuter`1'/'Plain`1'<!0>::'this$0'
+      ldarg.1
+      ceq
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Own`2'<'U', 'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'item'
+    .field private class 'GenericInnerOuter`1'<!1> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld !0 class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'item'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'item'
+      ret
+    }
+    .method public hidebysig instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'get_item'()
+      ret
+    }
+    .method public hidebysig instance !1 'outer'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'this$0'
+      call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
+      ret
+    }
+    .property instance !0 'item'()
+    {
+      .get instance !0 'GenericInnerOuter`1'/'Own`2'::'get_item'()
+    }
+  }
+  .class nested public auto ansi beforefieldinit 'Base`2'<'U', 'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'item'
+    .field private class 'GenericInnerOuter`1'<!1> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld !0 class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'item'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'item'
+      ret
+    }
+    .method public hidebysig instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'get_item'()
+      ret
+    }
+    .method public hidebysig newslot virtual instance !1 'outer'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'this$0'
+      call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
+      ret
+    }
+    .property instance !0 'item'()
+    {
+      .get instance !0 'GenericInnerOuter`1'/'Base`2'::'get_item'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Derived`2'<'V', 'T'>
+         extends class 'GenericInnerOuter`1'/'Base`2'<!0, !1>
+  {
+    .field private class 'GenericInnerOuter`1'<!1> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Derived`2'<!0, !1>::'this$0'
+      ldarg.0
+      ldarg.1
+      ldarg.2
+      call instance void class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+      ret
+    }
+    .method public hidebysig virtual instance !1 'outer'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Derived`2'<!0, !1>::'this$0'
+      call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Pair`2'<'U', 'T'>
+         extends class 'GenericInnerPairBase`2'<!0, !1>
+  {
+    .field private class 'GenericInnerOuter`1'<!1> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'Pair`2'<!0, !1>::'this$0'
+      ldarg.0
+      ldarg.2
+      ldarg.1
+      call instance !0 class 'GenericInnerOuter`1'<!1>::'get_seed'()
+      call instance void class 'GenericInnerPairBase`2'<!0, !1>::.ctor(!0, !1)
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'First`2'<'U', 'T'>
+         extends [mscorlib]System.Object
+  {
+    .class nested public auto ansi sealed beforefieldinit 'Second`3'<'V', 'U', 'T'>
+           extends [mscorlib]System.Object
+    {
+      .field private !0 'own'
+      .field private class 'GenericInnerOuter`1'/'First`2'<!1, !2> 'this$0'
+      .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'/'First`2'<!1, !2> 'this$0', !0 'own') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        ldarg.1
+        stfld class 'GenericInnerOuter`1'/'First`2'<!1, !2> class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'this$0'
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ldarg.0
+        ldarg.2
+        stfld !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'own'
+        ret
+      }
+      .method public hidebysig specialname instance !0 'get_own'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'own'
+        ret
+      }
+      .method public hidebysig instance !2 'root'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld class 'GenericInnerOuter`1'/'First`2'<!1, !2> class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'this$0'
+        ldfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'First`2'<!1, !2>::'this$0'
+        call instance !0 class 'GenericInnerOuter`1'<!2>::'get_seed'()
+        ret
+      }
+      .method public hidebysig instance !1 'middle'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        ldfld class 'GenericInnerOuter`1'/'First`2'<!1, !2> class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'this$0'
+        call instance !0 class 'GenericInnerOuter`1'/'First`2'<!1, !2>::'get_middle'()
+        ret
+      }
+      .method public hidebysig instance !0 'own'() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'get_own'()
+        ret
+      }
+      .property instance !0 'own'()
+      {
+        .get instance !0 'GenericInnerOuter`1'/'First`2'/'Second`3'::'get_own'()
+      }
+    }
+    .field private !0 'middle'
+    .field private class 'GenericInnerOuter`1'<!1> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!1> 'this$0', !0 'middle') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!1> class 'GenericInnerOuter`1'/'First`2'<!0, !1>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld !0 class 'GenericInnerOuter`1'/'First`2'<!0, !1>::'middle'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_middle'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'GenericInnerOuter`1'/'First`2'<!0, !1>::'middle'
+      ret
+    }
+    .property instance !0 'middle'()
+    {
+      .get instance !0 'GenericInnerOuter`1'/'First`2'::'get_middle'()
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'ConstructorPaths`1'<'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'value'
+    .field private class 'GenericInnerOuter`1'<!0> 'this$0'
+    .method public hidebysig specialname instance !0 'get_value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::'value'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!0> 'this$0', !0 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'GenericInnerOuter`1'<!0> class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::'value'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'GenericInnerOuter`1'<!0> 'this$0') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      ldarg.1
+      call instance !0 class 'GenericInnerOuter`1'<!0>::'get_seed'()
+      call instance void class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::.ctor(class 'GenericInnerOuter`1'<!0>, !0)
+      ret
+    }
+    .method public hidebysig instance !0 'value'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<!0>::'get_value'()
+      ret
+    }
+    .property instance !0 'value'()
+    {
+      .get instance !0 'GenericInnerOuter`1'/'ConstructorPaths`1'::'get_value'()
+    }
+  }
+  .field private !0 'seed'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'seed') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericInnerOuter`1'<!0>::'seed'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericInnerOuter`1'<!0>::'seed'
+    ret
+  }
+  .method public hidebysig instance class 'GenericInnerOuter`1'/'Plain`1'<!0> 'plain'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void class 'GenericInnerOuter`1'/'Plain`1'<!0>::.ctor(class 'GenericInnerOuter`1'<!0>)
+    ret
+  }
+  .method public hidebysig instance class 'GenericInnerOuter`1'/'Own`2'<!!0, !0> 'own'<'U'>(!!0 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    newobj instance void class 'GenericInnerOuter`1'/'Own`2'<!!0, !0>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    ret
+  }
+  .property instance !0 'seed'()
+  {
+    .get instance !0 'GenericInnerOuter`1'::'get_seed'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DuplicateGenericInnerOuter`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public auto ansi sealed beforefieldinit 'Duplicate`2'<'T', 'T'>
+         extends [mscorlib]System.Object
+  {
+    .field private !0 'item'
+    .field private class 'DuplicateGenericInnerOuter`1'<!1> 'this$0'
+    .method public hidebysig specialname rtspecialname instance void .ctor(class 'DuplicateGenericInnerOuter`1'<!1> 'this$0', !0 'item') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      stfld class 'DuplicateGenericInnerOuter`1'<!1> class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'this$0'
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ldarg.0
+      ldarg.2
+      stfld !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'item'
+      ret
+    }
+    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ldfld !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'item'
+      ret
+    }
+    .method public hidebysig instance !0 'item'() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'get_item'()
+      ret
+    }
+    .property instance !0 'item'()
+    {
+      .get instance !0 'DuplicateGenericInnerOuter`1'/'Duplicate`2'::'get_item'()
+    }
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'genericInnerClassesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class 'GenericInnerOuter`1'/'Own`2'<!!1, !!0> 'makeGenericInnerOwn'<'T', 'U'>(class 'GenericInnerOuter`1'<!!0> 'outer', !!1 'item') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    newobj instance void class 'GenericInnerOuter`1'/'Own`2'<!!1, !!0>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'GenericInnerOuter`1'<string> 'outer',
+      [1] class 'GenericInnerOuter`1'/'Plain`1'<string> 'plain',
+      [2] class 'GenericInnerOuter`1'/'Own`2'<int32, string> 'own',
+      [3] class 'GenericInnerOuter`1'/'Own`2'<int32, string> 'made',
+      [4] class 'GenericInnerOuter`1'/'Base`2'<int32, string> 'base',
+      [5] class 'GenericInnerPairBase`2'<int32, string> 'pair',
+      [6] class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string> 'second',
+      [7] class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string> 'constructorPath',
+      [8] class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string> 'duplicate'
+    )
+    ldstr "outer"
+    newobj instance void class 'GenericInnerOuter`1'<string>::.ctor(!0)
+    stloc.0
+    ldloc.0
+    call instance class 'GenericInnerOuter`1'/'Plain`1'<!0> class 'GenericInnerOuter`1'<string>::'plain'()
+    stloc.1
+    ldloc.0
+    ldc.i4 7
+    call instance class 'GenericInnerOuter`1'/'Own`2'<!!0, !0> class 'GenericInnerOuter`1'<string>::'own'<int32>(!!0)
+    stloc.2
+    ldloc.0
+    ldc.i4 9
+    call class 'GenericInnerOuter`1'/'Own`2'<!!1, !!0> 'genericInnerClassesKt'::'makeGenericInnerOwn'<string, int32>(class 'GenericInnerOuter`1'<!!0>, !!1)
+    stloc.3
+    ldloc.0
+    ldc.i4 11
+    newobj instance void class 'GenericInnerOuter`1'/'Derived`2'<int32, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    stloc 4
+    ldloc.0
+    ldc.i4 13
+    newobj instance void class 'GenericInnerOuter`1'/'Pair`2'<int32, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    stloc 5
+    ldloc.0
+    ldstr "middle"
+    newobj instance void class 'GenericInnerOuter`1'/'First`2'<string, string>::.ctor(class 'GenericInnerOuter`1'<!1>, !0)
+    ldc.i4 17
+    newobj instance void class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::.ctor(class 'GenericInnerOuter`1'/'First`2'<!1, !2>, !0)
+    stloc 6
+    ldloc.0
+    newobj instance void class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>::.ctor(class 'GenericInnerOuter`1'<!0>)
+    stloc 7
+    newobj instance void class 'DuplicateGenericInnerOuter`1'<string>::.ctor()
+    ldc.i4 19
+    newobj instance void class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::.ctor(class 'DuplicateGenericInnerOuter`1'<!1>, !0)
+    stloc 8
+    ldloc.1
+    call instance !0 class 'GenericInnerOuter`1'/'Plain`1'<string>::'outer'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.1
+    ldloc.0
+    call instance bool class 'GenericInnerOuter`1'/'Plain`1'<string>::'owns'(class 'GenericInnerOuter`1'<!0>)
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    call instance !0 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'item'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    call instance !1 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'outer'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.3
+    call instance !0 class 'GenericInnerOuter`1'/'Own`2'<int32, string>::'item'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    call instance !0 class 'GenericInnerOuter`1'/'Base`2'<int32, string>::'item'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    callvirt instance !1 class 'GenericInnerOuter`1'/'Base`2'<int32, string>::'outer'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 5
+    call instance !0 class 'GenericInnerPairBase`2'<int32, string>::'first'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 5
+    call instance !1 class 'GenericInnerPairBase`2'<int32, string>::'second'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    call instance !2 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'root'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    call instance !1 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'middle'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
+    call instance !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<int32, string, string>::'own'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    call instance !0 class 'GenericInnerOuter`1'/'ConstructorPaths`1'<string>::'value'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 8
+    call instance !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<int32, string>::'item'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

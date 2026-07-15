@@ -13,10 +13,6 @@
 // survives.
 
 class GenericInnerHost<T> {
-    inner class Nested {
-        fun value(): Int = 1
-    }
-
     class Good {
         fun value(): Int = 2
     }
