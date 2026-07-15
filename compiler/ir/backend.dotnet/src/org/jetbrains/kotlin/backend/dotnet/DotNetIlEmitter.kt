@@ -909,7 +909,6 @@ class DotNetIlEmitter(
         }
         if (irClass.isData) {
             when {
-                irClass.kind == ClassKind.OBJECT -> dotNetUnsupported("data object '$name' is not supported")
                 irClass.isOriginallyLocalDeclaration -> dotNetUnsupported("local data class '$name' is not supported yet")
             }
             irClass.primaryConstructor
