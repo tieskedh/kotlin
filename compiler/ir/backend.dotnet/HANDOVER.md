@@ -15,14 +15,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   RuntimeException migration-gate decision (`acde56d80`) and the bounded top-level data-class and
   masked-default implementation (`2660cc58e`) and named nested data classes (`c27ede97d`), followed
   by array-backed data classes (`a43d3de4d`), constructor defaults (`d6deff4f5`), and generic
-  data-class equality (`c1597ef12`), data objects (`a2a418bfd`), and local data classes in the
-  current functional slice.
+  data-class equality (`c1597ef12`), data objects (`a2a418bfd`), local data classes (`4deb5e208`),
+  and the POC IL-assembly-pipeline direction in the current decision slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
 - Full DotNet suite: **440 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
+- `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
+  textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
+  The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
+  text and direct-PE sinks. Because the compiler is JVM-hosted, `System.Reflection.Metadata` is a
+  reference or sidecar option rather than an in-process drop-in; do not add a sidecar merely to
+  replace one external assembler process with another protocol.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
   top-level properties/objects/companions, class inheritance, interfaces, hybrid nullability
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
