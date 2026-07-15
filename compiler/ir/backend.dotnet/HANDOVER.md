@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-15 for the next agent working on the `dotnet` branch
-(Kotlin Error identity/fault-policy continuation).
+(RuntimeException fault-translation/catch-policy continuation).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -10,12 +10,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - Branch `dotnet`; latest committed functional work comprises runtime-helper ownership
   (`b54578fab`), capturing-callable state (`131161ca5`), callable-reference metadata
   (`fb6d43448`), the System.Object Any foundation (`4a78533ad`), and the hybrid Kotlin/CLR
-  exception-identity foundation (`a4a862e45`), followed by exact source-visible
-  NumberFormatException identity in the current functional slice.
+  exception-identity foundation (`a4a862e45`) and exact source-visible NumberFormatException
+  identity (`eb1fae21e`), followed by exact Kotlin Error identity in the current functional slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **394 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **398 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
@@ -481,9 +481,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings preserved exact and
   parent catches, null default message, cause identity, and the boundary from a foreign
   `InvalidOperationException`. The draft rationale is
-  `docs/decisions/draft-adr-hybrid-exception-identity.md`; the rejection pin keeps
-  `RuntimeException` and `Error` unavailable until their distinct catch policies are coherent.
-  The fresh full DotNet suite is 390/0/0/0 across eight XML files.
+  `docs/decisions/draft-adr-hybrid-exception-identity.md`; the rejection pin at that slice kept
+  `RuntimeException` and `Error` unavailable until their distinct catch policies were coherent.
+  The exact mappings below supersede the Error boundary. The fresh full DotNet suite was
+  390/0/0/0 across eight XML files.
 - The exact NumberFormatException continuation is the first source-visible runtime-owned mapping.
   It follows the JVM/Native two-constructor surface, but uses the CLR-specific physical hierarchy
   `Kotlin.NumberFormatException : System.ArgumentException`: this preserves exact identity plus
@@ -500,6 +501,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parent/root value widening, identity, virtual message dispatch, and default message/cause state.
   The new exact golden assembles under both ILAsm versions, the embedded-runtime box also passes
   through the Framework toolchain selection, and the fresh full DotNet suite is 394/0/0/0.
+- The exact Error continuation gives Kotlin-created `Error` values the runtime-owned identity
+  `Kotlin.Error : System.Exception` and all four mature constructor forms. It deliberately does
+  not map to deprecated `System.SystemException` and does not claim that foreign CLR
+  OutOfMemoryException or StackOverflowException values are Kotlin Error instances. The nullable
+  message field/reused virtual Message slot and InnerException preserve no-arg, explicit-message,
+  message-plus-cause, and cause-only Kotlin behavior. The mapped-constructor registry now records a
+  separate `hasCauseCtor` capability: Error enables it, while existing BCL mappings keep rejecting
+  the cause-only shape. The existing Throwable/Exception -> System.Exception collapse means an
+  exact Error is caught by both on this POC; the pins make that accepted root delta explicit.
+  `exceptionabi_s3` assembled both consumer/runtime combinations with both ILAsm versions and ran
+  all eight combinations across CoreCLR 10.0.9 and Framework 4.8, preserving exact/cause behavior
+  and keeping a foreign OutOfMemoryException outside the exact catch. The exact golden assembles
+  under both ILAsm versions, the embedded-runtime box passes through the Framework toolchain
+  selection, and the fresh full DotNet suite is 398/0/0/0.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -582,14 +597,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit an exact source-visible Kotlin Error identity.** A Kotlin-created `Error` can own an
-   exact runtime class below System.Exception and preserve the currently supported Throwable edge,
-   but raw CLR fatal exceptions must remain distinct unless an explicit interop translation policy
-   is chosen. Probe all four mature constructor forms and nullable message/cause behavior; do not
-   map Error to deprecated `System.SystemException` or claim it catches OOM/stack-overflow faults.
-   Keep source `RuntimeException` rejected until its mapped-child catch policy is coherent. Fuller
-   callable reflection remains later work rather than expanding the minimal name slice
-   opportunistically.
+1. **Design the RuntimeException migration boundary before enabling source use.** Compare two
+   coherent strategies: translate every relevant CLR-native fault into runtime-owned Kotlin child
+   classes, or represent a Kotlin catch as a union/filter over the exact root and deliberate BCL
+   mappings. Account for catch-variable storage, rethrow identity, constructors, interop-thrown
+   faults, and parent/child type tests; a catch union alone does not make a BCL child storable as
+   exact `Kotlin.RuntimeException`. Do not publish a source mapping until one representation is
+   coherent end to end. Fuller callable reflection remains later work rather than expanding the
+   minimal name slice opportunistically.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

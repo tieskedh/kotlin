@@ -26,6 +26,9 @@ internal object DotNetRuntimeLibrary {
     val numberFormatExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NumberFormatException".toIlIdentifier()}"
 
+    val errorTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.Error".toIlIdentifier()}"
+
     fun assembleNextTo(
         executableOutput: File,
         target: DotNetTarget,
@@ -220,6 +223,84 @@ internal object DotNetRuntimeLibrary {
             .property instance string Message()
             {
               .get instance string Kotlin.NumberFormatException::'get_Message'()
+            }
+          }
+
+          .class public auto ansi beforefieldinit Error
+                 extends [mscorlib]System.Exception
+          {
+            .field private string '_message'
+
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              call instance void [mscorlib]System.Exception::.ctor()
+              ldarg.0
+              ldnull
+              stfld string Kotlin.Error::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void [mscorlib]System.Exception::.ctor(string)
+              ldarg.0
+              ldarg.1
+              stfld string Kotlin.Error::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class [mscorlib]System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              ldarg.0
+              ldarg.1
+              ldarg.2
+              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              ldarg.0
+              ldarg.1
+              stfld string Kotlin.Error::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              .locals init ([0] string 'message')
+              ldarg.1
+              brtrue.s IL_errorCauseNotNull
+              ldnull
+              br.s IL_errorMessageReady
+        IL_errorCauseNotNull:
+              ldarg.1
+              callvirt instance string [mscorlib]System.Object::ToString()
+        IL_errorMessageReady:
+              stloc.0
+              ldarg.0
+              ldloc.0
+              ldarg.1
+              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              ldarg.0
+              ldloc.0
+              stfld string Kotlin.Error::'_message'
+              ret
+            }
+
+            .method public hidebysig specialname virtual instance string 'get_Message'() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              ldfld string Kotlin.Error::'_message'
+              ret
+            }
+
+            .property instance string Message()
+            {
+              .get instance string Kotlin.Error::'get_Message'()
             }
           }
 

@@ -829,7 +829,8 @@ internal class DotNetIlExpressionCodegen(
      * [hasMessageCauseCtor][DotNetMappedExceptions.Entry.Mapped.hasMessageCauseCtor] is set (a
      * mirror of the Kotlin stdlib's declared constructor surface; every BCL mapping has the CLR
      * `(string, Exception)` overload, probe-verified, while runtime mappings provide their exact
-     * flagged surface), and the cause-only `(Throwable?)` constructor has no mapped overload.
+     * flagged surface). Cause-only `(Throwable?)` maps where
+     * [hasCauseCtor][DotNetMappedExceptions.Entry.Mapped.hasCauseCtor] is set.
      */
     private fun emitMappedExceptionConstructorCall(
         call: IrConstructorCall,
@@ -856,8 +857,10 @@ internal class DotNetIlExpressionCodegen(
             parameterTypes.isEmpty() -> {}
             parameterTypes == listOf(DotNetIlValueType.String) -> {}
             parameterTypes == listOf(DotNetIlValueType.String, causeType) && entry.hasMessageCauseCtor -> {}
+            parameterTypes == listOf(causeType) && entry.hasCauseCtor -> {}
             parameterTypes == listOf(causeType) -> dotNetUnsupported(
-                "constructor '$className(cause)' has no CLR overload; construct with (message) or (message, cause)"
+                "constructor '$className(cause)' has no mapped CLR overload; " +
+                        "construct with (message) or (message, cause)"
             )
             else -> dotNetUnsupported(
                 "constructor of '$className' has no matching overload on the mapped CLR type '${entry.clrTypeRef}'"

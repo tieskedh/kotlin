@@ -58,8 +58,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
   for exact Kotlin-only exception identities and
   `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. The first
-  source-visible exact type is `Kotlin.NumberFormatException : System.ArgumentException`. Their
-  hybrid exception policy is described in the exception-model bullet below.
+  source-visible exact types are `Kotlin.NumberFormatException : System.ArgumentException` and
+  `Kotlin.Error : System.Exception`. Their hybrid exception policy is described in the
+  exception-model bullet below.
   The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
@@ -940,8 +941,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   the cause-only form uses `cause?.toString()` and preserves the cause in `InnerException`.
   Source `kotlin.RuntimeException` still REJECTS: mapped logical children such as
   `IllegalStateException -> System.InvalidOperationException` are not physical children of the
-  runtime root, so enabling the parent would make its catch miss a legal child. `Error` also
-  resolves through the injected stdlib but REJECTS because the CLR has no fatal-error branch.
+  runtime root, so enabling the parent would make its catch miss a legal child.
+  `Error` is source-visible through exact runtime-owned `Kotlin.Error : System.Exception`, with the
+  mature four constructor forms and the same nullable-message/cause implementation as the dormant
+  RuntimeException root. This preserves Kotlin-created Error identity without pretending the CLR
+  has a faithful fatal-error superclass: `System.SystemException` is deprecated and structurally
+  wrong, while foreign `OutOfMemoryException`/`StackOverflowException` values remain distinct.
+  Since `Throwable` and `Exception` already collapse to System.Exception, the existing accepted
+  root delta also means `catch (Exception)` catches a Kotlin Error on this target.
   `NumberFormatException` is instead source-visible through exact runtime-owned
   `Kotlin.NumberFormatException : System.ArgumentException`. This CLR-specific physical parent
   preserves Kotlin's already-supported `NumberFormatException IS-A IllegalArgumentException`
@@ -956,10 +963,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `message` keeps type `String?` but is never null on BCL-mapped exceptions (no-arg `Exception()`
   yields the CLR default text); the constructor
   whitelist is `()`/`(String?)` everywhere and `(String?, Throwable?)` where the registry's
-  `hasMessageCauseCtor` flag is set — the flag mirrors the Kotlin stdlib's declared constructor
-  surface, not CLR availability (the CLR `(string, Exception)` overload exists on every BCL-mapped
-  type, probe-verified; runtime mappings provide their exact flagged surface) — and the cause-only
-  `(Throwable?)` constructor is rejected when the mapped surface does not declare it. `throw e`
+  `hasMessageCauseCtor` flag is set; cause-only `(Throwable?)` maps only where `hasCauseCtor` is set.
+  The flags mirror the Kotlin stdlib's declared constructor surface, not CLR availability (the CLR
+  `(string, Exception)` overload exists on every BCL-mapped type, probe-verified; runtime mappings
+  provide their exact flagged surface). `throw e`
   inside a catch is a plain `ldloc`/`throw` preserving object identity; the
   IL `rethrow` instruction is never emitted (Kotlin has no bare rethrow; stack-trace-restart
   delta is moot until traces are surfaced). The injected exception declarations are excluded from codegen

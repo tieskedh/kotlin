@@ -118,6 +118,24 @@ Kotlin `NumberFormatException` to it would break the parent edge; making the exa
 foreign format faults would require explicit translation at a parsing/interop boundary or a catch
 union. Neither behavior is claimed by this slice.
 
+The next source-visible exact mapping is:
+
+```text
+Kotlin.Error : System.Exception
+```
+
+It follows the JVM/Native four-constructor Kotlin surface and owns the same nullable-message/cause
+behavior as the dormant RuntimeException root. No faithful CLR fatal-error root exists:
+`System.SystemException` is deprecated, contains ordinary non-fatal failures, and is not the base
+of every CLR fatal condition. The exact class therefore represents Kotlin-created Error values
+only. Foreign `OutOfMemoryException` and `StackOverflowException` values remain distinct until an
+explicit interop translation or catch-union policy is justified.
+
+The physical `System.Exception` parent preserves the supported `Throwable` storage/catch edge. It
+also means `catch (Exception)` catches Kotlin.Error because this POC already maps both Kotlin
+Throwable and Exception to System.Exception. That is the existing documented root-collapse delta,
+not a new claim that Error logically extends Kotlin Exception.
+
 Every later exception requires its own interop audit. A BCL-mapped child can move under the
 Kotlin-owned root only together with explicit fault translation or catch-union/filter lowering.
 No entry may migrate merely because a similarly named runtime class exists.
@@ -135,12 +153,18 @@ ILAsm versions. Both consumer binaries ran with both runtime binaries on both Co
 caught the exact value as System.ArgumentException, caught it by exact identity, and kept a foreign
 System.FormatException outside the exact catch.
 
+Probe series `exceptionabi_s3` applied the same eight-way matrix to Kotlin.Error. Every execution
+preserved null default message, exact identity, cause-only message/cause identity, and kept a
+foreign OutOfMemoryException outside the exact Error catch.
+
 The compiler exact-IL pin covers both value and statement exhaustive-when throws and the
 Kotlin.Runtime type reference. The existing two-handler test keeps the sibling
 IllegalStateException boundary. NumberFormatException IL/box pins cover exact construction and
 catch, the mapped IllegalArgumentException value/catch edge, Throwable widening, identity, message
-dispatch, and default state. A rejection pin keeps RuntimeException and Error unavailable until
-their distinct hierarchy problems are solved.
+dispatch, and default state. Error IL/box pins cover all four constructors, exact and root catches,
+Throwable identity, message/cause state, and the accepted Exception root-collapse catch. A
+rejection pin keeps RuntimeException unavailable until its mapped-child hierarchy problem is
+solved.
 
 ## Consequences and boundaries
 
@@ -152,6 +176,6 @@ their distinct hierarchy problems are solved.
 - Runtime-owned identities need not share one physical base when doing so would break an existing
   mapped-parent edge; the registry must state every such edge and every type needs its own interop
   audit.
-- RuntimeException source use, other Kotlin-owned mapped children, Error, negative-array-size
-  identity, raw-fault translation, catch filters/unions, stack traces, and non-Exception throw
-  wrapping remain separate slices.
+- RuntimeException source use, other Kotlin-owned mapped children, negative-array-size identity,
+  raw-fault translation, catch filters/unions, stack traces, and non-Exception throw wrapping
+  remain separate slices.
