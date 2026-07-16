@@ -6,6 +6,10 @@ fun nextBoxed(values: Iterator<Int>): Int = values.next()
 
 fun <T> nextGeneric(values: Iterator<T>): T = values.next()
 
+fun <T> openIterator(values: Array<T>): Iterator<T> = values.iterator()
+
+fun <T> firstFromOpenArray(values: Array<T>): T = openIterator(values).next()
+
 fun stringIterator(values: Array<String>): Iterator<String> = values.iterator()
 
 fun hasNext(values: Iterator<String>): Boolean = values.hasNext()
@@ -73,4 +77,5 @@ fun main() {
     println(erasedIntNext(IntValueIterator(8)))
     println(erasedGenericNext(GenericValueIterator("generic")))
     println(erasedStringNext(DeferredStringValueIterator("deferred")))
+    println(firstFromOpenArray(arrayOf("open")))
 }

@@ -978,9 +978,10 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
  * An explicit array `iterator()` value -> the shared runtime ArrayIterator object.
  *
  * The runtime takes System.Array, so primitive and concrete reference vectors use the same object.
- * An open Array<T> producer remains outside this bounded slice: its physical `T[]` is valid, but
- * landing it would silently broaden the current open-array feature boundary. Generic consumers of
- * an already-created Iterator<T> are supported because Next narrows its object result with `!!n`.
+ * Open invariant Array<T> producers use the same object: their exact `!n[]`/`!!n[]` vectors are
+ * System.Array values, and the existing erased consumer narrows Next with `unbox.any !n`/`!!n`.
+ * Receiver mapping still rejects nullable type parameters, projections, and nested arrays before
+ * this intrinsic runs, so accepting the producer does not broaden those array families.
  */
 private class DotNetIlArrayIteratorIntrinsic(
     private val fixedArrayType: DotNetIlValueType?,
@@ -997,9 +998,6 @@ private class DotNetIlArrayIteratorIntrinsic(
                 codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
                 ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
         )
-        if (arrayType is DotNetIlValueType.GenericArray && arrayType.elementType is DotNetIlValueType.TypeParameter) {
-            dotNetUnsupported("iterator on an open generic Array<T> is not supported in the escaping iterator slice")
-        }
         codegen.emitExpression(receiver, arrayType)
         codegen.emit(
             DotNetRuntimeLibraryHelpers.arrayIteratorConstructorInstruction,

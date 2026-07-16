@@ -349,8 +349,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   from a base which owns typed members. An abstract obligation-only base emits no false recursive
   bridge; the first concrete descendant owns it instead. No adapter or public execution capability
   is introduced.
-  STAYS REJECTED, loudly: open `Array<T>` producers, user-defined Iterator subinterfaces and
-  primitive-specialized iterator subclasses, Iterable/collection/sequence iteration, mutable
+  Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector directly to the same
+  System.Array-backed producer; erased Next narrows through `unbox.any !n`/`!!n`. The array mapper
+  still rejects `Array<T?>`, projections, concrete primitive-element generic arrays, and nested
+  arrays before the intrinsic runs. STAYS REJECTED, loudly: user-defined Iterator subinterfaces
+  and primitive-specialized iterator subclasses, Iterable/collection/sequence iteration, mutable
   iterators, CLR IEnumerator adapters, and typed fast-path entries. Pins:
   `ilText/arrayIterators.kt`, `box/arrayIterators.kt`, and the iterator negatives in
   `ilText/genericArraysRejected.kt`.
@@ -425,7 +428,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   loudly: ordinary use-site projections/star projections (the concrete vararg-only normalization
   below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
   primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
-  including arrays of primitive arrays, open-generic iterator producers, array casts/type checks,
+  including arrays of primitive arrays, array casts/type checks,
   resized/open-generic copying, and content APIs other than the shallow `contentEquals` slice
   below. Concrete reference-array iterator values use the erased runtime iterator ABI above.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:

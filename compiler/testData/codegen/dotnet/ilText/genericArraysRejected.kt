@@ -54,8 +54,6 @@ fun <T> openResize(values: Array<T>, size: Int): Array<T?> = values.copyOf(size)
 fun <T> openCopyInto(source: Array<T>, destination: Array<T>): Array<T> =
     source.copyInto(destination)
 
-fun <T> openIterator(values: Array<T>): Iterator<T> = values.iterator()
-
 interface CustomIteratorView<T> : Iterator<T>
 
 class CustomIntIterator : IntIterator() {
