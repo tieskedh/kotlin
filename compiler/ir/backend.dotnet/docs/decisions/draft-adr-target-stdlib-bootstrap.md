@@ -29,8 +29,9 @@ Kotlin.Stdlib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
 
 ABI major 1 is unsigned. AssemblyVersion stays fixed for compatible ABI-1 builds; product/package
 versions belong outside CLR AssemblyVersion. `Kotlin.Stdlib.dll` references `Kotlin.Runtime.dll`
-and uses the .NET Framework 4.8 API floor so the same logical IL can be assembled for either
-supported runtime target.
+and currently uses the .NET Framework 4.8 API floor so the same logical IL can be assembled for
+either supported runtime target. `draft-adr-dotnet-library-target-profile.md` records the stronger
+candidate: one `netstandard2.0` platform-library profile shared by both executable targets.
 
 Ownership is split as follows:
 
@@ -168,6 +169,10 @@ classpath, the bootstrap override.
 Until the repository build populates those directories, absence of both files still selects the
 injected-source compatibility path. Installed-pair use no longer enables `kotlin.*` packages in
 user sources; that temporary permission is limited to compiler-owned injected sources.
+
+These per-runtime directories are provisional discovery scaffolding, not the intended package
+layout. The validated `netstandard2.0` candidate would replace them with one portable installed
+pair after its full BCL member-reference audit and codegen profile are implemented.
 
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
