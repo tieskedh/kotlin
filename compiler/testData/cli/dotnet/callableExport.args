@@ -1,0 +1,4 @@
+$TESTDATA_DIR$/callableExport.kt
+-Xdotnet-export=sample.makeAdder=makeAdderDelegate
+-d
+$TEMP_DIR$/callableExport.il

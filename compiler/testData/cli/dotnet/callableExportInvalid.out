@@ -1,0 +1,2 @@
+error: invalid value 'sample.makeAdder' for -Xdotnet-export: expected '<kotlin-fq-name>=<clr-method-name>'
+COMPILATION_ERROR
