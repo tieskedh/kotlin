@@ -1,4 +1,5 @@
 $TESTDATA_DIR$/callableExport.kt
 -Xdotnet-export=sample.makeAdder=makeAdderDelegate
+-Xdotnet-export=sample.applyTwice=applyTwiceDelegate
 -d
 $TEMP_DIR$/callableExport.il

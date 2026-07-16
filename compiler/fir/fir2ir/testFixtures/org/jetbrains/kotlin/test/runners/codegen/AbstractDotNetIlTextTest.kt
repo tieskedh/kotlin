@@ -254,7 +254,7 @@ private class DotNetEnvironmentConfigurator(
 
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     val DOTNET_EXPORT by stringDirective(
-        "Explicit callable factory export in <kotlin-fq-name>=<clr-method-name> form"
+        "Explicit callable boundary export in <kotlin-fq-name>=<clr-method-name> form"
     )
 }
 

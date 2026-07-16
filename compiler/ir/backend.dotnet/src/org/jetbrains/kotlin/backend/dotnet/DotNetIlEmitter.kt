@@ -26,6 +26,7 @@ import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
@@ -680,7 +681,7 @@ class DotNetIlEmitter(
             }
         } while (anyDeclarationRemoved)
 
-        // Build exports only after the ordinary render fixpoint. A selected factory is never
+        // Build exports only after the ordinary render fixpoint. A selected function is never
         // allowed to retain a stale signature or call a declaration evicted by a class/body
         // failure. Export failures are compilation errors because the user requested this
         // boundary explicitly; silently dropping the facade would be a false-success ABI.
@@ -699,24 +700,26 @@ class DotNetIlEmitter(
                 continue
             }
             try {
+                val renderedExport = renderCallableExport(target, export, targetInfo, typeMapper)
+                val exportedParameterTypes = renderedExport.parameterTypes.joinToString(", ")
                 val collision = availableFunctions.entries.firstOrNull { [function, info] ->
                     info.owner.ilTypeRef == targetInfo.owner.ilTypeRef &&
                             function.typeParameters.isEmpty() &&
                             function.dotNetIlMethodName() == export.clrMethodName &&
-                            info.signature.renderParameterTypes() == targetInfo.signature.renderParameterTypes()
+                            info.signature.renderParameterTypes() == exportedParameterTypes
                 }
                 if (collision != null) {
                     dotNetUnsupported(
-                        "CLR method '${export.clrMethodName}(${targetInfo.signature.renderParameterTypes()})' " +
+                        "CLR method '${export.clrMethodName}($exportedParameterTypes)' " +
                                 "already exists on facade ${targetInfo.owner.ilTypeRef}"
                     )
                 }
                 val exportIdentity = "${targetInfo.owner.ilTypeRef}::${export.clrMethodName}(" +
-                        "${targetInfo.signature.renderParameterTypes()})"
+                        "$exportedParameterTypes)"
                 if (!exportedIlIdentities.add(exportIdentity)) {
                     dotNetUnsupported("another requested export maps to the same CLR method '$exportIdentity'")
                 }
-                renderedCallableExports[target] = renderCallableFactoryExport(target, export, targetInfo, typeMapper)
+                renderedCallableExports[target] = renderedExport.method
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -2034,86 +2037,115 @@ class DotNetIlEmitter(
         fqNameWhenAvailable?.asString() ?: name.asString()
 
     /**
-     * Renders the first explicit CLR export slice: a top-level factory returning a non-null
-     * Function0/1/2 becomes one user-named static facade method returning Func or Action. The
-     * canonical Kotlin method and its FunctionN return stay unchanged; this extra method alone
-     * calls the runtime projection helper. Reverse delegate adaptation is intentionally absent,
-     * so callable parameters are rejected rather than exposed as FunctionN on a supposedly CLR-
-     * friendly surface.
+     * Renders one explicit CLR callable boundary. Supported Function0/1/2 parameters become
+     * typed Func/Action parameters and are adapted back to the canonical erased FunctionN before
+     * the Kotlin method is called. A callable return is projected in the opposite direction;
+     * ordinary parameters and returns stay unchanged. No ordinary Kotlin signature is rewritten.
      */
-    private fun renderCallableFactoryExport(
+    private fun renderCallableExport(
         target: IrSimpleFunction,
         export: DotNetCallableExport,
         targetInfo: DotNetIlFunctionInfo,
         typeMapper: DotNetIlTypeMapper,
-    ): DotNetIlRenderedMethod {
+    ): DotNetRenderedCallableExport {
         if (target.visibility != DescriptorVisibilities.PUBLIC) {
             dotNetUnsupported("the selected function is not public")
         }
         if (target.typeParameters.isNotEmpty()) {
-            dotNetUnsupported("generic callable factories are not supported by this export slice")
+            dotNetUnsupported("generic functions are not supported by this export slice")
         }
-        if (target.parameters.any { parameter ->
-                DotNetRuntimeTypes.mapCallableType(parameter.type) != null || parameter.type.isSuspendFunction()
-            }
-        ) {
-            dotNetUnsupported(
-                "callable parameters require the not-yet-defined CLR delegate-to-Kotlin adaptation boundary"
+        if (target.isSuspend) {
+            dotNetUnsupported("suspend functions are outside the CLR delegate boundary")
+        }
+        val parameterBoundaries = target.parameters.map { parameter ->
+            parameter.type.delegateBoundaryOrNull(typeMapper, "parameter '${parameter.name.asString()}'")
+        }
+        val returnBoundary = target.returnType.delegateBoundaryOrNull(typeMapper, "return type")
+        if (parameterBoundaries.all { it == null } && returnBoundary == null) {
+            dotNetUnsupported("the selected function has no supported Function0/1/2 parameter or return")
+        }
+        val exportedParameterTypes = targetInfo.signature.parameterTypes.mapIndexed { index, type ->
+            parameterBoundaries[index]?.closedDelegateType ?: type.nameInSignature
+        }
+        val parameters = target.parameters.indices.joinToString(", ") { index ->
+            "${exportedParameterTypes[index]} ${target.parameters[index].name.asString().toIlIdentifier()}"
+        }
+        val exportedReturnType = returnBoundary?.closedDelegateType
+            ?: targetInfo.signature.returnType.nameInSignature
+        val ilText = buildString {
+            appendLine(
+                "  .method public hidebysig static $exportedReturnType " +
+                        "${export.clrMethodName.toIlIdentifier()}($parameters) cil managed"
             )
-        }
-
-        val callableType = target.returnType as? IrSimpleType
-            ?: dotNetUnsupported("the selected function does not return a supported function type")
-        if (!callableType.isFunction() || callableType.isSuspendFunction()) {
-            val reflectionNote = if (callableType.isKFunction()) {
-                " (KFunction export needs an explicit FunctionN execution view)"
-            } else {
-                ""
+            appendLine("  {")
+            appendLine("    .maxstack ${maxOf(1, target.parameters.size)}")
+            target.parameters.indices.forEach { index ->
+                appendLine("    ldarg $index")
+                parameterBoundaries[index]?.let { boundary ->
+                    appendLine("    ${boundary.adaptationCallInstruction}")
+                }
             }
-            dotNetUnsupported("the selected function does not return a supported Function0/1/2$reflectionNote")
+            appendLine("    ${targetInfo.renderCallInstruction(target.dotNetIlMethodName())}")
+            returnBoundary?.let { boundary ->
+                appendLine("    ${boundary.projectionCallInstruction}")
+            }
+            appendLine("    ret")
+            appendLine("  }")
+        }
+        return DotNetRenderedCallableExport(
+            method = DotNetIlRenderedMethod(ilText),
+            parameterTypes = exportedParameterTypes,
+        )
+    }
+
+    private fun IrType.delegateBoundaryOrNull(
+        typeMapper: DotNetIlTypeMapper,
+        position: String,
+    ): DotNetDelegateBoundary? {
+        val mappedCallableType = DotNetRuntimeTypes.mapCallableType(this)
+        if (mappedCallableType == null && !isSuspendFunction() && !isKFunction()) return null
+        if (isSuspendFunction()) {
+            dotNetUnsupported("suspend callable $position is outside the CLR delegate boundary")
+        }
+        if (isKFunction()) {
+            dotNetUnsupported("KFunction $position needs an explicit FunctionN execution view")
+        }
+        val callableType = this as? IrSimpleType
+            ?: dotNetUnsupported("$position is not a supported Function0/1/2")
+        if (!callableType.isFunction()) {
+            dotNetUnsupported("callable marker $position has no fixed CLR delegate shape")
         }
         if (callableType.isMarkedNullable()) {
-            dotNetUnsupported("nullable callable returns require a CLR nullability-metadata policy")
+            dotNetUnsupported("nullable callable $position requires a CLR nullability-metadata policy")
         }
         val logicalTypes = callableType.arguments.map { argument ->
             (argument as? IrTypeProjection)?.type
-                ?: dotNetUnsupported("star-projected callable types cannot be exported")
+                ?: dotNetUnsupported("star-projected callable $position cannot be exported")
         }
         val arity = logicalTypes.size - 1
         if (arity !in 0..2) {
-            dotNetUnsupported("callable arity $arity is outside the supported Function0/1/2 export boundary")
+            dotNetUnsupported("callable arity $arity in $position is outside the supported Function0/1/2 boundary")
         }
         val callableParameterTypes = logicalTypes.dropLast(1).mapIndexed { index, type ->
             typeMapper.toDotNetIlValueType(type)
-                ?: dotNetUnsupported("callable parameter type ${index + 1} '${type.render()}' cannot be mapped to CLR")
+                ?: dotNetUnsupported(
+                    "callable argument type ${index + 1} '${type.render()}' in $position cannot be mapped to CLR"
+                )
         }
         val logicalResultType = logicalTypes.last()
         val callableResultType = if (logicalResultType.isUnit()) {
             null
         } else {
             typeMapper.toDotNetIlValueType(logicalResultType)
-                ?: dotNetUnsupported("callable result type '${logicalResultType.render()}' cannot be mapped to CLR")
+                ?: dotNetUnsupported("callable result type '${logicalResultType.render()}' in $position cannot be mapped to CLR")
         }
-        val projection = DotNetRuntimeTypes.delegateProjection(callableParameterTypes, callableResultType)
-        val parameters = target.parameters.zip(targetInfo.signature.parameterTypes)
-            .joinToString(", ") { [parameter, type] ->
-                "${type.nameInSignature} ${parameter.name.asString().toIlIdentifier()}"
-            }
-        val ilText = buildString {
-            appendLine(
-                "  .method public hidebysig static ${projection.closedDelegateType} " +
-                        "${export.clrMethodName.toIlIdentifier()}($parameters) cil managed"
-            )
-            appendLine("  {")
-            appendLine("    .maxstack ${maxOf(1, target.parameters.size)}")
-            target.parameters.indices.forEach { index -> appendLine("    ldarg $index") }
-            appendLine("    ${targetInfo.renderCallInstruction(target.dotNetIlMethodName())}")
-            appendLine("    ${projection.projectionCallInstruction}")
-            appendLine("    ret")
-            appendLine("  }")
-        }
-        return DotNetIlRenderedMethod(ilText)
+        return DotNetRuntimeTypes.delegateBoundary(callableParameterTypes, callableResultType)
     }
+
+    private data class DotNetRenderedCallableExport(
+        val method: DotNetIlRenderedMethod,
+        val parameterTypes: List<String>,
+    )
 
     private fun StringBuilder.appendHeader(referencesRuntimeAssembly: Boolean) {
         appendLine(".assembly extern $CORE_LIB {}")

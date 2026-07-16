@@ -1,3 +1,5 @@
 // EXISTS: callableExport.il
 // CONTAINS: callableExport.il, System.Func`2<int32, int32> 'makeAdderDelegate'(int32 'offset')
 // CONTAINS: callableExport.il, DelegateProjection'::'ToFunc1'<int32, int32>
+// CONTAINS: callableExport.il, int32 'applyTwiceDelegate'(class [mscorlib]System.Func`2<int32, int32> 'transform', int32 'value')
+// CONTAINS: callableExport.il, DelegateProjection'::'FromFunc1'<int32, int32>

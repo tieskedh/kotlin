@@ -9,11 +9,11 @@ object DotNetConfigurationKeys {
     val ASSEMBLY_NAME: CompilerConfigurationKey<String> = CompilerConfigurationKey.create("output .NET assembly name")
     val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET runtime flavor")
     val CALLABLE_EXPORTS: CompilerConfigurationKey<List<DotNetCallableExport>> =
-        CompilerConfigurationKey.create("explicit .NET callable factory exports")
+        CompilerConfigurationKey.create("explicit .NET callable boundary exports")
 }
 
 /**
- * One explicit CLR-facing callable factory export.
+ * One explicit CLR-facing callable boundary export.
  *
  * This is compiler configuration, not a Kotlin source annotation: the POC can evaluate an export
  * boundary without adding a public Kotlin API. [kotlinFqName] selects one top-level function and

@@ -153,31 +153,36 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   fields, parameters, returns, ordinary Kotlin subtype conversion, or as a CLR delegate identity.
   The explicit export helper may probe the same-object capability solely to bind a typed Func;
   the generated facade exposes the delegate, never ExactFunctionN.
-  The first CLR export slice now gives delegate projection an explicit owner without adding a
+  The explicit CLR export slice gives delegate projection/adaptation an explicit owner without a
   Kotlin source annotation or automatic overloads. Repeatable compiler configuration
   `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects exactly one public, non-generic
-  top-level factory returning a non-null Function0/1/2. The canonical factory and its erased
-  FunctionN return remain unchanged; one user-named static method is added to the SAME file facade
-  with the factory's ordinary parameter list and a typed Func/Action return. The compiler uses the
-  logical callable arguments to select Func versus Action (Unit -> CLR void) and closes the
-  metadata-public `Kotlin.Runtime.Internal.DelegateProjection` helper. A matching ExactFunctionN
-  view binds the Func directly to InvokeExact; erased-only implementations use a closed static
-  generic box/unbox thunk; Unit Action always uses a void thunk that discards Kotlin.Unit. Repeated
-  projection of the same object and closed shape compares delegate-equal without caching, and
-  exceptions are not caught or translated. Overloaded selectors, facade-name/signature clashes,
-  nullable callable returns, callable parameters, generic factories, KFunction/suspend returns,
-  and arities above 2 fail loudly. In particular, callable parameters stay rejected until an
-  equally explicit delegate-to-FunctionN adapter and round-trip policy exist; no projection occurs
-  in ordinary Kotlin fields, parameters, returns, subtyping, or calls. `delegateexport_s1` ran all
-  exact/erased Func and Unit Action arities under modern and Framework ILAsm; compiler-produced
-  `delegateexport_compiler_s1` facades and the landed runtime ran exact, fallback, equality, and
-  Action cases on both runtimes. Pins: `ilText/callableExports.kt` and CLI
-  `dotnet/callableExport.args`. The detailed invariant and remaining round-trip/nullability work
-  are in the callable draft ADR.
+  top-level function with at least one non-null Function0/1/2 parameter or return. The canonical
+  Kotlin method and all erased FunctionN positions remain unchanged; one user-named static method
+  is added to the SAME file facade. Only that method replaces callable positions with typed
+  Func/Action (Unit -> CLR void). The metadata-public
+  `Kotlin.Runtime.Internal.DelegateProjection` helper projects returns and adapts delegate
+  parameters into private runtime-owned classes implementing the canonical FunctionN interface.
+  Func adapters additionally expose the optional ExactFunctionN capability; Action adapters stay
+  erased because Unit has no generic void representation. Projecting one of these adapters back to
+  the same closed delegate shape returns its stored ORIGINAL delegate object. Different closed
+  shapes have no identity promise, and Kotlin-callable -> delegate -> Kotlin-callable identity is
+  not promised. Existing Kotlin-to-CLR projection still binds exact Func directly to InvokeExact,
+  falls back through closed generic box/unbox thunks, and uses a void thunk for Action. Repeated
+  projection of the same Kotlin object/shape compares delegate-equal without caching. Adapters and
+  projections add no catches; a null delegate at a non-null exported parameter throws
+  ArgumentNullException. Overloaded selectors, facade-name/exported-signature clashes, nullable
+  callable positions, generic or suspend functions, KFunction/suspend callable positions, and
+  arities above 2 fail loudly. No projection or adaptation occurs in ordinary Kotlin fields,
+  parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
+  Func/Action arity under modern and Framework ILAsm; compiler-produced facades plus the landed
+  runtime ran both directions, invocation, and same-shape round-trip identity on both runtimes.
+  Pins: `ilText/callableExports.kt`, `ilText/callableParameters.kt`, and CLI
+  `dotnet/callableExport.args`. The detailed invariant and remaining nullability work are in the
+  callable draft ADR.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
-  delegate adapters, and Unit exact entry points. Kotlin metadata serialization and
-  Later .NET-facing export slices must preserve the logical function arguments;
+  implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin
+  metadata serialization. Later .NET-facing export slices must preserve the logical function arguments;
   the canonical interface encodes none of those arguments, so CLR reflection alone cannot
   reconstruct the Kotlin type even if later optimization members are visible. Promotion of the
   candidate requires both a measured exact-shape non-boxing execution path and representative
