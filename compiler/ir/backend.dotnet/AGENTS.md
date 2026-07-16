@@ -367,8 +367,24 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   self-containing arrays remain undefined and gain no cycle detector, matching the stdlib
   contract. `arrayhash_s1` assembled and ran on modern CoreCLR and Framework, and the exact golden
   assembles with both ILAsm versions. Pins: `ilText/arrayContentHashCode.kt` and
-  `box/arrayContentHashCode.kt`. STAYS REJECTED, loudly: `contentToString`,
-  `contentDeepToString`, unsigned arrays, and mapper-rejected array families.
+  `box/arrayContentHashCode.kt`.
+- Shallow and recursive content rendering (probe series `arraystring_s1`; common/JVM
+  `contentToString`/`contentDeepToString` contract) reuse the Kotlin-owned `StringValueOf`
+  boundary so null, Boolean, Char, Double, and user `toString` semantics do not leak raw CLR
+  formatting. Nullable arrays render as `"null"`; non-null arrays use List-compatible brackets
+  and `", "` separators. `contentToString` covers the five supported primitive arrays plus generic
+  arrays and deliberately renders nested arrays through their ordinary identity-based `toString`.
+  Generic-array `contentDeepToString` recursively renders reference vectors and each supported
+  primitive vector. Its Framework-compatible `ArrayList` stores only the active recursion path:
+  encountering an active array appends `"[...]"`, while a shared non-cyclic child is removed after
+  its branch and renders fully again later. Array identity makes `ArrayList.Contains` the correct
+  path predicate; this is not an equality/content lookup. Open invariant `Array<T>` and projected/
+  concrete reference vectors keep exact storage and evaluate the receiver once. Data-class array
+  rendering delegates to the general shallow helper through its existing compatibility wrapper.
+  `arraystring_s1` assembled and ran null, primitive, nested, repeated-child, and cyclic cases on
+  modern CoreCLR and Framework; the exact golden assembles with both ILAsm versions. Pins:
+  `ilText/arrayContentToString.kt` and `box/arrayContentToString.kt`. STAYS REJECTED, loudly:
+  unsigned arrays and mapper-rejected array families.
 - Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
   delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
   stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the

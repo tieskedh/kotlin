@@ -118,6 +118,16 @@ public external fun DoubleArray?.contentHashCode(): Int
 public external fun BooleanArray?.contentHashCode(): Int
 public external fun CharArray?.contentHashCode(): Int
 public external fun <T> Array<out T>?.contentDeepHashCode(): Int
+
+// Shallow text keeps nested arrays as ordinary identity-rendered elements. Deep text recursively
+// renders supported nested arrays and replaces only active recursion-path cycles with "[...]".
+public external fun <T> Array<out T>?.contentToString(): String
+public external fun IntArray?.contentToString(): String
+public external fun LongArray?.contentToString(): String
+public external fun DoubleArray?.contentToString(): String
+public external fun BooleanArray?.contentToString(): String
+public external fun CharArray?.contentToString(): String
+public external fun <T> Array<out T>?.contentDeepToString(): String
 """,
     "DotNetStdlibKotlin.kt" to """package kotlin
 
