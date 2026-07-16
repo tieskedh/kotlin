@@ -141,9 +141,9 @@ The candidate is only the Kotlin identity ABI and universal invocation fallback.
 that erased invocation or untyped CLR signatures are sufficient final execution and export
 surfaces.
 
-The POC now evaluates a first exact-shape execution layer without changing that identity. A
-compiler-generated, non-Unit callable object also implements one metadata-public interface in the
-reserved compiler/runtime namespace:
+The POC now evaluates optional execution layers without changing that identity. Every
+compiler-generated, non-Unit callable object implements one exact metadata-public interface in
+the reserved compiler/runtime namespace:
 
 ```text
 Kotlin.Runtime.Internal.ExactFunction0<out R> { R InvokeExact() }
@@ -156,12 +156,11 @@ metadata only because generated modules must implement and call them across the 
 boundary. The generated object's original typed body becomes `InvokeExact`; its erased `Invoke`
 bridge calls that body and retains the universal `Kotlin.FunctionN` contract.
 
-When the logical parameter and result types at a call site are known, codegen evaluates the
-receiver and arguments once, probes the corresponding closed `ExactFunctionN` interface, and
-calls `InvokeExact` if present. When codegen can trace a bounded immutable local initializer chain
-to a more specific fixed FunctionN/KFunctionN view, it may recover that view's logical signature.
-It can then probe the corresponding exact interface second and apply only legal argument/result
-widenings. For
+When the logical parameter and result types at a call site are known, codegen can probe the
+corresponding closed `ExactFunctionN` interface and call `InvokeExact` if present. When codegen can
+trace a bounded immutable local initializer chain to a more specific fixed FunctionN/KFunctionN
+view, it may recover that view's logical signature. It can then probe the corresponding exact
+interface after the call-site shape and apply only legal argument/result widenings. For
 example, `(Int) -> Int` stored as `(Int) -> Any` can call `ExactFunction1<Int, Int>` with an
 unboxed argument and box only the result. CLR-compatible reference variance needs no second probe
 because the call-site-shaped interface already succeeds. Statement-position non-Unit invocation
@@ -171,13 +170,35 @@ This recovery is not part of the `ExactFunctionN` contract. No consumer may assu
 causes an object to expose the widened closed exact interface, or that codegen will recover an
 original interface after arbitrary storage or control flow.
 
+Cross-module measurement justified one additional, narrower execution capability for the CLR
+value-type variance hole:
+
+```text
+Kotlin.Runtime.Internal.TypedArgumentsFunction1<in P0> { object InvokeTyped(P0) }
+Kotlin.Runtime.Internal.TypedArgumentsFunction2<in P0, in P1> { object InvokeTyped(P0, P1) }
+```
+
+A generated non-Unit Function1/2 object with at least one concrete primitive or
+nullable-primitive parameter implements this optional interface in addition to FunctionN and
+ExactFunctionN. `InvokeTyped` calls the same `InvokeExact` body with unboxed arguments and erases
+only the result. Func1/2 adapters at the explicit CLR boundary expose the same capability; Action
+adapters do not.
+
+Codegen probes this view only when the call site's logical result is `Any`/`Any?` (`object`) and at
+least one argument is primitive-shaped. It evaluates the receiver and arguments once, probes the
+call-site-shaped TypedArgumentsFunctionN first, then the existing exact shape(s), then erased
+Invoke. This is deliberately not a general provenance system or a promise that every widening can
+find a partially typed interface. Exact primitive-result calls retain their ExactFunctionN-first
+path. Parameter, field, return, and mutable-local boundaries can now take the partial path when the
+runtime object proves it, but they retain the erased fallback when it does not.
+
 Otherwise codegen calls erased `Invoke` and performs the established boxing, casting, and
 unboxing. Parameters, fields, return values, and mutable locals do not retain trustworthy local
 initializer provenance, while older modules and explicit user-written function implementations
 may expose no exact capability at all. Every optional path is therefore guarded by `isinst`, and
-those cases remain valid fallback providers. A failed fully call-site-shaped probe is proof only
-that that exact interface is absent; it is not treated as proof that no typed invocation is
-possible when safe provenance supplies another shape.
+those cases remain valid fallback providers. A failed fully call-site-shaped exact probe is proof
+only that that interface is absent; it is not treated as proof that no typed invocation is
+possible when the partial capability or safe local provenance supplies another shape.
 
 Unit callables deliberately remain erased on Kotlin-side execution because CLR `void` cannot be a
 generic result argument. The later export boundary may project that object to Action, but the
@@ -193,14 +214,14 @@ An upstream-quality design needs three distinct layers:
 
 1. **Canonical Kotlin identity ABI.** Non-generic `Kotlin.FunctionN` is the stable storage identity,
    and erased `Invoke` is the universal fallback.
-2. **Exact-shape execution ABI.** The implemented candidate uses the optional internal
-   `ExactFunctionN` interfaces described above. A typed invocation is admissible only when the
-   compiler knows a safe call shape (the call-site shape or immutable local provenance) and the
-   runtime object proves that it provides the matching closed capability. Otherwise it uses erased
-   `Invoke`. The optimization does not change callable identity or add required members to the
-   candidate `Kotlin.FunctionN` interfaces. Unit, higher arities, benchmark-guided call-site
-   selection, partial typed-argument capabilities, and any future direct generated-class call
-   remain deliberate follow-ups rather than alternate identities.
+2. **Optional execution ABI.** The implemented candidate uses the internal `ExactFunctionN` and
+   narrowly benchmarked `TypedArgumentsFunction1/2` interfaces described above. An exact invocation
+   requires a safe call shape (the call-site shape or immutable local provenance) and a matching
+   runtime capability. The partial invocation requires an object-shaped logical result, at least
+   one concrete primitive-shaped argument, and a matching runtime capability. Otherwise codegen
+   uses erased `Invoke`. Neither optimization changes callable identity or adds required members to
+   `Kotlin.FunctionN`. Unit, higher arities, broader partial capabilities, and any future direct
+   generated-class call remain deliberate follow-ups rather than alternate identities.
 3. **CLR export ABI.** Ordinary public APIs intended for C# and other CLR languages need typed
    projections, such as generated `Func`/`Action` adapters or typed facade members. Those
    projections do not participate in Kotlin subtype conversion and may allocate wrappers.
@@ -283,9 +304,10 @@ a cache. A different closed delegate shape is a different projection and has no 
 
 The reverse direction constructs a private runtime-owned adapter that stores the original
 delegate and implements the erased `FunctionN` identity. A Func adapter also implements the
-matching optional `ExactFunctionN` capability so Kotlin calls with the exact logical shape avoid
-boxing; an Action adapter uses the universal erased path and returns `Kotlin.Unit.INSTANCE` after
-the void delegate completes. This is a semantic foreign adaptation, so ordinary Kotlin `===`
+matching optional `ExactFunctionN` capability; Func1/2 adapters expose TypedArgumentsFunctionN as
+well. Exact calls avoid all boxing, while eligible widened-result calls retain typed arguments.
+An Action adapter uses the universal erased path and returns `Kotlin.Unit.INSTANCE` after the void
+delegate completes. This is a semantic foreign adaptation, so ordinary Kotlin `===`
 preservation does not apply to the newly allocated adapter. When that adapter is projected back to
 the same closed delegate shape, the helper recognizes its own invariant adapter class and returns
 the stored original delegate object. A different closed shape may produce a new delegate.
@@ -345,10 +367,11 @@ Benefits:
 
 Costs:
 
-- calls whose object does not provide the matching exact capability still box value arguments and
+- calls whose object does not provide a matching optional capability still box value arguments and
   results and cast or unbox at the erased boundary;
-- the currently implemented exact-capable path adds one, or for proven widening two, guarded
-  interface probes;
+- the exact path adds one guarded interface probe, or two for provenance-recovered widening; an
+  eligible object-result/value-argument path adds the partial probe first and may therefore make
+  up to three guarded probes before erased fallback;
 - the raw POC interface is untyped to C# and is not proposed as the final CLR export surface;
 - overloads that differ only in logical function type arguments have the same CLR signature and
   must be rejected as platform clashes; and
@@ -399,26 +422,34 @@ order, Unit erasure, and explicit user implementations.
 
 `compiler/testData/codegen/dotnet/ilText/callableInvocationProvenance.kt` separates exact primitive
 calls, primitive-result widening, parameter widening, immutable alias chains, function references,
-mutable and parameter-boundary fallback, and explicit user implementations. Its widened
-`(Int) -> Any` paths first probe the call-site shape and then the original
-`ExactFunction1<Int, Int>` shape, avoiding argument boxing while boxing the result. The exact
-golden assembles and executes under both ILAsm/runtime flavors.
+mutable and parameter-boundary capability dispatch, and explicit user fallback. Its widened
+`(Int) -> Any` paths now probe TypedArgumentsFunction1 first, then the call-site exact shape and
+the locally recoverable original `ExactFunction1<Int, Int>` shape. Every hit avoids argument
+boxing while retaining an object result. The exact golden assembles and executes under both
+ILAsm/runtime flavors.
 
 Raw probe series `callable_capability_s1` also implemented a partial
 `TypedArgumentsFunction1<Int>` interface with `object InvokeTyped(int)`. The fully shaped
 `ExactFunction1<Int, object>` probe missed as expected, while the partial probe succeeded and
-avoided argument boxing on both modern CoreCLR and .NET Framework. That proves the capability is
-technically viable; it does not yet justify adding another metadata-public runtime interface and
-member to every eligible generated callable. Cross-module or benchmark evidence must establish
-that the provenance-free benefit outweighs that ABI and code-size cost.
+avoided argument boxing on both modern CoreCLR and .NET Framework. The follow-up
+`typed_arguments_crossmodule_s1` compiled the runtime contract, producer, and consumer as separate
+Roslyn 5.6 assemblies. Over 2,000,000 widened `(Int) -> Any` calls on CoreCLR, erased invocation
+allocated 96,000,040 bytes and partial invocation 48,000,040 bytes: exactly one 24-byte argument
+box was removed per call. Stable partial-first timings improved from 40–43 ms to 30–31 ms on
+CoreCLR and from 200–213 ms to 141–142 ms on Framework. Each producer gained one InterfaceImpl row
+and a 13-byte Function1 or 17-byte Function2 bridge; both small producer PEs remained at the same
+4096-byte aligned size. A Unit variant removed its argument allocation but regressed Framework
+timing, so the implemented capability excludes Unit rather than generalizing the technically
+possible shape. These measurements cross the evidential threshold for the narrow Function1/2
+capability above, not for broader partial interfaces.
 
 ## Deferred decisions
 
 The POC currently uses generated fields for captures and bound receivers and one invariant generic
 mutable-reference cell. Those concrete layouts are implementation evidence, not additional
   callable identities and not standardized by this ADR. This ADR does not decide KCallable metadata
-  beyond `name`, property references, reflective lookup/call APIs, suspend callables, member/property
-  export, overload-aware export selection, Unit exact execution, partial typed-argument
+  beyond `name`, property references, reflective lookup/call APIs, suspend callables, member
+  export, Unit exact/typed-argument execution, broader or higher-arity typed-argument
   capabilities, or the exact Kotlin
   metadata encoding. Those features must
   preserve the canonical ABI invariants above or explicitly revise this draft before they land.
@@ -433,8 +464,9 @@ Promote this draft only after all of the following validate the boundary:
 - adapted references, suspend callables, property references, and fuller KCallable metadata
   coexist with the candidate identity (capturing/bound function references and the minimal
   KFunction name view are already validated);
-- the implemented exact-shape strategy is benchmarked and either retained or revised while its
-  erased fallback and single-object identity remain intact; and
+- the implemented exact and partial execution strategies receive representative application-level
+  benchmarks and are either retained or revised while their erased fallback and single-object
+  identity remain intact; and
 - representative typed CLR exports give host-language consumers a normal typed surface and define
   adapter reuse/delegate equality, callback registration and removal, repeated Kotlin-to-CLR and
   CLR-to-Kotlin projection, nullability translation, and exception translation.
