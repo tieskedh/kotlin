@@ -99,6 +99,25 @@ This does not add a source declaration to the fake stdlib. Common Kotlin depreca
 `NoWhenBranchMatchedException` at error level because it is a compiler implementation exception,
 so making it a new user-facing API on this target would be a compatibility mistake.
 
+The negative-array-size guard uses the same compiler-owned pattern:
+
+```text
+Kotlin.NegativeArraySizeException : Kotlin.RuntimeException
+```
+
+The common Array API promises a `RuntimeException` for a negative size but does not expose a
+portable `NegativeArraySizeException` source type. JVM happens to throw
+`java.lang.NegativeArraySizeException`; CLR `newarr` instead throws `OverflowException`, whose
+mapped `ArithmeticException` edge is false for Kotlin array construction. Every dynamic array
+allocation therefore tests the size before `newarr` and constructs this exact Kotlin-owned child.
+It has the JVM class's parameterless and message constructor shapes, inherits the root's null
+default message, and introduces no arithmetic, argument, or illegal-state edge.
+
+The class is metadata-public only because generated consumers construct it across the runtime
+assembly boundary. It is not declared in the temporary stdlib or entered in the source exception
+map, so this slice neither exposes a new common Kotlin API nor bypasses the RuntimeException
+source-migration gate. Its physical parent nevertheless freezes the correct future parent edge.
+
 The first source-visible exact mapping is:
 
 ```text
@@ -188,6 +207,13 @@ stored as System.Exception, but an exact-root local containing a mapped BCL chil
 both runtimes dispatched a Kotlin.RuntimeException member on an InvalidOperationException object.
 This evidence freezes the source-mapping gate above.
 
+Probe series `negativearray_s1` assembled the runtime-owned child and a guarded consumer with
+modern 10.0.9 and .NET Framework 4.8 ILAsm. All four same-target and cross-runtime pairings saw the
+exact identity and RuntimeException parent, kept arithmetic/argument/illegal-state tests false,
+and observed the inherited null default message. Repository goldens pin the runtime token across
+primitive, reference, initializer, vararg, and resized-copy allocations; CoreCLR pins the existing
+catch categories, evaluation order, and null message through both FIR parsers.
+
 The compiler exact-IL pin covers both value and statement exhaustive-when throws and the
 Kotlin.Runtime type reference. The existing two-handler test keeps the sibling
 IllegalStateException boundary. NumberFormatException IL/box pins cover exact construction and
@@ -207,6 +233,6 @@ solved.
 - Runtime-owned identities need not share one physical base when doing so would break an existing
   mapped-parent edge; the registry must state every such edge and every type needs its own interop
   audit.
-- RuntimeException source use, other Kotlin-owned mapped children, negative-array-size identity,
-  raw-fault translation, catch filters/unions, stack traces, and non-Exception throw wrapping
+- RuntimeException source use, other Kotlin-owned mapped children, raw-fault translation,
+  catch filters/unions, stack traces, and non-Exception throw wrapping
   remain separate slices.

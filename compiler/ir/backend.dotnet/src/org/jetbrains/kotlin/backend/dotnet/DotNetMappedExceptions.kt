@@ -44,6 +44,11 @@ import org.jetbrains.kotlin.types.Variance
  *   `Current` outside its valid state, maps to Kotlin IllegalStateException and would create a
  *   false subtype edge. The exact identity lets an escaping Kotlin iterator preserve its specified
  *   exhaustion contract without changing the broader exception mapping.
+ * - Negative array allocation uses compiler-owned `Kotlin.NegativeArraySizeException` below the
+ *   dormant exact RuntimeException root. Common Kotlin promises only RuntimeException here, and
+ *   exposes no portable source class, so the child is deliberately absent from [entries]. This
+ *   prevents CLR `OverflowException` from introducing a false ArithmeticException edge without
+ *   bypassing the RuntimeException source-migration gate.
  * - `kotlin.ArithmeticException` -> `System.ArithmeticException` closes the divide-by-zero debt:
  *   the CLR's `DivideByZeroException` IS-A `System.ArithmeticException` (probe-verified), so
  *   `catch (e: ArithmeticException)` catches a CLR division fault. The message stays the CLR's

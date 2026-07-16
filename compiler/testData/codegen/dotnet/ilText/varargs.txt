@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'varargs' {}
 .module 'main-varargs.il'
 
@@ -191,7 +195,7 @@ IL_whenEnd_2:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -218,7 +222,7 @@ IL_arraySizeNonNegative_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -292,7 +296,7 @@ IL_arraySizeNonNegative_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -409,7 +413,7 @@ IL_whileEnd_2:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr string
@@ -526,7 +530,7 @@ IL_whileEnd_2:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -642,7 +646,7 @@ IL_whileEnd_2:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr string
@@ -730,7 +734,7 @@ IL_whileEnd_2:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int64
@@ -764,7 +768,7 @@ IL_arraySizeNonNegative_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr char
@@ -800,7 +804,7 @@ IL_arraySizeNonNegative_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr float64
@@ -849,7 +853,7 @@ IL_arraySizeNonNegative_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -962,7 +966,7 @@ IL_whenEnd_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -1036,7 +1040,7 @@ IL_whileEnd_2:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
