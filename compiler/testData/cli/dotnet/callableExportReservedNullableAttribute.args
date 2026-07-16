@@ -1,0 +1,4 @@
+$TESTDATA_DIR$/callableExportReservedNullableAttribute.kt
+-Xdotnet-export=System.Runtime.CompilerServices.accept=Accept
+-d
+$TEMP_DIR$/callableExportReservedNullableAttribute.il

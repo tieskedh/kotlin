@@ -6,6 +6,41 @@
 .assembly 'callableExports' {}
 .module 'main-callableExports.il'
 
+.namespace System.Runtime.CompilerServices
+{
+  .class private auto ansi sealed beforefieldinit NullableAttribute
+         extends [mscorlib]System.Attribute
+  {
+    .field public initonly uint8[] NullableFlags
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8) cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldc.i4.1
+      newarr [mscorlib]System.Byte
+      dup
+      ldc.i4.0
+      ldarg.1
+      stelem.i1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8[]) cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+  }
+}
 .class public auto ansi sealed beforefieldinit 'demo.State'
        extends [mscorlib]System.Object
 {
@@ -279,6 +314,8 @@
   }
   .method public hidebysig static class [mscorlib]System.Func`1<int32> 'makeZeroDelegate'() cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     call class [Kotlin.Runtime]'Kotlin.Function0' 'demo.callableExportsKt'::'makeZero'()
     call class [mscorlib]System.Func`1<!!0> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToFunc0'<int32>(class [Kotlin.Runtime]'Kotlin.Function0')
@@ -293,6 +330,8 @@
   }
   .method public hidebysig static class [mscorlib]System.Func`2<int32, int32> 'makeOneDelegate'(int32 'offset') cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     ldarg 0
     call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableExportsKt'::'makeOne'(int32)
@@ -308,6 +347,8 @@
   }
   .method public hidebysig static class [mscorlib]System.Func`3<int32, int32, int32> 'makeTwoDelegate'(int32 'scale') cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     ldarg 0
     call class [Kotlin.Runtime]'Kotlin.Function2' 'demo.callableExportsKt'::'makeTwo'(int32)
@@ -322,6 +363,8 @@
   }
   .method public hidebysig static class [mscorlib]System.Func`2<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>> 'makeNullableDelegate'() cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableExportsKt'::'makeNullable'()
     call class [mscorlib]System.Func`2<!!0, !!1> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToFunc1'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>>(class [Kotlin.Runtime]'Kotlin.Function1')
@@ -336,6 +379,10 @@
   }
   .method public hidebysig static class [mscorlib]System.Action 'makeUnitZeroAction'(class 'demo.State' 'state') cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     ldarg 0
     call class [Kotlin.Runtime]'Kotlin.Function0' 'demo.callableExportsKt'::'makeUnitZero'(class 'demo.State')
@@ -351,6 +398,10 @@
   }
   .method public hidebysig static class [mscorlib]System.Action`1<int32> 'makeUnitOneAction'(class 'demo.State' 'state') cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     ldarg 0
     call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableExportsKt'::'makeUnitOne'(class 'demo.State')
@@ -366,6 +417,10 @@
   }
   .method public hidebysig static class [mscorlib]System.Action`2<int32, int32> 'makeUnitTwoAction'(class 'demo.State' 'state') cil managed
   {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
     .maxstack 1
     ldarg 0
     call class [Kotlin.Runtime]'Kotlin.Function2' 'demo.callableExportsKt'::'makeUnitTwo'(class 'demo.State')

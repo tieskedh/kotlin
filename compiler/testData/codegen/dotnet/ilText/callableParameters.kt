@@ -7,8 +7,13 @@
 // DOTNET_EXPORT: demo.runTwo=runTwoAction
 // DOTNET_EXPORT: demo.echoOne=echoOneDelegate
 // DOTNET_EXPORT: demo.echoUnitOne=echoUnitOneAction
+// DOTNET_EXPORT: demo.invokeText=invokeTextDelegate
+// DOTNET_EXPORT: demo.echoNullableText=echoNullableTextDelegate
+// DOTNET_EXPORT: demo.echoBox=echoBoxDelegate
 
 package demo
+
+class TextBox<T>(val value: T)
 
 fun callZero(callback: () -> Int): Int = callback()
 
@@ -33,3 +38,9 @@ fun runTwo(callback: (Int, Int) -> Unit, left: Int, right: Int) {
 fun echoOne(callback: (Int) -> Int): (Int) -> Int = callback
 
 fun echoUnitOne(callback: (Int) -> Unit): (Int) -> Unit = callback
+
+fun invokeText(callback: (String?) -> String, value: String?): String = callback(value)
+
+fun echoNullableText(callback: ((String?) -> String)?): ((String?) -> String)? = callback
+
+fun echoBox(callback: (TextBox<String?>) -> TextBox<String>?): (TextBox<String?>) -> TextBox<String>? = callback
