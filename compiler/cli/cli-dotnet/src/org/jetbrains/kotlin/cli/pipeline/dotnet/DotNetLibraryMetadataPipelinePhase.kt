@@ -6,8 +6,10 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
-import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
+import org.jetbrains.kotlin.backend.dotnet.dotNetProducedLibraryArtifact
+import org.jetbrains.kotlin.backend.dotnet.dotNetProducesLibrary
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
@@ -37,20 +39,21 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.absolute
 
-/** Serializes the compiler-owned bootstrap stdlib declarations from the explicit producer run. */
-object DotNetStdlibMetadataSerializationPipelinePhase :
+/** Serializes the Kotlin declarations paired with one portable CLR implementation assembly. */
+object DotNetLibraryMetadataSerializationPipelinePhase :
     PipelinePhase<DotNetFrontendPipelineArtifact, DotNetFrontendPipelineArtifact>(
-        name = "DotNetStdlibMetadataSerializationPipelinePhase",
+        name = "DotNetLibraryMetadataSerializationPipelinePhase",
         preActions = setOf(PerformanceNotifications.KlibWritingStarted),
         postActions = setOf(CheckCompilationErrors.CheckDiagnosticCollector),
     ) {
     override fun executePhase(input: DotNetFrontendPipelineArtifact): DotNetFrontendPipelineArtifact {
-        check(input.configuration.dotNetProducesStdlib)
-        val outputDirectory = input.configuration.dotNetOutput!!
-        outputDirectory.mkdirs()
-        outputDirectory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME).deleteRecursively()
-
         val configuration = input.configuration
+        check(configuration.dotNetProducesStdlib.xor(configuration.dotNetProducesLibrary))
+        val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
+        val outputDirectory = configuration.dotNetOutput!!
+        outputDirectory.mkdirs()
+        outputDirectory.resolve(artifact.metadataFileName).deleteRecursively()
+
         val metadataVersion = configuration.metadataVersion()
         val fragments = mutableMapOf<String, MutableList<SerializedFirFile>>()
         val serializedSourceNames = mutableSetOf<String>()
@@ -58,7 +61,8 @@ object DotNetStdlibMetadataSerializationPipelinePhase :
             val (session, scopeSession, fir) = output
             val languageVersionSettings = configuration.languageVersionSettings
             for (firFile in fir) {
-                if (firFile.name !in DOTNET_STDLIB_SOURCES) continue
+                val isBootstrapStdlibSource = firFile.name in DOTNET_STDLIB_SOURCES
+                if (configuration.dotNetProducesStdlib != isBootstrapStdlibSource) continue
                 val packageFragment = serializeSingleFirFile(
                     firFile,
                     session,
@@ -79,12 +83,18 @@ object DotNetStdlibMetadataSerializationPipelinePhase :
                     .add(SerializedFirFile(firFile.name, packageFragment.toByteArray(), firFile.sourceFile?.path))
             }
         }
-        check(serializedSourceNames == DOTNET_STDLIB_SOURCES.keys) {
-            "The stdlib producer resolved ${serializedSourceNames.sorted()}, expected ${DOTNET_STDLIB_SOURCES.keys.sorted()}"
+        if (configuration.dotNetProducesStdlib) {
+            check(serializedSourceNames == DOTNET_STDLIB_SOURCES.keys) {
+                "The stdlib producer resolved ${serializedSourceNames.sorted()}, expected ${DOTNET_STDLIB_SOURCES.keys.sorted()}"
+            }
+        } else {
+            check(serializedSourceNames.isNotEmpty()) {
+                "The library producer did not resolve any user source files"
+            }
         }
 
         val header = KlibMetadataProtoBuf.Header.newBuilder().apply {
-            moduleName = DotNetStdlibArtifact.METADATA_UNIQUE_NAME
+            moduleName = artifact.assemblyName
             if (configuration.languageVersionSettings.isPreRelease()) {
                 flags = KlibMetadataHeaderFlags.PRE_RELEASE
             }
@@ -103,26 +113,27 @@ object DotNetStdlibMetadataSerializationPipelinePhase :
             fragmentNames,
             metadataVersion.toArray(),
         )
-        return input.copy(stdlibMetadata = metadata)
+        return input.copy(libraryMetadata = metadata)
     }
 }
 
-/** Writes the bound metadata companion only after the CLR stdlib assembly was produced. */
-object DotNetStdlibMetadataPackagingPipelinePhase :
+/** Writes the bound metadata companion only after the CLR implementation assembly was produced. */
+object DotNetLibraryMetadataPackagingPipelinePhase :
     PipelinePhase<DotNetBackendPipelineArtifact, DotNetBackendPipelineArtifact>(
-        name = "DotNetStdlibMetadataPackagingPipelinePhase",
+        name = "DotNetLibraryMetadataPackagingPipelinePhase",
         postActions = setOf(PerformanceNotifications.KlibWritingFinished, CheckCompilationErrors.CheckDiagnosticCollector),
     ) {
     override fun executePhase(input: DotNetBackendPipelineArtifact): DotNetBackendPipelineArtifact {
-        check(input.configuration.dotNetProducesStdlib)
-        val metadata = checkNotNull(input.stdlibMetadata)
-        val implementationFile = input.output
-        if (!implementationFile.isFile || implementationFile.name != DotNetStdlibArtifact.ASSEMBLY_FILE_NAME) return input
-
         val configuration = input.configuration
+        check(configuration.dotNetProducesStdlib.xor(configuration.dotNetProducesLibrary))
+        val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
+        val metadata = checkNotNull(input.libraryMetadata)
+        val implementationFile = input.output
+        if (!implementationFile.isFile || implementationFile.name != artifact.assemblyFileName) return input
+
         val outputDirectory = configuration.dotNetOutput!!
-        val finalFile = outputDirectory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
-        val temporaryFile = outputDirectory.resolve(".${DotNetStdlibArtifact.METADATA_FILE_NAME}.tmp")
+        val finalFile = outputDirectory.resolve(artifact.metadataFileName)
+        val temporaryFile = outputDirectory.resolve(".${artifact.metadataFileName}.tmp")
         temporaryFile.deleteRecursively()
         val versions = KotlinLibraryVersioning(
             abiVersion = KotlinAbiVersion.CURRENT,
@@ -132,23 +143,23 @@ object DotNetStdlibMetadataPackagingPipelinePhase :
         KlibWriter {
             format(KlibFormat.ZipArchive)
             manifest {
-                moduleName(DotNetStdlibArtifact.METADATA_UNIQUE_NAME)
+                moduleName(artifact.assemblyName)
                 versions(versions)
                 // There is no durable .NET KLIB platform kind yet. The custom target binding
                 // below prevents this provisional common encoding from claiming portability.
                 platformAndTargets(BuiltInsPlatform.COMMON)
                 customProperties {
-                    setProperty(DotNetStdlibArtifact.METADATA_ASSEMBLY_NAME_PROPERTY, DotNetStdlibArtifact.ASSEMBLY_NAME)
-                    setProperty(DotNetStdlibArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY, DotNetStdlibArtifact.ASSEMBLY_VERSION)
-                    setProperty(DotNetStdlibArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY, DotNetStdlibArtifact.ASSEMBLY_CULTURE)
+                    setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY, artifact.assemblyName)
+                    setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY, artifact.assemblyVersion)
+                    setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY, artifact.assemblyCulture)
                     setProperty(
-                        DotNetStdlibArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY,
-                        DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
+                        DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY,
+                        artifact.assemblyPublicKeyToken,
                     )
-                    setProperty(DotNetStdlibArtifact.METADATA_ASSEMBLY_FILE_PROPERTY, DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+                    setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY, artifact.assemblyFileName)
                     setProperty(
-                        DotNetStdlibArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
-                        DotNetStdlibArtifact.LIBRARY_TARGET_FRAMEWORK,
+                        DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
+                        DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK,
                     )
                 }
             }

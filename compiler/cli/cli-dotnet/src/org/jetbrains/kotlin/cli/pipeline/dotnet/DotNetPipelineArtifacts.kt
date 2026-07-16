@@ -14,7 +14,7 @@ data class DotNetFrontendPipelineArtifact(
     override val frontendOutput: AllModulesFrontendOutput,
     override val configuration: CompilerConfiguration,
     val sourceFiles: List<KtSourceFile>,
-    val stdlibMetadata: SerializedMetadata? = null,
+    val libraryMetadata: SerializedMetadata? = null,
 ) : FrontendPipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetFrontendPipelineArtifact =
@@ -28,7 +28,7 @@ data class DotNetFir2IrPipelineArtifact(
     override val result: Fir2IrActualizedResult,
     val frontendOutput: AllModulesFrontendOutput,
     override val configuration: CompilerConfiguration,
-    val stdlibMetadata: SerializedMetadata?,
+    val libraryMetadata: SerializedMetadata?,
 ) : Fir2IrPipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetFir2IrPipelineArtifact =
@@ -38,7 +38,7 @@ data class DotNetFir2IrPipelineArtifact(
 data class DotNetBackendPipelineArtifact(
     val output: File,
     override val configuration: CompilerConfiguration,
-    val stdlibMetadata: SerializedMetadata?,
+    val libraryMetadata: SerializedMetadata?,
 ) : PipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetBackendPipelineArtifact =

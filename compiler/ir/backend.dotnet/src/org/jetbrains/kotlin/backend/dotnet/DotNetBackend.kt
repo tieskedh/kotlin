@@ -27,7 +27,9 @@ object DotNetBackend {
         val target = configuration.dotNetTarget
         val assemblyName = configuration.dotNetAssemblyName ?: output.nameWithoutExtension
         val producesStdlib = configuration.dotNetProducesStdlib
-        val emitsExecutable = !producesStdlib && !output.isDirectory && when (target) {
+        val producesLibrary = configuration.dotNetProducesLibrary
+        val producedLibraryArtifact = configuration.dotNetProducedLibraryArtifact
+        val emitsExecutable = producedLibraryArtifact == null && !output.isDirectory && when (target) {
             DotNetTarget.NET_FRAMEWORK -> output.extension.equals("exe", ignoreCase = true)
             // Modern .NET has no directly runnable ilasm .exe story on this pipeline: the runnable
             // artifact is a .dll launched by the signed `dotnet` host, so both spellings of an
@@ -48,7 +50,7 @@ object DotNetBackend {
             output
         }
         val ilTarget = when {
-            producesStdlib -> output.resolve(DotNetStdlibLibrary.ASSEMBLY_IL_FILE_NAME)
+            producedLibraryArtifact != null -> output.resolve(producedLibraryArtifact.assemblyIlFileName)
             output.isDirectory -> output.resolve("$assemblyName.il")
             emitsExecutable -> binaryOutput.siblingWithExtension("il")
             else -> output
@@ -79,8 +81,8 @@ object DotNetBackend {
             // still depend on it.
             binaryOutput.delete()
             if (target == DotNetTarget.NET) binaryOutput.runtimeConfigFile().delete()
-        } else if (producesStdlib) {
-            output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME).delete()
+        } else if (producedLibraryArtifact != null) {
+            output.resolve(producedLibraryArtifact.assemblyFileName).delete()
             ilTarget.delete()
         }
 
@@ -132,12 +134,18 @@ object DotNetBackend {
         val emitter = DotNetIlEmitter(
             messageCollector = messageCollector,
             assemblyName = assemblyName,
-            moduleFileName = if (emitsExecutable) binaryOutput.name else ilTarget.name,
+            moduleFileName = when {
+                emitsExecutable -> binaryOutput.name
+                producesLibrary -> checkNotNull(producedLibraryArtifact).assemblyFileName
+                else -> ilTarget.name
+            },
             producesExecutable = emitsExecutable,
             irBuiltIns = irBuiltIns,
             propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
             exports = configuration.dotNetExports,
             propertyExports = configuration.dotNetPropertyExports,
+            coreLibrary = if (producesLibrary) DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY else DEFAULT_EXECUTABLE_CORE_LIBRARY,
+            assemblyVersionIl = if (producesLibrary) checkNotNull(producedLibraryArtifact).assemblyVersionIl else null,
         )
         val ilText = emitter.emit(irModuleFragment)
         if (ilText == null) {
@@ -178,6 +186,12 @@ object DotNetBackend {
         // ilasm decodes a BOM-less file as ANSI, mangling every multi-byte UTF-8 sequence (e.g. in
         // string literals), so the .il file must be written as UTF-8 *with* a BOM.
         ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
+
+        if (producesLibrary) {
+            val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
+            DotNetIlAssembler.assemblePortableLibrary(ilTarget, assemblyOutput, messageCollector)
+            return assemblyOutput
+        }
 
         if (emitsExecutable) {
             if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, messageCollector) == null) return binaryOutput
