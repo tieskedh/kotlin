@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(exception fidelity after the CLR delegate-projection boundary audit).
+(array content-semantics audit after exact negative-array-size identity).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -726,6 +726,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   versions and all four modern/Framework runtime pairings agree. The callable draft ADR records
   adapter and round-trip requirements. Do not invent a public source API or automatic overloads;
   add an explicit export/interop boundary first and co-land the projection mechanism there.
+- Negative dynamic array sizes now construct compiler-owned
+  `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
+  Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
+  so the CLR child is metadata-public for generated consumers but intentionally absent from the
+  fake stdlib and source map. It replaces the neutral System.Exception approximation without
+  exposing raw OverflowException's false ArithmeticException edge or inventing argument/state
+  edges, and inherits the exact root's null default message. Constructors, initializer arrays,
+  varargs, reference arrays, and resized copyOf share the guard. `negativearray_s1` assembled and
+  ran exact/parent/sibling/message checks with both ILAsm versions in all four runtime pairings;
+  repository goldens and both parser boxes cover tokens, categories, and evaluation order.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -808,10 +818,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Improve exception fidelity.** Follow the recorded RuntimeException migration gate and replace
-   the neutral negative-array-size fault only when its Kotlin-owned identity and catch policy are
-   audited. Keep `contentEquals` and related content operations separate until their floating,
-   nullable, primitive, and recursive semantics have been reviewed.
+1. **Audit and implement array content operations.** Keep identity equality unchanged. Establish
+   floating-point, nullable, primitive/reference, nested-array, and recursive semantics against
+   mature targets before routing `contentEquals` or related operations through runtime helpers.
 2. **Add an explicit CLR export/interop boundary.** Only then co-land the already probe-validated
    Func/Action projection mechanism. Preserve FunctionN storage/identity and define overload/facade
    naming, nullability, Unit/void, exception translation, adapter round trips, and delegate equality

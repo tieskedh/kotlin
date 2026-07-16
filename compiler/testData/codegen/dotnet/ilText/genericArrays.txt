@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericArrays' {}
 .module 'main-genericArrays.il'
 
@@ -305,7 +309,7 @@ IL_tryEnd_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr string
