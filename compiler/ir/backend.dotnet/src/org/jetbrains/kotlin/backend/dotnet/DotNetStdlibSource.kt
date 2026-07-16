@@ -104,6 +104,10 @@ public external infix fun LongArray?.contentEquals(other: LongArray?): Boolean
 public external infix fun DoubleArray?.contentEquals(other: DoubleArray?): Boolean
 public external infix fun BooleanArray?.contentEquals(other: BooleanArray?): Boolean
 public external infix fun CharArray?.contentEquals(other: CharArray?): Boolean
+
+// Deep equality is defined only on generic arrays; nested generic arrays recurse, supported
+// primitive arrays use their shallow content contract, and all other elements use Kotlin equals.
+public external infix fun <T> Array<out T>?.contentDeepEquals(other: Array<out T>?): Boolean
 """,
     "DotNetStdlibKotlin.kt" to """package kotlin
 
