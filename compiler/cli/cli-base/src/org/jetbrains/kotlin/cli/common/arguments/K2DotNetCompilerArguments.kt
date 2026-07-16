@@ -57,8 +57,9 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
     @Argument(
         value = "-Xdotnet-export",
         delimiter = Argument.Delimiters.none,
-        valueDescription = "<kotlin-fq-name>=<clr-method-name>",
+        valueDescription = "<kotlin-selector>=<clr-method-name>",
         description = "Export a public top-level function through an explicitly named CLR facade method. " +
+                "An overloaded selector adds fully qualified Kotlin parameter types in parentheses. " +
                 "Function0/1/2 positions use typed Func/Action shapes. May be repeated."
     )
     var dotNetExports: Array<String>? = null

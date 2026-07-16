@@ -166,11 +166,22 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   The explicit export helper may probe the same-object capability solely to bind a typed Func;
   the generated facade exposes the delegate, never ExactFunctionN.
   The explicit CLR export slice gives host-facing naming and delegate projection/adaptation an
-  explicit owner without a Kotlin source annotation or automatic whole-module policy. Following
-  the JVM naming/default and Wasm/JS wrapper pattern semantically, repeatable configuration
-  `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects exactly one public, non-generic
-  top-level function. The canonical Kotlin method remains unchanged; a user-named static method is
-  added to the SAME file facade. Ordinary positions retain their mapped CLR shapes. Only that
+  explicit owner without a Kotlin source annotation or automatic whole-module policy. The
+  unchanged-declaration plus host-wrapper boundary follows JVM naming/default and Wasm/JS export
+  patterns semantically. The textual selector does NOT: it is provisional POC control-plane
+  machinery needed only because no source-bound annotation exists. Repeatable configuration
+  `-Xdotnet-export=<kotlin-selector>=<clr-method-name>` selects exactly one public, non-generic
+  top-level function. A unique name may use the legacy `pkg.name` selector. An overloaded name
+  must use `pkg.name(kotlin.Int,kotlin.String?)`: fully qualified, whitespace-free, expanded Kotlin
+  parameter types; nested types use canonical forms such as
+  `kotlin.Function1<kotlin.Int,kotlin.Int>`, and an extension receiver is the first parameter.
+  Return types are excluded because Kotlin has no return-only overloads. These are Kotlin logical
+  signatures, never CLR/IL tokens or declaration-order indexes; multiple overloads may therefore
+  be exported independently, while a bare overloaded name fails loudly. Do not promote this
+  spelling to a public ABI: a future declaration-bound export mechanism should make the textual
+  disambiguator unnecessary. The canonical Kotlin
+  method remains unchanged; a user-named static method is added to the SAME file facade. Ordinary
+  positions retain their mapped CLR shapes. Only that
   explicit surface replaces Function0/1/2 positions with typed Func/Action (Unit -> CLR void). An
   ordinary function with no callable position is valid and gains the same explicit CLR name,
   nullability metadata, collision policy, and Kotlin-default overloads. The metadata-public
@@ -198,8 +209,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   initialized locals. No `[opt]`/constant metadata is emitted: Roslyn otherwise copies constants
   into callers or substitutes `default(T)`, neither of which is Kotlin's general contract.
   Non-trailing defaults create no overload; any generated-signature collision fails the requested
-  export as a whole. Overloaded selectors, facade-name/exported-signature clashes, generic or
-  suspend functions, KFunction/suspend callable positions, and arities above 2 fail loudly. Member
+  export as a whole. Missing or ambiguous selectors, facade-name/exported-signature clashes,
+  generic or suspend functions, KFunction/suspend callable positions, and arities above 2 fail
+  loudly. Member
   functions, properties, constructors, classes, and automatic whole-module export remain out. No
   projection or adaptation occurs in ordinary Kotlin fields,
   parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
@@ -214,7 +226,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `dotnet/callableExport.args`, and both reserved-attribute and default-overload collision fixtures.
   `plainfunctionexport_s1` assembled ordinary aliases with both ILAsm versions and Roslyn consumers
   executed primitive, reference, default-overload, and extension-receiver calls on both runtimes;
-  the primitive-only reserved-name CLI pin proves nullable metadata is demand-driven. Detailed
+  the primitive-only reserved-name CLI pin proves nullable metadata is demand-driven.
+  `overloadedexport_s1` assembled signature-selected aliases under both ILAsm versions; Roslyn
+  5.6.0 consumers executed primitive/reference overloads, typed callable adaptation, a defaulted
+  extension, and a nested nullable generic argument on CoreCLR and Framework. Detailed
   decisions are in the callable and CLR-default draft ADRs.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,

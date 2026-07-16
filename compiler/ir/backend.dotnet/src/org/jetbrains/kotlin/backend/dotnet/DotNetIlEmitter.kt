@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
@@ -107,14 +108,32 @@ class DotNetIlEmitter(
         val exportsByTarget = LinkedHashMap<IrSimpleFunction, DotNetExport>()
         var exportSelectionFailed = false
         for (export in exports) {
-            val candidates = topLevelFunctionsByFile.values.flatten().filter { function ->
+            val nameCandidates = topLevelFunctionsByFile.values.flatten().filter { function ->
                 !function.isOriginallyLocalDeclaration && function.fqNameWhenAvailable?.asString() == export.kotlinFqName
             }
+            val candidates = export.kotlinParameterSignature?.let { requestedSignature ->
+                nameCandidates.filter { function ->
+                    function.dotNetExportParameterSignature() == requestedSignature
+                }
+            } ?: nameCandidates
             if (candidates.size != 1) {
-                val reason = if (candidates.isEmpty()) "no top-level function was found" else "the name is overloaded"
+                val reason = when {
+                    nameCandidates.isEmpty() -> "no top-level function was found"
+                    export.kotlinParameterSignature == null ->
+                        "the name is overloaded; add a fully qualified parameter signature to the selector"
+                    candidates.isEmpty() -> {
+                        val available = nameCandidates.map { it.dotNetExportParameterSignature() }
+                            .distinct()
+                            .sorted()
+                            .joinToString(", ") { signature -> "($signature)" }
+                        "no overload has parameter signature '(${export.kotlinParameterSignature})'; " +
+                                "available signatures: $available"
+                    }
+                    else -> "the parameter signature is ambiguous"
+                }
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
-                    "Cannot export '${export.kotlinFqName}' as '${export.clrMethodName}': $reason."
+                    "Cannot export '${export.kotlinSelector}' as '${export.clrMethodName}': $reason."
                 )
                 exportSelectionFailed = true
                 continue
@@ -124,7 +143,7 @@ class DotNetIlEmitter(
             if (previous != null) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
-                    "Cannot export '${export.kotlinFqName}' more than once."
+                    "Cannot export '${export.kotlinSelector}' more than once."
                 )
                 exportSelectionFailed = true
             }
@@ -697,7 +716,7 @@ class DotNetIlEmitter(
                 val reason = skipReasons[target] ?: "the selected function is not in the emitted callable surface"
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
-                    "Cannot export '${export.kotlinFqName}' as '${export.clrMethodName}': $reason."
+                    "Cannot export '${export.kotlinSelector}' as '${export.clrMethodName}': $reason."
                 )
                 exportFailed = true
                 continue
@@ -729,7 +748,7 @@ class DotNetIlEmitter(
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
-                    "Cannot export '${export.kotlinFqName}' as '${export.clrMethodName}': ${e.reason}."
+                    "Cannot export '${export.kotlinSelector}' as '${export.clrMethodName}': ${e.reason}."
                 )
                 exportFailed = true
             }
@@ -2054,6 +2073,32 @@ class DotNetIlEmitter(
 
     private fun IrDeclarationWithName.diagnosticName(): String =
         fqNameWhenAvailable?.asString() ?: name.asString()
+
+    /** Canonical expanded Kotlin parameter types used only to disambiguate explicit exports. */
+    private fun IrSimpleFunction.dotNetExportParameterSignature(): String =
+        parameters.joinToString(",") { parameter -> parameter.type.dotNetExportSelectorType() }
+
+    private fun IrType.dotNetExportSelectorType(): String = when (this) {
+        is IrSimpleType -> buildString {
+            append(
+                when (val typeClassifier = classifier) {
+                    is IrClassSymbol -> typeClassifier.owner.fqNameWhenAvailable?.asString()
+                        ?: typeClassifier.owner.name.asString()
+                    is IrTypeParameterSymbol -> typeClassifier.owner.name.asString()
+                    else -> typeClassifier.toString()
+                }
+            )
+            if (arguments.isNotEmpty()) {
+                append('<')
+                arguments.joinTo(this, separator = ",") { argument ->
+                    (argument as? IrTypeProjection)?.type?.dotNetExportSelectorType() ?: "*"
+                }
+                append('>')
+            }
+            if (isMarkedNullable()) append('?')
+        }
+        else -> render().filterNot(Char::isWhitespace)
+    }
 
     /**
      * Renders one explicit CLR function export while leaving the Kotlin method unchanged.
