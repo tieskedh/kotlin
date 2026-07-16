@@ -8,6 +8,12 @@ private fun reflectedIncrement(value: Int): Int = value + 1
 
 private fun reflectedLabel(ignored: Any): String = "label"
 
+private fun reflectedValue(): Int = 42
+
+private fun overloaded(value: Int): Int = value + 1
+
+private fun overloaded(value: String): Int = 2
+
 private fun reflected() = ::reflectedIncrement
 
 private fun nameOf(reference: KFunction1<Int, Int>): String = reference.name
@@ -31,5 +37,39 @@ fun box(): String {
     if (bound.name != "read") return "fail 6: bound name"
     if (bound() != 42) return "fail 7: bound invocation"
     if (bound === ReflectedBound(42)::read) return "fail 8: bound reference cache"
+
+    val first: (Int) -> Int = ::reflectedIncrement
+    val second: (Int) -> Int = ::reflectedIncrement
+    if (first === second || first != second) return "fail 9: cross-site equality"
+    if (first.hashCode() != second.hashCode()) return "fail 10: cross-site hash"
+    if (first.toString() != "function reflectedIncrement") return "fail 11: function rendering"
+
+    val intOverload: (Int) -> Int = ::overloaded
+    val stringOverload: (String) -> Int = ::overloaded
+    if (intOverload.equals(stringOverload)) return "fail 12: overload identity"
+
+    val receiver = ReflectedBound(42)
+    val boundFirst = receiver::read
+    val boundSecond = receiver::read
+    if (boundFirst === boundSecond || boundFirst != boundSecond) return "fail 13: bound equality"
+    if (boundFirst.hashCode() != boundSecond.hashCode()) return "fail 14: bound hash"
+    if (boundFirst == ReflectedBound(42)::read) return "fail 15: distinct bound receiver"
+
+    val lambdaFirst: () -> Int = { 42 }
+    val lambdaSecond: () -> Int = { 42 }
+    if (lambdaFirst == lambdaSecond) return "fail 16: lambda equality"
+
+    val primitiveBoundFirst: () -> String = 41::toString
+    val primitiveBoundSecond: () -> String = 41::toString
+    if (primitiveBoundFirst != primitiveBoundSecond) return "fail 17: primitive bound equality"
+    if (primitiveBoundFirst.hashCode() != primitiveBoundSecond.hashCode()) return "fail 18: primitive bound hash"
+
+    val valueReference: () -> Int = ::reflectedValue
+    val unitReference: () -> Unit = ::reflectedValue
+    if (valueReference.equals(unitReference)) return "fail 19: adapted reference identity"
+
+    val constructor: (Int) -> ReflectedBound = ::ReflectedBound
+    if (constructor.toString() != "constructor") return "fail 20: constructor rendering"
+
     return "OK"
 }

@@ -284,7 +284,7 @@
        extends [mscorlib]System.Object
 {
   .field private int32 'code'
-  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'code') cil managed
+  .method family hidebysig specialname rtspecialname instance void .ctor(int32 'code') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -347,7 +347,7 @@
        extends [mscorlib]System.Object
 {
   .field private !0 'value'
-  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .method family hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
   {
     .maxstack 2
     ldarg.0

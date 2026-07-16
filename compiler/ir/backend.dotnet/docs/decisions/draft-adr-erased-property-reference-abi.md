@@ -59,6 +59,15 @@ assembly boundary. They are compiler/runtime contracts, not a Kotlin or C# progr
 An explicit Kotlin class implementing KPropertyN uses the same erased Get/Set and inherited
 FunctionN slots; it does not need, and is not assumed to expose, an exact execution capability.
 
+Property equality, hashing, and rendering follow the Native/Wasm wrapper model. Two runtime-owned
+wrappers are equal only when they have the same concrete wrapper kind, name, getter reference,
+and—when mutable—setter reference. Getter and setter references use the structural function-
+reference identity recorded by the callable ADR, so equivalent property expressions at different
+source sites compare equal without exposing wrapper class names. Bound receivers participate
+through those contained references. Hashing combines the same components. Rendering is
+`property <name> (Kotlin reflection is not available)`. Explicit user implementations do not
+inherit these private-wrapper semantics and retain their own `Any` behavior.
+
 The first slice constructs immutable arities zero through two and mutable arities zero and one.
 The `KMutableProperty2` identity and erased `Set` slot can be represented, but constructing its
 wrapper requires a three-argument setter callable and the callable POC currently ends at
@@ -71,7 +80,7 @@ the callable family.
 - This decision does not reuse or extend the provisional export-selector grammar. Property
   references are Kotlin runtime values, not CLR facade-selection controls.
 - It does not define full reflection (`getter`, `setter`, `returnType`, parameters, owner,
-  annotations), local delegated-property reflection, equality, hashing, or rendering.
+  annotations) or local delegated-property reflection.
 - It does not promise exact typed property access. Optional execution capabilities may be added
   later, but erased `Get`/`Set` and the inherited erased `FunctionN.Invoke` remain universal.
 - Consumers may not depend on the private wrapper names or assume that a property reference
@@ -85,6 +94,9 @@ reuses the established callable identity. It also matches the existing lowering 
 and setter references proceed through the ordinary callable-reference lowering, including bound
 receiver and mutable-capture handling.
 
+Structural wrapper equality depends only on stable callable-reference identity and private stored
+components. It adds no KProperty member, public wrapper identity, or alternate callable shape.
+
 The cost is boxing at the erased wrapper boundary and a deliberately small reflection surface.
 Those are acceptable for the POC because typed access can be layered on without changing identity,
 whereas choosing a generic canonical interface now would make primitive variance identity
@@ -95,5 +107,6 @@ unrecoverable without adapters.
 The focused property-reference box assembles the generated program and Kotlin.Runtime with both
 modern ILAsm and the .NET Framework 4.8 ILAsm selection, then executes both products on CoreCLR.
 It covers immutable and mutable arities zero/one, direct Get/Set, inherited FunctionN invocation,
-primitive-result variance, one-time bound-receiver evaluation, and an explicit user implementation.
+primitive-result variance, one-time bound-receiver evaluation, cross-site and bound structural
+equality/hash behavior, rendering, and an explicit user implementation.
 The exact IL-text pin separately records the generated wrapper-construction and erased-call shapes.

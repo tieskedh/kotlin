@@ -11,8 +11,10 @@ import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.common.lower.UpgradeCallableReferences
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.backend.dotnet.DotNetIrMangler
 import org.jetbrains.kotlin.backend.dotnet.dotNetFixedFunctionArityOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
@@ -21,16 +23,23 @@ import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.buildField
 import org.jetbrains.kotlin.ir.builders.irDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.builders.irBlockBody
+import org.jetbrains.kotlin.ir.builders.irBranch
 import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irElseBranch
+import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irGet
+import org.jetbrains.kotlin.ir.builders.irGetField
+import org.jetbrains.kotlin.ir.builders.irInt
 import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irString
+import org.jetbrains.kotlin.ir.builders.irWhen
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createExpressionBody
@@ -50,6 +59,7 @@ import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.copyTo
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
 import org.jetbrains.kotlin.ir.util.isLambda
@@ -87,16 +97,30 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     override fun getReferenceClassName(reference: IrRichFunctionReference): Name =
         Name.identifier(if (reference.origin.isLambda) "lambda" else "functionReference")
 
-    override fun getSuperClassType(reference: IrRichFunctionReference): IrType = context.irBuiltIns.anyType
+    override fun getSuperClassType(reference: IrRichFunctionReference): IrType =
+        if (reference.hasFunctionReferenceIdentity) context.functionReferenceSymbols.baseClass.defaultType
+        else context.irBuiltIns.anyType
 
     override fun IrBuilderWithScope.generateSuperClassConstructorCall(
         constructor: IrConstructor,
         superClassType: IrType,
         functionReference: IrRichFunctionReference,
-    ): IrDelegatingConstructorCall = irDelegatingConstructorCall(
-        superClassType.classOrFail.owner.primaryConstructor
-            ?: error("Internal .NET backend error: kotlin.Any has no primary constructor")
-    )
+    ): IrDelegatingConstructorCall {
+        if (!functionReference.hasFunctionReferenceIdentity) {
+            return irDelegatingConstructorCall(
+                superClassType.classOrFail.owner.primaryConstructor
+                    ?: error("Internal .NET backend error: kotlin.Any has no primary constructor")
+            )
+        }
+        val baseConstructor = this@DotNetCallableReferenceLowering.context.functionReferenceSymbols.constructor
+        return irDelegatingConstructorCall(baseConstructor).apply {
+            arguments[0] = irString(functionReference.stableReferenceId())
+            arguments[1] = irInt(functionReference.referenceArity())
+            arguments[2] = irInt(functionReference.referenceFlags())
+            arguments[3] = irInt(functionReference.boundValues.size)
+            arguments[4] = irString(functionReference.reflectedName())
+        }
+    }
 
     override fun getClassOrigin(reference: IrRichFunctionReference): IrDeclarationOrigin =
         if (reference.origin.isLambda) DOTNET_LAMBDA_IMPL else DOTNET_FUNCTION_REFERENCE_IMPL
@@ -222,8 +246,11 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     }
 
     override fun generateExtraMethods(functionReferenceClass: IrClass, reference: IrRichFunctionReference) {
+        if (reference.hasFunctionReferenceIdentity) {
+            addBoundValueAccess(functionReferenceClass)
+        }
         if (!reference.type.isKFunction() || reference.type.isKSuspendFunction()) return
-        val reflectionTarget = reference.reflectionTargetSymbol?.owner ?: return
+        if (reference.reflectionTargetSymbol == null) return
         val superProperty = context.irBuiltIns.kCallableClass.owner.properties
             .single { it.name.asString() == "name" }
         val superGetter = superProperty.getter
@@ -248,7 +275,41 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             overriddenSymbols = listOf(superGetter.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
             body = context.createIrBuilder(symbol).irBlockBody {
-                +irReturn(irString(reflectionTarget.metadata?.name?.asString() ?: reflectionTarget.name.asString()))
+                +irReturn(irString(reference.reflectedName()))
+            }
+        }
+    }
+
+    /** Exposes exactly the rich reference's bound values to the runtime identity base. */
+    private fun addBoundValueAccess(functionReferenceClass: IrClass) {
+        val fields = functionReferenceClass.declarations.filterIsInstance<IrField>()
+        if (fields.isEmpty()) return
+        val overridden = context.functionReferenceSymbols.boundValueAt
+        functionReferenceClass.addFunction {
+            origin = IrDeclarationOrigin.DEFINED
+            name = overridden.name
+            visibility = DescriptorVisibilities.PROTECTED
+            modality = Modality.FINAL
+            returnType = context.irBuiltIns.anyNType
+        }.apply function@{
+            overriddenSymbols = listOf(overridden.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            parameters += overridden.parameters.single { it.kind == IrParameterKind.Regular }.copyTo(this)
+            body = context.createIrBuilder(symbol).irBlockBody {
+                val receiver = irGet(this@function.dispatchReceiverParameter!!)
+                fun boundValue(field: IrField): IrExpression = irGetField(receiver, field)
+                val result = if (fields.size == 1) {
+                    boundValue(fields.single())
+                } else {
+                    val index = this@function.parameters.single { it.kind == IrParameterKind.Regular }
+                    irWhen(
+                        context.irBuiltIns.anyNType,
+                        fields.dropLast(1).mapIndexed { fieldIndex, field ->
+                            irBranch(irEquals(irGet(index), irInt(fieldIndex)), boundValue(field))
+                        } + irElseBranch(boundValue(fields.last())),
+                    )
+                }
+                +irReturn(result)
             }
         }
     }
@@ -292,6 +353,46 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         }
     }
 }
+
+private val IrRichFunctionReference.hasFunctionReferenceIdentity: Boolean
+    get() = reflectionTargetSymbol != null
+
+private fun IrRichFunctionReference.reflectedName(): String {
+    val target = reflectionTargetSymbol?.owner
+        ?: error("Internal .NET backend error: callable identity requested without a reflection target")
+    return target.metadata?.name?.asString() ?: target.name.asString()
+}
+
+/**
+ * Declarations with a serialized Kotlin signature use it, matching Wasm's identity source. When
+ * the current IR has no signature, the containing logical file and declaration offsets
+ * disambiguate otherwise identical full Kotlin mangles without embedding a machine-local path.
+ */
+private fun IrRichFunctionReference.stableReferenceId(): String {
+    val target = reflectionTargetSymbol?.owner
+        ?: error("Internal .NET backend error: callable identity requested without a reflection target")
+    target.symbol.signature?.let { return "signature:$it" }
+    val fileName = target.fileOrNull?.fileEntry?.name
+        ?.substringAfterLast('/')
+        ?.substringAfterLast('\\')
+        ?: "<unknown>"
+    val mangle = with(DotNetIrMangler) { target.mangleString(compatibleMode = false) }
+    return "local:$fileName:${target.startOffset}:${target.endOffset}:$mangle"
+}
+
+private fun IrRichFunctionReference.referenceArity(): Int =
+    invokeFunction.parameters.size - boundValues.size + if (invokeFunction.isSuspend) 1 else 0
+
+private fun IrRichFunctionReference.referenceFlags(): Int = listOfNotNull(
+    (1 shl 0).takeIf { invokeFunction.isSuspend },
+    (1 shl 1).takeIf { hasVarargConversion },
+    (1 shl 2).takeIf { hasSuspendConversion },
+    (1 shl 3).takeIf { hasUnitConversion },
+    (1 shl 4).takeIf { isFunInterfaceConstructorAdapter() },
+).sum()
+
+private fun IrRichFunctionReference.isFunInterfaceConstructorAdapter(): Boolean =
+    invokeFunction.origin == IrDeclarationOrigin.ADAPTER_FOR_FUN_INTERFACE_CONSTRUCTOR
 
 /**
  * Caches every non-capturing callable expression in a class-local static field, following the

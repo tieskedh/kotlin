@@ -12,9 +12,9 @@ import java.io.File
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
  * boundary, and Kotlin-owned exception identities that have no faithful BCL type. Compiler
  * support shared by generated modules, including the constructor-default ABI marker, optional
- * ExactFunctionN and TypedArgumentsFunctionN execution capabilities, property-reference wrappers,
- * and explicit-export delegate projection, lives below the reserved `Kotlin.Runtime.Internal`
- * namespace.
+ * ExactFunctionN and TypedArgumentsFunctionN execution capabilities, the structural function-
+ * reference implementation base, property-reference wrappers, and explicit-export delegate
+ * projection, lives below the reserved `Kotlin.Runtime.Internal` namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
