@@ -1,0 +1,2 @@
+error: cannot export 'sample.readValue' as 'value': CLR property 'value' already exists on facade 'sample.propertyExportKt'.
+COMPILATION_ERROR

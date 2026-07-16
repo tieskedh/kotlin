@@ -1,0 +1,2 @@
+error: cannot export property 'sample.shifted' as 'Shifted': extension properties need a separate CLR indexer or method policy.
+COMPILATION_ERROR

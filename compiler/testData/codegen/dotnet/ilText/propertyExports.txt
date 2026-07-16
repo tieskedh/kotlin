@@ -1,0 +1,368 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'propertyExports' {}
+.module 'main-propertyExports.il'
+
+.namespace System.Runtime.CompilerServices
+{
+  .class private auto ansi sealed beforefieldinit NullableAttribute
+         extends [mscorlib]System.Attribute
+  {
+    .field public initonly uint8[] NullableFlags
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8) cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldc.i4.1
+      newarr [mscorlib]System.Byte
+      dup
+      ldc.i4.0
+      ldarg.1
+      stelem.i1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8[]) cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+  }
+}
+.class private auto ansi sealed 'demo.propertyExportsKt$transform$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+{
+  .field public static initonly class 'demo.propertyExportsKt$transform$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'demo.propertyExportsKt$transform$1'::.ctor()
+    stsfld class 'demo.propertyExportsKt$transform$1' 'demo.propertyExportsKt$transform$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    call int32 'demo.propertyExportsKt'::'get_count'()
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.propertyExportsKt$transform$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'demo.propertyExportsKt$consume$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1'
+{
+  .field public static initonly class 'demo.propertyExportsKt$consume$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'demo.propertyExportsKt$consume$1'::.ctor()
+    stsfld class 'demo.propertyExportsKt$consume$1' 'demo.propertyExportsKt$consume$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    call void 'demo.propertyExportsKt'::'set_count'(int32)
+    ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+    ret
+  }
+}
+.class public abstract sealed auto ansi 'demo.propertyExportsKt'
+       extends [mscorlib]System.Object
+{
+  .field private static int32 'count'
+  .field private static string 'maybeText'
+  .field private static class [Kotlin.Runtime]'Kotlin.Function1' 'transform'
+  .field private static class [Kotlin.Runtime]'Kotlin.Function1' 'consume'
+  .field private static int32 'restricted'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    ldc.i4 1
+    stsfld int32 'demo.propertyExportsKt'::'count'
+    ldnull
+    stsfld string 'demo.propertyExportsKt'::'maybeText'
+    ldsfld class 'demo.propertyExportsKt$transform$1' 'demo.propertyExportsKt$transform$1'::'INSTANCE'
+    stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
+    ldsfld class 'demo.propertyExportsKt$consume$1' 'demo.propertyExportsKt$consume$1'::'INSTANCE'
+    stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
+    ldc.i4 7
+    stsfld int32 'demo.propertyExportsKt'::'restricted'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_count'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32 'demo.propertyExportsKt'::'count'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_count'(int32 '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld int32 'demo.propertyExportsKt'::'count'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_Count'() cil managed
+  {
+    .maxstack 1
+    call int32 'demo.propertyExportsKt'::'get_count'()
+    ret
+  }
+  .method public hidebysig specialname static void 'set_Count'(int32 '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg 0
+    call void 'demo.propertyExportsKt'::'set_count'(int32)
+    ret
+  }
+  .method public hidebysig specialname static string 'get_maybeText'() cil managed
+  {
+    .maxstack 1
+    ldsfld string 'demo.propertyExportsKt'::'maybeText'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_maybeText'(string '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld string 'demo.propertyExportsKt'::'maybeText'
+    ret
+  }
+  .method public hidebysig specialname static string 'get_MaybeText'() cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 02 00 00)
+    .maxstack 1
+    call string 'demo.propertyExportsKt'::'get_maybeText'()
+    ret
+  }
+  .method public hidebysig specialname static void 'set_MaybeText'(string '<set-?>') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 02 00 00)
+    .maxstack 1
+    ldarg 0
+    call void 'demo.propertyExportsKt'::'set_maybeText'(string)
+    ret
+  }
+  .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.Function1' 'get_transform'() cil managed
+  {
+    .maxstack 1
+    ldsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_transform'(class [Kotlin.Runtime]'Kotlin.Function1' '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'transform'
+    ret
+  }
+  .method public hidebysig specialname static class [mscorlib]System.Func`2<int32, int32> 'get_Transform'() cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'get_transform'()
+    call class [mscorlib]System.Func`2<!!0, !!1> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToFunc1'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig specialname static void 'set_Transform'(class [mscorlib]System.Func`2<int32, int32> '<set-?>') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    call void 'demo.propertyExportsKt'::'set_transform'(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.Function1' 'get_consume'() cil managed
+  {
+    .maxstack 1
+    ldsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_consume'(class [Kotlin.Runtime]'Kotlin.Function1' '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'consume'
+    ret
+  }
+  .method public hidebysig specialname static class [mscorlib]System.Action`1<int32> 'get_Consume'() cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'get_consume'()
+    call class [mscorlib]System.Action`1<!!0> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToAction1'<int32>(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig specialname static void 'set_Consume'(class [mscorlib]System.Action`1<int32> '<set-?>') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromAction1'<int32>(class [mscorlib]System.Action`1<!!0>)
+    call void 'demo.propertyExportsKt'::'set_consume'(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig specialname static string 'get_readOnly'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string 'tmp0_elvis_lhs'
+    )
+    call string 'demo.propertyExportsKt'::'get_maybeText'()
+    stloc.0
+    ldloc.0
+    ldnull
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    ldstr "none"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig specialname static string 'get_ReadOnly'() cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    call string 'demo.propertyExportsKt'::'get_readOnly'()
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_restricted'() cil managed
+  {
+    .maxstack 1
+    ldsfld int32 'demo.propertyExportsKt'::'restricted'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_restricted'(int32 '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld int32 'demo.propertyExportsKt'::'restricted'
+    ret
+  }
+  .method public hidebysig specialname static int32 'get_Restricted'() cil managed
+  {
+    .maxstack 1
+    call int32 'demo.propertyExportsKt'::'get_restricted'()
+    ret
+  }
+  .method public hidebysig static void 'updateRestricted'(int32 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call void 'demo.propertyExportsKt'::'set_restricted'(int32)
+    ret
+  }
+  .property int32 'count'()
+  {
+    .get int32 'demo.propertyExportsKt'::'get_count'()
+    .set void 'demo.propertyExportsKt'::'set_count'(int32)
+  }
+  .property int32 'Count'()
+  {
+    .get int32 'demo.propertyExportsKt'::'get_Count'()
+    .set void 'demo.propertyExportsKt'::'set_Count'(int32)
+  }
+  .property string 'maybeText'()
+  {
+    .get string 'demo.propertyExportsKt'::'get_maybeText'()
+    .set void 'demo.propertyExportsKt'::'set_maybeText'(string)
+  }
+  .property string 'MaybeText'()
+  {
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 02 00 00)
+    .get string 'demo.propertyExportsKt'::'get_MaybeText'()
+    .set void 'demo.propertyExportsKt'::'set_MaybeText'(string)
+  }
+  .property class [Kotlin.Runtime]'Kotlin.Function1' 'transform'()
+  {
+    .get class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'get_transform'()
+    .set void 'demo.propertyExportsKt'::'set_transform'(class [Kotlin.Runtime]'Kotlin.Function1')
+  }
+  .property class [mscorlib]System.Func`2<int32, int32> 'Transform'()
+  {
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .get class [mscorlib]System.Func`2<int32, int32> 'demo.propertyExportsKt'::'get_Transform'()
+    .set void 'demo.propertyExportsKt'::'set_Transform'(class [mscorlib]System.Func`2<int32, int32>)
+  }
+  .property class [Kotlin.Runtime]'Kotlin.Function1' 'consume'()
+  {
+    .get class [Kotlin.Runtime]'Kotlin.Function1' 'demo.propertyExportsKt'::'get_consume'()
+    .set void 'demo.propertyExportsKt'::'set_consume'(class [Kotlin.Runtime]'Kotlin.Function1')
+  }
+  .property class [mscorlib]System.Action`1<int32> 'Consume'()
+  {
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .get class [mscorlib]System.Action`1<int32> 'demo.propertyExportsKt'::'get_Consume'()
+    .set void 'demo.propertyExportsKt'::'set_Consume'(class [mscorlib]System.Action`1<int32>)
+  }
+  .property string 'readOnly'()
+  {
+    .get string 'demo.propertyExportsKt'::'get_readOnly'()
+  }
+  .property string 'ReadOnly'()
+  {
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .get string 'demo.propertyExportsKt'::'get_ReadOnly'()
+  }
+  .property int32 'restricted'()
+  {
+    .get int32 'demo.propertyExportsKt'::'get_restricted'()
+    .set void 'demo.propertyExportsKt'::'set_restricted'(int32)
+  }
+  .property int32 'Restricted'()
+  {
+    .get int32 'demo.propertyExportsKt'::'get_Restricted'()
+  }
+}
