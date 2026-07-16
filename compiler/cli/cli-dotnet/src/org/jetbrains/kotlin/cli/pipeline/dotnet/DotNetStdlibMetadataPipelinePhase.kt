@@ -9,7 +9,6 @@ import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
-import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
 import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
@@ -147,7 +146,10 @@ object DotNetStdlibMetadataPackagingPipelinePhase :
                         DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
                     )
                     setProperty(DotNetStdlibArtifact.METADATA_ASSEMBLY_FILE_PROPERTY, DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
-                    setProperty(DotNetStdlibArtifact.METADATA_TARGET_PROPERTY, configuration.dotNetTarget.flagValue)
+                    setProperty(
+                        DotNetStdlibArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
+                        DotNetStdlibArtifact.LIBRARY_TARGET_FRAMEWORK,
+                    )
                 }
             }
             includeMetadata(metadata)

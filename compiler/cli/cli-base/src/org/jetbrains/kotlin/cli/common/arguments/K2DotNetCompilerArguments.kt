@@ -48,7 +48,8 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
     @Argument(
         value = "-Xdotnet-produce-stdlib",
         description = "Produce the experimental Kotlin.Stdlib.klib/Kotlin.Stdlib.dll pair in the -d directory. " +
-                "This POC build mode accepts no user source files."
+                "The library targets netstandard2.0 and uses the portable-library assembler independently of the executable target. " +
+                "This build mode accepts no user source files."
     )
     var dotNetProduceStdlib: Boolean = false
         set(value) {

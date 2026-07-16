@@ -350,14 +350,23 @@ internal object DotNetRuntimeTypes {
         parameterTypes: List<DotNetIlValueType>,
         resultType: DotNetIlValueType?,
         nullable: Boolean,
+        coreLibraryReference: String,
     ): DotNetDelegateBoundary {
         val arity = parameterTypes.size
         require(arity in 0..2) { "unsupported callable export arity $arity" }
         val returnsUnit = resultType == null
         val typeArguments = parameterTypes + listOfNotNull(resultType)
         val family = if (returnsUnit) "Action" else "Func"
-        val closedDelegateType = renderDelegateType(family, typeArguments.map { it.nameInSignature })
-        val openDelegateType = renderDelegateType(family, typeArguments.indices.map { "!!$it" })
+        val closedDelegateType = renderDelegateType(
+            family,
+            typeArguments.map { it.nameInSignature },
+            coreLibraryReference,
+        )
+        val openDelegateType = renderDelegateType(
+            family,
+            typeArguments.indices.map { "!!$it" },
+            coreLibraryReference,
+        )
         val instantiation = typeArguments.takeIf { it.isNotEmpty() }
             ?.joinToString(", ", "<", ">") { it.nameInSignature }
             .orEmpty()
@@ -372,11 +381,15 @@ internal object DotNetRuntimeTypes {
         return DotNetDelegateBoundary(closedDelegateType, projectionCall, adaptationCall)
     }
 
-    private fun renderDelegateType(family: String, arguments: List<String>): String {
+    private fun renderDelegateType(
+        family: String,
+        arguments: List<String>,
+        coreLibraryReference: String,
+    ): String {
         val genericSuffix = arguments.takeIf { it.isNotEmpty() }
             ?.joinToString(", ", "`${arguments.size}<", ">")
             .orEmpty()
-        return "class ${CORE_LIB_REF}System.$family$genericSuffix"
+        return "class ${coreLibraryReference}System.$family$genericSuffix"
     }
 
     private fun functionClassInfo(arity: Int): DotNetIlClassInfo = DotNetIlClassInfo(
