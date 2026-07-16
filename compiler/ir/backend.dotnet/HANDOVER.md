@@ -2,8 +2,8 @@
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
-defaults, overload-aware function selection, and immutable callable-provenance invocation
-implemented).
+defaults, overload-aware function selection, immutable callable-provenance invocation, and the
+bounded typed-argument callable capability implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -27,8 +27,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
   by the stringification slice, first explicit callable-factory export, callable-parameter
   adapters, nullable export metadata, default-argument export continuation, immutable
-  callable-provenance exact invocation, ordinary top-level function exports, and overload-aware
-  export selection and top-level property exports described below.
+  callable-provenance exact invocation, ordinary top-level function exports, overload-aware
+  export selection, top-level property exports, and the measured typed-argument callable
+  capability described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -730,11 +731,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   explicit fallback, and receiver/argument/invocation order. The new
   `ilText/callableInvocationProvenance.kt` pin separately covers exact primitive calls, primitive
   result widening, parameter widening, immutable alias chains, function references, mutable and
-  parameter boundaries, and user implementations. Raw probe `callable_capability_s1` proved that
-  a partial typed-argument interface could remove argument boxing across provenance-free widened
-  result boundaries on both runtimes, but that additional metadata-public execution ABI remains
-  deferred until cross-boundary measurements justify its member and code-size cost. Delegate
-  projection remains a separate export layer; the boundary audit follows below.
+  parameter boundaries, and user implementations. Raw probe `callable_capability_s1` proved the
+  partial shape. The separately compiled `typed_arguments_crossmodule_s1` runtime, producer, and
+  consumer then measured 2,000,000 `(Int) -> Any` calls: the partial path saved one 24-byte
+  argument box per call (96,000,040 versus 48,000,040 allocated bytes), with stable timings moving
+  from 40–43 ms to 30–31 ms on CoreCLR and 200–213 ms to 141–142 ms on Framework. A producer gains
+  a 13-byte Function1 or 17-byte Function2 bridge plus one InterfaceImpl row. The branch therefore
+  implements metadata-public `TypedArgumentsFunction1/2` only on generated non-Unit callables with
+  at least one concrete primitive/nullable-primitive parameter. Object-result/value-argument calls
+  probe it first, then ExactFunctionN, then erased Invoke. Exact primitive calls are unchanged;
+  older/user objects retain guarded erased fallback. The Unit experiment saved allocation but
+  regressed Framework time, so Unit deliberately remains erased. `box/callableObjects.kt` pins
+  cross-boundary Function1/2 hits, nullable primitive arguments, and the explicit-user miss.
+  Delegate projection remains a separate export layer; the boundary audit follows below.
 - The explicit CLR export boundary is compiler configuration, not a Kotlin annotation or automatic
   whole-module policy: repeatable `-Xdotnet-export=<kotlin-selector>=<clr-method-name>` selects one
   public, non-generic top-level function. Its canonical Kotlin method remains unchanged; a
@@ -755,7 +764,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   projection helper binds exact Func directly to InvokeExact, falls back through closed generic
   box/unbox thunks for erased implementations, and discards Kotlin.Unit in Action thunks. The
   reverse helper wraps Func/Action in private runtime-owned FunctionN adapters; Func adapters also
-  expose ExactFunctionN, while Action adapters remain erased. Projecting an adapter back to the
+  expose ExactFunctionN, Func1/2 adapters expose TypedArgumentsFunctionN, and Action adapters
+  remain erased. Projecting an adapter back to the
   same closed shape returns its stored original delegate object. Different shapes and the
   Kotlin-callable -> delegate -> Kotlin-callable direction have no identity promise. A null foreign
   delegate at a non-null position throws ArgumentNullException; nullable positions pass null in
@@ -938,10 +948,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Measure the deferred partial typed-argument callable capability across module boundaries.**
-   The local raw probe established feasibility; do not add another runtime interface until a
-   separately compiled consumer or representative benchmark shows that provenance-free primitive
-   argument boxing is material.
+1. **Audit Kotlin property-reference representation before implementing it.** Determine how the
+   JVM/JS/Native backends split KProperty identity, getter/setter execution, bound receiver storage,
+   and metadata. Preserve the existing erased FunctionN callable identity where a property
+   reference is invokable; do not reuse or extend the provisional export-selector grammar as its
+   control plane. Record the CLR-specific distinction before landing codegen.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

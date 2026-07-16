@@ -43,7 +43,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'demo.callableExportDefaultsKt$apply$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field private int32 '$prefix'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$prefix') cil managed
@@ -75,10 +75,19 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'demo.callableExportDefaultsKt$apply$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed 'demo.callableExportDefaultsKt$invokeWithDefaults$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'demo.callableExportDefaultsKt$invokeWithDefaults$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -113,10 +122,19 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'demo.callableExportDefaultsKt$invokeWithDefaults$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed 'demo.callableExportDefaultsKt$invokeNullableDefault$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<valuetype [mscorlib]System.Nullable`1<int32>>
 {
   .field public static initonly class 'demo.callableExportDefaultsKt$invokeNullableDefault$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -176,10 +194,19 @@ IL_whenEnd_0:
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(valuetype [mscorlib]System.Nullable`1<int32> 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'demo.callableExportDefaultsKt$invokeNullableDefault$1'::'InvokeExact'(valuetype [mscorlib]System.Nullable`1<int32>)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed beforefieldinit 'demo.callableExportDefaultsKt$makeAdder$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field private int32 '$offset'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$offset') cil managed
@@ -211,10 +238,19 @@ IL_whenEnd_0:
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'demo.callableExportDefaultsKt$makeAdder$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed 'demo.callableExportDefaultsKt$nonTrailing$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'demo.callableExportDefaultsKt$nonTrailing$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -249,10 +285,19 @@ IL_whenEnd_0:
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'demo.callableExportDefaultsKt$nonTrailing$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed beforefieldinit 'demo.callableExportDefaultsKt$extensionApply$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field private int32 '$this_extensionApply'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$this_extensionApply') cil managed
@@ -280,6 +325,15 @@ IL_whenEnd_0:
     ldarg.0
     ldarg.1
     unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.callableExportDefaultsKt$extensionApply$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
     callvirt instance int32 'demo.callableExportDefaultsKt$extensionApply$1'::'InvokeExact'(int32)
     box [mscorlib]System.Int32
     ret

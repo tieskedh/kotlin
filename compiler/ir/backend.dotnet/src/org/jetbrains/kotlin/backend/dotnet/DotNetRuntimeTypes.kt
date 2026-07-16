@@ -90,6 +90,14 @@ internal object DotNetRuntimeTypes {
         )
     }
 
+    private val typedArgumentsFunctionClasses = (1..2).associateWith { arity ->
+        DotNetIlClassInfo(
+            ilClassName = "Kotlin.Runtime.Internal.TypedArgumentsFunction$arity`$arity",
+            typeParameterVariances = List(arity) { Variance.IN_VARIANCE },
+            assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+        )
+    }
+
     init {
         kFunctionBase.interfaces = listOf(
             DotNetIlValueType.UserClass(kCallableBase),
@@ -103,6 +111,8 @@ internal object DotNetRuntimeTypes {
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? = when {
         irClass.isDotNetMutableRefStub == true -> mutableRefClass
         irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
+        irClass.dotNetTypedArgumentsFunctionArity != null ->
+            typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
         irClass.isDotNetIteratorBase || irClass.isDotNetSupportedPrimitiveIterator -> iteratorBase
         irClass.isDotNetKCallableBase -> kCallableBase
         irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
@@ -199,6 +209,18 @@ internal object DotNetRuntimeTypes {
         val arity = exactType.arguments.size - 1
         val parameterTypes = (0 until arity).joinToString(", ") { "!$it" }
         return "callvirt instance !$arity ${exactType.nameInSignature}::'InvokeExact'($parameterTypes)"
+    }
+
+    /** Closed optional execution capability for exact parameters and an erased result. */
+    fun typedArgumentsFunctionType(parameterTypes: List<DotNetIlValueType>): DotNetIlValueType.GenericInstance? {
+        val classInfo = typedArgumentsFunctionClasses[parameterTypes.size] ?: return null
+        return DotNetIlValueType.GenericInstance(classInfo, parameterTypes)
+    }
+
+    /** Member-reference spelling of TypedArgumentsFunctionN.InvokeTyped. */
+    fun typedArgumentsInvokeCallInstruction(typedArgumentsType: DotNetIlValueType.GenericInstance): String {
+        val parameterTypes = typedArgumentsType.arguments.indices.joinToString(", ") { "!$it" }
+        return "callvirt instance object ${typedArgumentsType.nameInSignature}::'InvokeTyped'($parameterTypes)"
     }
 
     /** Member-reference spelling of the stable physically erased FunctionN.Invoke slot. */

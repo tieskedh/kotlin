@@ -43,7 +43,7 @@
 }
 .class private auto ansi sealed 'demo.propertyExportsKt$transform$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'demo.propertyExportsKt$transform$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -74,6 +74,15 @@
     ldarg.0
     ldarg.1
     unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.propertyExportsKt$transform$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
     callvirt instance int32 'demo.propertyExportsKt$transform$1'::'InvokeExact'(int32)
     box [mscorlib]System.Int32
     ret

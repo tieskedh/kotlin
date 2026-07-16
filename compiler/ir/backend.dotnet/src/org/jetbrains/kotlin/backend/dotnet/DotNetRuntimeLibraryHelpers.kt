@@ -118,6 +118,20 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  .class interface public abstract auto ansi 'TypedArgumentsFunction1`1'<- P0>
+            |  {
+            |    .method public hidebysig newslot abstract virtual instance object InvokeTyped(!0 p1) cil managed
+            |    {
+            |    }
+            |  }
+            |
+            |  .class interface public abstract auto ansi 'TypedArgumentsFunction2`2'<- P0, - P1>
+            |  {
+            |    .method public hidebysig newslot abstract virtual instance object InvokeTyped(!0 p1, !1 p2) cil managed
+            |    {
+            |    }
+            |  }
+            |
             |  .class private auto ansi sealed beforefieldinit 'Func0Adapter`1'<R>
             |         extends [mscorlib]System.Object
             |         implements Kotlin.Function0, class Kotlin.Runtime.Internal.'ExactFunction0`1'<!0>
@@ -158,7 +172,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class private auto ansi sealed beforefieldinit 'Func1Adapter`2'<P0, R>
             |         extends [mscorlib]System.Object
-            |         implements Kotlin.Function1, class Kotlin.Runtime.Internal.'ExactFunction1`2'<!0, !1>
+            |         implements Kotlin.Function1,
+            |                    class Kotlin.Runtime.Internal.'ExactFunction1`2'<!0, !1>,
+            |                    class Kotlin.Runtime.Internal.'TypedArgumentsFunction1`1'<!0>
             |  {
             |    .field assembly class [mscorlib]System.Func`2<!0, !1> 'delegate'
             |
@@ -184,6 +200,17 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
+            |    .method public hidebysig newslot virtual final instance object InvokeTyped(!0 p1) cil managed
+            |    {
+            |      .override method instance object class Kotlin.Runtime.Internal.'TypedArgumentsFunction1`1'<!0>::InvokeTyped(!0)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance !1 class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::InvokeExact(!0)
+            |      box !1
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance object Invoke(object p1) cil managed
             |    {
             |      .override method instance object Kotlin.Function1::Invoke(object)
@@ -199,7 +226,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class private auto ansi sealed beforefieldinit 'Func2Adapter`3'<P0, P1, R>
             |         extends [mscorlib]System.Object
-            |         implements Kotlin.Function2, class Kotlin.Runtime.Internal.'ExactFunction2`3'<!0, !1, !2>
+            |         implements Kotlin.Function2,
+            |                    class Kotlin.Runtime.Internal.'ExactFunction2`3'<!0, !1, !2>,
+            |                    class Kotlin.Runtime.Internal.'TypedArgumentsFunction2`2'<!0, !1>
             |  {
             |    .field assembly class [mscorlib]System.Func`3<!0, !1, !2> 'delegate'
             |
@@ -223,6 +252,18 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.1
             |      ldarg.2
             |      callvirt instance !2 class [mscorlib]System.Func`3<!0, !1, !2>::Invoke(!0, !1)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object InvokeTyped(!0 p1, !1 p2) cil managed
+            |    {
+            |      .override method instance object class Kotlin.Runtime.Internal.'TypedArgumentsFunction2`2'<!0, !1>::InvokeTyped(!0, !1)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      call instance !2 class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::InvokeExact(!0, !1)
+            |      box !2
             |      ret
             |    }
             |
