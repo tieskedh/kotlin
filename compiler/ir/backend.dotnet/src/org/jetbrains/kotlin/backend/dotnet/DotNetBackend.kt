@@ -18,7 +18,7 @@ object DotNetBackend {
         irBuiltIns: IrBuiltIns,
         symbolTable: SymbolTable,
         configuration: CompilerConfiguration,
-    ): File {
+    ): DotNetBackendOutput {
         // The .NET backend has no IrDiagnosticReporter-based reporting yet; it deliberately talks
         // to the message collector directly, like DotNetIlEmitter and DotNetIlAssembler.
         @OptIn(MessageCollectorAccess::class)
@@ -29,6 +29,9 @@ object DotNetBackend {
         val producesStdlib = configuration.dotNetProducesStdlib
         val producesLibrary = configuration.dotNetProducesLibrary
         val producedLibraryArtifact = configuration.dotNetProducedLibraryArtifact
+        val externalLibraries = configuration.dotNetExternalLibraries
+        fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
+            DotNetBackendOutput(file, declarations)
         val emitsExecutable = producedLibraryArtifact == null && !output.isDirectory && when (target) {
             DotNetTarget.NET_FRAMEWORK -> output.extension.equals("exe", ignoreCase = true)
             // Modern .NET has no directly runnable ilasm .exe story on this pipeline: the runnable
@@ -72,7 +75,20 @@ object DotNetBackend {
             )
             if (emitsExecutable) binaryOutput.delete()
             ilTarget.delete()
-            return if (emitsExecutable) binaryOutput else ilTarget
+            return result(if (emitsExecutable) binaryOutput else ilTarget)
+        }
+        val collidingExternalLibrary = externalLibraries.firstOrNull {
+            it.artifact.assemblyName.equals(assemblyName, ignoreCase = true)
+        }
+        if (collidingExternalLibrary != null) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "Output assembly '$assemblyName' collides with external Kotlin/.NET library " +
+                        "'${collidingExternalLibrary.metadataFile.path}'."
+            )
+            if (emitsExecutable) binaryOutput.delete()
+            ilTarget.delete()
+            return result(if (emitsExecutable) binaryOutput else ilTarget)
         }
         if (emitsExecutable) {
             // Clear module-specific artifacts before lowering. A lowering/emission/runtime/ILAsm
@@ -101,7 +117,7 @@ object DotNetBackend {
                 "The module is not supported by the .NET backend: ${e.reason}"
             )
             ilTarget.delete()
-            return ilTarget
+            return result(ilTarget)
         }
 
         val stdlibIlText = if (DotNetStdlibLibrary.hasImplementation(irModuleFragment)) {
@@ -114,7 +130,7 @@ object DotNetBackend {
                 propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
                 emissionScope = DotNetIlEmissionScope.STDLIB,
                 coreLibrary = DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY,
-            ).emit(irModuleFragment) ?: return ilTarget
+            ).emit(irModuleFragment)?.ilText ?: return result(ilTarget)
         } else {
             null
         }
@@ -125,10 +141,12 @@ object DotNetBackend {
                     CompilerMessageSeverity.ERROR,
                     "The explicit stdlib build did not contain compiler-owned stdlib implementations."
                 )
-                return output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+                return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
             }
-            return DotNetStdlibLibrary.assembleIn(output, stdlibIlText, messageCollector)
-                ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+            return result(
+                DotNetStdlibLibrary.assembleIn(output, stdlibIlText, messageCollector)
+                    ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+            )
         }
 
         val emitter = DotNetIlEmitter(
@@ -146,14 +164,16 @@ object DotNetBackend {
             propertyExports = configuration.dotNetPropertyExports,
             coreLibrary = if (producesLibrary) DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY else DEFAULT_EXECUTABLE_CORE_LIBRARY,
             assemblyVersionIl = if (producesLibrary) checkNotNull(producedLibraryArtifact).assemblyVersionIl else null,
+            externalLibraries = externalLibraries,
         )
-        val ilText = emitter.emit(irModuleFragment)
-        if (ilText == null) {
+        val emission = emitter.emit(irModuleFragment)
+        if (emission == null) {
             // Emission failed (the error is in the message collector). Remove any stale output of
             // a previous successful compilation so callers never see outdated content.
             ilTarget.delete()
-            return ilTarget
+            return result(ilTarget)
         }
+        val ilText = emission.ilText
         if ("[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in ilText && stdlibIlText == null) {
             val externalStdlib = configuration.dotNetExternalStdlib
             if (externalStdlib == null) {
@@ -164,7 +184,7 @@ object DotNetBackend {
                             "Compile without -no-stdlib or add the target stdlib metadata KLIB to the classpath."
                 )
                 ilTarget.delete()
-                return ilTarget
+                return result(ilTarget)
             }
             if (!externalStdlib.implementationFile.isFile) {
                 messageCollector.report(
@@ -173,13 +193,32 @@ object DotNetBackend {
                             "missing CLR assembly '${externalStdlib.implementationFile.path}'."
                 )
                 ilTarget.delete()
-                return ilTarget
+                return result(ilTarget)
             }
             if (emitsExecutable) {
                 val packagedStdlib = (binaryOutput.parentFile ?: File("."))
                     .resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
                 if (externalStdlib.implementationFile.canonicalFile != packagedStdlib.canonicalFile) {
                     externalStdlib.implementationFile.copyTo(packagedStdlib, overwrite = true)
+                }
+            }
+        }
+        for (library in externalLibraries) {
+            if ("[${library.artifact.assemblyName}]" !in ilText) continue
+            if (!library.implementationFile.isFile) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "The Kotlin/.NET metadata '${library.metadataFile.path}' is bound to missing CLR assembly " +
+                            "'${library.implementationFile.path}'."
+                )
+                ilTarget.delete()
+                return result(ilTarget)
+            }
+            if (emitsExecutable) {
+                val packagedLibrary = (binaryOutput.parentFile ?: File("."))
+                    .resolve(library.artifact.assemblyFileName)
+                if (library.implementationFile.canonicalFile != packagedLibrary.canonicalFile) {
+                    library.implementationFile.copyTo(packagedLibrary, overwrite = true)
                 }
             }
         }
@@ -190,21 +229,21 @@ object DotNetBackend {
         if (producesLibrary) {
             val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
             DotNetIlAssembler.assemblePortableLibrary(ilTarget, assemblyOutput, messageCollector)
-            return assemblyOutput
+            return result(assemblyOutput, emission.declarations)
         }
 
         if (emitsExecutable) {
-            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, messageCollector) == null) return binaryOutput
+            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, messageCollector) == null) return result(binaryOutput)
             if (stdlibIlText != null &&
                 DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, messageCollector) == null
             ) {
-                return binaryOutput
+                return result(binaryOutput)
             }
             DotNetIlAssembler.assembleExecutable(ilTarget, binaryOutput, target, messageCollector)
-            return binaryOutput
+            return result(binaryOutput)
         }
 
-        return ilTarget
+        return result(ilTarget)
     }
 
     private fun File.siblingWithExtension(extension: String): File {
@@ -216,3 +255,8 @@ object DotNetBackend {
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }
+
+data class DotNetBackendOutput(
+    val file: File,
+    val declarations: Map<String, DotNetPhysicalDeclaration>,
+)

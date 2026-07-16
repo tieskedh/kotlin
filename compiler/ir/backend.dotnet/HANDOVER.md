@@ -11,7 +11,7 @@ identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin a
 committed; bound stdlib metadata consumption, the explicit paired stdlib producer, and its
 reproducibility boundary and default Kotlin-home discovery are committed, and the stronger
 `netstandard2.0` platform-library profile is committed; ordinary user-library KLIB/DLL production
-is implemented in the current feature slice).
+and bounded Kotlin cross-module consumption are implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -115,8 +115,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   pair using the netstandard2.0 profile, fixed unsigned 1.0.0.0 assembly identity, modern portable
   writer, and no entry point/runtimeconfig. A focused consumer assembled separately and invoked an
   explicit exported primitive method from the produced DLL on CoreCLR. General Kotlin
-  cross-module calls remain deferred until the KLIB owns durable facade/member identity rather
-  than asking a consumer to infer it from a source filename. No full suite was run.
+  cross-module calls were initially deferred until the KLIB owned durable facade/member identity
+  rather than asking a consumer to infer it from a source filename. The current continuation now
+  follows JS/Native logical linking with Kotlin public `IdSignature` keys and adds a bounded CLR
+  binding index containing only owner path, method name, and dispatch shape. The loader accepts
+  only explicitly ABI-marked, fully bound unsigned netstandard2.0 pairs; arbitrary metadata KLIBs
+  stay compile-time-only. A focused Kotlin consumer constructs an external class, invokes an
+  external member and top-level function, receives the producer-recorded facade, copies the DLL
+  beside its executable, and runs successfully on CoreCLR. Backend and CLI Kotlin compilation
+  pass. The fresh `DotNetLibraryIntegrationTest` run is 4/0/0/0, and the fresh complete .NET
+  FIR2IR matrix is 502/0/0/0 across eight XML files.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1068,6 +1076,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   380/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
+- The full-suite audit after general library linking exposed two earlier regressions. The new
+  core-library profile had split the established empty `mscorlib` AssemblyRef over two lines,
+  invalidating every IL golden; the shared renderer now preserves the canonical one-line form.
+  More importantly, the Iterable continuation had broadened `IMPLICIT_CAST` and bare-local
+  smartcast recovery to every reference pair. That emitted impossible `castclass` conversions for
+  `Producer<Int> -> Producer<Any>` and analogous open/value variance. Smartcast recovery is now
+  limited to a target that is physically assignable to the source view; the variant-interface
+  rejection and Iterable execution pins both pass. This is deliberately conservative. The future
+  Kotlin-common direction is the per-declaration erased identity plus same-object exact capability
+  in `docs/decisions/draft-adr-variant-interface-abi.md`, not broader casts. Settle that model before
+  committing a broad variant stdlib abstraction such as `List<out T>`.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1137,13 +1156,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Define durable external declaration identity for Kotlin library consumption.** The general
-   producer now writes a bound KLIB/DLL pair, but an arbitrary external Kotlin callable still
-   needs assembly plus facade/member identity in metadata. Do not infer facades from source paths,
-   and do not make the existing textual export selector a Kotlin dependency ABI.
-2. **Install one portable platform-library pair during the build.** Discovery already uses
+1. **Prototype the variant-interface representation needed by the real stdlib.** Use
+   `docs/decisions/draft-adr-variant-interface-abi.md`: erased Kotlin identity, declaration-owned
+   exact capability, no subtype-conversion wrappers. Keep the current reified path and rejection
+   until the primitive/open/reference, identity, cross-module, and dual-runtime matrix proves the
+   replacement.
+2. **Turn the portable pair into the build-owned .NET stdlib input.** Discovery already uses
    `lib/dotnet/netstandard2.0`; add an explicit host-capability-aware producer/install task. Do not
-   make cross-platform `distKotlinc` depend unconditionally on a host ILAsm.
+   make cross-platform `distKotlinc` depend unconditionally on a host ILAsm. Then compile the
+   generated common stdlib sources plus narrow .NET actuals through the ordinary library producer
+   instead of expanding the handwritten bootstrap corpus.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
