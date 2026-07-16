@@ -18,8 +18,9 @@ import java.io.File
  * projection, lives below the reserved `Kotlin.Runtime.Internal` namespace. Ordinary Kotlin
  * library implementations do not live here; the first such implementation is the generic array
  * iterator emitted into `Kotlin.Stdlib.dll`.
- * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
- * produce their own PE while exposing exactly the same logical assembly identity.
+ * One .NET Standard 2.0 library profile is assembled with modern ILAsm, independently of the
+ * executable target. Framework ILAsm remains a source-compatibility check, not the canonical
+ * portable-library writer, because it injects an `mscorlib` AssemblyRef into its output PE.
  */
 internal object DotNetRuntimeLibrary {
     const val ASSEMBLY_NAME = "Kotlin.Runtime"
@@ -43,7 +44,6 @@ internal object DotNetRuntimeLibrary {
 
     fun assembleNextTo(
         executableOutput: File,
-        target: DotNetTarget,
         messageCollector: MessageCollector,
     ): File? {
         val outputDirectory = executableOutput.parentFile ?: File(".")
@@ -53,25 +53,35 @@ internal object DotNetRuntimeLibrary {
         return try {
             // ILAsm decodes BOM-less input as ANSI; keep the runtime source on the same UTF-8+BOM
             // path as generated program IL even though its current text is ASCII-only.
-            ilFile.writeBytes(UTF8_BOM + IL_TEXT.toByteArray(Charsets.UTF_8))
-            output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
+            ilFile.writeBytes(UTF8_BOM + ilText().toByteArray(Charsets.UTF_8))
+            output.takeIf { DotNetIlAssembler.assemblePortableLibrary(ilFile, output, messageCollector) }
         } finally {
             ilFile.delete()
         }
     }
 
-    private val IL_TEXT = """
-        .assembly extern mscorlib {}
+    private fun ilText(): String {
+        val coreLibrary = DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY
+        val coreLibraryReference = coreLibrary.reference
+        val assemblyReferenceIl = buildString {
+            coreLibrary.appendAssemblyReferenceTo(this)
+        }.trimEnd().prependIndent("        ")
+        val targetFrameworkAttributeIl = buildString {
+            coreLibrary.appendTargetFrameworkAttributeTo(this)
+        }.trimEnd().prependIndent("        ")
+        return """
+$assemblyReferenceIl
         .assembly Kotlin.Runtime
         {
           .ver $ASSEMBLY_VERSION_IL
+$targetFrameworkAttributeIl
         }
         .module Kotlin.Runtime.dll
 
         .namespace Kotlin.Runtime
         {
           .class public abstract sealed auto ansi beforefieldinit RuntimeInfo
-                 extends [mscorlib]System.Object
+                 extends ${coreLibraryReference}System.Object
           {
           }
         }
@@ -79,7 +89,7 @@ internal object DotNetRuntimeLibrary {
         .namespace Kotlin
         {
           .class public auto ansi beforefieldinit RuntimeException
-                 extends [mscorlib]System.Exception
+                 extends ${coreLibraryReference}System.Exception
           {
             .field private string '_message'
 
@@ -87,7 +97,7 @@ internal object DotNetRuntimeLibrary {
             {
               .maxstack 2
               ldarg.0
-              call instance void [mscorlib]System.Exception::.ctor()
+              call instance void ${coreLibraryReference}System.Exception::.ctor()
               ldarg.0
               ldnull
               stfld string Kotlin.RuntimeException::'_message'
@@ -99,27 +109,27 @@ internal object DotNetRuntimeLibrary {
               .maxstack 2
               ldarg.0
               ldarg.1
-              call instance void [mscorlib]System.Exception::.ctor(string)
+              call instance void ${coreLibraryReference}System.Exception::.ctor(string)
               ldarg.0
               ldarg.1
               stfld string Kotlin.RuntimeException::'_message'
               ret
             }
 
-            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class [mscorlib]System.Exception 'cause') cil managed
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class ${coreLibraryReference}System.Exception 'cause') cil managed
             {
               .maxstack 3
               ldarg.0
               ldarg.1
               ldarg.2
-              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              call instance void ${coreLibraryReference}System.Exception::.ctor(string, class ${coreLibraryReference}System.Exception)
               ldarg.0
               ldarg.1
               stfld string Kotlin.RuntimeException::'_message'
               ret
             }
 
-            .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Exception 'cause') cil managed
+            .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Exception 'cause') cil managed
             {
               .maxstack 3
               .locals init ([0] string 'message')
@@ -129,13 +139,13 @@ internal object DotNetRuntimeLibrary {
               br.s IL_messageReady
         IL_causeNotNull:
               ldarg.1
-              callvirt instance string [mscorlib]System.Object::ToString()
+              callvirt instance string ${coreLibraryReference}System.Object::ToString()
         IL_messageReady:
               stloc.0
               ldarg.0
               ldloc.0
               ldarg.1
-              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              call instance void ${coreLibraryReference}System.Exception::.ctor(string, class ${coreLibraryReference}System.Exception)
               ldarg.0
               ldloc.0
               stfld string Kotlin.RuntimeException::'_message'
@@ -176,22 +186,22 @@ internal object DotNetRuntimeLibrary {
               ret
             }
 
-            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class [mscorlib]System.Exception 'cause') cil managed
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class ${coreLibraryReference}System.Exception 'cause') cil managed
             {
               .maxstack 3
               ldarg.0
               ldarg.1
               ldarg.2
-              call instance void Kotlin.RuntimeException::.ctor(string, class [mscorlib]System.Exception)
+              call instance void Kotlin.RuntimeException::.ctor(string, class ${coreLibraryReference}System.Exception)
               ret
             }
 
-            .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Exception 'cause') cil managed
+            .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Exception 'cause') cil managed
             {
               .maxstack 2
               ldarg.0
               ldarg.1
-              call instance void Kotlin.RuntimeException::.ctor(class [mscorlib]System.Exception)
+              call instance void Kotlin.RuntimeException::.ctor(class ${coreLibraryReference}System.Exception)
               ret
             }
           }
@@ -239,7 +249,7 @@ internal object DotNetRuntimeLibrary {
           }
 
           .class public auto ansi beforefieldinit NumberFormatException
-                 extends [mscorlib]System.ArgumentException
+                 extends ${coreLibraryReference}System.ArgumentException
           {
             .field private string '_message'
 
@@ -247,7 +257,7 @@ internal object DotNetRuntimeLibrary {
             {
               .maxstack 2
               ldarg.0
-              call instance void [mscorlib]System.ArgumentException::.ctor()
+              call instance void ${coreLibraryReference}System.ArgumentException::.ctor()
               ldarg.0
               ldnull
               stfld string Kotlin.NumberFormatException::'_message'
@@ -259,7 +269,7 @@ internal object DotNetRuntimeLibrary {
               .maxstack 2
               ldarg.0
               ldarg.1
-              call instance void [mscorlib]System.ArgumentException::.ctor(string)
+              call instance void ${coreLibraryReference}System.ArgumentException::.ctor(string)
               ldarg.0
               ldarg.1
               stfld string Kotlin.NumberFormatException::'_message'
@@ -281,7 +291,7 @@ internal object DotNetRuntimeLibrary {
           }
 
           .class public auto ansi beforefieldinit Error
-                 extends [mscorlib]System.Exception
+                 extends ${coreLibraryReference}System.Exception
           {
             .field private string '_message'
 
@@ -289,7 +299,7 @@ internal object DotNetRuntimeLibrary {
             {
               .maxstack 2
               ldarg.0
-              call instance void [mscorlib]System.Exception::.ctor()
+              call instance void ${coreLibraryReference}System.Exception::.ctor()
               ldarg.0
               ldnull
               stfld string Kotlin.Error::'_message'
@@ -301,27 +311,27 @@ internal object DotNetRuntimeLibrary {
               .maxstack 2
               ldarg.0
               ldarg.1
-              call instance void [mscorlib]System.Exception::.ctor(string)
+              call instance void ${coreLibraryReference}System.Exception::.ctor(string)
               ldarg.0
               ldarg.1
               stfld string Kotlin.Error::'_message'
               ret
             }
 
-            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class [mscorlib]System.Exception 'cause') cil managed
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class ${coreLibraryReference}System.Exception 'cause') cil managed
             {
               .maxstack 3
               ldarg.0
               ldarg.1
               ldarg.2
-              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              call instance void ${coreLibraryReference}System.Exception::.ctor(string, class ${coreLibraryReference}System.Exception)
               ldarg.0
               ldarg.1
               stfld string Kotlin.Error::'_message'
               ret
             }
 
-            .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Exception 'cause') cil managed
+            .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Exception 'cause') cil managed
             {
               .maxstack 3
               .locals init ([0] string 'message')
@@ -331,13 +341,13 @@ internal object DotNetRuntimeLibrary {
               br.s IL_errorMessageReady
         IL_errorCauseNotNull:
               ldarg.1
-              callvirt instance string [mscorlib]System.Object::ToString()
+              callvirt instance string ${coreLibraryReference}System.Object::ToString()
         IL_errorMessageReady:
               stloc.0
               ldarg.0
               ldloc.0
               ldarg.1
-              call instance void [mscorlib]System.Exception::.ctor(string, class [mscorlib]System.Exception)
+              call instance void ${coreLibraryReference}System.Exception::.ctor(string, class ${coreLibraryReference}System.Exception)
               ldarg.0
               ldloc.0
               stfld string Kotlin.Error::'_message'
@@ -468,7 +478,7 @@ internal object DotNetRuntimeLibrary {
             }
           }
 
-          .class public sealed auto ansi Unit extends [mscorlib]System.Object
+          .class public sealed auto ansi Unit extends ${coreLibraryReference}System.Object
           {
             .field public static initonly class Kotlin.Unit INSTANCE
 
@@ -476,7 +486,7 @@ internal object DotNetRuntimeLibrary {
             {
               .maxstack 1
               ldarg.0
-              call instance void [mscorlib]System.Object::.ctor()
+              call instance void ${coreLibraryReference}System.Object::.ctor()
               ret
             }
 
@@ -510,7 +520,8 @@ internal object DotNetRuntimeLibrary {
             }
           }
         }
-    """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText
+    """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText(coreLibraryReference)
+    }
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }

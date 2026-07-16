@@ -77,8 +77,20 @@ import org.jetbrains.kotlin.types.Variance
  * entry now, fail explicitly" design rule).
  */
 internal object DotNetMappedExceptions {
-    /** The IL reference of `System.Exception`, the CLR type both `kotlin.Throwable` and `kotlin.Exception` map to. */
-    const val EXCEPTION_TYPE_REF = "${CORE_LIB_REF}System.Exception"
+    /** The IL reference of `System.Exception` in one emission's selected core-library profile. */
+    fun exceptionTypeRef(coreLibraryReference: String): String = "${coreLibraryReference}System.Exception"
+
+    internal sealed class PhysicalTypeRef {
+        abstract fun render(coreLibraryReference: String): String
+
+        class CoreLibrary(private val fullName: String) : PhysicalTypeRef() {
+            override fun render(coreLibraryReference: String): String = "$coreLibraryReference$fullName"
+        }
+
+        class Exact(private val ilTypeRef: String) : PhysicalTypeRef() {
+            override fun render(coreLibraryReference: String): String = ilTypeRef
+        }
+    }
 
     internal sealed class Entry {
         /**
@@ -90,25 +102,32 @@ internal object DotNetMappedExceptions {
          * physical type too.
          */
         class Mapped(
-            val clrTypeRef: String,
+            private val physicalTypeRef: PhysicalTypeRef,
             val hasMessageCauseCtor: Boolean,
             val hasCauseCtor: Boolean,
-            val physicalSupertypeRefs: Set<String>,
-        ) : Entry()
+            private val physicalSupertypeRefs: Set<PhysicalTypeRef>,
+        ) : Entry() {
+            fun clrTypeRef(coreLibraryReference: String): String = physicalTypeRef.render(coreLibraryReference)
+
+            fun physicalSupertypeRefs(coreLibraryReference: String): Set<String> =
+                physicalSupertypeRefs.mapTo(linkedSetOf()) { it.render(coreLibraryReference) }
+        }
 
         /** A Kotlin exception class that resolves but has no honest CLR mapping; any codegen use fails with [reason]. */
         class Rejected(val reason: String) : Entry()
     }
 
     val entries: Map<FqName, Entry> = buildMap {
+        val exceptionType = PhysicalTypeRef.CoreLibrary("System.Exception")
+
         fun mapped(kotlinName: String, clrName: String, hasMessageCauseCtor: Boolean) {
             put(
                 FqName("kotlin.$kotlinName"),
                 Entry.Mapped(
-                    clrTypeRef = "${CORE_LIB_REF}System.$clrName",
+                    physicalTypeRef = PhysicalTypeRef.CoreLibrary("System.$clrName"),
                     hasMessageCauseCtor = hasMessageCauseCtor,
                     hasCauseCtor = false,
-                    physicalSupertypeRefs = setOf(EXCEPTION_TYPE_REF),
+                    physicalSupertypeRefs = setOf(exceptionType),
                 )
             )
         }
@@ -124,28 +143,31 @@ internal object DotNetMappedExceptions {
         put(
             FqName("kotlin.NumberFormatException"),
             Entry.Mapped(
-                clrTypeRef = DotNetRuntimeLibrary.numberFormatExceptionTypeRef,
+                physicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.numberFormatExceptionTypeRef),
                 hasMessageCauseCtor = false,
                 hasCauseCtor = false,
-                physicalSupertypeRefs = setOf("${CORE_LIB_REF}System.ArgumentException", EXCEPTION_TYPE_REF),
+                physicalSupertypeRefs = setOf(
+                    PhysicalTypeRef.CoreLibrary("System.ArgumentException"),
+                    exceptionType,
+                ),
             )
         )
         put(
             FqName("kotlin.NoSuchElementException"),
             Entry.Mapped(
-                clrTypeRef = DotNetRuntimeLibrary.noSuchElementExceptionTypeRef,
+                physicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noSuchElementExceptionTypeRef),
                 hasMessageCauseCtor = false,
                 hasCauseCtor = false,
-                physicalSupertypeRefs = setOf(EXCEPTION_TYPE_REF),
+                physicalSupertypeRefs = setOf(exceptionType),
             )
         )
         put(
             FqName("kotlin.Error"),
             Entry.Mapped(
-                clrTypeRef = DotNetRuntimeLibrary.errorTypeRef,
+                physicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.errorTypeRef),
                 hasMessageCauseCtor = true,
                 hasCauseCtor = true,
-                physicalSupertypeRefs = setOf(EXCEPTION_TYPE_REF),
+                physicalSupertypeRefs = setOf(exceptionType),
             )
         )
         put(
@@ -161,8 +183,12 @@ internal object DotNetMappedExceptions {
     fun isMappedTypeAssignableTo(actualTypeRef: String, expectedTypeRef: String): Boolean =
         entries.values.asSequence()
             .filterIsInstance<Entry.Mapped>()
-            .filter { it.clrTypeRef == actualTypeRef }
-            .any { expectedTypeRef in it.physicalSupertypeRefs }
+            .any { entry ->
+                DotNetCoreLibraryProfile.entries.any { profile ->
+                    entry.clrTypeRef(profile.reference) == actualTypeRef &&
+                            expectedTypeRef in entry.physicalSupertypeRefs(profile.reference)
+                }
+            }
 
     /**
      * Whether [irClass] is one of the exception class declarations of the injected stdlib

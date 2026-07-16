@@ -7,7 +7,6 @@ import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
-import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.collectSources
 import org.jetbrains.kotlin.cli.common.contentRoots
@@ -142,7 +141,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
 /**
  * Recognizes an explicit metadata-KLIB/CLR-DLL pair without turning arbitrary classpath entries
  * into physical CLR references. The KLIB manifest binds Kotlin declarations to one stable,
- * target-specific assembly companion; ordinary metadata KLIBs remain compile-time-only inputs.
+ * portable assembly companion; ordinary metadata KLIBs remain compile-time-only inputs.
  */
 private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotNetStdlib(
     klibs: List<KotlinLibrary>,
@@ -166,7 +165,8 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         DotNetStdlibArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to
                 DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
         DotNetStdlibArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_FILE_NAME,
-        DotNetStdlibArtifact.METADATA_TARGET_PROPERTY to dotNetTarget.flagValue,
+        DotNetStdlibArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to
+                DotNetStdlibArtifact.LIBRARY_TARGET_FRAMEWORK,
     )
     val mismatch = expectedProperties.entries.firstOrNull { entry ->
         properties.getProperty(entry.key) != entry.value

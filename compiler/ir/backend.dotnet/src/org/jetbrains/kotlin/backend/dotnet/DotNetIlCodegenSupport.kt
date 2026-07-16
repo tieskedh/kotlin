@@ -34,17 +34,6 @@ import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.render
 
-/**
- * The core library assembly name declared in the module header (`.assembly extern`) and targeted
- * by every emitted IL member reference. Kept as a single constant (with the derived
- * [CORE_LIB_REF] prefix) so retargeting the backend to a different corelib — e.g. modern .NET's
- * `System.Runtime` — is a one-line change instead of a scatter-shot edit.
- */
-internal const val CORE_LIB = "mscorlib"
-
-/** The bracketed resolution-scope prefix of corelib type references in emitted IL. */
-internal const val CORE_LIB_REF = "[$CORE_LIB]"
-
 /** Whether this is one of the primitive-array classifiers whose scalar element type is supported. */
 internal fun IrType.isSupportedDotNetPrimitiveArray(): Boolean = when (classFqName?.asString()) {
     "kotlin.BooleanArray",
@@ -202,6 +191,7 @@ private fun List<IrValueParameter>.dotNetParameterTypes(typeMapper: DotNetIlType
  */
 internal class DotNetIlTypeMapper(
     private val availableClasses: Map<IrClass, DotNetIlClassInfo>,
+    val coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
 ) {
     /**
      * The class info of [irClass] while it is still available, or null once (or if) the emitter
@@ -339,7 +329,7 @@ internal class DotNetIlTypeMapper(
             StandardNames.FqNames._char.toSafe() -> DotNetIlValueType.Char
             else -> return null
         }
-        return DotNetIlValueType.NullableValue(elementType)
+        return DotNetIlValueType.NullableValue(elementType, coreLibrary.reference)
     }
 
     /**
@@ -351,7 +341,8 @@ internal class DotNetIlTypeMapper(
      */
     private fun toMappedExceptionTypeOrNull(type: IrType): DotNetIlValueType.MappedClass? =
         when (val entry = type.classFqName?.let(DotNetMappedExceptions.entries::get)) {
-            is DotNetMappedExceptions.Entry.Mapped -> DotNetIlValueType.MappedClass(entry.clrTypeRef)
+            is DotNetMappedExceptions.Entry.Mapped ->
+                DotNetIlValueType.MappedClass(entry.clrTypeRef(coreLibrary.reference))
             is DotNetMappedExceptions.Entry.Rejected -> dotNetUnsupported(entry.reason)
             null -> null
         }

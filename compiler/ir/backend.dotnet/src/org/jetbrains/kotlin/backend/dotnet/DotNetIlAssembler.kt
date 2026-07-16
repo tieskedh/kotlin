@@ -26,6 +26,27 @@ object DotNetIlAssembler {
         }
     }
 
+    /**
+     * Assembles a portable library with the modern ILAsm. Framework ILAsm accepts netstandard
+     * source but injects an `mscorlib` AssemblyRef into the PE, so it is a compatibility oracle,
+     * not a writer for the canonical netstandard2.0 asset.
+     */
+    fun assemblePortableLibrary(ilFile: File, output: File, messageCollector: MessageCollector): Boolean {
+        output.delete()
+        runtimeConfigFile(output).delete()
+        val ilasm = findModernIlasm()
+        if (ilasm == null) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "Cannot assemble portable library ${output.path}: no modern .NET ilasm was found. " +
+                        "Provision the toolchain with $PROVISION_SCRIPT, " +
+                        "or set KOTLIN_DOTNET_ILASM to an ilasm.exe / KOTLIN_DOTNET_ROOT to a toolchain root."
+            )
+            return false
+        }
+        return runIlasm(ilasm, ilFile, output, dll = true, messageCollector)
+    }
+
     private fun assembleForNetFramework(
         ilFile: File,
         output: File,

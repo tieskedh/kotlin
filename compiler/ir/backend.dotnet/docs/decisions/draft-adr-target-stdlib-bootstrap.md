@@ -67,12 +67,12 @@ Kotlin.Stdlib.dll   -> CLR implementations referenced by emitted IL
 
 The metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
 unsigned ABI-1 identity (`dotnet_assembly_name=Kotlin.Stdlib`, version `1.0.0.0`, neutral culture,
-and null public-key token), `dotnet_assembly_file=Kotlin.Stdlib.dll`, and the requested
-`dotnet_target`. This binding is what turns that one metadata dependency into a physical CLR
+and null public-key token), `dotnet_assembly_file=Kotlin.Stdlib.dll`, and
+`dotnet_library_tfm=netstandard2.0`. This binding is what turns that one metadata dependency into a physical CLR
 reference; arbitrary KLIBs remain compile-time-only. The compiler requires the named sibling DLL
 and copies it beside an executable consumer. The metadata encoding is currently the common KLIB
-encoding because there is no durable .NET KLIB platform kind yet; the custom target binding
-prevents that implementation detail from claiming cross-target executability.
+encoding because there is no durable .NET KLIB platform kind yet; the custom library-TFM binding
+records the portable CLR API contract without claiming that .NET Standard is an executable runtime.
 
 ## Relationship to the stdlib generator
 
@@ -116,8 +116,9 @@ The POC adds an explicit compiler product route:
 This provisional build control accepts no user source files, owns the `Kotlin.Stdlib` module name,
 and cannot be combined with `-no-stdlib` or CLR export selectors. It is not a source annotation or
 a proposed end-user stdlib API. From one resolved frontend session it serializes all compiler-owned
-bootstrap declarations, lowers their executable implementations, assembles the target-specific
-DLL, and publishes the packed metadata KLIB only after the DLL succeeds:
+bootstrap declarations, lowers their executable implementations, assembles the portable
+netstandard2.0 DLL with the modern library writer, and publishes the packed metadata KLIB only
+after the DLL succeeds:
 
 ```text
 compiler-owned stdlib source
@@ -135,10 +136,11 @@ after the implementation assembly exists.
 
 ### Reproducibility boundary
 
-For a fixed compiler, source corpus, and requested target, repeated producer runs must emit an
+For a fixed compiler and source corpus, repeated producer runs must emit an
 identical packed KLIB and identical textual IL. KLIB archive order and timestamps are normalized by
 the shared Kotlin archive writer, and metadata fragments are ordered by package and source name.
-Focused CoreCLR and Framework pins compare both compiler-owned files byte for byte.
+Focused modern and Framework runtime-selection pins compare both compiler-owned files byte for
+byte; runtime selection must not change the portable library product.
 
 The current external ILAsm implementations give identical IL a fresh PE module identity, so DLL
 byte identity is not a truthful POC gate. The durable requirement at this stage is the fixed
@@ -149,30 +151,26 @@ itself deterministic.
 ### Installed-pair discovery
 
 Following JVM/JS `KotlinPaths` and Native distribution ownership, an ordinary .NET compilation
-prefers the complete target pair at:
+prefers the complete portable pair at:
 
 ```text
-<kotlin-home>/lib/dotnet/net/Kotlin.Stdlib.klib
-<kotlin-home>/lib/dotnet/net/Kotlin.Stdlib.dll
-
-<kotlin-home>/lib/dotnet/netframework/Kotlin.Stdlib.klib
-<kotlin-home>/lib/dotnet/netframework/Kotlin.Stdlib.dll
+<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.klib
+<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll
 ```
 
-The target directories are not a new Kotlin semantic distinction. They are required because both
-physical variants preserve the same CLR assembly identity and filename, while each metadata
-manifest binds the pair to its requested runtime target. A complete matching pair becomes the
-default metadata dependency; a half-installed pair is an error rather than permission to rebuild a
-different implementation silently. `-no-stdlib` remains the opt-out and, together with an explicit
-classpath, the bootstrap override.
+The manifest binds the companion to the `netstandard2.0` library TFM, independently of the
+consumer's executable runtime. A complete matching pair becomes the default metadata dependency;
+a half-installed pair is an error rather than permission to rebuild a different implementation
+silently. `-no-stdlib` remains the opt-out and, together with an explicit classpath, the bootstrap
+override.
 
 Until the repository build populates those directories, absence of both files still selects the
 injected-source compatibility path. Installed-pair use no longer enables `kotlin.*` packages in
 user sources; that temporary permission is limited to compiler-owned injected sources.
 
-These per-runtime directories are provisional discovery scaffolding, not the intended package
-layout. The validated `netstandard2.0` candidate would replace them with one portable installed
-pair after its full BCL member-reference audit and codegen profile are implemented.
+The repository build does not install this pair yet. Its future producer must be
+host-capability-aware: modern ILAsm is currently required because Framework ILAsm injects an
+`mscorlib` AssemblyRef even when it accepts netstandard-scoped source.
 
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
@@ -250,10 +248,11 @@ Iterator calls inside the stdlib assembly. A focused CLI integration pin compile
 `-no-stdlib`, resolves `first()` from a metadata KLIB, and verifies the generic external DLL call
 without a generated consumer-side CollectionsKt. A manual Framework executable exercised the same
 path against a real generated DLL and user-defined Iterable. Two focused integration pins run the
-explicit producer for CoreCLR and Framework, check each packed KLIB manifest and real target DLL,
-then consume both `first()` and `last()` from each exact produced pair in a separate compilation.
-Each target producer is also run twice; the packed KLIB and compiler-owned IL are byte-identical.
-Finally, each produced pair is installed into a temporary target-specific Kotlin home and consumed
+explicit producer under modern and Framework runtime selection, check each packed KLIB manifest
+and portable DLL, then consume both `first()` and `last()` from each produced pair in a separate
+compilation. Each producer is also run twice; the packed KLIB and compiler-owned IL are
+byte-identical. Finally, each produced pair is installed into a temporary portable-profile Kotlin
+home and consumed
 by an ordinary compilation with neither `-no-stdlib` nor a manual metadata classpath; the consumer
 does not regenerate the stdlib facade.
 

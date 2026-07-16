@@ -53,7 +53,7 @@ import org.jetbrains.kotlin.ir.util.resolveFakeOverride
 import org.jetbrains.kotlin.ir.util.resolveFakeOverrideMaybeAbstract
 import org.jetbrains.kotlin.name.Name
 
-class DotNetIlEmitter(
+internal class DotNetIlEmitter(
     private val messageCollector: MessageCollector,
     private val assemblyName: String,
     private val moduleFileName: String,
@@ -63,6 +63,7 @@ class DotNetIlEmitter(
     private val exports: List<DotNetExport> = emptyList(),
     private val propertyExports: List<DotNetPropertyExport> = emptyList(),
     private val emissionScope: DotNetIlEmissionScope = DotNetIlEmissionScope.USER,
+    private val coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
 ) {
     /**
      * Renders the module to IL text.
@@ -320,7 +321,7 @@ class DotNetIlEmitter(
             // also guarantees a plain `Box` and a generic `Box<T>` can never collide in IL.
             registerClassTree(irClass)
         }
-        val typeMapper = DotNetIlTypeMapper(availableClasses)
+        val typeMapper = DotNetIlTypeMapper(availableClasses, coreLibrary)
         // Base-chain and interface linking pass, deliberately AFTER every registration: a base
         // class or interface may be declared after its user (forward references are legal IL —
         // probe-verified, inheritprobe_s1 — and legal Kotlin), so the links cannot be built
@@ -1030,6 +1031,7 @@ class DotNetIlEmitter(
                     facadeFields,
                     facadePropertyBlocks,
                     hasClassInitializer = renderedStaticInitializers.containsKey(file),
+                    coreLibraryReference = coreLibrary.reference,
                 ).generate(this)
             }
         }
@@ -1043,7 +1045,7 @@ class DotNetIlEmitter(
                 referencesStdlibAssembly = "[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in moduleBody,
             )
             if (exportsUseNullableMetadata) {
-                append(DotNetNullableMetadata.attributeClassIl)
+                append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
             }
             append(moduleBody)
         }
@@ -1973,6 +1975,7 @@ class DotNetIlEmitter(
                 // variance form `<+ 'T'>` / `<- 'T'>` (genprobe_s8, genconstraintprobe_s1,
                 // genifaceprobe_s1).
                 genericParameters = irClass.typeParameters.renderDotNetIlGenericParameters(typeMapper),
+                coreLibraryReference = coreLibrary.reference,
             ).generate(this)
         }
         return RenderedClass(ilText)
@@ -2603,6 +2606,7 @@ class DotNetIlEmitter(
                 callableParameterTypes,
                 callableResultType,
                 nullable = callableType.isMarkedNullable(),
+                coreLibraryReference = coreLibrary.reference,
             ),
             nullabilityFlags = DotNetNullableMetadata.delegateFlags(
                 callableType,
@@ -2688,7 +2692,7 @@ class DotNetIlEmitter(
         referencesRuntimeAssembly: Boolean,
         referencesStdlibAssembly: Boolean,
     ) {
-        appendLine(".assembly extern $CORE_LIB {}")
+        coreLibrary.appendAssemblyReferenceTo(this)
         if (referencesRuntimeAssembly) {
             appendLine(".assembly extern ${DotNetRuntimeLibrary.ASSEMBLY_NAME}")
             appendLine("{")
@@ -2705,6 +2709,7 @@ class DotNetIlEmitter(
             appendLine(".assembly ${assemblyName.toIlIdentifier()}")
             appendLine("{")
             appendLine("  .ver ${DotNetStdlibLibrary.ASSEMBLY_VERSION_IL}")
+            coreLibrary.appendTargetFrameworkAttributeTo(this)
             appendLine("}")
         } else {
             appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")

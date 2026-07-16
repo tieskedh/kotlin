@@ -24,14 +24,14 @@ import java.util.zip.ZipFile
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     @Test
-    fun testProducesBoundCoreClrStdlibPairFromOneCompilation() {
+    fun testProducesPortableStdlibPairForModernRuntimeSelection() {
         assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         produceAndConsumeBoundStdlibPair("net")
     }
 
     @Test
-    fun testProducesBoundFrameworkStdlibPairFromOneCompilation() {
-        assumeTrue(DotNetIlAssembler.findFrameworkIlasm() != null, "Framework ilasm is not available")
+    fun testProducesPortableStdlibPairForFrameworkRuntimeSelection() {
+        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Portable-library ilasm is not available")
         produceAndConsumeBoundStdlibPair("netframework")
     }
 
@@ -75,7 +75,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
-        assertTrue(manifest.getProperty("dotnet_target") == target)
+        assertTrue(manifest.getProperty("dotnet_library_tfm") == "netstandard2.0")
+        val il = pairDirectory.resolve("Kotlin.Stdlib.il").readText()
+        assertTrue(".assembly extern netstandard" in il)
+        assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
+        assertTrue("[mscorlib]" !in il)
         return pairDirectory
     }
 
@@ -110,7 +114,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     private fun consumeInstalledStdlibPair(pairDirectory: File, target: String) {
         val kotlinHome = File(tmpdir, "kotlin-home-$target")
-        val installedDirectory = kotlinHome.resolve("lib/dotnet/$target").apply { mkdirs() }
+        val installedDirectory = kotlinHome.resolve("lib/dotnet/netstandard2.0").apply { mkdirs() }
         pairDirectory.resolve("Kotlin.Stdlib.klib").copyTo(installedDirectory.resolve("Kotlin.Stdlib.klib"))
         pairDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
         val consumerSource = File(tmpdir, "installed-consumer-$target.kt").apply {
@@ -166,7 +170,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "\ndotnet_assembly_culture=neutral" +
                     "\ndotnet_assembly_public_key_token=null" +
                     "\ndotnet_assembly_file=Kotlin.Stdlib.dll" +
-                    "\ndotnet_target=netframework\n"
+                    "\ndotnet_library_tfm=netstandard2.0\n"
         )
         // IL-only compilation checks that the bound physical companion exists; executable tests
         // separately validate the real generated stdlib assembly.

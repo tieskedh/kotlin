@@ -56,9 +56,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   fixed throughout compatible ABI-1 releases; product/package versions must be tracked outside
   AssemblyVersion. ABI 1 is deliberately unsigned: strong naming is part of CLR identity, so a
   future signed runtime requires a new assembly identity/ABI major rather than silently breaking
-  binding. One TFM-neutral ECMA-335 IL definition is assembled by the selected target's ILAsm;
-  runtime APIs remain within the .NET Framework 4.8 `mscorlib` surface so the same ABI also runs on
-  modern CoreCLR. `runtimeprobe_s1` assembled the runtime and a type-resolving consumer with both
+  binding. The runtime now emits one netstandard2.0 ECMA-335 definition and uses modern ILAsm as
+  its portable writer; Framework ILAsm is not used for the canonical library because it injects
+  an `mscorlib` AssemblyRef. The API remains within the audited netstandard2.0 surface so the same
+  ABI runs on Framework 4.8 and modern CoreCLR. `runtimeprobe_s1` originally assembled the runtime
+  and a type-resolving consumer with both
   modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings ran, while both
   runtime binaries reported the exact identity above. Namespace ownership is reserved now:
   Kotlin language ABI types live under `Kotlin`, runtime services under `Kotlin.Runtime`, and
@@ -98,27 +100,28 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   STDLIB ownership scopes. A separate consumer can now resolve Kotlin declarations from a metadata
   `Kotlin.Stdlib.klib` and call implementations in its bound sibling `Kotlin.Stdlib.dll`, with no
   injected implementation source. The KLIB manifest binds the complete unsigned assembly
-  identity, file, and requested runtime target; an arbitrary metadata KLIB never becomes a CLR
+  identity, file, and `netstandard2.0` library TFM; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
   inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
-  bound target-specific KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
+  bound portable KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
   class-file metadata is not the applicable lifecycle model because .NET currently has two
   physical companion artifacts. Every assembled executable still receives both platform dlls;
   same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
-  must produce byte-identical packed KLIB and compiler-owned IL for each target; ILAsm-produced PE
+  must produce byte-identical packed KLIB and compiler-owned IL for each assembler path; ILAsm-produced PE
   bytes are not part of that gate because the external assembler gives identical IL a fresh module
   identity. Once a distribution-owned default pair is populated in Kotlin home, same-run production
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
-  Ordinary compilation already prefers a complete pair at
-  `<kotlin-home>/lib/dotnet/<net|netframework>/Kotlin.Stdlib.{klib,dll}` and rejects a half-installed
+  Ordinary compilation prefers the single complete pair at
+  `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}` and rejects a half-installed
   pair; absence still falls back to injected sources until the build installs these artifacts.
-  The target directory is required because both variants retain the same CLR assembly identity and
-  filename while their metadata manifests bind different requested runtime targets. Do not make
-  that provisional layout permanent: `docs/decisions/draft-adr-dotnet-library-target-profile.md`
-  records the stronger validated candidate of one `netstandard2.0` runtime/stdlib profile consumed
-  by both executable targets. Implement an explicit core-library profile and audit every BCL
-  member reference against the 2.0 reference assembly; never land the probe's textual replacement.
+  `Kotlin.Runtime` and `Kotlin.Stdlib` use an explicit netstandard2.0 core-library profile, exact
+  AssemblyRef and TargetFrameworkAttribute metadata, and no `mscorlib` MemberRefs. The complete
+  profile was audited against the 2.0 reference assembly: 27 BCL types and 55 members, zero
+  misses. Applications retain their executable profile. .NET Standard remains a valid future
+  target for general Kotlin library products, but never an executable runtime; do not conflate
+  either axis with the POC assembler choice. See
+  `docs/decisions/draft-adr-dotnet-library-target-profile.md`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
   their List fast paths are omitted because List has no target ABI yet. Do not add a generator

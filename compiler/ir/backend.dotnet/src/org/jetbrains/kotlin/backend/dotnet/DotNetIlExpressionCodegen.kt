@@ -62,6 +62,8 @@ internal class DotNetIlExpressionCodegen(
     private val currentOwner: DotNetIlClassInfo,
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
+    internal val coreLibraryReference = typeMapper.coreLibrary.reference
+
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
     }
@@ -161,7 +163,7 @@ internal class DotNetIlExpressionCodegen(
                     emitExpression(expression, naturalType)
                     return
                 }
-                val coercion = dotNetWideningCoercionOrNull(naturalType, expectedType)
+                val coercion = dotNetWideningCoercionOrNull(naturalType, expectedType, coreLibraryReference)
                 if (coercion != null) {
                     emitExpression(expression, naturalType)
                     methodContext.emit(coercion, pops = 1, pushes = 1)
@@ -257,7 +259,10 @@ internal class DotNetIlExpressionCodegen(
      * `catch (e: NullPointerException)` through the existing exception registry.
      */
     private fun emitThrowNullPointerException() {
-        methodContext.emit("newobj instance void ${CORE_LIB_REF}System.NullReferenceException::.ctor()", pushes = 1)
+        methodContext.emit(
+            "newobj instance void ${coreLibraryReference}System.NullReferenceException::.ctor()",
+            pushes = 1,
+        )
         methodContext.emitThrow()
     }
 
@@ -409,7 +414,7 @@ internal class DotNetIlExpressionCodegen(
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
                 else -> {
-                    val coercion = dotNetWideningCoercionOrNull(operandType, castType)
+                    val coercion = dotNetWideningCoercionOrNull(operandType, castType, coreLibraryReference)
                     when {
                         coercion != null -> {
                             emitExpression(expression.argument, operandType)
@@ -428,7 +433,7 @@ internal class DotNetIlExpressionCodegen(
             }
         }
         if (!castType.isDotNetAssignableTo(expectedType)) {
-            val outerCoercion = dotNetWideningCoercionOrNull(castType, expectedType)
+            val outerCoercion = dotNetWideningCoercionOrNull(castType, expectedType, coreLibraryReference)
                 ?: dotNetUnsupported(
                     "implicit cast produces ${castType.nameInSignature} " +
                             "where ${expectedType.nameInSignature} is expected"
@@ -543,11 +548,15 @@ internal class DotNetIlExpressionCodegen(
     private fun emitPrimitiveValueToString(valueType: DotNetIlValueType) {
         when (valueType) {
             DotNetIlValueType.Boolean -> emitBooleanToString()
-            DotNetIlValueType.Int32 -> emitBoxedInvariantToString("${CORE_LIB_REF}System.Int32")
-            DotNetIlValueType.Int64 -> emitBoxedInvariantToString("${CORE_LIB_REF}System.Int64")
+            DotNetIlValueType.Int32 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int32")
+            DotNetIlValueType.Int64 -> emitBoxedInvariantToString("${coreLibraryReference}System.Int64")
             DotNetIlValueType.Float64 -> emitDoubleValueToString()
             DotNetIlValueType.Char ->
-                methodContext.emit("call string ${CORE_LIB_REF}System.Char::ToString(char)", pops = 1, pushes = 1)
+                methodContext.emit(
+                    "call string ${coreLibraryReference}System.Char::ToString(char)",
+                    pops = 1,
+                    pushes = 1,
+                )
             else -> error("Internal .NET backend error: no primitive string rendering for ${valueType.nameInSignature}")
         }
     }
@@ -582,11 +591,13 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit("box $boxedType", pops = 1, pushes = 1)
         methodContext.emit("ldnull", pushes = 1)
         methodContext.emit(
-            "call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()",
+            "call class ${coreLibraryReference}System.Globalization.CultureInfo " +
+                    "${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()",
             pushes = 1,
         )
         methodContext.emit(
-            "callvirt instance string ${CORE_LIB_REF}System.IFormattable::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)",
+            "callvirt instance string ${coreLibraryReference}System.IFormattable::ToString(" +
+                    "string, class ${coreLibraryReference}System.IFormatProvider)",
             pops = 3,
             pushes = 1,
         )
@@ -990,7 +1001,8 @@ internal class DotNetIlExpressionCodegen(
     ) {
         val constructor = call.symbol.owner
         val className = constructor.constructedClass.name.asString()
-        val producedType = DotNetIlValueType.MappedClass(entry.clrTypeRef)
+        val mappedClrTypeRef = entry.clrTypeRef(coreLibraryReference)
+        val producedType = DotNetIlValueType.MappedClass(mappedClrTypeRef)
         if (!producedType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "constructor call of '$className' produces ${producedType.nameInSignature} " +
@@ -1003,7 +1015,9 @@ internal class DotNetIlExpressionCodegen(
                     "parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}"
                 )
         }
-        val causeType: DotNetIlValueType = DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+        val causeType: DotNetIlValueType = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(coreLibraryReference)
+        )
         when {
             parameterTypes.isEmpty() -> {}
             parameterTypes == listOf(DotNetIlValueType.String) -> {}
@@ -1014,12 +1028,12 @@ internal class DotNetIlExpressionCodegen(
                         "construct with (message) or (message, cause)"
             )
             else -> dotNetUnsupported(
-                "constructor of '$className' has no matching overload on the mapped CLR type '${entry.clrTypeRef}'"
+                "constructor of '$className' has no matching overload on the mapped CLR type '$mappedClrTypeRef'"
             )
         }
         emitArguments(call.arguments, parameterTypes, "constructor of '$className'")
         methodContext.emit(
-            "newobj instance void ${entry.clrTypeRef}::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
+            "newobj instance void $mappedClrTypeRef::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
             pops = parameterTypes.size,
             pushes = 1,
         )
@@ -1336,7 +1350,11 @@ internal class DotNetIlExpressionCodegen(
             val parameterType = entry.second
             methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
             if (!parameterType.isDotNetAssignableTo(DotNetIlValueType.Object)) {
-                val coercion = dotNetWideningCoercionOrNull(parameterType, DotNetIlValueType.Object)
+                val coercion = dotNetWideningCoercionOrNull(
+                    parameterType,
+                    DotNetIlValueType.Object,
+                    coreLibraryReference,
+                )
                     ?: dotNetUnsupported(
                         "callable argument cannot be converted from ${parameterType.nameInSignature} to object"
                     )
@@ -1403,7 +1421,7 @@ internal class DotNetIlExpressionCodegen(
         to: DotNetIlValueType,
     ): DotNetOptionalInstruction? = when {
         from.isDotNetAssignableTo(to) -> DotNetOptionalInstruction(null)
-        else -> dotNetWideningCoercionOrNull(from, to)?.let(::DotNetOptionalInstruction)
+        else -> dotNetWideningCoercionOrNull(from, to, coreLibraryReference)?.let(::DotNetOptionalInstruction)
     }
 
     /** The deepest fixed FunctionN/KFunctionN type retained by an immutable initializer chain. */
@@ -1460,7 +1478,7 @@ internal class DotNetIlExpressionCodegen(
     /** Narrows an erased runtime slot result from object to the logical Kotlin call result type. */
     private fun emitErasedObjectAs(expectedType: DotNetIlValueType, description: String) {
         if (expectedType == DotNetIlValueType.Object) return
-        val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull()
+        val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
             ?: dotNetUnsupported(
                 "erased $description cannot be converted from object to ${expectedType.nameInSignature}"
             )
@@ -1558,7 +1576,7 @@ internal class DotNetIlExpressionCodegen(
         val slotType = slot.type
         if (!slotType.isDotNetAssignableTo(expectedType)) {
             if (slotType == DotNetIlValueType.Object && methodContext.isErasedRuntimeParameter(expression.symbol)) {
-                val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull()
+                val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
                     ?: dotNetUnsupported(
                         "erased runtime parameter '${expression.symbol.owner.name.asString()}' cannot be converted " +
                                 "from object to ${expectedType.nameInSignature}"
@@ -1675,21 +1693,25 @@ internal fun storeLocalInstruction(index: Int): String =
  * Roslyn precedent: C# performs exactly these conversions implicitly at typed/object boundaries;
  * JVM precedent: the JVM backend's StackValue boxing coercions.
  */
-internal fun dotNetWideningCoercionOrNull(from: DotNetIlValueType, to: DotNetIlValueType): String? = when {
+internal fun dotNetWideningCoercionOrNull(
+    from: DotNetIlValueType,
+    to: DotNetIlValueType,
+    coreLibraryReference: String,
+): String? = when {
     to is DotNetIlValueType.NullableValue && from == to.elementType -> to.ctorInstruction
     to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
     from is DotNetIlValueType.TypeParameter && (to == DotNetIlValueType.Object || from.isConstrainedTo(to)) ->
         "box ${from.nameInSignature}"
-    to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull()?.let { "box $it" }
+    to == DotNetIlValueType.Object -> from.dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { "box $it" }
     else -> null
 }
 
 /** The CLR conversion from an erased runtime object slot to one supported logical value type. */
-internal fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(): String? {
-    dotNetBoxedCorelibRefOrNull()?.let { return "unbox.any $it" }
+internal fun DotNetIlValueType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference: String): String? {
+    dotNetBoxedCorelibRefOrNull(coreLibraryReference)?.let { return "unbox.any $it" }
     return when (this) {
         DotNetIlValueType.Object -> null
-        DotNetIlValueType.String -> "castclass ${CORE_LIB_REF}System.String"
+        DotNetIlValueType.String -> "castclass ${coreLibraryReference}System.String"
         is DotNetIlValueType.NullableValue,
         is DotNetIlValueType.TypeParameter,
             -> "unbox.any $nameInSignature"

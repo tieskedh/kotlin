@@ -347,7 +347,9 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         val stdlibIlFile = outputDirectory.resolve("Kotlin.Stdlib.il")
         val stdlibIlText = stdlibIlFile.takeIf(File::isFile)?.readText().orEmpty().replace("\r\n", "\n")
         val requiredStdlibIl = listOf(
-            ".assembly 'Kotlin.Stdlib'\n{\n  .ver 1:0:0:0\n}",
+            ".assembly extern netstandard\n{\n  .ver 2:0:0:0\n  .publickeytoken = (CC 7B 13 FF CD 2D DD 51)\n}",
+            ".assembly 'Kotlin.Stdlib'\n{\n  .ver 1:0:0:0",
+            "System.Runtime.Versioning.TargetFrameworkAttribute",
             ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'<'T'>",
             "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'",
             "'<IteratorHasNextBridge>'",
@@ -364,6 +366,9 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         }
         if (".assembly extern Kotlin.Stdlib" in stdlibIlText) {
             assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }
+        }
+        if ("[mscorlib]" in stdlibIlText) {
+            assertions.fail { "Kotlin.Stdlib must stay inside the netstandard2.0 API profile: ${stdlibIlFile.path}" }
         }
         val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")
         val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()

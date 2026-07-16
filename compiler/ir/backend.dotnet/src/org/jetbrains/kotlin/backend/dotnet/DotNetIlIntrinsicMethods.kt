@@ -678,7 +678,7 @@ private object DotNetIlDataClassArrayMemberHashCodeIntrinsic : DotNetIlIntrinsic
         val [argument, argumentType] = call.dataClassArrayArgument(codegen, "hashCode")
         codegen.emitExpression(argument, argumentType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.dataClassArrayHashCodeCallInstruction,
+            DotNetRuntimeLibraryHelpers.dataClassArrayHashCodeCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )
@@ -697,7 +697,7 @@ private object DotNetIlDataClassArrayMemberToStringIntrinsic : DotNetIlIntrinsic
         val [argument, argumentType] = call.dataClassArrayArgument(codegen, "toString")
         codegen.emitExpression(argument, argumentType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.dataClassArrayToStringCallInstruction,
+            DotNetRuntimeLibraryHelpers.dataClassArrayToStringCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )
@@ -1190,7 +1190,7 @@ private object DotNetIlIteratorNextIntrinsic : DotNetIlIntrinsicMethod() {
             pushes = 1,
         )
         if (expectedType != DotNetIlValueType.Object) {
-            val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull()
+            val narrowing = expectedType.dotNetObjectNarrowingInstructionOrNull(codegen.coreLibraryReference)
                 ?: dotNetUnsupported(
                     "erased iterator result cannot be converted from object to ${expectedType.nameInSignature}"
                 )
@@ -1276,7 +1276,10 @@ private class DotNetIlArrayCopyIntoIntrinsic(
         codegen.emit(loadLocalInstruction(destinationOffsetSlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(startIndexSlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(endIndexSlot.index), pushes = 1)
-        codegen.emit(DotNetRuntimeLibraryHelpers.arrayCopyIntoCallInstruction, pops = 5)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayCopyIntoCallInstruction(codegen.coreLibraryReference),
+            pops = 5,
+        )
         codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
         return true
     }
@@ -1343,13 +1346,18 @@ private class DotNetIlArrayCopyOfIntrinsic(
             codegen.emit("ldlen", pops = 1, pushes = 1)
             codegen.emit("conv.i4", pops = 1, pushes = 1)
             codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
-            codegen.emit("call int32 ${CORE_LIB_REF}System.Math::Min(int32, int32)", pops = 2, pushes = 1)
+            codegen.emit(
+                "call int32 ${codegen.coreLibraryReference}System.Math::Min(int32, int32)",
+                pops = 2,
+                pushes = 1,
+            )
         } else {
             codegen.emit(loadLocalInstruction(sizeSlot.index), pushes = 1)
         }
         codegen.emit(
-            "call void ${CORE_LIB_REF}System.Array::Copy(" +
-                    "class ${CORE_LIB_REF}System.Array, int32, class ${CORE_LIB_REF}System.Array, int32, int32)",
+            "call void ${codegen.coreLibraryReference}System.Array::Copy(" +
+                    "class ${codegen.coreLibraryReference}System.Array, int32, " +
+                    "class ${codegen.coreLibraryReference}System.Array, int32, int32)",
             pops = 5,
         )
         codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
@@ -1392,7 +1400,11 @@ private class DotNetIlArrayContentEqualsIntrinsic(
 
         codegen.emitExpression(left, leftType)
         codegen.emitExpression(right, rightType)
-        codegen.emit(DotNetRuntimeLibraryHelpers.arrayContentEqualsCallInstruction, pops = 2, pushes = 1)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayContentEqualsCallInstruction(codegen.coreLibraryReference),
+            pops = 2,
+            pushes = 1,
+        )
         return true
     }
 }
@@ -1429,7 +1441,11 @@ private object DotNetIlArrayContentDeepEqualsIntrinsic : DotNetIlIntrinsicMethod
 
         codegen.emitExpression(left, leftType)
         codegen.emitExpression(right, rightType)
-        codegen.emit(DotNetRuntimeLibraryHelpers.arrayContentDeepEqualsCallInstruction, pops = 2, pushes = 1)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayContentDeepEqualsCallInstruction(codegen.coreLibraryReference),
+            pops = 2,
+            pushes = 1,
+        )
         return true
     }
 }
@@ -1458,7 +1474,7 @@ private class DotNetIlArrayContentHashCodeIntrinsic(
 
         codegen.emitExpression(receiver, receiverType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.arrayContentHashCodeCallInstruction,
+            DotNetRuntimeLibraryHelpers.arrayContentHashCodeCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )
@@ -1485,7 +1501,7 @@ private object DotNetIlArrayContentDeepHashCodeIntrinsic : DotNetIlIntrinsicMeth
 
         codegen.emitExpression(receiver, receiverType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.arrayContentDeepHashCodeCallInstruction,
+            DotNetRuntimeLibraryHelpers.arrayContentDeepHashCodeCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )
@@ -1517,7 +1533,7 @@ private class DotNetIlArrayContentToStringIntrinsic(
 
         codegen.emitExpression(receiver, receiverType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.arrayContentToStringCallInstruction,
+            DotNetRuntimeLibraryHelpers.arrayContentToStringCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )
@@ -1544,7 +1560,7 @@ private object DotNetIlArrayContentDeepToStringIntrinsic : DotNetIlIntrinsicMeth
 
         codegen.emitExpression(receiver, receiverType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.arrayContentDeepToStringCallInstruction,
+            DotNetRuntimeLibraryHelpers.arrayContentDeepToStringCallInstruction(codegen.coreLibraryReference),
             pops = 1,
             pushes = 1,
         )
@@ -1766,7 +1782,11 @@ private class DotNetIlEqualityIntrinsic(
                 if (referenceEquality) {
                     codegen.emit("ceq", pops = 2, pushes = 1)
                 } else {
-                    codegen.emit("call bool ${CORE_LIB_REF}System.String::op_Equality(string, string)", pops = 2, pushes = 1)
+                    codegen.emit(
+                        "call bool ${codegen.coreLibraryReference}System.String::op_Equality(string, string)",
+                        pops = 2,
+                        pushes = 1,
+                    )
                 }
             }
             // Kotlin primitive arrays inherit identity-based Any.equals on the mature JVM
@@ -2434,7 +2454,7 @@ private object DotNetIlPrintlnIntrinsic : DotNetIlIntrinsicMethod() {
     ): Boolean {
         return when (call.arguments.size) {
             0 -> {
-                codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine()")
+                codegen.emit("call void ${codegen.coreLibraryReference}System.Console::WriteLine()")
                 true
             }
             1 -> {
@@ -2444,14 +2464,14 @@ private object DotNetIlPrintlnIntrinsic : DotNetIlIntrinsicMethod() {
                 when (parameterType) {
                     DotNetIlValueType.Char -> {
                         codegen.emitExpression(argument, DotNetIlValueType.Char)
-                        codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine(char)", pops = 1)
+                        codegen.emit("call void ${codegen.coreLibraryReference}System.Console::WriteLine(char)", pops = 1)
                     }
                     else -> {
                         // Int, Long, Double, String, Boolean and Any? — see the class KDoc for
                         // why the direct WriteLine(int32)/WriteLine(int64)/WriteLine(float64)/
                         // WriteLine(bool) overloads must not be used.
                         codegen.emitStringValueExpression(argument)
-                        codegen.emit("call void ${CORE_LIB_REF}System.Console::WriteLine(string)", pops = 1)
+                        codegen.emit("call void ${codegen.coreLibraryReference}System.Console::WriteLine(string)", pops = 1)
                     }
                 }
                 true
@@ -2475,7 +2495,7 @@ private object DotNetIlStringPlusIntrinsic : DotNetIlIntrinsicMethod() {
 
         codegen.emitStringValueExpression(receiver)
         codegen.emitStringValueExpression(argument)
-        codegen.emit("call string ${CORE_LIB_REF}System.String::Concat(string, string)", pops = 2, pushes = 1)
+        codegen.emit("call string ${codegen.coreLibraryReference}System.String::Concat(string, string)", pops = 2, pushes = 1)
         return true
     }
 }
@@ -2516,7 +2536,7 @@ private object DotNetIlAnyEqualsIntrinsic : DotNetIlIntrinsicMethod() {
             codegen.emit(DotNetRuntimeLibraryHelpers.areEqualCallInstruction, pops = 2, pushes = 1)
         } else {
             codegen.emit(
-                "call instance bool ${CORE_LIB_REF}System.Object::Equals(object)",
+                "call instance bool ${codegen.coreLibraryReference}System.Object::Equals(object)",
                 pops = 2,
                 pushes = 1,
             )
@@ -2540,7 +2560,7 @@ private object DotNetIlAnyHashCodeIntrinsic : DotNetIlIntrinsicMethod() {
             codegen.emit(DotNetRuntimeLibraryHelpers.hashCodeCallInstruction, pops = 1, pushes = 1)
         } else {
             codegen.emit(
-                "call instance int32 ${CORE_LIB_REF}System.Object::GetHashCode()",
+                "call instance int32 ${codegen.coreLibraryReference}System.Object::GetHashCode()",
                 pops = 1,
                 pushes = 1,
             )
@@ -2568,7 +2588,7 @@ private object DotNetIlAnyToStringIntrinsic : DotNetIlIntrinsicMethod() {
         } else {
             codegen.emitExpression(receiver, DotNetIlValueType.Object)
             codegen.emit(
-                "call instance string ${CORE_LIB_REF}System.Object::ToString()",
+                "call instance string ${codegen.coreLibraryReference}System.Object::ToString()",
                 pops = 1,
                 pushes = 1,
             )
@@ -2593,7 +2613,7 @@ private object DotNetIlExceptionMessageIntrinsic : DotNetIlIntrinsicMethod() {
         val receiver = call.dotNetMappedExceptionReceiver(codegen, "message")
         codegen.emitExpression(receiver.first, receiver.second)
         codegen.emit(
-            "callvirt instance string ${DotNetMappedExceptions.EXCEPTION_TYPE_REF}::get_Message()",
+            "callvirt instance string ${DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)}::get_Message()",
             pops = 1,
             pushes = 1,
         )
@@ -2612,13 +2632,15 @@ private object DotNetIlExceptionCauseIntrinsic : DotNetIlIntrinsicMethod() {
         codegen: DotNetIlExpressionCodegen,
         expectedType: DotNetIlValueType,
     ): Boolean {
-        val exceptionType = DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+        val exceptionType = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+        )
         if (expectedType != exceptionType || call.arguments.size != 1) return false
         val receiver = call.dotNetMappedExceptionReceiver(codegen, "cause")
         codegen.emitExpression(receiver.first, receiver.second)
         codegen.emit(
             "callvirt instance ${exceptionType.nameInSignature} " +
-                    "${DotNetMappedExceptions.EXCEPTION_TYPE_REF}::get_InnerException()",
+                    "${DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)}::get_InnerException()",
             pops = 1,
             pushes = 1,
         )
@@ -2665,7 +2687,9 @@ private fun IrCall.dotNetEqualityOperandType(codegen: DotNetIlExpressionCodegen)
         // reference `ceq` is type-agnostic. General `==` on that pair still lands in the
         // MappedClass rejection arm below, exactly like same-typed instances.
         leftType is DotNetIlValueType.MappedClass && rightType is DotNetIlValueType.MappedClass ->
-            DotNetIlValueType.MappedClass(DotNetMappedExceptions.EXCEPTION_TYPE_REF)
+            DotNetIlValueType.MappedClass(
+                DotNetMappedExceptions.exceptionTypeRef(codegen.coreLibraryReference)
+            )
         // Base/derived-typed user-class operands (expressible since the inheritance model)
         // compare through the ancestor type: the reference `ceq` is type-agnostic and the
         // derived-typed side widens by the established no-instruction upcast, so the wider
