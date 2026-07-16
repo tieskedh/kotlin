@@ -161,7 +161,7 @@
   }
 }
 .class private auto ansi sealed 'callableInvocationProvenanceKt$main$reference$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'callableInvocationProvenanceKt$main$reference$1' 'INSTANCE'
@@ -174,9 +174,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:callableInvocationProvenance.kt:380:422:#increment(kotlin.Int){}"
+    ldc.i4 1
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "increment"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
