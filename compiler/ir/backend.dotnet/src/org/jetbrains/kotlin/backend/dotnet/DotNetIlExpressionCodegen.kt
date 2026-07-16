@@ -79,14 +79,15 @@ internal class DotNetIlExpressionCodegen(
      * class's `copy$default`: its IR result is `C<T>`, while a call through `C<Int>` produces
      * `C<Int>`. Use the same call resolution as emission so later coercion/cast decisions observe
      * the substituted CLR result instead of inventing an illegal `C<!0>` to `C<int32>` cast.
-     * Erased callable `Invoke` is excluded: its physical result is always object, but its logical
-     * IR result remains authoritative for the call-specific cast/unbox performed by codegen.
+     * Erased callable `Invoke` and property `get` are excluded: their physical result is always
+     * object, but their logical IR result remains authoritative for the call-specific cast/unbox
+     * performed by codegen.
      */
     private fun mappedNaturalType(expression: IrExpression): DotNetIlValueType? {
         if (
             expression is IrCall &&
             intrinsicMethods.getIntrinsic(expression.symbol) == null &&
-            !expression.symbol.owner.isDotNetErasedCallableInvoke()
+            !expression.symbol.owner.isDotNetErasedObjectResult()
         ) {
             val returnType = resolveCall(expression).returnType
             if (returnType is DotNetIlReturnType.Value) return returnType.type
@@ -1184,9 +1185,9 @@ internal class DotNetIlExpressionCodegen(
         val producedType = (returnType as? DotNetIlReturnType.Value)?.type
         if (
             producedType == DotNetIlValueType.Object &&
-            call.symbol.owner.isDotNetErasedCallableInvoke()
+            call.symbol.owner.isDotNetErasedObjectResult()
         ) {
-            emitErasedCallableObjectAs(expectedType)
+            emitErasedObjectAs(expectedType, "${call.symbol.owner.name.asString()} result")
         } else if (producedType?.isDotNetAssignableTo(expectedType) != true) {
             dotNetUnsupported(
                 "call to '${call.symbol.owner.name.asString()}' produces ${returnType.nameInSignature} " +
@@ -1343,7 +1344,7 @@ internal class DotNetIlExpressionCodegen(
             pops = arity + 1,
             pushes = 1,
         )
-        emitErasedCallableObjectAs(resultType)
+        emitErasedObjectAs(resultType, "callable result")
         methodContext.emit(storeLocalInstruction(callableResultSlot.index), pops = 1)
 
         methodContext.emitLabel(joinLabel)
@@ -1452,12 +1453,12 @@ internal class DotNetIlExpressionCodegen(
         val instruction: String?,
     )
 
-    /** Narrows an erased callable result from object to the logical Kotlin call result type. */
-    private fun emitErasedCallableObjectAs(expectedType: DotNetIlValueType) {
+    /** Narrows an erased runtime slot result from object to the logical Kotlin call result type. */
+    private fun emitErasedObjectAs(expectedType: DotNetIlValueType, description: String) {
         if (expectedType == DotNetIlValueType.Object) return
         val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull()
             ?: dotNetUnsupported(
-                "erased callable result cannot be converted from object to ${expectedType.nameInSignature}"
+                "erased $description cannot be converted from object to ${expectedType.nameInSignature}"
             )
         methodContext.emit(instruction, pops = 1, pushes = 1)
     }
@@ -1552,10 +1553,10 @@ internal class DotNetIlExpressionCodegen(
         val slot = methodContext.reference(expression.symbol)
         val slotType = slot.type
         if (!slotType.isDotNetAssignableTo(expectedType)) {
-            if (slotType == DotNetIlValueType.Object && methodContext.isErasedCallableParameter(expression.symbol)) {
+            if (slotType == DotNetIlValueType.Object && methodContext.isErasedRuntimeParameter(expression.symbol)) {
                 val instruction = expectedType.dotNetObjectNarrowingInstructionOrNull()
                     ?: dotNetUnsupported(
-                        "erased callable parameter '${expression.symbol.owner.name.asString()}' cannot be converted " +
+                        "erased runtime parameter '${expression.symbol.owner.name.asString()}' cannot be converted " +
                                 "from object to ${expectedType.nameInSignature}"
                     )
                 emitLoadSlot(slot)

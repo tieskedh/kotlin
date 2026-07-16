@@ -98,6 +98,7 @@ object DotNetBackend {
             moduleFileName = if (emitsExecutable) binaryOutput.name else ilTarget.name,
             producesExecutable = emitsExecutable,
             irBuiltIns = irBuiltIns,
+            propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
             exports = configuration.dotNetExports,
             propertyExports = configuration.dotNetPropertyExports,
         )

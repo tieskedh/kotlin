@@ -57,6 +57,7 @@ class DotNetIlEmitter(
     private val moduleFileName: String,
     private val producesExecutable: Boolean,
     private val irBuiltIns: IrBuiltIns,
+    private val propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
     private val exports: List<DotNetExport> = emptyList(),
     private val propertyExports: List<DotNetPropertyExport> = emptyList(),
 ) {
@@ -341,7 +342,12 @@ class DotNetIlEmitter(
         val facadeClassInfoByFile = files.associateWith { DotNetIlClassInfo(fileClassNames.getValue(it)) }
 
         val availableFunctions = LinkedHashMap<IrSimpleFunction, DotNetIlFunctionInfo>()
-        DotNetRuntimeTypes.registerCallableFunctions(irBuiltIns, typeMapper, availableFunctions)
+        DotNetRuntimeTypes.registerCallableFunctions(
+            irBuiltIns,
+            propertyReferenceFactoryFunctions,
+            typeMapper,
+            availableFunctions,
+        )
         val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
         for ([file, functions] in topLevelFunctionsByFile) {
             val facadeClassInfo = facadeClassInfoByFile.getValue(file)
@@ -1266,7 +1272,7 @@ class DotNetIlEmitter(
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
             }
             // A class may implement any number of recursively declared module-local interfaces,
-            // plus the supported Kotlin.Runtime callable interfaces, next to its (at most one)
+            // plus the supported Kotlin.Runtime callable/property interfaces, next to its (at most one)
             // base class; whether each module interface itself compiles is deliberately
             // NOT checked here — the render re-resolves the `implements` list every fixpoint
             // round, so an evicted interface cascades whole-class with a carried reason, exactly
@@ -1275,12 +1281,14 @@ class DotNetIlEmitter(
                 if (superInterface !in moduleInterfaces &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKFunctionArityOrNull() == null &&
+                    superInterface.dotNetFixedKPropertyArityOrNull() == null &&
+                    superInterface.dotNetFixedKMutablePropertyArityOrNull() == null &&
                     superInterface.dotNetExactFunctionArity == null &&
                     superInterface.dotNetTypedArgumentsFunctionArity == null
                 ) {
                     dotNetUnsupported(
                         "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +
-                                "interface of the compiled module or a supported Kotlin.Runtime callable interface"
+                                "interface of the compiled module or a supported Kotlin.Runtime execution interface"
                     )
                 }
             }

@@ -18,15 +18,18 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isKFunction
+import org.jetbrains.kotlin.ir.util.isKMutableProperty
+import org.jetbrains.kotlin.ir.util.isKProperty
 import org.jetbrains.kotlin.ir.util.isKSuspendFunction
+import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.parentAsClass
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.util.OperatorNameConventions
 
-/** Routes reflective callable invocation through the unchanged erased FunctionN execution slot. */
+/** Routes reflective function/property invocation through the unchanged erased FunctionN slot. */
 internal class DotNetKFunctionInvokeLowering(
-    @Suppress("UNUSED_PARAMETER") context: DotNetBackendContext,
+    private val context: DotNetBackendContext,
 ) : IrVisitorVoid(), FileLoweringPass {
     override fun lower(irFile: IrFile) {
         irFile.acceptChildrenVoid(this)
@@ -41,6 +44,26 @@ internal class DotNetKFunctionInvokeLowering(
 
         val callee = expression.symbol.owner
         if (callee.name != OperatorNameConventions.INVOKE) return
+
+        val receiver = expression.dispatchReceiver
+        if (receiver != null && (receiver.type.isKProperty() || receiver.type.isKMutableProperty())) {
+            val arguments = (receiver.type as? IrSimpleType)?.arguments ?: return
+            val arity = arguments.size - 1
+            if (arity !in 0..2) return
+            val functionClass = context.irBuiltIns.functionN(arity)
+            expression.symbol = functionClass.invokeFun?.symbol
+                ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
+            val functionType = functionClass.symbol.typeWithArguments(arguments)
+            expression.dispatchReceiver = IrTypeOperatorCallImpl(
+                expression.startOffset,
+                expression.endOffset,
+                functionType,
+                IrTypeOperator.IMPLICIT_CAST,
+                functionType,
+                receiver,
+            )
+            return
+        }
 
         val parentClass = callee.parent as? IrClass ?: return
         if (!parentClass.defaultType.isKFunction() && !parentClass.defaultType.isKSuspendFunction()) {

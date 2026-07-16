@@ -8,12 +8,13 @@ import java.io.File
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
  * the fixed, physically erased Function0/1/2 interfaces, the orthogonal KCallable/KFunction
- * reflection view, the erased Iterator execution interface, the singleton Unit value required
- * when a callable result crosses the object-shaped invocation boundary, and Kotlin-owned
- * exception identities that have no faithful BCL type. Compiler support shared by generated
- * modules, including the constructor-default ABI marker, optional ExactFunctionN and
- * TypedArgumentsFunctionN execution capabilities, and explicit-export delegate projection, lives below the reserved
- * `Kotlin.Runtime.Internal` namespace.
+ * reflection view, erased KProperty0/1/2 identities, the erased Iterator execution interface,
+ * the singleton Unit value required when a callable result crosses the object-shaped invocation
+ * boundary, and Kotlin-owned exception identities that have no faithful BCL type. Compiler
+ * support shared by generated modules, including the constructor-default ABI marker, optional
+ * ExactFunctionN and TypedArgumentsFunctionN execution capabilities, property-reference wrappers,
+ * and explicit-export delegate projection, lives below the reserved `Kotlin.Runtime.Internal`
+ * namespace.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */
@@ -372,6 +373,64 @@ internal object DotNetRuntimeLibrary {
           .class interface public abstract auto ansi KFunction
                  implements Kotlin.KCallable, Kotlin.Function
           {
+          }
+
+          .class interface public abstract auto ansi KProperty
+                 implements Kotlin.KCallable
+          {
+          }
+
+          .class interface public abstract auto ansi KMutableProperty
+                 implements Kotlin.KProperty
+          {
+          }
+
+          .class interface public abstract auto ansi KProperty0
+                 implements Kotlin.KProperty, Kotlin.Function0
+          {
+            .method public hidebysig newslot abstract virtual instance object Get() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi KProperty1
+                 implements Kotlin.KProperty, Kotlin.Function1
+          {
+            .method public hidebysig newslot abstract virtual instance object Get(object receiver) cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi KProperty2
+                 implements Kotlin.KProperty, Kotlin.Function2
+          {
+            .method public hidebysig newslot abstract virtual instance object Get(object receiver1, object receiver2) cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi KMutableProperty0
+                 implements Kotlin.KProperty0, Kotlin.KMutableProperty
+          {
+            .method public hidebysig newslot abstract virtual instance void Set(object 'value') cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi KMutableProperty1
+                 implements Kotlin.KProperty1, Kotlin.KMutableProperty
+          {
+            .method public hidebysig newslot abstract virtual instance void Set(object receiver, object 'value') cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi KMutableProperty2
+                 implements Kotlin.KProperty2, Kotlin.KMutableProperty
+          {
+            .method public hidebysig newslot abstract virtual instance void Set(object receiver1, object receiver2, object 'value') cil managed
+            {
+            }
           }
 
           .class interface public abstract auto ansi Function0
