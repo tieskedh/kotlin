@@ -281,6 +281,10 @@ internal class DotNetIlIntrinsicMethods(
                 Key(kotlinCollectionsFqn, info.arrayFqn, "contentHashCode", emptyList())
                         to DotNetIlArrayContentHashCodeIntrinsic(info.arrayType)
             )
+            add(
+                Key(kotlinCollectionsFqn, info.arrayFqn, "contentToString", emptyList())
+                        to DotNetIlArrayContentToStringIntrinsic(info.arrayType)
+            )
         }
         add(
             Key(kotlinCollectionsFqn, arrayFqn, "contentEquals", listOf(arrayFqn))
@@ -297,6 +301,14 @@ internal class DotNetIlIntrinsicMethods(
         add(
             Key(kotlinCollectionsFqn, arrayFqn, "contentDeepHashCode", emptyList())
                     to DotNetIlArrayContentDeepHashCodeIntrinsic
+        )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "contentToString", emptyList())
+                    to DotNetIlArrayContentToStringIntrinsic(fixedArrayType = null)
+        )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "contentDeepToString", emptyList())
+                    to DotNetIlArrayContentDeepToStringIntrinsic
         )
     }
 
@@ -1333,6 +1345,65 @@ private object DotNetIlArrayContentDeepHashCodeIntrinsic : DotNetIlIntrinsicMeth
         codegen.emitExpression(receiver, receiverType)
         codegen.emit(
             DotNetRuntimeLibraryHelpers.arrayContentDeepHashCodeCallInstruction,
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Nullable shallow content text for primitive and generic arrays; nested arrays retain identity. */
+private class DotNetIlArrayContentToStringIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.String || call.arguments.size != 1) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'contentToString'")
+        val receiverType = fixedArrayType
+            ?: codegen.toDotNetIlValueType(receiver.type)?.takeIf {
+                it is DotNetIlValueType.PrimitiveArray || it is DotNetIlValueType.GenericArray
+            }
+            ?: dotNetUnsupported(
+                "'contentToString' has unsupported receiver type ${receiver.type.render()}"
+            )
+
+        codegen.emitExpression(receiver, receiverType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayContentToStringCallInstruction,
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Nullable recursive content text for generic arrays with active-path cycle detection. */
+private object DotNetIlArrayContentDeepToStringIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.String || call.arguments.size != 1) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'contentDeepToString'")
+        val receiverType = codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
+            ?: dotNetUnsupported(
+                "'contentDeepToString' has unsupported receiver type ${receiver.type.render()}"
+            )
+
+        codegen.emitExpression(receiver, receiverType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayContentDeepToStringCallInstruction,
             pops = 1,
             pushes = 1,
         )

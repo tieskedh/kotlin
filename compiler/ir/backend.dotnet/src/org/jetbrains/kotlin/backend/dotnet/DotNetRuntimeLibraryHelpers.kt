@@ -689,7 +689,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
-            |    .method public hidebysig static string 'DataClassArrayToString'(class [mscorlib]System.Array 'value') cil managed
+            |    .method public hidebysig static string 'ArrayContentToString'(class [mscorlib]System.Array 'value') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
@@ -744,6 +744,192 @@ internal object DotNetRuntimeLibraryHelpers {
             |      pop
             |      ldloc.0
             |      callvirt instance string [mscorlib]System.Object::ToString()
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static void 'AppendArrayContentDeepToString'(
+            |        class [mscorlib]System.Array 'value',
+            |        class [mscorlib]System.Text.StringBuilder 'builder',
+            |        class [mscorlib]System.Collections.ArrayList 'processed') cil managed
+            |    {
+            |      .maxstack 4
+            |      .locals init (
+            |        [0] int32 'index',
+            |        [1] int32 'length',
+            |        [2] object 'element'
+            |      )
+            |      ldarg.2
+            |      ldarg.0
+            |      callvirt instance bool [mscorlib]System.Collections.ArrayList::Contains(object)
+            |      brfalse IL_arrayDeepStringNew
+            |      ldarg.1
+            |      ldstr "[...]"
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      ret
+            |IL_arrayDeepStringNew:
+            |      ldarg.2
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Collections.ArrayList::Add(object)
+            |      pop
+            |      ldarg.1
+            |      ldstr "["
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      ldc.i4.0
+            |      stloc.0
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      stloc.1
+            |IL_arrayDeepStringLoop:
+            |      ldloc.0
+            |      ldloc.1
+            |      bge IL_arrayDeepStringEnd
+            |      ldloc.0
+            |      brfalse IL_arrayDeepStringLoad
+            |      ldarg.1
+            |      ldstr ", "
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |IL_arrayDeepStringLoad:
+            |      ldarg.0
+            |      ldloc.0
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      stloc.2
+            |      ldloc.2
+            |      isinst object[]
+            |      brfalse IL_arrayDeepStringInt
+            |      ldloc.2
+            |      isinst object[]
+            |      ldarg.1
+            |      ldarg.2
+            |      call void 'Kotlin.Runtime.Internal.Intrinsics'::'AppendArrayContentDeepToString'(
+            |          class [mscorlib]System.Array,
+            |          class [mscorlib]System.Text.StringBuilder,
+            |          class [mscorlib]System.Collections.ArrayList)
+            |      br IL_arrayDeepStringNext
+            |IL_arrayDeepStringInt:
+            |      ldloc.2
+            |      isinst int32[]
+            |      brfalse IL_arrayDeepStringLong
+            |      ldarg.1
+            |      ldloc.2
+            |      isinst int32[]
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
+            |          class [mscorlib]System.Array)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      br IL_arrayDeepStringNext
+            |IL_arrayDeepStringLong:
+            |      ldloc.2
+            |      isinst int64[]
+            |      brfalse IL_arrayDeepStringDouble
+            |      ldarg.1
+            |      ldloc.2
+            |      isinst int64[]
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
+            |          class [mscorlib]System.Array)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      br IL_arrayDeepStringNext
+            |IL_arrayDeepStringDouble:
+            |      ldloc.2
+            |      isinst float64[]
+            |      brfalse IL_arrayDeepStringBoolean
+            |      ldarg.1
+            |      ldloc.2
+            |      isinst float64[]
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
+            |          class [mscorlib]System.Array)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      br IL_arrayDeepStringNext
+            |IL_arrayDeepStringBoolean:
+            |      ldloc.2
+            |      isinst bool[]
+            |      brfalse IL_arrayDeepStringChar
+            |      ldarg.1
+            |      ldloc.2
+            |      isinst bool[]
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
+            |          class [mscorlib]System.Array)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      br IL_arrayDeepStringNext
+            |IL_arrayDeepStringChar:
+            |      ldloc.2
+            |      isinst char[]
+            |      brfalse IL_arrayDeepStringScalar
+            |      ldarg.1
+            |      ldloc.2
+            |      isinst char[]
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
+            |          class [mscorlib]System.Array)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      br IL_arrayDeepStringNext
+            |IL_arrayDeepStringScalar:
+            |      ldarg.1
+            |      ldloc.2
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |IL_arrayDeepStringNext:
+            |      ldloc.0
+            |      ldc.i4.1
+            |      add
+            |      stloc.0
+            |      br IL_arrayDeepStringLoop
+            |IL_arrayDeepStringEnd:
+            |      ldarg.1
+            |      ldstr "]"
+            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      pop
+            |      ldarg.2
+            |      ldarg.2
+            |      callvirt instance int32 [mscorlib]System.Collections.ArrayList::get_Count()
+            |      ldc.i4.1
+            |      sub
+            |      callvirt instance void [mscorlib]System.Collections.ArrayList::RemoveAt(int32)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static string 'ArrayContentDeepToString'(
+            |        class [mscorlib]System.Array 'value') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] class [mscorlib]System.Text.StringBuilder 'builder',
+            |        [1] class [mscorlib]System.Collections.ArrayList 'processed'
+            |      )
+            |      ldarg.0
+            |      brtrue IL_arrayDeepStringNotNull
+            |      ldstr "null"
+            |      ret
+            |IL_arrayDeepStringNotNull:
+            |      newobj instance void [mscorlib]System.Text.StringBuilder::.ctor()
+            |      stloc.0
+            |      newobj instance void [mscorlib]System.Collections.ArrayList::.ctor()
+            |      stloc.1
+            |      ldarg.0
+            |      ldloc.0
+            |      ldloc.1
+            |      call void 'Kotlin.Runtime.Internal.Intrinsics'::'AppendArrayContentDeepToString'(
+            |          class [mscorlib]System.Array,
+            |          class [mscorlib]System.Text.StringBuilder,
+            |          class [mscorlib]System.Collections.ArrayList)
+            |      ldloc.0
+            |      callvirt instance string [mscorlib]System.Object::ToString()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static string 'DataClassArrayToString'(
+            |        class [mscorlib]System.Array 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
+            |          class [mscorlib]System.Array)
             |      ret
             |    }
             |
@@ -1085,6 +1271,18 @@ internal object DotNetRuntimeLibraryHelpers {
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayContentDeepHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+
+    /** Nullable shallow List-compatible content rendering for every supported CLR vector. */
+    val arrayContentToStringCallInstruction: String =
+        "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayContentToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+
+    /** Nullable recursive List-compatible content rendering for generic arrays. */
+    val arrayContentDeepToStringCallInstruction: String =
+        "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayContentDeepToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
 
     /** Content hash for the CLR vector behind an array property of a generated data class. */
     val dataClassArrayHashCodeCallInstruction: String =

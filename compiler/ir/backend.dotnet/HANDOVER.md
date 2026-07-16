@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(remaining array content stringification after equality and hashing).
+(array content operations complete; explicit CLR export/interop boundary next).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -22,11 +22,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   followed by concrete array copying (`afd686b1f`), escaping array iterators (`603b6f46d`), the
   callable exact path (`e977cba1b`), the delegate-projection boundary freeze (`9e7c608d5`), and
   exact negative-array-size identity (`2448c404c`), shallow array-content equality (`359d01490`),
-  and recursive array-content equality (`3c65c82f4`), followed by the hashing slice described below.
+  recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
+  by the stringification slice described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **476 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **480 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -768,6 +769,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   undefined with no cycle detector. `arrayhash_s1` ran on modern CoreCLR and Framework, the exact
   golden assembles under both ILAsm versions, and the focused PSI/LightTree IL and box matrix is
   clean.
+- `contentToString` and `contentDeepToString` now share the Kotlin-owned scalar string boundary.
+  The shallow operation covers generic arrays plus all five supported primitive arrays and keeps
+  nested arrays identity-rendered. The deep generic-array operation recursively renders supported
+  nested arrays and tracks only the active reference-array path in a Framework-compatible
+  `ArrayList`: actual cycles become `[...]`, while repeated non-cyclic children render fully each
+  time. Null, empty, scalar, primitive, Double special values, nested references, the canonical
+  cyclic graph, repeated children, open generic vectors, and one-time receiver evaluation are
+  pinned. Existing data-class array rendering delegates to the general shallow helper through its
+  compatibility wrapper. `arraystring_s1` ran on modern CoreCLR and Framework, the exact golden
+  assembles under both ILAsm versions, and the focused PSI/LightTree IL and box matrix is clean.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -850,11 +861,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Finish array content operations in semantic slices.** Equality and hashing are complete. Add
-   `contentToString`/`contentDeepToString` without conflating shallow and recursive contracts.
-   Keep identity equality unchanged and reuse runtime helpers only where their exact Kotlin
-   semantics match.
-2. **Add an explicit CLR export/interop boundary.** Only then co-land the already probe-validated
+1. **Add an explicit CLR export/interop boundary.** Only then co-land the already probe-validated
    Func/Action projection mechanism. Preserve FunctionN storage/identity and define overload/facade
    naming, nullability, Unit/void, exception translation, adapter round trips, and delegate equality
    at that boundary.
