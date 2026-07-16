@@ -1,0 +1,5 @@
+$TESTDATA_DIR$/overloadedFunctionExport.kt
+-Xdotnet-export=sample.convert(kotlin.Int)=ConvertInt
+-Xdotnet-export=sample.convert(kotlin.String?)=ConvertText
+-d
+$TEMP_DIR$/overloadedFunctionExport.il
