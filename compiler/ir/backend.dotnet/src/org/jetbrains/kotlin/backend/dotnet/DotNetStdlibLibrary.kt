@@ -49,11 +49,10 @@ internal object DotNetStdlibLibrary {
     fun implementationFileFacadeIlName(file: IrFile): String? =
         COLLECTIONS_FACADE_IL_NAME.takeIf { file.isDotNetStdlibImplementationSource }
 
-    /** Writes deterministic IL in [outputDirectory] and assembles the target-specific stdlib PE. */
+    /** Writes deterministic netstandard2.0 IL and assembles its PE with modern ILAsm. */
     fun assembleIn(
         outputDirectory: File,
         ilText: String,
-        target: DotNetTarget,
         messageCollector: MessageCollector,
     ): File? {
         outputDirectory.mkdirs()
@@ -61,16 +60,15 @@ internal object DotNetStdlibLibrary {
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
         output.delete()
         ilFile.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
-        return output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
+        return output.takeIf { DotNetIlAssembler.assemblePortableLibrary(ilFile, output, messageCollector) }
     }
 
     /** Bootstrap compatibility path while ordinary executable builds still rebuild the stdlib. */
     fun assembleNextTo(
         executableOutput: File,
         ilText: String,
-        target: DotNetTarget,
         messageCollector: MessageCollector,
-    ): File? = assembleIn(executableOutput.parentFile ?: File("."), ilText, target, messageCollector)
+    ): File? = assembleIn(executableOutput.parentFile ?: File("."), ilText, messageCollector)
 
     /** Constructs the closed generic stdlib iterator over a vector already on the IL stack. */
     fun arrayIteratorConstructorInstruction(elementType: DotNetIlValueType): String =

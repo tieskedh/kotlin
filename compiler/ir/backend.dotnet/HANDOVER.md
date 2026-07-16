@@ -99,6 +99,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   retargeting; an unchanged mscorlib application consumed the portable pair on both runtimes. The
   Framework C# compiler also consumed it against the actual netstandard2.0 reference assembly.
   This is probe evidence only; no production code uses textual retargeting. No full suite was run.
+  The following implementation continuation made that profile explicit instead of retaining the
+  probe transform. Runtime, stdlib codegen, mapped exceptions, nullable values/metadata, delegates,
+  and runtime helpers now render through a selected core-library profile. Both platform assemblies
+  emit the exact netstandard 2.0 AssemblyRef and TargetFrameworkAttribute; the KLIB binds
+  `dotnet_library_tfm=netstandard2.0`; installed discovery uses the single
+  `lib/dotnet/netstandard2.0` directory. Ordinary application IL remains mscorlib-scoped for the
+  current executable targets. The backend and CLI Kotlin compilations pass, and the focused
+  `DotNetLibraryIntegrationTest` passes under both runtime selections using the portable writer.
+  A follow-up check found that Framework ILAsm injects an otherwise unused `mscorlib` AssemblyRef
+  into a netstandard-scoped PE; platform-library production therefore always uses modern ILAsm.
+  Framework ILAsm remains the Framework application writer and a source compatibility oracle. No
+  full suite was run. General user libraries should be allowed to select this TFM too, but through a
+  library product mode—not by pretending .NET Standard is an executable runtime.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1119,14 +1132,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Implement the `netstandard2.0` platform-library profile.** First audit every current runtime
-   and stdlib BCL MemberRef against the 2.0 reference assembly. Then introduce an explicit
-   core-library profile, exact AssemblyRef/TargetFrameworkAttribute emission, and a library-TFM
-   KLIB binding. Do not globally replace `mscorlib` text. Keep executable target selection separate.
-2. **Install one portable stdlib pair during the build.** After the profile lands, replace the
-   provisional `lib/dotnet/<target>` discovery with `lib/dotnet/netstandard2.0` and add an explicit
-   host-capability-aware producer/install task. Do not make cross-platform `distKotlinc` depend
-   unconditionally on a host ILAsm.
+1. **Add a general Kotlin library product targeting `netstandard2.0`.** Reuse the proven KLIB+DLL
+   pairing and explicit core-library profile, but separate TFM selection from assembler/toolchain
+   selection. A library has no entry point or runtimeconfig; .NET Standard is a valid library
+   target, never an executable host.
+2. **Install one portable platform-library pair during the build.** Discovery already uses
+   `lib/dotnet/netstandard2.0`; add an explicit host-capability-aware producer/install task. Do not
+   make cross-platform `distKotlinc` depend unconditionally on a host ILAsm.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

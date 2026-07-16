@@ -522,7 +522,10 @@ internal class DotNetIlMethodCodegen(
         val targetClass = target.constructedClass
         methodContext.emit("ldarg.0", pushes = 1)
         if (targetClass.defaultType.isAny()) {
-            methodContext.emit("call instance void ${CORE_LIB_REF}System.Object::.ctor()", pops = 1)
+            methodContext.emit(
+                "call instance void ${typeMapper.coreLibrary.reference}System.Object::.ctor()",
+                pops = 1,
+            )
             return
         }
         val classInfo = typeMapper.classInfoOrNull(targetClass)

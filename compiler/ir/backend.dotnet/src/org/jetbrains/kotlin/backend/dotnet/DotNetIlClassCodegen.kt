@@ -55,6 +55,7 @@ internal class DotNetIlClassCodegen(
     private val isInterface: Boolean = false,
     private val interfaceRefs: List<String> = emptyList(),
     private val genericParameters: String? = null,
+    private val coreLibraryReference: String = DEFAULT_EXECUTABLE_CORE_LIBRARY.reference,
 ) {
     fun generate(builder: StringBuilder) {
         val visibility = if (exported) "public" else "private"
@@ -86,7 +87,7 @@ internal class DotNetIlClassCodegen(
         // genprobe_s5).
         builder.appendLine(".class $flags ${className.toIlIdentifier()}${genericParameters.orEmpty()}")
         if (!isInterface) {
-            builder.appendLine("       extends ${baseClassRef ?: "${CORE_LIB_REF}System.Object"}")
+            builder.appendLine("       extends ${baseClassRef ?: "${coreLibraryReference}System.Object"}")
         }
         if (interfaceRefs.isNotEmpty()) {
             builder.appendLine("       implements ${interfaceRefs.joinToString(", ")}")

@@ -33,10 +33,11 @@ object DotNetStdlibArtifact {
     const val METADATA_ASSEMBLY_CULTURE_PROPERTY = "dotnet_assembly_culture"
     const val METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY = "dotnet_assembly_public_key_token"
     const val METADATA_ASSEMBLY_FILE_PROPERTY = "dotnet_assembly_file"
-    const val METADATA_TARGET_PROPERTY = "dotnet_target"
+    const val LIBRARY_TARGET_FRAMEWORK = "netstandard2.0"
+    const val METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY = "dotnet_library_tfm"
 
-    fun distributionDirectory(kotlinLibDirectory: File, target: DotNetTarget): File =
-        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(target.flagValue)
+    fun distributionDirectory(kotlinLibDirectory: File): File =
+        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(LIBRARY_TARGET_FRAMEWORK)
 }
 
 /** Kotlin compile-time metadata paired with the CLR assembly that owns its implementations. */
