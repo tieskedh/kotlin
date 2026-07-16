@@ -1025,13 +1025,12 @@ private object DotNetIlIterableIteratorIntrinsic : DotNetIlIntrinsicMethod() {
 }
 
 /**
- * An explicit array `iterator()` value -> the shared runtime ArrayIterator object.
+ * An explicit array `iterator()` value -> the ordinary generic target-stdlib ArrayIterator.
  *
- * The runtime takes System.Array, so primitive and concrete reference vectors use the same object.
- * Open invariant Array<T> producers use the same object: their exact `!n[]`/`!!n[]` vectors are
- * System.Array values, and the existing erased consumer narrows Next with `unbox.any !n`/`!!n`.
- * Receiver mapping still rejects nullable type parameters, projections, and nested arrays before
- * this intrinsic runs, so accepting the producer does not broaden those array families.
+ * The closed class instantiation retains the vector element type (`int32`, `string`, `!n`/`!!n`),
+ * while its compiler-generated erased Iterator bridge boxes only at Next. Receiver mapping still
+ * rejects nullable type parameters, projections, and nested arrays before this intrinsic runs, so
+ * accepting the producer does not broaden those array families.
  */
 private class DotNetIlArrayIteratorIntrinsic(
     private val fixedArrayType: DotNetIlValueType?,
@@ -1048,9 +1047,16 @@ private class DotNetIlArrayIteratorIntrinsic(
                 codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
                 ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
         )
+        val elementType = when (arrayType) {
+            is DotNetIlValueType.PrimitiveArray -> arrayType.elementType
+            is DotNetIlValueType.GenericArray -> arrayType.elementType
+            else -> dotNetUnsupported(
+                "'iterator' has unsupported CLR array representation ${arrayType.nameInSignature}"
+            )
+        }
         codegen.emitExpression(receiver, arrayType)
         codegen.emit(
-            DotNetRuntimeLibraryHelpers.arrayIteratorConstructorInstruction,
+            DotNetStdlibLibrary.arrayIteratorConstructorInstruction(elementType),
             pops = 1,
             pushes = 1,
         )

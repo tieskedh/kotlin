@@ -5,9 +5,10 @@ Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dot
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
-continuation implemented; local delegated-property tokens are committed and explicit user
-Iterator bridges, open invariant array iterators, and bodyless iterator subinterfaces are committed;
-Kotlin-owned Iterable identity/bridges are implemented in the current feature slice).
+continuation implemented; local delegated-property tokens, explicit user Iterator bridges, open
+invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Iterable
+identity/bridges are committed; the first physical target-stdlib assembly and ordinary Kotlin
+array-iterator implementation are implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -38,7 +39,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   continuation (`ef279c65e`), followed by local delegated-property tokens (`417bd3c79`) and
   explicit user Iterator bridges (`e8cc1fc6d`), open invariant array iterators (`801c307a7`), and
   bodyless iterator subinterfaces (`f2ca42e73`), followed by Kotlin-owned Iterable identity and
-  compiler-generated bridges in the current feature slice.
+  compiler-generated bridges (`87c9d7711`), and the first `Kotlin.Stdlib.dll`/ordinary Kotlin
+  ArrayIterator implementation in the current feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -48,6 +50,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The Iterable slice adds one ilText and one box file (four generated parser tests); its focused
   six-test gate, including the existing rejection file, is 6/0/0/0. The next full count is expected
   to be 502; no fresh full suite was run because the user explicitly did not require one.
+  The target-stdlib slice has focused passing IL-text and CoreCLR box pins for both parsers, plus
+  the PSI Iterable box; the box harness now also inspects the physical stdlib artifact. No fresh
+  full suite has been run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -712,10 +717,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   cast or `unbox.any` the result. This preserves the same object/cursor across Kotlin covariance,
   including `Iterator<Int> -> Iterator<Any>`, where CLR generic variance cannot help. Explicit
   `iterator()` over the five primitive vectors, concrete reference arrays, and open invariant
-  `Array<T>` constructs the shared internal ArrayIterator over System.Array; open vectors retain
-  their exact `!n[]`/`!!n[]` signature and consumers use `unbox.any !n`/`!!n`. Nullable type
-  parameters, projections, concrete primitive-element generic arrays, and nested arrays still
-  fail in the structural array mapper. Direct array `for` loops remain allocation-free.
+  `Array<T>` now constructs the corresponding closed generic
+  `[Kotlin.Stdlib]Kotlin.Collections.ArrayIterator<T>`; open vectors retain their exact
+  `!n[]`/`!!n[]` signature and consumers use `unbox.any !n`/`!!n`. Nullable type parameters,
+  projections, concrete primitive-element generic arrays, and nested arrays still fail in the
+  structural array mapper. Direct array `for` loops remain allocation-free.
   Exhaustion uses exact runtime-owned `Kotlin.NoSuchElementException` rather than CLR
   InvalidOperationException, which would create a false IllegalStateException edge.
   `iteratorabi_s1` assembled generic/primitive/reference consumers and the exact catch with modern
@@ -747,12 +753,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   now emit checked `castclass`, including instantiated generic interface targets. Imported CLR
   generic interfaces and IEnumerable/IEnumerator remain a separate deferred interop problem; no
   foreign-view or BCL mapping was introduced.
-  Primitive-specialized subclasses, collections, and CLR enumeration adapters remain rejected. The
-  handwritten runtime ArrayIterator is now explicitly classified as
-  bootstrap packaging: a future real .NET stdlib should own its ordinary Kotlin implementation,
-  while Kotlin.Runtime retains the erased interface identity. Separate primitive implementations
-  remain a later performance decision. The exact golden's dual-ILAsm result and the fresh full
-  suite count are recorded in Branch state above.
+  Primitive-specialized subclasses, collections, and CLR enumeration adapters remain rejected.
+  The first target-stdlib migration now implements the previously stated boundary:
+  `Kotlin.Runtime` keeps the erased Iterator/Iterable identities and exact exhaustion exception,
+  while an ordinary generic Kotlin `ArrayIterator<T>` is emitted only into the new reserved
+  `Kotlin.Stdlib, Version=1.0.0.0` assembly. Explicit array iterator intrinsics construct the
+  corresponding closed generic stdlib class, so primitive elements remain typed until the
+  compiler-generated erased Next bridge; the handwritten System.Array runtime producer is gone.
+  Until Kotlin metadata import/standalone library compilation exists, injected stdlib and user
+  sources share frontend/lowering and separate USER/STDLIB emitter ownership scopes produce the
+  two assemblies. Every executable is supplied both platform dlls; this is honest bootstrap
+  packaging, not a claim that separately compiled Kotlin libraries can already be consumed.
+  `docs/decisions/draft-adr-target-stdlib-bootstrap.md` records the boundary. Separate primitive
+  implementations remain a later performance decision.
 - The callable exact-path slice preserves erased `Kotlin.Function0/1/2/3` as the only Kotlin
   callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge
   pattern, eligible generated non-Unit callables keep their original typed body as `InvokeExact`
@@ -1040,17 +1053,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Create the first target-stdlib build and move the logical array iterator into it.** Keep the
-   erased Iterator/Iterable identities in Kotlin.Runtime and compile the stdlib implementation
-   through the same ordinary class bridge path; remove the handwritten runtime producer only once
-   every compiled program is supplied the stdlib assembly. Audit the existing injected
-   `DotNetStdlibSource` declarations before choosing the packaging boundary.
-2. **Validate iteration bridges across compiled Kotlin modules when that boundary exists.** The
-   erased runtime identity is cross-assembly, but this POC does not yet consume Kotlin metadata
-   from a separately produced CLR module; do not claim source-level cross-module validation.
-3. **Grow collection abstractions only from concrete stdlib needs.** Reuse the now-tested
-   table-driven erased-interface bridge policy, but do not map imported CLR collection interfaces
-   or invent foreign variance views as part of Kotlin-owned stdlib bootstrapping.
+1. **Turn the bootstrap stdlib producer into an explicit compiler build input.** The same-run
+   USER/STDLIB partition is sufficient to establish physical ownership, but the next foundational
+   step is standalone stdlib compilation plus Kotlin metadata serialization/import. Do not claim
+   source-level cross-module validation until a user module actually resolves against that output.
+2. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
+   table-driven erased-interface bridge policy for the next ordinary collection implementation;
+   do not add a runtime interface speculatively or map imported CLR collection interfaces as part
+   of Kotlin-owned stdlib bootstrapping.
+3. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
+   should become emitted Kotlin code only when its implementation is supported and tested; keep
+   platform operations in the intrinsic registry where the mature JVM stdlib does so.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

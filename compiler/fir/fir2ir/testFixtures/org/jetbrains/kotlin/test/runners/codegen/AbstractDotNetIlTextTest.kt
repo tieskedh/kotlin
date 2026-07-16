@@ -335,11 +335,28 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         if (!file.isFile) {
             assertions.fail { "Expected .NET assembly was not produced: ${file.path}" }
         }
-        val runtimeFile = (file.parentFile ?: File(".")).resolve("Kotlin.Runtime.dll")
+        val outputDirectory = file.parentFile ?: File(".")
+        val runtimeFile = outputDirectory.resolve("Kotlin.Runtime.dll")
         if (!runtimeFile.isFile) {
             assertions.fail { "Expected Kotlin/.NET runtime assembly was not produced: ${runtimeFile.path}" }
         }
-        val ilFile = (file.parentFile ?: File(".")).resolve("${file.nameWithoutExtension}.il")
+        val stdlibFile = outputDirectory.resolve("Kotlin.Stdlib.dll")
+        if (!stdlibFile.isFile) {
+            assertions.fail { "Expected Kotlin/.NET stdlib assembly was not produced: ${stdlibFile.path}" }
+        }
+        val stdlibIlFile = outputDirectory.resolve("Kotlin.Stdlib.il")
+        val stdlibIlText = stdlibIlFile.takeIf(File::isFile)?.readText().orEmpty().replace("\r\n", "\n")
+        val requiredStdlibIl = listOf(
+            ".assembly 'Kotlin.Stdlib'\n{\n  .ver 1:0:0:0\n}",
+            ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'<'T'>",
+            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'",
+            "'<IteratorHasNextBridge>'",
+            "'<IteratorNextBridge>'",
+        )
+        requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
+            assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }
+        }
+        val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")
         val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()
         if (".assembly extern Kotlin.Runtime" !in ilText || ".ver 1:0:0:0" !in ilText) {
             assertions.fail { "Expected .NET assembly to reference Kotlin.Runtime: ${ilFile.path}" }

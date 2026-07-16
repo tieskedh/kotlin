@@ -1,6 +1,6 @@
 # Draft ADR: Erased Kotlin iteration ABI on CLR
 
-- Status: **Draft candidate; implemented for array/user iterators and user iterables in the prototype**
+- Status: **Draft candidate; implemented for array/user iterators, user iterables, and the first target-stdlib producer**
 - Date: 2026-07-16
 - Scope: Kotlin-to-Kotlin `Iterator`/`Iterable` identity and execution across CLR assembly boundaries
 
@@ -87,19 +87,20 @@ inherited fake override use `GetIterator()` and receive the same erased iterator
 `for` loop over a user-defined `Iterable<T>` therefore follows the ordinary Kotlin lowering:
 `GetIterator()`, erased `HasNext()`, and erased `Next()` with result narrowing at the use site.
 
-The first producer is the internal runtime class
-`Kotlin.Runtime.Internal.ArrayIterator`. It stores one `System.Array` plus an index. `GetValue`
-boxes primitive vector elements and returns reference elements unchanged. Exhaustion throws exact
-`Kotlin.NoSuchElementException : Kotlin.RuntimeException`; using
+The first producer is now an ordinary generic Kotlin implementation emitted into
+`Kotlin.Stdlib.dll` as `Kotlin.Collections.ArrayIterator<T>`. It stores an exact `T[]` vector plus
+an index. Primitive elements stay typed inside the implementation and box only in its generated
+erased `Next()` bridge; reference elements pass through that bridge unchanged. Exhaustion throws
+exact `Kotlin.NoSuchElementException : Kotlin.RuntimeException`; using
 `System.InvalidOperationException` would introduce a false Kotlin IllegalStateException edge.
 
-That handwritten class is bootstrap packaging, not a permanent ownership decision. This POC has
-no real .NET stdlib module in which an ordinary Kotlin `ArrayIterator<T>` implementation can be
-compiled. Once that target stdlib exists and its classes use the bridge policy below, the logical
-array-iterator implementation should move there. The runtime assembly should retain the erased
-interface identity and only narrowly unavoidable low-level helpers. Whether primitive arrays use
-specialized stdlib iterator classes or the current shared `System.Array` implementation is a
-separate performance decision.
+`Kotlin.Runtime.dll` retains only the erased Iterator/Iterable identities and exact exception
+types. The former handwritten `Kotlin.Runtime.Internal.ArrayIterator(System.Array)` has been
+removed. The stdlib source is compiled through the same bridge policy as user code; its class is
+not a compiler-special implementation. Because the POC cannot yet import Kotlin metadata from a
+separately compiled module, source is currently injected into the same frontend/lowering run and
+scoped emission places the implementation only in `Kotlin.Stdlib.dll`. This bootstrap packaging is
+recorded separately in `draft-adr-target-stdlib-bootstrap.md`.
 
 Direct `for (element in array)` loops do not use this object. The existing common indexed-loop
 lowering evaluates the array once and remains allocation-free. The iterator ABI is used only when
@@ -107,9 +108,11 @@ an explicit `iterator()` call produces a value that can escape or be stored.
 
 The current bounded implementation supports the five established primitive vectors, concrete
 reference-element arrays, open invariant `Array<T>` producers, and ordinary user classes whose
-contract reaches `Iterator<T>` directly or through a supported subinterface. An open vector stays
-exact `!n[]`/`!!n[]` and passes directly to the shared `ArrayIterator(System.Array)`; erased
-`Next()` is narrowed with `unbox.any !n`/`!!n`.
+contract reaches `Iterator<T>` directly or through a supported subinterface. Each array producer
+constructs the corresponding closed stdlib class, such as `ArrayIterator<int32>` or
+`ArrayIterator<string>`. An open vector stays exact `!n[]`/`!!n[]` and constructs
+`ArrayIterator<!n>`/`ArrayIterator<!!n>`; erased `Next()` is narrowed with
+`unbox.any !n`/`!!n`.
 This does not admit `Array<T?>`, projections, concrete primitive-element generic arrays, or nested
 arrays: their receiver types remain rejected by the structural array mapper before iterator
 lowering runs.
@@ -187,13 +190,17 @@ implementations:
 - `compiler/testData/codegen/dotnet/box/iterables.kt`; and
 - the remaining iterator-family negatives in `genericArraysRejected.kt`.
 
+The array IL pin now carries an AssemblyRef to `Kotlin.Stdlib, Version=1.0.0.0` and constructs
+closed generic stdlib iterators. The box harness requires `Kotlin.Stdlib.dll` and verifies its
+retained IL contains the generic implementation plus compiler-generated `HasNext`/`Next`
+MethodImpl bridges before executing the program on CoreCLR.
+
 ## Deferred decisions
 
 This draft does not decide separately compiled Kotlin producer modules, subinterfaces with member
 bodies, primitive-specialized iterator subclasses, collection/list iterators, mutable iterators,
 sequences, CLR `IEnumerable<T>`/`IEnumerator<T>` adapters or foreign variance views, typed
-fast-path members, or Kotlin metadata encoding. The target-stdlib migration is the next consumer
-of this decision, not a new ABI decision: it should compile the logical `ArrayIterator` as ordinary
-Kotlin and remove its handwritten runtime implementation once packaging supplies the compiled
-stdlib class. Later layers may add views or optimizations, but ordinary Kotlin iteration covariance
-must continue to preserve the erased canonical identities or this draft must be explicitly revised.
+fast-path members, or Kotlin metadata encoding. The target-stdlib migration of `ArrayIterator` is
+implemented, but standalone stdlib production/consumption is not. Later layers may add views or
+optimizations, but ordinary Kotlin iteration covariance must continue to preserve the erased
+canonical identities or this draft must be explicitly revised.
