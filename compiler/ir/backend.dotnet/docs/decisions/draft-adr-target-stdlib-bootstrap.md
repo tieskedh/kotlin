@@ -145,6 +145,30 @@ assembly identity recorded in the KLIB plus successful separate consumption of t
 The direct PE writer described in `draft-adr-il-assembly-pipeline.md` must eventually make the PE
 itself deterministic.
 
+### Installed-pair discovery
+
+Following JVM/JS `KotlinPaths` and Native distribution ownership, an ordinary .NET compilation
+prefers the complete target pair at:
+
+```text
+<kotlin-home>/lib/dotnet/net/Kotlin.Stdlib.klib
+<kotlin-home>/lib/dotnet/net/Kotlin.Stdlib.dll
+
+<kotlin-home>/lib/dotnet/netframework/Kotlin.Stdlib.klib
+<kotlin-home>/lib/dotnet/netframework/Kotlin.Stdlib.dll
+```
+
+The target directories are not a new Kotlin semantic distinction. They are required because both
+physical variants preserve the same CLR assembly identity and filename, while each metadata
+manifest binds the pair to its requested runtime target. A complete matching pair becomes the
+default metadata dependency; a half-installed pair is an error rather than permission to rebuild a
+different implementation silently. `-no-stdlib` remains the opt-out and, together with an explicit
+classpath, the bootstrap override.
+
+Until the repository build populates those directories, absence of both files still selects the
+injected-source compatibility path. Installed-pair use no longer enables `kotlin.*` packages in
+user sources; that temporary permission is limited to compiler-owned injected sources.
+
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
 
@@ -201,6 +225,7 @@ Costs and limits:
 - the stdlib is redundantly rebuilt beside each executable for now;
 - the emitter temporarily recognizes injected stdlib ownership;
 - the explicit producer flag is POC build control rather than a final distribution interface;
+- the normal distribution does not yet install the discoverable target pairs;
 - the metadata-public implementation and facade names are compiler/stdlib contracts;
 - the current physical-member mapping covers only compiler-owned stdlib shapes; and
 - the standalone producer is still limited to the compiler-owned bootstrap stdlib.
@@ -223,6 +248,9 @@ path against a real generated DLL and user-defined Iterable. Two focused integra
 explicit producer for CoreCLR and Framework, check each packed KLIB manifest and real target DLL,
 then consume both `first()` and `last()` from each exact produced pair in a separate compilation.
 Each target producer is also run twice; the packed KLIB and compiler-owned IL are byte-identical.
+Finally, each produced pair is installed into a temporary target-specific Kotlin home and consumed
+by an ordinary compilation with neither `-no-stdlib` nor a manual metadata classpath; the consumer
+does not regenerate the stdlib facade.
 
 ## Deferred work
 

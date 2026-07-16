@@ -52,6 +52,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         // therefore outside this compiler-owned reproducibility gate; the manifest identity and
         // a separate consumer compilation below pin the durable assembly contract instead.
         consumeBoundStdlibPair(firstPairDirectory, target)
+        consumeInstalledStdlibPair(firstPairDirectory, target)
     }
 
     private fun produceBoundStdlibPair(target: String, run: String): File {
@@ -105,6 +106,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val il = outputFile.readText()
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'" in il)
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'" in il)
+    }
+
+    private fun consumeInstalledStdlibPair(pairDirectory: File, target: String) {
+        val kotlinHome = File(tmpdir, "kotlin-home-$target")
+        val installedDirectory = kotlinHome.resolve("lib/dotnet/$target").apply { mkdirs() }
+        pairDirectory.resolve("Kotlin.Stdlib.klib").copyTo(installedDirectory.resolve("Kotlin.Stdlib.klib"))
+        pairDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
+        val consumerSource = File(tmpdir, "installed-consumer-$target.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                public fun <T> installedFirstAndLast(values: Iterable<T>): T {
+                    values.first()
+                    return values.last()
+                }
+                """.trimIndent()
+            )
+        }
+        val outputFile = File(tmpdir, "installed-consumer-$target.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::kotlinHome.cliArgument, kotlinHome.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "InstalledConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
+        )
+        val il = outputFile.readText()
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'" in il)
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il)
     }
 
     @Test
