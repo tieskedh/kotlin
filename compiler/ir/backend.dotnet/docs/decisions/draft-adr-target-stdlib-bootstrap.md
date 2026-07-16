@@ -132,6 +132,19 @@ The two files therefore cannot silently describe different source compilations. 
 DLL are removed before a replacement build; metadata is written through a temporary packed KLIB
 after the implementation assembly exists.
 
+### Reproducibility boundary
+
+For a fixed compiler, source corpus, and requested target, repeated producer runs must emit an
+identical packed KLIB and identical textual IL. KLIB archive order and timestamps are normalized by
+the shared Kotlin archive writer, and metadata fragments are ordered by package and source name.
+Focused CoreCLR and Framework pins compare both compiler-owned files byte for byte.
+
+The current external ILAsm implementations give identical IL a fresh PE module identity, so DLL
+byte identity is not a truthful POC gate. The durable requirement at this stage is the fixed
+assembly identity recorded in the KLIB plus successful separate consumption of the assembled DLL.
+The direct PE writer described in `draft-adr-il-assembly-pipeline.md` must eventually make the PE
+itself deterministic.
+
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
 
@@ -154,7 +167,7 @@ compilation does not yet constitute a distributable multi-assembly library build
 This split emitter is temporary bootstrap compatibility, not the library build. The consumer half
 no longer depends on it: with `-no-stdlib` and the produced bound KLIB on its classpath, a user
 module resolves and calls the prebuilt DLL without injected implementations. Same-run production
-remains only until the explicit producer is deterministic on both runtime targets.
+remains only until ordinary compilation can discover a distribution-owned target pair by default.
 
 ## Rejected alternatives
 
@@ -209,6 +222,7 @@ without a generated consumer-side CollectionsKt. A manual Framework executable e
 path against a real generated DLL and user-defined Iterable. Two focused integration pins run the
 explicit producer for CoreCLR and Framework, check each packed KLIB manifest and real target DLL,
 then consume both `first()` and `last()` from each exact produced pair in a separate compilation.
+Each target producer is also run twice; the packed KLIB and compiler-owned IL are byte-identical.
 
 ## Deferred work
 

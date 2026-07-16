@@ -93,8 +93,9 @@ object DotNetStdlibMetadataSerializationPipelinePhase :
         val fragmentNames = mutableListOf<String>()
         val fragmentParts = mutableListOf<List<SerializedFirFile>>()
         for ([fqName, fragment] in fragments.entries.sortedBy { it.key }) {
+            val orderedFragment = fragment.sortedBy(SerializedFirFile::name)
             fragmentNames += fqName
-            fragmentParts += fragment
+            fragmentParts += orderedFragment
             header.addPackageFragmentName(fqName)
         }
         val metadata = SerializedMetadata(

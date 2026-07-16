@@ -105,9 +105,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   bound target-specific KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
   class-file metadata is not the applicable lifecycle model because .NET currently has two
   physical companion artifacts. Every assembled executable still receives both platform dlls;
-  same-run stdlib production remains bootstrap compatibility machinery until the standalone pair
-  is deterministic on both runtime targets, then it must disappear without moving ordinary
-  implementations back into `Kotlin.Runtime`.
+  same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
+  must produce byte-identical packed KLIB and compiler-owned IL for each target; ILAsm-produced PE
+  bytes are not part of that gate because the external assembler gives identical IL a fresh module
+  identity. Once a distribution-owned default pair can be discovered through Kotlin home, same-run
+  production must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
   their List fast paths are omitted because List has no target ABI yet. Do not add a generator

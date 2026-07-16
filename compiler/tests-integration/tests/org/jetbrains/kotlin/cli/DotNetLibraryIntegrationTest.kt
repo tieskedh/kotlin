@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.cli.common.arguments.cliArgument
 import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler
 import org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -35,7 +36,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     private fun produceAndConsumeBoundStdlibPair(target: String) {
-        val pairDirectory = File(tmpdir, "produced-$target-stdlib-pair")
+        val firstPairDirectory = produceBoundStdlibPair(target, "first")
+        val secondPairDirectory = produceBoundStdlibPair(target, "second")
+        assertArrayEquals(
+            firstPairDirectory.resolve("Kotlin.Stdlib.klib").readBytes(),
+            secondPairDirectory.resolve("Kotlin.Stdlib.klib").readBytes(),
+            "Packed stdlib metadata must be reproducible for target $target",
+        )
+        assertArrayEquals(
+            firstPairDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
+            secondPairDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
+            "Compiler-owned stdlib IL must be reproducible for target $target",
+        )
+        // ILAsm currently stamps a fresh PE identity even for identical input. Its DLL bytes are
+        // therefore outside this compiler-owned reproducibility gate; the manifest identity and
+        // a separate consumer compilation below pin the durable assembly contract instead.
+        consumeBoundStdlibPair(firstPairDirectory, target)
+    }
+
+    private fun produceBoundStdlibPair(target: String, run: String): File {
+        val pairDirectory = File(tmpdir, "produced-$target-stdlib-pair-$run")
         compileInProcess(
             K2DotNetCompiler(),
             K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
@@ -55,7 +75,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
         assertTrue(manifest.getProperty("dotnet_target") == target)
+        return pairDirectory
+    }
 
+    private fun consumeBoundStdlibPair(pairDirectory: File, target: String) {
+        val metadataLibrary = pairDirectory.resolve("Kotlin.Stdlib.klib")
         val consumerSource = pairDirectory.resolve("consumer.kt").apply {
             writeText(
                 """
