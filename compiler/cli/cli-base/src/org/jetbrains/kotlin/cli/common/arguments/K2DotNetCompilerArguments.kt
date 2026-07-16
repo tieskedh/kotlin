@@ -68,6 +68,19 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
             field = value
         }
 
+    @Argument(
+        value = "-Xdotnet-export-property",
+        delimiter = Argument.Delimiters.none,
+        valueDescription = "<kotlin-fq-name>=<clr-property-name>",
+        description = "Export a unique public top-level property through an explicitly named CLR property. " +
+                "This provisional POC option may be repeated."
+    )
+    var dotNetPropertyExports: Array<String>? = null
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
     override fun copyOf(): Freezable {
         val copy = K2DotNetCompilerArguments()
         copyCommonCompilerArguments(this, copy)
@@ -77,6 +90,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         copy.noStdlib = noStdlib
         copy.dotNetTarget = dotNetTarget
         copy.dotNetExports = dotNetExports?.copyOf()
+        copy.dotNetPropertyExports = dotNetPropertyExports?.copyOf()
         return copy
     }
 
