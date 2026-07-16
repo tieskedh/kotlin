@@ -795,6 +795,103 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  .class private abstract auto ansi beforefieldinit LocalDelegatedProperty0Base
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.KProperty0
+            |  {
+            |    .field private initonly string 'name'
+            |
+            |    .method family hidebysig specialname rtspecialname instance void .ctor(string 'name') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance string get_name() cil managed
+            |    {
+            |      .override method instance string Kotlin.KCallable::get_name()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
+            |      ret
+            |    }
+            |
+            |    .property instance string 'name'()
+            |    {
+            |      .get instance string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::get_name()
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Get() cil managed
+            |    {
+            |      .override method instance object Kotlin.KProperty0::Get()
+            |      .maxstack 1
+            |      ldstr "Not supported for local property reference."
+            |      newobj instance void [mscorlib]System.NotSupportedException::.ctor(string)
+            |      throw
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke() cil managed
+            |    {
+            |      .override method instance object Kotlin.Function0::Invoke()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance object Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::Get()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance string ToString() cil managed
+            |    {
+            |      .maxstack 3
+            |      ldstr "property "
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
+            |      ldstr " (Kotlin reflection is not available)"
+            |      call string [mscorlib]System.String::Concat(string, string, string)
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit LocalDelegatedProperty0Impl
+            |         extends Kotlin.Runtime.Internal.LocalDelegatedProperty0Base
+            |  {
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::.ctor(string)
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit LocalDelegatedMutableProperty0Impl
+            |         extends Kotlin.Runtime.Internal.LocalDelegatedProperty0Base
+            |         implements Kotlin.KMutableProperty0
+            |  {
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::.ctor(string)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance void Set(object 'value') cil managed
+            |    {
+            |      .override method instance void Kotlin.KMutableProperty0::Set(object)
+            |      .maxstack 1
+            |      ldstr "Not supported for local property reference."
+            |      newobj instance void [mscorlib]System.NotSupportedException::.ctor(string)
+            |      throw
+            |    }
+            |  }
+            |
             |  .class public abstract sealed auto ansi beforefieldinit PropertyReferenceFactory
             |         extends [mscorlib]System.Object
             |  {
@@ -852,6 +949,22 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.1
             |      ldarg.2
             |      newobj instance void Kotlin.Runtime.Internal.MutableProperty2Impl::.ctor(string, class Kotlin.Function2, class Kotlin.Function3)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KProperty0 CreateLocalDelegatedProperty0<V>(string 'name') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedProperty0Impl::.ctor(string)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateLocalDelegatedMutableProperty0<V>(string 'name') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      newobj instance void Kotlin.Runtime.Internal.LocalDelegatedMutableProperty0Impl::.ctor(string)
             |      ret
             |    }
             |  }

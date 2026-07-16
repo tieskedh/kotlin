@@ -10,11 +10,14 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.ir.builders.IrBuilderWithScope
 import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrRichFunctionReference
 import org.jetbrains.kotlin.ir.expressions.IrRichPropertyReference
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.typeOrNull
 
 /**
  * Follows the Native/Wasm wrapper model: a KProperty object stores ordinary lowered getter and
@@ -49,8 +52,17 @@ internal class DotNetPropertyReferenceLowering(context: DotNetBackendContext) :
         propertyName: String,
         propertyType: IrType,
         isMutable: Boolean,
-    ): IrExpression = dotNetUnsupported(
-        "local delegated property reference '$propertyName' is not supported; " +
-                "the bounded property-reference ABI covers ordinary KProperty0/1/2 values only"
-    )
+    ): IrExpression {
+        val valueType = (propertyType as? IrSimpleType)
+            ?.arguments
+            ?.singleOrNull()
+            ?.typeOrNull
+            ?: dotNetUnsupported(
+                "local delegated property reference '$propertyName' has an unsupported property type"
+            )
+        val factory = backendContext.propertyReferenceSymbols.localFactory(isMutable)
+        return irCall(factory.symbol, reference.type, listOf(valueType)).apply {
+            arguments[0] = irString(propertyName)
+        }
+    }
 }

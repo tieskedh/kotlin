@@ -5,7 +5,7 @@ Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dot
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
-continuation implemented at the current tip).
+continuation implemented; local delegated-property tokens are implemented at the current tip).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -33,7 +33,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   export selection, top-level property exports, and the measured typed-argument callable
   capability described below, followed by the bounded erased property-reference representation,
   structural callable-reference identity (`d3433c768`), and the Function3/KMutableProperty2
-  continuation at the current tip.
+  continuation (`ef279c65e`), followed by local delegated-property tokens at the current tip.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -858,6 +858,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   KFunctions with an `Accessor.property` back-reference, so exposing the wrapper's private stored
   FunctionN values would be semantically false. Accessor objects wait for a coherent .NET
   reflection metadata model.
+  Local delegated-property tokens now follow Native/Wasm's separate name-only shape. Private
+  KProperty0/KMutableProperty0 implementations expose truthful name, mutability, and rendering;
+  Get/Invoke/Set throw the mapped UnsupportedOperationException with the mature-target message and
+  the token retains System.Object identity equality. Metadata-public compiler-internal factories
+  construct the private wrappers. Common LocalDelegatedPropertiesLowering now runs before local
+  closure conversion, and delegated accessors are eligible local functions, so val/var accessors
+  capture their delegate normally. An IR-only throw-helper stub exists solely because common
+  callable-reference upgrade builds temporary unsupported accessor bodies before property
+  lowering discards them; it is not emitted. The box also covers provideDelegate.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -990,10 +999,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit local delegated-property tokens.** Determine whether common lowering already supplies a
-   coherent KProperty0 token for local delegates, then pin or diagnose its name/identity behavior
-   without adding JVM-only accessor objects or pretending owner/return-type/parameter metadata
-   exists.
+1. **Audit explicit user Iterator implementations.** Determine the smallest JVM-shaped
+   typed-to-erased bridge that lets a user `Iterator<T>` implement the existing non-generic
+   runtime execution identity without weakening the current open-array and collection gates.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

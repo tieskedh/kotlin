@@ -27,6 +27,26 @@ private class ExtensionHost {
     }
 }
 
+private class LocalDelegate(private var value: Int) {
+    operator fun getValue(receiver: Any?, property: KProperty<*>): Int {
+        println(property.name)
+        return value
+    }
+
+    operator fun setValue(receiver: Any?, property: KProperty<*>, value: Int) {
+        println(property.name)
+        this.value = value
+    }
+}
+
+private fun localDelegates() {
+    val localRead by LocalDelegate(40)
+    println(localRead)
+    var localWrite by LocalDelegate(41)
+    localWrite = 42
+    println(localWrite)
+}
+
 fun main() {
     val read = ::topRead
     println(read.name)
@@ -53,4 +73,6 @@ fun main() {
     println(extensionHost.read(extensionCell))
     extensionHost.write(extensionCell, 42)
     println(extensionCell.value)
+
+    localDelegates()
 }

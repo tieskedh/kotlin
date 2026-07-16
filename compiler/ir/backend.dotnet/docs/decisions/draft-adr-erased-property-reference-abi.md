@@ -15,6 +15,11 @@ name and `get`/optional `set` operations, and an immutable property reference is
 the corresponding function type. Bound receivers belong to the reference object and must be
 evaluated once when that object is created.
 
+A compiler-supplied property token for a local delegated property is deliberately weaker. There is
+no standalone local declaration that its `get`/`set` members may reflectively invoke, but
+`provideDelegate`, `getValue`, and `setValue` still receive a KProperty0/KMutableProperty0 value
+whose name and mutability are truthful.
+
 The mature targets split those roles in two main ways. JVM generates specialized property-
 reference subclasses because its reflection runtime already defines that class hierarchy. Native
 and Wasm lower a property reference to a wrapper containing ordinary getter and optional setter
@@ -60,6 +65,14 @@ assembly boundary. They are compiler/runtime contracts, not a Kotlin or C# progr
 An explicit Kotlin class implementing KPropertyN uses the same erased Get/Set and inherited
 FunctionN slots; it does not need, and is not assumed to expose, an exact execution capability.
 
+Following Native and Wasm, a local delegated-property token uses a separate private name-only
+wrapper. An immutable token implements KProperty0; a mutable token implements KMutableProperty0.
+`name`, the mutable marker, and rendering are available, while `Get`, `Invoke`, and `Set` throw
+`UnsupportedOperationException("Not supported for local property reference.")`. The wrapper has no
+getter/setter callable fields and retains System.Object identity equality. This avoids inventing a
+callable target or structural equality for a token whose only durable semantics are local delegate
+metadata. Cross-assembly construction uses two additional compiler-internal factory methods.
+
 Property equality, hashing, and rendering follow the Native/Wasm wrapper model. Two runtime-owned
 wrappers are equal only when they have the same concrete wrapper kind, name, getter reference,
 and—when mutable—setter reference. Getter and setter references use the structural function-
@@ -79,8 +92,9 @@ rather than expanding callable ABI as an incidental property-reference detail.
 
 - This decision does not reuse or extend the provisional export-selector grammar. Property
   references are Kotlin runtime values, not CLR facade-selection controls.
-- It does not define full reflection (`returnType`, parameters, owner, annotations) or local
-  delegated-property reflection.
+- It does not define full reflection (`returnType`, parameters, owner, annotations). Local
+  delegated-property support is intentionally limited to name, mutability, rendering, and the
+  mature-target unsupported-access behavior above.
 - It does not expose JVM-shaped `getter`/`setter` accessor objects. The common expect declaration
   and the Native, Wasm, and JS actual interfaces omit those members; JVM adds them as a
   target-specific reflection surface whose accessors are KFunctions and point back through
@@ -103,6 +117,10 @@ receiver and mutable-capture handling.
 Structural wrapper equality depends only on stable callable-reference identity and private stored
 components. It adds no KProperty member, public wrapper identity, or alternate callable shape.
 
+Local delegated tokens intentionally do not participate in that structural wrapper equality. They
+carry no getter/setter reference identity, and Native/Wasm supply no equality contract beyond the
+ordinary object behavior of their dedicated local wrapper classes.
+
 The cost is boxing at the erased wrapper boundary and a deliberately small reflection surface.
 Those are acceptable for the POC because typed access can be layered on without changing identity,
 whereas choosing a generic canonical interface now would make primitive variance identity
@@ -115,5 +133,6 @@ modern ILAsm and the .NET Framework 4.8 ILAsm selection, then executes both prod
 It covers immutable and mutable arities zero through two, direct Get/Set, inherited FunctionN
 invocation, primitive-result variance, one-time bound-receiver evaluation, cross-site and bound
 structural equality/hash behavior, rendering, a delegated member-extension property that requires
-KMutableProperty2, and explicit user implementations.
+KMutableProperty2, local delegated val/var tokens including `provideDelegate`, their unsupported
+Get/Invoke behavior, and explicit user implementations.
 The exact IL-text pin separately records the generated wrapper-construction and erased-call shapes.
