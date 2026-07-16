@@ -1,0 +1,85 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package org.jetbrains.kotlin.cli
+
+import org.jetbrains.kotlin.cli.common.CLICompiler
+import org.jetbrains.kotlin.cli.common.ExitCode
+import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
+import org.jetbrains.kotlin.cli.common.arguments.K2MetadataCompilerArguments
+import org.jetbrains.kotlin.cli.common.arguments.cliArgument
+import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler
+import org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler
+import org.jetbrains.kotlin.test.TestCaseWithTmpdir
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+import java.io.File
+
+class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
+    @Test
+    fun testConsumesExternalStdlibMetadataPair() {
+        val pairDirectory = File(tmpdir, "dotnet-stdlib-pair").apply { mkdirs() }
+        val metadataSource = File(pairDirectory, "stdlib.kt").apply {
+            writeText(
+                """
+                package kotlin.collections
+
+                public fun <T> Iterable<T>.first(): T = iterator().next()
+                """.trimIndent()
+            )
+        }
+        val metadataLibrary = File(pairDirectory, "Kotlin.Stdlib.klib")
+        compileInProcess(
+            KotlinMetadataCompiler(),
+            metadataSource.path,
+            K2MetadataCompilerArguments::allowKotlinPackage.cliArgument,
+            K2MetadataCompilerArguments::moduleName.cliArgument, "Kotlin.Stdlib",
+            K2MetadataCompilerArguments::destination.cliArgument, metadataLibrary.path,
+        )
+        File(metadataLibrary, "default/manifest").appendText(
+            "\ndotnet_assembly_name=Kotlin.Stdlib" +
+                    "\ndotnet_assembly_version=1.0.0.0" +
+                    "\ndotnet_assembly_culture=neutral" +
+                    "\ndotnet_assembly_public_key_token=null" +
+                    "\ndotnet_assembly_file=Kotlin.Stdlib.dll" +
+                    "\ndotnet_target=netframework\n"
+        )
+        // IL-only compilation checks that the bound physical companion exists; executable tests
+        // separately validate the real generated stdlib assembly.
+        File(pairDirectory, "Kotlin.Stdlib.dll").writeBytes(byteArrayOf(0))
+
+        val consumerSource = File(pairDirectory, "consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                public fun <T> consume(values: Iterable<T>): T = values.first()
+                """.trimIndent()
+            )
+        }
+        val outputFile = File(pairDirectory, "consumer.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Consumer",
+            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
+        )
+
+        val il = outputFile.readText()
+        assertTrue(
+            "call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<!!0>" in il,
+        ) { "Expected a generic call through the external stdlib assembly:\n$il" }
+        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il) {
+            "The external stdlib implementation must not be regenerated in the consumer:\n$il"
+        }
+    }
+
+    private fun compileInProcess(compiler: CLICompiler<*>, vararg args: String) {
+        val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(compiler, args.toList())
+        if (exitCode != ExitCode.OK) error("Failed to compile: ${args.joinToString(" ")}\nOutput:\n$output")
+    }
+}
