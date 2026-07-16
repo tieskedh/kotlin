@@ -1,8 +1,8 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(array content operations complete; explicit CLR callable boundary, nullability, and defaults
-implemented).
+(array content operations complete; explicit CLR callable boundary, nullability, defaults, and
+immutable callable-provenance invocation implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -25,11 +25,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exact negative-array-size identity (`2448c404c`), shallow array-content equality (`359d01490`),
   recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
   by the stringification slice, first explicit callable-factory export, callable-parameter
-  adapters, nullable export metadata, and default-argument export continuation described below.
+  adapters, nullable export metadata, default-argument export continuation, and immutable
+  callable-provenance exact invocation described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **486 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **488 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **15 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -712,15 +713,26 @@ session state, process, and a curated task menu. Keep both files updated as you 
   FunctionN discover that typed member across assemblies. It is metadata-public for assembly
   access, but is not a Kotlin source or storage ABI. Call sites with a complete logical shape
   evaluate receiver/arguments once, use a closed-interface `isinst`, call without value boxing on
-  a hit, and otherwise use erased Invoke. This naturally preserves older-module and explicit-user
-  implementations. Reference variance can hit through CLR generic variance; value-type variance
-  misses and falls back. Unit remains erased because CLR void cannot close the generic result.
+  a hit, and otherwise use erased Invoke. The call-site-shaped probe is no longer treated as the
+  only possible typed capability. When an immutable local initializer chain retains the generated
+  callable's original shape, a second guarded probe invokes that interface and performs only legal
+  widenings; `(Int) -> Int` viewed as `(Int) -> Any` therefore keeps its primitive argument and
+  boxes only the result. Discarded non-Unit calls use the same path. CLR-compatible reference
+  variance needs no second probe. Mutable locals, parameters, fields, and returns lack this local
+  provenance and retain the erased fallback, as do older-module and explicit-user implementations
+  that fail every `isinst`. Unit remains erased because CLR void cannot close the generic result.
   `callableexact_s1` assembled exact, fallback, reference-variant, and value-variant cases with
   modern and Framework ILAsm and ran all four runtime pairings. Goldens cover ordinary, capture,
   reference, local-function, and array-initializer contexts; CoreCLR coverage additionally pins
   parameter/open-generic calls, nullable primitives, variance, captures, bound references, Unit,
-  explicit fallback, and receiver/argument/invocation order. Delegate projection remains a
-  separate export layer; the boundary audit follows below.
+  explicit fallback, and receiver/argument/invocation order. The new
+  `ilText/callableInvocationProvenance.kt` pin separately covers exact primitive calls, primitive
+  result widening, parameter widening, immutable alias chains, function references, mutable and
+  parameter boundaries, and user implementations. Raw probe `callable_capability_s1` proved that
+  a partial typed-argument interface could remove argument boxing across provenance-free widened
+  result boundaries on both runtimes, but that additional metadata-public execution ABI remains
+  deferred until cross-boundary measurements justify its member and code-size cost. Delegate
+  projection remains a separate export layer; the boundary audit follows below.
 - The explicit CLR export boundary is compiler configuration, not a Kotlin annotation or automatic
   whole-module policy: repeatable `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one
   public, non-generic top-level function with at least one Function0/1/2 parameter or

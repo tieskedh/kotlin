@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.IrVariable
 import org.jetbrains.kotlin.ir.expressions.IrCall
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
@@ -23,6 +24,7 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
@@ -659,6 +661,15 @@ internal class DotNetIlExpressionCodegen(
         return resolved.returnType
     }
 
+    /** Uses the same typed callable capability in statement position, then discards its result. */
+    fun tryEmitExactCallableCallForDiscard(call: IrCall): Boolean {
+        if (call.type.isUnit()) return false
+        val logicalResultType = typeMapper.toDotNetIlValueType(call.type) ?: return false
+        if (!emitExactCallableCallOrNull(call, logicalResultType)) return false
+        methodContext.emit("pop", pops = 1)
+        return true
+    }
+
     /**
      * Resolves both the member-reference token and its substituted value signature. Keeping this
      * separate from instruction emission lets [mappedNaturalType] use exactly the same generic
@@ -1185,11 +1196,16 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Calls the optional typed capability of a Kotlin FunctionN when the receiver provides the
-     * exact static shape, otherwise falls back to the stable object-shaped Invoke slot. The
-     * receiver and every argument are evaluated once into locals before the runtime test, so
-     * both branches preserve source order and side effects. An older module or an explicit user
-     * implementation simply fails `isinst` and takes the erased path.
+     * Calls an optional typed capability of a Kotlin FunctionN, otherwise falls back to the
+     * stable object-shaped Invoke slot. The call-site shape is always tried first. For an
+     * immutable local alias, the initializer chain can retain a narrower source function type
+     * after Kotlin variance widened the local's view; that original shape is tried second and
+     * its arguments/result are widened explicitly. This recovers typed invocation for cases
+     * such as `(Int) -> Int` stored as `(Int) -> Any` without inventing another runtime ABI.
+     *
+     * The receiver and every argument are evaluated once into locals before any runtime test,
+     * so every branch preserves source order and side effects. An older module or an explicit
+     * user implementation simply fails every `isinst` and takes the erased path.
      */
     private fun emitExactCallableCallOrNull(call: IrCall, expectedType: DotNetIlValueType): Boolean {
         if (!call.symbol.owner.isDotNetErasedCallableInvoke()) return false
@@ -1222,7 +1238,18 @@ internal class DotNetIlExpressionCodegen(
         }
         val resultType = logicalTypes.last()
         if (resultType != expectedType && !resultType.isDotNetAssignableTo(expectedType)) return false
-        val exactType = DotNetRuntimeTypes.exactFunctionType(logicalTypes) ?: return false
+        val callSiteShape = exactCallableInvocationShapeOrNull(logicalTypes, logicalTypes) ?: return false
+        val invocationShapes = mutableListOf(callSiteShape)
+        receiver.callableProvenanceTypeOrNull(arity)
+            ?.dotNetExactCallableLogicalTypesOrNull(arity)
+            ?.toDotNetIlValueTypesOrNull()
+            ?.let { provenanceTypes -> exactCallableInvocationShapeOrNull(logicalTypes, provenanceTypes) }
+            ?.takeUnless { provenanceShape ->
+                invocationShapes.any { existingShape ->
+                    provenanceShape.exactType.isDotNetAssignableTo(existingShape.exactType)
+                }
+            }
+            ?.let(invocationShapes::add)
         val erasedReceiverType = DotNetRuntimeTypes.fixedFunctionType(arity)
 
         emitExpression(receiver, erasedReceiverType)
@@ -1233,25 +1260,47 @@ internal class DotNetIlExpressionCodegen(
             spillToSyntheticLocal(parameterType, "<callableArgument>")
         }
 
-        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
-        methodContext.emit("isinst ${exactType.nameInSignature}", pops = 1, pushes = 1)
-        val exactReceiverSlot = spillToSyntheticLocal(exactType, "<exactCallable>")
         val fallbackLabel = methodContext.nextLabel("callableErasedFallback")
         val joinLabel = methodContext.nextLabel("callableExactEnd")
-        methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
-        methodContext.emitBranch("brfalse", fallbackLabel, pops = 1)
+        var resultSlot: DotNetIlSlot.Local? = null
+        invocationShapes.forEachIndexed { shapeIndex, shape ->
+            methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+            methodContext.emit("isinst ${shape.exactType.nameInSignature}", pops = 1, pushes = 1)
+            val exactReceiverSlot = spillToSyntheticLocal(shape.exactType, "<exactCallable>")
+            if (resultSlot == null) {
+                resultSlot = methodContext.declareSyntheticLocal(resultType, "<callableResult>")
+            }
+            val nextShapeLabel = if (shapeIndex == invocationShapes.lastIndex) {
+                fallbackLabel
+            } else {
+                methodContext.nextLabel("callableExactShapeFallback")
+            }
+            methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
+            methodContext.emitBranch("brfalse", nextShapeLabel, pops = 1)
 
-        methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
-        argumentSlots.forEach { slot ->
-            methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+            methodContext.emit(loadLocalInstruction(exactReceiverSlot.index), pushes = 1)
+            argumentSlots.forEachIndexed { index, slot ->
+                methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+                shape.argumentCoercions[index]?.let { instruction ->
+                    methodContext.emit(instruction, pops = 1, pushes = 1)
+                }
+            }
+            methodContext.emit(
+                DotNetRuntimeTypes.exactInvokeCallInstruction(shape.exactType),
+                pops = arity + 1,
+                pushes = 1,
+            )
+            shape.resultCoercion?.let { instruction ->
+                methodContext.emit(instruction, pops = 1, pushes = 1)
+            }
+            methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+            methodContext.emitGoto(joinLabel)
+            if (nextShapeLabel != fallbackLabel) {
+                methodContext.emitLabel(nextShapeLabel)
+            }
         }
-        methodContext.emit(
-            DotNetRuntimeTypes.exactInvokeCallInstruction(exactType),
-            pops = arity + 1,
-            pushes = 1,
-        )
-        val resultSlot = spillToSyntheticLocal(resultType, "<callableResult>")
-        methodContext.emitGoto(joinLabel)
+        val callableResultSlot = resultSlot
+            ?: error("Internal .NET backend error: exact invocation has no result slot")
 
         methodContext.emitLabel(fallbackLabel)
         methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
@@ -1273,12 +1322,95 @@ internal class DotNetIlExpressionCodegen(
             pushes = 1,
         )
         emitErasedCallableObjectAs(resultType)
-        methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+        methodContext.emit(storeLocalInstruction(callableResultSlot.index), pops = 1)
 
         methodContext.emitLabel(joinLabel)
-        methodContext.emit(loadLocalInstruction(resultSlot.index), pushes = 1)
+        methodContext.emit(loadLocalInstruction(callableResultSlot.index), pushes = 1)
         return true
     }
+
+    private fun exactCallableInvocationShapeOrNull(
+        callSiteTypes: List<DotNetIlValueType>,
+        capabilityTypes: List<DotNetIlValueType>,
+    ): DotNetExactCallableInvocationShape? {
+        if (callSiteTypes.size != capabilityTypes.size) return null
+        val exactType = DotNetRuntimeTypes.exactFunctionType(capabilityTypes) ?: return null
+        val arity = capabilityTypes.size - 1
+        val argumentCoercions = (0 until arity).map { index ->
+            val coercion = wideningCoercionOrNull(callSiteTypes[index], capabilityTypes[index]) ?: return null
+            coercion.instruction
+        }
+        val resultCoercion = wideningCoercionOrNull(capabilityTypes.last(), callSiteTypes.last()) ?: return null
+        return DotNetExactCallableInvocationShape(exactType, argumentCoercions, resultCoercion.instruction)
+    }
+
+    private fun List<IrType>.toDotNetIlValueTypesOrNull(): List<DotNetIlValueType>? = map { type ->
+        typeMapper.toDotNetIlValueType(type) ?: return null
+    }
+
+    /**
+     * `null` means the widening is impossible; a present wrapper may contain no instruction for
+     * an assignable CLR shape. Keeping those cases distinct lets a candidate exact interface be
+     * rejected before any IL is emitted.
+     */
+    private fun wideningCoercionOrNull(
+        from: DotNetIlValueType,
+        to: DotNetIlValueType,
+    ): DotNetOptionalInstruction? = when {
+        from.isDotNetAssignableTo(to) -> DotNetOptionalInstruction(null)
+        else -> dotNetWideningCoercionOrNull(from, to)?.let(::DotNetOptionalInstruction)
+    }
+
+    /** The deepest fixed FunctionN/KFunctionN type retained by an immutable initializer chain. */
+    private fun IrExpression.callableProvenanceTypeOrNull(
+        arity: Int,
+        visitedVariables: MutableSet<IrVariable> = hashSetOf(),
+    ): IrSimpleType? {
+        val localCandidate = (type as? IrSimpleType)?.takeIf { candidate ->
+            candidate.dotNetCallableArityOrNull() == arity
+        }
+        val nested = when (this) {
+            is IrGetValue -> {
+                val variable = symbol.owner as? IrVariable
+                if (variable == null || variable.isVar || !visitedVariables.add(variable)) null
+                else variable.initializer?.callableProvenanceTypeOrNull(arity, visitedVariables)
+            }
+            is IrTypeOperatorCall -> argument.callableProvenanceTypeOrNull(arity, visitedVariables)
+            else -> null
+        }
+        return nested ?: localCandidate
+    }
+
+    private fun IrSimpleType.dotNetCallableArityOrNull(): Int? {
+        val irClass = (classifier as? IrClassSymbol)?.owner ?: return null
+        return irClass.dotNetFixedFunctionArityOrNull() ?: irClass.dotNetFixedKFunctionArityOrNull()
+    }
+
+    private fun IrSimpleType.dotNetExactCallableLogicalTypesOrNull(arity: Int): List<IrType>? {
+        val receiverClass = (classifier as? IrClassSymbol)?.owner ?: return null
+        if (dotNetCallableArityOrNull() != arity || arguments.size != arity + 1) return null
+        val logicalTypes = arguments.map { argument ->
+            (argument as? IrTypeProjection)?.type ?: return null
+        }
+        if (logicalTypes.any { type ->
+                val classifier = (type as? IrSimpleType)?.classifier
+                classifier is IrTypeParameterSymbol && classifier.owner.parent == receiverClass
+            }
+        ) {
+            return null
+        }
+        return logicalTypes
+    }
+
+    private data class DotNetExactCallableInvocationShape(
+        val exactType: DotNetIlValueType.GenericInstance,
+        val argumentCoercions: List<String?>,
+        val resultCoercion: String?,
+    )
+
+    private data class DotNetOptionalInstruction(
+        val instruction: String?,
+    )
 
     /** Narrows an erased callable result from object to the logical Kotlin call result type. */
     private fun emitErasedCallableObjectAs(expectedType: DotNetIlValueType) {
