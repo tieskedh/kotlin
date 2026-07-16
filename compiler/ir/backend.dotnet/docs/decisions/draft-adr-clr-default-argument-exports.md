@@ -21,9 +21,10 @@ C#. It also must not change the canonical Kotlin method or callable ABI.
 
 ## Decision
 
-An explicit `-Xdotnet-export` keeps its full typed Func/Action facade method. When the selected
-Kotlin function has a contiguous suffix of parameters with source defaults, the compiler also
-emits one ordinary CLR overload for each progressively omitted trailing parameter.
+An explicit `-Xdotnet-export` keeps its full facade method. Ordinary positions retain their mapped
+CLR types, while Function0/1/2 positions use typed Func/Action shapes. When the selected Kotlin
+function has a contiguous suffix of parameters with source defaults, the compiler also emits one
+ordinary CLR overload for each progressively omitted trailing parameter.
 
 Every shorter overload:
 
@@ -84,6 +85,6 @@ collision diagnostic.
 
 - an opt-in policy for caller-embedded CLR constants and its binary-versioning consequences;
 - named omission of non-trailing Kotlin defaults;
-- default arguments on broader export kinds once `-Xdotnet-export` is no longer callable-specific;
+- default arguments on future member, property, constructor, or class export kinds;
   and
 - generic and suspend exports, which remain outside the current explicit boundary.

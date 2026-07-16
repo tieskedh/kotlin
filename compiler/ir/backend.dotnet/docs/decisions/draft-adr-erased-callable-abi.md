@@ -205,8 +205,9 @@ An upstream-quality design needs three distinct layers:
    projections, such as generated `Func`/`Action` adapters or typed facade members. Those
    projections do not participate in Kotlin subtype conversion and may allocate wrappers.
 
-The non-generic top-level Function0/1/2 parameter/return subset of layer 3 is implemented below,
-including explicit CLR nullability metadata. Broader export selection remains open. Performance
+The non-generic top-level function subset of layer 3 is implemented below, including ordinary
+functions, Function0/1/2 adaptation, explicit CLR nullability metadata, and Kotlin-default
+overloads. Overload-aware selection and non-function declarations remain open. Performance
 validation of layer 2 and representative evidence for the remaining layer-3 directions are
 requirements for promoting this draft rather than optional post-promotion work.
 
@@ -220,7 +221,7 @@ callable references, nor foreign-language export projections. Those operations m
 object because they are not Kotlin function-type upcasts. A projected delegate is not required to
 be reference-identical to the canonical Kotlin callable it wraps.
 
-## Explicit CLR delegate export boundary
+## Explicit CLR function export boundary
 
 The POC now has a bounded owner for Kotlin-to-CLR projection. Repeatable compiler configuration
 uses this spelling:
@@ -230,16 +231,24 @@ uses this spelling:
 ```
 
 It deliberately is not a Kotlin source annotation and does not export every public declaration.
-One mapping must select exactly one public, non-generic top-level function with at least one
-Function0/1/2 parameter or return. The original Kotlin method and its FunctionN signature remain
-unchanged. The compiler adds a user-named static method to that file's existing facade, replacing
-only callable positions with typed Func/Action positions and leaving ordinary parameters and
-returns unchanged. Requiring the CLR name in configuration makes naming an explicit owner decision;
-overloaded Kotlin names and occupied exported signatures are errors rather than backend guesses.
+One mapping must select exactly one public, non-generic top-level function. The original Kotlin
+method remains unchanged. The compiler adds a user-named static method to that file's existing
+facade, retaining ordinary mapped parameter/return shapes and replacing only Function0/1/2
+positions with typed Func/Action shapes. An ordinary function with no callable position is still a
+valid explicit export; the alias supplies deliberate CLR naming, nullability metadata, and
+Kotlin-default overloads. Requiring the CLR name in configuration makes naming an explicit owner
+decision; overloaded Kotlin names and occupied exported signatures are errors rather than backend
+guesses.
+
+This follows the mature targets' semantic boundary: JVM naming/default annotations and Wasm/JS
+exports preserve the Kotlin declaration and add or expose an explicit host-facing shape. The
+external selector is POC-specific because this branch must evaluate the CLR boundary without
+adding a public Kotlin annotation prematurely.
 
 Generic or suspend functions, KFunction/suspend callable positions, callable markers without a
 fixed arity, and arities above two remain outside the slice. These gates keep an incomplete facade
-from exposing erased FunctionN in a position that claims to be CLR-friendly.
+from exposing erased FunctionN in a position that claims to be CLR-friendly. Member functions,
+properties, constructors, classes, and automatic whole-module export also remain out of scope.
 
 The implementation does not require another Kotlin callable representation. The generated facade
 passes the canonical FunctionN object to metadata-public
@@ -266,9 +275,10 @@ the stored original delegate object. A different closed shape may produce a new 
 Kotlin-to-CLR-to-Kotlin is not required to return the original Kotlin callable in this slice.
 
 Nullability comes from source IR at the explicit export boundary, never from erased `FunctionN`.
-The compiler synthesizes its reserved `System.Runtime.CompilerServices.NullableAttribute` shape
-into every module with an export and places an explicit attribute on each non-empty exported return
-and parameter type shape. Flags follow
+When at least one exported return or parameter has a non-empty nullable-reference shape, the
+compiler synthesizes its reserved `System.Runtime.CompilerServices.NullableAttribute` and emits an
+explicit attribute on that shape. A primitive-only export neither emits nor reserves the
+attribute. Flags follow
 [Roslyn's nullable metadata contract](https://github.com/dotnet/roslyn/blob/main/docs/features/nullable-metadata.md)
 in preorder (`0` oblivious, `1` non-null, `2` nullable), including nested generic arguments and
 array elements while skipping value types.
@@ -280,8 +290,8 @@ delegate invocation unchanged because the boundary adds no catch/translation. An
 exception translation belongs to the interop boundary, not the canonical callable or projection
 thunk.
 
-Trailing source defaults add shorter overloads to this explicit surface without changing callable
-identity. They call the existing masked `$default` dispatcher; the separate
+Trailing source defaults add shorter overloads to this explicit surface without changing the
+Kotlin declaration or callable identity. They call the existing masked `$default` dispatcher; the separate
 [CLR default-export draft ADR](draft-adr-clr-default-argument-exports.md) owns that decision and its
 deliberate rejection of implicit CLR optional constants.
 
@@ -298,7 +308,10 @@ Func/Action parameters and same-object echo round trips on modern CoreCLR and .N
 Probe `nullableexport_s1` assembled scalar and vector nullable-attribute blobs and exercised
 nullable Func/Action adapter round trips under both ILAsm/runtime flavors. CoreCLR's
 `NullabilityInfoContext` reconstructed the intended nested nullable states from compiler-produced
-facades.
+facades. `plainfunctionexport_s1` then assembled compiler-produced ordinary aliases with modern
+10.0.9 and .NET Framework 4.8 ILAsm; Roslyn 5.6.0 consumers executed primitive, nullable-reference,
+default-overload, and extension-receiver calls on both runtimes. Repository pins also prove that a
+primitive-only export does not reserve or synthesize `NullableAttribute`.
 
 ## Consequences
 
@@ -384,8 +397,9 @@ that the provenance-free benefit outweighs that ABI and code-size cost.
 The POC currently uses generated fields for captures and bound receivers and one invariant generic
 mutable-reference cell. Those concrete layouts are implementation evidence, not additional
   callable identities and not standardized by this ADR. This ADR does not decide KCallable metadata
-  beyond `name`, property references, reflective lookup/call APIs, suspend callables, broader export
-  selection, Unit exact execution, partial typed-argument capabilities, or the exact Kotlin
+  beyond `name`, property references, reflective lookup/call APIs, suspend callables, member/property
+  export, overload-aware export selection, Unit exact execution, partial typed-argument
+  capabilities, or the exact Kotlin
   metadata encoding. Those features must
   preserve the canonical ABI invariants above or explicitly revise this draft before they land.
 The POC's .NET Framework 4.8 compatibility is probe evidence for the candidate representation, not

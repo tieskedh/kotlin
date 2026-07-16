@@ -100,6 +100,12 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   }
 
   @Test
+  @TestMetadata("plainFunctionExportPrimitiveReserved.args")
+  public void testPlainFunctionExportPrimitiveReserved() {
+    run("plainFunctionExportPrimitiveReserved.args");
+  }
+
+  @Test
   @TestMetadata("printlnEscapedString.args")
   public void testPrintlnEscapedString() {
     run("printlnEscapedString.args");
