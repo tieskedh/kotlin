@@ -141,15 +141,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   It is metadata-public only because generated modules consume it across the runtime assembly
   boundary; it is neither a Kotlin source declaration nor a storage/interface identity. A
   statically shaped FunctionN call evaluates receiver and arguments once, probes the closed exact
-  interface, invokes it without argument/result boxing on a hit, and otherwise uses the stable
-  erased slot. Explicit user implementations and older modules therefore remain valid. CLR
-  reference variance may make a compatible exact probe succeed; widened value-type shapes miss
-  and fall back because CLR variance does not apply to value types. Unit stays erased because void
+  call-site interface, invokes it without argument/result boxing on a hit, and otherwise uses the
+  stable erased slot. When an immutable local's initializer chain retains a different original
+  FunctionN/KFunctionN shape, codegen may probe that exact interface second and apply only legal
+  argument/result widenings. Thus `(Int) -> Int` stored locally as `(Int) -> Any` invokes
+  `ExactFunction1<Int, Int>` and boxes only its result; a discarded non-Unit invocation uses the
+  same guarded path. The second probe is omitted when CLR reference variance already makes the
+  first probe sufficient. Mutable locals and parameter/field/return boundaries have no such
+  provenance and keep the erased fallback. Explicit user implementations and older modules also
+  remain valid because every optional path is guarded by `isinst`. Unit stays erased because void
   cannot close a generic result slot; do not invent a second Action-like capability casually.
   `callableexact_s1` assembled and ran identical, erased-only, reference-variant, and value-variant
-  cases with both ILAsm versions and all four runtime pairings. Repository pins cover ordinary,
-  capturing, bound, KFunction, local, array-initializer, nullable, generic, evaluation-order, and
-  explicit-fallback shapes on CoreCLR. This is an execution capability only: never use it in
+  cases with both ILAsm versions and all four runtime pairings. `callable_capability_s1` separately
+  proved on both runtimes that a partial `TypedArgumentsFunction1<Int>` interface could avoid
+  argument boxing across a provenance-free widened-result boundary. It remains deferred: that
+  metadata-public runtime interface and member would add an execution ABI and code-size cost, so
+  local IR provenance is used first and cross-boundary evidence must justify the broader shape.
+  Repository pins cover ordinary, capturing, bound, KFunction, local, array-initializer, nullable,
+  generic, evaluation-order, explicit-fallback, and immutable-provenance shapes on CoreCLR;
+  `ilText/callableInvocationProvenance.kt` distinguishes exact primitives, primitive-result
+  widening, parameter widening, mutable/boundary fallback, and explicit user implementations.
+  This is an execution capability only: never use it in
   fields, parameters, returns, ordinary Kotlin subtype conversion, or as a CLR delegate identity.
   The explicit export helper may probe the same-object capability solely to bind a typed Func;
   the generated facade exposes the delegate, never ExactFunctionN.

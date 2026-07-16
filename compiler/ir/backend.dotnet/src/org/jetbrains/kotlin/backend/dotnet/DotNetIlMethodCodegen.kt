@@ -697,6 +697,7 @@ internal class DotNetIlMethodCodegen(
     }
 
     private fun emitCallStatement(call: IrCall) {
+        if (expressionCodegen.tryEmitExactCallableCallForDiscard(call)) return
         if (expressionCodegen.emitCall(call) is DotNetIlReturnType.Value) {
             methodContext.emit("pop", pops = 1)
         }
