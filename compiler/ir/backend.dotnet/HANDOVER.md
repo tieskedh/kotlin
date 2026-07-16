@@ -6,8 +6,8 @@ defaults, overload-aware function selection, immutable callable-provenance invoc
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
 continuation implemented; local delegated-property tokens are committed and explicit user
-Iterator bridges are committed and open invariant array iterators are implemented at the current
-working tip; bodyless iterator subinterfaces are implemented in the current feature slice).
+Iterator bridges, open invariant array iterators, and bodyless iterator subinterfaces are committed;
+Kotlin-owned Iterable identity/bridges are implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -37,13 +37,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   structural callable-reference identity (`d3433c768`), and the Function3/KMutableProperty2
   continuation (`ef279c65e`), followed by local delegated-property tokens (`417bd3c79`) and
   explicit user Iterator bridges (`e8cc1fc6d`), open invariant array iterators (`801c307a7`), and
-  bodyless iterator subinterfaces at the current working tip.
+  bodyless iterator subinterfaces (`f2ca42e73`), followed by Kotlin-owned Iterable identity and
+  compiler-generated bridges in the current feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **498 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Last full DotNet suite at `f2ca42e73`: **498 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **21 tests, 0 failures, 0 errors, 0 skips**.
+  The Iterable slice adds one ilText and one box file (four generated parser tests); its focused
+  six-test gate, including the existing rejection file, is 6/0/0/0. The next full count is expected
+  to be 502; no fresh full suite was run because the user explicitly did not require one.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -730,6 +734,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   would create a second typed execution contract; interface bodies remain outside the Framework
   4.8 floor. A subinterface's own generic variance remains CLR/reference-only, but widening its
   value-shaped instance to the erased base Iterator remains identity-preserving.
+  Kotlin-owned `Iterable<T>` now follows the same invariant through the non-generic runtime
+  `Kotlin.Collections.Iterable { Iterator GetIterator() }` identity. The former Iterator-specific
+  lowering is a table-driven erased-collection bridge policy: ordinary classes retain typed
+  `iterator()` and receive a private explicit GetIterator bridge; base ownership, abstract
+  obligation deferral, bodyless subinterfaces, fake-override calls, and redeclaration rejection
+  match Iterator. Real `for` loops over user-defined iterables execute through erased
+  GetIterator/HasNext/Next. Primitive and reference covariance, including
+  `IterableView<Int> -> Iterable<Any>`, preserves the producer object without a wrapper. That
+  identity assertion exposed a general codegen omission: reference smartcasts may narrow a local
+  read while the CLR slot retains its wider declared type. Bare reads and explicit IR smartcasts
+  now emit checked `castclass`, including instantiated generic interface targets. Imported CLR
+  generic interfaces and IEnumerable/IEnumerator remain a separate deferred interop problem; no
+  foreign-view or BCL mapping was introduced.
   Primitive-specialized subclasses, collections, and CLR enumeration adapters remain rejected. The
   handwritten runtime ArrayIterator is now explicitly classified as
   bootstrap packaging: a future real .NET stdlib should own its ordinary Kotlin implementation,
@@ -1023,15 +1040,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Validate iterator bridges across compiled Kotlin modules when that boundary exists.** The
+1. **Create the first target-stdlib build and move the logical array iterator into it.** Keep the
+   erased Iterator/Iterable identities in Kotlin.Runtime and compile the stdlib implementation
+   through the same ordinary class bridge path; remove the handwritten runtime producer only once
+   every compiled program is supplied the stdlib assembly. Audit the existing injected
+   `DotNetStdlibSource` declarations before choosing the packaging boundary.
+2. **Validate iteration bridges across compiled Kotlin modules when that boundary exists.** The
    erased runtime identity is cross-assembly, but this POC does not yet consume Kotlin metadata
    from a separately produced CLR module; do not claim source-level cross-module validation.
-2. **Move the logical array iterator into the target stdlib when that build exists.** Keep the
-   erased interface identity in Kotlin.Runtime and compile the stdlib implementation through the
-   same ordinary user-class bridge path; do not add another handwritten producer model.
-3. **Extract reusable erased-interface bridge policy before adding a second erased interface
-   family.** Use that family's actual member/variance requirements as the second data point; do not
-   turn the Iterator-specific lowering into an untested abstraction in advance.
+3. **Grow collection abstractions only from concrete stdlib needs.** Reuse the now-tested
+   table-driven erased-interface bridge policy, but do not map imported CLR collection interfaces
+   or invent foreign variance views as part of Kotlin-owned stdlib bootstrapping.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

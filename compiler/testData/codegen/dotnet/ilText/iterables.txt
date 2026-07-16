@@ -1,0 +1,340 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'iterables' {}
+.module 'main-iterables.il'
+
+.class public auto ansi sealed beforefieldinit 'CountingIterator'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .field private int32 'limit'
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'limit') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'CountingIterator'::'limit'
+    ldarg.0
+    ldc.i4 0
+    stfld int32 'CountingIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_limit'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'CountingIterator'::'limit'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'CountingIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'CountingIterator'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 'CountingIterator'::'get_value'()
+    ldarg.0
+    call instance int32 'CountingIterator'::'get_limit'()
+    clt
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'next'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 '<unary>'
+    )
+    ldarg.0
+    call instance int32 'CountingIterator'::'get_value'()
+    stloc.0
+    ldarg.0
+    ldloc.0
+    ldc.i4.1
+    add
+    call instance void 'CountingIterator'::'set_value'(int32)
+    ldloc.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'CountingIterator'::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'CountingIterator'::'next'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .property instance int32 'limit'()
+  {
+    .get instance int32 'CountingIterator'::'get_limit'()
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'CountingIterator'::'get_value'()
+    .set instance void 'CountingIterator'::'set_value'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CountingIterable'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterable'
+{
+  .field private int32 'limit'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'limit') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'CountingIterable'::'limit'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_limit'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'CountingIterable'::'limit'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'CountingIterable'::'get_limit'()
+    newobj instance void 'CountingIterator'::.ctor(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<IterableIteratorBridge>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'CountingIterable'::'iterator'()
+    ret
+  }
+  .property instance int32 'limit'()
+  {
+    .get instance int32 'CountingIterable'::'get_limit'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'StringIterator'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .field private string 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'StringIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'StringIterator'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'next'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'StringIterator'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'StringIterator'::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'StringIterator'::'next'()
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'StringIterator'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'IterableView`1'<+ 'T'>
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterable'
+{
+  .method public hidebysig newslot abstract virtual instance string 'label'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ViewedIterable'
+       extends [mscorlib]System.Object
+       implements class 'IterableView`1'<string>
+{
+  .field private string 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'ViewedIterable'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'ViewedIterable'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'ViewedIterable'::'get_value'()
+    newobj instance void 'StringIterator'::.ctor(string)
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'label'() cil managed
+  {
+    .maxstack 1
+    ldstr "view"
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<IterableIteratorBridge>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'ViewedIterable'::'iterator'()
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'ViewedIterable'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'iterablesKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iteratorFrom'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iteratorThroughView'(class 'IterableView`1'<string> 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    ret
+  }
+  .method public hidebysig static int32 'sum'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'values') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] int32 'result',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<iterator>',
+      [2] int32 'value'
+    )
+    ldc.i4 0
+    stloc.0
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    stloc.1
+IL_whileCond_0:
+    ldloc.1
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    brfalse IL_whileEnd_1
+    ldloc.1
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+    ldloc.0
+    ldloc.2
+    add
+    stloc.0
+    br IL_whileCond_0
+IL_whileEnd_1:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'CountingIterable' 'values'
+    )
+    ldc.i4 3
+    newobj instance void 'CountingIterable'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterablesKt'::'iteratorFrom'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    unbox.any [mscorlib]System.Int32
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call int32 'iterablesKt'::'sum'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "viewed"
+    newobj instance void 'ViewedIterable'::.ctor(string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterablesKt'::'iteratorThroughView'(class 'IterableView`1'<string>)
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

@@ -62,6 +62,10 @@ interface RedeclaredHasNextIteratorView<T> : Iterator<T> {
     override fun hasNext(): Boolean
 }
 
+interface RedeclaredIterableView<T> : Iterable<T> {
+    override fun iterator(): Iterator<T>
+}
+
 class CustomIntIterator : IntIterator() {
     override fun hasNext(): Boolean = false
     override fun nextInt(): Int = 0

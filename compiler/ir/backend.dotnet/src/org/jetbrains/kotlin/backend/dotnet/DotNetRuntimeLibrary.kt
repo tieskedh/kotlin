@@ -499,6 +499,13 @@ internal object DotNetRuntimeLibrary {
             {
             }
           }
+
+          .class interface public abstract auto ansi Iterable
+          {
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+          }
         }
     """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText
 

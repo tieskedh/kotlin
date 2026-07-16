@@ -1,5 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetErasedCollectionContract
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetErasedCollectionContractOrNull
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -150,7 +152,7 @@ internal class DotNetIlIntrinsicMethods(
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
-            iteratorIntrinsics()
+            erasedCollectionIntrinsics()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -316,12 +318,15 @@ internal class DotNetIlIntrinsicMethods(
     }
 
     /**
-     * The logical Iterator<T> API and supported primitive-specialized iterator APIs all dispatch
-     * through the same erased runtime slots. Registering the primitive owners is necessary because
-     * their final `next()` bridge and specialized `nextX()` calls retain that static owner in IR.
+     * The logical Iterable<T>/Iterator<T> APIs and supported primitive-specialized iterator APIs
+     * dispatch through Kotlin-owned erased runtime slots. Registering the primitive owners is
+     * necessary because their final `next()` bridge and specialized `nextX()` calls retain that
+     * static owner in IR.
      */
-    private fun iteratorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+    private fun erasedCollectionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        val iterableFqn = FqName("kotlin.collections.Iterable")
         val iteratorFqn = FqName("kotlin.collections.Iterator")
+        add(Key(iterableFqn, null, "iterator", emptyList()) to DotNetIlIterableIteratorIntrinsic)
         add(Key(iteratorFqn, null, "hasNext", emptyList()) to DotNetIlIteratorHasNextIntrinsic)
         add(Key(iteratorFqn, null, "next", emptyList()) to DotNetIlIteratorNextIntrinsic)
         for (info in listOf(
@@ -559,22 +564,25 @@ internal class DotNetIlIntrinsicMethods(
             null -> null
         }?.let { return it }
 
-        // A module iterator subinterface inherits the erased runtime slots without redeclaring
-        // typed members. Calls arrive through its fake overrides, whose owner has no intrinsic
-        // registry key; route only that interface shape to the canonical erased operations.
+        // A module collection subinterface inherits erased runtime slots without redeclaring typed
+        // members. Calls arrive through fake overrides, whose owner has no registry key; route
+        // only those compiler-owned shapes to their canonical erased operations.
         val simpleFunction = function as? IrSimpleFunction ?: return null
         val owner = simpleFunction.parent as? IrClass ?: return null
-        if (
-            simpleFunction.isFakeOverride && owner.isInterface &&
-            simpleFunction.allOverridden().any { (it.parent as? IrClass)?.isDotNetIteratorBase == true }
-        ) {
-            return when (name) {
+        if (!simpleFunction.isFakeOverride || !owner.isInterface) return null
+        val erasedCollectionContract = simpleFunction.allOverridden().firstNotNullOfOrNull {
+            (it.parent as? IrClass)?.dotNetErasedCollectionContractOrNull
+        }
+        return when (erasedCollectionContract) {
+            DotNetErasedCollectionContract.ITERABLE ->
+                if (name == "iterator") DotNetIlIterableIteratorIntrinsic else null
+            DotNetErasedCollectionContract.ITERATOR -> when (name) {
                 "hasNext" -> DotNetIlIteratorHasNextIntrinsic
                 "next" -> DotNetIlIteratorNextIntrinsic
                 else -> null
             }
+            null -> null
         }
-        return null
     }
 
     data class Key(
@@ -990,6 +998,28 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
         codegen.emit(loadLocalInstruction(indexSlot.index), pushes = 1)
         codegen.emit(loadLocalInstruction(valueSlot.index), pushes = 1)
         codegen.emit(arrayType.storeElementInstruction, pops = 3)
+        return true
+    }
+}
+
+/** Kotlin Iterable.iterator -> the erased Kotlin.Runtime Iterable execution slot. */
+private object DotNetIlIterableIteratorIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetRuntimeTypes.iteratorType || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing iterable receiver for 'iterator'")
+        codegen.emitExpression(receiver, DotNetRuntimeTypes.iterableType)
+        codegen.emit(
+            "callvirt instance ${DotNetRuntimeTypes.iteratorType.nameInSignature} " +
+                    "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                    "${"Kotlin.Collections.Iterable".toIlIdentifier()}::${"GetIterator".toIlIdentifier()}()",
+            pops = 1,
+            pushes = 1,
+        )
         return true
     }
 }

@@ -3,7 +3,8 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
-import org.jetbrains.kotlin.backend.dotnet.lower.hasDotNetIteratorBridges
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetErasedCollectionContractOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.hasDotNetErasedCollectionBridges
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetDefaultParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
@@ -1273,19 +1274,21 @@ class DotNetIlEmitter(
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
             }
             // A class may implement any number of recursively declared module-local interfaces,
-            // plus the supported Kotlin.Runtime callable/property/iterator interfaces, next to its (at most one)
+            // plus the supported Kotlin.Runtime callable/property/collection interfaces, next to its (at most one)
             // base class; whether each module interface itself compiles is deliberately
             // NOT checked here — the render re-resolves the `implements` list every fixpoint
             // round, so an evicted interface cascades whole-class with a carried reason, exactly
             // like an evicted base class.
             for (superInterface in superClasses.filter { it.isInterface }) {
-                if (superInterface.isDotNetIteratorBase) {
+                val erasedCollectionContract = superInterface.dotNetErasedCollectionContractOrNull
+                if (erasedCollectionContract != null) {
                     if (
-                        !irClass.hasDotNetIteratorBridges &&
+                        !irClass.hasDotNetErasedCollectionBridges(erasedCollectionContract) &&
                         irClass.modality !in setOf(Modality.ABSTRACT, Modality.SEALED)
                     ) {
                         dotNetUnsupported(
-                            "class '$name' implements Iterator<T> without class-owned typed members " +
+                            "class '$name' implements ${erasedCollectionContract.kotlinName}<T> " +
+                                    "without class-owned typed members " +
                                     "from which the erased runtime bridges can be generated"
                         )
                     }
@@ -1396,7 +1399,7 @@ class DotNetIlEmitter(
      * Everything else stays rejected,
      * whole-interface: `fun interface` (no SAM-conversion model), local interfaces or interfaces
      * that do not have a supported named metadata parent,
-     * out-of-module super-interfaces other than the erased Kotlin.Runtime Iterator identity,
+     * out-of-module super-interfaces other than supported erased Kotlin.Runtime collection identities,
      * members WITH bodies — default methods and accessors with
      * bodies — (modern CoreCLR supports Default Interface Methods, but Framework 4.8 ILAsm
      * rejects their bodies, `dimprobe_s1`), private interface members, overrides of
@@ -1446,7 +1449,7 @@ class DotNetIlEmitter(
             if (superType.isAny()) continue
             val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                 ?: dotNetUnsupported("interface '$name' has an unsupported supertype")
-            if (superInterface.isDotNetIteratorBase) continue
+            if (superInterface.dotNetErasedCollectionContractOrNull != null) continue
             if (!superInterface.isInterface || superInterface !in moduleInterfaces) {
                 dotNetUnsupported(
                     "interface '$name' extends '${superInterface.diagnosticName()}', which is not an interface " +
@@ -1502,10 +1505,14 @@ class DotNetIlEmitter(
      */
     private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
         if (member.isFakeOverride) return
-        if (member.allOverridden().any { (it.parent as? IrClass)?.isDotNetIteratorBase == true }) {
+        val erasedCollectionContract = member.allOverridden().firstNotNullOfOrNull {
+            (it.parent as? IrClass)?.dotNetErasedCollectionContractOrNull
+        }
+        if (erasedCollectionContract != null) {
             dotNetUnsupported(
-                "$description of iterator subinterface '$interfaceName' redeclares the erased Iterator runtime slot; " +
-                    "typed iterator-interface redeclarations are not supported"
+                "$description of ${erasedCollectionContract.kotlinName} subinterface '$interfaceName' " +
+                        "redeclares an erased runtime slot; typed collection-interface redeclarations " +
+                        "are not supported"
             )
         }
         // Abstract generic interface slots are ordinary CLR generic virtual methods. The same

@@ -141,9 +141,10 @@ internal class DotNetIlExpressionCodegen(
         // widens it: `newobj Nullable<T>::.ctor` for `T -> T?`, `box` for `T -> Any?` and
         // `T? -> Any?` (the CLR collapses the latter to boxed-T-or-null, probe-verified,
         // boxprobe_s3). Instruction-free reference widenings just recurse at the natural type.
-        // Narrowings never coerce here — they exist only as explicit IMPLICIT_CAST/`!!` shapes
-        // (see emitTypeOperatorCall) — so anything else falls through to the per-producer
-        // assignability rejections below.
+        // Narrowings generally exist as explicit IMPLICIT_CAST/`!!` shapes (see
+        // emitTypeOperatorCall). A frontend-proven smartcast can instead narrow the type of a
+        // bare IrGetValue while its physical local retains the declared wider type; emitGetValue
+        // materializes that checked CLR view change.
         if (expression != null) {
             val naturalType = mappedNaturalType(expression)
             if (naturalType != null && naturalType != expectedType) {
@@ -400,7 +401,10 @@ internal class DotNetIlExpressionCodegen(
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
                 operandType.isDotNetAssignableTo(castType) -> emitExpression(expression.argument, operandType)
-                operandType.isDotNetReferenceShaped() && castType is DotNetIlValueType.UserClass -> {
+                // A frontend-proven reference smartcast may target either a non-generic class
+                // or an instantiated generic class/interface. Both are ordinary CLR reference
+                // view changes and therefore use the same checked instruction.
+                operandType.isDotNetReferenceShaped() && castType.isDotNetReferenceShaped() -> {
                     emitExpression(expression.argument, operandType)
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
@@ -1574,6 +1578,16 @@ internal class DotNetIlExpressionCodegen(
             ) {
                 emitLoadSlot(slot)
                 emitNullableUnwrapOrThrowNpe(slotType)
+                return
+            }
+            // A REFERENCE smartcast can likewise narrow a bare local read without an
+            // IrTypeOperatorCall. The frontend proof changes the IrGetValue type, but the CLR
+            // local necessarily keeps its declared wider type. A checked `castclass` is the
+            // verifier-visible form of that proof (and preserves Kotlin's failure mode if an
+            // unsound upstream smartcast ever reaches this backend).
+            if (slotType.isDotNetReferenceShaped() && expectedType.isDotNetReferenceShaped()) {
+                emitLoadSlot(slot)
+                methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
                 return
             }
             dotNetUnsupported(
