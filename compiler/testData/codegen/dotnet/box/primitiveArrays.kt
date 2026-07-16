@@ -92,8 +92,10 @@ private fun negativeLengthCatch(): String = try {
     "wrong-arithmetic"
 } catch (e: IllegalArgumentException) {
     "wrong-argument"
+} catch (e: IllegalStateException) {
+    "wrong-state"
 } catch (e: Exception) {
-    "caught"
+    if (e.message == null) "caught" else "wrong-message:${e.message}"
 }
 
 fun box(): String {

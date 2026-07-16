@@ -616,9 +616,9 @@ private fun emitGuardedArrayAllocation(
     codegen: DotNetIlExpressionCodegen,
 ) {
     // CLR newarr(-1) throws OverflowException, which is an ArithmeticException. Kotlin's
-    // negative-array-size failure is not arithmetic, so branch first and use the neutral
-    // System.Exception approximation documented in AGENTS.md. Keep the size on the stack
-    // across the test so the non-negative path feeds newarr without a synthetic local.
+    // negative-array-size failure is a RuntimeException instead, so branch first and construct
+    // the exact compiler-owned identity. Keep the size on the stack across the test so the
+    // non-negative path feeds newarr without a synthetic local.
     codegen.emitExpression(size, DotNetIlValueType.Int32)
     emitGuardedArrayAllocationFromStack(newArrayInstruction, codegen)
 }
@@ -635,7 +635,7 @@ private fun emitGuardedArrayAllocationFromStack(
     codegen.emitBranch("brfalse", nonNegativeLabel, pops = 1)
     codegen.emit("pop", pops = 1)
     codegen.emitParameterlessExceptionThrow(
-        exceptionTypeRef = "${CORE_LIB_REF}System.Exception",
+        exceptionTypeRef = DotNetRuntimeLibrary.negativeArraySizeExceptionTypeRef,
         valuePosition = true,
     )
     codegen.emitLabel(nonNegativeLabel)
