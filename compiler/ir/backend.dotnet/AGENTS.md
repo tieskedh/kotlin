@@ -84,11 +84,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   support and ordinary stdlib implementations, with CLR assemblies as the physical boundary):
   `Kotlin.Stdlib, Version=1.0.0.0, PublicKeyToken=null` is the second reserved unsigned ABI-1
   platform identity. `Kotlin.Runtime` retains language identities and compiler/runtime services;
-  `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementation is the
-  generic `Kotlin.Collections.ArrayIterator<T>`, compiled through the same class and erased
-  Iterator-bridge pipeline as user code. The implementation is private to Kotlin source but
-  metadata-public because generated user assemblies construct it across the boundary; its name is
-  therefore a compiler/stdlib ABI detail, not a Kotlin source API. Because standalone Kotlin
+  `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementations are the
+  generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
+  class and erased Iterator/Iterable bridge pipelines as user code. The implementations are
+  private to Kotlin source but metadata-public because generated user assemblies construct them
+  across the boundary; their names are therefore compiler/stdlib ABI details, not Kotlin source
+  APIs. Because standalone Kotlin
   library compilation/metadata import does not exist yet, injected stdlib source participates in
   the same frontend/lowering run and `DotNetIlEmitter` partitions the lowered module into USER and
   STDLIB ownership scopes. Every assembled executable receives both platform dlls; raw IL-only
@@ -387,6 +388,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   identity without a wrapper. Reference smartcasts proven by the frontend are materialized as
   checked `castclass` view changes when the CLR local keeps its wider declared type; instantiated
   generic interface targets are ordinary reference smartcast targets, not a special Iterable rule.
+  The common stdlib's array `asIterable()` surface now constructs the ordinary generic
+  `[Kotlin.Stdlib]Kotlin.Collections.ArrayIterable<T>` for the five established primitive vectors,
+  concrete reference arrays, and open invariant `Array<T>`. Each view stores the original exact
+  vector, so later mutations are observed, and each `iterator()` constructs a fresh stdlib
+  `ArrayIterator<T>` through ordinary compiled Kotlin code. The view preserves erased Iterable
+  covariance identity. Unlike the common implementation, an empty array currently gets the same
+  view object instead of the `emptyList()` singleton; that optimization has no specified semantic
+  effect and must wait for a coherent List ABI rather than inventing one here.
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector to
   `ArrayIterator<!n>`/`ArrayIterator<!!n>`; erased Next narrows through
   `unbox.any !n`/`!!n`. The array mapper still rejects `Array<T?>`, projections, concrete

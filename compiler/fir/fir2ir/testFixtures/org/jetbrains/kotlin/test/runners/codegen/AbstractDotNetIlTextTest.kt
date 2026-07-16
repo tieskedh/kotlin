@@ -352,6 +352,9 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'",
             "'<IteratorHasNextBridge>'",
             "'<IteratorNextBridge>'",
+            ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'<'T'>",
+            "newobj instance void class 'Kotlin.Collections.ArrayIterator`1'<!0>::.ctor(!0[])",
+            "'<IterableIteratorBridge>'",
         )
         requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
             assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }

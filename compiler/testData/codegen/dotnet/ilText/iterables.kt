@@ -30,6 +30,8 @@ fun iteratorFrom(values: Iterable<Int>): Iterator<Int> = values.iterator()
 
 fun iteratorThroughView(values: IterableView<String>): Iterator<String> = values.iterator()
 
+fun <T> iterableFromOpenArray(values: Array<T>): Iterable<T> = values.asIterable()
+
 fun sum(values: Iterable<Int>): Int {
     var result = 0
     for (value in values) result = result + value
@@ -41,4 +43,11 @@ fun main() {
     println(iteratorFrom(values).next())
     println(sum(values))
     println(iteratorThroughView(ViewedIterable("viewed")).next())
+    val words = arrayOf("before")
+    val wordView = words.asIterable()
+    words[0] = "after"
+    println(wordView.iterator().next())
+    println(sum(intArrayOf(1, 2, 3).asIterable()))
+    println(iterableFromOpenArray(arrayOf("open")).iterator().next())
+    println(emptyArray<String>().asIterable().iterator().hasNext())
 }

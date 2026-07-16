@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'iterables' {}
 .module 'main-iterables.il'
 
@@ -273,6 +277,13 @@
     callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
     ret
   }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'iterableFromOpenArray'<'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'<!!0>::.ctor(!0[])
+    ret
+  }
   .method public hidebysig static int32 'sum'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'values') cil managed
   {
     .maxstack 2
@@ -308,7 +319,18 @@ IL_whileEnd_1:
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] class 'CountingIterable' 'values'
+      [0] class 'CountingIterable' 'values',
+      [1] string[] 'words',
+      [2] string[] '<arrayOf>',
+      [3] string '<arrayElement>',
+      [4] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'wordView',
+      [5] string[] '<arraySet>',
+      [6] int32 '<arrayIndex>',
+      [7] string '<arrayValue>',
+      [8] int32[] '<arrayOf>@8',
+      [9] int32 '<arrayElement>@9',
+      [10] string[] '<arrayOf>@10',
+      [11] string '<arrayElement>@11'
     )
     ldc.i4 3
     newobj instance void 'CountingIterable'::.ctor(int32)
@@ -334,6 +356,91 @@ IL_whileEnd_1:
     call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterablesKt'::'iteratorThroughView'(class 'IterableView`1'<string>)
     callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
     castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newarr string
+    stloc.2
+    ldstr "before"
+    stloc.3
+    ldloc.2
+    ldc.i4 0
+    ldloc.3
+    stelem string
+    ldloc.2
+    stloc.1
+    ldloc.1
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'<string>::.ctor(!0[])
+    stloc 4
+    ldloc.1
+    stloc 5
+    ldc.i4 0
+    stloc 6
+    ldstr "after"
+    stloc 7
+    ldloc 5
+    ldloc 6
+    ldloc 7
+    stelem string
+    ldloc 4
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 3
+    newarr int32
+    stloc 8
+    ldc.i4 1
+    stloc 9
+    ldloc 8
+    ldc.i4 0
+    ldloc 9
+    stelem.i4
+    ldc.i4 2
+    stloc 9
+    ldloc 8
+    ldc.i4 1
+    ldloc 9
+    stelem.i4
+    ldc.i4 3
+    stloc 9
+    ldloc 8
+    ldc.i4 2
+    ldloc 9
+    stelem.i4
+    ldloc 8
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'<int32>::.ctor(!0[])
+    call int32 'iterablesKt'::'sum'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newarr string
+    stloc 10
+    ldstr "open"
+    stloc 11
+    ldloc 10
+    ldc.i4 0
+    ldloc 11
+    stelem string
+    ldloc 10
+    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'iterablesKt'::'iterableFromOpenArray'<string>(!!0[])
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4.0
+    newarr string
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'<string>::.ctor(!0[])
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

@@ -274,7 +274,8 @@ class DotNetIlEmitter(
             }
             val aritySuffix = irClass.typeParameters.size.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
             val baseName = when {
-                irClass.isDotNetStdlibImplementation -> DotNetStdlibLibrary.ARRAY_ITERATOR_IL_NAME.removeSuffix("`1")
+                irClass.isDotNetStdlibImplementation ->
+                    DotNetStdlibLibrary.implementationClassIlName(irClass)!!.removeSuffix(aritySuffix)
                 irClass.dotNetInventedLocalClassName != null -> irClass.dotNetInventedLocalClassName!!
                 enclosingClassInfo == null -> irClass.fqNameWhenAvailable!!.asString()
                 else -> irClass.name.asString()
