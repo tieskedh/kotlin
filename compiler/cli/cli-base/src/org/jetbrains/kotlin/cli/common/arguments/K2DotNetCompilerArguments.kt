@@ -8,7 +8,11 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         private val serialVersionUID = 0L
     }
 
-    @Argument(value = "-d", valueDescription = "<path>", description = "Destination .il file or output directory.")
+    @Argument(
+        value = "-d",
+        valueDescription = "<path>",
+        description = "Destination .il file or output directory; the stdlib producer requires a directory."
+    )
     var destination: String? = null
         set(value) {
             checkFrozen()
@@ -42,11 +46,22 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         }
 
     @Argument(
+        value = "-Xdotnet-produce-stdlib",
+        description = "Produce the experimental Kotlin.Stdlib.klib/Kotlin.Stdlib.dll pair in the -d directory. " +
+                "This POC build mode accepts no user source files."
+    )
+    var dotNetProduceStdlib: Boolean = false
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
+    @Argument(
         value = "-Xdotnet-target",
         valueDescription = "{netframework|net}",
-        description = "The .NET runtime flavor of the produced executable: " +
+        description = "The .NET runtime flavor of the produced artifact: " +
                 "'netframework' assembles a .NET Framework .exe (default), " +
-                "'net' assembles a modern .NET .dll with a runtimeconfig.json for 'dotnet exec'."
+                "'net' assembles a modern .NET .dll and adds a runtimeconfig.json for executable requests."
     )
     var dotNetTarget: String? = null
         set(value) {
@@ -88,6 +103,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         copy.moduleName = moduleName
         copy.classpath = classpath
         copy.noStdlib = noStdlib
+        copy.dotNetProduceStdlib = dotNetProduceStdlib
         copy.dotNetTarget = dotNetTarget
         copy.dotNetExports = dotNetExports?.copyOf()
         copy.dotNetPropertyExports = dotNetPropertyExports?.copyOf()

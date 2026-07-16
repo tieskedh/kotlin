@@ -13,10 +13,19 @@ class DotNetCliPipeline(override val defaultPerformanceManager: PerformanceManag
     override fun createCompoundPhase(
         arguments: K2DotNetCompilerArguments,
     ): CompilerPhase<PipelineContext, ArgumentsPipelineArtifact<K2DotNetCompilerArguments>, *> {
-        return DotNetConfigurationPipelinePhase then
-                DotNetFrontendPipelinePhase then
-                DotNetFir2IrPipelinePhase then
-                DotNetBackendPipelinePhase
+        return if (arguments.dotNetProduceStdlib) {
+            DotNetConfigurationPipelinePhase then
+                    DotNetFrontendPipelinePhase then
+                    DotNetStdlibMetadataSerializationPipelinePhase then
+                    DotNetFir2IrPipelinePhase then
+                    DotNetBackendPipelinePhase then
+                    DotNetStdlibMetadataPackagingPipelinePhase
+        } else {
+            DotNetConfigurationPipelinePhase then
+                    DotNetFrontendPipelinePhase then
+                    DotNetFir2IrPipelinePhase then
+                    DotNetBackendPipelinePhase
+        }
     }
 
     override fun isKaptMode(arguments: K2DotNetCompilerArguments): Boolean = false

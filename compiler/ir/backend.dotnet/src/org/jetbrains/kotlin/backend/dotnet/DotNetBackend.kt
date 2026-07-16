@@ -26,7 +26,8 @@ object DotNetBackend {
         val output = configuration.dotNetOutput ?: error("Missing .NET output")
         val target = configuration.dotNetTarget
         val assemblyName = configuration.dotNetAssemblyName ?: output.nameWithoutExtension
-        val emitsExecutable = !output.isDirectory && when (target) {
+        val producesStdlib = configuration.dotNetProducesStdlib
+        val emitsExecutable = !producesStdlib && !output.isDirectory && when (target) {
             DotNetTarget.NET_FRAMEWORK -> output.extension.equals("exe", ignoreCase = true)
             // Modern .NET has no directly runnable ilasm .exe story on this pipeline: the runnable
             // artifact is a .dll launched by the signed `dotnet` host, so both spellings of an
@@ -47,13 +48,14 @@ object DotNetBackend {
             output
         }
         val ilTarget = when {
+            producesStdlib -> output.resolve(DotNetStdlibLibrary.ASSEMBLY_IL_FILE_NAME)
             output.isDirectory -> output.resolve("$assemblyName.il")
             emitsExecutable -> binaryOutput.siblingWithExtension("il")
             else -> output
         }
         ilTarget.parentFile?.mkdirs()
 
-        val reservedAssembly = listOf(
+        val reservedAssembly = if (producesStdlib) null else listOf(
             DotNetRuntimeLibrary.ASSEMBLY_NAME to DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME,
             DotNetStdlibLibrary.ASSEMBLY_NAME to DotNetStdlibLibrary.ASSEMBLY_FILE_NAME,
         ).firstOrNull { reserved ->
@@ -77,6 +79,9 @@ object DotNetBackend {
             // still depend on it.
             binaryOutput.delete()
             if (target == DotNetTarget.NET) binaryOutput.runtimeConfigFile().delete()
+        } else if (producesStdlib) {
+            output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME).delete()
+            ilTarget.delete()
         }
 
         val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable, irModuleFragment)
@@ -109,6 +114,18 @@ object DotNetBackend {
             ).emit(irModuleFragment) ?: return ilTarget
         } else {
             null
+        }
+
+        if (producesStdlib) {
+            if (stdlibIlText == null) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "The explicit stdlib build did not contain compiler-owned stdlib implementations."
+                )
+                return output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+            }
+            return DotNetStdlibLibrary.assembleIn(output, stdlibIlText, target, messageCollector)
+                ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
         }
 
         val emitter = DotNetIlEmitter(

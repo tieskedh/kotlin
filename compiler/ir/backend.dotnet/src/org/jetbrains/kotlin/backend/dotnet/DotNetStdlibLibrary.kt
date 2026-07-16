@@ -12,9 +12,9 @@ import java.io.File
  * The first physical Kotlin/.NET target-stdlib boundary.
  *
  * Like `Kotlin.Runtime`, ABI major 1 is unsigned and keeps AssemblyVersion 1.0.0.0. The bootstrap
- * The bootstrap compiler still rebuilds this assembly beside ordinary executables. A separate
- * consumer may instead import the bound metadata KLIB/CLR DLL pair; one standalone producer for
- * both artifacts is not available yet.
+ * compiler still rebuilds this assembly beside ordinary executables. The explicit stdlib product
+ * mode emits this assembly and its bound metadata KLIB from one frontend/IR run; a separate
+ * consumer may then import that pair without injected implementation sources.
  */
 internal object DotNetStdlibLibrary {
     const val ASSEMBLY_NAME = DotNetStdlibArtifact.ASSEMBLY_NAME
@@ -49,14 +49,13 @@ internal object DotNetStdlibLibrary {
     fun implementationFileFacadeIlName(file: IrFile): String? =
         COLLECTIONS_FACADE_IL_NAME.takeIf { file.isDotNetStdlibImplementationSource }
 
-    /** Writes deterministic IL beside the program and assembles the target-specific stdlib PE. */
-    fun assembleNextTo(
-        executableOutput: File,
+    /** Writes deterministic IL in [outputDirectory] and assembles the target-specific stdlib PE. */
+    fun assembleIn(
+        outputDirectory: File,
         ilText: String,
         target: DotNetTarget,
         messageCollector: MessageCollector,
     ): File? {
-        val outputDirectory = executableOutput.parentFile ?: File(".")
         outputDirectory.mkdirs()
         val ilFile = outputDirectory.resolve(ASSEMBLY_IL_FILE_NAME)
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
@@ -64,6 +63,14 @@ internal object DotNetStdlibLibrary {
         ilFile.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
         return output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
     }
+
+    /** Bootstrap compatibility path while ordinary executable builds still rebuild the stdlib. */
+    fun assembleNextTo(
+        executableOutput: File,
+        ilText: String,
+        target: DotNetTarget,
+        messageCollector: MessageCollector,
+    ): File? = assembleIn(executableOutput.parentFile ?: File("."), ilText, target, messageCollector)
 
     /** Constructs the closed generic stdlib iterator over a vector already on the IL stack. */
     fun arrayIteratorConstructorInstruction(elementType: DotNetIlValueType): String =
