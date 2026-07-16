@@ -9,8 +9,9 @@ continuation implemented; local delegated-property tokens, explicit user Iterato
 invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Iterable
 identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
 committed; bound stdlib metadata consumption, the explicit paired stdlib producer, and its
-reproducibility boundary are committed, and default Kotlin-home discovery is implemented in the
-current feature slice).
+reproducibility boundary and default Kotlin-home discovery are committed, and the stronger
+`netstandard2.0` platform-library profile is validated and documented in the current feature
+slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -92,6 +93,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `<kotlin-home>/lib/dotnet/<target>` and compiles an ordinary consumer without `-no-stdlib` or a
   manual classpath. Both select the bound pair and do not regenerate CollectionsKt; the same
   focused class remains 3/0/0/0. No full suite was run.
+  The `netstandard_s1` representation audit then separated library TFM from executable target. The
+  complete current runtime/stdlib plus a first/last program ran under modern and Framework ILAsm,
+  CoreCLR 10, Framework 4.8, and both cross-assembler library pairings after isolated netstandard
+  retargeting; an unchanged mscorlib application consumed the portable pair on both runtimes. The
+  Framework C# compiler also consumed it against the actual netstandard2.0 reference assembly.
+  This is probe evidence only; no production code uses textual retargeting. No full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1112,17 +1119,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Install the target stdlib during the build.** Default discovery is implemented and covered,
-   but an ordinary repository distribution does not yet populate the target directories. Add an
-   explicit host-capability-aware build task that places producer output under
-   `lib/dotnet/<target>` without making cross-platform `distKotlinc` depend unconditionally on a
-   host ILAsm. Then remove the injected-source fallback and same-run stdlib rebuilding only for
-   distributions that actually contain a complete pair.
-2. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
+1. **Implement the `netstandard2.0` platform-library profile.** First audit every current runtime
+   and stdlib BCL MemberRef against the 2.0 reference assembly. Then introduce an explicit
+   core-library profile, exact AssemblyRef/TargetFrameworkAttribute emission, and a library-TFM
+   KLIB binding. Do not globally replace `mscorlib` text. Keep executable target selection separate.
+2. **Install one portable stdlib pair during the build.** After the profile lands, replace the
+   provisional `lib/dotnet/<target>` discovery with `lib/dotnet/netstandard2.0` and add an explicit
+   host-capability-aware producer/install task. Do not make cross-platform `distKotlinc` depend
+   unconditionally on a host ILAsm.
+3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
    of Kotlin-owned stdlib bootstrapping.
-3. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
+4. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
    should become emitted Kotlin code only when its implementation is supported and tested; keep
    platform operations in the intrinsic registry where the mature JVM stdlib does so.
 
