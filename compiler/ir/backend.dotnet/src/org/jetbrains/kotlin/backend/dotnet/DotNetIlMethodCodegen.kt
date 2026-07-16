@@ -77,8 +77,9 @@ internal class DotNetIlMethodCodegen(
         signature.parameterTypes,
         typeMapper,
         firstArgumentIndex = if (function is IrConstructor) 1 else 0,
-        erasedCallableParameters = if (
-            function is IrSimpleFunction && function.isDotNetErasedCallableInvoke()
+        erasedRuntimeParameters = if (
+            function is IrSimpleFunction &&
+            (function.isDotNetErasedCallableInvoke() || function.isDotNetErasedPropertyAccess())
         ) {
             function.parameters.drop(if (signature.hasThis) 1 else 0).mapTo(linkedSetOf()) { it.symbol }
         } else {
@@ -307,14 +308,14 @@ internal class DotNetIlMethodCodegen(
                 } else if (
                     !methodContext.isTerminated &&
                     function is IrSimpleFunction &&
-                    function.isDotNetErasedCallableInvoke() &&
+                    function.isDotNetErasedObjectResult() &&
                     function.returnType.isUnit()
                 ) {
-                    // A Unit lambda whose final operation is already a statement (not an
-                    // IrReturn) falls through its block body. The physical erased slot still
-                    // returns object, so materialize Unit exactly as emitReturnValue does for an
-                    // explicit return. Without this epilogue ILAsm accepts the method, but the
-                    // CLR rejects it as an invalid program when invoked.
+                    // A Unit callable/property getter whose final operation is already a
+                    // statement (not an IrReturn) falls through its block body. The physical
+                    // erased slot still returns object, so materialize Unit exactly as
+                    // emitReturnValue does for an explicit return. Without this epilogue ILAsm
+                    // accepts the method, but the CLR rejects it as an invalid program.
                     expressionCodegen.emitRuntimeUnitInstance()
                     methodContext.emitReturn(pops = 1)
                 }
@@ -456,14 +457,14 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * Ordinary Kotlin Unit functions remain CLR-void. A fixed-function erased `Invoke` override
-     * instead executes its Unit expression for effects, then returns the runtime singleton through
-     * the object-shaped ABI slot.
+     * Ordinary Kotlin Unit functions remain CLR-void. An erased `Invoke` or property `Get`
+     * override instead executes its Unit expression for effects, then returns the runtime
+     * singleton through the object-shaped ABI slot.
      */
     private fun emitReturnValue(expression: IrExpression, expectedType: DotNetIlValueType) {
         if (
             function is IrSimpleFunction &&
-            function.isDotNetErasedCallableInvoke() &&
+            function.isDotNetErasedObjectResult() &&
             expectedType == DotNetIlValueType.Object &&
             expression.type.isUnit()
         ) {

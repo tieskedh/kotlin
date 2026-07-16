@@ -132,6 +132,315 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  .class private abstract auto ansi beforefieldinit PropertyReferenceBase
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.KProperty
+            |  {
+            |    .field private initonly string 'name'
+            |
+            |    .method family hidebysig specialname rtspecialname instance void .ctor(string 'name') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig specialname newslot virtual final instance string get_name() cil managed
+            |    {
+            |      .override method instance string Kotlin.KCallable::get_name()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit Property0Impl
+            |         extends Kotlin.Runtime.Internal.PropertyReferenceBase
+            |         implements Kotlin.KProperty0
+            |  {
+            |    .field private initonly class Kotlin.Function0 'getter'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name', class Kotlin.Function0 'getter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string)
+            |      ldarg.0
+            |      ldarg.2
+            |      stfld class Kotlin.Function0 Kotlin.Runtime.Internal.Property0Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Get() cil managed
+            |    {
+            |      .override method instance object Kotlin.KProperty0::Get()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function0 Kotlin.Runtime.Internal.Property0Impl::'getter'
+            |      callvirt instance object Kotlin.Function0::Invoke()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke() cil managed
+            |    {
+            |      .override method instance object Kotlin.Function0::Invoke()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance object Kotlin.Runtime.Internal.Property0Impl::Get()
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit MutableProperty0Impl
+            |         extends Kotlin.Runtime.Internal.PropertyReferenceBase
+            |         implements Kotlin.KMutableProperty0
+            |  {
+            |    .field private initonly class Kotlin.Function0 'getter'
+            |    .field private initonly class Kotlin.Function1 'setter'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name', class Kotlin.Function0 'getter', class Kotlin.Function1 'setter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string)
+            |      ldarg.0
+            |      ldarg.2
+            |      stfld class Kotlin.Function0 Kotlin.Runtime.Internal.MutableProperty0Impl::'getter'
+            |      ldarg.0
+            |      ldarg.3
+            |      stfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty0Impl::'setter'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Get() cil managed
+            |    {
+            |      .override method instance object Kotlin.KProperty0::Get()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function0 Kotlin.Runtime.Internal.MutableProperty0Impl::'getter'
+            |      callvirt instance object Kotlin.Function0::Invoke()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke() cil managed
+            |    {
+            |      .override method instance object Kotlin.Function0::Invoke()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance object Kotlin.Runtime.Internal.MutableProperty0Impl::Get()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance void Set(object 'value') cil managed
+            |    {
+            |      .override method instance void Kotlin.KMutableProperty0::Set(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty0Impl::'setter'
+            |      ldarg.1
+            |      callvirt instance object Kotlin.Function1::Invoke(object)
+            |      pop
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit Property1Impl
+            |         extends Kotlin.Runtime.Internal.PropertyReferenceBase
+            |         implements Kotlin.KProperty1
+            |  {
+            |    .field private initonly class Kotlin.Function1 'getter'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name', class Kotlin.Function1 'getter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string)
+            |      ldarg.0
+            |      ldarg.2
+            |      stfld class Kotlin.Function1 Kotlin.Runtime.Internal.Property1Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Get(object receiver) cil managed
+            |    {
+            |      .override method instance object Kotlin.KProperty1::Get(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.Property1Impl::'getter'
+            |      ldarg.1
+            |      callvirt instance object Kotlin.Function1::Invoke(object)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object receiver) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function1::Invoke(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance object Kotlin.Runtime.Internal.Property1Impl::Get(object)
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit MutableProperty1Impl
+            |         extends Kotlin.Runtime.Internal.PropertyReferenceBase
+            |         implements Kotlin.KMutableProperty1
+            |  {
+            |    .field private initonly class Kotlin.Function1 'getter'
+            |    .field private initonly class Kotlin.Function2 'setter'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name', class Kotlin.Function1 'getter', class Kotlin.Function2 'setter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string)
+            |      ldarg.0
+            |      ldarg.2
+            |      stfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty1Impl::'getter'
+            |      ldarg.0
+            |      ldarg.3
+            |      stfld class Kotlin.Function2 Kotlin.Runtime.Internal.MutableProperty1Impl::'setter'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Get(object receiver) cil managed
+            |    {
+            |      .override method instance object Kotlin.KProperty1::Get(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty1Impl::'getter'
+            |      ldarg.1
+            |      callvirt instance object Kotlin.Function1::Invoke(object)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object receiver) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function1::Invoke(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance object Kotlin.Runtime.Internal.MutableProperty1Impl::Get(object)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance void Set(object receiver, object 'value') cil managed
+            |    {
+            |      .override method instance void Kotlin.KMutableProperty1::Set(object, object)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldfld class Kotlin.Function2 Kotlin.Runtime.Internal.MutableProperty1Impl::'setter'
+            |      ldarg.1
+            |      ldarg.2
+            |      callvirt instance object Kotlin.Function2::Invoke(object, object)
+            |      pop
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit Property2Impl
+            |         extends Kotlin.Runtime.Internal.PropertyReferenceBase
+            |         implements Kotlin.KProperty2
+            |  {
+            |    .field private initonly class Kotlin.Function2 'getter'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(string 'name', class Kotlin.Function2 'getter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      call instance void Kotlin.Runtime.Internal.PropertyReferenceBase::.ctor(string)
+            |      ldarg.0
+            |      ldarg.2
+            |      stfld class Kotlin.Function2 Kotlin.Runtime.Internal.Property2Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Get(object receiver1, object receiver2) cil managed
+            |    {
+            |      .override method instance object Kotlin.KProperty2::Get(object, object)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldfld class Kotlin.Function2 Kotlin.Runtime.Internal.Property2Impl::'getter'
+            |      ldarg.1
+            |      ldarg.2
+            |      callvirt instance object Kotlin.Function2::Invoke(object, object)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object receiver1, object receiver2) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function2::Invoke(object, object)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      call instance object Kotlin.Runtime.Internal.Property2Impl::Get(object, object)
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class public abstract sealed auto ansi beforefieldinit PropertyReferenceFactory
+            |         extends [mscorlib]System.Object
+            |  {
+            |    .method public hidebysig static class Kotlin.KProperty0 CreateProperty0<V>(string 'name', class Kotlin.Function0 'getter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      newobj instance void Kotlin.Runtime.Internal.Property0Impl::.ctor(string, class Kotlin.Function0)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KMutableProperty0 CreateMutableProperty0<V>(string 'name', class Kotlin.Function0 'getter', class Kotlin.Function1 'setter') cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      newobj instance void Kotlin.Runtime.Internal.MutableProperty0Impl::.ctor(string, class Kotlin.Function0, class Kotlin.Function1)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KProperty1 CreateProperty1<R0, V>(string 'name', class Kotlin.Function1 'getter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      newobj instance void Kotlin.Runtime.Internal.Property1Impl::.ctor(string, class Kotlin.Function1)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KMutableProperty1 CreateMutableProperty1<R0, V>(string 'name', class Kotlin.Function1 'getter', class Kotlin.Function2 'setter') cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      ldarg.2
+            |      newobj instance void Kotlin.Runtime.Internal.MutableProperty1Impl::.ctor(string, class Kotlin.Function1, class Kotlin.Function2)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.KProperty2 CreateProperty2<R0, R1, V>(string 'name', class Kotlin.Function2 'getter') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      newobj instance void Kotlin.Runtime.Internal.Property2Impl::.ctor(string, class Kotlin.Function2)
+            |      ret
+            |    }
+            |  }
+            |
             |  .class private auto ansi sealed beforefieldinit 'Func0Adapter`1'<R>
             |         extends [mscorlib]System.Object
             |         implements Kotlin.Function0, class Kotlin.Runtime.Internal.'ExactFunction0`1'<!0>

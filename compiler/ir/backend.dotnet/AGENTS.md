@@ -259,7 +259,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   invocation, read-only access, and reflection checks on CoreCLR and Framework. Detailed
   decisions are in the callable, CLR-default, and CLR-property draft ADRs.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
-  KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
+  KCallable metadata beyond `name`, property-reference reflection beyond direct get/set/invoke,
+  reflective lookup/call APIs,
   implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin
   metadata serialization. Later .NET-facing export slices must preserve the logical function arguments;
   the canonical interface encodes none of those arguments, so CLR reflection alone cannot
@@ -269,6 +270,24 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   not a reason to split the canonical Kotlin representation in this first POC slice.
   Final raw library IL declares the exact runtime AssemblyRef whenever an emitted signature or
   body contains a `[Kotlin.Runtime]` token; it never relies on ILAsm assembly autodetection.
+- Property-reference ABI candidate (argumentation:
+  `docs/decisions/draft-adr-erased-property-reference-abi.md`; follows the Native/Wasm wrapper
+  model): a source property reference becomes one runtime-owned object storing its name and
+  lowered getter/optional setter FunctionN objects. The CLR-specific deviation is physical
+  erasure: public non-generic `Kotlin.KProperty0/1/2` and `KMutableProperty0/1/2` identities expose
+  object-shaped `Get` arguments/results and void `Set`, because CLR generic variance cannot
+  preserve one identity through value-type instantiations. Each KPropertyN inherits the existing
+  erased FunctionN interface; invocation therefore uses the same callable ABI rather than a
+  delegate or second callable shape. Bound receiver storage remains in the generated getter and
+  setter classes, and common property-reference lowering evaluates a non-trivial bound receiver
+  once before sharing it. Private runtime wrappers are created through metadata-public
+  `Kotlin.Runtime.Internal.PropertyReferenceFactory` methods, a compiler/runtime contract rather
+  than source API. Immutable arities 0..2 and mutable arities 0..1 are constructed; mutable arity
+  2 remains unsupported until Function3 is designed as part of the callable family. Direct
+  `get`/`set`, FunctionN invocation, primitive result variance, bound mutation, and explicit user
+  implementations use the universal erased slots. Full reflection, local delegated-property
+  reflection, equality/hash/rendering, and exact property-access capabilities remain deferred.
+  Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
 - Iterator ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
   series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an
   object-shaped execution boundary, with CLR `object` replacing JVM Object): source

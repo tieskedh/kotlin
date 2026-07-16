@@ -41,6 +41,8 @@ internal class DotNetBackendContext(
         DotNetExactCallableSymbols(irBuiltIns, irFactory, irModuleFragment)
     val typedArgumentsCallableSymbols: DotNetTypedArgumentsCallableSymbols =
         DotNetTypedArgumentsCallableSymbols(irBuiltIns, irFactory, irModuleFragment)
+    val propertyReferenceSymbols: DotNetPropertyReferenceSymbols =
+        DotNetPropertyReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager(irBuiltIns, irFactory)
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(

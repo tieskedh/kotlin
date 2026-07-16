@@ -3,7 +3,8 @@
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
-bounded typed-argument callable capability implemented).
+bounded typed-argument callable capability implemented; bounded Kotlin property-reference values
+implemented at the current tip).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -29,7 +30,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   adapters, nullable export metadata, default-argument export continuation, immutable
   callable-provenance exact invocation, ordinary top-level function exports, overload-aware
   export selection, top-level property exports, and the measured typed-argument callable
-  capability described below.
+  capability described below, followed by the bounded erased property-reference representation
+  at the current tip.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -816,6 +818,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   invocation, and read-only reflection on CoreCLR and Framework. The property draft ADR records
   representation, selection limits, evidence, and the deferred extension/indexer and const-field
   policies.
+- The property-reference slice follows Native/Wasm's runtime-wrapper model while retaining the
+  existing callable invariant. Source KProperty0/1/2 and KMutableProperty0/1/2 map to non-generic
+  Kotlin.Runtime interfaces; Get/Set are object-shaped (Set returns CLR void), and each KPropertyN
+  inherits the matching erased FunctionN. This CLR-specific erasure is required because generic
+  variance cannot preserve identity through primitive instantiations. One private runtime wrapper
+  stores the name plus ordinary lowered getter/setter callable objects; common lowering evaluates
+  a bound receiver once and shares its generated storage. Cross-assembly construction goes through
+  metadata-public PropertyReferenceFactory methods in Kotlin.Runtime.Internal, not through the
+  export selector and not through a public Kotlin surface. Immutable arities 0..2 and mutable
+  arities 0..1 construct; mutable arity 2 waits for a deliberate Function3 extension. Direct
+  get/set, inherited invocation, primitive result widening, bound mutation, and explicit user
+  implementations are pinned by `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
+  The draft property-reference ADR records target precedent, CLR distinction, and the deferred
+  reflection/equality/exact-access boundaries. Focused PSI box and IL-text tests pass; the box
+  path assembled the runtime and program with modern and Framework 4.8 ILAsm selections and
+  executed both products on CoreCLR.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -948,11 +966,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit Kotlin property-reference representation before implementing it.** Determine how the
-   JVM/JS/Native backends split KProperty identity, getter/setter execution, bound receiver storage,
-   and metadata. Preserve the existing erased FunctionN callable identity where a property
-   reference is invokable; do not reuse or extend the provisional export-selector grammar as its
-   control plane. Record the CLR-specific distinction before landing codegen.
+1. **Audit property-reference equality, hashing, and rendering before implementing them.** Compare
+   JVM reflection reference classes with Native/Wasm wrappers and separate language-observable
+   callable-reference semantics from unavailable full-reflection metadata. Preserve the erased
+   KPropertyN/FunctionN identities and private wrapper boundary; do not make wrapper class names,
+   factory methods, or the provisional export-selector grammar observable.
+2. **Then audit reflective getter/setter objects.** Determine the smallest coherent KProperty
+   reflection continuation (if any) without pretending owner/return-type/parameter metadata exists.
+   Keep KMutableProperty2 blocked on a deliberate Function3-family decision rather than adding a
+   one-off setter representation.
 
 ## Known warts (fine to leave; do not "fix" casually)
 
