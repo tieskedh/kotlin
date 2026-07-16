@@ -11,7 +11,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
     @Argument(
         value = "-d",
         valueDescription = "<path>",
-        description = "Destination .il file or output directory; the stdlib producer requires a directory."
+        description = "Destination .il file or output directory; library producers require a directory."
     )
     var destination: String? = null
         set(value) {
@@ -58,11 +58,24 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         }
 
     @Argument(
+        value = "-Xdotnet-produce-library",
+        description = "Produce an experimental <module>.klib/<module>.dll library pair in the -d directory. " +
+                "The library targets netstandard2.0, has no entry point, and is assembled with the " +
+                "portable-library toolchain."
+    )
+    var dotNetProduceLibrary: Boolean = false
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
+    @Argument(
         value = "-Xdotnet-target",
         valueDescription = "{netframework|net}",
-        description = "The .NET runtime flavor of the produced artifact: " +
+        description = "The .NET runtime flavor of an executable request: " +
                 "'netframework' assembles a .NET Framework .exe (default), " +
-                "'net' assembles a modern .NET .dll and adds a runtimeconfig.json for executable requests."
+                "'net' assembles a modern .NET .dll and adds a runtimeconfig.json. " +
+                "Portable library production targets netstandard2.0 independently of this option."
     )
     var dotNetTarget: String? = null
         set(value) {
@@ -105,6 +118,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         copy.classpath = classpath
         copy.noStdlib = noStdlib
         copy.dotNetProduceStdlib = dotNetProduceStdlib
+        copy.dotNetProduceLibrary = dotNetProduceLibrary
         copy.dotNetTarget = dotNetTarget
         copy.dotNetExports = dotNetExports?.copyOf()
         copy.dotNetPropertyExports = dotNetPropertyExports?.copyOf()
