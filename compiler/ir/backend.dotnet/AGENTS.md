@@ -233,7 +233,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
   the removed iterator loop. Explicit escaping iterator values use the erased runtime iterator
   ABI described above. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), user-facing content APIs, and unsigned arrays.
+  elements are unsupported), content APIs other than the shallow `contentEquals` slice below,
+  and unsigned arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
@@ -261,8 +262,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   below is the sole exception; never erase Kotlin invariance into CLR covariance), concrete
   primitive/nullable-primitive elements, `Array<T?>`, nested/jagged arrays
   including arrays of primitive arrays, open-generic iterator producers, array casts/type checks,
-  resized/open-generic copying, and user-facing content APIs. Concrete reference-array iterator
-  values use the erased runtime iterator ABI above.
+  resized/open-generic copying, and content APIs other than the shallow `contentEquals` slice
+  below. Concrete reference-array iterator values use the erased runtime iterator ABI above.
   Pins: `ilText/genericArrays.kt`, `ilText/genericArraysRejected.kt`; runtime:
   `box/genericArrays.kt`.
 - Concrete array initializer constructors reuse the same backend.common
@@ -314,9 +315,29 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   exact vectors. A concrete `Array<String?>`-like result shares its exact reference vector with
   `Array<String>`; only open `Array<T?>` remains unrepresentable because `T` may be a value type.
   STAYS REJECTED, loudly: copying an open `Array<T>`, `copyOfRange`, mapper-rejected array families,
-  and content operations. Pins: `ilText/arrayCopying.kt`, `box/arrayCopying.kt`, and the negative
-  additions in `ilText/genericArraysRejected.kt`. The exact golden assembles under modern 10.0.9
-  and Framework 4.8 ILAsm; both parser boxes execute with modern and Framework-selected ILAsm.
+  and content operations other than `contentEquals`. Pins: `ilText/arrayCopying.kt`,
+  `box/arrayCopying.kt`, and the negative additions in `ilText/genericArraysRejected.kt`. The exact
+  golden assembles under modern 10.0.9 and Framework 4.8 ILAsm; both parser boxes execute with
+  modern and Framework-selected ILAsm.
+- Shallow array content equality (probe series `arraycontent_s1`; JVM `java.util.Arrays.equals`
+  contract plus the JS target's element-loop precedent) is a registry-owned operation exposed by
+  resolution-only external `kotlin.collections.contentEquals` declarations. Array `==`/`===`
+  remain identity operations. Nullable receivers and arguments compare true only when both are
+  null; non-null vectors require equal lengths and Kotlin-equal elements. One metadata-public
+  runtime helper traverses `System.Array` and passes each boxed element pair through the existing
+  Kotlin-owned `Intrinsics.AreEqual` boundary. That deliberately avoids raw numeric `ceq` and CLR
+  collection helpers: `Double` content equality canonicalizes NaNs and distinguishes signed zero,
+  matching the common stdlib contract. Reference elements retain null-safe virtual Kotlin
+  equality. Nested array elements remain identity-compared because this operation is shallow;
+  recursive traversal belongs only to future `contentDeepEquals`.
+  The five supported primitive vectors, concrete/projected reference vectors, and open invariant
+  `Array<T>` consumers all call the same helper without changing their exact CLR storage types.
+  Receiver and argument are evaluated once in source order. The helper is internal by namespace,
+  public only for cross-assembly access, and creates no new Kotlin array ABI shape.
+  `arraycontent_s1` assembled and ran null, primitive, NaN, signed-zero, and nested-identity cases
+  on modern CoreCLR and Framework. Pins: `ilText/arrayContentEquals.kt` and
+  `box/arrayContentEquals.kt`. STAYS REJECTED, loudly: `contentDeepEquals`, `contentHashCode`,
+  `contentToString`, unsigned arrays, and mapper-rejected array families.
 - Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
   delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
   stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the
