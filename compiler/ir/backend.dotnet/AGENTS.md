@@ -148,19 +148,31 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ExactFunction1<Int, Int>` and boxes only its result; a discarded non-Unit invocation uses the
   same guarded path. The second probe is omitted when CLR reference variance already makes the
   first probe sufficient. Mutable locals and parameter/field/return boundaries have no such
-  provenance and keep the erased fallback. Explicit user implementations and older modules also
-  remain valid because every optional path is guarded by `isinst`. Unit stays erased because void
-  cannot close a generic result slot; do not invent a second Action-like capability casually.
+  provenance, but a second optional execution capability now covers the measured
+  provenance-free value-argument case without changing storage identity:
+  `[Kotlin.Runtime]Kotlin.Runtime.Internal.TypedArgumentsFunction1<P0>` and
+  `TypedArgumentsFunction2<P0, P1>` expose `object InvokeTyped(P...)`. Generated non-Unit
+  Function1/2 objects with at least one concrete primitive or nullable-primitive parameter
+  implement that interface and box only their result. A call whose logical result is `Any`/`Any?`
+  and which has such a parameter probes the closed typed-arguments view first, then the existing
+  exact shape(s), then erased Invoke. Exact primitive-result calls therefore stay on ExactFunctionN.
+  Explicit user implementations and older modules remain valid because every optional path is
+  guarded by `isinst`. Unit stays erased because void cannot close a generic result slot and the
+  Framework benchmark did not justify an Action-like partial capability.
   `callableexact_s1` assembled and ran identical, erased-only, reference-variant, and value-variant
-  cases with both ILAsm versions and all four runtime pairings. `callable_capability_s1` separately
-  proved on both runtimes that a partial `TypedArgumentsFunction1<Int>` interface could avoid
-  argument boxing across a provenance-free widened-result boundary. It remains deferred: that
-  metadata-public runtime interface and member would add an execution ABI and code-size cost, so
-  local IR provenance is used first and cross-boundary evidence must justify the broader shape.
+  cases with both ILAsm versions and all four runtime pairings. `callable_capability_s1` first
+  proved the partial shape on both runtimes. The separately compiled
+  `typed_arguments_crossmodule_s1` producer/consumer benchmark then measured 2,000,000 widened
+  `(Int) -> Any` calls: erased invocation allocated 96,000,040 bytes and typed-arguments invocation
+  48,000,040 bytes on CoreCLR, exactly one 24-byte argument box saved per call. Stable partial-first
+  timings improved from 40–43 ms to 30–31 ms on CoreCLR and 200–213 ms to 141–142 ms on Framework;
+  each producer bridge was 13–17 IL bytes plus one InterfaceImpl row (PE size stayed within the
+  existing 512-byte alignment). The Unit variant removed allocation but regressed Framework time,
+  which is why Unit remains outside the implemented scope.
   Repository pins cover ordinary, capturing, bound, KFunction, local, array-initializer, nullable,
   generic, evaluation-order, explicit-fallback, and immutable-provenance shapes on CoreCLR;
   `ilText/callableInvocationProvenance.kt` distinguishes exact primitives, primitive-result
-  widening, parameter widening, mutable/boundary fallback, and explicit user implementations.
+  widening, parameter widening, mutable/boundary capability dispatch, and explicit fallback.
   This is an execution capability only: never use it in
   fields, parameters, returns, ordinary Kotlin subtype conversion, or as a CLR delegate identity.
   The explicit export helper may probe the same-object capability solely to bind a typed Func;
@@ -187,8 +199,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   nullability metadata, collision policy, and Kotlin-default overloads. The metadata-public
   `Kotlin.Runtime.Internal.DelegateProjection` helper projects returns and adapts delegate
   parameters into private runtime-owned classes implementing the canonical FunctionN interface.
-  Func adapters additionally expose the optional ExactFunctionN capability; Action adapters stay
-  erased because Unit has no generic void representation. Projecting one of these adapters back to
+  Func adapters additionally expose the optional ExactFunctionN capability; Func1/2 adapters also
+  expose their TypedArgumentsFunctionN view, while Action adapters stay erased because Unit has no
+  generic void representation. Projecting one of these adapters back to
   the same closed delegate shape returns its stored ORIGINAL delegate object. Different closed
   shapes have no identity promise, and Kotlin-callable -> delegate -> Kotlin-callable identity is
   not promised. Existing Kotlin-to-CLR projection still binds exact Func directly to InvokeExact,

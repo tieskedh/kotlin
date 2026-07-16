@@ -1275,7 +1275,8 @@ class DotNetIlEmitter(
                 if (superInterface !in moduleInterfaces &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKFunctionArityOrNull() == null &&
-                    superInterface.dotNetExactFunctionArity == null
+                    superInterface.dotNetExactFunctionArity == null &&
+                    superInterface.dotNetTypedArgumentsFunctionArity == null
                 ) {
                     dotNetUnsupported(
                         "class '$name' implements '${superInterface.diagnosticName()}', which is not an " +

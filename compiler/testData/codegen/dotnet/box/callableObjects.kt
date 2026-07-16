@@ -54,6 +54,12 @@ fun call1(function: (Int) -> Int, value: Int): Int = function(value)
 
 fun call2(function: (Int, Int) -> Int, left: Int, right: Int): Int = function(left, right)
 
+fun callWidened1(function: (Int) -> Any, value: Int): Any = function(value)
+
+fun callWidened2(function: (Int, Int) -> Any, left: Int, right: Int): Any = function(left, right)
+
+fun callNullableWidened(function: (Int?) -> Any, value: Int?): Any = function(value)
+
 fun <T> applyExact(value: T, function: (T) -> T): T = function(value)
 
 fun <T> preserve(function: () -> T): () -> T = function
@@ -179,5 +185,19 @@ fun box(): String {
     if (orderedCallable()(orderedArgument()) != 42 || callableEvaluationOrder != "RAI") {
         return "fail 40: callable evaluation order"
     }
+    val crossBoundarySource: (Int) -> Int = { value -> value + 1 }
+    val crossBoundaryWidened: (Int) -> Any = crossBoundarySource
+    if (callWidened1(crossBoundaryWidened, 41) != 42) return "fail 41: partial Function1 capability"
+
+    val crossBoundarySumSource: (Int, Int) -> Int = { left, right -> left + right }
+    val crossBoundarySumWidened: (Int, Int) -> Any = crossBoundarySumSource
+    if (callWidened2(crossBoundarySumWidened, 20, 22) != 42) return "fail 42: partial Function2 capability"
+
+    val explicitWidened: (Int) -> Any = implemented
+    if (callWidened1(explicitWidened, 21) != 42) return "fail 43: erased user fallback"
+
+    val nullableArgumentSource: (Int?) -> Int = { value -> value ?: 42 }
+    val nullableArgumentWidened: (Int?) -> Any = nullableArgumentSource
+    if (callNullableWidened(nullableArgumentWidened, null) != 42) return "fail 44: nullable primitive argument"
     return "OK"
 }
