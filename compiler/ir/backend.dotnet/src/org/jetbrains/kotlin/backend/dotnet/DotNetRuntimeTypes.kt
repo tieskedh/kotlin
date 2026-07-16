@@ -216,6 +216,7 @@ internal object DotNetRuntimeTypes {
     fun delegateBoundary(
         parameterTypes: List<DotNetIlValueType>,
         resultType: DotNetIlValueType?,
+        nullable: Boolean,
     ): DotNetDelegateBoundary {
         val arity = parameterTypes.size
         require(arity in fixedFunctionClasses.indices) { "unsupported callable export arity $arity" }
@@ -229,10 +230,12 @@ internal object DotNetRuntimeTypes {
             .orEmpty()
         val helperOwner = "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "Kotlin.Runtime.Internal.DelegateProjection".toIlIdentifier()
-        val projectionCall = "call $openDelegateType $helperOwner::${"To$family$arity".toIlIdentifier()}$instantiation(" +
+        val nullablePrefix = if (nullable) "Nullable" else ""
+        val projectionCall = "call $openDelegateType " +
+                "$helperOwner::${"To$nullablePrefix$family$arity".toIlIdentifier()}$instantiation(" +
                 "${fixedFunctionType(arity).nameInSignature})"
         val adaptationCall = "call ${fixedFunctionType(arity).nameInSignature} " +
-                "$helperOwner::${"From$family$arity".toIlIdentifier()}$instantiation($openDelegateType)"
+                "$helperOwner::${"From$nullablePrefix$family$arity".toIlIdentifier()}$instantiation($openDelegateType)"
         return DotNetDelegateBoundary(closedDelegateType, projectionCall, adaptationCall)
     }
 
