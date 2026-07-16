@@ -20,6 +20,7 @@ object DotNetConfigurationKeys {
 
 /** Stable manifest and CLR identity shared by the CLI dependency loader and IL backend. */
 object DotNetStdlibArtifact {
+    const val DISTRIBUTION_DIRECTORY_NAME = "dotnet"
     const val ASSEMBLY_NAME = "Kotlin.Stdlib"
     const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
     const val METADATA_FILE_NAME = "$ASSEMBLY_NAME.klib"
@@ -33,6 +34,9 @@ object DotNetStdlibArtifact {
     const val METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY = "dotnet_assembly_public_key_token"
     const val METADATA_ASSEMBLY_FILE_PROPERTY = "dotnet_assembly_file"
     const val METADATA_TARGET_PROPERTY = "dotnet_target"
+
+    fun distributionDirectory(kotlinLibDirectory: File, target: DotNetTarget): File =
+        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(target.flagValue)
 }
 
 /** Kotlin compile-time metadata paired with the CLR assembly that owns its implementations. */

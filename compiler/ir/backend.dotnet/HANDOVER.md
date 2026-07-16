@@ -8,8 +8,9 @@ structural callable/property-reference Any semantics, and the coherent Function3
 continuation implemented; local delegated-property tokens, explicit user Iterator bridges, open
 invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Iterable
 identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
-committed; bound stdlib metadata consumption and the explicit paired stdlib producer are committed,
-and its reproducibility boundary is implemented in the current feature slice).
+committed; bound stdlib metadata consumption, the explicit paired stdlib producer, and its
+reproducibility boundary are committed, and default Kotlin-home discovery is implemented in the
+current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -44,8 +45,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ArrayIterator implementation (`186af0b4d`), followed by the stdlib ArrayIterable/asIterable
   continuation (`ba7260521`) and the first top-level generated-common stdlib operations,
   `Iterable<T>.first()` and `last()` (`311b79bd7`), followed by separate-consumer stdlib metadata
-  KLIB/CLR DLL binding (`df4ab474b`) and one-compilation KLIB/DLL production (`21eb60d4e`), with
-  producer reproducibility in the current feature slice.
+  KLIB/CLR DLL binding (`df4ab474b`), one-compilation KLIB/DLL production (`21eb60d4e`), and
+  producer reproducibility (`59c0b1d33`), with installed-pair discovery in the current feature
+  slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -85,6 +87,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   3/0/0/0. DLL byte identity is deliberately excluded because both external ILAsm paths may stamp
   fresh PE module identity; stable assembly binding plus separate consumption is the current PE
   contract. No full suite was run.
+  The installed-pair continuation follows JVM/JS `KotlinPaths` and Native distribution ownership.
+  Each target pin installs the produced pair under a temporary
+  `<kotlin-home>/lib/dotnet/<target>` and compiles an ordinary consumer without `-no-stdlib` or a
+  manual classpath. Both select the bound pair and do not regenerate CollectionsKt; the same
+  focused class remains 3/0/0/0. No full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1105,12 +1112,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Migrate default stdlib discovery.** The explicit pair is now functionally and reproducibly
-   pinned on both targets. Follow JVM's `KotlinPaths` and Native's distribution-owned stdlib model:
-   define and populate a target-specific Kotlin-home location, then make ordinary compilation load
-   that bound pair by default unless `-no-stdlib` is present. Preserve classpath + `-no-stdlib` as
-   the explicit override; do not invent another source annotation or general publication syntax.
-   Remove same-run stdlib rebuilding only after that installed-artifact route is covered.
+1. **Install the target stdlib during the build.** Default discovery is implemented and covered,
+   but an ordinary repository distribution does not yet populate the target directories. Add an
+   explicit host-capability-aware build task that places producer output under
+   `lib/dotnet/<target>` without making cross-platform `distKotlinc` depend unconditionally on a
+   host ILAsm. Then remove the injected-source fallback and same-run stdlib rebuilding only for
+   distributions that actually contain a complete pair.
 2. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

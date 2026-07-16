@@ -108,8 +108,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
   must produce byte-identical packed KLIB and compiler-owned IL for each target; ILAsm-produced PE
   bytes are not part of that gate because the external assembler gives identical IL a fresh module
-  identity. Once a distribution-owned default pair can be discovered through Kotlin home, same-run
-  production must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
+  identity. Once a distribution-owned default pair is populated in Kotlin home, same-run production
+  must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
+  Ordinary compilation already prefers a complete pair at
+  `<kotlin-home>/lib/dotnet/<net|netframework>/Kotlin.Stdlib.{klib,dll}` and rejects a half-installed
+  pair; absence still falls back to injected sources until the build installs these artifacts.
+  The target directory is required because both variants retain the same CLR assembly identity and
+  filename while their metadata manifests bind different requested runtime targets.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
   their List fast paths are omitted because List has no target ABI yet. Do not add a generator
