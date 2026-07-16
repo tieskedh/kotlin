@@ -61,6 +61,8 @@ private fun sum(values: Iterable<Int>): Int {
 
 private fun <T> openArrayView(values: Array<T>): Iterable<T> = values.asIterable()
 
+private fun <T> firstFrom(values: Iterable<T>): T = values.first()
+
 fun box(): String {
     val counting = CountingIterable(4)
     val widened: Iterable<Any> = counting
@@ -108,6 +110,25 @@ fun box(): String {
     if (emptyArray<String>().asIterable().iterator().hasNext()) return "fail 17: empty array view"
     if (arrayOf<String?>(null).asIterable().iterator().next() != null) {
         return "fail 18: nullable-element array view"
+    }
+    if (firstFrom(CountingIterable(1)) != 0) return "fail 19: stdlib first user iterable"
+    val widenedFirst: Iterable<Any> = CountingIterable(1)
+    if (widenedFirst.first() != 0) return "fail 20: stdlib first widened primitive"
+    if (firstFrom(arrayOf("stdlib").asIterable()) != "stdlib") {
+        return "fail 21: stdlib first array view"
+    }
+    if (arrayOf<String?>(null).asIterable().first() != null) {
+        return "fail 22: stdlib first nullable element"
+    }
+    val nullableNumber: Int? = firstFrom(BaseIterable<Int?>(7))
+    if (nullableNumber != 7) return "fail 23: stdlib first nullable primitive"
+    try {
+        emptyArray<String>().asIterable().first()
+        return "fail 24: stdlib first empty did not throw"
+    } catch (failure: NoSuchElementException) {
+        if (failure.message != "Collection is empty.") {
+            return "fail 25: stdlib first message: ${failure.message}"
+        }
     }
     return "OK"
 }

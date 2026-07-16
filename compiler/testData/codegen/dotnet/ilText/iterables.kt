@@ -32,6 +32,8 @@ fun iteratorThroughView(values: IterableView<String>): Iterator<String> = values
 
 fun <T> iterableFromOpenArray(values: Array<T>): Iterable<T> = values.asIterable()
 
+fun <T> firstFrom(values: Iterable<T>): T = values.first()
+
 fun sum(values: Iterable<Int>): Int {
     var result = 0
     for (value in values) result = result + value
@@ -50,4 +52,6 @@ fun main() {
     println(sum(intArrayOf(1, 2, 3).asIterable()))
     println(iterableFromOpenArray(arrayOf("open")).iterator().next())
     println(emptyArray<String>().asIterable().iterator().hasNext())
+    println(firstFrom(CountingIterable(1)))
+    println(arrayOf("stdlib").asIterable().first())
 }

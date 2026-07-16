@@ -85,13 +85,11 @@ class DotNetIlEmitter(
      * executable was requested without a main function).
      */
     fun emit(moduleFragment: IrModuleFragment): String? {
-        val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns)
+        val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns, emissionScope)
         val allFiles = moduleFragment.files.toList()
         val files = when (emissionScope) {
             DotNetIlEmissionScope.USER -> allFiles
-            DotNetIlEmissionScope.STDLIB -> allFiles.filter { file ->
-                file.declarations.filterIsInstance<IrClass>().any { it.isDotNetStdlibImplementation }
-            }
+            DotNetIlEmissionScope.STDLIB -> allFiles.filter { it.isDotNetStdlibImplementationSource }
         }
         val topLevelClassesByFile = files.associateWith { file ->
             file.declarations.filterIsInstance<IrClass>().filter(emissionScope::owns)
@@ -109,7 +107,9 @@ class DotNetIlEmitter(
                 ?.let { file to it }
         }.toMap()
         val topLevelFunctionsByFile = files.associateWith { file ->
-            file.declarations.filterIsInstance<IrSimpleFunction>().filter { it.origin != DOTNET_STATIC_INITIALIZER }
+            file.declarations.filterIsInstance<IrSimpleFunction>().filter { function ->
+                function.origin != DOTNET_STATIC_INITIALIZER && emissionScope.owns(function)
+            }
         }
 
         // Export selection is deliberately external compiler configuration, not a Kotlin source
@@ -2256,7 +2256,11 @@ class DotNetIlEmitter(
         return files.associateWith { file ->
             val fileName = file.fileEntry.name.substringAfterLast('/').substringAfterLast('\\').substringBeforeLast('.')
             val packageFqName = file.packageFqName
-            val baseName = if (packageFqName.isRoot) "${fileName}Kt" else "${packageFqName.asString()}.${fileName}Kt"
+            val baseName = if (emissionScope == DotNetIlEmissionScope.STDLIB) {
+                DotNetStdlibLibrary.implementationFileFacadeIlName(file)
+            } else {
+                null
+            } ?: if (packageFqName.isRoot) "${fileName}Kt" else "${packageFqName.asString()}.${fileName}Kt"
             var className = baseName
             var suffix = 1
             while (!usedNames.add(className)) {
