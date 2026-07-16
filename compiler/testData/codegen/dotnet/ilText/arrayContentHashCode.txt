@@ -1,0 +1,83 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'arrayContentHashCode' {}
+.module 'main-arrayContentHashCode.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'arrayContentHashCodeKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'shallowAnyHash'(object[] 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static int32 'shallowIntHash'(int32[] 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static int32 'deepAnyHash'(object[] 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepHashCode'(class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static int32 'genericHash'<'T'>(!!0[] 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepHashCode'(class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] object[] '<arrayOf>',
+      [1] int32[] '<arrayOf>@1',
+      [2] int32 '<arrayElement>',
+      [3] object '<arrayElement>@3'
+    )
+    ldc.i4 1
+    newarr object
+    stloc.0
+    ldc.i4 2
+    newarr int32
+    stloc.1
+    ldc.i4 1
+    stloc.2
+    ldloc.1
+    ldc.i4 0
+    ldloc.2
+    stelem.i4
+    ldc.i4 2
+    stloc.2
+    ldloc.1
+    ldc.i4 1
+    ldloc.2
+    stelem.i4
+    ldloc.1
+    stloc.3
+    ldloc.0
+    ldc.i4 0
+    ldloc.3
+    stelem object
+    ldloc.0
+    call int32 'arrayContentHashCodeKt'::'deepAnyHash'(object[])
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}
