@@ -291,6 +291,13 @@
     call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
     ret
   }
+  .method public hidebysig static !!0 'lastFrom'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    ret
+  }
   .method public hidebysig static int32 'sum'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'values') cil managed
   {
     .maxstack 2
@@ -339,7 +346,9 @@ IL_whileEnd_1:
       [10] string[] '<arrayOf>@10',
       [11] string '<arrayElement>@11',
       [12] string[] '<arrayOf>@12',
-      [13] string '<arrayElement>@13'
+      [13] string '<arrayElement>@13',
+      [14] string[] '<arrayOf>@14',
+      [15] string '<arrayElement>@15'
     )
     ldc.i4 3
     newobj instance void 'CountingIterable'::.ctor(int32)
@@ -471,6 +480,33 @@ IL_boolStrEnd_1:
     ldloc 12
     newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'<string>::.ctor(!0[])
     call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<string>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 3
+    newobj instance void 'CountingIterable'::.ctor(int32)
+    call !!0 'iterablesKt'::'lastFrom'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 2
+    newarr string
+    stloc 14
+    ldstr "first"
+    stloc 15
+    ldloc 14
+    ldc.i4 0
+    ldloc 15
+    stelem string
+    ldstr "last"
+    stloc 15
+    ldloc 14
+    ldc.i4 1
+    ldloc 15
+    stelem string
+    ldloc 14
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterable`1'<string>::.ctor(!0[])
+    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'<string>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

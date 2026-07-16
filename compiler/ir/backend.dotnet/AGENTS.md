@@ -87,9 +87,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementations are the
   generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
   class and erased Iterator/Iterable bridge pipelines as user code, followed by the common
-  `Iterable<T>.first()` operation on the stable physical
-  `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function body
-  runs in the stdlib and works through the erased Iterable/Iterator ABI for every implementation.
+  `Iterable<T>.first()` and `last()` operations on the stable physical
+  `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function
+  bodies run in the stdlib and work through the erased Iterable/Iterator ABI for every
+  implementation.
   The implementation classes are private to Kotlin source but metadata-public because generated
   user assemblies construct them
   across the boundary; their names are therefore compiler/stdlib ABI details, not Kotlin source
@@ -101,8 +102,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   bootstrap machinery and must disappear once a separately built stdlib can be consumed, without
   moving ordinary implementations back into `Kotlin.Runtime`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
-  is a traceable bootstrap extraction of common `Elements.f_first`; only its List fast path is
-  omitted because List has no target ABI yet. Do not add a generator target that emits an
+  and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
+  their List fast paths are omitted because List has no target ABI yet. Do not add a generator target that emits an
   uncompilable broad corpus. The durable endpoint is compiling generated common sources plus
   narrow .NET actuals once standalone stdlib metadata can be consumed.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
@@ -405,12 +406,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   covariance identity. Unlike the common implementation, an empty array currently gets the same
   view object instead of the `emptyList()` singleton; that optimization has no specified semantic
   effect and must wait for a coherent List ABI rather than inventing one here.
-  The first top-level collection implementation is `Iterable<T>.first()` in `Kotlin.Stdlib`.
-  Calls use a real generic method instantiation on `Kotlin.Collections.CollectionsKt`, not an
-  intrinsic copy of the algorithm in each user assembly. Its universal iterator body preserves
-  the common generator's semantics for stdlib and user Iterables; the common List branch remains
-  a deferred optimization. Empty input throws the exact runtime-owned NoSuchElementException with
-  the common message `Collection is empty.`
+  The first top-level collection implementations are `Iterable<T>.first()` and `last()` in
+  `Kotlin.Stdlib`. Calls use real generic method instantiations on
+  `Kotlin.Collections.CollectionsKt`, not intrinsic copies of the algorithms in each user
+  assembly. Their universal iterator bodies preserve the common generator's semantics for stdlib
+  and user Iterables; the common List branches remain deferred optimizations. Empty input throws
+  the exact runtime-owned NoSuchElementException with the common message `Collection is empty.`
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector to
   `ArrayIterator<!n>`/`ArrayIterator<!!n>`; erased Next narrows through
   `unbox.any !n`/`!!n`. The array mapper still rejects `Array<T?>`, projections, concrete
@@ -1499,10 +1500,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - The bootstrap stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package.
   Resolution-only declarations such as `println`, `Char.code`, and array operations are filtered
   through the intrinsic/exception registries and never emitted into a facade. The ordinary Kotlin
-  `ArrayIterator<T>`/`ArrayIterable<T>` declarations and `Iterable<T>.first()` body are different:
-  STDLIB-scoped emission owns them and USER-scoped emission excludes them, yielding the classes
-  and stable `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. USER codegen's
-  `first` intrinsic selects that external generic method; it does not inline the body. Injected
+  `ArrayIterator<T>`/`ArrayIterable<T>` declarations and `Iterable<T>.first()`/`last()` bodies are
+  different: STDLIB-scoped emission owns them and USER-scoped emission excludes them, yielding the
+  classes and stable `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. USER
+  codegen's stdlib operation intrinsics select those external generic methods; they do not inline
+  the bodies. Injected
   declarations must compile without any diagnostics, including warnings: the FIR test
   infrastructure maps every reported diagnostic back to a test file and crashes on diagnostics
   in injected files (suppress e.g. deprecations locally).

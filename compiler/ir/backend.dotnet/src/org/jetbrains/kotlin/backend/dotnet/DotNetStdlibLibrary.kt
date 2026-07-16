@@ -30,6 +30,7 @@ internal object DotNetStdlibLibrary {
     )
     private val implementationFunctionFacadeIlNames = mapOf(
         "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
+        "kotlin.collections.last" to COLLECTIONS_FACADE_IL_NAME,
     )
 
     fun hasImplementation(module: IrModuleFragment): Boolean =
@@ -84,16 +85,19 @@ internal object DotNetStdlibLibrary {
         return function.fqNameWhenAvailable?.asString()?.let(implementationFunctionFacadeIlNames::get)
     }
 
-    /** Calls the open generic stdlib method while instantiating its sole method parameter. */
-    fun iterableFirstCallInstruction(elementType: DotNetIlValueType): String =
-        FIRST_FUNCTION_INFO.renderCallInstruction(
-            methodName = "first",
-            ownerToken = "[$ASSEMBLY_NAME]${FIRST_FUNCTION_INFO.owner.ilTypeRef}",
+    /** Calls an open generic `Iterable<T> -> T` stdlib method at its exact element type. */
+    fun iterableElementFunctionCallInstruction(
+        functionName: String,
+        elementType: DotNetIlValueType,
+    ): String =
+        ITERABLE_ELEMENT_FUNCTION_INFO.renderCallInstruction(
+            methodName = functionName,
+            ownerToken = "[$ASSEMBLY_NAME]${ITERABLE_ELEMENT_FUNCTION_INFO.owner.ilTypeRef}",
             methodInstantiation = listOf(elementType),
         )
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
-    private val FIRST_FUNCTION_INFO = DotNetIlFunctionInfo(
+    private val ITERABLE_ELEMENT_FUNCTION_INFO = DotNetIlFunctionInfo(
         owner = DotNetIlClassInfo(COLLECTIONS_FACADE_IL_NAME),
         signature = DotNetIlMethodSignature(
             returnType = DotNetIlReturnType.Value(

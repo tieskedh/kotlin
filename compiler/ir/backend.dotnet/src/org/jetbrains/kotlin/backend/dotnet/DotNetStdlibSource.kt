@@ -150,6 +150,18 @@ public fun <T> Iterable<T>.first(): T {
     return iterator.next()
 }
 
+// Bootstrap subset of the same generator's Elements.f_last common template. Its List fast path
+// is likewise only an unavailable optimization; the universal Iterator algorithm is the contract.
+public fun <T> Iterable<T>.last(): T {
+    val iterator = iterator()
+    if (!iterator.hasNext())
+        throw NoSuchElementException("Collection is empty.")
+    var last = iterator.next()
+    while (iterator.hasNext())
+        last = iterator.next()
+    return last
+}
+
 // The first executable target-stdlib implementation. It is private in Kotlin source so injected
 // declarations do not expose a provisional user API. The backend emits this class, with public CLR
 // metadata for cross-assembly construction, only into Kotlin.Stdlib. Its Iterator MethodImpl

@@ -41,8 +41,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   bodyless iterator subinterfaces (`f2ca42e73`), followed by Kotlin-owned Iterable identity and
   compiler-generated bridges (`87c9d7711`), and the first `Kotlin.Stdlib.dll`/ordinary Kotlin
   ArrayIterator implementation (`186af0b4d`), followed by the stdlib ArrayIterable/asIterable
-  continuation (`ba7260521`) and the first top-level generated-common stdlib operation,
-  `Iterable<T>.first()`, in the current feature slice.
+  continuation (`ba7260521`) and the first top-level generated-common stdlib operations,
+  `Iterable<T>.first()` and `last()`, in the current feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -61,6 +61,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parsers (4/0/0/0). The box harness verifies the physical generic CollectionsKt method and the
   assembled program covers user/stdlib producers, primitive widening, nullable elements, and the
   empty exception/message. No fresh full suite was run.
+  The `Iterable.last` continuation extends the same pins with a looping common body, mutable
+  generic local, repeated erased Iterator calls, and the same producer/type/empty boundaries. It
+  is the final piecemeal operation proof; further stdlib progress should target standalone
+  compilation and metadata consumption instead of accumulating copied bootstrap functions.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -781,13 +785,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   erased Iterable covariance identity. Empty arrays currently get the same view instead of the
   common stdlib's `emptyList()` optimization because List has no coherent ABI yet; no observable
   Iterable semantics are changed.
-  The next stdlib slice adds the first top-level operation: `Iterable<T>.first()` is emitted only
-  into `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt`, and user call sites invoke the real
-  generic method across the assembly boundary. The Kotlin body is the universal iterator portion
-  of the stdlib generator's common `Elements.f_first` template. Its List fast path is deliberately
-  omitted until List has a coherent ABI; this changes only an optimization. Empty input preserves
-  the common `Collection is empty.` NoSuchElementException behavior. The generator currently has
-  no .NET target; do not add one merely to generate an unsupported broad corpus. The eventual
+  The next stdlib slices add the first top-level operations: `Iterable<T>.first()` and `last()` are
+  emitted only into `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt`, and user call sites invoke
+  the real generic methods across the assembly boundary. Their Kotlin bodies are the universal
+  iterator portions of the stdlib generator's common `Elements.f_first` and `f_last` templates.
+  Their List fast paths are deliberately omitted until List has a coherent ABI; this changes only
+  optimization. Empty input preserves the common `Collection is empty.` NoSuchElementException
+  behavior. Together they prove straight-line and looping generic common bodies; adding more
+  individual operations would not prove standalone stdlib consumption. The generator currently
+  has no .NET target; do not add one merely to generate an unsupported broad corpus. The eventual
   standalone stdlib build should consume generated common sources and narrow .NET actuals.
 - The callable exact-path slice preserves erased `Kotlin.Function0/1/2/3` as the only Kotlin
   callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge

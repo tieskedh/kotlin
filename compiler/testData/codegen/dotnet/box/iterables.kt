@@ -63,6 +63,8 @@ private fun <T> openArrayView(values: Array<T>): Iterable<T> = values.asIterable
 
 private fun <T> firstFrom(values: Iterable<T>): T = values.first()
 
+private fun <T> lastFrom(values: Iterable<T>): T = values.last()
+
 fun box(): String {
     val counting = CountingIterable(4)
     val widened: Iterable<Any> = counting
@@ -128,6 +130,22 @@ fun box(): String {
     } catch (failure: NoSuchElementException) {
         if (failure.message != "Collection is empty.") {
             return "fail 25: stdlib first message: ${failure.message}"
+        }
+    }
+    if (lastFrom(CountingIterable(4)) != 3) return "fail 26: stdlib last user iterable"
+    val widenedLast: Iterable<Any> = CountingIterable(3)
+    if (widenedLast.last() != 2) return "fail 27: stdlib last widened primitive"
+    if (lastFrom(arrayOf("first", "last").asIterable()) != "last") {
+        return "fail 28: stdlib last array view"
+    }
+    val nullableLast: Int? = lastFrom(BaseIterable<Int?>(9))
+    if (nullableLast != 9) return "fail 29: stdlib last nullable primitive"
+    try {
+        emptyArray<String>().asIterable().last()
+        return "fail 30: stdlib last empty did not throw"
+    } catch (failure: NoSuchElementException) {
+        if (failure.message != "Collection is empty.") {
+            return "fail 31: stdlib last message: ${failure.message}"
         }
     }
     return "OK"

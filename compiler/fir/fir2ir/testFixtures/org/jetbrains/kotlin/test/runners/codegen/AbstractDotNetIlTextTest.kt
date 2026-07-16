@@ -357,6 +357,7 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             "'<IterableIteratorBridge>'",
             ".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'",
             ".method public hidebysig static !!0 'first'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
+            ".method public hidebysig static !!0 'last'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
         )
         requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
             assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }

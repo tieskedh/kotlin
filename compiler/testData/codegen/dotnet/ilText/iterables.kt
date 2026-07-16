@@ -34,6 +34,8 @@ fun <T> iterableFromOpenArray(values: Array<T>): Iterable<T> = values.asIterable
 
 fun <T> firstFrom(values: Iterable<T>): T = values.first()
 
+fun <T> lastFrom(values: Iterable<T>): T = values.last()
+
 fun sum(values: Iterable<Int>): Int {
     var result = 0
     for (value in values) result = result + value
@@ -54,4 +56,6 @@ fun main() {
     println(emptyArray<String>().asIterable().iterator().hasNext())
     println(firstFrom(CountingIterable(1)))
     println(arrayOf("stdlib").asIterable().first())
+    println(lastFrom(CountingIterable(3)))
+    println(arrayOf("first", "last").asIterable().last())
 }

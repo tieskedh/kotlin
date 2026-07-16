@@ -294,7 +294,10 @@ internal class DotNetIlIntrinsicMethods(
 
     /** Physical calls to executable Kotlin.Stdlib functions, never inline reimplementations. */
     private fun stdlibFunctionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = listOf(
-        Key(kotlinCollectionsFqn, iterableFqn, "first", emptyList()) to DotNetIlStdlibFirstIntrinsic,
+        Key(kotlinCollectionsFqn, iterableFqn, "first", emptyList())
+                to DotNetIlStdlibIterableElementIntrinsic("first"),
+        Key(kotlinCollectionsFqn, iterableFqn, "last", emptyList())
+                to DotNetIlStdlibIterableElementIntrinsic("last"),
     )
 
     /** Kotlin-owned array content operations; CLR vector identity/collection helpers are not used. */
@@ -1110,13 +1113,15 @@ private class DotNetIlArrayAsIterableIntrinsic(
 }
 
 /**
- * `Iterable<T>.first()` -> the ordinary generic implementation in Kotlin.Stdlib.
+ * An `Iterable<T> -> T` operation -> its ordinary generic implementation in Kotlin.Stdlib.
  *
  * This intrinsic selects a physical cross-assembly method reference only; it does not reproduce
  * the library algorithm in user code. The stdlib emitter deliberately omits this intrinsic and
  * compiles the injected Kotlin body onto the stable CollectionsKt facade.
  */
-private object DotNetIlStdlibFirstIntrinsic : DotNetIlIntrinsicMethod() {
+private class DotNetIlStdlibIterableElementIntrinsic(
+    private val functionName: String,
+) : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
@@ -1124,15 +1129,15 @@ private object DotNetIlStdlibFirstIntrinsic : DotNetIlIntrinsicMethod() {
     ): Boolean {
         if (call.arguments.size != 1 || call.typeArguments.size != 1) return false
         val elementIrType = call.typeArguments.single()
-            ?: dotNetUnsupported("'first' has an unsupported missing type argument")
+            ?: dotNetUnsupported("'$functionName' has an unsupported missing type argument")
         val elementType = codegen.toDotNetIlValueType(elementIrType)
-            ?: dotNetUnsupported("'first' has unsupported element type ${elementIrType.render()}")
+            ?: dotNetUnsupported("'$functionName' has unsupported element type ${elementIrType.render()}")
         if (expectedType != elementType) return false
         val receiver = call.arguments.single()
-            ?: dotNetUnsupported("missing iterable receiver for 'first'")
+            ?: dotNetUnsupported("missing iterable receiver for '$functionName'")
         codegen.emitExpression(receiver, DotNetRuntimeTypes.iterableType)
         codegen.emit(
-            DotNetStdlibLibrary.iterableFirstCallInstruction(elementType),
+            DotNetStdlibLibrary.iterableElementFunctionCallInstruction(functionName, elementType),
             pops = 1,
             pushes = 1,
         )
