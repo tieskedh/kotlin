@@ -87,9 +87,12 @@ lowering evaluates the array once and remains allocation-free. The iterator ABI 
 an explicit `iterator()` call produces a value that can escape or be stored.
 
 The current bounded implementation supports the five established primitive vectors, concrete
-reference-element arrays, and ordinary user classes which directly implement `Iterator<T>`. An
-open `Array<T>.iterator()` producer remains rejected even though an already-created `Iterator<T>`
-can be consumed by a generic function.
+reference-element arrays, open invariant `Array<T>` producers, and ordinary user classes which
+directly implement `Iterator<T>`. An open vector stays exact `!n[]`/`!!n[]` and passes directly to
+the shared `ArrayIterator(System.Array)`; erased `Next()` is narrowed with `unbox.any !n`/`!!n`.
+This does not admit `Array<T?>`, projections, concrete primitive-element generic arrays, or nested
+arrays: their receiver types remain rejected by the structural array mapper before iterator
+lowering runs.
 
 A user implementation retains its logically typed Kotlin members, including `next(): T`. The
 backend adds two private explicit CLR interface implementations on the same object: `HasNext()`
@@ -124,16 +127,16 @@ producers, and an exact exhaustion catch with modern 10.0.9 and .NET Framework 4
 same-assembler and cross-runtime pairings produced the same results.
 
 Repository pins cover both FIR parsers and real CoreCLR execution, including reference,
-primitive, open-generic, covariant, and inherited user implementations:
+primitive, open-generic producer/consumer, covariant, and inherited user implementations:
 
 - `compiler/testData/codegen/dotnet/ilText/arrayIterators.kt`;
 - `compiler/testData/codegen/dotnet/box/arrayIterators.kt`; and
-- the open-producer negative in `genericArraysRejected.kt`.
+- the remaining iterator-family negatives in `genericArraysRejected.kt`.
 
 ## Deferred decisions
 
 This draft does not decide the target-stdlib packaging migration, separately compiled Kotlin
-producer modules, open `Array<T>` producers, user-defined iterator subinterfaces,
+producer modules, user-defined iterator subinterfaces,
 primitive-specialized iterator subclasses, collection/list iterators, mutable iterators,
 sequences, `Iterable<T>`, CLR `IEnumerable<T>`/`IEnumerator<T>` adapters, typed fast-path members,
 or Kotlin metadata encoding. Those layers may add views or optimizations, but ordinary Kotlin
