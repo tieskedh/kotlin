@@ -41,6 +41,263 @@
     .set instance void 'Cell'::'set_value'(int32)
   }
 }
+.class public auto ansi sealed beforefieldinit 'ExtensionDelegate'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'getValue'(class 'Cell' 'receiver', class [Kotlin.Runtime]'Kotlin.KProperty' 'property') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call instance int32 'Cell'::'get_value'()
+    ret
+  }
+  .method public hidebysig instance void 'setValue'(class 'Cell' 'receiver', class [Kotlin.Runtime]'Kotlin.KProperty' 'property', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.3
+    call instance void 'Cell'::'set_value'(int32)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ExtensionHost'
+       extends [mscorlib]System.Object
+{
+  .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$2'
+         extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
+         implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<class 'ExtensionHost', class 'Cell', int32>
+  {
+    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'INSTANCE'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::.ctor()
+      stsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::'INSTANCE'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 6
+      ldarg.0
+      ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<get-delegatedValue>@Cell(){}"
+      ldc.i4 2
+      ldc.i4 0
+      ldc.i4 0
+      ldstr "<get-delegatedValue>"
+      call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+      ret
+    }
+    .method public hidebysig newslot virtual final instance int32 'InvokeExact'(class 'ExtensionHost' 'p0', class 'Cell' 'p1') cil managed
+    {
+      .maxstack 2
+      ldarg.1
+      ldarg.2
+      call instance int32 'ExtensionHost'::'get_delegatedValue'(class 'Cell')
+      ret
+    }
+    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      castclass 'ExtensionHost'
+      ldarg.2
+      castclass 'Cell'
+      callvirt instance int32 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::'InvokeExact'(class 'ExtensionHost', class 'Cell')
+      box [mscorlib]System.Int32
+      ret
+    }
+  }
+  .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$3'
+         extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
+         implements [Kotlin.Runtime]'Kotlin.Function3'
+  {
+    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'INSTANCE'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ExtensionHost'/'ExtensionHost$delegatedValue$3'::.ctor()
+      stsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'ExtensionHost'/'ExtensionHost$delegatedValue$3'::'INSTANCE'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 6
+      ldarg.0
+      ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<set-delegatedValue>@Cell(kotlin.Int){}"
+      ldc.i4 3
+      ldc.i4 0
+      ldc.i4 0
+      ldstr "<set-delegatedValue>"
+      call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+      ret
+    }
+    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'p2') cil managed
+    {
+      .maxstack 3
+      ldarg.1
+      castclass 'ExtensionHost'
+      ldarg.2
+      castclass 'Cell'
+      ldarg.3
+      unbox.any [mscorlib]System.Int32
+      call instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
+      ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+      ret
+    }
+  }
+  .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$4'
+         extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
+         implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<class 'ExtensionHost', class 'Cell', int32>
+  {
+    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'INSTANCE'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::.ctor()
+      stsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::'INSTANCE'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 6
+      ldarg.0
+      ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<get-delegatedValue>@Cell(){}"
+      ldc.i4 2
+      ldc.i4 0
+      ldc.i4 0
+      ldstr "<get-delegatedValue>"
+      call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+      ret
+    }
+    .method public hidebysig newslot virtual final instance int32 'InvokeExact'(class 'ExtensionHost' 'p0', class 'Cell' 'p1') cil managed
+    {
+      .maxstack 2
+      ldarg.1
+      ldarg.2
+      call instance int32 'ExtensionHost'::'get_delegatedValue'(class 'Cell')
+      ret
+    }
+    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1') cil managed
+    {
+      .maxstack 3
+      ldarg.0
+      ldarg.1
+      castclass 'ExtensionHost'
+      ldarg.2
+      castclass 'Cell'
+      callvirt instance int32 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::'InvokeExact'(class 'ExtensionHost', class 'Cell')
+      box [mscorlib]System.Int32
+      ret
+    }
+  }
+  .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$5'
+         extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
+         implements [Kotlin.Runtime]'Kotlin.Function3'
+  {
+    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'INSTANCE'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      newobj instance void 'ExtensionHost'/'ExtensionHost$delegatedValue$5'::.ctor()
+      stsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'ExtensionHost'/'ExtensionHost$delegatedValue$5'::'INSTANCE'
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 6
+      ldarg.0
+      ldstr "local:propertyReferences.kt:619:670:ExtensionHost#<set-delegatedValue>@Cell(kotlin.Int){}"
+      ldc.i4 3
+      ldc.i4 0
+      ldc.i4 0
+      ldstr "<set-delegatedValue>"
+      call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+      ret
+    }
+    .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'p2') cil managed
+    {
+      .maxstack 3
+      ldarg.1
+      castclass 'ExtensionHost'
+      ldarg.2
+      castclass 'Cell'
+      ldarg.3
+      unbox.any [mscorlib]System.Int32
+      call instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
+      ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+      ret
+    }
+  }
+  .field private class 'ExtensionDelegate' 'delegatedValue$delegate'
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    newobj instance void 'ExtensionDelegate'::.ctor()
+    stfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_delegatedValue'(class 'Cell' '<this>') cil managed
+  {
+    .maxstack 5
+    ldarg.0
+    ldfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
+    ldarg.1
+    ldstr "delegatedValue"
+    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::'INSTANCE'
+    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'ExtensionHost'/'ExtensionHost$delegatedValue$3'::'INSTANCE'
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3')
+    call instance int32 'ExtensionDelegate'::'getValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty')
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_delegatedValue'(class 'Cell' '<this>', int32 '<set-?>') cil managed
+  {
+    .maxstack 5
+    ldarg.0
+    ldfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
+    ldarg.1
+    ldstr "delegatedValue"
+    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::'INSTANCE'
+    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'ExtensionHost'/'ExtensionHost$delegatedValue$5'::'INSTANCE'
+    call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3')
+    ldarg.2
+    call instance void 'ExtensionDelegate'::'setValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty', int32)
+    ret
+    ret
+  }
+  .method public hidebysig instance int32 'read'(class 'Cell' 'receiver') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance int32 'ExtensionHost'::'get_delegatedValue'(class 'Cell')
+    ret
+  }
+  .method public hidebysig instance void 'write'(class 'Cell' 'receiver', int32 'value') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
+    ret
+  }
+  .property instance int32 'delegatedValue'()
+  {
+    .get instance int32 'ExtensionHost'::'get_delegatedValue'(class 'Cell')
+    .set instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
+  }
+}
 .class private auto ansi sealed 'propertyReferencesKt$main$read$1'
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
@@ -57,7 +314,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:251:271:#<get-topRead>(){}"
+    ldstr "local:propertyReferences.kt:284:304:#<get-topRead>(){}"
     ldc.i4 0
     ldc.i4 0
     ldc.i4 0
@@ -96,7 +353,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:199:216:#<get-topValue>(){}"
+    ldstr "local:propertyReferences.kt:232:249:#<get-topValue>(){}"
     ldc.i4 0
     ldc.i4 0
     ldc.i4 0
@@ -135,7 +392,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:199:216:#<set-topValue>(kotlin.Int){}"
+    ldstr "local:propertyReferences.kt:232:249:#<set-topValue>(kotlin.Int){}"
     ldc.i4 1
     ldc.i4 0
     ldc.i4 0
@@ -169,7 +426,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:292:306:Cell#<get-value>(){}"
+    ldstr "local:propertyReferences.kt:325:339:Cell#<get-value>(){}"
     ldc.i4 1
     ldc.i4 0
     ldc.i4 0
@@ -211,7 +468,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:292:306:Cell#<set-value>(kotlin.Int){}"
+    ldstr "local:propertyReferences.kt:325:339:Cell#<set-value>(kotlin.Int){}"
     ldc.i4 2
     ldc.i4 0
     ldc.i4 0
@@ -240,7 +497,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:292:306:Cell#<get-value>(){}"
+    ldstr "local:propertyReferences.kt:325:339:Cell#<get-value>(){}"
     ldc.i4 0
     ldc.i4 0
     ldc.i4 1
@@ -289,7 +546,7 @@
   {
     .maxstack 6
     ldarg.0
-    ldstr "local:propertyReferences.kt:292:306:Cell#<set-value>(kotlin.Int){}"
+    ldstr "local:propertyReferences.kt:325:339:Cell#<set-value>(kotlin.Int){}"
     ldc.i4 1
     ldc.i4 0
     ldc.i4 1
@@ -378,7 +635,9 @@
       [14] class [Kotlin.Runtime]'Kotlin.KMutableProperty0' 'bound',
       [15] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@15',
       [16] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>@16',
-      [17] int32 '<callableResult>@17'
+      [17] int32 '<callableResult>@17',
+      [18] class 'ExtensionHost' 'extensionHost',
+      [19] class 'Cell' 'extensionCell'
     )
     ldstr "topRead"
     ldsfld class 'propertyReferencesKt$main$read$1' 'propertyReferencesKt$main$read$1'::'INSTANCE'
@@ -530,6 +789,30 @@ IL_callableErasedFallback_6:
     stloc 17
 IL_callableExactEnd_7:
     ldloc 17
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'ExtensionHost'::.ctor()
+    stloc 18
+    ldc.i4 40
+    newobj instance void 'Cell'::.ctor(int32)
+    stloc 19
+    ldloc 18
+    ldloc 19
+    call instance int32 'ExtensionHost'::'read'(class 'Cell')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 18
+    ldloc 19
+    ldc.i4 42
+    call instance void 'ExtensionHost'::'write'(class 'Cell', int32)
+    ldloc 19
+    call instance int32 'Cell'::'get_value'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

@@ -3,8 +3,9 @@
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
-bounded typed-argument callable capability implemented; bounded Kotlin property-reference values
-and structural callable/property-reference Any semantics implemented at the current tip).
+bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
+structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
+continuation implemented at the current tip).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -30,12 +31,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   adapters, nullable export metadata, default-argument export continuation, immutable
   callable-provenance exact invocation, ordinary top-level function exports, overload-aware
   export selection, top-level property exports, and the measured typed-argument callable
-  capability described below, followed by the bounded erased property-reference representation
-  at the current tip.
+  capability described below, followed by the bounded erased property-reference representation,
+  structural callable-reference identity (`d3433c768`), and the Function3/KMutableProperty2
+  continuation at the current tip.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **494 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **498 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **21 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -710,7 +712,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   CoreCLR. Open `Array<T>` producers and user Iterator implementations stay rejected pending a
   deliberately designed erased bridge. The exact golden's dual-ILAsm result and the fresh full
   suite count are recorded in Branch state above.
-- The callable exact-path slice preserves erased `Kotlin.Function0/1/2` as the only Kotlin
+- The callable exact-path slice preserves erased `Kotlin.Function0/1/2/3` as the only Kotlin
   callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge
   pattern, eligible generated non-Unit callables keep their original typed body as `InvokeExact`
   and make erased `Invoke` call it. A CLR-specific optional
@@ -726,6 +728,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   variance needs no second probe. Mutable locals, parameters, fields, and returns lack this local
   provenance and retain the erased fallback, as do older-module and explicit-user implementations
   that fail every `isinst`. Unit remains erased because CLR void cannot close the generic result.
+  Function3 now receives the same ExactFunctionN execution capability. It deliberately receives no
+  TypedArgumentsFunction3: the cross-module measurement admitted that metadata-public partial
+  contract only for arities 1/2. The separate Func/Action export boundary also remains capped at
+  arity 2.
   `callableexact_s1` assembled exact, fallback, reference-variant, and value-variant cases with
   modern and Framework ILAsm and ran all four runtime pairings. Goldens cover ordinary, capture,
   reference, local-function, and array-initializer contexts; CoreCLR coverage additionally pins
@@ -826,8 +832,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   stores the name plus ordinary lowered getter/setter callable objects; common lowering evaluates
   a bound receiver once and shares its generated storage. Cross-assembly construction goes through
   metadata-public PropertyReferenceFactory methods in Kotlin.Runtime.Internal, not through the
-  export selector and not through a public Kotlin surface. Immutable arities 0..2 and mutable
-  arities 0..1 construct; mutable arity 2 waits for a deliberate Function3 extension. Direct
+  export selector and not through a public Kotlin surface. Immutable and mutable arities 0..2
+  construct. Mutable arity 2 uses the ordinary erased Function3 setter unlocked by the coherent
+  callable-family extension; it introduces no property-specific callable shape. Direct
   get/set, inherited invocation, primitive result widening, bound mutation, and explicit user
   implementations are pinned by `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
   The structural-identity continuation follows Native for function references and Native/Wasm for
@@ -846,6 +853,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   another callable ABI. Focused PSI/LightTree box and IL-text tests pass; the box path assembled the
   runtime and program with modern and Framework 4.8 ILAsm selections and executed both products on
   CoreCLR.
+  The follow-up accessor audit intentionally added no `getter`/`setter` members: common, Native,
+  Wasm, and JS KProperty surfaces omit JVM's target-specific accessor objects. JVM accessors are
+  KFunctions with an `Accessor.property` back-reference, so exposing the wrapper's private stored
+  FunctionN values would be semantically false. Accessor objects wait for a coherent .NET
+  reflection metadata model.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -978,10 +990,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit reflective getter/setter objects.** Determine the smallest coherent KProperty
-   reflection continuation (if any) without pretending owner/return-type/parameter metadata exists.
-   Keep KMutableProperty2 blocked on a deliberate Function3-family decision rather than adding a
-   one-off setter representation.
+1. **Audit local delegated-property tokens.** Determine whether common lowering already supplies a
+   coherent KProperty0 token for local delegates, then pin or diagnose its name/identity behavior
+   without adding JVM-only accessor objects or pretending owner/return-type/parameter metadata
+   exists.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

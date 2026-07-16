@@ -1,4 +1,4 @@
-// Fixed Function0/1/2 objects on CoreCLR: optional exact invocation with erased fallback,
+// Fixed Function0/1/2/3 objects on CoreCLR: optional exact invocation with erased fallback,
 // function-typed plumbing, direct top-level references, Unit materialization, singleton reuse,
 // Kotlin variance across both reference and primitive slots, open generic type arguments, the
 // Function marker, extension receivers, explicit implementations, nullable callable storage,
@@ -12,11 +12,17 @@ private class Doubler : (Int) -> Int {
     override fun invoke(value: Int): Int = value + value
 }
 
+private class SumThree : (Int, Int, Int) -> Int {
+    override fun invoke(first: Int, second: Int, third: Int): Int = first + second + third
+}
+
 private class Offset(private val delta: Int) {
     fun apply(value: Int): Int = value + delta
 }
 
 fun increment(value: Int): Int = value + 1
+
+fun sumThree(first: Int, second: Int, third: Int): Int = first + second + third
 
 fun mark(): Unit {
     unitCalls = unitCalls + 1
@@ -54,6 +60,9 @@ fun call1(function: (Int) -> Int, value: Int): Int = function(value)
 
 fun call2(function: (Int, Int) -> Int, left: Int, right: Int): Int = function(left, right)
 
+fun call3(function: (Int, Int, Int) -> Int, first: Int, second: Int, third: Int): Int =
+    function(first, second, third)
+
 fun callWidened1(function: (Int) -> Any, value: Int): Any = function(value)
 
 fun callWidened2(function: (Int, Int) -> Any, left: Int, right: Int): Any = function(left, right)
@@ -83,9 +92,13 @@ fun box(): String {
     val zero: () -> Int = { 40 }
     val one: (Int) -> Int = { value -> value + 2 }
     val two: (Int, Int) -> Int = { left, right -> left + right }
+    val three: (Int, Int, Int) -> Int = { first, second, third -> first + second + third }
     if (call0(zero) != 40) return "fail 1: Function0"
     if (call1(one, 40) != 42) return "fail 2: Function1"
     if (call2(two, 20, 22) != 42) return "fail 3: Function2"
+    if (call3(three, 10, 12, 20) != 42) return "fail 45: Function3"
+    val threeReference = ::sumThree
+    if (threeReference(10, 12, 20) != 42) return "fail 46: KFunction3"
 
     val reference: (Int) -> Int = ::increment
     if (reference(41) != 42) return "fail 4: direct reference"
@@ -138,6 +151,8 @@ fun box(): String {
 
     val implemented: (Int) -> Int = Doubler()
     if (implemented(21) != 42) return "fail 22: explicit Function implementation"
+    val implementedThree: (Int, Int, Int) -> Int = SumThree()
+    if (implementedThree(10, 12, 20) != 42) return "fail 47: explicit Function3 implementation"
 
     val nullableCallable: (() -> Int)? = null
     if (nullableCallable != null) return "fail 23: nullable callable"

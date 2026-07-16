@@ -194,8 +194,52 @@
     ret
   }
 }
-.class private auto ansi sealed 'callableObjectsKt$main$reference$1'
+.class private auto ansi sealed 'callableObjectsKt$main$three$1'
        extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function3', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>
+{
+  .field public static initonly class 'callableObjectsKt$main$three$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$three$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$three$1' 'callableObjectsKt$main$three$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'first', int32 'second', int32 'third') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.2
+    add
+    ldarg.3
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'first', object 'second', object 'third') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    ldarg.2
+    unbox.any [mscorlib]System.Int32
+    ldarg.3
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'callableObjectsKt$main$three$1'::'InvokeExact'(int32, int32, int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'callableObjectsKt$main$reference$1'
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'callableObjectsKt$main$reference$1' 'INSTANCE'
@@ -208,9 +252,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:callableObjects.kt:580:622:#increment(kotlin.Int){}"
+    ldc.i4 1
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "increment"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0') cil managed
@@ -250,8 +299,66 @@
     .get instance string 'callableObjectsKt$main$reference$1'::'get_name'()
   }
 }
+.class private auto ansi sealed 'callableObjectsKt$main$threeReference$1'
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function3', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>
+{
+  .field public static initonly class 'callableObjectsKt$main$threeReference$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'callableObjectsKt$main$threeReference$1'::.ctor()
+    stsfld class 'callableObjectsKt$main$threeReference$1' 'callableObjectsKt$main$threeReference$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 6
+    ldarg.0
+    ldstr "local:callableObjects.kt:624:703:#sumThree(kotlin.Int;kotlin.Int;kotlin.Int){}"
+    ldc.i4 3
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "sumThree"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'p0', int32 'p1', int32 'p2') cil managed
+  {
+    .maxstack 3
+    ldarg.1
+    ldarg.2
+    ldarg.3
+    call int32 'callableObjectsKt'::'sumThree'(int32, int32, int32)
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1', object 'p2') cil managed
+  {
+    .maxstack 4
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    ldarg.2
+    unbox.any [mscorlib]System.Int32
+    ldarg.3
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'callableObjectsKt$main$threeReference$1'::'InvokeExact'(int32, int32, int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "sumThree"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'callableObjectsKt$main$threeReference$1'::'get_name'()
+  }
+}
 .class private auto ansi sealed 'callableObjectsKt$main$unit$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
 {
   .field public static initonly class 'callableObjectsKt$main$unit$1' 'INSTANCE'
@@ -264,9 +371,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:callableObjects.kt:705:745:#mark(){}"
+    ldc.i4 0
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "mark"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance object 'Invoke'() cil managed
@@ -592,6 +704,16 @@
     add
     ret
   }
+  .method public hidebysig static int32 'sumThree'(int32 'first', int32 'second', int32 'third') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    add
+    ldarg.2
+    add
+    ret
+  }
   .method public hidebysig static void 'mark'() cil managed
   {
     .maxstack 1
@@ -682,73 +804,87 @@ IL_callableExactEnd_1:
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
-    .maxstack 3
+    .maxstack 4
     .locals init (
       [0] class [Kotlin.Runtime]'Kotlin.Function0' 'zero',
       [1] class [Kotlin.Runtime]'Kotlin.Function1' 'one',
       [2] class [Kotlin.Runtime]'Kotlin.Function2' 'two',
-      [3] class [Kotlin.Runtime]'Kotlin.Function1' 'reference',
-      [4] class [Kotlin.Runtime]'Kotlin.Function0' 'unit',
-      [5] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
-      [6] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
-      [7] int32 '<callableResult>',
-      [8] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@8',
-      [9] int32 '<callableArgument>',
-      [10] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@10',
-      [11] int32 '<callableResult>@11',
-      [12] class [Kotlin.Runtime]'Kotlin.Function2' '<callableReceiver>@12',
-      [13] int32 '<callableArgument>@13',
-      [14] int32 '<callableArgument>@14',
-      [15] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32> '<exactCallable>@15',
-      [16] int32 '<callableResult>@16',
-      [17] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@17',
-      [18] int32 '<callableArgument>@18',
-      [19] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@19',
-      [20] int32 '<callableResult>@20',
-      [21] class [Kotlin.Runtime]'Kotlin.Function1' 'broad',
-      [22] class [Kotlin.Runtime]'Kotlin.Function1' 'narrow',
-      [23] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@23',
-      [24] string '<callableArgument>@24',
-      [25] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, object> '<exactCallable>@25',
-      [26] object '<callableResult>@26',
-      [27] class [Kotlin.Runtime]'Kotlin.Function0' 'primitive',
-      [28] class [Kotlin.Runtime]'Kotlin.Function0' 'widened',
-      [29] class [Kotlin.Runtime]'Kotlin.Function1' 'text',
-      [30] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@30',
-      [31] string '<callableArgument>@31',
-      [32] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string> '<exactCallable>@32',
-      [33] string '<callableResult>@33',
-      [34] class [Kotlin.Runtime]'Kotlin.Function0' 'nullablePresent',
-      [35] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableAbsent',
-      [36] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
-      [37] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@37',
-      [38] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>> '<exactCallable>@38',
-      [39] valuetype [mscorlib]System.Nullable`1<int32> '<callableResult>@39',
-      [40] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
-      [41] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
-      [42] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@42',
-      [43] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>> '<exactCallable>@43',
-      [44] valuetype [mscorlib]System.Nullable`1<int32> '<callableResult>@44',
-      [45] valuetype [mscorlib]System.Nullable`1<int32> '<eq>@45',
-      [46] class [Kotlin.Runtime]'Kotlin.Function1' 'boolean',
-      [47] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@47',
-      [48] bool '<callableArgument>@48',
-      [49] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool> '<exactCallable>@49',
-      [50] bool '<callableResult>@50',
-      [51] class [Kotlin.Runtime]'Kotlin.Function0' 'preserved',
-      [52] class [Kotlin.Runtime]'Kotlin.Function' 'marker',
-      [53] class [Kotlin.Runtime]'Kotlin.Function' 'starMarker',
-      [54] class [Kotlin.Runtime]'Kotlin.Function1' 'extension',
-      [55] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@55',
-      [56] string '<callableArgument>@56',
-      [57] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string> '<exactCallable>@57',
-      [58] string '<callableResult>@58',
-      [59] class [Kotlin.Runtime]'Kotlin.Function1' 'implemented',
-      [60] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@60',
-      [61] int32 '<callableArgument>@61',
-      [62] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@62',
-      [63] int32 '<callableResult>@63',
-      [64] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableCallable'
+      [3] class [Kotlin.Runtime]'Kotlin.Function3' 'three',
+      [4] class [Kotlin.Runtime]'Kotlin.Function1' 'reference',
+      [5] class [Kotlin.Runtime]'Kotlin.KFunction' 'threeReference',
+      [6] class [Kotlin.Runtime]'Kotlin.Function0' 'unit',
+      [7] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [8] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [9] int32 '<callableResult>',
+      [10] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@10',
+      [11] int32 '<callableArgument>',
+      [12] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@12',
+      [13] int32 '<callableResult>@13',
+      [14] class [Kotlin.Runtime]'Kotlin.Function2' '<callableReceiver>@14',
+      [15] int32 '<callableArgument>@15',
+      [16] int32 '<callableArgument>@16',
+      [17] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32> '<exactCallable>@17',
+      [18] int32 '<callableResult>@18',
+      [19] class [Kotlin.Runtime]'Kotlin.Function3' '<callableReceiver>@19',
+      [20] int32 '<callableArgument>@20',
+      [21] int32 '<callableArgument>@21',
+      [22] int32 '<callableArgument>@22',
+      [23] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32> '<exactCallable>@23',
+      [24] int32 '<callableResult>@24',
+      [25] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@25',
+      [26] int32 '<callableArgument>@26',
+      [27] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@27',
+      [28] int32 '<callableResult>@28',
+      [29] class [Kotlin.Runtime]'Kotlin.Function3' '<callableReceiver>@29',
+      [30] int32 '<callableArgument>@30',
+      [31] int32 '<callableArgument>@31',
+      [32] int32 '<callableArgument>@32',
+      [33] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32> '<exactCallable>@33',
+      [34] int32 '<callableResult>@34',
+      [35] class [Kotlin.Runtime]'Kotlin.Function1' 'broad',
+      [36] class [Kotlin.Runtime]'Kotlin.Function1' 'narrow',
+      [37] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@37',
+      [38] string '<callableArgument>@38',
+      [39] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, object> '<exactCallable>@39',
+      [40] object '<callableResult>@40',
+      [41] class [Kotlin.Runtime]'Kotlin.Function0' 'primitive',
+      [42] class [Kotlin.Runtime]'Kotlin.Function0' 'widened',
+      [43] class [Kotlin.Runtime]'Kotlin.Function1' 'text',
+      [44] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@44',
+      [45] string '<callableArgument>@45',
+      [46] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string> '<exactCallable>@46',
+      [47] string '<callableResult>@47',
+      [48] class [Kotlin.Runtime]'Kotlin.Function0' 'nullablePresent',
+      [49] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableAbsent',
+      [50] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [51] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@51',
+      [52] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>> '<exactCallable>@52',
+      [53] valuetype [mscorlib]System.Nullable`1<int32> '<callableResult>@53',
+      [54] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [55] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>',
+      [56] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>@56',
+      [57] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>> '<exactCallable>@57',
+      [58] valuetype [mscorlib]System.Nullable`1<int32> '<callableResult>@58',
+      [59] valuetype [mscorlib]System.Nullable`1<int32> '<eq>@59',
+      [60] class [Kotlin.Runtime]'Kotlin.Function1' 'boolean',
+      [61] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@61',
+      [62] bool '<callableArgument>@62',
+      [63] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool> '<exactCallable>@63',
+      [64] bool '<callableResult>@64',
+      [65] class [Kotlin.Runtime]'Kotlin.Function0' 'preserved',
+      [66] class [Kotlin.Runtime]'Kotlin.Function' 'marker',
+      [67] class [Kotlin.Runtime]'Kotlin.Function' 'starMarker',
+      [68] class [Kotlin.Runtime]'Kotlin.Function1' 'extension',
+      [69] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@69',
+      [70] string '<callableArgument>@70',
+      [71] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string> '<exactCallable>@71',
+      [72] string '<callableResult>@72',
+      [73] class [Kotlin.Runtime]'Kotlin.Function1' 'implemented',
+      [74] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>@74',
+      [75] int32 '<callableArgument>@75',
+      [76] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@76',
+      [77] int32 '<callableResult>@77',
+      [78] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableCallable'
     )
     ldsfld class 'callableObjectsKt$main$zero$1' 'callableObjectsKt$main$zero$1'::'INSTANCE'
     stloc.0
@@ -756,178 +892,222 @@ IL_callableExactEnd_1:
     stloc.1
     ldsfld class 'callableObjectsKt$main$two$1' 'callableObjectsKt$main$two$1'::'INSTANCE'
     stloc.2
-    ldsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
+    ldsfld class 'callableObjectsKt$main$three$1' 'callableObjectsKt$main$three$1'::'INSTANCE'
     stloc.3
-    ldsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
+    ldsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
     stloc 4
-    ldloc.0
+    ldsfld class 'callableObjectsKt$main$threeReference$1' 'callableObjectsKt$main$threeReference$1'::'INSTANCE'
     stloc 5
-    ldloc 5
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    ldsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
     stloc 6
-    ldloc 6
-    brfalse IL_callableErasedFallback_0
-    ldloc 6
-    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    ldloc.0
     stloc 7
+    ldloc 7
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc 8
+    ldloc 8
+    brfalse IL_callableErasedFallback_0
+    ldloc 8
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc 9
     br IL_callableExactEnd_1
 IL_callableErasedFallback_0:
-    ldloc 5
+    ldloc 7
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any [mscorlib]System.Int32
-    stloc 7
+    stloc 9
 IL_callableExactEnd_1:
-    ldloc 7
+    ldloc 9
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
-    stloc 8
-    ldc.i4 40
-    stloc 9
-    ldloc 8
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
     stloc 10
-    ldloc 10
-    brfalse IL_callableErasedFallback_2
-    ldloc 10
-    ldloc 9
-    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    ldc.i4 40
     stloc 11
+    ldloc 10
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc 12
+    ldloc 12
+    brfalse IL_callableErasedFallback_2
+    ldloc 12
+    ldloc 11
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc 13
     br IL_callableExactEnd_3
 IL_callableErasedFallback_2:
-    ldloc 8
-    ldloc 9
+    ldloc 10
+    ldloc 11
     box [mscorlib]System.Int32
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     unbox.any [mscorlib]System.Int32
-    stloc 11
+    stloc 13
 IL_callableExactEnd_3:
-    ldloc 11
+    ldloc 13
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
-    stloc 12
-    ldc.i4 20
-    stloc 13
-    ldc.i4 22
     stloc 14
-    ldloc 12
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>
+    ldc.i4 20
     stloc 15
-    ldloc 15
-    brfalse IL_callableErasedFallback_4
-    ldloc 15
-    ldloc 13
-    ldloc 14
-    callvirt instance !2 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>::'InvokeExact'(!0, !1)
+    ldc.i4 22
     stloc 16
+    ldloc 14
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>
+    stloc 17
+    ldloc 17
+    brfalse IL_callableErasedFallback_4
+    ldloc 17
+    ldloc 15
+    ldloc 16
+    callvirt instance !2 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>::'InvokeExact'(!0, !1)
+    stloc 18
     br IL_callableExactEnd_5
 IL_callableErasedFallback_4:
-    ldloc 12
-    ldloc 13
-    box [mscorlib]System.Int32
     ldloc 14
+    ldloc 15
+    box [mscorlib]System.Int32
+    ldloc 16
     box [mscorlib]System.Int32
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function2'::'Invoke'(object, object)
     unbox.any [mscorlib]System.Int32
-    stloc 16
+    stloc 18
 IL_callableExactEnd_5:
-    ldloc 16
+    ldloc 18
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    stloc 17
-    ldc.i4 41
-    stloc 18
-    ldloc 17
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
     stloc 19
-    ldloc 19
-    brfalse IL_callableErasedFallback_6
-    ldloc 19
-    ldloc 18
-    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    ldc.i4 10
     stloc 20
+    ldc.i4 12
+    stloc 21
+    ldc.i4 20
+    stloc 22
+    ldloc 19
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>
+    stloc 23
+    ldloc 23
+    brfalse IL_callableErasedFallback_6
+    ldloc 23
+    ldloc 20
+    ldloc 21
+    ldloc 22
+    callvirt instance !3 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>::'InvokeExact'(!0, !1, !2)
+    stloc 24
     br IL_callableExactEnd_7
 IL_callableErasedFallback_6:
-    ldloc 17
-    ldloc 18
-    box [mscorlib]System.Int32
-    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
-    unbox.any [mscorlib]System.Int32
-    stloc 20
-IL_callableExactEnd_7:
+    ldloc 19
     ldloc 20
+    box [mscorlib]System.Int32
+    ldloc 21
+    box [mscorlib]System.Int32
+    ldloc 22
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function3'::'Invoke'(object, object, object)
+    unbox.any [mscorlib]System.Int32
+    stloc 24
+IL_callableExactEnd_7:
+    ldloc 24
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc 4
+    stloc 25
+    ldc.i4 41
+    stloc 26
+    ldloc 25
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc 27
+    ldloc 27
+    brfalse IL_callableErasedFallback_8
+    ldloc 27
+    ldloc 26
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc 28
+    br IL_callableExactEnd_9
+IL_callableErasedFallback_8:
+    ldloc 25
+    ldloc 26
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc 28
+IL_callableExactEnd_9:
+    ldloc 28
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 5
+    castclass class [Kotlin.Runtime]'Kotlin.Function3'
+    stloc 29
+    ldc.i4 10
+    stloc 30
+    ldc.i4 12
+    stloc 31
+    ldc.i4 20
+    stloc 32
+    ldloc 29
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>
+    stloc 33
+    ldloc 33
+    brfalse IL_callableErasedFallback_10
+    ldloc 33
+    ldloc 30
+    ldloc 31
+    ldloc 32
+    callvirt instance !3 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>::'InvokeExact'(!0, !1, !2)
+    stloc 34
+    br IL_callableExactEnd_11
+IL_callableErasedFallback_10:
+    ldloc 29
+    ldloc 30
+    box [mscorlib]System.Int32
+    ldloc 31
+    box [mscorlib]System.Int32
+    ldloc 32
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function3'::'Invoke'(object, object, object)
+    unbox.any [mscorlib]System.Int32
+    stloc 34
+IL_callableExactEnd_11:
+    ldloc 34
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 6
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     pop
     call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'cached'()
     call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'cached'()
     ceq
-    brtrue IL_boolStrTrue_8
+    brtrue IL_boolStrTrue_12
     ldstr "false"
-    br IL_boolStrEnd_9
-IL_boolStrTrue_8:
+    br IL_boolStrEnd_13
+IL_boolStrTrue_12:
     ldstr "true"
-IL_boolStrEnd_9:
+IL_boolStrEnd_13:
     call void [mscorlib]System.Console::WriteLine(string)
     ldsfld class 'callableObjectsKt$main$broad$1' 'callableObjectsKt$main$broad$1'::'INSTANCE'
-    stloc 21
-    ldloc 21
-    stloc 22
-    ldloc 21
-    ldloc 22
-    ceq
-    brtrue IL_boolStrTrue_10
-    ldstr "false"
-    br IL_boolStrEnd_11
-IL_boolStrTrue_10:
-    ldstr "true"
-IL_boolStrEnd_11:
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 22
-    stloc 23
-    ldstr "reference variance"
-    stloc 24
-    ldloc 23
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, object>
-    stloc 25
-    ldloc 25
-    brfalse IL_callableErasedFallback_12
-    ldloc 25
-    ldloc 24
-    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, object>::'InvokeExact'(!0)
-    stloc 26
-    br IL_callableExactEnd_13
-IL_callableErasedFallback_12:
-    ldloc 23
-    ldloc 24
-    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
-    stloc 26
-IL_callableExactEnd_13:
-    ldloc 26
-    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
-    stloc 27
-    ldloc 27
-    stloc 28
-    ldloc 27
-    ldloc 28
+    stloc 35
+    ldloc 35
+    stloc 36
+    ldloc 35
+    ldloc 36
     ceq
     brtrue IL_boolStrTrue_14
     ldstr "false"
@@ -936,135 +1116,140 @@ IL_boolStrTrue_14:
     ldstr "true"
 IL_boolStrEnd_15:
     call void [mscorlib]System.Console::WriteLine(string)
-    ldsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
-    stloc 29
-    ldloc 29
-    stloc 30
-    ldstr "reference cast"
-    stloc 31
-    ldloc 30
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
-    stloc 32
-    ldloc 32
+    ldloc 36
+    stloc 37
+    ldstr "reference variance"
+    stloc 38
+    ldloc 37
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, object>
+    stloc 39
+    ldloc 39
     brfalse IL_callableErasedFallback_16
-    ldloc 32
-    ldloc 31
-    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>::'InvokeExact'(!0)
-    stloc 33
+    ldloc 39
+    ldloc 38
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, object>::'InvokeExact'(!0)
+    stloc 40
     br IL_callableExactEnd_17
 IL_callableErasedFallback_16:
-    ldloc 30
-    ldloc 31
+    ldloc 37
+    ldloc 38
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    stloc 40
+IL_callableExactEnd_17:
+    ldloc 40
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
+    stloc 41
+    ldloc 41
+    stloc 42
+    ldloc 41
+    ldloc 42
+    ceq
+    brtrue IL_boolStrTrue_18
+    ldstr "false"
+    br IL_boolStrEnd_19
+IL_boolStrTrue_18:
+    ldstr "true"
+IL_boolStrEnd_19:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
+    stloc 43
+    ldloc 43
+    stloc 44
+    ldstr "reference cast"
+    stloc 45
+    ldloc 44
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
+    stloc 46
+    ldloc 46
+    brfalse IL_callableErasedFallback_20
+    ldloc 46
+    ldloc 45
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>::'InvokeExact'(!0)
+    stloc 47
+    br IL_callableExactEnd_21
+IL_callableErasedFallback_20:
+    ldloc 44
+    ldloc 45
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     castclass [mscorlib]System.String
-    stloc 33
-IL_callableExactEnd_17:
-    ldloc 33
+    stloc 47
+IL_callableExactEnd_21:
+    ldloc 47
     call void [mscorlib]System.Console::WriteLine(string)
     ldsfld class 'callableObjectsKt$main$nullablePresent$1' 'callableObjectsKt$main$nullablePresent$1'::'INSTANCE'
-    stloc 34
+    stloc 48
     ldsfld class 'callableObjectsKt$main$nullableAbsent$1' 'callableObjectsKt$main$nullableAbsent$1'::'INSTANCE'
-    stloc 35
-    ldloc 34
-    stloc 37
-    ldloc 37
+    stloc 49
+    ldloc 48
+    stloc 51
+    ldloc 51
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>>
-    stloc 38
-    ldloc 38
-    brfalse IL_callableErasedFallback_18
-    ldloc 38
+    stloc 52
+    ldloc 52
+    brfalse IL_callableErasedFallback_22
+    ldloc 52
     callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>>::'InvokeExact'()
-    stloc 39
-    br IL_callableExactEnd_19
-IL_callableErasedFallback_18:
-    ldloc 37
+    stloc 53
+    br IL_callableExactEnd_23
+IL_callableErasedFallback_22:
+    ldloc 51
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any valuetype [mscorlib]System.Nullable`1<int32>
-    stloc 39
-IL_callableExactEnd_19:
-    ldloc 39
-    stloc 36
-    ldloc 36
-    stloc 40
-    ldloca 40
+    stloc 53
+IL_callableExactEnd_23:
+    ldloc 53
+    stloc 50
+    ldloc 50
+    stloc 54
+    ldloca 54
     call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
     ldc.i4.0
     ceq
-    brfalse IL_whenNext_21
+    brfalse IL_whenNext_25
     ldc.i4 -1
-    br IL_whenEnd_20
-IL_whenNext_21:
-    ldloc 36
-    stloc 41
-    ldloca 41
+    br IL_whenEnd_24
+IL_whenNext_25:
+    ldloc 50
+    stloc 55
+    ldloca 55
     call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
-    brtrue IL_notNull_22
+    brtrue IL_notNull_26
     newobj instance void [mscorlib]System.NullReferenceException::.ctor()
     throw
-IL_notNull_22:
-    ldloca 41
+IL_notNull_26:
+    ldloca 55
     call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
-IL_whenEnd_20:
+IL_whenEnd_24:
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 35
-    stloc 42
-    ldloc 42
+    ldloc 49
+    stloc 56
+    ldloc 56
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>>
-    stloc 43
-    ldloc 43
-    brfalse IL_callableErasedFallback_23
-    ldloc 43
+    stloc 57
+    ldloc 57
+    brfalse IL_callableErasedFallback_27
+    ldloc 57
     callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>>::'InvokeExact'()
-    stloc 44
-    br IL_callableExactEnd_24
-IL_callableErasedFallback_23:
-    ldloc 42
+    stloc 58
+    br IL_callableExactEnd_28
+IL_callableErasedFallback_27:
+    ldloc 56
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
     unbox.any valuetype [mscorlib]System.Nullable`1<int32>
-    stloc 44
-IL_callableExactEnd_24:
-    ldloc 44
-    stloc 45
-    ldloca 45
+    stloc 58
+IL_callableExactEnd_28:
+    ldloc 58
+    stloc 59
+    ldloca 59
     call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
     ldc.i4.0
     ceq
-    brtrue IL_boolStrTrue_25
-    ldstr "false"
-    br IL_boolStrEnd_26
-IL_boolStrTrue_25:
-    ldstr "true"
-IL_boolStrEnd_26:
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
-    stloc 46
-    ldloc 46
-    stloc 47
-    ldc.i4.0
-    stloc 48
-    ldloc 47
-    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>
-    stloc 49
-    ldloc 49
-    brfalse IL_callableErasedFallback_27
-    ldloc 49
-    ldloc 48
-    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>::'InvokeExact'(!0)
-    stloc 50
-    br IL_callableExactEnd_28
-IL_callableErasedFallback_27:
-    ldloc 47
-    ldloc 48
-    box [mscorlib]System.Boolean
-    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
-    unbox.any [mscorlib]System.Boolean
-    stloc 50
-IL_callableExactEnd_28:
-    ldloc 50
     brtrue IL_boolStrTrue_29
     ldstr "false"
     br IL_boolStrEnd_30
@@ -1072,26 +1257,31 @@ IL_boolStrTrue_29:
     ldstr "true"
 IL_boolStrEnd_30:
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 27
-    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'preserve'<int32>(class [Kotlin.Runtime]'Kotlin.Function0')
-    stloc 51
-    ldloc 27
-    ldloc 51
-    ceq
-    brtrue IL_boolStrTrue_31
-    ldstr "false"
-    br IL_boolStrEnd_32
-IL_boolStrTrue_31:
-    ldstr "true"
-IL_boolStrEnd_32:
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 27
-    stloc 52
-    ldloc 52
-    stloc 53
-    ldloc 52
-    ldloc 27
-    ceq
+    ldsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
+    stloc 60
+    ldloc 60
+    stloc 61
+    ldc.i4.0
+    stloc 62
+    ldloc 61
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>
+    stloc 63
+    ldloc 63
+    brfalse IL_callableErasedFallback_31
+    ldloc 63
+    ldloc 62
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>::'InvokeExact'(!0)
+    stloc 64
+    br IL_callableExactEnd_32
+IL_callableErasedFallback_31:
+    ldloc 61
+    ldloc 62
+    box [mscorlib]System.Boolean
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Boolean
+    stloc 64
+IL_callableExactEnd_32:
+    ldloc 64
     brtrue IL_boolStrTrue_33
     ldstr "false"
     br IL_boolStrEnd_34
@@ -1099,8 +1289,11 @@ IL_boolStrTrue_33:
     ldstr "true"
 IL_boolStrEnd_34:
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 53
-    ldloc 27
+    ldloc 41
+    call class [Kotlin.Runtime]'Kotlin.Function0' 'callableObjectsKt'::'preserve'<int32>(class [Kotlin.Runtime]'Kotlin.Function0')
+    stloc 65
+    ldloc 41
+    ldloc 65
     ceq
     brtrue IL_boolStrTrue_35
     ldstr "false"
@@ -1109,56 +1302,80 @@ IL_boolStrTrue_35:
     ldstr "true"
 IL_boolStrEnd_36:
     call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 41
+    stloc 66
+    ldloc 66
+    stloc 67
+    ldloc 66
+    ldloc 41
+    ceq
+    brtrue IL_boolStrTrue_37
+    ldstr "false"
+    br IL_boolStrEnd_38
+IL_boolStrTrue_37:
+    ldstr "true"
+IL_boolStrEnd_38:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 67
+    ldloc 41
+    ceq
+    brtrue IL_boolStrTrue_39
+    ldstr "false"
+    br IL_boolStrEnd_40
+IL_boolStrTrue_39:
+    ldstr "true"
+IL_boolStrEnd_40:
+    call void [mscorlib]System.Console::WriteLine(string)
     ldsfld class 'callableObjectsKt$main$extension$1' 'callableObjectsKt$main$extension$1'::'INSTANCE'
-    stloc 54
-    ldloc 54
-    stloc 55
+    stloc 68
+    ldloc 68
+    stloc 69
     ldstr "extension receiver"
-    stloc 56
-    ldloc 55
+    stloc 70
+    ldloc 69
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
-    stloc 57
-    ldloc 57
-    brfalse IL_callableErasedFallback_37
-    ldloc 57
-    ldloc 56
+    stloc 71
+    ldloc 71
+    brfalse IL_callableErasedFallback_41
+    ldloc 71
+    ldloc 70
     callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>::'InvokeExact'(!0)
-    stloc 58
-    br IL_callableExactEnd_38
-IL_callableErasedFallback_37:
-    ldloc 55
-    ldloc 56
+    stloc 72
+    br IL_callableExactEnd_42
+IL_callableErasedFallback_41:
+    ldloc 69
+    ldloc 70
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     castclass [mscorlib]System.String
-    stloc 58
-IL_callableExactEnd_38:
-    ldloc 58
+    stloc 72
+IL_callableExactEnd_42:
+    ldloc 72
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'Doubler'::.ctor()
-    stloc 59
-    ldloc 59
-    stloc 60
+    stloc 73
+    ldloc 73
+    stloc 74
     ldc.i4 21
-    stloc 61
-    ldloc 60
+    stloc 75
+    ldloc 74
     isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
-    stloc 62
-    ldloc 62
-    brfalse IL_callableErasedFallback_39
-    ldloc 62
-    ldloc 61
+    stloc 76
+    ldloc 76
+    brfalse IL_callableErasedFallback_43
+    ldloc 76
+    ldloc 75
     callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
-    stloc 63
-    br IL_callableExactEnd_40
-IL_callableErasedFallback_39:
-    ldloc 60
-    ldloc 61
+    stloc 77
+    br IL_callableExactEnd_44
+IL_callableErasedFallback_43:
+    ldloc 74
+    ldloc 75
     box [mscorlib]System.Int32
     callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
     unbox.any [mscorlib]System.Int32
-    stloc 63
-IL_callableExactEnd_40:
-    ldloc 63
+    stloc 77
+IL_callableExactEnd_44:
+    ldloc 77
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -1177,16 +1394,16 @@ IL_callableExactEnd_40:
     call !!0 'callableObjectsKt'::'callGeneric'<string>(class [Kotlin.Runtime]'Kotlin.Function1', !!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldnull
-    stloc 64
-    ldloc 64
+    stloc 78
+    ldloc 78
     ldnull
     ceq
-    brtrue IL_boolStrTrue_41
+    brtrue IL_boolStrTrue_45
     ldstr "false"
-    br IL_boolStrEnd_42
-IL_boolStrTrue_41:
+    br IL_boolStrEnd_46
+IL_boolStrTrue_45:
     ldstr "true"
-IL_boolStrEnd_42:
+IL_boolStrEnd_46:
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

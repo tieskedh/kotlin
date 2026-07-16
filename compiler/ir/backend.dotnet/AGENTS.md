@@ -84,9 +84,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   function types and erased
   executable descriptors, with CLR `object` replacing JVM Object):
   Kotlin-to-Kotlin callable storage uses the public non-generic runtime interfaces
-  `Kotlin.Function`, `Kotlin.Function0`, `Kotlin.Function1`, and `Kotlin.Function2`; it never uses
-  `System.Func`/`System.Action`. The fixed interfaces expose exactly `object Invoke(...)`, with one
-  `object` parameter per logical argument. Source `kotlin.Function<R>` and `Function<*>` map to the
+  `Kotlin.Function`, `Kotlin.Function0`, `Kotlin.Function1`, `Kotlin.Function2`, and
+  `Kotlin.Function3`; it never uses `System.Func`/`System.Action`. The fixed interfaces expose
+  exactly `object Invoke(...)`, with one `object` parameter per logical argument. Source
+  `kotlin.Function<R>` and `Function<*>` map to the
   non-invokable `Kotlin.Function` marker without changing identity. Nullable callable references
   keep the same physical interface. Kotlin's `in`/`out` type arguments remain compiler-level
   type information rather than CLR-reified interface identity, so every legal variance conversion
@@ -106,9 +107,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   memberless `Kotlin.KFunction : KCallable, Function` marker. A direct function-reference object
   implements that marker AND exactly one erased `Kotlin.FunctionN`; lambdas and adapted references
   without a KFunction source type remain FunctionN-only. KFunction declares no invocation member.
-  Source `KFunction0`/`KFunction1`/`KFunction2` storage maps to the non-generic KFunction view, and
-  invocation or widening to FunctionN performs a checked interface view change on the SAME object
-  before calling the unchanged erased `Invoke`. This is reflection capability, not a second
+  Source `KFunction0`/`KFunction1`/`KFunction2`/`KFunction3` storage maps to the non-generic
+  KFunction view, and invocation or widening to FunctionN performs a checked interface view change
+  on the SAME object before calling the unchanged erased `Invoke`. This is reflection capability,
+  not a second
   callable execution/identity ABI and never creates a wrapper. Erasure makes overloads differing only in logical
   function arguments collide; the existing CLR method-identity gate rejects both overloads and
   lets unrelated declarations survive, matching the JVM platform-clash category. `callableabi_s2`
@@ -147,9 +149,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/callableObjects.kt`, `ilText/callableCaptures.kt`, `ilText/callableReferences.kt`,
   `ilText/callableObjectsRejected.kt`, `box/callableObjects.kt`, and
   `box/callableReferences.kt`.
-  Generated non-Unit callables now follow the JVM typed-body-plus-erased-bridge pattern while
-  retaining the sole FunctionN identity. The original typed body is `InvokeExact`; the erased
-  bridge calls it. The CLR-specific discovery mechanism is one optional, variant
+  Generated non-Unit Function0/1/2/3 callables now follow the JVM typed-body-plus-erased-bridge
+  pattern while retaining the sole FunctionN identity. The original typed body is `InvokeExact`;
+  the erased bridge calls it. The CLR-specific discovery mechanism is one optional, variant
   `[Kotlin.Runtime]Kotlin.Runtime.Internal.ExactFunctionN<P..., R>` interface on that same object.
   It is metadata-public only because generated modules consume it across the runtime assembly
   boundary; it is neither a Kotlin source declaration nor a storage/interface identity. A
@@ -172,6 +174,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Explicit user implementations and older modules remain valid because every optional path is
   guarded by `isinst`. Unit stays erased because void cannot close a generic result slot and the
   Framework benchmark did not justify an Action-like partial capability.
+  Function3 has the exact capability but deliberately no TypedArgumentsFunction3: the partial
+  interface is a metadata-public runtime contract, and the cross-module allocation/throughput
+  evidence that justified only Function1/2 has not been repeated for arity 3. The CLR export
+  boundary separately remains capped at Function0/1/2 and has no Func/Action3 adapters.
   `callableexact_s1` assembled and ran identical, erased-only, reference-variant, and value-variant
   cases with both ILAsm versions and all four runtime pairings. `callable_capability_s1` first
   proved the partial shape on both runtimes. The separately compiled
@@ -271,7 +277,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   with both ILAsm versions; Roslyn consumers ran mutability, nullability, callable identity and
   invocation, read-only access, and reflection checks on CoreCLR and Framework. Detailed
   decisions are in the callable, CLR-default, and CLR-property draft ADRs.
-  STAYS REJECTED, loudly: suspend callables, callable arity above 2,
+  STAYS REJECTED, loudly: suspend callables, Kotlin callable arity above 3, explicit CLR callable
+  export arity above 2,
   KCallable metadata beyond `name`, property-reference reflection beyond direct get/set/invoke,
   reflective lookup/call APIs,
   implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin
@@ -295,15 +302,19 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   setter classes, and common property-reference lowering evaluates a non-trivial bound receiver
   once before sharing it. Private runtime wrappers are created through metadata-public
   `Kotlin.Runtime.Internal.PropertyReferenceFactory` methods, a compiler/runtime contract rather
-  than source API. Immutable arities 0..2 and mutable arities 0..1 are constructed; mutable arity
-  2 remains unsupported until Function3 is designed as part of the callable family. Direct
+  than source API. Immutable and mutable arities 0..2 are constructed. Mutable arity 2 uses the
+  coherently extended erased Function3 family for its ordinary Unit-returning setter object; it
+  does not introduce a property-specific callable shape. Direct
   `get`/`set`, FunctionN invocation, primitive result variance, bound mutation, and explicit user
   implementations use the universal erased slots. Following Native/Wasm, runtime-owned wrappers
   compare their exact private wrapper kind, name, structurally equal getter, and optional setter;
   bound receivers participate through those callable references. Equal wrappers hash the same and
   render `property <name> (Kotlin reflection is not available)`. User implementations keep their
-  own Any behavior. Full reflection, local delegated-property reflection, and exact property-
-  access capabilities remain deferred.
+  own Any behavior. JVM-shaped getter/setter accessor objects are not exposed: the common expect
+  declaration and Native/Wasm/JS actuals omit them, while JVM adds a target-specific surface whose
+  Accessor points back to its property and is also a KFunction. Returning the wrapper's stored
+  FunctionN would be semantically false. Full reflection, accessor objects, local delegated-
+  property reflection, and exact property-access capabilities remain deferred.
   Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
 - Iterator ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
   series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an

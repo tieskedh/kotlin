@@ -62,7 +62,7 @@ internal class DotNetExactCallableSymbols(
             irModuleFragment,
             FqName("kotlin.runtime.internal"),
         )
-        List(3) { arity ->
+        List(4) { arity ->
             val irClass = irFactory.buildClass {
                 origin = IrDeclarationOrigin.IR_BUILTINS_STUB
                 name = Name.identifier("ExactFunction$arity")
@@ -103,7 +103,7 @@ internal class DotNetExactCallableSymbols(
         }
     }
 
-    /** Exact interface view for a non-suspend, non-Unit Function0/1/2-like type. */
+    /** Exact interface view for a non-suspend, non-Unit Function0/1/2/3-like type. */
     fun typeFor(callableType: IrType): IrType? {
         if ((!callableType.isFunction() && !callableType.isKFunction()) ||
             callableType.isSuspendFunction() || callableType.isKSuspendFunction()

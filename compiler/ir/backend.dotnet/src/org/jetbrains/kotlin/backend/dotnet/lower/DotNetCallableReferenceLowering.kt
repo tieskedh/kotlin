@@ -140,7 +140,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         val reflectiveType = reference.type.takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
         val erasedExecutionType = reflectiveType?.let {
             val arity = it.arguments.size - 1
-            if (arity !in 0..2) null
+            if (arity !in 0..3) null
             else context.irBuiltIns.functionN(arity).symbol.typeWithArguments(it.arguments)
         }
         return listOfNotNull(erasedExecutionType, exactType, typedArgumentsType)
@@ -151,7 +151,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             .takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
         if (reflectiveType != null) {
             val arity = reflectiveType.arguments.size - 1
-            if (arity in 0..2) {
+            if (arity in 0..3) {
                 val executionInvoke = context.irBuiltIns.functionN(arity).invokeFun
                     ?: error("Internal .NET backend error: kotlin.Function$arity has no invoke member")
                 if (executionInvoke.symbol !in invokeFunction.overriddenSymbols) {
@@ -348,7 +348,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             functionReferenceClass.superTypes.none { superType ->
                 superType.classOrNull?.owner?.dotNetFixedFunctionArityOrNull() != null
             } ->
-                "does not use a supported fixed Function0, Function1, or Function2 interface"
+                "does not use a supported fixed Function0, Function1, Function2, or Function3 interface"
             else -> null
         }
     }
