@@ -208,16 +208,15 @@ internal object DotNetRuntimeTypes {
     }
 
     /**
-     * The typed CLR delegate returned by one explicit callable-factory export and the runtime
-     * projection call that constructs it. A Unit result selects Action; every other result
-     * selects Func. The open `!!n` signature in the member reference is the declaration
-     * signature of the generic runtime helper, while [closedDelegateType] is the concrete return
-     * type of the generated facade method.
+     * Both directions of one explicit CLR delegate boundary. A Unit result selects Action;
+     * every other result selects Func. The open `!!n` signatures in the member references are
+     * the declaration signatures of the generic runtime helpers, while [closedDelegateType] is
+     * the concrete parameter or return type of the generated facade method.
      */
-    fun delegateProjection(
+    fun delegateBoundary(
         parameterTypes: List<DotNetIlValueType>,
         resultType: DotNetIlValueType?,
-    ): DotNetDelegateProjection {
+    ): DotNetDelegateBoundary {
         val arity = parameterTypes.size
         require(arity in fixedFunctionClasses.indices) { "unsupported callable export arity $arity" }
         val returnsUnit = resultType == null
@@ -225,15 +224,16 @@ internal object DotNetRuntimeTypes {
         val family = if (returnsUnit) "Action" else "Func"
         val closedDelegateType = renderDelegateType(family, typeArguments.map { it.nameInSignature })
         val openDelegateType = renderDelegateType(family, typeArguments.indices.map { "!!$it" })
-        val methodName = "To$family$arity"
         val instantiation = typeArguments.takeIf { it.isNotEmpty() }
             ?.joinToString(", ", "<", ">") { it.nameInSignature }
             .orEmpty()
         val helperOwner = "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "Kotlin.Runtime.Internal.DelegateProjection".toIlIdentifier()
-        val projectionCall = "call $openDelegateType $helperOwner::${methodName.toIlIdentifier()}$instantiation(" +
+        val projectionCall = "call $openDelegateType $helperOwner::${"To$family$arity".toIlIdentifier()}$instantiation(" +
                 "${fixedFunctionType(arity).nameInSignature})"
-        return DotNetDelegateProjection(closedDelegateType, projectionCall)
+        val adaptationCall = "call ${fixedFunctionType(arity).nameInSignature} " +
+                "$helperOwner::${"From$family$arity".toIlIdentifier()}$instantiation($openDelegateType)"
+        return DotNetDelegateBoundary(closedDelegateType, projectionCall, adaptationCall)
     }
 
     private fun renderDelegateType(family: String, arguments: List<String>): String {
@@ -249,9 +249,10 @@ internal object DotNetRuntimeTypes {
     )
 }
 
-internal data class DotNetDelegateProjection(
+internal data class DotNetDelegateBoundary(
     val closedDelegateType: String,
     val projectionCallInstruction: String,
+    val adaptationCallInstruction: String,
 )
 
 private val IrClass.isDotNetFunctionBase: Boolean
