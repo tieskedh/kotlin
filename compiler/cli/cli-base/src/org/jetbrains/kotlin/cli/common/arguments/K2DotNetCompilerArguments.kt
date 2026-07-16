@@ -58,7 +58,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         value = "-Xdotnet-export",
         delimiter = Argument.Delimiters.none,
         valueDescription = "<kotlin-fq-name>=<clr-method-name>",
-        description = "Export a top-level callable factory through a typed CLR Func/Action facade method. " +
+        description = "Export top-level Function0/1/2 parameters and returns through a typed CLR Func/Action facade method. " +
                 "May be repeated."
     )
     var dotNetExports: Array<String>? = null

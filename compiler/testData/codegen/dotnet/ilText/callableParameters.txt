@@ -1,0 +1,271 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'callableParameters' {}
+.module 'main-callableParameters.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'demo.callableParametersKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'callZero'(class [Kotlin.Runtime]'Kotlin.Function0' 'callback') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function0' '<callableReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32> '<exactCallable>',
+      [2] int32 '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_callableErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>::'InvokeExact'()
+    stloc.2
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_callableExactEnd_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32 'callZeroDelegate'(class [mscorlib]System.Func`1<int32> 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc0'<int32>(class [mscorlib]System.Func`1<!!0>)
+    call int32 'demo.callableParametersKt'::'callZero'(class [Kotlin.Runtime]'Kotlin.Function0')
+    ret
+  }
+  .method public hidebysig static int32 'callOne'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'callOneDelegate'(class [mscorlib]System.Func`2<int32, int32> 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 1
+    call int32 'demo.callableParametersKt'::'callOne'(class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'callTwo'(class [Kotlin.Runtime]'Kotlin.Function2' 'callback', int32 'left', int32 'right') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function2' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] int32 '<callableArgument>@2',
+      [3] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32> '<exactCallable>',
+      [4] int32 '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldarg.2
+    stloc.2
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>
+    stloc.3
+    ldloc.3
+    brfalse IL_callableErasedFallback_0
+    ldloc.3
+    ldloc.1
+    ldloc.2
+    callvirt instance !2 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>::'InvokeExact'(!0, !1)
+    stloc 4
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    ldloc.2
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function2'::'Invoke'(object, object)
+    unbox.any [mscorlib]System.Int32
+    stloc 4
+IL_callableExactEnd_1:
+    ldloc 4
+    ret
+  }
+  .method public hidebysig static int32 'callTwoDelegate'(class [mscorlib]System.Func`3<int32, int32, int32> 'callback', int32 'left', int32 'right') cil managed
+  {
+    .maxstack 3
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc2'<int32, int32, int32>(class [mscorlib]System.Func`3<!!0, !!1, !!2>)
+    ldarg 1
+    ldarg 2
+    call int32 'demo.callableParametersKt'::'callTwo'(class [Kotlin.Runtime]'Kotlin.Function2', int32, int32)
+    ret
+  }
+  .method public hidebysig static valuetype [mscorlib]System.Nullable`1<int32> 'callNullable'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', valuetype [mscorlib]System.Nullable`1<int32> 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>> '<exactCallable>',
+      [3] valuetype [mscorlib]System.Nullable`1<int32> '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box valuetype [mscorlib]System.Nullable`1<int32>
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static valuetype [mscorlib]System.Nullable`1<int32> 'callNullableDelegate'(class [mscorlib]System.Func`2<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>> 'callback', valuetype [mscorlib]System.Nullable`1<int32> 'value') cil managed
+  {
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 1
+    call valuetype [mscorlib]System.Nullable`1<int32> 'demo.callableParametersKt'::'callNullable'(class [Kotlin.Runtime]'Kotlin.Function1', valuetype [mscorlib]System.Nullable`1<int32>)
+    ret
+  }
+  .method public hidebysig static void 'runZero'(class [Kotlin.Runtime]'Kotlin.Function0' 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function0'::'Invoke'()
+    pop
+    ret
+  }
+  .method public hidebysig static void 'runZeroAction'(class [mscorlib]System.Action 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function0' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromAction0'(class [mscorlib]System.Action)
+    call void 'demo.callableParametersKt'::'runZero'(class [Kotlin.Runtime]'Kotlin.Function0')
+    ret
+  }
+  .method public hidebysig static void 'runOne'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    pop
+    ret
+  }
+  .method public hidebysig static void 'runOneAction'(class [mscorlib]System.Action`1<int32> 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromAction1'<int32>(class [mscorlib]System.Action`1<!!0>)
+    ldarg 1
+    call void 'demo.callableParametersKt'::'runOne'(class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static void 'runTwo'(class [Kotlin.Runtime]'Kotlin.Function2' 'callback', int32 'left', int32 'right') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    box [mscorlib]System.Int32
+    ldarg.2
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function2'::'Invoke'(object, object)
+    pop
+    ret
+  }
+  .method public hidebysig static void 'runTwoAction'(class [mscorlib]System.Action`2<int32, int32> 'callback', int32 'left', int32 'right') cil managed
+  {
+    .maxstack 3
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromAction2'<int32, int32>(class [mscorlib]System.Action`2<!!0, !!1>)
+    ldarg 1
+    ldarg 2
+    call void 'demo.callableParametersKt'::'runTwo'(class [Kotlin.Runtime]'Kotlin.Function2', int32, int32)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'echoOne'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class [mscorlib]System.Func`2<int32, int32> 'echoOneDelegate'(class [mscorlib]System.Func`2<int32, int32> 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableParametersKt'::'echoOne'(class [Kotlin.Runtime]'Kotlin.Function1')
+    call class [mscorlib]System.Func`2<!!0, !!1> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToFunc1'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'echoUnitOne'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class [mscorlib]System.Action`1<int32> 'echoUnitOneAction'(class [mscorlib]System.Action`1<int32> 'callback') cil managed
+  {
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromAction1'<int32>(class [mscorlib]System.Action`1<!!0>)
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableParametersKt'::'echoUnitOne'(class [Kotlin.Runtime]'Kotlin.Function1')
+    call class [mscorlib]System.Action`1<!!0> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToAction1'<int32>(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+}

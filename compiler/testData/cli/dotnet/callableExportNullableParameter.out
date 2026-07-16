@@ -1,0 +1,2 @@
+error: cannot export 'sample.acceptNullable' as 'Accept': nullable callable parameter 'callback' requires a CLR nullability-metadata policy.
+COMPILATION_ERROR

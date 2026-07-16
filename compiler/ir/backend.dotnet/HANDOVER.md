@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(array content operations complete; first explicit CLR callable export boundary implemented).
+(array content operations complete; explicit CLR callable parameter/return boundary implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -23,13 +23,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   callable exact path (`e977cba1b`), the delegate-projection boundary freeze (`9e7c608d5`), and
   exact negative-array-size identity (`2448c404c`), shallow array-content equality (`359d01490`),
   recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
-  by the stringification slice and first explicit callable-factory export slice described below.
+  by the stringification slice, first explicit callable-factory export, and callable-parameter
+  adapter continuation described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **482 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **484 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
-  **12 tests, 0 failures, 0 errors, 0 skips**.
+  **13 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -719,20 +720,24 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parameter/open-generic calls, nullable primitives, variance, captures, bound references, Unit,
   explicit fallback, and receiver/argument/invocation order. Delegate projection remains a
   separate export layer; the boundary audit follows below.
-- The first explicit CLR export boundary is compiler configuration, not a Kotlin annotation or
-  automatic overload policy: repeatable
-  `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one public, non-generic top-level
-  factory returning a non-null Function0/1/2. Its canonical FunctionN method remains unchanged;
-  one user-named method on the existing file facade returns typed Func or Action. The runtime
+- The explicit CLR export boundary is compiler configuration, not a Kotlin annotation or automatic
+  overload policy: repeatable `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one
+  public, non-generic top-level function with at least one non-null Function0/1/2 parameter or
+  return. Its canonical FunctionN signature remains unchanged; one user-named method on the
+  existing file facade exposes only those callable positions as typed Func/Action. The runtime
   projection helper binds exact Func directly to InvokeExact, falls back through closed generic
-  box/unbox thunks for erased implementations, and discards Kotlin.Unit in Action thunks. Same
-  object/shape projections compare delegate-equal; exceptions pass unchanged. Callable parameters,
-  nullable callable returns, overloaded selectors, name/signature collisions, generic factories,
-  KFunction/suspend returns, and arities above two are loud errors. `delegateexport_s1` executed all
-  arities/exact/fallback/Unit shapes with both runtimes; a compiler-produced facade and the landed
-  runtime executed exact, erased, equality, and Action checks on modern and Framework. The dual-
-  parser golden pins every Func/Action arity, and the generated CLI suite pins the option. Reverse
-  delegate adaptation and round trips remain the next interop slice.
+  box/unbox thunks for erased implementations, and discards Kotlin.Unit in Action thunks. The
+  reverse helper wraps Func/Action in private runtime-owned FunctionN adapters; Func adapters also
+  expose ExactFunctionN, while Action adapters remain erased. Projecting an adapter back to the
+  same closed shape returns its stored original delegate object. Different shapes and the
+  Kotlin-callable -> delegate -> Kotlin-callable direction have no identity promise. A null foreign
+  delegate throws ArgumentNullException; user exceptions pass unchanged because no boundary helper
+  catches. Nullable callable positions, overloaded selectors, exported name/signature collisions,
+  generic/suspend functions, KFunction/suspend callable positions, marker/high-arity callables are
+  loud errors. `delegateexport_s1` and `delegateadapter_s1` executed the full arity/Func/Action
+  matrix with both runtimes. Compiler-produced facades plus the landed runtime executed invocation
+  and same-object round trips on modern and Framework. Dual-parser goldens pin both return and
+  parameter directions, and the generated CLI suite pins the option and nullable-parameter gate.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -865,11 +870,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Extend the explicit CLR export boundary to callable parameters.** Add equally explicit
-   Func/Action-to-FunctionN adapters, keep them out of ordinary Kotlin conversion, restore the
-   original delegate on adapter-to-delegate round trips, and pin repeated registration/removal,
-   Unit/void, exceptions, and exact/erased fallback.
-2. **Add CLR nullability metadata at the export boundary.** Only then permit nullable callable
+1. **Add CLR nullability metadata at the export boundary.** Only then permit nullable callable
    returns/parameters; do not infer nullability from physically erased FunctionN.
 
 ## Known warts (fine to leave; do not "fix" casually)
