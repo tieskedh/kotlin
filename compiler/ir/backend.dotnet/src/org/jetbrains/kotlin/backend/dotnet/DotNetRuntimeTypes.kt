@@ -32,11 +32,12 @@ import org.jetbrains.kotlin.types.Variance
  * KProperty0/1/2 and their mutable variants use the same erased-identity rule and inherit the
  * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
- * Kotlin Iterator and the five currently supported primitive Iterator subclasses likewise map to
- * one non-generic `Kotlin.Collections.Iterator` execution interface. Its object-shaped Next slot
- * preserves reference identity across Kotlin's covariant Iterator views, including value-element
- * instantiations that CLR generic variance cannot convert. The compiler narrows each result back
- * to the logical Kotlin element type. CLR IEnumerator remains an explicit interop concern.
+ * Kotlin Iterable, Iterator, and the five currently supported primitive Iterator subclasses map
+ * to non-generic Kotlin-owned execution interfaces. Iterator's object-shaped Next slot preserves
+ * reference identity across Kotlin's covariant views, including value-element instantiations that
+ * CLR generic variance cannot convert. Iterable returns that same erased Iterator identity. The
+ * compiler narrows each result back to the logical Kotlin element type. CLR IEnumerable and
+ * IEnumerator remain explicit interop concerns.
  */
 internal object DotNetRuntimeTypes {
     val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
@@ -57,6 +58,12 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
     val iteratorType = DotNetIlValueType.UserClass(iteratorBase)
+
+    private val iterableBase = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Collections.Iterable",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+    val iterableType = DotNetIlValueType.UserClass(iterableBase)
 
     private val kCallableBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.KCallable",
@@ -167,6 +174,7 @@ internal object DotNetRuntimeTypes {
         irClass.dotNetTypedArgumentsFunctionArity != null ->
             typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
         irClass.isDotNetIteratorBase || irClass.isDotNetSupportedPrimitiveIterator -> iteratorBase
+        irClass.isDotNetIterableBase -> iterableBase
         irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
         irClass.isDotNetKCallableBase -> kCallableBase
         irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
@@ -241,6 +249,7 @@ internal object DotNetRuntimeTypes {
         }
         if (irClass.isDotNetIteratorBase && simpleType.arguments.size == 1) return iteratorType
         if (irClass.isDotNetSupportedPrimitiveIterator && simpleType.arguments.isEmpty()) return iteratorType
+        if (irClass.isDotNetIterableBase && simpleType.arguments.size == 1) return iterableType
         return mapCallableType(type)
     }
 
@@ -398,6 +407,9 @@ private val IrClass.isDotNetKMutablePropertyBase: Boolean
 
 internal val IrClass.isDotNetIteratorBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterator" && typeParameters.size == 1
+
+internal val IrClass.isDotNetIterableBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterable" && typeParameters.size == 1
 
 internal val IrClass.isDotNetSupportedPrimitiveIterator: Boolean
     get() = fqNameWhenAvailable?.asString() in DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES && typeParameters.isEmpty()
