@@ -146,7 +146,8 @@ internal class DotNetIlIntrinsicMethods(
         Key(booleanFqn, null, "toString", emptyList()) to DotNetIlToStringIntrinsic,
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
-            genericArrayIntrinsics() + arrayCopyIntrinsics() + iteratorIntrinsics()
+            genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
+            iteratorIntrinsics()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -266,6 +267,25 @@ internal class DotNetIlIntrinsicMethods(
         add(
             Key(kotlinCollectionsFqn, arrayFqn, "copyOf", listOf(intFqn))
                     to DotNetIlArrayCopyOfIntrinsic(fixedArrayType = null, resized = true)
+        )
+    }
+
+    /**
+     * `contentEquals` is a Kotlin-owned shallow operation, not CLR vector identity and not a deep
+     * traversal. All supported vectors share one runtime helper so boxed primitive elements and
+     * references cross the existing Kotlin equality boundary consistently. In particular this
+     * preserves the stdlib's boxed-Double contract (all NaNs equal; signed zeroes distinct).
+     */
+    private fun arrayContentIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        for (info in primitiveArrays) {
+            add(
+                Key(kotlinCollectionsFqn, info.arrayFqn, "contentEquals", listOf(info.arrayFqn))
+                        to DotNetIlArrayContentEqualsIntrinsic(info.arrayType)
+            )
+        }
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "contentEquals", listOf(arrayFqn))
+                    to DotNetIlArrayContentEqualsIntrinsic(fixedArrayType = null)
         )
     }
 
@@ -1169,6 +1189,46 @@ private class DotNetIlArrayCopyOfIntrinsic(
             pops = 5,
         )
         codegen.emit(loadLocalInstruction(destinationSlot.index), pushes = 1)
+        return true
+    }
+}
+
+/**
+ * Nullable, shallow `contentEquals` for primitive and generic arrays. Receiver and argument are
+ * emitted exactly once in source order. Open `Array<T>` is intentionally supported: no element
+ * opcode is selected in consumer IL because the runtime traverses the vector through System.Array.
+ */
+private class DotNetIlArrayContentEqualsIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
+        val left = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'contentEquals'")
+        val right = call.arguments[1]
+            ?: dotNetUnsupported("missing other array for 'contentEquals'")
+
+        fun arrayTypeOrNull(expression: IrExpression): DotNetIlValueType? =
+            codegen.toDotNetIlValueType(expression.type)?.takeIf {
+                it is DotNetIlValueType.PrimitiveArray || it is DotNetIlValueType.GenericArray
+            }
+
+        val leftMappedType = arrayTypeOrNull(left)
+        val rightMappedType = arrayTypeOrNull(right)
+        val leftType = fixedArrayType ?: leftMappedType ?: rightMappedType
+            ?: dotNetUnsupported("'contentEquals' has unsupported receiver type ${left.type.render()}")
+        val rightType = fixedArrayType ?: rightMappedType ?: leftMappedType
+            ?: dotNetUnsupported("'contentEquals' has unsupported argument type ${right.type.render()}")
+
+        codegen.emitExpression(left, leftType)
+        codegen.emitExpression(right, rightType)
+        codegen.emit(DotNetRuntimeLibraryHelpers.arrayContentEqualsCallInstruction, pops = 2, pushes = 1)
         return true
     }
 }

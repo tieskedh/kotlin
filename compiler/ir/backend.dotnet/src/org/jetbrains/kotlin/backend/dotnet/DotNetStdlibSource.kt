@@ -31,7 +31,7 @@ public fun println(message: Any?) {}
 """,
     "DotNetStdlibCollections.kt" to """package kotlin.collections
 
-// Resolution-only declarations for the first array-copying slice. The backend intercepts every
+// Resolution-only declarations for the first array-operation slices. The backend intercepts every
 // call through DotNetIlIntrinsicMethods and excludes these declarations from emitted facades.
 // Keeping them external also leaves omitted defaults visible on the original call, so the
 // intrinsic can preserve Kotlin's receiver/argument/default-expression evaluation order without
@@ -95,6 +95,15 @@ public external fun CharArray.copyOf(newSize: Int): CharArray
 // Concrete reference substitutions map Array<T?> to the same exact CLR reference vector and are
 // supported. An open T? still reaches the owning generic-array gate and fails explicitly.
 public external fun <T> Array<T>.copyOf(newSize: Int): Array<T?>
+
+// Shallow content equality follows the common stdlib contract: nullable arrays compare equal when
+// both are null, elements use Kotlin equality, and nested arrays keep their identity-based equals.
+public external infix fun <T> Array<out T>?.contentEquals(other: Array<out T>?): Boolean
+public external infix fun IntArray?.contentEquals(other: IntArray?): Boolean
+public external infix fun LongArray?.contentEquals(other: LongArray?): Boolean
+public external infix fun DoubleArray?.contentEquals(other: DoubleArray?): Boolean
+public external infix fun BooleanArray?.contentEquals(other: BooleanArray?): Boolean
+public external infix fun CharArray?.contentEquals(other: CharArray?): Boolean
 """,
     "DotNetStdlibKotlin.kt" to """package kotlin
 

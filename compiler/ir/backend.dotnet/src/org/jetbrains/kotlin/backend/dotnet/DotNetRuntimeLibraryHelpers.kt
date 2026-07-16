@@ -328,6 +328,60 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
+            |    .method public hidebysig static bool 'ArrayContentEquals'(
+            |        class [mscorlib]System.Array 'left',
+            |        class [mscorlib]System.Array 'right') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] int32 'index',
+            |        [1] int32 'length'
+            |      )
+            |      ldarg.0
+            |      ldarg.1
+            |      ceq
+            |      brfalse.s IL_arrayContentNotSame
+            |      ldc.i4.1
+            |      ret
+            |IL_arrayContentNotSame:
+            |      ldarg.0
+            |      brfalse.s IL_arrayContentFalse
+            |      ldarg.1
+            |      brfalse.s IL_arrayContentFalse
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      stloc.1
+            |      ldloc.1
+            |      ldarg.1
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      bne.un.s IL_arrayContentFalse
+            |      ldc.i4.0
+            |      stloc.0
+            |IL_arrayContentLoop:
+            |      ldloc.0
+            |      ldloc.1
+            |      bge.s IL_arrayContentTrue
+            |      ldarg.0
+            |      ldloc.0
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      ldarg.1
+            |      ldloc.0
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+            |      brfalse.s IL_arrayContentFalse
+            |      ldloc.0
+            |      ldc.i4.1
+            |      add
+            |      stloc.0
+            |      br.s IL_arrayContentLoop
+            |IL_arrayContentTrue:
+            |      ldc.i4.1
+            |      ret
+            |IL_arrayContentFalse:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static int32 'DataClassArrayHashCode'(class [mscorlib]System.Array 'value') cil managed
             |    {
             |      .maxstack 3
@@ -742,6 +796,13 @@ internal object DotNetRuntimeLibraryHelpers {
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"StringValueOf".toIlIdentifier()}(object)"
+
+    /** Nullable shallow content equality for every supported CLR vector representation. */
+    val arrayContentEqualsCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayContentEquals".toIlIdentifier()}(" +
+                "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array)"
 
     /** Content hash for the CLR vector behind an array property of a generated data class. */
     val dataClassArrayHashCodeCallInstruction: String =
