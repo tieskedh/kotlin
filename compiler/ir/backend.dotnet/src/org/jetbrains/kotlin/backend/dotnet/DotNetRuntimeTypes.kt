@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.invokeFun
 import org.jetbrains.kotlin.ir.util.isKFunction
+import org.jetbrains.kotlin.ir.util.functions
 import org.jetbrains.kotlin.ir.util.properties
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.types.Variance
@@ -28,6 +29,8 @@ import org.jetbrains.kotlin.types.Variance
  * function-type variance conversion is the same object reference at runtime. It deliberately
  * does not model the JVM's unrelated high-arity `FunctionN` fallback. CLR delegates remain an
  * interop concern and never appear in Kotlin-to-Kotlin signatures.
+ * KProperty0/1/2 and their mutable variants use the same erased-identity rule and inherit the
+ * matching FunctionN execution view; their Get/Set slots are Kotlin-owned runtime contracts.
  *
  * Kotlin Iterator and the five currently supported primitive Iterator subclasses likewise map to
  * one non-generic `Kotlin.Collections.Iterator` execution interface. Its object-shaped Next slot
@@ -62,6 +65,35 @@ internal object DotNetRuntimeTypes {
 
     private val kFunctionBase = DotNetIlClassInfo(
         ilClassName = "Kotlin.KFunction",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val kPropertyBase = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KProperty",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val kMutablePropertyBase = DotNetIlClassInfo(
+        ilClassName = "Kotlin.KMutableProperty",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val fixedPropertyClasses = List(3) { arity ->
+        DotNetIlClassInfo(
+            ilClassName = "Kotlin.KProperty$arity",
+            assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+        )
+    }
+
+    private val fixedMutablePropertyClasses = List(3) { arity ->
+        DotNetIlClassInfo(
+            ilClassName = "Kotlin.KMutableProperty$arity",
+            assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+        )
+    }
+
+    private val propertyReferenceFactory = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.PropertyReferenceFactory",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -106,6 +138,20 @@ internal object DotNetRuntimeTypes {
         fixedFunctionClasses.forEach { classInfo ->
             classInfo.interfaces = listOf(DotNetIlValueType.UserClass(functionBase))
         }
+        kPropertyBase.interfaces = listOf(DotNetIlValueType.UserClass(kCallableBase))
+        kMutablePropertyBase.interfaces = listOf(DotNetIlValueType.UserClass(kPropertyBase))
+        fixedPropertyClasses.forEachIndexed { arity, classInfo ->
+            classInfo.interfaces = listOf(
+                DotNetIlValueType.UserClass(kPropertyBase),
+                DotNetIlValueType.UserClass(fixedFunctionClasses[arity]),
+            )
+        }
+        fixedMutablePropertyClasses.forEachIndexed { arity, classInfo ->
+            classInfo.interfaces = listOf(
+                DotNetIlValueType.UserClass(fixedPropertyClasses[arity]),
+                DotNetIlValueType.UserClass(kMutablePropertyBase),
+            )
+        }
     }
 
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? = when {
@@ -114,8 +160,15 @@ internal object DotNetRuntimeTypes {
         irClass.dotNetTypedArgumentsFunctionArity != null ->
             typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]
         irClass.isDotNetIteratorBase || irClass.isDotNetSupportedPrimitiveIterator -> iteratorBase
+        irClass.isDotNetPropertyReferenceFactory == true -> propertyReferenceFactory
         irClass.isDotNetKCallableBase -> kCallableBase
         irClass.isDotNetKFunctionBase || irClass.dotNetFixedKFunctionArityOrNull() != null -> kFunctionBase
+        irClass.isDotNetKPropertyBase -> kPropertyBase
+        irClass.isDotNetKMutablePropertyBase -> kMutablePropertyBase
+        irClass.dotNetFixedKPropertyArityOrNull() != null ->
+            fixedPropertyClasses[irClass.dotNetFixedKPropertyArityOrNull()!!]
+        irClass.dotNetFixedKMutablePropertyArityOrNull() != null ->
+            fixedMutablePropertyClasses[irClass.dotNetFixedKMutablePropertyArityOrNull()!!]
         irClass.isDotNetFunctionBase -> functionBase
         else -> irClass.dotNetFixedFunctionArityOrNull()?.let(fixedFunctionClasses::get)
     }
@@ -136,15 +189,35 @@ internal object DotNetRuntimeTypes {
                 if (simpleType.arguments.size != 1) return null
                 kFunctionBase
             }
+            irClass.isDotNetKPropertyBase -> {
+                if (simpleType.arguments.size != 1) return null
+                kPropertyBase
+            }
+            irClass.isDotNetKMutablePropertyBase -> {
+                if (simpleType.arguments.size != 1) return null
+                kMutablePropertyBase
+            }
             else -> {
                 val functionArity = irClass.dotNetFixedFunctionArityOrNull()
                 if (functionArity != null) {
                     if (simpleType.arguments.size != functionArity + 1) return null
                     fixedFunctionClasses[functionArity]
                 } else {
-                    val kFunctionArity = irClass.dotNetFixedKFunctionArityOrNull() ?: return null
-                    if (simpleType.arguments.size != kFunctionArity + 1) return null
-                    kFunctionBase
+                    val kFunctionArity = irClass.dotNetFixedKFunctionArityOrNull()
+                    if (kFunctionArity != null) {
+                        if (simpleType.arguments.size != kFunctionArity + 1) return null
+                        kFunctionBase
+                    } else {
+                        val propertyArity = irClass.dotNetFixedKPropertyArityOrNull()
+                        if (propertyArity != null) {
+                            if (simpleType.arguments.size != propertyArity + 1) return null
+                            fixedPropertyClasses[propertyArity]
+                        } else {
+                            val mutablePropertyArity = irClass.dotNetFixedKMutablePropertyArityOrNull() ?: return null
+                            if (simpleType.arguments.size != mutablePropertyArity + 1) return null
+                            fixedMutablePropertyClasses[mutablePropertyArity]
+                        }
+                    }
                 }
             }
         }
@@ -166,6 +239,7 @@ internal object DotNetRuntimeTypes {
 
     fun registerCallableFunctions(
         irBuiltIns: IrBuiltIns,
+        propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: MutableMap<IrSimpleFunction, DotNetIlFunctionInfo>,
     ) {
@@ -185,6 +259,26 @@ internal object DotNetRuntimeTypes {
             kCallableBase,
             nameGetter.dotNetSignature(typeMapper),
         )
+        for (arity in fixedPropertyClasses.indices) {
+            val get = irBuiltIns.getKPropertyClass(mutable = false, arity).owner.functions
+                .single { it.name.asString() == "get" }
+            availableFunctions[get] = DotNetIlFunctionInfo(
+                fixedPropertyClasses[arity],
+                get.dotNetSignature(typeMapper),
+            )
+            val set = irBuiltIns.getKPropertyClass(mutable = true, arity).owner.functions
+                .single { it.name.asString() == "set" }
+            availableFunctions[set] = DotNetIlFunctionInfo(
+                fixedMutablePropertyClasses[arity],
+                set.dotNetSignature(typeMapper),
+            )
+        }
+        propertyReferenceFactoryFunctions.forEach { factory ->
+            availableFunctions[factory] = DotNetIlFunctionInfo(
+                propertyReferenceFactory,
+                factory.dotNetSignature(typeMapper),
+            )
+        }
     }
 
     val unitInstanceLoadInstruction: String
@@ -289,6 +383,12 @@ private val IrClass.isDotNetKCallableBase: Boolean
 private val IrClass.isDotNetKFunctionBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KFunction" && typeParameters.size == 1
 
+private val IrClass.isDotNetKPropertyBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KProperty" && typeParameters.size == 1
+
+private val IrClass.isDotNetKMutablePropertyBase: Boolean
+    get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KMutableProperty" && typeParameters.size == 1
+
 private val IrClass.isDotNetIteratorBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterator" && typeParameters.size == 1
 
@@ -318,3 +418,18 @@ internal fun IrClass.dotNetFixedKFunctionArityOrNull(): Int? {
     // arguments. Class identity therefore comes from the canonical built-in FQ name here.
     return arity.takeIf { it in 0..2 }
 }
+
+internal fun IrClass.dotNetFixedKPropertyArityOrNull(): Int? {
+    val fqName = fqNameWhenAvailable?.asString() ?: return null
+    val arity = fqName.removePrefix("kotlin.reflect.KProperty").toIntOrNull() ?: return null
+    return arity.takeIf { it in 0..2 }
+}
+
+internal fun IrClass.dotNetFixedKMutablePropertyArityOrNull(): Int? {
+    val fqName = fqNameWhenAvailable?.asString() ?: return null
+    val arity = fqName.removePrefix("kotlin.reflect.KMutableProperty").toIntOrNull() ?: return null
+    return arity.takeIf { it in 0..2 }
+}
+
+internal fun IrClass.dotNetFixedPropertyArityOrNull(): Int? =
+    dotNetFixedKPropertyArityOrNull() ?: dotNetFixedKMutablePropertyArityOrNull()

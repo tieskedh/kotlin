@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetKFunctionInvokeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
@@ -43,6 +44,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // then move only transformed declarations to the nearest metadata container. This precedes
     // inner classes and initializer merging, as on the JVM (localprobe_s1/s2, anonprobe_s1/s2).
     ::DotNetUpgradeCallableReferences,
+    // Native/Wasm precedent: split KProperty values into a runtime wrapper around rich getter
+    // and optional setter references while their bound values can still be shared exactly once.
+    // The following callable lowering turns those references into the established FunctionN
+    // objects; the wrapper does not create another callable execution identity.
+    ::DotNetPropertyReferenceLowering,
     // Match the mature backends before closure conversion and default stubs: normalize concrete
     // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread
     // copies to ordinary array operations. Open `vararg T` keeps its unsupported projection.

@@ -23,7 +23,7 @@ internal class DotNetIlMethodContext(
     parameterTypes: List<DotNetIlValueType>,
     private val typeMapper: DotNetIlTypeMapper,
     firstArgumentIndex: Int = 0,
-    private val erasedCallableParameters: Set<IrValueSymbol> = emptySet(),
+    private val erasedRuntimeParameters: Set<IrValueSymbol> = emptySet(),
 ) {
     private val bodyBuilder = StringBuilder()
     private val slots = hashMapOf<IrValueSymbol, DotNetIlSlot>()
@@ -90,8 +90,8 @@ internal class DotNetIlMethodContext(
         slots[symbol] = DotNetIlSlot.Parameter(0, type)
     }
 
-    /** True only for a logical callable parameter stored in an erased object-shaped Invoke slot. */
-    fun isErasedCallableParameter(symbol: IrValueSymbol): Boolean = symbol in erasedCallableParameters
+    /** True for a logical parameter stored in an erased callable/property object-shaped slot. */
+    fun isErasedRuntimeParameter(symbol: IrValueSymbol): Boolean = symbol in erasedRuntimeParameters
 
     val locals: List<DotNetIlSlot.Local>
         get() = localSlots
