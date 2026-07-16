@@ -114,7 +114,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `<kotlin-home>/lib/dotnet/<net|netframework>/Kotlin.Stdlib.{klib,dll}` and rejects a half-installed
   pair; absence still falls back to injected sources until the build installs these artifacts.
   The target directory is required because both variants retain the same CLR assembly identity and
-  filename while their metadata manifests bind different requested runtime targets.
+  filename while their metadata manifests bind different requested runtime targets. Do not make
+  that provisional layout permanent: `docs/decisions/draft-adr-dotnet-library-target-profile.md`
+  records the stronger validated candidate of one `netstandard2.0` runtime/stdlib profile consumed
+  by both executable targets. Implement an explicit core-library profile and audit every BCL
+  member reference against the 2.0 reference assembly; never land the probe's textual replacement.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
   their List fast paths are omitted because List has no target ABI yet. Do not add a generator
