@@ -8,13 +8,16 @@ import java.io.File
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
  * the fixed, physically erased Function0/1/2/3 interfaces, the orthogonal KCallable/KFunction
- * reflection view, erased KProperty0/1/2 identities, the erased Iterator execution interface,
+ * reflection view, erased KProperty0/1/2 identities, the erased Iterator/Iterable execution
+ * interfaces,
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
  * boundary, and Kotlin-owned exception identities that have no faithful BCL type. Compiler
  * support shared by generated modules, including the constructor-default ABI marker, optional
  * ExactFunctionN and TypedArgumentsFunctionN execution capabilities, the structural function-
  * reference implementation base, property-reference wrappers, and explicit-export delegate
- * projection, lives below the reserved `Kotlin.Runtime.Internal` namespace.
+ * projection, lives below the reserved `Kotlin.Runtime.Internal` namespace. Ordinary Kotlin
+ * library implementations do not live here; the first such implementation is the generic array
+ * iterator emitted into `Kotlin.Stdlib.dll`.
  * The same TFM-neutral IL source is assembled with the selected target's ILAsm, so both targets
  * produce their own PE while exposing exactly the same logical assembly identity.
  */

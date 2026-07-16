@@ -3,6 +3,10 @@
 {
   .ver 1:0:0:0
 }
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
 .assembly 'arrayIterators' {}
 .module 'main-arrayIterators.il'
 
@@ -403,7 +407,7 @@
   {
     .maxstack 1
     ldarg.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ArrayIterator'::.ctor(class [mscorlib]System.Array)
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'<int32>::.ctor(!0[])
     ret
   }
   .method public hidebysig static int32 'nextInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
@@ -434,7 +438,7 @@
   {
     .maxstack 1
     ldarg.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ArrayIterator'::.ctor(class [mscorlib]System.Array)
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'<!!0>::.ctor(!0[])
     ret
   }
   .method public hidebysig static !!0 'firstFromOpenArray'<'T'>(!!0[] 'values') cil managed
@@ -450,7 +454,7 @@
   {
     .maxstack 1
     ldarg.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ArrayIterator'::.ctor(class [mscorlib]System.Array)
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'<string>::.ctor(!0[])
     ret
   }
   .method public hidebysig static bool 'hasNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
@@ -464,7 +468,7 @@
   {
     .maxstack 1
     ldarg.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ArrayIterator'::.ctor(class [mscorlib]System.Array)
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'<int32>::.ctor(!0[])
     ret
   }
   .method public hidebysig static int32 'nextOrMinusOne'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
@@ -558,7 +562,7 @@ IL_tryEnd_0:
     ldloc.1
     stelem.i4
     ldloc.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ArrayIterator'::.ctor(class [mscorlib]System.Array)
+    newobj instance void class [Kotlin.Stdlib]'Kotlin.Collections.ArrayIterator`1'<int32>::.ctor(!0[])
     call int32 'arrayIteratorsKt'::'nextInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
     box [mscorlib]System.Int32
     ldnull
