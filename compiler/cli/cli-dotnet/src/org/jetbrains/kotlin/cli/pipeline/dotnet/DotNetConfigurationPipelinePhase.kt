@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
@@ -9,6 +10,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetProducesLibrary
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
@@ -48,6 +50,13 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
     ) {
         val arguments = input.arguments
         configuration.dotNetProducesStdlib = arguments.dotNetProduceStdlib
+        configuration.dotNetProducesLibrary = arguments.dotNetProduceLibrary
+        if (arguments.dotNetProduceStdlib && arguments.dotNetProduceLibrary) {
+            configuration.report(
+                COMPILER_ARGUMENTS_ERROR,
+                "-Xdotnet-produce-stdlib and -Xdotnet-produce-library are mutually exclusive."
+            )
+        }
         if (arguments.dotNetProduceStdlib) {
             if (arguments.freeArgs.isNotEmpty()) {
                 configuration.report(
@@ -73,6 +82,12 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                     "-Xdotnet-produce-stdlib owns module name '${DotNetStdlibArtifact.ASSEMBLY_NAME}'."
                 )
             }
+        }
+        if (arguments.dotNetProduceLibrary && arguments.freeArgs.isEmpty()) {
+            configuration.report(
+                COMPILER_ARGUMENTS_ERROR,
+                "-Xdotnet-produce-library requires at least one Kotlin source file."
+            )
         }
         val commonSources = arguments.commonSources.toSet()
         val hmppCliModuleStructure = configuration.get(CommonConfigurationKeys.HMPP_MODULE_STRUCTURE)
@@ -149,10 +164,12 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             configuration.report(COMPILER_ARGUMENTS_ERROR, "Specify destination via -d")
         } else {
             val output = File(destination)
-            if (arguments.dotNetProduceStdlib && output.exists() && !output.isDirectory) {
+            if ((arguments.dotNetProduceStdlib || arguments.dotNetProduceLibrary) &&
+                output.exists() && !output.isDirectory
+            ) {
                 configuration.report(
                     COMPILER_ARGUMENTS_ERROR,
-                    "-Xdotnet-produce-stdlib requires -d to name an output directory."
+                    "Kotlin/.NET library production requires -d to name an output directory."
                 )
             }
             configuration.dotNetOutput = output
@@ -191,7 +208,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
 
         configuration.perfManager?.apply {
-            outputKind = if (arguments.dotNetProduceStdlib) "KLIB + .NET library" else "IL"
+            outputKind =
+                if (arguments.dotNetProduceStdlib || arguments.dotNetProduceLibrary) "KLIB + .NET library" else "IL"
             targetDescription = assemblyName
         }
     }
@@ -207,7 +225,7 @@ private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
     if (!metadataFile.isFile || !implementationFile.isFile) {
         report(
             COMPILER_ARGUMENTS_ERROR,
-            "Incomplete Kotlin/.NET ${DotNetStdlibArtifact.LIBRARY_TARGET_FRAMEWORK} stdlib installation in '$directory': " +
+            "Incomplete Kotlin/.NET ${DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK} stdlib installation in '$directory': " +
                     "both ${DotNetStdlibArtifact.METADATA_FILE_NAME} and ${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME} are required.",
         )
         return true

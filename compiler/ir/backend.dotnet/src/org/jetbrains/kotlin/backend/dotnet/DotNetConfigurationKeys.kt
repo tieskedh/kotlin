@@ -9,6 +9,8 @@ object DotNetConfigurationKeys {
     val ASSEMBLY_NAME: CompilerConfigurationKey<String> = CompilerConfigurationKey.create("output .NET assembly name")
     val PRODUCE_STDLIB: CompilerConfigurationKey<Boolean> =
         CompilerConfigurationKey.create("produce the bootstrap Kotlin/.NET stdlib pair")
+    val PRODUCE_LIBRARY: CompilerConfigurationKey<Boolean> =
+        CompilerConfigurationKey.create("produce a Kotlin/.NET library pair")
     val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET runtime flavor")
     val EXPORTS: CompilerConfigurationKey<List<DotNetExport>> =
         CompilerConfigurationKey.create("explicit .NET exports")
@@ -28,16 +30,34 @@ object DotNetStdlibArtifact {
     const val ASSEMBLY_CULTURE = "neutral"
     const val ASSEMBLY_PUBLIC_KEY_TOKEN = "null"
     const val METADATA_UNIQUE_NAME = ASSEMBLY_NAME
-    const val METADATA_ASSEMBLY_NAME_PROPERTY = "dotnet_assembly_name"
-    const val METADATA_ASSEMBLY_VERSION_PROPERTY = "dotnet_assembly_version"
-    const val METADATA_ASSEMBLY_CULTURE_PROPERTY = "dotnet_assembly_culture"
-    const val METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY = "dotnet_assembly_public_key_token"
-    const val METADATA_ASSEMBLY_FILE_PROPERTY = "dotnet_assembly_file"
-    const val LIBRARY_TARGET_FRAMEWORK = "netstandard2.0"
-    const val METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY = "dotnet_library_tfm"
-
     fun distributionDirectory(kotlinLibDirectory: File): File =
-        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(LIBRARY_TARGET_FRAMEWORK)
+        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK)
+}
+
+/** The two-file product and CLR identity of one Kotlin/.NET library. */
+data class DotNetLibraryArtifact(
+    val assemblyName: String,
+    val assemblyVersion: String = DEFAULT_ASSEMBLY_VERSION,
+    val assemblyCulture: String = DEFAULT_ASSEMBLY_CULTURE,
+    val assemblyPublicKeyToken: String = DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN,
+) {
+    val assemblyFileName: String = "$assemblyName.dll"
+    val assemblyIlFileName: String = "$assemblyName.il"
+    val metadataFileName: String = "$assemblyName.klib"
+    val assemblyVersionIl: String = assemblyVersion.replace('.', ':')
+
+    companion object {
+        const val LIBRARY_TARGET_FRAMEWORK = "netstandard2.0"
+        const val METADATA_ASSEMBLY_NAME_PROPERTY = "dotnet_assembly_name"
+        const val METADATA_ASSEMBLY_VERSION_PROPERTY = "dotnet_assembly_version"
+        const val METADATA_ASSEMBLY_CULTURE_PROPERTY = "dotnet_assembly_culture"
+        const val METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY = "dotnet_assembly_public_key_token"
+        const val METADATA_ASSEMBLY_FILE_PROPERTY = "dotnet_assembly_file"
+        const val METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY = "dotnet_library_tfm"
+        const val DEFAULT_ASSEMBLY_VERSION = "1.0.0.0"
+        const val DEFAULT_ASSEMBLY_CULTURE = "neutral"
+        const val DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN = "null"
+    }
 }
 
 /** Kotlin compile-time metadata paired with the CLR assembly that owns its implementations. */
@@ -191,6 +211,24 @@ var CompilerConfiguration.dotNetProducesStdlib: Boolean
     get() = getBoolean(DotNetConfigurationKeys.PRODUCE_STDLIB)
     set(value) {
         put(DotNetConfigurationKeys.PRODUCE_STDLIB, value)
+    }
+
+var CompilerConfiguration.dotNetProducesLibrary: Boolean
+    get() = getBoolean(DotNetConfigurationKeys.PRODUCE_LIBRARY)
+    set(value) {
+        put(DotNetConfigurationKeys.PRODUCE_LIBRARY, value)
+    }
+
+val CompilerConfiguration.dotNetProducedLibraryArtifact: DotNetLibraryArtifact?
+    get() = when {
+        dotNetProducesStdlib -> DotNetLibraryArtifact(
+            assemblyName = DotNetStdlibArtifact.ASSEMBLY_NAME,
+            assemblyVersion = DotNetStdlibArtifact.ASSEMBLY_VERSION,
+            assemblyCulture = DotNetStdlibArtifact.ASSEMBLY_CULTURE,
+            assemblyPublicKeyToken = DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
+        )
+        dotNetProducesLibrary -> dotNetAssemblyName?.let(::DotNetLibraryArtifact)
+        else -> null
     }
 
 var CompilerConfiguration.dotNetTarget: DotNetTarget
