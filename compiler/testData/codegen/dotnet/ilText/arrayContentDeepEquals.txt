@@ -1,0 +1,98 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'arrayContentDeepEquals' {}
+.module 'main-arrayContentDeepEquals.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'arrayContentDeepEqualsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static bool 'deepAny'(object[] 'left', object[] 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepEquals'(class [mscorlib]System.Array, class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static bool 'deepStrings'(string[] 'left', string[] 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepEquals'(class [mscorlib]System.Array, class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static bool 'deepGeneric'<'T'>(!!0[] 'left', !!0[] 'right') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepEquals'(class [mscorlib]System.Array, class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 4
+    .locals init (
+      [0] object[] '<arrayOf>',
+      [1] int32[] '<arrayOf>@1',
+      [2] int32 '<arrayElement>',
+      [3] object '<arrayElement>@3',
+      [4] object[] '<arrayOf>@4',
+      [5] int32[] '<arrayOf>@5',
+      [6] int32 '<arrayElement>@6',
+      [7] object '<arrayElement>@7'
+    )
+    ldc.i4 1
+    newarr object
+    stloc.0
+    ldc.i4 1
+    newarr int32
+    stloc.1
+    ldc.i4 1
+    stloc.2
+    ldloc.1
+    ldc.i4 0
+    ldloc.2
+    stelem.i4
+    ldloc.1
+    stloc.3
+    ldloc.0
+    ldc.i4 0
+    ldloc.3
+    stelem object
+    ldloc.0
+    ldc.i4 1
+    newarr object
+    stloc 4
+    ldc.i4 1
+    newarr int32
+    stloc 5
+    ldc.i4 1
+    stloc 6
+    ldloc 5
+    ldc.i4 0
+    ldloc 6
+    stelem.i4
+    ldloc 5
+    stloc 7
+    ldloc 4
+    ldc.i4 0
+    ldloc 7
+    stelem object
+    ldloc 4
+    call bool 'arrayContentDeepEqualsKt'::'deepAny'(object[], object[])
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

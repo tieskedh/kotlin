@@ -287,6 +287,10 @@ internal class DotNetIlIntrinsicMethods(
             Key(kotlinCollectionsFqn, arrayFqn, "contentEquals", listOf(arrayFqn))
                     to DotNetIlArrayContentEqualsIntrinsic(fixedArrayType = null)
         )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "contentDeepEquals", listOf(arrayFqn))
+                    to DotNetIlArrayContentDeepEqualsIntrinsic
+        )
     }
 
     /**
@@ -1229,6 +1233,43 @@ private class DotNetIlArrayContentEqualsIntrinsic(
         codegen.emitExpression(left, leftType)
         codegen.emitExpression(right, rightType)
         codegen.emit(DotNetRuntimeLibraryHelpers.arrayContentEqualsCallInstruction, pops = 2, pushes = 1)
+        return true
+    }
+}
+
+/**
+ * Nullable `contentDeepEquals` for generic arrays. The runtime owns recursive shape dispatch:
+ * reference vectors recurse, supported primitive-vector pairs use shallow content equality, and
+ * scalar elements use Kotlin equality. The common stdlib leaves self-containing arrays undefined,
+ * so this path deliberately adds no cycle detector or alternative observable contract.
+ */
+private object DotNetIlArrayContentDeepEqualsIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Boolean || call.arguments.size != 2) return false
+        val left = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'contentDeepEquals'")
+        val right = call.arguments[1]
+            ?: dotNetUnsupported("missing other array for 'contentDeepEquals'")
+
+        fun genericArrayTypeOrNull(expression: IrExpression): DotNetIlValueType.GenericArray? =
+            codegen.toDotNetIlValueType(expression.type) as? DotNetIlValueType.GenericArray
+
+        val leftMappedType = genericArrayTypeOrNull(left)
+        val rightMappedType = genericArrayTypeOrNull(right)
+        val leftType = leftMappedType ?: rightMappedType
+            ?: dotNetUnsupported("'contentDeepEquals' has unsupported receiver type ${left.type.render()}")
+        val rightType = rightMappedType ?: leftMappedType
+            ?: dotNetUnsupported("'contentDeepEquals' has unsupported argument type ${right.type.render()}")
+
+        codegen.emitExpression(left, leftType)
+        codegen.emitExpression(right, rightType)
+        codegen.emit(DotNetRuntimeLibraryHelpers.arrayContentDeepEqualsCallInstruction, pops = 2, pushes = 1)
         return true
     }
 }
