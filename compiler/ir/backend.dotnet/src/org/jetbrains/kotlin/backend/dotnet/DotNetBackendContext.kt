@@ -10,13 +10,17 @@ import org.jetbrains.kotlin.cli.common.diagnosticsCollector
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.InternalSymbolFinderAPI
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.IrDiagnosticReporter
 import org.jetbrains.kotlin.ir.KtDiagnosticReporterWithImplicitIrBasedContext
+import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrFactory
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
@@ -27,6 +31,8 @@ import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.SymbolTable
+import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.name.Name
 
 internal class DotNetBackendContext(
     override val irBuiltIns: IrBuiltIns,
@@ -72,8 +78,22 @@ internal class DotNetSymbols(
         get() = unsupportedSymbol("syntheticConstructorMarker")
     override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("throwUninitializedPropertyAccessException")
-    override val throwUnsupportedOperationException: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("throwUnsupportedOperationException")
+    override val throwUnsupportedOperationException: IrSimpleFunctionSymbol = run {
+        val kotlinInternalPackage = createEmptyExternalPackageFragment(
+            irModuleFragment,
+            FqName("kotlin.internal"),
+        )
+        irFactory.buildFun {
+            origin = IrDeclarationOrigin.IR_BUILTINS_STUB
+            name = Name.identifier("throwUnsupportedOperationException")
+            visibility = DescriptorVisibilities.INTERNAL
+            modality = Modality.FINAL
+            returnType = irBuiltIns.nothingType
+        }.apply {
+            parent = kotlinInternalPackage
+            addValueParameter("message", irBuiltIns.stringType)
+        }.symbol
+    }
     override val coroutineContextGetter: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("coroutineContextGetter")
     override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol

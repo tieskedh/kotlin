@@ -313,8 +313,17 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   own Any behavior. JVM-shaped getter/setter accessor objects are not exposed: the common expect
   declaration and Native/Wasm/JS actuals omit them, while JVM adds a target-specific surface whose
   Accessor points back to its property and is also a KFunction. Returning the wrapper's stored
-  FunctionN would be semantically false. Full reflection, accessor objects, local delegated-
-  property reflection, and exact property-access capabilities remain deferred.
+  FunctionN would be semantically false. Local delegated-property tokens follow Native/Wasm
+  separately: private name-only KProperty0/KMutableProperty0 wrappers expose truthful name,
+  mutability, and rendering, but Get/Invoke/Set throw the exact mapped
+  `UnsupportedOperationException("Not supported for local property reference.")` and retain object
+  identity equality. Two compiler-internal factories construct them; no getter/setter callable or
+  new reflection metadata is invented. Common `LocalDelegatedPropertiesLowering` flattens their
+  declarations before closure conversion, whose eligible local-function set includes delegated
+  accessors. An IR-only throw-helper symbol lets common callable-reference upgrade build temporary
+  unsupported accessor bodies; property-reference lowering discards them, so the helper is never
+  emitted as runtime or module ABI. Full reflection, accessor objects, and exact property-access
+  capabilities remain deferred.
   Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
 - Iterator ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
   series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an

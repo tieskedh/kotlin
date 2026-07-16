@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
+import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
@@ -49,6 +50,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // The following callable lowering turns those references into the established FunctionN
     // objects; the wrapper does not create another callable execution identity.
     ::DotNetPropertyReferenceLowering,
+    // Native/Wasm/JS precedent: after local property tokens have become dedicated name-only
+    // wrappers, flatten IrLocalDelegatedProperty into its ordinary getter/setter/delegate
+    // declarations before local closure conversion sees those accessors.
+    ::LocalDelegatedPropertiesLowering,
     // Match the mature backends before closure conversion and default stubs: normalize concrete
     // vararg parameters to their vector ABI, materialize omitted arguments, and lower spread
     // copies to ordinary array operations. Open `vararg T` keeps its unsupported projection.
