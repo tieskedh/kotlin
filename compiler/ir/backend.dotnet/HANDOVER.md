@@ -42,7 +42,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   compiler-generated bridges (`87c9d7711`), and the first `Kotlin.Stdlib.dll`/ordinary Kotlin
   ArrayIterator implementation (`186af0b4d`), followed by the stdlib ArrayIterable/asIterable
   continuation (`ba7260521`) and the first top-level generated-common stdlib operations,
-  `Iterable<T>.first()` and `last()`, in the current feature slice.
+  `Iterable<T>.first()` and `last()` (`311b79bd7`), followed by separate-consumer stdlib metadata
+  KLIB/CLR DLL binding in the current feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -63,8 +64,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   empty exception/message. No fresh full suite was run.
   The `Iterable.last` continuation extends the same pins with a looping common body, mutable
   generic local, repeated erased Iterator calls, and the same producer/type/empty boundaries. It
-  is the final piecemeal operation proof; further stdlib progress should target standalone
-  compilation and metadata consumption instead of accumulating copied bootstrap functions.
+  is the final piecemeal operation proof; the following slice therefore targets metadata-backed
+  consumption instead of accumulating copied bootstrap functions.
+  The external-stdlib continuation passes its focused CLI integration pin. A user module compiled
+  with `-no-stdlib` resolves `first()` from `Kotlin.Stdlib.klib`, maps imported Iterable through the
+  erased runtime identity, and emits the generic call to the sibling bound DLL without regenerating
+  CollectionsKt. A separate manual Framework executable also ran successfully against the real
+  previously produced DLL. No fresh full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -772,10 +778,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `Kotlin.Stdlib, Version=1.0.0.0` assembly. Explicit array iterator intrinsics construct the
   corresponding closed generic stdlib class, so primitive elements remain typed until the
   compiler-generated erased Next bridge; the handwritten System.Array runtime producer is gone.
-  Until Kotlin metadata import/standalone library compilation exists, injected stdlib and user
-  sources share frontend/lowering and separate USER/STDLIB emitter ownership scopes produce the
-  two assemblies. Every executable is supplied both platform dlls; this is honest bootstrap
-  packaging, not a claim that separately compiled Kotlin libraries can already be consumed.
+  The default bootstrap producer still shares injected stdlib and user sources through
+  frontend/lowering, then separate USER/STDLIB emitter ownership scopes produce the two assemblies.
+  Every executable is supplied both platform dlls. Separately compiled consumers can now resolve
+  the bounded stdlib API through a metadata KLIB and execute against its manifest-bound sibling
+  DLL; this is deliberately not a claim that arbitrary Kotlin libraries have general physical
+  member mapping.
   `docs/decisions/draft-adr-target-stdlib-bootstrap.md` records the boundary. Separate primitive
   implementations remain a later performance decision.
   The first follow-on stdlib class is generic `ArrayIterable<T>`. Exact `asIterable()` overloads
@@ -792,9 +800,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Their List fast paths are deliberately omitted until List has a coherent ABI; this changes only
   optimization. Empty input preserves the common `Collection is empty.` NoSuchElementException
   behavior. Together they prove straight-line and looping generic common bodies; adding more
-  individual operations would not prove standalone stdlib consumption. The generator currently
-  has no .NET target; do not add one merely to generate an unsupported broad corpus. The eventual
-  standalone stdlib build should consume generated common sources and narrow .NET actuals.
+  individual operations would not by themselves prove standalone stdlib consumption. The
+  generator currently has no .NET target; do not add one merely to generate an unsupported broad
+  corpus. The eventual standalone stdlib build should consume generated common sources and narrow
+  .NET actuals.
 - The callable exact-path slice preserves erased `Kotlin.Function0/1/2/3` as the only Kotlin
   callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge
   pattern, eligible generated non-Unit callables keep their original typed body as `InvokeExact`
@@ -1082,10 +1091,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Turn the bootstrap stdlib producer into an explicit compiler build input.** The same-run
-   USER/STDLIB partition is sufficient to establish physical ownership, but the next foundational
-   step is standalone stdlib compilation plus Kotlin metadata serialization/import. Do not claim
-   source-level cross-module validation until a user module actually resolves against that output.
+1. **Complete the standalone stdlib producer.** Source-level cross-module consumption is now proven:
+   a user module resolves against a metadata KLIB and invokes the bound CLR DLL. The remaining
+   foundational step is to serialize `Kotlin.Stdlib.klib` and emit `Kotlin.Stdlib.dll` from the same
+   explicit compiler build input instead of obtaining them through separate bootstrap routes. Do
+   not remove same-run production until that paired producer is deterministic on both runtime
+   targets.
 2. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

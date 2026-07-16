@@ -129,13 +129,33 @@ object DotNetBackend {
             return ilTarget
         }
         if ("[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in ilText && stdlibIlText == null) {
-            messageCollector.report(
-                CompilerMessageSeverity.ERROR,
-                "The generated module requires '${DotNetStdlibLibrary.ASSEMBLY_NAME}', but its injected " +
-                        "implementation source was not compiled. Compile without -no-stdlib."
-            )
-            ilTarget.delete()
-            return ilTarget
+            val externalStdlib = configuration.dotNetExternalStdlib
+            if (externalStdlib == null) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "The generated module requires '${DotNetStdlibLibrary.ASSEMBLY_NAME}', but neither " +
+                            "injected implementation source nor a bound metadata-KLIB/CLR-DLL pair was supplied. " +
+                            "Compile without -no-stdlib or add the target stdlib metadata KLIB to the classpath."
+                )
+                ilTarget.delete()
+                return ilTarget
+            }
+            if (!externalStdlib.implementationFile.isFile) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "The Kotlin/.NET stdlib metadata '${externalStdlib.metadataFile.path}' is bound to " +
+                            "missing CLR assembly '${externalStdlib.implementationFile.path}'."
+                )
+                ilTarget.delete()
+                return ilTarget
+            }
+            if (emitsExecutable) {
+                val packagedStdlib = (binaryOutput.parentFile ?: File("."))
+                    .resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+                if (externalStdlib.implementationFile.canonicalFile != packagedStdlib.canonicalFile) {
+                    externalStdlib.implementationFile.copyTo(packagedStdlib, overwrite = true)
+                }
+            }
         }
         // ilasm decodes a BOM-less file as ANSI, mangling every multi-byte UTF-8 sequence (e.g. in
         // string literals), so the .il file must be written as UTF-8 *with* a BOM.

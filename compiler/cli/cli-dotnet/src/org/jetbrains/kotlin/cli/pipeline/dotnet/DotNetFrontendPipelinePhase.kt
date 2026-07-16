@@ -4,6 +4,11 @@ import org.jetbrains.kotlin.CoreEnvironmentDeprecation
 import org.jetbrains.kotlin.KtPsiSourceFile
 import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
+import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
+import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
+import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
+import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
+import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.collectSources
 import org.jetbrains.kotlin.cli.common.contentRoots
 import org.jetbrains.kotlin.cli.common.diagnosticsCollector
@@ -21,6 +26,7 @@ import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.ConfigurationPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
 import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
+import org.jetbrains.kotlin.cli.report
 import org.jetbrains.kotlin.compiler.plugin.getCompilerExtensions
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.moduleName
@@ -33,6 +39,7 @@ import org.jetbrains.kotlin.fir.pipeline.buildFirViaLightTree
 import org.jetbrains.kotlin.fir.pipeline.resolveAndCheckFir
 import org.jetbrains.kotlin.fir.pipeline.runPlatformCheckers
 import org.jetbrains.kotlin.library.KotlinLibrary
+import org.jetbrains.kotlin.library.uniqueName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.PotentiallyIncorrectPhaseTimeMeasurement
@@ -66,6 +73,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
             libraryPaths = configuration.contentRoots.mapNotNull { (it as? JvmClasspathRoot)?.file?.path },
             configuration = configuration,
         ).all
+        configuration.recordExternalDotNetStdlib(klibs)
         val extensionRegistrars = configuration.getCompilerExtensions(FirExtensionRegistrar)
 
         val sourceFiles: List<KtSourceFile>
@@ -129,4 +137,50 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
         // via the analysis flag set in DotNetConfigurationUpdater.
         return DotNetFrontendPipelineArtifact(AllModulesFrontendOutput(outputs), configuration, sourceFiles)
     }
+}
+
+/**
+ * Recognizes an explicit metadata-KLIB/CLR-DLL pair without turning arbitrary classpath entries
+ * into physical CLR references. The KLIB manifest binds Kotlin declarations to one stable,
+ * target-specific assembly companion; ordinary metadata KLIBs remain compile-time-only inputs.
+ */
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotNetStdlib(
+    klibs: List<KotlinLibrary>,
+) {
+    val candidates = klibs.filter { it.uniqueName == DotNetStdlibArtifact.METADATA_UNIQUE_NAME }
+    if (candidates.isEmpty()) return
+    if (candidates.size != 1) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Multiple '${DotNetStdlibArtifact.METADATA_UNIQUE_NAME}' metadata libraries were loaded.",
+        )
+        return
+    }
+
+    val library = candidates.single()
+    val properties = library.manifestProperties
+    val expectedProperties = mapOf(
+        DotNetStdlibArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_NAME,
+        DotNetStdlibArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_VERSION,
+        DotNetStdlibArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_CULTURE,
+        DotNetStdlibArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to
+                DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
+        DotNetStdlibArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_FILE_NAME,
+        DotNetStdlibArtifact.METADATA_TARGET_PROPERTY to dotNetTarget.flagValue,
+    )
+    val mismatch = expectedProperties.entries.firstOrNull { entry ->
+        properties.getProperty(entry.key) != entry.value
+    }
+    if (mismatch != null) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Metadata library '${library.path}' must declare ${mismatch.key}=${mismatch.value} to bind it to the " +
+                    "requested Kotlin/.NET stdlib assembly.",
+        )
+        return
+    }
+
+    val metadataFile = library.path.toFile()
+    val implementationFile = metadataFile.parentFile.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    dotNetExternalStdlib = DotNetExternalStdlib(metadataFile, implementationFile)
 }

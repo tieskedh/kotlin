@@ -6,10 +6,10 @@ package org.jetbrains.kotlin.backend.dotnet
  *
  * Most declarations remain resolution-only intrinsic stubs. `DotNetStdlibCollections.kt` also
  * contains the first executable target-stdlib implementations: ordinary array-backed collection
- * classes and the first top-level collection operation. Until the backend can import Kotlin
- * metadata from a separately compiled library, frontend and lowering see those implementations
- * in the same module as the program; scoped IL emission then places them only in
- * `Kotlin.Stdlib.dll`, never in the user assembly.
+ * classes and top-level collection operations. The default bootstrap path still lets frontend
+ * and lowering see those implementations in the same module as the program; scoped IL emission
+ * then places them only in `Kotlin.Stdlib.dll`, never in the user assembly. A separate consumer
+ * may instead resolve declarations from a bound metadata KLIB/CLR DLL pair.
  */
 val DOTNET_STDLIB_SOURCES: Map<String, String> = mapOf(
     "DotNetStdlibIo.kt" to """@file:Suppress("UNUSED_PARAMETER")
