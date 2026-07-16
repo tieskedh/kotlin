@@ -8,19 +8,19 @@ object DotNetConfigurationKeys {
     val OUTPUT: CompilerConfigurationKey<File> = CompilerConfigurationKey.create("output .NET IL file")
     val ASSEMBLY_NAME: CompilerConfigurationKey<String> = CompilerConfigurationKey.create("output .NET assembly name")
     val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET runtime flavor")
-    val CALLABLE_EXPORTS: CompilerConfigurationKey<List<DotNetCallableExport>> =
-        CompilerConfigurationKey.create("explicit .NET callable boundary exports")
+    val EXPORTS: CompilerConfigurationKey<List<DotNetExport>> =
+        CompilerConfigurationKey.create("explicit .NET exports")
 }
 
 /**
- * One explicit CLR-facing callable boundary export.
+ * One explicit CLR-facing function export.
  *
  * This is compiler configuration, not a Kotlin source annotation: the POC can evaluate an export
- * boundary without adding a public Kotlin API. [kotlinFqName] selects one top-level function and
+ * boundary without adding a public Kotlin API. [kotlinFqName] selects one top-level function;
  * [clrMethodName] deliberately makes the CLR overload name an owner choice instead of a backend
- * heuristic.
+ * heuristic. Callable positions, when present, are projected through typed Func/Action shapes.
  */
-data class DotNetCallableExport(
+data class DotNetExport(
     val kotlinFqName: String,
     val clrMethodName: String,
 ) {
@@ -29,7 +29,7 @@ data class DotNetCallableExport(
         private val CLR_METHOD_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
         /** Parses the command-line/test spelling `<kotlin-fq-name>=<clr-method-name>`. */
-        fun parse(value: String): DotNetCallableExport {
+        fun parse(value: String): DotNetExport {
             val separator = value.indexOf('=')
             require(separator > 0 && separator < value.lastIndex && value.indexOf('=', separator + 1) < 0) {
                 "expected '<kotlin-fq-name>=<clr-method-name>'"
@@ -42,7 +42,7 @@ data class DotNetCallableExport(
             require(CLR_METHOD_NAME.matches(clrMethodName)) {
                 "'$clrMethodName' is not a supported CLR method name"
             }
-            return DotNetCallableExport(kotlinFqName, clrMethodName)
+            return DotNetExport(kotlinFqName, clrMethodName)
         }
     }
 }
@@ -82,8 +82,8 @@ var CompilerConfiguration.dotNetTarget: DotNetTarget
         put(DotNetConfigurationKeys.TARGET, value)
     }
 
-var CompilerConfiguration.dotNetCallableExports: List<DotNetCallableExport>
-    get() = get(DotNetConfigurationKeys.CALLABLE_EXPORTS, emptyList())
+var CompilerConfiguration.dotNetExports: List<DotNetExport>
+    get() = get(DotNetConfigurationKeys.EXPORTS, emptyList())
     set(value) {
-        put(DotNetConfigurationKeys.CALLABLE_EXPORTS, value)
+        put(DotNetConfigurationKeys.EXPORTS, value)
     }

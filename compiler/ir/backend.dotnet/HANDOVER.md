@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(array content operations complete; explicit CLR callable boundary, nullability, defaults, and
+(array content operations complete; explicit CLR function boundary, nullability, defaults, and
 immutable callable-provenance invocation implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
@@ -25,14 +25,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exact negative-array-size identity (`2448c404c`), shallow array-content equality (`359d01490`),
   recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
   by the stringification slice, first explicit callable-factory export, callable-parameter
-  adapters, nullable export metadata, default-argument export continuation, and immutable
-  callable-provenance exact invocation described below.
+  adapters, nullable export metadata, default-argument export continuation, immutable
+  callable-provenance exact invocation, and ordinary top-level function exports described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **488 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **490 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
-  **15 tests, 0 failures, 0 errors, 0 skips**.
+  **16 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -735,9 +735,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   projection remains a separate export layer; the boundary audit follows below.
 - The explicit CLR export boundary is compiler configuration, not a Kotlin annotation or automatic
   whole-module policy: repeatable `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one
-  public, non-generic top-level function with at least one Function0/1/2 parameter or
-  return. Its canonical FunctionN signature remains unchanged; a user-named method on the
-  existing file facade exposes only those callable positions as typed Func/Action. The runtime
+  public, non-generic top-level function. Its canonical Kotlin method remains unchanged; a
+  user-named method on the existing file facade retains ordinary mapped positions and exposes only
+  Function0/1/2 positions as typed Func/Action. Ordinary functions with no callable positions now
+  use the same explicitly named facade, nullability, default-overload, and collision policies. This
+  follows the JVM naming/default and Wasm/JS export-wrapper boundary semantically while keeping the
+  selector external during the POC. The runtime
   projection helper binds exact Func directly to InvokeExact, falls back through closed generic
   box/unbox thunks for erased implementations, and discards Kotlin.Unit in Action thunks. The
   reverse helper wraps Func/Action in private runtime-owned FunctionN adapters; Func adapters also
@@ -747,16 +750,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   delegate at a non-null position throws ArgumentNullException; nullable positions pass null in
   both directions. User exceptions pass unchanged because no boundary helper catches. Explicit
   Roslyn-compatible NullableAttribute metadata now describes every non-empty exported parameter
-  and return type shape directly from source IR, with preorder nested flags and value-type skipping;
-  no NullableContext compression or inference from erased FunctionN is used. Overloaded selectors,
+  and return type shape directly from source IR, with preorder nested flags and value-type
+  skipping; no NullableContext compression or inference from erased FunctionN is used. The
+  attribute class is synthesized and reserved only when one of those shapes needs it, so a
+  primitive-only explicit export can coexist with a source-owned class of that name. Overloaded selectors,
   exported name/signature collisions, generic/suspend functions, KFunction/suspend callable
   positions, and marker/high-arity callables are loud errors. `delegateexport_s1`,
   `delegateadapter_s1`, and `nullableexport_s1` executed the full arity/Func/Action/nullability
   matrix with both runtimes. Compiler-produced facades plus the landed runtime executed invocation
   and same-object round trips on modern and Framework. Dual-parser goldens pin both return and
   parameter directions, and the generated CLI suite pins the option and nullable-parameter path.
-  A negative CLI fixture also reserves the synthesized NullableAttribute metadata identity against
-  a source declaration in an exporting module.
+  A negative CLI fixture reserves the synthesized NullableAttribute metadata identity against a
+  source declaration in an exporting module, while a primitive-only positive fixture proves that
+  the unused identity is not reserved.
   A contiguous trailing suffix of source defaults now adds progressively shorter overloads only to
   that explicit facade. They pass physical placeholders and the established masks to `$default`,
   preserving arbitrary/dependent callee-side expressions and nullable-value slots. No CLR
@@ -766,6 +772,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ILAsm/runtime flavors; compiler-produced C# consumers ran full, suffix, zero-argument, dependent,
   callable-adaptation, and nullable-value cases. The exact golden and positive/collision CLI pins
   cover the repository surface. The separate default-export draft ADR records the reasoning.
+  `plainfunctionexport_s1` assembled compiler-produced ordinary aliases under both ILAsm versions;
+  Roslyn 5.6.0 consumers executed primitive, nullable-reference, progressively defaulted, and
+  extension-receiver calls on both runtimes. `ilText/plainFunctionExports.kt` pins that facade.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -898,9 +907,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Broaden the explicit CLR export selector beyond callable-bearing top-level functions.** Keep
-   naming, nullability, defaults, collision handling, and exception behavior owned by the explicit
-   facade; do not turn all public Kotlin declarations into an accidental CLR ABI.
+1. **Add an overload-aware explicit CLR function selector.** The current FQ-name selector rejects
+   overloaded groups rather than guessing. Design a stable parameter-signature spelling before
+   member/property/class export, and keep collision handling deterministic.
+2. **Evaluate top-level property export separately.** A CLR property is more than two renamed
+   accessor methods: decide metadata ownership, mutability, indexer behavior, and naming before
+   adding it to `-Xdotnet-export`.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

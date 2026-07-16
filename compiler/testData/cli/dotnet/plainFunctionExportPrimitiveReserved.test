@@ -1,0 +1,3 @@
+// EXISTS: plainFunctionExportPrimitiveReserved.il
+// CONTAINS: plainFunctionExportPrimitiveReserved.il, int32 'Add'(int32 'left', int32 'right')
+// NOT_CONTAINS: plainFunctionExportPrimitiveReserved.il, .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor

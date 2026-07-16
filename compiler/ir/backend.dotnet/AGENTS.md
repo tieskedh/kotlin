@@ -165,13 +165,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   fields, parameters, returns, ordinary Kotlin subtype conversion, or as a CLR delegate identity.
   The explicit export helper may probe the same-object capability solely to bind a typed Func;
   the generated facade exposes the delegate, never ExactFunctionN.
-  The explicit CLR export slice gives delegate projection/adaptation an explicit owner without a
-  Kotlin source annotation or an automatic whole-module export policy. Repeatable configuration
+  The explicit CLR export slice gives host-facing naming and delegate projection/adaptation an
+  explicit owner without a Kotlin source annotation or automatic whole-module policy. Following
+  the JVM naming/default and Wasm/JS wrapper pattern semantically, repeatable configuration
   `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects exactly one public, non-generic
-  top-level function with at least one Function0/1/2 parameter or return. The canonical
-  Kotlin method and all erased FunctionN positions remain unchanged; a user-named static method is
-  added to the SAME file facade. Only that explicit surface replaces callable positions with typed
-  Func/Action (Unit -> CLR void). The metadata-public
+  top-level function. The canonical Kotlin method remains unchanged; a user-named static method is
+  added to the SAME file facade. Ordinary positions retain their mapped CLR shapes. Only that
+  explicit surface replaces Function0/1/2 positions with typed Func/Action (Unit -> CLR void). An
+  ordinary function with no callable position is valid and gains the same explicit CLR name,
+  nullability metadata, collision policy, and Kotlin-default overloads. The metadata-public
   `Kotlin.Runtime.Internal.DelegateProjection` helper projects returns and adapts delegate
   parameters into private runtime-owned classes implementing the canonical FunctionN interface.
   Func adapters additionally expose the optional ExactFunctionN capability; Action adapters stay
@@ -184,8 +186,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   projections add no catches; a null delegate at a non-null exported parameter throws
   ArgumentNullException, while a nullable callable position maps null in both directions. Every
   explicit export carries Roslyn-compatible `NullableAttribute` metadata on each non-empty return
-  and parameter type shape. The compiler synthesizes the reserved attribute into that output
-  module, emits deterministic explicit attributes instead of NullableContext compression, and
+  and parameter type shape. The compiler synthesizes the reserved attribute only when at least one
+  exported shape needs it; a primitive-only export neither emits nor reserves that class. It emits
+  deterministic explicit attributes instead of NullableContext compression and
   encodes reference/generic/array nesting in preorder (`0` oblivious, `1` non-null, `2` nullable),
   skipping value types per Roslyn's contract. The metadata comes from source IR, never physically
   erased FunctionN. A contiguous suffix of source-default parameters creates progressively shorter
@@ -196,7 +199,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   into callers or substitutes `default(T)`, neither of which is Kotlin's general contract.
   Non-trailing defaults create no overload; any generated-signature collision fails the requested
   export as a whole. Overloaded selectors, facade-name/exported-signature clashes, generic or
-  suspend functions, KFunction/suspend callable positions, and arities above 2 fail loudly. No
+  suspend functions, KFunction/suspend callable positions, and arities above 2 fail loudly. Member
+  functions, properties, constructors, classes, and automatic whole-module export remain out. No
   projection or adaptation occurs in ordinary Kotlin fields,
   parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
   Func/Action arity under modern and Framework ILAsm; compiler-produced facades plus the landed
@@ -206,9 +210,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   as the intended nested nullable states. `defaultexport_s1` validated CLR optional-constant
   behavior, overload preference, generated masked calls, and C# consumers on both runtimes. Pins:
   `ilText/callableExports.kt`, `ilText/callableParameters.kt`,
-  `ilText/callableExportDefaults.kt`, CLI `dotnet/callableExport.args`, and both reserved-attribute
-  and default-overload collision fixtures. Detailed decisions are in the callable and CLR-default
-  draft ADRs.
+  `ilText/callableExportDefaults.kt`, `ilText/plainFunctionExports.kt`, CLI
+  `dotnet/callableExport.args`, and both reserved-attribute and default-overload collision fixtures.
+  `plainfunctionexport_s1` assembled ordinary aliases with both ILAsm versions and Roslyn consumers
+  executed primitive, reference, default-overload, and extension-receiver calls on both runtimes;
+  the primitive-only reserved-name CLI pin proves nullable metadata is demand-driven. Detailed
+  decisions are in the callable and CLR-default draft ADRs.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
   implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin
