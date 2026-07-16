@@ -1,6 +1,8 @@
 // Erased KProperty0/1 wrappers: name/get/invoke/set, primitive result variance, bound receiver
 // evaluation, and ordinary getter/setter callable delegation.
 
+import kotlin.reflect.KMutableProperty2
+import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty1
 
 private var topValue: Int = 40
@@ -19,6 +21,43 @@ private class ManualProperty : kotlin.reflect.KMutableProperty1<Cell, Int> {
 
     override fun set(receiver: Cell, value: Int) {
         receiver.value = value
+    }
+}
+
+private class ManualProperty2 : KMutableProperty2<ExtensionHost, Cell, Int> {
+    override val name: String
+        get() = "manual2"
+
+    override fun get(receiver1: ExtensionHost, receiver2: Cell): Int = receiver2.value
+
+    override fun invoke(receiver1: ExtensionHost, receiver2: Cell): Int = get(receiver1, receiver2)
+
+    override fun set(receiver1: ExtensionHost, receiver2: Cell, value: Int) {
+        receiver2.value = value
+    }
+}
+
+private var observedProperty2Name: String = ""
+
+private class ExtensionDelegate {
+    operator fun getValue(receiver: Cell, property: KProperty<*>): Int {
+        observedProperty2Name = property.name
+        return receiver.value
+    }
+
+    operator fun setValue(receiver: Cell, property: KProperty<*>, value: Int) {
+        observedProperty2Name = property.name
+        receiver.value = value
+    }
+}
+
+private class ExtensionHost {
+    var Cell.delegatedValue: Int by ExtensionDelegate()
+
+    fun read(receiver: Cell): Int = receiver.delegatedValue
+
+    fun write(receiver: Cell, value: Int) {
+        receiver.delegatedValue = value
     }
 }
 
@@ -84,5 +123,20 @@ fun box(): String {
     if (boundFirst == Cell(43)::value) return "fail 20: distinct bound receiver"
 
     if (manual == ManualProperty()) return "fail 21: user implementation identity"
+
+    val extensionHost = ExtensionHost()
+    val extensionCell = Cell(40)
+    if (extensionHost.read(extensionCell) != 40 || observedProperty2Name != "delegatedValue") {
+        return "fail 22: KMutableProperty2 delegated get"
+    }
+    extensionHost.write(extensionCell, 41)
+    if (extensionCell.value != 41 || observedProperty2Name != "delegatedValue") {
+        return "fail 23: KMutableProperty2 delegated set"
+    }
+    val manual2: KMutableProperty2<ExtensionHost, Cell, Int> = ManualProperty2()
+    manual2.set(extensionHost, extensionCell, 42)
+    if (manual2.get(extensionHost, extensionCell) != 42 || manual2(extensionHost, extensionCell) != 42) {
+        return "fail 24: explicit KMutableProperty2"
+    }
     return "OK"
 }

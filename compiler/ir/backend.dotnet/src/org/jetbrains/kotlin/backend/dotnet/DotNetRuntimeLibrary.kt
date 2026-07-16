@@ -7,7 +7,7 @@ import java.io.File
  * The first physical Kotlin/.NET runtime boundary.
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
- * the fixed, physically erased Function0/1/2 interfaces, the orthogonal KCallable/KFunction
+ * the fixed, physically erased Function0/1/2/3 interfaces, the orthogonal KCallable/KFunction
  * reflection view, erased KProperty0/1/2 identities, the erased Iterator execution interface,
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
  * boundary, and Kotlin-owned exception identities that have no faithful BCL type. Compiler
@@ -453,6 +453,14 @@ internal object DotNetRuntimeLibrary {
                  implements Kotlin.Function
           {
             .method public hidebysig newslot abstract virtual instance object Invoke(object p1, object p2) cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi Function3
+                 implements Kotlin.Function
+          {
+            .method public hidebysig newslot abstract virtual instance object Invoke(object p1, object p2, object p3) cil managed
             {
             }
           }
