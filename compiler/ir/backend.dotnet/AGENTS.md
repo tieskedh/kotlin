@@ -79,6 +79,22 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   The compiler reserves the runtime assembly name, creates no runtimeconfig for the library, and
   removes stale program outputs when either ILAsm path fails. Shared compiler support is emitted
   once in the runtime under `Kotlin.Runtime.Internal`, never copied into generated modules.
+- Target stdlib bootstrap (argumentation:
+  `docs/decisions/draft-adr-target-stdlib-bootstrap.md`; follows the JVM split between runtime ABI
+  support and ordinary stdlib implementations, with CLR assemblies as the physical boundary):
+  `Kotlin.Stdlib, Version=1.0.0.0, PublicKeyToken=null` is the second reserved unsigned ABI-1
+  platform identity. `Kotlin.Runtime` retains language identities and compiler/runtime services;
+  `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementation is the
+  generic `Kotlin.Collections.ArrayIterator<T>`, compiled through the same class and erased
+  Iterator-bridge pipeline as user code. The implementation is private to Kotlin source but
+  metadata-public because generated user assemblies construct it across the boundary; its name is
+  therefore a compiler/stdlib ABI detail, not a Kotlin source API. Because standalone Kotlin
+  library compilation/metadata import does not exist yet, injected stdlib source participates in
+  the same frontend/lowering run and `DotNetIlEmitter` partitions the lowered module into USER and
+  STDLIB ownership scopes. Every assembled executable receives both platform dlls; raw IL-only
+  compilation is not yet a distributable multi-assembly build. This same-run partition is
+  bootstrap machinery and must disappear once a separately built stdlib can be consumed, without
+  moving ordinary implementations back into `Kotlin.Runtime`.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
@@ -335,15 +351,18 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   cursor state instead of relying on CLR generic variance, which excludes value instantiations.
   Call sites cast or `unbox.any` the erased result, including `unbox.any !!n` in generic
   consumers. Explicit `iterator()` over the five supported primitive vectors and concrete
-  reference arrays constructs `Kotlin.Runtime.Internal.ArrayIterator`, which stores System.Array
-  plus an index and observes later vector mutations. Exhaustion throws the exact runtime-owned
+  reference arrays constructs the corresponding closed generic
+  `[Kotlin.Stdlib]Kotlin.Collections.ArrayIterator<T>`. The ordinary Kotlin implementation stores
+  an exact `T[]`, observes later vector mutations, and receives the same private erased bridges as
+  user code. Primitive elements box only at its generated `object Next()` boundary; reference
+  elements pass unchanged. Exhaustion throws the exact runtime-owned
   `Kotlin.NoSuchElementException`; mapping it to InvalidOperationException would falsely make it
-  an IllegalStateException. The handwritten runtime ArrayIterator is bootstrap packaging because
-  this POC has no real .NET stdlib build; once one exists, its ordinary Kotlin implementation
-  belongs there and the runtime retains the erased interface identity. Primitive specialization
-  is a later stdlib/performance choice. Direct array `for` loops keep the existing allocation-free
-  indexed lowering. A user class whose contract reaches `Iterator<T>` directly or through a
-  supported subinterface keeps typed `hasNext()` and `next(): T`; a JVM-shaped lowering adds
+  an IllegalStateException. The former handwritten System.Array producer has been removed from
+  `Kotlin.Runtime`; that assembly retains only the erased collection identities and exception.
+  Primitive specialization is a later stdlib/performance choice. Direct array `for` loops keep
+  the existing allocation-free indexed lowering. A user class whose contract reaches
+  `Iterator<T>` directly or through a supported subinterface keeps typed `hasNext()` and
+  `next(): T`; a JVM-shaped lowering adds
   private explicit `HasNext()` and erased `object Next()`
   MethodImpl bridges on the same object. The erased bridge boxes primitive or open-generic
   results exactly once, reference results pass unchanged, and a derived class inherits the bridge
@@ -368,10 +387,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   identity without a wrapper. Reference smartcasts proven by the frontend are materialized as
   checked `castclass` view changes when the CLR local keeps its wider declared type; instantiated
   generic interface targets are ordinary reference smartcast targets, not a special Iterable rule.
-  Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector directly to the same
-  System.Array-backed producer; erased Next narrows through `unbox.any !n`/`!!n`. The array mapper
-  still rejects `Array<T?>`, projections, concrete primitive-element generic arrays, and nested
-  arrays before the intrinsic runs. The contract is Kotlin-owned: imported CLR generic interfaces,
+  Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector to
+  `ArrayIterator<!n>`/`ArrayIterator<!!n>`; erased Next narrows through
+  `unbox.any !n`/`!!n`. The array mapper still rejects `Array<T?>`, projections, concrete
+  primitive-element generic arrays, and nested arrays before the intrinsic runs. The contract is
+  Kotlin-owned: imported CLR generic interfaces,
   `IEnumerable<T>`/`IEnumerator<T>`, and any future foreign variance views remain a separate interop
   decision and may not alter these erased identities. STAYS REJECTED, loudly: iterator/iterable
   subinterfaces which redeclare execution members or contain bodies, primitive-specialized
@@ -1448,13 +1468,18 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - File facade names are precomputed pre-gate (`DotNetIlEmitter.buildFileClassNames`): every
   declared top-level class reserves its IL name even when it is later skipped, so facade naming
   depends only on what the module declares, never on which classes survive support gates.
-  Injected stdlib declarations are excepted — they are not module declarations and reserve no
-  facade name (`DotNetMappedExceptions.isExceptionStdlibDeclaration` filters them out).
-- The fake stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package
-  (`kotlin.io` for `println`, `kotlin` for `Char.code`), filtered through the intrinsic registry and
-  never emitted as classes of their own. Injected declarations must compile without any diagnostics,
-  including warnings: the FIR test infrastructure maps every reported diagnostic back to a test
-  file and crashes on diagnostics in injected files (suppress e.g. deprecations locally).
+  Injected resolution-only stdlib declarations and the executable stdlib implementation are
+  excepted — they are not user-module declarations and reserve no user facade name
+  (`DotNetMappedExceptions.isExceptionStdlibDeclaration` and the emitter ownership scope filter
+  them out).
+- The bootstrap stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package.
+  Resolution-only declarations such as `println`, `Char.code`, and array operations are filtered
+  through the intrinsic/exception registries and never emitted into a facade. The ordinary Kotlin
+  `ArrayIterator<T>` declaration is different: STDLIB-scoped emission owns it and USER-scoped
+  emission excludes it, yielding one class in `Kotlin.Stdlib.dll`. Injected declarations must
+  compile without any diagnostics, including warnings: the FIR test infrastructure maps every
+  reported diagnostic back to a test file and crashes on diagnostics in injected files (suppress
+  e.g. deprecations locally).
 - Exceptions use the hybrid identity policy recorded in
   `docs/decisions/draft-adr-hybrid-exception-identity.md` (probe series `exceptionabi_s1`).
   `IrThrow` and `IrTry` follow the JVM model and map 1:1 onto the platform's
