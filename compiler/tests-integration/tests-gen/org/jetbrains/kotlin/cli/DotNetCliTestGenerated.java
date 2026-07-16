@@ -40,6 +40,12 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   }
 
   @Test
+  @TestMetadata("callableExportNullableParameter.args")
+  public void testCallableExportNullableParameter() {
+    run("callableExportNullableParameter.args");
+  }
+
+  @Test
   @TestMetadata("destinationDirectory.args")
   public void testDestinationDirectory() {
     run("destinationDirectory.args");

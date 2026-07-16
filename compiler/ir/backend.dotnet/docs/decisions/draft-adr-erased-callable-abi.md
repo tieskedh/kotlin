@@ -187,10 +187,10 @@ An upstream-quality design needs three distinct layers:
    projections, such as generated `Func`/`Action` adapters or typed facade members. Those
    projections do not participate in Kotlin subtype conversion and may allocate wrappers.
 
-The factory-return subset of layer 3 is implemented below; reverse adapters, nullability metadata,
-and broader export selection remain open. Performance validation of layer 2 and representative
-evidence for the remaining layer-3 directions are requirements for promoting this draft rather
-than optional post-promotion work.
+The non-generic top-level Function0/1/2 parameter/return subset of layer 3 is implemented below;
+nullability metadata and broader export selection remain open. Performance validation of layer 2
+and representative evidence for the remaining layer-3 directions are requirements for promoting
+this draft rather than optional post-promotion work.
 
 ## Identity boundary
 
@@ -202,7 +202,7 @@ callable references, nor foreign-language export projections. Those operations m
 object because they are not Kotlin function-type upcasts. A projected delegate is not required to
 be reference-identical to the canonical Kotlin callable it wraps.
 
-## First explicit CLR delegate export boundary
+## Explicit CLR delegate export boundary
 
 The POC now has a bounded owner for Kotlin-to-CLR projection. Repeatable compiler configuration
 uses this spelling:
@@ -212,20 +212,18 @@ uses this spelling:
 ```
 
 It deliberately is not a Kotlin source annotation and does not synthesize overloads for every
-public declaration. One mapping must select exactly one public, non-generic top-level factory that
-returns a non-null Function0/1/2. The original Kotlin factory and its FunctionN return signature
-remain unchanged. The compiler adds one user-named static method to that file's existing facade,
-with the factory's ordinary parameters and a typed Func/Action return. Requiring the CLR name in
-configuration makes naming an explicit owner decision; overloaded Kotlin names and an occupied
-facade method name/signature are errors rather than backend guesses.
+public declaration. One mapping must select exactly one public, non-generic top-level function
+with at least one non-null Function0/1/2 parameter or return. The original Kotlin method and its
+FunctionN signature remain unchanged. The compiler adds one user-named static method to that
+file's existing facade, replacing only callable positions with typed Func/Action positions and
+leaving ordinary parameters and returns unchanged. Requiring the CLR name in configuration makes
+naming an explicit owner decision; overloaded Kotlin names and an occupied facade method with the
+same exported parameter signature are errors rather than backend guesses.
 
-This first slice is intentionally one-way. Callable parameters require delegate-to-Kotlin
-adaptation and are rejected. Nullable callable returns require CLR nullability metadata and are
-rejected. Generic factories, KFunction/suspend returns, and arities above two are likewise outside
-the slice. These gates keep an incomplete facade from exposing erased FunctionN in a position that
-claims to be CLR-friendly. They also mean no adapter round trip exists yet; the reverse direction
-must be added explicitly at this same boundary and must restore an original delegate when it sees
-its own adapter.
+Nullable callable positions still require CLR nullability metadata and are rejected. Generic or
+suspend functions, KFunction/suspend callable positions, callable markers without a fixed arity,
+and arities above two are likewise outside the slice. These gates keep an incomplete facade from
+exposing erased FunctionN in a position that claims to be CLR-friendly.
 
 The implementation does not require another Kotlin callable representation. The generated facade
 passes the canonical FunctionN object to metadata-public
@@ -240,18 +238,23 @@ Repeated projection of the same callable to the same closed delegate type produc
 the same target and method, so CLR delegate equality succeeds and a separately projected value can
 remove an earlier event registration. This follows the CLR equality contract rather than requiring
 a cache. A different closed delegate shape is a different projection and has no equality promise.
-Future delegate-to-Kotlin conversion may allocate a generated adapter that stores the delegate,
-implements the erased `FunctionN` identity, and exposes the optional exact capability for `Func`;
-that is a semantic foreign adaptation, so ordinary Kotlin `===` preservation does not apply. A
-later implementation must return the original delegate when such an adapter is projected back. It
-must also specify whether Kotlin-to-CLR-to-Kotlin returns the original callable or an equivalent
-adapter; the canonical ABI does not require that round trip to preserve identity.
+
+The reverse direction constructs a private runtime-owned adapter that stores the original
+delegate and implements the erased `FunctionN` identity. A Func adapter also implements the
+matching optional `ExactFunctionN` capability so Kotlin calls with the exact logical shape avoid
+boxing; an Action adapter uses the universal erased path and returns `Kotlin.Unit.INSTANCE` after
+the void delegate completes. This is a semantic foreign adaptation, so ordinary Kotlin `===`
+preservation does not apply to the newly allocated adapter. When that adapter is projected back to
+the same closed delegate shape, the helper recognizes its own invariant adapter class and returns
+the stored original delegate object. A different closed shape may produce a new delegate.
+Kotlin-to-CLR-to-Kotlin is not required to return the original Kotlin callable in this slice.
 
 Nullability must come from export metadata rather than from `FunctionN`; until that layer exists,
-nullable callable factory returns are rejected. User exceptions pass through factory and delegate
-invocation unchanged because the facade and thunks add no catch/translation. Any future explicit
-exception translation belongs to the interop boundary, not the canonical callable or projection
-thunk.
+nullable callable parameters and returns are rejected. A null delegate supplied to a non-null
+exported parameter throws `ArgumentNullException("callable")`. User exceptions pass through the
+Kotlin method, adapter, and delegate invocation unchanged because the boundary adds no
+catch/translation. Any future explicit exception translation belongs to the interop boundary, not
+the canonical callable or projection thunk.
 
 Probe series `delegateprojection_s1` first validated direct-exact, erased-thunk, generic-thunk,
 Func, Action, repeated-equality, and callback-removal shapes. `delegateexport_s1` then executed all
@@ -259,7 +262,10 @@ exact/erased Func and Unit Action arities under modern 10.0.9 and .NET Framework
 compiler-produced `delegateexport_compiler_s1` facades plus the landed Kotlin.Runtime helper ran
 exact, erased fallback, repeated exact-delegate equality, and Action target/invocation checks on
 both runtimes. Repository IL pins cover all Func/Action arities; the CLI test pins the explicit
-configuration path.
+configuration path. Probe `delegateadapter_s1` then executed Func and Action adapters for arities
+zero through two, erased invocation, and original-delegate round trips under both ILAsm/runtime
+flavors. Compiler-produced `delegateadapter_compiler_s1` facades and the landed runtime executed
+Func/Action parameters and same-object echo round trips on modern CoreCLR and .NET Framework.
 
 ## Consequences
 
@@ -329,10 +335,10 @@ order, Unit erasure, and explicit user implementations.
 
 The POC currently uses generated fields for captures and bound receivers and one invariant generic
 mutable-reference cell. Those concrete layouts are implementation evidence, not additional
-callable identities and not standardized by this ADR. This ADR does not decide KCallable metadata
-beyond `name`, property references, reflective lookup/call APIs, suspend callables, reverse
-delegate adapters and their round trips, nullable CLR export metadata, broader export selection,
-Unit exact execution, or the exact Kotlin metadata encoding. Those features
+  callable identities and not standardized by this ADR. This ADR does not decide KCallable metadata
+  beyond `name`, property references, reflective lookup/call APIs, suspend callables, nullable CLR
+  export metadata, broader export selection, Unit exact execution, or the exact Kotlin metadata
+  encoding. Those features
 must preserve the canonical ABI invariants above or explicitly revise this draft before they land.
 The POC's .NET Framework 4.8 compatibility is probe evidence for the candidate representation, not
 a decision about the eventual product support baseline.

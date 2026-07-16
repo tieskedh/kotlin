@@ -118,13 +118,321 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  .class private auto ansi sealed beforefieldinit 'Func0Adapter`1'<R>
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Function0, class Kotlin.Runtime.Internal.'ExactFunction0`1'<!0>
+            |  {
+            |    .field assembly class [mscorlib]System.Func`1<!0> 'delegate'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Func`1<!0>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::'delegate'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance !0 InvokeExact() cil managed
+            |    {
+            |      .override method instance !0 class Kotlin.Runtime.Internal.'ExactFunction0`1'<!0>::InvokeExact()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::'delegate'
+            |      callvirt instance !0 class [mscorlib]System.Func`1<!0>::Invoke()
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke() cil managed
+            |    {
+            |      .override method instance object Kotlin.Function0::Invoke()
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance !0 class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::InvokeExact()
+            |      box !0
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit 'Func1Adapter`2'<P0, R>
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Function1, class Kotlin.Runtime.Internal.'ExactFunction1`2'<!0, !1>
+            |  {
+            |    .field assembly class [mscorlib]System.Func`2<!0, !1> 'delegate'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Func`2<!0, !1>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::'delegate'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance !1 InvokeExact(!0 p1) cil managed
+            |    {
+            |      .override method instance !1 class Kotlin.Runtime.Internal.'ExactFunction1`2'<!0, !1>::InvokeExact(!0)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::'delegate'
+            |      ldarg.1
+            |      callvirt instance !1 class [mscorlib]System.Func`2<!0, !1>::Invoke(!0)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object p1) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function1::Invoke(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      unbox.any !0
+            |      call instance !1 class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::InvokeExact(!0)
+            |      box !1
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit 'Func2Adapter`3'<P0, P1, R>
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Function2, class Kotlin.Runtime.Internal.'ExactFunction2`3'<!0, !1, !2>
+            |  {
+            |    .field assembly class [mscorlib]System.Func`3<!0, !1, !2> 'delegate'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Func`3<!0, !1, !2>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::'delegate'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance !2 InvokeExact(!0 p1, !1 p2) cil managed
+            |    {
+            |      .override method instance !2 class Kotlin.Runtime.Internal.'ExactFunction2`3'<!0, !1, !2>::InvokeExact(!0, !1)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::'delegate'
+            |      ldarg.1
+            |      ldarg.2
+            |      callvirt instance !2 class [mscorlib]System.Func`3<!0, !1, !2>::Invoke(!0, !1)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object p1, object p2) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function2::Invoke(object, object)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      unbox.any !0
+            |      ldarg.2
+            |      unbox.any !1
+            |      call instance !2 class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::InvokeExact(!0, !1)
+            |      box !2
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit Action0Adapter
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Function0
+            |  {
+            |    .field assembly class [mscorlib]System.Action 'delegate'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Action) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke() cil managed
+            |    {
+            |      .override method instance object Kotlin.Function0::Invoke()
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
+            |      callvirt instance void [mscorlib]System.Action::Invoke()
+            |      ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit 'Action1Adapter`1'<P0>
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Function1
+            |  {
+            |    .field assembly class [mscorlib]System.Action`1<!0> 'delegate'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Action`1<!0>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!0>::'delegate'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object p1) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function1::Invoke(object)
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!0>::'delegate'
+            |      ldarg.1
+            |      unbox.any !0
+            |      callvirt instance void class [mscorlib]System.Action`1<!0>::Invoke(!0)
+            |      ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class private auto ansi sealed beforefieldinit 'Action2Adapter`2'<P0, P1>
+            |         extends [mscorlib]System.Object
+            |         implements Kotlin.Function2
+            |  {
+            |    .field assembly class [mscorlib]System.Action`2<!0, !1> 'delegate'
+            |
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Action`2<!0, !1>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class [mscorlib]System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!0, !1>::'delegate'
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig newslot virtual final instance object Invoke(object p1, object p2) cil managed
+            |    {
+            |      .override method instance object Kotlin.Function2::Invoke(object, object)
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldfld class [mscorlib]System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!0, !1>::'delegate'
+            |      ldarg.1
+            |      unbox.any !0
+            |      ldarg.2
+            |      unbox.any !1
+            |      callvirt instance void class [mscorlib]System.Action`2<!0, !1>::Invoke(!0, !1)
+            |      ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
+            |      ret
+            |    }
+            |  }
+            |
             |  .class public abstract sealed auto ansi beforefieldinit DelegateProjection
             |         extends [mscorlib]System.Object
             |  {
+            |    .method public hidebysig static class Kotlin.Function0 FromFunc0<R>(class [mscorlib]System.Func`1<!!0>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brtrue.s valid
+            |      ldstr "callable"
+            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      throw
+            |    valid:
+            |      ldarg.0
+            |      newobj instance void class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>::.ctor(class [mscorlib]System.Func`1<!0>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function1 FromFunc1<P0, R>(class [mscorlib]System.Func`2<!!0, !!1>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brtrue.s valid
+            |      ldstr "callable"
+            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      throw
+            |    valid:
+            |      ldarg.0
+            |      newobj instance void class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>::.ctor(class [mscorlib]System.Func`2<!0, !1>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function2 FromFunc2<P0, P1, R>(class [mscorlib]System.Func`3<!!0, !!1, !!2>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brtrue.s valid
+            |      ldstr "callable"
+            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      throw
+            |    valid:
+            |      ldarg.0
+            |      newobj instance void class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>::.ctor(class [mscorlib]System.Func`3<!0, !1, !2>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function0 FromAction0(class [mscorlib]System.Action) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brtrue.s valid
+            |      ldstr "callable"
+            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      throw
+            |    valid:
+            |      ldarg.0
+            |      newobj instance void Kotlin.Runtime.Internal.Action0Adapter::.ctor(class [mscorlib]System.Action)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function1 FromAction1<P0>(class [mscorlib]System.Action`1<!!0>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brtrue.s valid
+            |      ldstr "callable"
+            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      throw
+            |    valid:
+            |      ldarg.0
+            |      newobj instance void class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>::.ctor(class [mscorlib]System.Action`1<!0>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function2 FromAction2<P0, P1>(class [mscorlib]System.Action`2<!!0, !!1>) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brtrue.s valid
+            |      ldstr "callable"
+            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      throw
+            |    valid:
+            |      ldarg.0
+            |      newobj instance void class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>::.ctor(class [mscorlib]System.Action`2<!0, !1>)
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static class [mscorlib]System.Func`1<!!0> ToFunc0<R>(class Kotlin.Function0 callable) cil managed
             |    {
             |      .maxstack 3
             |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0> exact)
+            |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>
+            |      dup
+            |      brfalse.s project
+            |      ldfld class [mscorlib]System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>::'delegate'
+            |      ret
+            |    project:
+            |      pop
             |      ldarg.0
             |      isinst class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0>
             |      stloc.0
@@ -147,6 +455,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .maxstack 3
             |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1> exact)
             |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>
+            |      dup
+            |      brfalse.s project
+            |      ldfld class [mscorlib]System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>::'delegate'
+            |      ret
+            |    project:
+            |      pop
+            |      ldarg.0
             |      isinst class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1>
             |      stloc.0
             |      ldloc.0
@@ -168,6 +484,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .maxstack 3
             |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2> exact)
             |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>
+            |      dup
+            |      brfalse.s project
+            |      ldfld class [mscorlib]System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>::'delegate'
+            |      ret
+            |    project:
+            |      pop
+            |      ldarg.0
             |      isinst class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2>
             |      stloc.0
             |      ldloc.0
@@ -188,6 +512,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |    {
             |      .maxstack 2
             |      ldarg.0
+            |      isinst Kotlin.Runtime.Internal.Action0Adapter
+            |      dup
+            |      brfalse.s project
+            |      ldfld class [mscorlib]System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
+            |      ret
+            |    project:
+            |      pop
+            |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit0(class Kotlin.Function0)
             |      newobj instance void [mscorlib]System.Action::.ctor(object, native int)
             |      ret
@@ -197,6 +529,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |    {
             |      .maxstack 2
             |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>
+            |      dup
+            |      brfalse.s project
+            |      ldfld class [mscorlib]System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>::'delegate'
+            |      ret
+            |    project:
+            |      pop
+            |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit1<!!0>(class Kotlin.Function1, !!0)
             |      newobj instance void class [mscorlib]System.Action`1<!!0>::.ctor(object, native int)
             |      ret
@@ -205,6 +545,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |    .method public hidebysig static class [mscorlib]System.Action`2<!!0, !!1> ToAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
             |    {
             |      .maxstack 2
+            |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>
+            |      dup
+            |      brfalse.s project
+            |      ldfld class [mscorlib]System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>::'delegate'
+            |      ret
+            |    project:
+            |      pop
             |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit2<!!0, !!1>(class Kotlin.Function2, !!0, !!1)
             |      newobj instance void class [mscorlib]System.Action`2<!!0, !!1>::.ctor(object, native int)
