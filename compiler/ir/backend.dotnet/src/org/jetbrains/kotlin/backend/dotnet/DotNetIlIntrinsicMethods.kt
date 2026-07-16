@@ -270,17 +270,16 @@ internal class DotNetIlIntrinsicMethods(
         )
     }
 
-    /**
-     * `contentEquals` is a Kotlin-owned shallow operation, not CLR vector identity and not a deep
-     * traversal. All supported vectors share one runtime helper so boxed primitive elements and
-     * references cross the existing Kotlin equality boundary consistently. In particular this
-     * preserves the stdlib's boxed-Double contract (all NaNs equal; signed zeroes distinct).
-     */
+    /** Kotlin-owned array content operations; CLR vector identity/collection helpers are not used. */
     private fun arrayContentIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         for (info in primitiveArrays) {
             add(
                 Key(kotlinCollectionsFqn, info.arrayFqn, "contentEquals", listOf(info.arrayFqn))
                         to DotNetIlArrayContentEqualsIntrinsic(info.arrayType)
+            )
+            add(
+                Key(kotlinCollectionsFqn, info.arrayFqn, "contentHashCode", emptyList())
+                        to DotNetIlArrayContentHashCodeIntrinsic(info.arrayType)
             )
         }
         add(
@@ -290,6 +289,14 @@ internal class DotNetIlIntrinsicMethods(
         add(
             Key(kotlinCollectionsFqn, arrayFqn, "contentDeepEquals", listOf(arrayFqn))
                     to DotNetIlArrayContentDeepEqualsIntrinsic
+        )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "contentHashCode", emptyList())
+                    to DotNetIlArrayContentHashCodeIntrinsic(fixedArrayType = null)
+        )
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "contentDeepHashCode", emptyList())
+                    to DotNetIlArrayContentDeepHashCodeIntrinsic
         )
     }
 
@@ -1270,6 +1277,65 @@ private object DotNetIlArrayContentDeepEqualsIntrinsic : DotNetIlIntrinsicMethod
         codegen.emitExpression(left, leftType)
         codegen.emitExpression(right, rightType)
         codegen.emit(DotNetRuntimeLibraryHelpers.arrayContentDeepEqualsCallInstruction, pops = 2, pushes = 1)
+        return true
+    }
+}
+
+/** Nullable shallow content hash for primitive and generic arrays; nested arrays retain identity. */
+private class DotNetIlArrayContentHashCodeIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 1) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'contentHashCode'")
+        val receiverType = fixedArrayType
+            ?: codegen.toDotNetIlValueType(receiver.type)?.takeIf {
+                it is DotNetIlValueType.PrimitiveArray || it is DotNetIlValueType.GenericArray
+            }
+            ?: dotNetUnsupported(
+                "'contentHashCode' has unsupported receiver type ${receiver.type.render()}"
+            )
+
+        codegen.emitExpression(receiver, receiverType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayContentHashCodeCallInstruction,
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/** Nullable recursive content hash for generic arrays; self-containing arrays remain undefined. */
+private object DotNetIlArrayContentDeepHashCodeIntrinsic : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetIlValueType.Int32 || call.arguments.size != 1) return false
+        val receiver = call.arguments[0]
+            ?: dotNetUnsupported("missing array receiver for 'contentDeepHashCode'")
+        val receiverType = codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
+            ?: dotNetUnsupported(
+                "'contentDeepHashCode' has unsupported receiver type ${receiver.type.render()}"
+            )
+
+        codegen.emitExpression(receiver, receiverType)
+        codegen.emit(
+            DotNetRuntimeLibraryHelpers.arrayContentDeepHashCodeCallInstruction,
+            pops = 1,
+            pushes = 1,
+        )
         return true
     }
 }
