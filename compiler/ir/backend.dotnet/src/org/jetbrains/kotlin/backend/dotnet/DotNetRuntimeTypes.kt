@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
@@ -406,10 +407,15 @@ private val IrClass.isDotNetKMutablePropertyBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KMutableProperty" && typeParameters.size == 1
 
 internal val IrClass.isDotNetIteratorBase: Boolean
-    get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterator" && typeParameters.size == 1
+    // Metadata-KLIB classifiers may be represented by a minimal external IR class whose own
+    // type-parameter list is not populated. Validate the closed use-site arity in
+    // mapCompilerRuntimeType instead; source declarations retain the defensive arity check.
+    get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterator" &&
+            (typeParameters.size == 1 || origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB)
 
 internal val IrClass.isDotNetIterableBase: Boolean
-    get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterable" && typeParameters.size == 1
+    get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterable" &&
+            (typeParameters.size == 1 || origin == IrDeclarationOrigin.IR_EXTERNAL_DECLARATION_STUB)
 
 internal val IrClass.isDotNetSupportedPrimitiveIterator: Boolean
     get() = fqNameWhenAvailable?.asString() in DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES && typeParameters.isEmpty()

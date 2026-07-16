@@ -92,20 +92,23 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   bodies run in the stdlib and work through the erased Iterable/Iterator ABI for every
   implementation.
   The implementation classes are private to Kotlin source but metadata-public because generated
-  user assemblies construct them
-  across the boundary; their names are therefore compiler/stdlib ABI details, not Kotlin source
-  APIs. Because standalone Kotlin library compilation/metadata import does not exist yet, injected
-  stdlib source participates in
+  user assemblies construct them across the boundary; their names are therefore compiler/stdlib
+  ABI details, not Kotlin source APIs. The default bootstrap path still injects stdlib source into
   the same frontend/lowering run and `DotNetIlEmitter` partitions the lowered module into USER and
-  STDLIB ownership scopes. Every assembled executable receives both platform dlls; raw IL-only
-  compilation is not yet a distributable multi-assembly build. This same-run partition is
-  bootstrap machinery and must disappear once a separately built stdlib can be consumed, without
-  moving ordinary implementations back into `Kotlin.Runtime`.
+  STDLIB ownership scopes. A separate consumer can now resolve Kotlin declarations from a metadata
+  `Kotlin.Stdlib.klib` and call implementations in its bound sibling `Kotlin.Stdlib.dll`, with no
+  injected implementation source. The KLIB manifest binds the complete unsigned assembly
+  identity, file, and requested runtime target; an arbitrary metadata KLIB never becomes a CLR
+  reference. This proves the consumer half only: the KLIB and DLL do not yet have one standalone producer. Every
+  assembled executable receives both platform dlls; raw IL-only compilation is not yet a
+  distributable multi-assembly build. Same-run production remains bootstrap machinery and must
+  disappear without moving ordinary implementations back into `Kotlin.Runtime`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
-  their List fast paths are omitted because List has no target ABI yet. Do not add a generator target that emits an
-  uncompilable broad corpus. The durable endpoint is compiling generated common sources plus
-  narrow .NET actuals once standalone stdlib metadata can be consumed.
+  their List fast paths are omitted because List has no target ABI yet. Do not add a generator
+  target that emits an uncompilable broad corpus. The durable endpoint is compiling generated
+  common sources plus narrow .NET actuals once the standalone producer can emit the bound KLIB/DLL
+  pair from one source compilation.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
@@ -1504,10 +1507,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   different: STDLIB-scoped emission owns them and USER-scoped emission excludes them, yielding the
   classes and stable `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. USER
   codegen's stdlib operation intrinsics select those external generic methods; they do not inline
-  the bodies. Injected
-  declarations must compile without any diagnostics, including warnings: the FIR test
-  infrastructure maps every reported diagnostic back to a test file and crashes on diagnostics
-  in injected files (suppress e.g. deprecations locally).
+  the bodies. Injected declarations must compile without any diagnostics, including warnings: the
+  FIR test infrastructure maps every reported diagnostic back to a test file and crashes on
+  diagnostics in injected files (suppress e.g. deprecations locally).
+  Metadata-only KLIB dependencies use the existing FIR metadata-library path. Imported built-in
+  collection classifiers may have minimal external IR owners whose declaration-side type-parameter
+  list is unpopulated, so runtime identity recognition uses the stable FqName and validates arity
+  on the actual `IrSimpleType` use site. The target stdlib is accepted as executable only when its
+  manifest binds the assembly name, version, neutral culture, null public-key token, file, and
+  runtime target to the reserved artifact; the compiler then packages the sibling DLL for an
+  executable consumer. This is not yet general physical-member metadata for arbitrary libraries.
 - Exceptions use the hybrid identity policy recorded in
   `docs/decisions/draft-adr-hybrid-exception-identity.md` (probe series `exceptionabi_s1`).
   `IrThrow` and `IrTry` follow the JVM model and map 1:1 onto the platform's
