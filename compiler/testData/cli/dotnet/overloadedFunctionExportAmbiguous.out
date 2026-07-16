@@ -1,0 +1,2 @@
+error: cannot export 'sample.convert' as 'Convert': the name is overloaded; add a fully qualified parameter signature to the selector.
+COMPILATION_ERROR

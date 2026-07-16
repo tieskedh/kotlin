@@ -100,6 +100,18 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   }
 
   @Test
+  @TestMetadata("overloadedFunctionExport.args")
+  public void testOverloadedFunctionExport() {
+    run("overloadedFunctionExport.args");
+  }
+
+  @Test
+  @TestMetadata("overloadedFunctionExportAmbiguous.args")
+  public void testOverloadedFunctionExportAmbiguous() {
+    run("overloadedFunctionExportAmbiguous.args");
+  }
+
+  @Test
   @TestMetadata("plainFunctionExportPrimitiveReserved.args")
   public void testPlainFunctionExportPrimitiveReserved() {
     run("plainFunctionExportPrimitiveReserved.args");

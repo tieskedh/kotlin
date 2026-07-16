@@ -254,7 +254,7 @@ private class DotNetEnvironmentConfigurator(
 
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     val DOTNET_EXPORT by stringDirective(
-        "Explicit CLR function export in <kotlin-fq-name>=<clr-method-name> form"
+        "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
     )
 }
 

@@ -207,7 +207,7 @@ An upstream-quality design needs three distinct layers:
 
 The non-generic top-level function subset of layer 3 is implemented below, including ordinary
 functions, Function0/1/2 adaptation, explicit CLR nullability metadata, and Kotlin-default
-overloads. Overload-aware selection and non-function declarations remain open. Performance
+overloads, including overload-aware selection. Non-function declarations remain open. Performance
 validation of layer 2 and representative evidence for the remaining layer-3 directions are
 requirements for promoting this draft rather than optional post-promotion work.
 
@@ -227,7 +227,7 @@ The POC now has a bounded owner for Kotlin-to-CLR projection. Repeatable compile
 uses this spelling:
 
 ```text
--Xdotnet-export=<kotlin-fq-name>=<clr-method-name>
+-Xdotnet-export=<kotlin-selector>=<clr-method-name>
 ```
 
 It deliberately is not a Kotlin source annotation and does not export every public declaration.
@@ -237,13 +237,26 @@ facade, retaining ordinary mapped parameter/return shapes and replacing only Fun
 positions with typed Func/Action shapes. An ordinary function with no callable position is still a
 valid explicit export; the alias supplies deliberate CLR naming, nullability metadata, and
 Kotlin-default overloads. Requiring the CLR name in configuration makes naming an explicit owner
-decision; overloaded Kotlin names and occupied exported signatures are errors rather than backend
-guesses.
+decision; occupied exported signatures are errors rather than backend guesses.
+
+A unique declaration keeps the short selector `pkg.name`. An overloaded group requires a
+fully qualified, whitespace-free expanded Kotlin parameter signature, for example
+`pkg.name(kotlin.Int,kotlin.Function1<kotlin.Int,kotlin.Int>)`. The extension receiver is the first
+parameter. The return type is intentionally absent because Kotlin cannot overload solely by
+return type. This spelling identifies the source-level declaration: it does not expose CLR/IL
+type tokens, and it does not use a declaration-order index that could change after unrelated
+source edits. Multiple overloads of one Kotlin name can therefore be exported independently. A
+legacy bare selector for an overloaded group remains an error, as does a signature that is absent
+or still ambiguous. Typealiases are matched by their expanded logical type; no promise is made to
+distinguish aliases whose expanded declarations are the same.
 
 This follows the mature targets' semantic boundary: JVM naming/default annotations and Wasm/JS
-exports preserve the Kotlin declaration and add or expose an explicit host-facing shape. The
-external selector is POC-specific because this branch must evaluate the CLR boundary without
-adding a public Kotlin annotation prematurely.
+exports preserve the Kotlin declaration and add or expose an explicit host-facing shape. Their
+annotations are already bound to one declaration, however, so the textual overload selector has
+no target precedent and is not a CLR requirement. It is provisional POC control-plane machinery
+needed only because this branch must evaluate the CLR boundary without adding a public Kotlin
+annotation prematurely. A future declaration-bound export model should remove the textual
+disambiguator rather than standardize this spelling as public ABI.
 
 Generic or suspend functions, KFunction/suspend callable positions, callable markers without a
 fixed arity, and arities above two remain outside the slice. These gates keep an incomplete facade
@@ -312,6 +325,9 @@ facades. `plainfunctionexport_s1` then assembled compiler-produced ordinary alia
 10.0.9 and .NET Framework 4.8 ILAsm; Roslyn 5.6.0 consumers executed primitive, nullable-reference,
 default-overload, and extension-receiver calls on both runtimes. Repository pins also prove that a
 primitive-only export does not reserve or synthesize `NullableAttribute`.
+`overloadedexport_s1` assembled signature-selected aliases with both ILAsm versions; Roslyn 5.6.0
+consumers executed primitive/reference overloads, typed callable adaptation, a defaulted
+extension, and a nested nullable generic argument on CoreCLR and .NET Framework.
 
 ## Consequences
 

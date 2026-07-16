@@ -22,27 +22,72 @@ object DotNetConfigurationKeys {
  */
 data class DotNetExport(
     val kotlinFqName: String,
+    val kotlinParameterSignature: String?,
     val clrMethodName: String,
 ) {
+    val kotlinSelector: String
+        get() = buildString {
+            append(kotlinFqName)
+            kotlinParameterSignature?.let { signature ->
+                append('(')
+                append(signature)
+                append(')')
+            }
+        }
+
     companion object {
         private val KOTLIN_FQ_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*")
+        private val KOTLIN_PARAMETER_SIGNATURE = Regex("[A-Za-z0-9_.,?*<>]*")
         private val CLR_METHOD_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
-        /** Parses the command-line/test spelling `<kotlin-fq-name>=<clr-method-name>`. */
+        /** Parses `<kotlin-fq-name>[(<expanded-parameter-types>)]=<clr-method-name>`. */
         fun parse(value: String): DotNetExport {
             val separator = value.indexOf('=')
             require(separator > 0 && separator < value.lastIndex && value.indexOf('=', separator + 1) < 0) {
-                "expected '<kotlin-fq-name>=<clr-method-name>'"
+                "expected '<kotlin-selector>=<clr-method-name>'"
             }
-            val kotlinFqName = value.substring(0, separator)
+            val kotlinSelector = value.substring(0, separator)
             val clrMethodName = value.substring(separator + 1)
+            val signatureStart = kotlinSelector.indexOf('(')
+            val kotlinFqName: String
+            val kotlinParameterSignature: String?
+            if (signatureStart < 0) {
+                kotlinFqName = kotlinSelector
+                kotlinParameterSignature = null
+            } else {
+                require(kotlinSelector.endsWith(')') && kotlinSelector.indexOf('(', signatureStart + 1) < 0) {
+                    "expected a selector in '<kotlin-fq-name>(<parameter-types>)' form"
+                }
+                kotlinFqName = kotlinSelector.substring(0, signatureStart)
+                kotlinParameterSignature = kotlinSelector.substring(signatureStart + 1, kotlinSelector.lastIndex)
+                require(KOTLIN_PARAMETER_SIGNATURE.matches(kotlinParameterSignature)) {
+                    "parameter signature '$kotlinParameterSignature' contains unsupported characters"
+                }
+                require(kotlinParameterSignature.hasBalancedTypeArguments()) {
+                    "parameter signature '$kotlinParameterSignature' has unbalanced type arguments"
+                }
+            }
             require(KOTLIN_FQ_NAME.matches(kotlinFqName)) {
                 "'$kotlinFqName' is not a supported Kotlin fully qualified function name"
             }
             require(CLR_METHOD_NAME.matches(clrMethodName)) {
                 "'$clrMethodName' is not a supported CLR method name"
             }
-            return DotNetExport(kotlinFqName, clrMethodName)
+            return DotNetExport(kotlinFqName, kotlinParameterSignature, clrMethodName)
+        }
+
+        private fun String.hasBalancedTypeArguments(): Boolean {
+            var depth = 0
+            for (character in this) {
+                when (character) {
+                    '<' -> depth++
+                    '>' -> {
+                        depth--
+                        if (depth < 0) return false
+                    }
+                }
+            }
+            return depth == 0
         }
     }
 }

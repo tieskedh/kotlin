@@ -53,6 +53,9 @@ alternate method names for those cases.
 An overload that collides with an existing facade method or another requested export is a
 compilation error. The compiler never silently drops only the conflicting overload, because that
 would make the requested export's default-argument surface depend on unrelated declarations.
+For an overloaded Kotlin name, the explicit expanded-parameter selector first chooses one source
+declaration; only that declaration's trailing default suffix generates shorter CLR overloads.
+Selector types are not CLR optional-argument metadata and do not change masked dispatch.
 
 ## Why not CLR optional constants now?
 

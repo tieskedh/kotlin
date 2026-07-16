@@ -82,10 +82,10 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                 )
                 continue
             }
-            if (exports.any { it.kotlinFqName == export.kotlinFqName }) {
+            if (exports.any { it.kotlinSelector == export.kotlinSelector }) {
                 configuration.report(
                     COMPILER_ARGUMENTS_ERROR,
-                    "Duplicate -Xdotnet-export target '${export.kotlinFqName}'."
+                    "Duplicate -Xdotnet-export target '${export.kotlinSelector}'."
                 )
                 continue
             }

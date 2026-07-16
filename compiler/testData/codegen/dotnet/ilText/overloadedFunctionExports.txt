@@ -1,0 +1,242 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'overloadedFunctionExports' {}
+.module 'main-overloadedFunctionExports.il'
+
+.namespace System.Runtime.CompilerServices
+{
+  .class private auto ansi sealed beforefieldinit NullableAttribute
+         extends [mscorlib]System.Attribute
+  {
+    .field public initonly uint8[] NullableFlags
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8) cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldc.i4.1
+      newarr [mscorlib]System.Byte
+      dup
+      ldc.i4.0
+      ldarg.1
+      stelem.i1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8[]) cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+  }
+}
+.class public auto ansi sealed beforefieldinit 'demo.Box`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'demo.Box`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'demo.Box`1'<!0>::'value'
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'demo.Box`1'::'get_value'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'demo.overloadedFunctionExportsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static string 'convert'(int32 'value') cil managed
+  {
+    .maxstack 4
+    ldstr "int:"
+    ldarg.0
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig static string 'ConvertInt'(int32 'value') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call string 'demo.overloadedFunctionExportsKt'::'convert'(int32)
+    ret
+  }
+  .method public hidebysig static string 'convert'(string 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string 'tmp0_elvis_lhs'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    ldnull
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brfalse IL_whenNext_1
+    ldstr "null"
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig static string 'ConvertText'(string 'value') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 02 00 00)
+    .maxstack 1
+    ldarg 0
+    call string 'demo.overloadedFunctionExportsKt'::'convert'(string)
+    ret
+  }
+  .method public hidebysig static int32 'apply'(int32 'value', class [Kotlin.Runtime]'Kotlin.Function1' 'transform') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.1
+    stloc.0
+    ldarg.0
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'Apply'(int32 'value', class [mscorlib]System.Func`2<int32, int32> 'transform') cil managed
+  {
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldarg 0
+    ldarg 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    call int32 'demo.overloadedFunctionExportsKt'::'apply'(int32, class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig static string 'decorate'(int32 '<this>', string 'suffix') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    ldarg.1
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig static string 'Decorate'(int32 '<this>', string 'suffix') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldarg 0
+    ldarg 1
+    call string 'demo.overloadedFunctionExportsKt'::'decorate'(int32, string)
+    ret
+  }
+  .method public hidebysig static string 'Decorate'(int32 '<this>') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 3
+    ldarg 0
+    ldnull
+    ldc.i4 1
+    call string 'demo.overloadedFunctionExportsKt'::'decorate$default'(int32, string, int32)
+    ret
+  }
+  .method public hidebysig static string 'decorate$default'(int32 '<this>', string 'suffix', int32 '$mask0') cil managed
+  {
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldstr "!"
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call string 'demo.overloadedFunctionExportsKt'::'decorate'(int32, string)
+    ret
+  }
+  .method public hidebysig static class 'demo.Box`1'<string> 'echoBox'(class 'demo.Box`1'<string> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'demo.Box`1'<string> 'EchoBox'(class 'demo.Box`1'<string> 'value') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8[]) = (01 00 02 00 00 00 01 02 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8[]) = (01 00 02 00 00 00 01 02 00 00)
+    .maxstack 1
+    ldarg 0
+    call class 'demo.Box`1'<string> 'demo.overloadedFunctionExportsKt'::'echoBox'(class 'demo.Box`1'<string>)
+    ret
+  }
+}

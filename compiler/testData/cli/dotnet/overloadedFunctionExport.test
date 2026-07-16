@@ -1,0 +1,3 @@
+// EXISTS: overloadedFunctionExport.il
+// CONTAINS: overloadedFunctionExport.il, string 'ConvertInt'(int32 'value')
+// CONTAINS: overloadedFunctionExport.il, string 'ConvertText'(string 'value')

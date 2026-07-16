@@ -1,0 +1,4 @@
+$TESTDATA_DIR$/overloadedFunctionExport.kt
+-Xdotnet-export=sample.convert=Convert
+-d
+$TEMP_DIR$/overloadedFunctionExportAmbiguous.il
