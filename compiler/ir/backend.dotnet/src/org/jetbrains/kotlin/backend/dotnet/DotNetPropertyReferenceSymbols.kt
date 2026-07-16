@@ -67,11 +67,20 @@ internal class DotNetPropertyReferenceSymbols(
         }
     }
 
+    private val localFactories: Map<Boolean, IrSimpleFunction> = mapOf(
+        false to createLocalFactory(mutable = false),
+        true to createLocalFactory(mutable = true),
+    )
+
     fun factory(arity: Int, mutable: Boolean): IrSimpleFunction =
         factories[arity to mutable]
             ?: error("Internal .NET backend error: no property-reference factory for arity $arity")
 
-    fun implementedFactories(): List<IrSimpleFunction> = factories.values.toList()
+    fun localFactory(mutable: Boolean): IrSimpleFunction =
+        localFactories.getValue(mutable)
+
+    fun implementedFactories(): List<IrSimpleFunction> =
+        factories.values + localFactories.values
 
     private fun createFactory(arity: Int, mutable: Boolean): IrSimpleFunction {
         val function = factoryClass.addFunction(
@@ -105,6 +114,24 @@ internal class DotNetPropertyReferenceSymbols(
                 irBuiltIns.functionN(arity + 1).symbol.typeWithArguments(typeArguments + irBuiltIns.unitType),
             )
         }
+        return function
+    }
+
+    private fun createLocalFactory(mutable: Boolean): IrSimpleFunction {
+        val function = factoryClass.addFunction(
+            name = "CreateLocalDelegated${if (mutable) "Mutable" else ""}Property0",
+            returnType = irBuiltIns.anyNType,
+            visibility = DescriptorVisibilities.PUBLIC,
+            isStatic = true,
+            origin = IrDeclarationOrigin.IR_BUILTINS_STUB,
+        )
+        function.addTypeParameter {
+            name = Name.identifier("V")
+            superTypes += irBuiltIns.anyNType
+        }
+        function.returnType = irBuiltIns.getKPropertyClass(mutable, 0)
+            .typeWithArguments(listOf(function.typeParameters.single().defaultType))
+        function.addValueParameter("name", irBuiltIns.stringType)
         return function
     }
 }

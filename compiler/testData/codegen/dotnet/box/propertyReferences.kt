@@ -1,8 +1,10 @@
-// Erased KProperty0/1 wrappers: name/get/invoke/set, primitive result variance, bound receiver
-// evaluation, and ordinary getter/setter callable delegation.
+// Erased KProperty0/1/2 wrappers: name/get/invoke/set, primitive result variance, bound receiver
+// evaluation, ordinary getter/setter callable delegation, and name-only local delegate tokens.
 
+import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KMutableProperty2
 import kotlin.reflect.KProperty
+import kotlin.reflect.KProperty0
 import kotlin.reflect.KProperty1
 
 private var topValue: Int = 40
@@ -59,6 +61,80 @@ private class ExtensionHost {
     fun write(receiver: Cell, value: Int) {
         receiver.delegatedValue = value
     }
+}
+
+private var observedLocalName: String = ""
+private var observedLocalMutable: Boolean = false
+private var observedLocalGetFailure: Boolean = false
+private var observedLocalInvokeFailure: Boolean = false
+private var observedLocalRendering: String = ""
+
+private fun observeLocalProperty(property: KProperty<*>) {
+    observedLocalName = property.name
+    observedLocalMutable = property is KMutableProperty<*>
+    observedLocalRendering = property.toString()
+    if (property is KProperty0<*>) {
+        observedLocalGetFailure = try {
+            property.get()
+            false
+        } catch (exception: UnsupportedOperationException) {
+            exception.message == "Not supported for local property reference."
+        }
+        observedLocalInvokeFailure = try {
+            property()
+            false
+        } catch (exception: UnsupportedOperationException) {
+            exception.message == "Not supported for local property reference."
+        }
+    } else {
+        observedLocalGetFailure = false
+        observedLocalInvokeFailure = false
+    }
+}
+
+private class LocalDelegate(private var value: Int) {
+    operator fun getValue(receiver: Any?, property: KProperty<*>): Int {
+        observeLocalProperty(property)
+        return value
+    }
+
+    operator fun setValue(receiver: Any?, property: KProperty<*>, value: Int) {
+        observeLocalProperty(property)
+        this.value = value
+    }
+}
+
+private fun readLocalDelegate(): Int {
+    val localRead by LocalDelegate(40)
+    return localRead
+}
+
+private fun writeLocalDelegate(): Int {
+    var localWrite by LocalDelegate(40)
+    localWrite = 42
+    return localWrite
+}
+
+private var localProvideCalls: Int = 0
+
+private class ProvidingLocalDelegate(private val value: Int) {
+    operator fun provideDelegate(receiver: Any?, property: KProperty<*>): ProvidingLocalDelegate {
+        if (receiver == null) {
+            localProvideCalls = localProvideCalls + 1
+        }
+        observeLocalProperty(property)
+        return this
+    }
+
+    operator fun getValue(receiver: Any?, property: KProperty<*>): Int {
+        observeLocalProperty(property)
+        return value
+    }
+}
+
+private fun readProvidedLocalDelegate(): Int {
+    val localProvided by ProvidingLocalDelegate(43)
+    return localProvided
 }
 
 private var receiverEvaluations: Int = 0
@@ -137,6 +213,32 @@ fun box(): String {
     manual2.set(extensionHost, extensionCell, 42)
     if (manual2.get(extensionHost, extensionCell) != 42 || manual2(extensionHost, extensionCell) != 42) {
         return "fail 24: explicit KMutableProperty2"
+    }
+
+    if (readLocalDelegate() != 40) return "fail 25: local delegated val"
+    if (observedLocalName != "localRead" || observedLocalMutable) return "fail 26: local val token"
+    if (!observedLocalGetFailure || !observedLocalInvokeFailure) {
+        return "fail 27: local val unsupported access"
+    }
+    if (observedLocalRendering != "property localRead (Kotlin reflection is not available)") {
+        return "fail 28: local val rendering"
+    }
+
+    if (writeLocalDelegate() != 42) return "fail 29: local delegated var"
+    if (observedLocalName != "localWrite" || !observedLocalMutable) return "fail 30: local var token"
+    if (!observedLocalGetFailure || !observedLocalInvokeFailure) {
+        return "fail 31: local var unsupported access"
+    }
+    if (observedLocalRendering != "property localWrite (Kotlin reflection is not available)") {
+        return "fail 32: local var rendering"
+    }
+
+    localProvideCalls = 0
+    if (readProvidedLocalDelegate() != 43 || localProvideCalls != 1) {
+        return "fail 33: local provideDelegate"
+    }
+    if (observedLocalName != "localProvided" || observedLocalMutable) {
+        return "fail 34: local provided token"
     }
     return "OK"
 }
