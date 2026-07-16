@@ -1,9 +1,9 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
-import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ITERATOR_HAS_NEXT_BRIDGE
-import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ITERATOR_NEXT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetErasedCollectionBridgeResult
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetErasedCollectionBridgeSlotOrNull
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
@@ -185,11 +185,8 @@ internal class DotNetIlMethodCodegen(
             appendLine("  {")
             if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
                 appendGenericDataClassComponentOverride()
-            } else if (
-                function.origin == DOTNET_ITERATOR_HAS_NEXT_BRIDGE ||
-                function.origin == DOTNET_ITERATOR_NEXT_BRIDGE
-            ) {
-                appendIteratorBridgeOverride()
+            } else if (function.origin.dotNetErasedCollectionBridgeSlotOrNull != null) {
+                appendErasedCollectionBridgeOverride()
             }
             if (!isAbstractMember) {
                 if (isEntryPoint) {
@@ -230,7 +227,7 @@ internal class DotNetIlMethodCodegen(
      */
     private fun IrFunction.dotNetMemberVisibility(): String? {
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
-        if (origin == DOTNET_ITERATOR_HAS_NEXT_BRIDGE || origin == DOTNET_ITERATOR_NEXT_BRIDGE) return "private"
+        if (origin.dotNetErasedCollectionBridgeSlotOrNull != null) return "private"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
         if (visibility == DescriptorVisibilities.PROTECTED) return "family"
         if (visibility != DescriptorVisibilities.PRIVATE) return null
@@ -255,16 +252,18 @@ internal class DotNetIlMethodCodegen(
         appendLine("    .override method ${overrideInfo.renderMethodReference(overridden.dotNetIlMethodName())}")
     }
 
-    /** Binds one private bridge to the non-generic Kotlin.Runtime iterator execution slot. */
-    private fun StringBuilder.appendIteratorBridgeOverride() {
-        val [returnType, methodName] = when (function.origin) {
-            DOTNET_ITERATOR_HAS_NEXT_BRIDGE -> "bool" to "HasNext"
-            DOTNET_ITERATOR_NEXT_BRIDGE -> "object" to "Next"
-            else -> error("Internal .NET backend error: function is not an iterator bridge")
+    /** Binds one private bridge to its non-generic Kotlin.Runtime collection execution slot. */
+    private fun StringBuilder.appendErasedCollectionBridgeOverride() {
+        val slot = function.origin.dotNetErasedCollectionBridgeSlotOrNull
+            ?: error("Internal .NET backend error: function is not an erased collection bridge")
+        val returnType = when (slot.result) {
+            DotNetErasedCollectionBridgeResult.BOOLEAN -> "bool"
+            DotNetErasedCollectionBridgeResult.OBJECT -> "object"
+            DotNetErasedCollectionBridgeResult.ITERATOR -> DotNetRuntimeTypes.iteratorType.nameInSignature
         }
         appendLine(
             "    .override method instance $returnType [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
-                    "${"Kotlin.Collections.Iterator".toIlIdentifier()}::${methodName.toIlIdentifier()}()"
+                    "${slot.runtimeOwnerIlName.toIlIdentifier()}::${slot.runtimeMemberName.toIlIdentifier()}()"
         )
     }
 
@@ -298,7 +297,7 @@ internal class DotNetIlMethodCodegen(
      *   no virtual flags — the established plain-`call` model.
      */
     private fun IrFunction.dotNetVirtualFlags(): String {
-        if (origin == DOTNET_ITERATOR_HAS_NEXT_BRIDGE || origin == DOTNET_ITERATOR_NEXT_BRIDGE) {
+        if (origin.dotNetErasedCollectionBridgeSlotOrNull != null) {
             return "newslot virtual final "
         }
         if (this !is IrSimpleFunction || !signature.hasThis) return ""

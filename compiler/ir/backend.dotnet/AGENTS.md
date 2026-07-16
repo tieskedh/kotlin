@@ -325,7 +325,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   emitted as runtime or module ABI. Full reflection, accessor objects, and exact property-access
   capabilities remain deferred.
   Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
-- Iterator ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
+- Iteration ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
   series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an
   object-shaped execution boundary, with CLR `object` replacing JVM Object): source
   `Iterator<T>` and the supported primitive iterator classes map to one public non-generic
@@ -357,14 +357,27 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   own generic identity follows the existing CLR generic-interface rule: variance widening is
   reference-only, while a value-shaped subinterface view can still widen safely to erased
   `Iterator<Any>` without an adapter.
+  Source `Iterable<T>` likewise maps to one public non-generic
+  `[Kotlin.Runtime]Kotlin.Collections.Iterable` identity with
+  `Kotlin.Collections.Iterator GetIterator()`. An ordinary implementation retains its typed
+  Kotlin `iterator()` member and receives one private explicit MethodImpl bridge. Base ownership,
+  abstract-obligation deferral, bodyless subinterfaces, inherited fake-override calls, and typed
+  redeclaration rejection follow the same table-driven policy as Iterator. Consequently a real
+  `for` loop over a user-defined Iterable uses erased `GetIterator`/`HasNext`/`Next`, and both
+  `Iterable<Int> -> Iterable<Any>` and a value-shaped `IterableView<Int> -> Iterable<Any>` preserve
+  identity without a wrapper. Reference smartcasts proven by the frontend are materialized as
+  checked `castclass` view changes when the CLR local keeps its wider declared type; instantiated
+  generic interface targets are ordinary reference smartcast targets, not a special Iterable rule.
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector directly to the same
   System.Array-backed producer; erased Next narrows through `unbox.any !n`/`!!n`. The array mapper
   still rejects `Array<T?>`, projections, concrete primitive-element generic arrays, and nested
-  arrays before the intrinsic runs. STAYS REJECTED, loudly: iterator subinterfaces which redeclare
-  the execution members or contain bodies, primitive-specialized iterator subclasses,
-  Iterable/collection/sequence iteration, mutable iterators, CLR IEnumerator adapters, and typed
-  fast-path entries. Pins:
-  `ilText/arrayIterators.kt`, `box/arrayIterators.kt`, and the iterator negatives in
+  arrays before the intrinsic runs. The contract is Kotlin-owned: imported CLR generic interfaces,
+  `IEnumerable<T>`/`IEnumerator<T>`, and any future foreign variance views remain a separate interop
+  decision and may not alter these erased identities. STAYS REJECTED, loudly: iterator/iterable
+  subinterfaces which redeclare execution members or contain bodies, primitive-specialized
+  iterator subclasses, collection/sequence iteration, mutable iterators, CLR enumeration adapters,
+  and typed fast-path entries. Pins: `ilText/arrayIterators.kt`, `box/arrayIterators.kt`,
+  `ilText/iterables.kt`, `box/iterables.kt`, and the iterator-family negatives in
   `ilText/genericArraysRejected.kt`.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
   functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
