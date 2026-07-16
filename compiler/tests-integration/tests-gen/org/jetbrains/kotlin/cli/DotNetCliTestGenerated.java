@@ -34,6 +34,12 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   }
 
   @Test
+  @TestMetadata("callableExportDefaultClash.args")
+  public void testCallableExportDefaultClash() {
+    run("callableExportDefaultClash.args");
+  }
+
+  @Test
   @TestMetadata("callableExportInvalid.args")
   public void testCallableExportInvalid() {
     run("callableExportInvalid.args");

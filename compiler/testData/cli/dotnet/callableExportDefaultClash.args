@@ -1,0 +1,4 @@
+$TESTDATA_DIR$/callableExportDefaultClash.kt
+-Xdotnet-export=sample.source=clash
+-d
+$TEMP_DIR$/callableExportDefaultClash.il

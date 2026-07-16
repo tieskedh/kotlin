@@ -1,0 +1,2 @@
+error: cannot export 'sample.source' as 'clash': CLR method 'clash(int32)' already exists on facade 'sample.callableExportDefaultClashKt'.
+COMPILATION_ERROR

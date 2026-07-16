@@ -1,7 +1,8 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(array content operations complete; explicit CLR callable boundary and nullability implemented).
+(array content operations complete; explicit CLR callable boundary, nullability, and defaults
+implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -24,13 +25,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   exact negative-array-size identity (`2448c404c`), shallow array-content equality (`359d01490`),
   recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
   by the stringification slice, first explicit callable-factory export, callable-parameter
-  adapters, and nullable export metadata continuation described below.
+  adapters, nullable export metadata, and default-argument export continuation described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **484 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **486 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
-  **14 tests, 0 failures, 0 errors, 0 skips**.
+  **15 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -721,9 +722,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   explicit fallback, and receiver/argument/invocation order. Delegate projection remains a
   separate export layer; the boundary audit follows below.
 - The explicit CLR export boundary is compiler configuration, not a Kotlin annotation or automatic
-  overload policy: repeatable `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one
+  whole-module policy: repeatable `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one
   public, non-generic top-level function with at least one Function0/1/2 parameter or
-  return. Its canonical FunctionN signature remains unchanged; one user-named method on the
+  return. Its canonical FunctionN signature remains unchanged; a user-named method on the
   existing file facade exposes only those callable positions as typed Func/Action. The runtime
   projection helper binds exact Func directly to InvokeExact, falls back through closed generic
   box/unbox thunks for erased implementations, and discards Kotlin.Unit in Action thunks. The
@@ -744,6 +745,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parameter directions, and the generated CLI suite pins the option and nullable-parameter path.
   A negative CLI fixture also reserves the synthesized NullableAttribute metadata identity against
   a source declaration in an exporting module.
+  A contiguous trailing suffix of source defaults now adds progressively shorter overloads only to
+  that explicit facade. They pass physical placeholders and the established masks to `$default`,
+  preserving arbitrary/dependent callee-side expressions and nullable-value slots. No CLR
+  optional-constant metadata is emitted, because Roslyn either embeds its constant in the caller or
+  supplies `default(T)`. Non-trailing defaults stay full-argument-only, and a generated overload
+  collision is a loud error for the whole export. `defaultexport_s1` used Roslyn 5.6.0 plus both
+  ILAsm/runtime flavors; compiler-produced C# consumers ran full, suffix, zero-argument, dependent,
+  callable-adaptation, and nullable-value cases. The exact golden and positive/collision CLI pins
+  cover the repository surface. The separate default-export draft ADR records the reasoning.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -876,9 +886,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Define default-argument interop on explicit CLR exports.** Probe CLR optional-constant
-   metadata versus generated overloads, and keep arbitrary Kotlin default expressions routed
-   through the existing `$default` helpers rather than pretending every default is a CLR constant.
+1. **Broaden the explicit CLR export selector beyond callable-bearing top-level functions.** Keep
+   naming, nullability, defaults, collision handling, and exception behavior owned by the explicit
+   facade; do not turn all public Kotlin declarations into an accidental CLR ABI.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

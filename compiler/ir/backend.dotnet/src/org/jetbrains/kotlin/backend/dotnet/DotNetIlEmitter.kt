@@ -1,7 +1,9 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetDefaultParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetCallableObject
@@ -23,6 +25,7 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
+import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
@@ -695,7 +698,7 @@ class DotNetIlEmitter(
         // allowed to retain a stale signature or call a declaration evicted by a class/body
         // failure. Export failures are compilation errors because the user requested this
         // boundary explicitly; silently dropping the facade would be a false-success ABI.
-        val renderedCallableExports = LinkedHashMap<IrSimpleFunction, DotNetIlRenderedMethod>()
+        val renderedCallableExports = LinkedHashMap<IrSimpleFunction, List<DotNetIlRenderedMethod>>()
         val exportedIlIdentities = hashSetOf<String>()
         var callableExportFailed = false
         for ([target, export] in callableExportsByTarget) {
@@ -710,26 +713,28 @@ class DotNetIlEmitter(
                 continue
             }
             try {
-                val renderedExport = renderCallableExport(target, export, targetInfo, typeMapper)
-                val exportedParameterTypes = renderedExport.parameterTypes.joinToString(", ")
-                val collision = availableFunctions.entries.firstOrNull { [function, info] ->
-                    info.owner.ilTypeRef == targetInfo.owner.ilTypeRef &&
-                            function.typeParameters.isEmpty() &&
-                            function.dotNetIlMethodName() == export.clrMethodName &&
-                            info.signature.renderParameterTypes() == exportedParameterTypes
+                val renderedExport = renderCallableExport(target, export, targetInfo, typeMapper, availableFunctions)
+                for (exportedMethod in renderedExport.methods) {
+                    val exportedParameterTypes = exportedMethod.parameterTypes.joinToString(", ")
+                    val collision = availableFunctions.entries.firstOrNull { [function, info] ->
+                        info.owner.ilTypeRef == targetInfo.owner.ilTypeRef &&
+                                function.typeParameters.isEmpty() &&
+                                function.dotNetIlMethodName() == export.clrMethodName &&
+                                info.signature.renderParameterTypes() == exportedParameterTypes
+                    }
+                    if (collision != null) {
+                        dotNetUnsupported(
+                            "CLR method '${export.clrMethodName}($exportedParameterTypes)' " +
+                                    "already exists on facade ${targetInfo.owner.ilTypeRef}"
+                        )
+                    }
+                    val exportIdentity = "${targetInfo.owner.ilTypeRef}::${export.clrMethodName}(" +
+                            "$exportedParameterTypes)"
+                    if (!exportedIlIdentities.add(exportIdentity)) {
+                        dotNetUnsupported("another requested export maps to the same CLR method '$exportIdentity'")
+                    }
                 }
-                if (collision != null) {
-                    dotNetUnsupported(
-                        "CLR method '${export.clrMethodName}($exportedParameterTypes)' " +
-                                "already exists on facade ${targetInfo.owner.ilTypeRef}"
-                    )
-                }
-                val exportIdentity = "${targetInfo.owner.ilTypeRef}::${export.clrMethodName}(" +
-                        "$exportedParameterTypes)"
-                if (!exportedIlIdentities.add(exportIdentity)) {
-                    dotNetUnsupported("another requested export maps to the same CLR method '$exportIdentity'")
-                }
-                renderedCallableExports[target] = renderedExport.method
+                renderedCallableExports[target] = renderedExport.methods.map { it.method }
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -2060,6 +2065,7 @@ class DotNetIlEmitter(
         export: DotNetCallableExport,
         targetInfo: DotNetIlFunctionInfo,
         typeMapper: DotNetIlTypeMapper,
+        availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     ): DotNetRenderedCallableExport {
         if (target.visibility != DescriptorVisibilities.PUBLIC) {
             dotNetUnsupported("the selected function is not public")
@@ -2097,34 +2103,126 @@ class DotNetIlEmitter(
                 DotNetIlReturnType.Void -> emptyList()
                 is DotNetIlReturnType.Value -> DotNetNullableMetadata.flags(target.returnType, returnType.type)
             }
-        val ilText = buildString {
-            appendLine(
-                "  .method public hidebysig static $exportedReturnType " +
-                        "${export.clrMethodName.toIlIdentifier()}($parameters) cil managed"
-            )
-            appendLine("  {")
-            appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
-            parameterNullabilityFlags.forEachIndexed { index, flags ->
-                appendNullableAttribute(parameterIndex = index + 1, flags = flags)
-            }
-            appendLine("    .maxstack ${maxOf(1, target.parameters.size)}")
-            target.parameters.indices.forEach { index ->
-                appendLine("    ldarg $index")
-                parameterBoundaries[index]?.let { boundary ->
-                    appendLine("    ${boundary.delegateBoundary.adaptationCallInstruction}")
+        val renderedMethods = mutableListOf<DotNetRenderedExportMethod>()
+        renderedMethods += DotNetRenderedExportMethod(
+            method = DotNetIlRenderedMethod(buildString {
+                appendLine(
+                    "  .method public hidebysig static $exportedReturnType " +
+                            "${export.clrMethodName.toIlIdentifier()}($parameters) cil managed"
+                )
+                appendLine("  {")
+                appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
+                parameterNullabilityFlags.forEachIndexed { index, flags ->
+                    appendNullableAttribute(parameterIndex = index + 1, flags = flags)
                 }
-            }
-            appendLine("    ${targetInfo.renderCallInstruction(target.dotNetIlMethodName())}")
-            returnBoundary?.let { boundary ->
-                appendLine("    ${boundary.delegateBoundary.projectionCallInstruction}")
-            }
-            appendLine("    ret")
-            appendLine("  }")
-        }
-        return DotNetRenderedCallableExport(
-            method = DotNetIlRenderedMethod(ilText),
+                appendLine("    .maxstack ${maxOf(1, target.parameters.size)}")
+                target.parameters.indices.forEach { index ->
+                    appendLine("    ldarg $index")
+                    parameterBoundaries[index]?.let { boundary ->
+                        appendLine("    ${boundary.delegateBoundary.adaptationCallInstruction}")
+                    }
+                }
+                appendLine("    ${targetInfo.renderCallInstruction(target.dotNetIlMethodName())}")
+                returnBoundary?.let { boundary ->
+                    appendLine("    ${boundary.delegateBoundary.projectionCallInstruction}")
+                }
+                appendLine("    ret")
+                appendLine("  }")
+            }),
             parameterTypes = exportedParameterTypes,
         )
+
+        val defaultParameterIndices = target.dotNetDefaultParameterIndices.orEmpty().toSet()
+        val trailingOverloadStarts = buildList {
+            var firstOmitted = target.parameters.size
+            while (firstOmitted > 0 && firstOmitted - 1 in defaultParameterIndices) {
+                firstOmitted--
+                add(firstOmitted)
+            }
+        }
+        if (trailingOverloadStarts.isEmpty()) {
+            return DotNetRenderedCallableExport(renderedMethods)
+        }
+
+        val defaultStub = target.defaultArgumentsDispatchFunction as? IrSimpleFunction
+            ?: dotNetUnsupported("default-argument export has no generated default dispatcher")
+        val defaultStubInfo = availableFunctions[defaultStub]
+            ?: dotNetUnsupported("the generated default dispatcher is not in the emitted callable surface")
+        val maskParameters = defaultStub.parameters.drop(target.parameters.size)
+        if (
+            maskParameters.isEmpty() ||
+            maskParameters.any { it.origin != IrDeclarationOrigin.MASK_FOR_DEFAULT_FUNCTION }
+        ) {
+            dotNetUnsupported("the generated default dispatcher has an unsupported mask/handler shape")
+        }
+        val defaultMaskBitByParameterIndex = target.parameters.indices
+            .filter { index -> target.parameters[index].participatesInDefaultArgumentMask() }
+            .withIndex()
+            .associate { indexedParameter -> indexedParameter.value to indexedParameter.index }
+
+        for (firstOmitted in trailingOverloadStarts) {
+            val retainedParameterTypes = exportedParameterTypes.take(firstOmitted)
+            val retainedParameters = target.parameters.indices.take(firstOmitted).joinToString(", ") { index ->
+                "${retainedParameterTypes[index]} ${target.parameters[index].name.asString().toIlIdentifier()}"
+            }
+            val defaultMasks = IntArray(maskParameters.size)
+            for (parameterIndex in firstOmitted until target.parameters.size) {
+                val defaultBitIndex = defaultMaskBitByParameterIndex[parameterIndex]
+                    ?: error("Internal .NET backend error: default parameter has no dispatcher mask bit")
+                val maskIndex = defaultBitIndex / 32
+                defaultMasks[maskIndex] = defaultMasks[maskIndex] or (1 shl (defaultBitIndex % 32))
+            }
+            val defaultValueLocals = (firstOmitted until target.parameters.size)
+                .filter { index -> targetInfo.signature.parameterTypes[index] is DotNetIlValueType.NullableValue }
+                .withIndex()
+                .associate { indexedParameter -> indexedParameter.value to indexedParameter.index }
+            renderedMethods += DotNetRenderedExportMethod(
+                method = DotNetIlRenderedMethod(buildString {
+                    appendLine(
+                        "  .method public hidebysig static $exportedReturnType " +
+                                "${export.clrMethodName.toIlIdentifier()}($retainedParameters) cil managed"
+                    )
+                    appendLine("  {")
+                    appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
+                    parameterNullabilityFlags.take(firstOmitted).forEachIndexed { index, flags ->
+                        appendNullableAttribute(parameterIndex = index + 1, flags = flags)
+                    }
+                    if (defaultValueLocals.isNotEmpty()) {
+                        appendLine("    .locals init (")
+                        defaultValueLocals.entries.forEachIndexed { entryIndex, entry ->
+                            val parameterIndex = entry.key
+                            val localIndex = entry.value
+                            val comma = if (entryIndex == defaultValueLocals.size - 1) "" else ","
+                            val localType = targetInfo.signature.parameterTypes[parameterIndex].nameInSignature
+                            appendLine("      [$localIndex] $localType '<default$localIndex>'$comma")
+                        }
+                        appendLine("    )")
+                    }
+                    appendLine("    .maxstack ${maxOf(1, defaultStub.parameters.size)}")
+                    repeat(firstOmitted) { index ->
+                        appendLine("    ldarg $index")
+                        parameterBoundaries[index]?.let { boundary ->
+                            appendLine("    ${boundary.delegateBoundary.adaptationCallInstruction}")
+                        }
+                    }
+                    for (parameterIndex in firstOmitted until target.parameters.size) {
+                        appendDefaultArgumentPlaceholder(
+                            targetInfo.signature.parameterTypes[parameterIndex],
+                            defaultValueLocals[parameterIndex],
+                        )
+                    }
+                    defaultMasks.forEach { mask -> appendLine("    ldc.i4 $mask") }
+                    appendLine("    ${defaultStubInfo.renderCallInstruction(defaultStub.dotNetIlMethodName())}")
+                    returnBoundary?.let { boundary ->
+                        appendLine("    ${boundary.delegateBoundary.projectionCallInstruction}")
+                    }
+                    appendLine("    ret")
+                    appendLine("  }")
+                }),
+                parameterTypes = retainedParameterTypes,
+            )
+        }
+        return DotNetRenderedCallableExport(renderedMethods)
     }
 
     private fun IrType.delegateBoundaryOrNull(
@@ -2190,7 +2288,49 @@ class DotNetIlEmitter(
         appendLine("    ${DotNetNullableMetadata.renderAttribute(flags)}")
     }
 
+    private fun StringBuilder.appendDefaultArgumentPlaceholder(
+        type: DotNetIlValueType,
+        initializedLocalIndex: Int?,
+    ) {
+        val instruction = when (type) {
+            DotNetIlValueType.Boolean,
+            DotNetIlValueType.Int32,
+            DotNetIlValueType.Char,
+                -> "ldc.i4 0"
+
+            DotNetIlValueType.Int64 -> "ldc.i8 0"
+            DotNetIlValueType.Float64 -> "ldc.r8 0.0"
+            is DotNetIlValueType.NullableValue -> {
+                checkNotNull(initializedLocalIndex) { "nullable default placeholder needs an initialized local" }
+                "ldloc $initializedLocalIndex"
+            }
+            is DotNetIlValueType.TypeParameter -> dotNetUnsupported(
+                "open generic default placeholders are outside the non-generic CLR export boundary"
+            )
+            DotNetIlValueType.String,
+            DotNetIlValueType.Object,
+            is DotNetIlValueType.UserClass,
+            is DotNetIlValueType.MappedClass,
+            is DotNetIlValueType.GenericInstance,
+            is DotNetIlValueType.PrimitiveArray,
+            is DotNetIlValueType.GenericArray,
+                -> "ldnull"
+        }
+        appendLine("    $instruction")
+    }
+
+    /** Mirrors the common masked-default factory's private parameter-bit participation rule. */
+    private fun IrValueParameter.participatesInDefaultArgumentMask(): Boolean =
+        kind != IrParameterKind.DispatchReceiver &&
+                kind != IrParameterKind.ExtensionReceiver &&
+                origin != IrDeclarationOrigin.MOVED_DISPATCH_RECEIVER &&
+                origin != IrDeclarationOrigin.MOVED_EXTENSION_RECEIVER
+
     private data class DotNetRenderedCallableExport(
+        val methods: List<DotNetRenderedExportMethod>,
+    )
+
+    private data class DotNetRenderedExportMethod(
         val method: DotNetIlRenderedMethod,
         val parameterTypes: List<String>,
     )

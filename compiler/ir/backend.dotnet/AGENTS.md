@@ -154,11 +154,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   The explicit export helper may probe the same-object capability solely to bind a typed Func;
   the generated facade exposes the delegate, never ExactFunctionN.
   The explicit CLR export slice gives delegate projection/adaptation an explicit owner without a
-  Kotlin source annotation or automatic overloads. Repeatable compiler configuration
+  Kotlin source annotation or an automatic whole-module export policy. Repeatable configuration
   `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects exactly one public, non-generic
   top-level function with at least one Function0/1/2 parameter or return. The canonical
-  Kotlin method and all erased FunctionN positions remain unchanged; one user-named static method
-  is added to the SAME file facade. Only that method replaces callable positions with typed
+  Kotlin method and all erased FunctionN positions remain unchanged; a user-named static method is
+  added to the SAME file facade. Only that explicit surface replaces callable positions with typed
   Func/Action (Unit -> CLR void). The metadata-public
   `Kotlin.Runtime.Internal.DelegateProjection` helper projects returns and adapts delegate
   parameters into private runtime-owned classes implementing the canonical FunctionN interface.
@@ -176,7 +176,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   module, emits deterministic explicit attributes instead of NullableContext compression, and
   encodes reference/generic/array nesting in preorder (`0` oblivious, `1` non-null, `2` nullable),
   skipping value types per Roslyn's contract. The metadata comes from source IR, never physically
-  erased FunctionN. Overloaded selectors, facade-name/exported-signature clashes, generic or
+  erased FunctionN. A contiguous suffix of source-default parameters creates progressively shorter
+  overloads on this explicit facade only. Each overload supplies physical zero/null placeholders,
+  sets the existing masked-dispatch bits, and calls the Kotlin `$default` helper, so arbitrary and
+  parameter-dependent expressions remain callee-evaluated. Nullable value placeholders use
+  initialized locals. No `[opt]`/constant metadata is emitted: Roslyn otherwise copies constants
+  into callers or substitutes `default(T)`, neither of which is Kotlin's general contract.
+  Non-trailing defaults create no overload; any generated-signature collision fails the requested
+  export as a whole. Overloaded selectors, facade-name/exported-signature clashes, generic or
   suspend functions, KFunction/suspend callable positions, and arities above 2 fail loudly. No
   projection or adaptation occurs in ordinary Kotlin fields,
   parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
@@ -184,9 +191,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   runtime ran both directions, invocation, and same-shape round-trip identity on both runtimes.
   `nullableexport_s1` additionally validated explicit scalar/vector metadata blobs and nullable
   delegate round trips on both runtimes; CoreCLR's NullabilityInfoContext reads the compiler output
-  as the intended nested nullable states. Pins: `ilText/callableExports.kt`,
-  `ilText/callableParameters.kt`, CLI `dotnet/callableExport.args`, and the reserved-attribute CLI
-  collision fixture. The detailed invariant is in the callable draft ADR.
+  as the intended nested nullable states. `defaultexport_s1` validated CLR optional-constant
+  behavior, overload preference, generated masked calls, and C# consumers on both runtimes. Pins:
+  `ilText/callableExports.kt`, `ilText/callableParameters.kt`,
+  `ilText/callableExportDefaults.kt`, CLI `dotnet/callableExport.args`, and both reserved-attribute
+  and default-overload collision fixtures. Detailed decisions are in the callable and CLR-default
+  draft ADRs.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
   implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin
