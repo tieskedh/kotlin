@@ -361,6 +361,22 @@
     unbox.any !!0
     ret
   }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'openIterator'<'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.ArrayIterator'::.ctor(class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig static !!0 'firstFromOpenArray'<'T'>(!!0[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'arrayIteratorsKt'::'openIterator'<!!0>(!!0[])
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    unbox.any !!0
+    ret
+  }
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'stringIterator'(string[] 'values') cil managed
   {
     .maxstack 1
@@ -443,7 +459,9 @@ IL_tryEnd_0:
     .maxstack 3
     .locals init (
       [0] int32[] '<arrayOf>',
-      [1] int32 '<arrayElement>'
+      [1] int32 '<arrayElement>',
+      [2] string[] '<arrayOf>@2',
+      [3] string '<arrayElement>@3'
     )
     ldc.i4 1
     newarr int32
@@ -481,6 +499,18 @@ IL_tryEnd_0:
     ldstr "deferred"
     newobj instance void 'DeferredStringValueIterator'::.ctor(string)
     call string 'arrayIteratorsKt'::'erasedStringNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    newarr string
+    stloc.2
+    ldstr "open"
+    stloc.3
+    ldloc.2
+    ldc.i4 0
+    ldloc.3
+    stelem string
+    ldloc.2
+    call !!0 'arrayIteratorsKt'::'firstFromOpenArray'<string>(!!0[])
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
