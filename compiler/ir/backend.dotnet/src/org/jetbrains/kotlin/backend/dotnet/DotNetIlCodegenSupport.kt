@@ -79,7 +79,8 @@ internal fun dotNetUnsupported(reason: String): Nothing =
 
 internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): DotNetIlMethodSignature {
     val isErasedCallableInvoke = isDotNetErasedCallableInvoke()
-    val ilReturnType = if (isErasedCallableInvoke) {
+    val isErasedPropertyAccess = isDotNetErasedPropertyAccess()
+    val ilReturnType = if (isErasedCallableInvoke || (isErasedPropertyAccess && name.asString() == "get")) {
         DotNetIlReturnType.Value(DotNetIlValueType.Object)
     } else {
         typeMapper.toDotNetIlReturnType(returnType)
@@ -90,7 +91,7 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
     // uniform, while `hasThis` makes signature rendering and slot numbering treat it as the
     // implicit CLR argument 0 (see DotNetIlMethodSignature).
     val hasThis = parameters.firstOrNull()?.kind == IrParameterKind.DispatchReceiver
-    val parameterTypes = if (isErasedCallableInvoke) {
+    val parameterTypes = if (isErasedCallableInvoke || isErasedPropertyAccess) {
         parameters.map { parameter ->
             if (parameter.kind == IrParameterKind.DispatchReceiver) {
                 typeMapper.toDotNetIlValueType(parameter.type)
@@ -118,6 +119,7 @@ internal fun IrSimpleFunction.dotNetSignature(typeMapper: DotNetIlTypeMapper): D
  */
 internal fun IrSimpleFunction.dotNetIlMethodName(): String {
     if (isDotNetErasedCallableInvoke()) return "Invoke"
+    if (isDotNetErasedPropertyAccess()) return if (name.asString() == "get") "Get" else "Set"
     dotNetAnyMethodOrNull()?.let { return it.clrName }
     val property = correspondingPropertySymbol?.owner ?: return name.asString()
     val prefix = if (isGetter) "get_" else "set_"
@@ -161,6 +163,20 @@ internal fun IrSimpleFunction.isDotNetErasedCallableInvoke(): Boolean {
         (overridden.parent as? IrClass)?.dotNetFixedFunctionArityOrNull() != null
     }
 }
+
+/** Whether this is a fixed-arity KProperty get/set member with an erased physical CLR slot. */
+internal fun IrSimpleFunction.isDotNetErasedPropertyAccess(): Boolean {
+    if (name.asString() !in setOf("get", "set")) return false
+    if ((parent as? IrClass)?.dotNetFixedPropertyArityOrNull() != null) return true
+    return allOverridden().any { overridden ->
+        (overridden.parent as? IrClass)?.dotNetFixedPropertyArityOrNull() != null
+    }
+}
+
+/** Whether this function's physical CLR result is object while its Kotlin result stays logical. */
+internal fun IrSimpleFunction.isDotNetErasedObjectResult(): Boolean =
+    isDotNetErasedCallableInvoke() ||
+            (isDotNetErasedPropertyAccess() && name.asString() == "get")
 
 /**
  * The IL signature of a constructor: CLR constructors always return `void`, and an
