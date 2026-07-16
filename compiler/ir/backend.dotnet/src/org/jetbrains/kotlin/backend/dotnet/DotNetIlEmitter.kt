@@ -62,6 +62,7 @@ class DotNetIlEmitter(
     private val propertyReferenceFactoryFunctions: List<IrSimpleFunction>,
     private val exports: List<DotNetExport> = emptyList(),
     private val propertyExports: List<DotNetPropertyExport> = emptyList(),
+    private val emissionScope: DotNetIlEmissionScope = DotNetIlEmissionScope.USER,
 ) {
     /**
      * Renders the module to IL text.
@@ -85,9 +86,15 @@ class DotNetIlEmitter(
      */
     fun emit(moduleFragment: IrModuleFragment): String? {
         val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns)
-        val files = moduleFragment.files.toList()
+        val allFiles = moduleFragment.files.toList()
+        val files = when (emissionScope) {
+            DotNetIlEmissionScope.USER -> allFiles
+            DotNetIlEmissionScope.STDLIB -> allFiles.filter { file ->
+                file.declarations.filterIsInstance<IrClass>().any { it.isDotNetStdlibImplementation }
+            }
+        }
         val topLevelClassesByFile = files.associateWith { file ->
-            file.declarations.filterIsInstance<IrClass>()
+            file.declarations.filterIsInstance<IrClass>().filter(emissionScope::owns)
         }
         val fileClassNames = buildFileClassNames(files, topLevelClassesByFile)
         val topLevelPropertiesByFile = files.associateWith { file ->
@@ -180,7 +187,10 @@ class DotNetIlEmitter(
             }
         }
         if (exportSelectionFailed) return null
-        val mainFunctions = DotNetMainFunctionDetector().getMainFunctions(moduleFragment)
+        val mainFunctions = when (emissionScope) {
+            DotNetIlEmissionScope.USER -> DotNetMainFunctionDetector().getMainFunctions(moduleFragment)
+            DotNetIlEmissionScope.STDLIB -> emptyList()
+        }
         if (mainFunctions.size > 1) {
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
@@ -263,10 +273,11 @@ class DotNetIlEmitter(
                 return
             }
             val aritySuffix = irClass.typeParameters.size.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
-            val baseName = irClass.dotNetInventedLocalClassName ?: if (enclosingClassInfo == null) {
-                irClass.fqNameWhenAvailable!!.asString()
-            } else {
-                irClass.name.asString()
+            val baseName = when {
+                irClass.isDotNetStdlibImplementation -> DotNetStdlibLibrary.ARRAY_ITERATOR_IL_NAME.removeSuffix("`1")
+                irClass.dotNetInventedLocalClassName != null -> irClass.dotNetInventedLocalClassName!!
+                enclosingClassInfo == null -> irClass.fqNameWhenAvailable!!.asString()
+                else -> irClass.name.asString()
             }
             var collisionSuffix = 0
             var classInfo: DotNetIlClassInfo
@@ -1027,7 +1038,8 @@ class DotNetIlEmitter(
             // derive that from the rendered body so an evicted callable cannot leave a stale ref.
             appendHeader(
                 referencesRuntimeAssembly = producesExecutable ||
-                        "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody
+                        "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody,
+                referencesStdlibAssembly = "[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in moduleBody,
             )
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl)
@@ -2667,7 +2679,10 @@ class DotNetIlEmitter(
         val nullabilityFlags: List<Int>,
     )
 
-    private fun StringBuilder.appendHeader(referencesRuntimeAssembly: Boolean) {
+    private fun StringBuilder.appendHeader(
+        referencesRuntimeAssembly: Boolean,
+        referencesStdlibAssembly: Boolean,
+    ) {
         appendLine(".assembly extern $CORE_LIB {}")
         if (referencesRuntimeAssembly) {
             appendLine(".assembly extern ${DotNetRuntimeLibrary.ASSEMBLY_NAME}")
@@ -2675,7 +2690,20 @@ class DotNetIlEmitter(
             appendLine("  .ver ${DotNetRuntimeLibrary.ASSEMBLY_VERSION_IL}")
             appendLine("}")
         }
-        appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
+        if (referencesStdlibAssembly) {
+            appendLine(".assembly extern ${DotNetStdlibLibrary.ASSEMBLY_NAME}")
+            appendLine("{")
+            appendLine("  .ver ${DotNetStdlibLibrary.ASSEMBLY_VERSION_IL}")
+            appendLine("}")
+        }
+        if (emissionScope == DotNetIlEmissionScope.STDLIB) {
+            appendLine(".assembly ${assemblyName.toIlIdentifier()}")
+            appendLine("{")
+            appendLine("  .ver ${DotNetStdlibLibrary.ASSEMBLY_VERSION_IL}")
+            appendLine("}")
+        } else {
+            appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
+        }
         appendLine(".module ${moduleFileName.toIlIdentifier()}")
         appendLine()
     }

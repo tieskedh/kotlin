@@ -53,12 +53,17 @@ object DotNetBackend {
         }
         ilTarget.parentFile?.mkdirs()
 
-        if (assemblyName.equals(DotNetRuntimeLibrary.ASSEMBLY_NAME, ignoreCase = true) ||
-            (emitsExecutable && binaryOutput.name.equals(DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME, ignoreCase = true))
-        ) {
+        val reservedAssembly = listOf(
+            DotNetRuntimeLibrary.ASSEMBLY_NAME to DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME,
+            DotNetStdlibLibrary.ASSEMBLY_NAME to DotNetStdlibLibrary.ASSEMBLY_FILE_NAME,
+        ).firstOrNull { reserved ->
+            assemblyName.equals(reserved.first, ignoreCase = true) ||
+                    (emitsExecutable && binaryOutput.name.equals(reserved.second, ignoreCase = true))
+        }
+        if (reservedAssembly != null) {
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
-                "'${DotNetRuntimeLibrary.ASSEMBLY_NAME}' is reserved for the Kotlin/.NET runtime assembly; " +
+                "'${reservedAssembly.first}' is reserved for a Kotlin/.NET platform assembly; " +
                         "choose a different module name and output file."
             )
             if (emitsExecutable) binaryOutput.delete()
@@ -92,6 +97,20 @@ object DotNetBackend {
             return ilTarget
         }
 
+        val stdlibIlText = if (DotNetStdlibLibrary.hasImplementation(irModuleFragment)) {
+            DotNetIlEmitter(
+                messageCollector = messageCollector,
+                assemblyName = DotNetStdlibLibrary.ASSEMBLY_NAME,
+                moduleFileName = DotNetStdlibLibrary.ASSEMBLY_FILE_NAME,
+                producesExecutable = false,
+                irBuiltIns = irBuiltIns,
+                propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
+                emissionScope = DotNetIlEmissionScope.STDLIB,
+            ).emit(irModuleFragment) ?: return ilTarget
+        } else {
+            null
+        }
+
         val emitter = DotNetIlEmitter(
             messageCollector = messageCollector,
             assemblyName = assemblyName,
@@ -109,12 +128,26 @@ object DotNetBackend {
             ilTarget.delete()
             return ilTarget
         }
+        if ("[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in ilText && stdlibIlText == null) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "The generated module requires '${DotNetStdlibLibrary.ASSEMBLY_NAME}', but its injected " +
+                        "implementation source was not compiled. Compile without -no-stdlib."
+            )
+            ilTarget.delete()
+            return ilTarget
+        }
         // ilasm decodes a BOM-less file as ANSI, mangling every multi-byte UTF-8 sequence (e.g. in
         // string literals), so the .il file must be written as UTF-8 *with* a BOM.
         ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
 
         if (emitsExecutable) {
             if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, target, messageCollector) == null) return binaryOutput
+            if (stdlibIlText != null &&
+                DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, target, messageCollector) == null
+            ) {
+                return binaryOutput
+            }
             DotNetIlAssembler.assembleExecutable(ilTarget, binaryOutput, target, messageCollector)
             return binaryOutput
         }
