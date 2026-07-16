@@ -409,6 +409,7 @@ internal data class DotNetIlMethodSignature(
 internal class DotNetIlFunctionInfo(
     val owner: DotNetIlClassInfo,
     val signature: DotNetIlMethodSignature,
+    val physicalMethodName: String? = null,
 ) {
     /** Whether this is an instance method of a user class (see [DotNetIlMethodSignature.hasThis]). */
     val isInstance: Boolean
@@ -573,6 +574,10 @@ internal class DotNetIlClassInfo(
             ?: ilClassName.toIlIdentifier()
         assemblyName?.let { "[$it]$localRef" } ?: localRef
     }
+
+    /** Assembly-independent owner path persisted in the paired KLIB declaration index. */
+    fun physicalPathComponents(): List<String> =
+        enclosingClass?.physicalPathComponents().orEmpty() + ilClassName
 
     /**
      * The `instance void 'C'::.ctor(<params>)` member reference shared by every constructor use:
