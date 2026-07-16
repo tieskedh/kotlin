@@ -192,6 +192,7 @@ private fun List<IrValueParameter>.dotNetParameterTypes(typeMapper: DotNetIlType
 internal class DotNetIlTypeMapper(
     private val availableClasses: Map<IrClass, DotNetIlClassInfo>,
     val coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
+    private val externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
 ) {
     /**
      * The class info of [irClass] while it is still available, or null once (or if) the emitter
@@ -199,7 +200,12 @@ internal class DotNetIlTypeMapper(
      * through this lookup so a removed class fails its users instead of leaving stale IL text.
      */
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? =
-        availableClasses[irClass] ?: DotNetRuntimeTypes.classInfoFor(irClass)
+        availableClasses[irClass]
+            ?: DotNetRuntimeTypes.classInfoFor(irClass)
+            ?: externalDeclarations.classInfoOrNull(irClass, this)
+
+    fun externalFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? =
+        externalDeclarations.functionInfoOrNull(function, this)
 
     /** Maps [type] in return position; CLR `void` is the return encoding of Kotlin `Unit`. */
     fun toDotNetIlReturnType(type: IrType): DotNetIlReturnType? {

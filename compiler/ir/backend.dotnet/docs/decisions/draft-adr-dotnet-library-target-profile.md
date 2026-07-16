@@ -1,6 +1,6 @@
 # Draft ADR: .NET library target profile
 
-- Status: **POC implementation landed locally; cross-module Kotlin consumption deferred**
+- Status: **POC implementation landed locally, including bounded Kotlin cross-module consumption**
 - Date: 2026-07-16
 - Scope: target framework/API identity of Kotlin-owned platform and user libraries
 
@@ -102,15 +102,28 @@ The implementation now:
    AssemblyRef and `.NETStandard,Version=v2.0` `TargetFrameworkAttribute`;
 3. binds the KLIB with `dotnet_library_tfm=netstandard2.0`, independently of executable target;
 4. discovers one installed pair under `lib/dotnet/netstandard2.0`; and
-5. keeps ordinary application IL on its existing executable core-library profile; and
+5. keeps ordinary application IL on its existing executable core-library profile;
 6. provides `-Xdotnet-produce-library`, which emits `<module>.klib`, `<module>.il`, and
-   `<module>.dll` for ordinary Kotlin sources with no entry point or runtimeconfig.
+   `<module>.dll` for ordinary Kotlin sources with no entry point or runtimeconfig; and
+7. writes a versioned declaration-binding index into an ordinary produced KLIB and uses it to
+   resolve Kotlin calls and types to the paired CLR assembly.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
-CLR consumers can use the existing explicit export boundary from that DLL. The KLIB does not yet
-define durable external facade/member identities, so Kotlin-to-Kotlin calls across arbitrary
-produced library pairs remain deferred rather than being guessed from source filenames.
+CLR consumers can use the existing explicit export boundary from that DLL. Kotlin consumers do
+not need a second selector language. Following JS/Native linking, the logical key is Kotlin's
+public `IdSignature`. Because this POC KLIB contains declaration metadata while the executable
+implementation is already in a sibling CLR DLL, the CLR-specific index adds only the facts not
+carried by that logical signature: physical owner-type path, method name, and static/instance
+dispatch. Parameter and return signatures are still derived from Kotlin metadata.
+
+The producer indexes only declarations that survive backend emission. The loader recognizes only
+KLIBs with the explicit index ABI marker, validates their complete unsigned netstandard2.0
+assembly binding, and requires the named sibling DLL. Arbitrary metadata KLIBs remain
+compile-time-only. A consumer never reconstructs a facade from a source filename; it uses the
+producer-recorded owner. Executable consumers copy referenced sibling DLLs next to their output.
+The current manifest-property encoding is a bounded POC schema, not a public annotation or final
+KLIB component design.
 
 Portable PE production uses modern ILAsm independently of executable target. Framework ILAsm
 accepts the same source but injects an `mscorlib` AssemblyRef into the resulting PE; it therefore
@@ -139,7 +152,8 @@ IL churn before the boundary is represented deliberately.
 
 This draft does not choose a modern .NET light-up TFM, NuGet package layout/versioning, or the
 eventual direct PE writer. The fixed `netstandard2.0` user-library mode also does not yet choose a
-public multi-TFM selection syntax. Kotlin cross-module consumption needs a durable mapping from
-Kotlin declarations to physical assembly/type/member identities in metadata; it must not infer
-file facades from local source paths. None of those concerns should reuse executable `main`
+public multi-TFM selection syntax. Before productionization, the declaration index needs a proper
+versioned KLIB component and a compatibility policy for Kotlin signature-mangler evolution; the
+current manifest encoding is intentionally provisional. Transitive dependency publication and
+package-manager layout also remain open. None of those concerns should reuse executable `main`
 semantics merely because the existing POC runtime option is named `-Xdotnet-target`.

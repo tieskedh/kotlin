@@ -34,6 +34,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package sample
 
                 public fun increment(value: Int): Int = value + 1
+
+                public class Counter(public val value: Int) {
+                    public fun plus(delta: Int): Int = value + delta
+                }
                 """.trimIndent()
             )
         }
@@ -61,6 +65,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(manifest.getProperty("dotnet_assembly_version") == "1.0.0.0")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Sample.Library.dll")
         assertTrue(manifest.getProperty("dotnet_library_tfm") == "netstandard2.0")
+        assertTrue(manifest.getProperty("dotnet_abi_version") == "1")
+        assertTrue(manifest.stringPropertyNames().any { it.startsWith("dotnet_decl_") })
 
         val il = outputDirectory.resolve("Sample.Library.il").readText()
         assertTrue(".assembly extern netstandard" in il)
@@ -115,6 +121,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val processOutput = process.inputStream.bufferedReader().use { it.readText() }
         assertTrue(process.waitFor() == 0) { "Portable library consumer failed:\n$processOutput" }
+
+        val kotlinConsumerDirectory = outputDirectory.resolve("kotlin-consumer").apply { mkdirs() }
+        val kotlinConsumerSource = kotlinConsumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import sample.Counter
+                import sample.increment
+
+                fun main() {
+                    val answer = increment(Counter(40).plus(1))
+                    if (answer != 42) throw Error("Kotlin library returned ${'$'}answer")
+                }
+                """.trimIndent()
+            )
+        }
+        val kotlinConsumerAssembly = kotlinConsumerDirectory.resolve("KotlinConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            kotlinConsumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "KotlinConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, kotlinConsumerAssembly.path,
+        )
+        assertTrue(kotlinConsumerDirectory.resolve("Sample.Library.dll").isFile) {
+            "The external CLR implementation must be packaged beside an executable consumer"
+        }
+        val kotlinConsumerIl = kotlinConsumerDirectory.resolve("KotlinConsumer.il").readText()
+        assertTrue(".assembly extern 'Sample.Library'" in kotlinConsumerIl)
+        assertTrue("[Sample.Library]" in kotlinConsumerIl)
+        val kotlinProcess = ProcessBuilder(dotnetHost.path, "exec", kotlinConsumerAssembly.path)
+            .directory(kotlinConsumerDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val kotlinProcessOutput = kotlinProcess.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(kotlinProcess.waitFor() == 0) {
+            "Kotlin cross-module library consumer failed:\n$kotlinProcessOutput"
+        }
     }
 
     @Test

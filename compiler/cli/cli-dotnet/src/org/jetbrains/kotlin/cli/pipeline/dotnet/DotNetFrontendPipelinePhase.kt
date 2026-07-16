@@ -5,9 +5,12 @@ import org.jetbrains.kotlin.KtPsiSourceFile
 import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
+import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
+import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.collectSources
 import org.jetbrains.kotlin.cli.common.contentRoots
@@ -74,6 +77,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
             configuration = configuration,
         ).all
         configuration.recordExternalDotNetStdlib(klibs)
+        configuration.recordExternalDotNetLibraries(klibs)
         val extensionRegistrars = configuration.getCompilerExtensions(FirExtensionRegistrar)
 
         val sourceFiles: List<KtSourceFile>
@@ -184,4 +188,95 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     val metadataFile = library.path.toFile()
     val implementationFile = metadataFile.parentFile.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
     dotNetExternalStdlib = DotNetExternalStdlib(metadataFile, implementationFile)
+}
+
+/** Loads only KLIBs explicitly produced as bound Kotlin/.NET library pairs. */
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotNetLibraries(
+    klibs: List<KotlinLibrary>,
+) {
+    val candidates = klibs.filter { library ->
+        library.uniqueName != DotNetStdlibArtifact.METADATA_UNIQUE_NAME &&
+                library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) != null
+    }
+    if (candidates.isEmpty()) return
+
+    val libraries = mutableListOf<DotNetExternalLibrary>()
+    val assemblyNames = hashSetOf<String>()
+    val logicalKeys = hashSetOf<String>()
+    for (library in candidates) {
+        val properties = library.manifestProperties
+        val abiVersion = properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY)
+        if (abiVersion != DotNetLibraryAbiCodec.ABI_VERSION) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' uses unsupported CLR ABI index version '$abiVersion'.",
+            )
+            return
+        }
+        fun required(name: String): String? = properties.getProperty(name)?.takeIf(String::isNotEmpty).also { value ->
+            if (value == null) {
+                report(COMPILER_ARGUMENTS_ERROR, "Kotlin/.NET metadata library '${library.path}' is missing '$name'.")
+            }
+        }
+        val assemblyName = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY) ?: return
+        val assemblyVersion = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY) ?: return
+        val assemblyCulture = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY) ?: return
+        val publicKeyToken = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY) ?: return
+        val assemblyFileName = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY) ?: return
+        val targetFramework = required(DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY) ?: return
+        val identityIsSupported = assemblyName == library.uniqueName &&
+                assemblyFileName == "$assemblyName.dll" &&
+                java.io.File(assemblyFileName).name == assemblyFileName &&
+                assemblyVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+")) &&
+                assemblyCulture == DotNetLibraryArtifact.DEFAULT_ASSEMBLY_CULTURE &&
+                publicKeyToken == DotNetLibraryArtifact.DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN &&
+                targetFramework == DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK
+        if (!identityIsSupported) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' does not declare the supported unsigned " +
+                        "${DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK} sibling-assembly identity.",
+            )
+            return
+        }
+        if (!assemblyNames.add(assemblyName.lowercase())) {
+            report(COMPILER_ARGUMENTS_ERROR, "Multiple Kotlin/.NET libraries declare assembly '$assemblyName'.")
+            return
+        }
+        val declarations = try {
+            DotNetLibraryAbiCodec.decode(properties)
+        } catch (exception: IllegalArgumentException) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' has an invalid CLR declaration index: " +
+                        exception.message,
+            )
+            return
+        }
+        val duplicateLogicalKey = declarations.keys.firstOrNull { !logicalKeys.add(it) }
+        if (duplicateLogicalKey != null) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Multiple Kotlin/.NET libraries bind declaration '$duplicateLogicalKey'.",
+            )
+            return
+        }
+        val metadataFile = library.path.toFile()
+        val implementationFile = metadataFile.parentFile.resolve(assemblyFileName)
+        if (!implementationFile.isFile) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata '${metadataFile.path}' is bound to missing CLR assembly " +
+                        "'${implementationFile.path}'.",
+            )
+            return
+        }
+        libraries += DotNetExternalLibrary(
+            DotNetLibraryArtifact(assemblyName, assemblyVersion, assemblyCulture, publicKeyToken),
+            metadataFile,
+            implementationFile,
+            declarations,
+        )
+    }
+    dotNetExternalLibraries = libraries
 }

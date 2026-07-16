@@ -18,6 +18,8 @@ object DotNetConfigurationKeys {
         CompilerConfigurationKey.create("explicit .NET property exports")
     val EXTERNAL_STDLIB: CompilerConfigurationKey<DotNetExternalStdlib> =
         CompilerConfigurationKey.create("external Kotlin/.NET stdlib artifact pair")
+    val EXTERNAL_LIBRARIES: CompilerConfigurationKey<List<DotNetExternalLibrary>> =
+        CompilerConfigurationKey.create("external Kotlin/.NET library artifact pairs")
 }
 
 /** Stable manifest and CLR identity shared by the CLI dependency loader and IL backend. */
@@ -255,4 +257,10 @@ var CompilerConfiguration.dotNetExternalStdlib: DotNetExternalStdlib?
         if (value != null) {
             put(DotNetConfigurationKeys.EXTERNAL_STDLIB, value)
         }
+    }
+
+var CompilerConfiguration.dotNetExternalLibraries: List<DotNetExternalLibrary>
+    get() = get(DotNetConfigurationKeys.EXTERNAL_LIBRARIES, emptyList())
+    set(value) {
+        put(DotNetConfigurationKeys.EXTERNAL_LIBRARIES, value)
     }

@@ -123,9 +123,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `<module>.klib`/`<module>.dll` pair under the same netstandard2.0 profile, with no entry point or
   runtimeconfig. Its fixed library TFM is independent of `-Xdotnet-target` and modern ILAsm remains
   only the portable PE writer. Explicit CLR exports are callable across the resulting assembly
-  edge. Arbitrary Kotlin cross-module calls are not yet enabled: first put durable assembly,
-  facade, and member identity into the library metadata; never reconstruct an external facade from
-  a source filename. .NET Standard is a library target, never an executable runtime. See
+  edge. Kotlin cross-module calls now follow JS/Native's public `IdSignature` as their logical key;
+  a versioned POC KLIB index adds only the CLR owner path, method name, and dispatch shape needed
+  to bind that declaration to its sibling assembly. Signatures remain metadata-derived, arbitrary
+  metadata KLIBs remain compile-time-only, and consumers never reconstruct a facade from a source
+  filename. Executables copy directly referenced implementation DLLs beside their output. The
+  manifest-property encoding is provisional pending a real KLIB component and signature-version
+  compatibility policy. .NET Standard is a library target, never an executable runtime. See
   `docs/decisions/draft-adr-dotnet-library-target-profile.md`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
@@ -1763,7 +1767,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     (`out`/`in` — ECMA-335 II.10.1.7 allows variance only on interfaces and delegates; emitting
     invariant would silently change assignability), variant interface conversions when either
     differing argument is value-shaped or an open type parameter (a CLR caller may instantiate
-    it with a value type), constraints whose bounds are nullable, generic instantiations, other type
+    it with a value type). This is the current REIFIED-IDENTITY boundary, not a Kotlin-common
+    semantic decision: `docs/decisions/draft-adr-variant-interface-abi.md` records the candidate
+    per-declaration erased identity plus same-object exact capability. Never broaden `castclass`
+    to simulate the missing representation. Also rejected: constraints whose bounds are nullable,
+    generic instantiations, other type
     parameters, builtins/mapped types, or anything outside the module-local supported class and
     interface model, `T?` ANYWHERE in a generic declaration (NO uniform CLR representation for
     the supported interface-bound case: a CLR caller can instantiate it with a value type needing

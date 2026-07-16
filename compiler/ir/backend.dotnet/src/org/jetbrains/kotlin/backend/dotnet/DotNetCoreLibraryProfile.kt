@@ -32,11 +32,11 @@ internal enum class DotNetCoreLibraryProfile(
         get() = "[$assemblyName]"
 
     fun appendAssemblyReferenceTo(builder: StringBuilder) {
-        builder.appendLine(".assembly extern $assemblyName")
         if (assemblyVersionIl == null && publicKeyTokenIl == null) {
-            builder.appendLine("{}")
+            builder.appendLine(".assembly extern $assemblyName {}")
             return
         }
+        builder.appendLine(".assembly extern $assemblyName")
         builder.appendLine("{")
         assemblyVersionIl?.let { builder.appendLine("  .ver $it") }
         publicKeyTokenIl?.let { builder.appendLine("  .publickeytoken = ($it)") }

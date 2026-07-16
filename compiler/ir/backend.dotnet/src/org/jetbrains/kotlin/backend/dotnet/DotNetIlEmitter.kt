@@ -65,6 +65,7 @@ internal class DotNetIlEmitter(
     private val emissionScope: DotNetIlEmissionScope = DotNetIlEmissionScope.USER,
     private val coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
     private val assemblyVersionIl: String? = null,
+    private val externalLibraries: List<DotNetExternalLibrary> = emptyList(),
 ) {
     /**
      * Renders the module to IL text.
@@ -86,7 +87,7 @@ internal class DotNetIlEmitter(
      * error when the module cannot be emitted at all (unsupported or ambiguous main, or an
      * executable was requested without a main function).
      */
-    fun emit(moduleFragment: IrModuleFragment): String? {
+    fun emit(moduleFragment: IrModuleFragment): DotNetIlEmissionResult? {
         val intrinsicMethods = DotNetIlIntrinsicMethods(irBuiltIns, emissionScope)
         val allFiles = moduleFragment.files.toList()
         val files = when (emissionScope) {
@@ -322,7 +323,8 @@ internal class DotNetIlEmitter(
             // also guarantees a plain `Box` and a generic `Box<T>` can never collide in IL.
             registerClassTree(irClass)
         }
-        val typeMapper = DotNetIlTypeMapper(availableClasses, coreLibrary)
+        val externalDeclarations = DotNetExternalDeclarations(externalLibraries)
+        val typeMapper = DotNetIlTypeMapper(availableClasses, coreLibrary, externalDeclarations)
         // Base-chain and interface linking pass, deliberately AFTER every registration: a base
         // class or interface may be declared after its user (forward references are legal IL —
         // probe-verified, inheritprobe_s1 — and legal Kotlin), so the links cannot be built
@@ -1036,7 +1038,7 @@ internal class DotNetIlEmitter(
                 ).generate(this)
             }
         }
-        return buildString {
+        val ilText = buildString {
             // Executables retain the runtime-foundation AssemblyRef unconditionally. Raw library
             // IL acquires it once the final fixpoint output contains a physical runtime type;
             // derive that from the rendered body so an evicted callable cannot leave a stale ref.
@@ -1044,12 +1046,19 @@ internal class DotNetIlEmitter(
                 referencesRuntimeAssembly = producesExecutable ||
                         "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody,
                 referencesStdlibAssembly = "[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in moduleBody,
+                referencedExternalLibraries = externalLibraries.filter { library ->
+                    "[${library.artifact.assemblyName}]" in moduleBody
+                },
             )
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
             }
             append(moduleBody)
         }
+        return DotNetIlEmissionResult(
+            ilText,
+            collectDotNetLibraryDeclarations(files.toSet(), availableClasses, availableFunctions),
+        )
     }
 
     /**
@@ -2692,6 +2701,7 @@ internal class DotNetIlEmitter(
     private fun StringBuilder.appendHeader(
         referencesRuntimeAssembly: Boolean,
         referencesStdlibAssembly: Boolean,
+        referencedExternalLibraries: List<DotNetExternalLibrary>,
     ) {
         coreLibrary.appendAssemblyReferenceTo(this)
         if (referencesRuntimeAssembly) {
@@ -2704,6 +2714,12 @@ internal class DotNetIlEmitter(
             appendLine(".assembly extern ${DotNetStdlibLibrary.ASSEMBLY_NAME}")
             appendLine("{")
             appendLine("  .ver ${DotNetStdlibLibrary.ASSEMBLY_VERSION_IL}")
+            appendLine("}")
+        }
+        for (library in referencedExternalLibraries.sortedBy { it.artifact.assemblyName }) {
+            appendLine(".assembly extern ${library.artifact.assemblyName.toIlIdentifier()}")
+            appendLine("{")
+            appendLine("  .ver ${library.artifact.assemblyVersionIl}")
             appendLine("}")
         }
         val emittedAssemblyVersion = when {
@@ -2723,3 +2739,8 @@ internal class DotNetIlEmitter(
         appendLine()
     }
 }
+
+internal data class DotNetIlEmissionResult(
+    val ilText: String,
+    val declarations: Map<String, DotNetPhysicalDeclaration>,
+)

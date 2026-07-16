@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducedLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducesLibrary
@@ -161,6 +162,12 @@ object DotNetLibraryMetadataPackagingPipelinePhase :
                         DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
                         DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK,
                     )
+                    if (configuration.dotNetProducesLibrary) {
+                        setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
+                        for (entry in DotNetLibraryAbiCodec.encode(input.declarations)) {
+                            setProperty(entry.key, entry.value)
+                        }
+                    }
                 }
             }
             includeMetadata(metadata)
