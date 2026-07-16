@@ -10,6 +10,8 @@ private class Doubler : (Int) -> Int {
 
 fun increment(value: Int): Int = value + 1
 
+fun sumThree(first: Int, second: Int, third: Int): Int = first + second + third
+
 fun mark(): Unit {
     println("unit")
 }
@@ -26,13 +28,17 @@ fun main() {
     val zero: () -> Int = { 40 }
     val one: (Int) -> Int = { value -> value + 2 }
     val two: (Int, Int) -> Int = { left, right -> left + right }
+    val three: (Int, Int, Int) -> Int = { first, second, third -> first + second + third }
     val reference: (Int) -> Int = ::increment
+    val threeReference = ::sumThree
     val unit: () -> Unit = ::mark
 
     println(zero())
     println(one(40))
     println(two(20, 22))
+    println(three(10, 12, 20))
     println(reference(41))
+    println(threeReference(10, 12, 20))
     unit()
     println(cached() === cached())
 
