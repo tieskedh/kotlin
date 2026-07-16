@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
+import org.jetbrains.kotlin.cli.common.kotlinPaths
 import org.jetbrains.kotlin.cli.jvm.config.JvmClasspathRoot
 import org.jetbrains.kotlin.cli.pipeline.AbstractConfigurationPhase
 import org.jetbrains.kotlin.cli.pipeline.ArgumentsPipelineArtifact
@@ -83,9 +84,6 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             )
         }
 
-        // The injected fake stdlib source declares `package kotlin.io`, which is forbidden by default.
-        // TODO: this is loose — it also allows *user* code to declare packages in `kotlin.*`.
-        configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, arguments.allowKotlinPackage || !arguments.noStdlib)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
 
         val requestedTarget = arguments.dotNetTarget
@@ -170,9 +168,21 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         configuration.moduleName = assemblyName
         configuration.dotNetAssemblyName = assemblyName
 
-        if (!arguments.noStdlib) {
+        val usesBootstrapStdlibSources = when {
+            arguments.dotNetProduceStdlib -> true
+            arguments.noStdlib -> false
+            configuration.addInstalledDotNetStdlib() -> false
+            else -> true
+        }
+        if (usesBootstrapStdlibSources) {
             configuration.addDotNetStdlibSourceRoots()
         }
+        // Only the temporary compiler-owned source corpus needs permission to declare kotlin.*
+        // packages. An installed stdlib must not broaden the user's source-package permissions.
+        configuration.put(
+            CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE,
+            arguments.allowKotlinPackage || usesBootstrapStdlibSources,
+        )
 
         for (path in arguments.classpath?.split(File.pathSeparatorChar).orEmpty()) {
             if (path.isNotEmpty()) {
@@ -185,6 +195,25 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             targetDescription = assemblyName
         }
     }
+}
+
+/** Adds the target-bound stdlib pair installed under `<kotlin-home>/lib/dotnet/<target>`. */
+private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
+    val kotlinLibDirectory = kotlinPaths?.libPath ?: return false
+    val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory, dotNetTarget)
+    val metadataFile = directory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
+    val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+    if (!metadataFile.exists() && !implementationFile.exists()) return false
+    if (!metadataFile.isFile || !implementationFile.isFile) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Incomplete Kotlin/.NET stdlib installation for target '${dotNetTarget.flagValue}' in '$directory': " +
+                    "both ${DotNetStdlibArtifact.METADATA_FILE_NAME} and ${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME} are required.",
+        )
+        return true
+    }
+    add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(metadataFile))
+    return true
 }
 
 private fun CompilerConfiguration.addDotNetStdlibSourceRoots() {
