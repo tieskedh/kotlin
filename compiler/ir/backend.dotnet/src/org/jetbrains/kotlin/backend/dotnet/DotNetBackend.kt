@@ -111,6 +111,7 @@ object DotNetBackend {
                 irBuiltIns = irBuiltIns,
                 propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
                 emissionScope = DotNetIlEmissionScope.STDLIB,
+                coreLibrary = DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY,
             ).emit(irModuleFragment) ?: return ilTarget
         } else {
             null
@@ -124,7 +125,7 @@ object DotNetBackend {
                 )
                 return output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
             }
-            return DotNetStdlibLibrary.assembleIn(output, stdlibIlText, target, messageCollector)
+            return DotNetStdlibLibrary.assembleIn(output, stdlibIlText, messageCollector)
                 ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
         }
 
@@ -179,9 +180,9 @@ object DotNetBackend {
         ilTarget.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
 
         if (emitsExecutable) {
-            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, target, messageCollector) == null) return binaryOutput
+            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, messageCollector) == null) return binaryOutput
             if (stdlibIlText != null &&
-                DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, target, messageCollector) == null
+                DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, messageCollector) == null
             ) {
                 return binaryOutput
             }

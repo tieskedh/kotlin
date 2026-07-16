@@ -197,17 +197,17 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
     }
 }
 
-/** Adds the target-bound stdlib pair installed under `<kotlin-home>/lib/dotnet/<target>`. */
+/** Adds the portable stdlib pair installed under `<kotlin-home>/lib/dotnet/netstandard2.0`. */
 private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
     val kotlinLibDirectory = kotlinPaths?.libPath ?: return false
-    val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory, dotNetTarget)
+    val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory)
     val metadataFile = directory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
     val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
     if (!metadataFile.exists() && !implementationFile.exists()) return false
     if (!metadataFile.isFile || !implementationFile.isFile) {
         report(
             COMPILER_ARGUMENTS_ERROR,
-            "Incomplete Kotlin/.NET stdlib installation for target '${dotNetTarget.flagValue}' in '$directory': " +
+            "Incomplete Kotlin/.NET ${DotNetStdlibArtifact.LIBRARY_TARGET_FRAMEWORK} stdlib installation in '$directory': " +
                     "both ${DotNetStdlibArtifact.METADATA_FILE_NAME} and ${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME} are required.",
         )
         return true

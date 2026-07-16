@@ -1,6 +1,6 @@
 # Draft ADR: .NET library target profile
 
-- Status: **Draft candidate; representation probe validated, codegen not yet migrated**
+- Status: **POC implementation landed locally; general user-library mode deferred**
 - Date: 2026-07-16
 - Scope: target framework/API identity of `Kotlin.Runtime` and `Kotlin.Stdlib`
 
@@ -34,9 +34,12 @@ Kotlin.Stdlib.dll
 Kotlin.Stdlib.klib
 ```
 
-Keep `netframework` and `net` as concrete executable/toolchain targets. They are not aliases for
-the library TFM, and `netstandard2.0` must not be added as a runnable value of
-`-Xdotnet-target`.
+Keep `netframework` and `net` as concrete executable/runtime selections. They are not aliases for
+the library TFM, and `netstandard2.0` must not be presented as something that can launch an
+application. It is nevertheless a real compilation target for libraries. The current
+`-Xdotnet-target` option still means executable runtime plus POC assembler selection; a general
+library product should expose the library TFM explicitly instead of hiding it behind that runtime
+switch.
 
 The intended installed shape is one canonical pair rather than one pair per execution target:
 
@@ -80,32 +83,34 @@ The probe established:
 - the Framework C# compiler accepted calls to the Kotlin stdlib while compiling with `/nostdlib`
   against the actual `netstandard2.0` reference assembly.
 
-The exercised output was `40` then `42` in every runtime/assembler pairing. This proves the
-representation and consumer model are viable. It does not prove that every currently emitted BCL
-member reference belongs to the 2.0 contract.
+The exercised output was `40` then `42` in every runtime/assembler pairing. A subsequent metadata
+audit resolved all 27 referenced BCL types and all 55 external BCL member references against the
+actual .NET Standard 2.0 reference assembly with zero errors.
 
-## Required implementation shape
+## Implemented POC shape
 
 Do not implement this decision as a textual `mscorlib` replacement. Introduce an explicit
 core-library/API profile consumed by module headers, type rendering, member references, runtime
 helpers, and platform-library production.
 
-Before changing the installed layout:
+The implementation now:
 
-1. Validate every runtime and stdlib BCL type/member reference against the `netstandard2.0`
-   reference assembly, including currently cold helper bodies.
-2. Emit the exact `netstandard, Version=2.0.0.0, PublicKeyToken=cc7b13ffcd2ddd51`
-   AssemblyRef and `.NETStandard,Version=v2.0` `TargetFrameworkAttribute`.
-3. Replace the KLIB's execution-target binding with a library-TFM property; executable target
-   compatibility is then checked against that profile rather than string equality.
-4. Run one produced platform-library pair against Framework and CoreCLR applications, including a
-   C# consumer compiled against the 2.0 reference contract.
-5. Only then replace the provisional per-runtime Kotlin-home discovery paths and add distribution
-   installation.
+1. carries an explicit core-library profile through type mapping, module headers, member
+   references, nullable metadata, runtime helpers, and platform-library production;
+2. emits the exact `netstandard, Version=2.0.0.0, PublicKeyToken=cc7b13ffcd2ddd51`
+   AssemblyRef and `.NETStandard,Version=v2.0` `TargetFrameworkAttribute`;
+3. binds the KLIB with `dotnet_library_tfm=netstandard2.0`, independently of executable target;
+4. discovers one installed pair under `lib/dotnet/netstandard2.0`; and
+5. keeps ordinary application IL on its existing executable core-library profile.
+
+Portable PE production uses modern ILAsm independently of executable target. Framework ILAsm
+accepts the same source but injects an `mscorlib` AssemblyRef into the resulting PE; it therefore
+remains the Framework application writer and a compatibility oracle, not the canonical
+netstandard2.0 library writer. A direct PE writer should eventually replace this tool constraint.
 
 ## Rejected alternatives
 
-### Treat `netstandard2.0` as a third executable target
+### Treat `netstandard2.0` as a third executable runtime
 
 There is no .NET Standard runtime or application host. This would preserve the current conflation
 instead of fixing it.
@@ -123,6 +128,8 @@ IL churn before the boundary is represented deliberately.
 
 ## Deferred work
 
-This draft does not choose a modern .NET light-up TFM, NuGet package layout/versioning, general
-Kotlin library multi-targeting, or the eventual direct PE writer. It only separates the portable
-platform-library API floor from executable runtime selection.
+This draft does not choose a modern .NET light-up TFM, NuGet package layout/versioning, or the
+eventual direct PE writer. General Kotlin libraries should be able to select `netstandard2.0`, but
+that requires a proper user-library KLIB+DLL product mode and a separate assembler/toolchain axis;
+it must not reuse executable `main` semantics merely because the current POC option is named
+`-Xdotnet-target`.

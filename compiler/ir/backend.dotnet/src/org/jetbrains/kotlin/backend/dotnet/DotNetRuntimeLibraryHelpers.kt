@@ -82,17 +82,17 @@ internal object DotNetRuntimeLibraryHelpers {
      * Kotlin's JVM-backed object contract, and Framework also preserves NaN payloads in
      * Double.GetHashCode.
      */
-    val ilText: String = """
+    fun ilText(coreLibraryReference: String): String = """
             |.namespace Kotlin.Runtime.Internal
             |{
             |  .class public auto ansi sealed beforefieldinit DefaultConstructorMarker
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
             |    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ret
             |    }
             |  }
@@ -140,7 +140,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class public abstract auto ansi beforefieldinit FunctionReferenceBase
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
             |    .field private initonly string 'id'
             |    .field private initonly int32 'arity'
@@ -153,7 +153,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
             |      stfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'id'
@@ -249,7 +249,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .locals init ([0] int32 result, [1] int32 index)
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'id'
-            |      callvirt instance int32 [mscorlib]System.Object::GetHashCode()
+            |      callvirt instance int32 ${coreLibraryReference}System.Object::GetHashCode()
             |      stloc.0
             |      ldloc.0
             |      ldc.i4.s 31
@@ -297,7 +297,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'name'
             |      ldstr "<init>"
-            |      call bool [mscorlib]System.String::op_Equality(string, string)
+            |      call bool ${coreLibraryReference}System.String::op_Equality(string, string)
             |      brfalse FR_ToString_Function
             |      ldstr "constructor"
             |      ret
@@ -305,13 +305,13 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldstr "function "
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'name'
-            |      call string [mscorlib]System.String::Concat(string, string)
+            |      call string ${coreLibraryReference}System.String::Concat(string, string)
             |      ret
             |    }
             |  }
             |
             |  .class private abstract auto ansi beforefieldinit PropertyReferenceBase
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.KProperty
             |  {
             |    .field private initonly string 'name'
@@ -320,7 +320,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
             |      stfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
@@ -360,9 +360,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.0
             |      brfalse PR_Equals_False
             |      ldarg.0
-            |      call instance class [mscorlib]System.Type [mscorlib]System.Object::GetType()
+            |      call instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
             |      ldloc.0
-            |      callvirt instance class [mscorlib]System.Type [mscorlib]System.Object::GetType()
+            |      callvirt instance class ${coreLibraryReference}System.Type ${coreLibraryReference}System.Object::GetType()
             |      bne.un PR_Equals_False
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
@@ -427,7 +427,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
             |      ldstr " (Kotlin reflection is not available)"
-            |      call string [mscorlib]System.String::Concat(string, string, string)
+            |      call string ${coreLibraryReference}System.String::Concat(string, string, string)
             |      ret
             |    }
             |  }
@@ -796,7 +796,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class private abstract auto ansi beforefieldinit LocalDelegatedProperty0Base
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.KProperty0
             |  {
             |    .field private initonly string 'name'
@@ -805,7 +805,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
             |      stfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
@@ -831,7 +831,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance object Kotlin.KProperty0::Get()
             |      .maxstack 1
             |      ldstr "Not supported for local property reference."
-            |      newobj instance void [mscorlib]System.NotSupportedException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
             |      throw
             |    }
             |
@@ -851,7 +851,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldfld string Kotlin.Runtime.Internal.LocalDelegatedProperty0Base::'name'
             |      ldstr " (Kotlin reflection is not available)"
-            |      call string [mscorlib]System.String::Concat(string, string, string)
+            |      call string ${coreLibraryReference}System.String::Concat(string, string, string)
             |      ret
             |    }
             |  }
@@ -887,13 +887,13 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance void Kotlin.KMutableProperty0::Set(object)
             |      .maxstack 1
             |      ldstr "Not supported for local property reference."
-            |      newobj instance void [mscorlib]System.NotSupportedException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.NotSupportedException::.ctor(string)
             |      throw
             |    }
             |  }
             |
             |  .class public abstract sealed auto ansi beforefieldinit PropertyReferenceFactory
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
             |    .method public hidebysig static class Kotlin.KProperty0 CreateProperty0<V>(string 'name', class Kotlin.Function0 'getter') cil managed
             |    {
@@ -970,19 +970,19 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit 'Func0Adapter`1'<R>
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.Function0, class Kotlin.Runtime.Internal.'ExactFunction0`1'<!0>
             |  {
-            |    .field assembly class [mscorlib]System.Func`1<!0> 'delegate'
+            |    .field assembly class ${coreLibraryReference}System.Func`1<!0> 'delegate'
             |
-            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Func`1<!0>) cil managed
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Func`1<!0>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
-            |      stfld class [mscorlib]System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::'delegate'
+            |      stfld class ${coreLibraryReference}System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::'delegate'
             |      ret
             |    }
             |
@@ -991,8 +991,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance !0 class Kotlin.Runtime.Internal.'ExactFunction0`1'<!0>::InvokeExact()
             |      .maxstack 1
             |      ldarg.0
-            |      ldfld class [mscorlib]System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::'delegate'
-            |      callvirt instance !0 class [mscorlib]System.Func`1<!0>::Invoke()
+            |      ldfld class ${coreLibraryReference}System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!0>::'delegate'
+            |      callvirt instance !0 class ${coreLibraryReference}System.Func`1<!0>::Invoke()
             |      ret
             |    }
             |
@@ -1008,21 +1008,21 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit 'Func1Adapter`2'<P0, R>
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.Function1,
             |                    class Kotlin.Runtime.Internal.'ExactFunction1`2'<!0, !1>,
             |                    class Kotlin.Runtime.Internal.'TypedArgumentsFunction1`1'<!0>
             |  {
-            |    .field assembly class [mscorlib]System.Func`2<!0, !1> 'delegate'
+            |    .field assembly class ${coreLibraryReference}System.Func`2<!0, !1> 'delegate'
             |
-            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Func`2<!0, !1>) cil managed
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Func`2<!0, !1>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
-            |      stfld class [mscorlib]System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::'delegate'
+            |      stfld class ${coreLibraryReference}System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::'delegate'
             |      ret
             |    }
             |
@@ -1031,9 +1031,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance !1 class Kotlin.Runtime.Internal.'ExactFunction1`2'<!0, !1>::InvokeExact(!0)
             |      .maxstack 2
             |      ldarg.0
-            |      ldfld class [mscorlib]System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!0, !1>::'delegate'
             |      ldarg.1
-            |      callvirt instance !1 class [mscorlib]System.Func`2<!0, !1>::Invoke(!0)
+            |      callvirt instance !1 class ${coreLibraryReference}System.Func`2<!0, !1>::Invoke(!0)
             |      ret
             |    }
             |
@@ -1062,21 +1062,21 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit 'Func2Adapter`3'<P0, P1, R>
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.Function2,
             |                    class Kotlin.Runtime.Internal.'ExactFunction2`3'<!0, !1, !2>,
             |                    class Kotlin.Runtime.Internal.'TypedArgumentsFunction2`2'<!0, !1>
             |  {
-            |    .field assembly class [mscorlib]System.Func`3<!0, !1, !2> 'delegate'
+            |    .field assembly class ${coreLibraryReference}System.Func`3<!0, !1, !2> 'delegate'
             |
-            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Func`3<!0, !1, !2>) cil managed
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Func`3<!0, !1, !2>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
-            |      stfld class [mscorlib]System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::'delegate'
+            |      stfld class ${coreLibraryReference}System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::'delegate'
             |      ret
             |    }
             |
@@ -1085,10 +1085,10 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance !2 class Kotlin.Runtime.Internal.'ExactFunction2`3'<!0, !1, !2>::InvokeExact(!0, !1)
             |      .maxstack 3
             |      ldarg.0
-            |      ldfld class [mscorlib]System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!0, !1, !2>::'delegate'
             |      ldarg.1
             |      ldarg.2
-            |      callvirt instance !2 class [mscorlib]System.Func`3<!0, !1, !2>::Invoke(!0, !1)
+            |      callvirt instance !2 class ${coreLibraryReference}System.Func`3<!0, !1, !2>::Invoke(!0, !1)
             |      ret
             |    }
             |
@@ -1120,19 +1120,19 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit Action0Adapter
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.Function0
             |  {
-            |    .field assembly class [mscorlib]System.Action 'delegate'
+            |    .field assembly class ${coreLibraryReference}System.Action 'delegate'
             |
-            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Action) cil managed
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Action) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
-            |      stfld class [mscorlib]System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
+            |      stfld class ${coreLibraryReference}System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
             |      ret
             |    }
             |
@@ -1141,27 +1141,27 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance object Kotlin.Function0::Invoke()
             |      .maxstack 1
             |      ldarg.0
-            |      ldfld class [mscorlib]System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
-            |      callvirt instance void [mscorlib]System.Action::Invoke()
+            |      ldfld class ${coreLibraryReference}System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
+            |      callvirt instance void ${coreLibraryReference}System.Action::Invoke()
             |      ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
             |      ret
             |    }
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit 'Action1Adapter`1'<P0>
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.Function1
             |  {
-            |    .field assembly class [mscorlib]System.Action`1<!0> 'delegate'
+            |    .field assembly class ${coreLibraryReference}System.Action`1<!0> 'delegate'
             |
-            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Action`1<!0>) cil managed
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Action`1<!0>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
-            |      stfld class [mscorlib]System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!0>::'delegate'
+            |      stfld class ${coreLibraryReference}System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!0>::'delegate'
             |      ret
             |    }
             |
@@ -1170,29 +1170,29 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance object Kotlin.Function1::Invoke(object)
             |      .maxstack 2
             |      ldarg.0
-            |      ldfld class [mscorlib]System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!0>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!0>::'delegate'
             |      ldarg.1
             |      unbox.any !0
-            |      callvirt instance void class [mscorlib]System.Action`1<!0>::Invoke(!0)
+            |      callvirt instance void class ${coreLibraryReference}System.Action`1<!0>::Invoke(!0)
             |      ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
             |      ret
             |    }
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit 'Action2Adapter`2'<P0, P1>
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |         implements Kotlin.Function2
             |  {
-            |    .field assembly class [mscorlib]System.Action`2<!0, !1> 'delegate'
+            |    .field assembly class ${coreLibraryReference}System.Action`2<!0, !1> 'delegate'
             |
-            |    .method public hidebysig specialname rtspecialname instance void .ctor(class [mscorlib]System.Action`2<!0, !1>) cil managed
+            |    .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Action`2<!0, !1>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ldarg.0
             |      ldarg.1
-            |      stfld class [mscorlib]System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!0, !1>::'delegate'
+            |      stfld class ${coreLibraryReference}System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!0, !1>::'delegate'
             |      ret
             |    }
             |
@@ -1201,105 +1201,105 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .override method instance object Kotlin.Function2::Invoke(object, object)
             |      .maxstack 3
             |      ldarg.0
-            |      ldfld class [mscorlib]System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!0, !1>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!0, !1>::'delegate'
             |      ldarg.1
             |      unbox.any !0
             |      ldarg.2
             |      unbox.any !1
-            |      callvirt instance void class [mscorlib]System.Action`2<!0, !1>::Invoke(!0, !1)
+            |      callvirt instance void class ${coreLibraryReference}System.Action`2<!0, !1>::Invoke(!0, !1)
             |      ldsfld class Kotlin.Unit Kotlin.Unit::INSTANCE
             |      ret
             |    }
             |  }
             |
             |  .class public abstract sealed auto ansi beforefieldinit DelegateProjection
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
-            |    .method public hidebysig static class Kotlin.Function0 FromFunc0<R>(class [mscorlib]System.Func`1<!!0>) cil managed
+            |    .method public hidebysig static class Kotlin.Function0 FromFunc0<R>(class ${coreLibraryReference}System.Func`1<!!0>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      brtrue.s valid
             |      ldstr "callable"
-            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
             |      throw
             |    valid:
             |      ldarg.0
-            |      newobj instance void class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>::.ctor(class [mscorlib]System.Func`1<!0>)
+            |      newobj instance void class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>::.ctor(class ${coreLibraryReference}System.Func`1<!0>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function1 FromFunc1<P0, R>(class [mscorlib]System.Func`2<!!0, !!1>) cil managed
+            |    .method public hidebysig static class Kotlin.Function1 FromFunc1<P0, R>(class ${coreLibraryReference}System.Func`2<!!0, !!1>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      brtrue.s valid
             |      ldstr "callable"
-            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
             |      throw
             |    valid:
             |      ldarg.0
-            |      newobj instance void class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>::.ctor(class [mscorlib]System.Func`2<!0, !1>)
+            |      newobj instance void class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>::.ctor(class ${coreLibraryReference}System.Func`2<!0, !1>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function2 FromFunc2<P0, P1, R>(class [mscorlib]System.Func`3<!!0, !!1, !!2>) cil managed
+            |    .method public hidebysig static class Kotlin.Function2 FromFunc2<P0, P1, R>(class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      brtrue.s valid
             |      ldstr "callable"
-            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
             |      throw
             |    valid:
             |      ldarg.0
-            |      newobj instance void class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>::.ctor(class [mscorlib]System.Func`3<!0, !1, !2>)
+            |      newobj instance void class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>::.ctor(class ${coreLibraryReference}System.Func`3<!0, !1, !2>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function0 FromAction0(class [mscorlib]System.Action) cil managed
+            |    .method public hidebysig static class Kotlin.Function0 FromAction0(class ${coreLibraryReference}System.Action) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      brtrue.s valid
             |      ldstr "callable"
-            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
             |      throw
             |    valid:
             |      ldarg.0
-            |      newobj instance void Kotlin.Runtime.Internal.Action0Adapter::.ctor(class [mscorlib]System.Action)
+            |      newobj instance void Kotlin.Runtime.Internal.Action0Adapter::.ctor(class ${coreLibraryReference}System.Action)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function1 FromAction1<P0>(class [mscorlib]System.Action`1<!!0>) cil managed
+            |    .method public hidebysig static class Kotlin.Function1 FromAction1<P0>(class ${coreLibraryReference}System.Action`1<!!0>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      brtrue.s valid
             |      ldstr "callable"
-            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
             |      throw
             |    valid:
             |      ldarg.0
-            |      newobj instance void class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>::.ctor(class [mscorlib]System.Action`1<!0>)
+            |      newobj instance void class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>::.ctor(class ${coreLibraryReference}System.Action`1<!0>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function2 FromAction2<P0, P1>(class [mscorlib]System.Action`2<!!0, !!1>) cil managed
+            |    .method public hidebysig static class Kotlin.Function2 FromAction2<P0, P1>(class ${coreLibraryReference}System.Action`2<!!0, !!1>) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      brtrue.s valid
             |      ldstr "callable"
-            |      newobj instance void [mscorlib]System.ArgumentNullException::.ctor(string)
+            |      newobj instance void ${coreLibraryReference}System.ArgumentNullException::.ctor(string)
             |      throw
             |    valid:
             |      ldarg.0
-            |      newobj instance void class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>::.ctor(class [mscorlib]System.Action`2<!0, !1>)
+            |      newobj instance void class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>::.ctor(class ${coreLibraryReference}System.Action`2<!0, !1>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function0 FromNullableFunc0<R>(class [mscorlib]System.Func`1<!!0>) cil managed
+            |    .method public hidebysig static class Kotlin.Function0 FromNullableFunc0<R>(class ${coreLibraryReference}System.Func`1<!!0>) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1308,11 +1308,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class Kotlin.Function0 Kotlin.Runtime.Internal.DelegateProjection::FromFunc0<!!0>(class [mscorlib]System.Func`1<!!0>)
+            |      call class Kotlin.Function0 Kotlin.Runtime.Internal.DelegateProjection::FromFunc0<!!0>(class ${coreLibraryReference}System.Func`1<!!0>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function1 FromNullableFunc1<P0, R>(class [mscorlib]System.Func`2<!!0, !!1>) cil managed
+            |    .method public hidebysig static class Kotlin.Function1 FromNullableFunc1<P0, R>(class ${coreLibraryReference}System.Func`2<!!0, !!1>) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1321,11 +1321,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class Kotlin.Function1 Kotlin.Runtime.Internal.DelegateProjection::FromFunc1<!!0, !!1>(class [mscorlib]System.Func`2<!!0, !!1>)
+            |      call class Kotlin.Function1 Kotlin.Runtime.Internal.DelegateProjection::FromFunc1<!!0, !!1>(class ${coreLibraryReference}System.Func`2<!!0, !!1>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function2 FromNullableFunc2<P0, P1, R>(class [mscorlib]System.Func`3<!!0, !!1, !!2>) cil managed
+            |    .method public hidebysig static class Kotlin.Function2 FromNullableFunc2<P0, P1, R>(class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2>) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1334,11 +1334,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class Kotlin.Function2 Kotlin.Runtime.Internal.DelegateProjection::FromFunc2<!!0, !!1, !!2>(class [mscorlib]System.Func`3<!!0, !!1, !!2>)
+            |      call class Kotlin.Function2 Kotlin.Runtime.Internal.DelegateProjection::FromFunc2<!!0, !!1, !!2>(class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function0 FromNullableAction0(class [mscorlib]System.Action) cil managed
+            |    .method public hidebysig static class Kotlin.Function0 FromNullableAction0(class ${coreLibraryReference}System.Action) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1347,11 +1347,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class Kotlin.Function0 Kotlin.Runtime.Internal.DelegateProjection::FromAction0(class [mscorlib]System.Action)
+            |      call class Kotlin.Function0 Kotlin.Runtime.Internal.DelegateProjection::FromAction0(class ${coreLibraryReference}System.Action)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function1 FromNullableAction1<P0>(class [mscorlib]System.Action`1<!!0>) cil managed
+            |    .method public hidebysig static class Kotlin.Function1 FromNullableAction1<P0>(class ${coreLibraryReference}System.Action`1<!!0>) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1360,11 +1360,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class Kotlin.Function1 Kotlin.Runtime.Internal.DelegateProjection::FromAction1<!!0>(class [mscorlib]System.Action`1<!!0>)
+            |      call class Kotlin.Function1 Kotlin.Runtime.Internal.DelegateProjection::FromAction1<!!0>(class ${coreLibraryReference}System.Action`1<!!0>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class Kotlin.Function2 FromNullableAction2<P0, P1>(class [mscorlib]System.Action`2<!!0, !!1>) cil managed
+            |    .method public hidebysig static class Kotlin.Function2 FromNullableAction2<P0, P1>(class ${coreLibraryReference}System.Action`2<!!0, !!1>) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1373,11 +1373,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class Kotlin.Function2 Kotlin.Runtime.Internal.DelegateProjection::FromAction2<!!0, !!1>(class [mscorlib]System.Action`2<!!0, !!1>)
+            |      call class Kotlin.Function2 Kotlin.Runtime.Internal.DelegateProjection::FromAction2<!!0, !!1>(class ${coreLibraryReference}System.Action`2<!!0, !!1>)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Func`1<!!0> ToFunc0<R>(class Kotlin.Function0 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Func`1<!!0> ToFunc0<R>(class Kotlin.Function0 callable) cil managed
             |    {
             |      .maxstack 3
             |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0> exact)
@@ -1385,7 +1385,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      isinst class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>
             |      dup
             |      brfalse.s project
-            |      ldfld class [mscorlib]System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Func`1<!0> class Kotlin.Runtime.Internal.'Func0Adapter`1'<!!0>::'delegate'
             |      ret
             |    project:
             |      pop
@@ -1397,16 +1397,16 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.0
             |      ldloc.0
             |      ldvirtftn instance !0 class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0>::InvokeExact()
-            |      newobj instance void class [mscorlib]System.Func`1<!!0>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Func`1<!!0>::.ctor(object, native int)
             |      ret
             |    fallback:
             |      ldarg.0
             |      ldftn !!0 Kotlin.Runtime.Internal.DelegateProjection::Invoke0<!!0>(class Kotlin.Function0)
-            |      newobj instance void class [mscorlib]System.Func`1<!!0>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Func`1<!!0>::.ctor(object, native int)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Func`2<!!0, !!1> ToFunc1<P0, R>(class Kotlin.Function1 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Func`2<!!0, !!1> ToFunc1<P0, R>(class Kotlin.Function1 callable) cil managed
             |    {
             |      .maxstack 3
             |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1> exact)
@@ -1414,7 +1414,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      isinst class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>
             |      dup
             |      brfalse.s project
-            |      ldfld class [mscorlib]System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Func`2<!0, !1> class Kotlin.Runtime.Internal.'Func1Adapter`2'<!!0, !!1>::'delegate'
             |      ret
             |    project:
             |      pop
@@ -1426,16 +1426,16 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.0
             |      ldloc.0
             |      ldvirtftn instance !1 class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1>::InvokeExact(!0)
-            |      newobj instance void class [mscorlib]System.Func`2<!!0, !!1>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Func`2<!!0, !!1>::.ctor(object, native int)
             |      ret
             |    fallback:
             |      ldarg.0
             |      ldftn !!1 Kotlin.Runtime.Internal.DelegateProjection::Invoke1<!!0, !!1>(class Kotlin.Function1, !!0)
-            |      newobj instance void class [mscorlib]System.Func`2<!!0, !!1>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Func`2<!!0, !!1>::.ctor(object, native int)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Func`3<!!0, !!1, !!2> ToFunc2<P0, P1, R>(class Kotlin.Function2 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2> ToFunc2<P0, P1, R>(class Kotlin.Function2 callable) cil managed
             |    {
             |      .maxstack 3
             |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2> exact)
@@ -1443,7 +1443,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      isinst class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>
             |      dup
             |      brfalse.s project
-            |      ldfld class [mscorlib]System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Func`3<!0, !1, !2> class Kotlin.Runtime.Internal.'Func2Adapter`3'<!!0, !!1, !!2>::'delegate'
             |      ret
             |    project:
             |      pop
@@ -1455,67 +1455,67 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.0
             |      ldloc.0
             |      ldvirtftn instance !2 class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2>::InvokeExact(!0, !1)
-            |      newobj instance void class [mscorlib]System.Func`3<!!0, !!1, !!2>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2>::.ctor(object, native int)
             |      ret
             |    fallback:
             |      ldarg.0
             |      ldftn !!2 Kotlin.Runtime.Internal.DelegateProjection::Invoke2<!!0, !!1, !!2>(class Kotlin.Function2, !!0, !!1)
-            |      newobj instance void class [mscorlib]System.Func`3<!!0, !!1, !!2>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2>::.ctor(object, native int)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Action ToAction0(class Kotlin.Function0 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Action ToAction0(class Kotlin.Function0 callable) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      isinst Kotlin.Runtime.Internal.Action0Adapter
             |      dup
             |      brfalse.s project
-            |      ldfld class [mscorlib]System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Action Kotlin.Runtime.Internal.Action0Adapter::'delegate'
             |      ret
             |    project:
             |      pop
             |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit0(class Kotlin.Function0)
-            |      newobj instance void [mscorlib]System.Action::.ctor(object, native int)
+            |      newobj instance void ${coreLibraryReference}System.Action::.ctor(object, native int)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Action`1<!!0> ToAction1<P0>(class Kotlin.Function1 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Action`1<!!0> ToAction1<P0>(class Kotlin.Function1 callable) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      isinst class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>
             |      dup
             |      brfalse.s project
-            |      ldfld class [mscorlib]System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Action`1<!0> class Kotlin.Runtime.Internal.'Action1Adapter`1'<!!0>::'delegate'
             |      ret
             |    project:
             |      pop
             |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit1<!!0>(class Kotlin.Function1, !!0)
-            |      newobj instance void class [mscorlib]System.Action`1<!!0>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Action`1<!!0>::.ctor(object, native int)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Action`2<!!0, !!1> ToAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Action`2<!!0, !!1> ToAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
             |    {
             |      .maxstack 2
             |      ldarg.0
             |      isinst class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>
             |      dup
             |      brfalse.s project
-            |      ldfld class [mscorlib]System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>::'delegate'
+            |      ldfld class ${coreLibraryReference}System.Action`2<!0, !1> class Kotlin.Runtime.Internal.'Action2Adapter`2'<!!0, !!1>::'delegate'
             |      ret
             |    project:
             |      pop
             |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit2<!!0, !!1>(class Kotlin.Function2, !!0, !!1)
-            |      newobj instance void class [mscorlib]System.Action`2<!!0, !!1>::.ctor(object, native int)
+            |      newobj instance void class ${coreLibraryReference}System.Action`2<!!0, !!1>::.ctor(object, native int)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Func`1<!!0> ToNullableFunc0<R>(class Kotlin.Function0 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Func`1<!!0> ToNullableFunc0<R>(class Kotlin.Function0 callable) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1524,11 +1524,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class [mscorlib]System.Func`1<!!0> Kotlin.Runtime.Internal.DelegateProjection::ToFunc0<!!0>(class Kotlin.Function0)
+            |      call class ${coreLibraryReference}System.Func`1<!!0> Kotlin.Runtime.Internal.DelegateProjection::ToFunc0<!!0>(class Kotlin.Function0)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Func`2<!!0, !!1> ToNullableFunc1<P0, R>(class Kotlin.Function1 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Func`2<!!0, !!1> ToNullableFunc1<P0, R>(class Kotlin.Function1 callable) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1537,11 +1537,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class [mscorlib]System.Func`2<!!0, !!1> Kotlin.Runtime.Internal.DelegateProjection::ToFunc1<!!0, !!1>(class Kotlin.Function1)
+            |      call class ${coreLibraryReference}System.Func`2<!!0, !!1> Kotlin.Runtime.Internal.DelegateProjection::ToFunc1<!!0, !!1>(class Kotlin.Function1)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Func`3<!!0, !!1, !!2> ToNullableFunc2<P0, P1, R>(class Kotlin.Function2 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2> ToNullableFunc2<P0, P1, R>(class Kotlin.Function2 callable) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1550,11 +1550,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class [mscorlib]System.Func`3<!!0, !!1, !!2> Kotlin.Runtime.Internal.DelegateProjection::ToFunc2<!!0, !!1, !!2>(class Kotlin.Function2)
+            |      call class ${coreLibraryReference}System.Func`3<!!0, !!1, !!2> Kotlin.Runtime.Internal.DelegateProjection::ToFunc2<!!0, !!1, !!2>(class Kotlin.Function2)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Action ToNullableAction0(class Kotlin.Function0 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Action ToNullableAction0(class Kotlin.Function0 callable) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1563,11 +1563,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class [mscorlib]System.Action Kotlin.Runtime.Internal.DelegateProjection::ToAction0(class Kotlin.Function0)
+            |      call class ${coreLibraryReference}System.Action Kotlin.Runtime.Internal.DelegateProjection::ToAction0(class Kotlin.Function0)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Action`1<!!0> ToNullableAction1<P0>(class Kotlin.Function1 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Action`1<!!0> ToNullableAction1<P0>(class Kotlin.Function1 callable) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1576,11 +1576,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class [mscorlib]System.Action`1<!!0> Kotlin.Runtime.Internal.DelegateProjection::ToAction1<!!0>(class Kotlin.Function1)
+            |      call class ${coreLibraryReference}System.Action`1<!!0> Kotlin.Runtime.Internal.DelegateProjection::ToAction1<!!0>(class Kotlin.Function1)
             |      ret
             |    }
             |
-            |    .method public hidebysig static class [mscorlib]System.Action`2<!!0, !!1> ToNullableAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
+            |    .method public hidebysig static class ${coreLibraryReference}System.Action`2<!!0, !!1> ToNullableAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
@@ -1589,7 +1589,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    nonnull:
             |      ldarg.0
-            |      call class [mscorlib]System.Action`2<!!0, !!1> Kotlin.Runtime.Internal.DelegateProjection::ToAction2<!!0, !!1>(class Kotlin.Function2)
+            |      call class ${coreLibraryReference}System.Action`2<!!0, !!1> Kotlin.Runtime.Internal.DelegateProjection::ToAction2<!!0, !!1>(class Kotlin.Function2)
             |      ret
             |    }
             |
@@ -1661,7 +1661,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  }
             |
             |  .class public auto ansi sealed beforefieldinit 'MutableRef`1'<'T'>
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
             |    .field public !0 'element'
             |
@@ -1669,13 +1669,13 @@ internal object DotNetRuntimeLibraryHelpers {
             |    {
             |      .maxstack 1
             |      ldarg.0
-            |      call instance void [mscorlib]System.Object::.ctor()
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
             |      ret
             |    }
             |  }
             |
             |  .class public abstract sealed auto ansi beforefieldinit Intrinsics
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
             |    .method public hidebysig static bool 'AreEqual'(object, object) cil managed
             |    {
@@ -1692,16 +1692,16 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_leftNotNull:
             |      ldarg.0
-            |      isinst [mscorlib]System.Double
+            |      isinst ${coreLibraryReference}System.Double
             |      brfalse.s IL_objectEquals
             |      ldarg.1
-            |      isinst [mscorlib]System.Double
+            |      isinst ${coreLibraryReference}System.Double
             |      brfalse.s IL_notEqual
             |      ldarg.0
-            |      unbox.any [mscorlib]System.Double
+            |      unbox.any ${coreLibraryReference}System.Double
             |      stloc.0
             |      ldarg.1
-            |      unbox.any [mscorlib]System.Double
+            |      unbox.any ${coreLibraryReference}System.Double
             |      stloc.1
             |      ldloc.0
             |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'DoubleToLongBits'(float64)
@@ -1715,7 +1715,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_objectEquals:
             |      ldarg.0
             |      ldarg.1
-            |      callvirt instance bool [mscorlib]System.Object::Equals(object)
+            |      callvirt instance bool ${coreLibraryReference}System.Object::Equals(object)
             |      ret
             |    }
             |
@@ -1729,10 +1729,10 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_hashNotNull:
             |      ldarg.0
-            |      isinst [mscorlib]System.Double
+            |      isinst ${coreLibraryReference}System.Double
             |      brfalse.s IL_hashBoolean
             |      ldarg.0
-            |      unbox.any [mscorlib]System.Double
+            |      unbox.any ${coreLibraryReference}System.Double
             |      call int64 'Kotlin.Runtime.Internal.Intrinsics'::'DoubleToLongBits'(float64)
             |      stloc.0
             |      ldloc.0
@@ -1745,10 +1745,10 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_hashBoolean:
             |      ldarg.0
-            |      isinst [mscorlib]System.Boolean
+            |      isinst ${coreLibraryReference}System.Boolean
             |      brfalse.s IL_hashChar
             |      ldarg.0
-            |      unbox.any [mscorlib]System.Boolean
+            |      unbox.any ${coreLibraryReference}System.Boolean
             |      brtrue.s IL_hashTrue
             |      ldc.i4 1237
             |      ret
@@ -1757,15 +1757,15 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_hashChar:
             |      ldarg.0
-            |      isinst [mscorlib]System.Char
+            |      isinst ${coreLibraryReference}System.Char
             |      brfalse.s IL_objectHash
             |      ldarg.0
-            |      unbox.any [mscorlib]System.Char
+            |      unbox.any ${coreLibraryReference}System.Char
             |      conv.i4
             |      ret
             |IL_objectHash:
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Object::GetHashCode()
+            |      callvirt instance int32 ${coreLibraryReference}System.Object::GetHashCode()
             |      ret
             |    }
             |
@@ -1778,10 +1778,10 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_valueNotNull:
             |      ldarg.0
-            |      isinst [mscorlib]System.Boolean
+            |      isinst ${coreLibraryReference}System.Boolean
             |      brfalse.s IL_stringDouble
             |      ldarg.0
-            |      unbox.any [mscorlib]System.Boolean
+            |      unbox.any ${coreLibraryReference}System.Boolean
             |      brtrue.s IL_stringTrue
             |      ldstr "false"
             |      ret
@@ -1790,33 +1790,33 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_stringDouble:
             |      ldarg.0
-            |      isinst [mscorlib]System.Double
+            |      isinst ${coreLibraryReference}System.Double
             |      brfalse.s IL_stringInt
             |      ldarg.0
-            |      unbox.any [mscorlib]System.Double
+            |      unbox.any ${coreLibraryReference}System.Double
             |      call string 'Kotlin.Runtime.Internal.DoubleFormatting'::'DoubleToString'(float64)
             |      ret
             |IL_stringInt:
             |      ldarg.0
-            |      isinst [mscorlib]System.Int32
+            |      isinst ${coreLibraryReference}System.Int32
             |      brtrue.s IL_stringInvariant
             |      ldarg.0
-            |      isinst [mscorlib]System.Int64
+            |      isinst ${coreLibraryReference}System.Int64
             |      brtrue.s IL_stringInvariant
             |      ldarg.0
-            |      callvirt instance string [mscorlib]System.Object::ToString()
+            |      callvirt instance string ${coreLibraryReference}System.Object::ToString()
             |      ret
             |IL_stringInvariant:
             |      ldarg.0
             |      ldnull
-            |      call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-            |      callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+            |      call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |      callvirt instance string ${coreLibraryReference}System.IFormattable::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
             |      ret
             |    }
             |
             |    .method public hidebysig static bool 'ArrayContentEquals'(
-            |        class [mscorlib]System.Array 'left',
-            |        class [mscorlib]System.Array 'right') cil managed
+            |        class ${coreLibraryReference}System.Array 'left',
+            |        class ${coreLibraryReference}System.Array 'right') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
@@ -1835,11 +1835,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.1
             |      brfalse.s IL_arrayContentFalse
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      stloc.1
             |      ldloc.1
             |      ldarg.1
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      bne.un.s IL_arrayContentFalse
             |      ldc.i4.0
             |      stloc.0
@@ -1849,10 +1849,10 @@ internal object DotNetRuntimeLibraryHelpers {
             |      bge.s IL_arrayContentTrue
             |      ldarg.0
             |      ldloc.0
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      ldarg.1
             |      ldloc.0
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
             |      brfalse.s IL_arrayContentFalse
             |      ldloc.0
@@ -1869,8 +1869,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |
             |    .method public hidebysig static bool 'ArrayContentDeepEquals'(
-            |        class [mscorlib]System.Array 'left',
-            |        class [mscorlib]System.Array 'right') cil managed
+            |        class ${coreLibraryReference}System.Array 'left',
+            |        class ${coreLibraryReference}System.Array 'right') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
@@ -1891,11 +1891,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.1
             |      brfalse IL_arrayDeepFalse
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      stloc.1
             |      ldloc.1
             |      ldarg.1
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      bne.un IL_arrayDeepFalse
             |      ldc.i4.0
             |      stloc.0
@@ -1905,11 +1905,11 @@ internal object DotNetRuntimeLibraryHelpers {
             |      bge IL_arrayDeepTrue
             |      ldarg.0
             |      ldloc.0
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      stloc.2
             |      ldarg.1
             |      ldloc.0
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      stloc.3
             |      ldloc.2
             |      ldloc.3
@@ -1928,7 +1928,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst object[]
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepEquals'(
-            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
             |IL_arrayDeepInt:
@@ -1940,7 +1940,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst int32[]
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
             |IL_arrayDeepLong:
@@ -1952,7 +1952,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst int64[]
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
             |IL_arrayDeepDouble:
@@ -1964,7 +1964,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst float64[]
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
             |IL_arrayDeepBoolean:
@@ -1976,7 +1976,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst bool[]
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
             |IL_arrayDeepChar:
@@ -1988,7 +1988,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst char[]
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
             |IL_arrayDeepScalar:
@@ -2010,7 +2010,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
-            |    .method public hidebysig static int32 'ArrayContentHashCode'(class [mscorlib]System.Array 'value') cil managed
+            |    .method public hidebysig static int32 'ArrayContentHashCode'(class ${coreLibraryReference}System.Array 'value') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
@@ -2028,7 +2028,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldc.i4.0
             |      stloc.1
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      stloc.2
             |IL_arrayHashLoop:
             |      ldloc.1
@@ -2040,7 +2040,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      mul
             |      ldarg.0
             |      ldloc.1
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
             |      add
             |      stloc.0
@@ -2055,7 +2055,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |
             |    .method public hidebysig static int32 'ArrayContentDeepHashCode'(
-            |        class [mscorlib]System.Array 'value') cil managed
+            |        class ${coreLibraryReference}System.Array 'value') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
@@ -2075,7 +2075,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldc.i4.0
             |      stloc.1
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      stloc.2
             |IL_arrayDeepHashLoop:
             |      ldloc.1
@@ -2083,7 +2083,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      bge IL_arrayDeepHashEnd
             |      ldarg.0
             |      ldloc.1
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      stloc.3
             |      ldloc.3
             |      isinst object[]
@@ -2091,7 +2091,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst object[]
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
             |IL_arrayDeepHashInt:
@@ -2101,7 +2101,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst int32[]
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
             |IL_arrayDeepHashLong:
@@ -2111,7 +2111,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst int64[]
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
             |IL_arrayDeepHashDouble:
@@ -2121,7 +2121,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst float64[]
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
             |IL_arrayDeepHashBoolean:
@@ -2131,7 +2131,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst bool[]
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
             |IL_arrayDeepHashChar:
@@ -2141,7 +2141,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.3
             |      isinst char[]
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
             |IL_arrayDeepHashScalar:
@@ -2166,20 +2166,20 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |
             |    .method public hidebysig static int32 'DataClassArrayHashCode'(
-            |        class [mscorlib]System.Array 'value') cil managed
+            |        class ${coreLibraryReference}System.Array 'value') cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      ret
             |    }
             |
-            |    .method public hidebysig static string 'ArrayContentToString'(class [mscorlib]System.Array 'value') cil managed
+            |    .method public hidebysig static string 'ArrayContentToString'(class ${coreLibraryReference}System.Array 'value') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
-            |        [0] class [mscorlib]System.Text.StringBuilder 'builder',
+            |        [0] class ${coreLibraryReference}System.Text.StringBuilder 'builder',
             |        [1] int32 'index',
             |        [2] int32 'length'
             |      )
@@ -2188,16 +2188,16 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldstr "null"
             |      ret
             |IL_arrayStringNotNull:
-            |      newobj instance void [mscorlib]System.Text.StringBuilder::.ctor()
+            |      newobj instance void ${coreLibraryReference}System.Text.StringBuilder::.ctor()
             |      stloc.0
             |      ldloc.0
             |      ldstr "["
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      ldc.i4.0
             |      stloc.1
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      stloc.2
             |IL_arrayStringLoop:
             |      ldloc.1
@@ -2208,15 +2208,15 @@ internal object DotNetRuntimeLibraryHelpers {
             |      brfalse.s IL_arrayStringElement
             |      ldloc.0
             |      ldstr ", "
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |IL_arrayStringElement:
             |      ldloc.0
             |      ldarg.0
             |      ldloc.1
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      ldloc.1
             |      ldc.i4.1
@@ -2226,17 +2226,17 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_arrayStringEnd:
             |      ldloc.0
             |      ldstr "]"
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      ldloc.0
-            |      callvirt instance string [mscorlib]System.Object::ToString()
+            |      callvirt instance string ${coreLibraryReference}System.Object::ToString()
             |      ret
             |    }
             |
             |    .method private hidebysig static void 'AppendArrayContentDeepToString'(
-            |        class [mscorlib]System.Array 'value',
-            |        class [mscorlib]System.Text.StringBuilder 'builder',
-            |        class [mscorlib]System.Collections.ArrayList 'processed') cil managed
+            |        class ${coreLibraryReference}System.Array 'value',
+            |        class ${coreLibraryReference}System.Text.StringBuilder 'builder',
+            |        class ${coreLibraryReference}System.Collections.ArrayList 'processed') cil managed
             |    {
             |      .maxstack 4
             |      .locals init (
@@ -2246,26 +2246,26 @@ internal object DotNetRuntimeLibraryHelpers {
             |      )
             |      ldarg.2
             |      ldarg.0
-            |      callvirt instance bool [mscorlib]System.Collections.ArrayList::Contains(object)
+            |      callvirt instance bool ${coreLibraryReference}System.Collections.ArrayList::Contains(object)
             |      brfalse IL_arrayDeepStringNew
             |      ldarg.1
             |      ldstr "[...]"
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      ret
             |IL_arrayDeepStringNew:
             |      ldarg.2
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Collections.ArrayList::Add(object)
+            |      callvirt instance int32 ${coreLibraryReference}System.Collections.ArrayList::Add(object)
             |      pop
             |      ldarg.1
             |      ldstr "["
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      ldc.i4.0
             |      stloc.0
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      stloc.1
             |IL_arrayDeepStringLoop:
             |      ldloc.0
@@ -2275,12 +2275,12 @@ internal object DotNetRuntimeLibraryHelpers {
             |      brfalse IL_arrayDeepStringLoad
             |      ldarg.1
             |      ldstr ", "
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |IL_arrayDeepStringLoad:
             |      ldarg.0
             |      ldloc.0
-            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      stloc.2
             |      ldloc.2
             |      isinst object[]
@@ -2290,9 +2290,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.1
             |      ldarg.2
             |      call void 'Kotlin.Runtime.Internal.Intrinsics'::'AppendArrayContentDeepToString'(
-            |          class [mscorlib]System.Array,
-            |          class [mscorlib]System.Text.StringBuilder,
-            |          class [mscorlib]System.Collections.ArrayList)
+            |          class ${coreLibraryReference}System.Array,
+            |          class ${coreLibraryReference}System.Text.StringBuilder,
+            |          class ${coreLibraryReference}System.Collections.ArrayList)
             |      br IL_arrayDeepStringNext
             |IL_arrayDeepStringInt:
             |      ldloc.2
@@ -2302,8 +2302,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.2
             |      isinst int32[]
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class [mscorlib]System.Array)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |          class ${coreLibraryReference}System.Array)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      br IL_arrayDeepStringNext
             |IL_arrayDeepStringLong:
@@ -2314,8 +2314,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.2
             |      isinst int64[]
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class [mscorlib]System.Array)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |          class ${coreLibraryReference}System.Array)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      br IL_arrayDeepStringNext
             |IL_arrayDeepStringDouble:
@@ -2326,8 +2326,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.2
             |      isinst float64[]
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class [mscorlib]System.Array)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |          class ${coreLibraryReference}System.Array)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      br IL_arrayDeepStringNext
             |IL_arrayDeepStringBoolean:
@@ -2338,8 +2338,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.2
             |      isinst bool[]
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class [mscorlib]System.Array)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |          class ${coreLibraryReference}System.Array)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      br IL_arrayDeepStringNext
             |IL_arrayDeepStringChar:
@@ -2350,15 +2350,15 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldloc.2
             |      isinst char[]
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class [mscorlib]System.Array)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |          class ${coreLibraryReference}System.Array)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      br IL_arrayDeepStringNext
             |IL_arrayDeepStringScalar:
             |      ldarg.1
             |      ldloc.2
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |IL_arrayDeepStringNext:
             |      ldloc.0
@@ -2369,59 +2369,59 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_arrayDeepStringEnd:
             |      ldarg.1
             |      ldstr "]"
-            |      callvirt instance class [mscorlib]System.Text.StringBuilder [mscorlib]System.Text.StringBuilder::Append(string)
+            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
             |      pop
             |      ldarg.2
             |      ldarg.2
-            |      callvirt instance int32 [mscorlib]System.Collections.ArrayList::get_Count()
+            |      callvirt instance int32 ${coreLibraryReference}System.Collections.ArrayList::get_Count()
             |      ldc.i4.1
             |      sub
-            |      callvirt instance void [mscorlib]System.Collections.ArrayList::RemoveAt(int32)
+            |      callvirt instance void ${coreLibraryReference}System.Collections.ArrayList::RemoveAt(int32)
             |      ret
             |    }
             |
             |    .method public hidebysig static string 'ArrayContentDeepToString'(
-            |        class [mscorlib]System.Array 'value') cil managed
+            |        class ${coreLibraryReference}System.Array 'value') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
-            |        [0] class [mscorlib]System.Text.StringBuilder 'builder',
-            |        [1] class [mscorlib]System.Collections.ArrayList 'processed'
+            |        [0] class ${coreLibraryReference}System.Text.StringBuilder 'builder',
+            |        [1] class ${coreLibraryReference}System.Collections.ArrayList 'processed'
             |      )
             |      ldarg.0
             |      brtrue IL_arrayDeepStringNotNull
             |      ldstr "null"
             |      ret
             |IL_arrayDeepStringNotNull:
-            |      newobj instance void [mscorlib]System.Text.StringBuilder::.ctor()
+            |      newobj instance void ${coreLibraryReference}System.Text.StringBuilder::.ctor()
             |      stloc.0
-            |      newobj instance void [mscorlib]System.Collections.ArrayList::.ctor()
+            |      newobj instance void ${coreLibraryReference}System.Collections.ArrayList::.ctor()
             |      stloc.1
             |      ldarg.0
             |      ldloc.0
             |      ldloc.1
             |      call void 'Kotlin.Runtime.Internal.Intrinsics'::'AppendArrayContentDeepToString'(
-            |          class [mscorlib]System.Array,
-            |          class [mscorlib]System.Text.StringBuilder,
-            |          class [mscorlib]System.Collections.ArrayList)
+            |          class ${coreLibraryReference}System.Array,
+            |          class ${coreLibraryReference}System.Text.StringBuilder,
+            |          class ${coreLibraryReference}System.Collections.ArrayList)
             |      ldloc.0
-            |      callvirt instance string [mscorlib]System.Object::ToString()
+            |      callvirt instance string ${coreLibraryReference}System.Object::ToString()
             |      ret
             |    }
             |
             |    .method public hidebysig static string 'DataClassArrayToString'(
-            |        class [mscorlib]System.Array 'value') cil managed
+            |        class ${coreLibraryReference}System.Array 'value') cil managed
             |    {
             |      .maxstack 1
             |      ldarg.0
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class [mscorlib]System.Array)
+            |          class ${coreLibraryReference}System.Array)
             |      ret
             |    }
             |
             |    .method public hidebysig static void 'ArrayCopyInto'(
-            |        class [mscorlib]System.Array 'source',
-            |        class [mscorlib]System.Array 'destination',
+            |        class ${coreLibraryReference}System.Array 'source',
+            |        class ${coreLibraryReference}System.Array 'destination',
             |        int32 'destinationOffset',
             |        int32 'startIndex',
             |        int32 'endIndex') cil managed
@@ -2435,14 +2435,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      blt.s IL_arrayCopyInvalid
             |      ldarg.s endIndex
             |      ldarg.0
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      bgt.s IL_arrayCopyInvalid
             |      ldarg.2
             |      ldc.i4.0
             |      blt.s IL_arrayCopyInvalid
             |      ldarg.2
             |      ldarg.1
-            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      callvirt instance int32 ${coreLibraryReference}System.Array::get_Length()
             |      ldarg.s endIndex
             |      ldarg.3
             |      sub
@@ -2455,15 +2455,15 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.s endIndex
             |      ldarg.3
             |      sub
-            |      call void [mscorlib]System.Array::Copy(
-            |          class [mscorlib]System.Array,
+            |      call void ${coreLibraryReference}System.Array::Copy(
+            |          class ${coreLibraryReference}System.Array,
             |          int32,
-            |          class [mscorlib]System.Array,
+            |          class ${coreLibraryReference}System.Array,
             |          int32,
             |          int32)
             |      ret
             |IL_arrayCopyInvalid:
-            |      newobj instance void [mscorlib]System.IndexOutOfRangeException::.ctor()
+            |      newobj instance void ${coreLibraryReference}System.IndexOutOfRangeException::.ctor()
             |      throw
             |    }
             |
@@ -2478,13 +2478,13 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |IL_bitsNotNaN:
             |      ldarg.0
-            |      call int64 [mscorlib]System.BitConverter::DoubleToInt64Bits(float64)
+            |      call int64 ${coreLibraryReference}System.BitConverter::DoubleToInt64Bits(float64)
             |      ret
             |    }
             |  }
             |
             |  .class public abstract sealed auto ansi beforefieldinit DoubleFormatting
-            |         extends [mscorlib]System.Object
+            |         extends ${coreLibraryReference}System.Object
             |  {
             |  .method public hidebysig static string 'DoubleToString'(float64 'value') cil managed
             |  {
@@ -2498,25 +2498,25 @@ internal object DotNetRuntimeLibraryHelpers {
             |      [5] int32 'i'
             |    )
             |    ldarg.0
-            |    call bool ${CORE_LIB_REF}System.Double::IsNaN(float64)
+            |    call bool ${coreLibraryReference}System.Double::IsNaN(float64)
             |    brfalse IL_notNaN
             |    ldstr "NaN"
             |    ret
             |IL_notNaN:
             |    ldarg.0
-            |    call bool ${CORE_LIB_REF}System.Double::IsPositiveInfinity(float64)
+            |    call bool ${coreLibraryReference}System.Double::IsPositiveInfinity(float64)
             |    brfalse IL_notPositiveInfinity
             |    ldstr "Infinity"
             |    ret
             |IL_notPositiveInfinity:
             |    ldarg.0
-            |    call bool ${CORE_LIB_REF}System.Double::IsNegativeInfinity(float64)
+            |    call bool ${coreLibraryReference}System.Double::IsNegativeInfinity(float64)
             |    brfalse IL_notNegativeInfinity
             |    ldstr "-Infinity"
             |    ret
             |IL_notNegativeInfinity:
             |    ldarg.0
-            |    call int64 ${CORE_LIB_REF}System.BitConverter::DoubleToInt64Bits(float64)
+            |    call int64 ${coreLibraryReference}System.BitConverter::DoubleToInt64Bits(float64)
             |    ldc.i8 -9223372036854775808
             |    bne.un IL_finite
             |    ldstr "-0.0"
@@ -2524,29 +2524,29 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_finite:
             |    ldarga.s 0
             |    ldstr "R"
-            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
-            |    call instance string ${CORE_LIB_REF}System.Double::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call instance string ${coreLibraryReference}System.Double::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
             |    stloc.0
             |    ldarg.0
             |    ldc.r8 0.0
             |    beq IL_decimal
             |    ldarg.0
-            |    call float64 ${CORE_LIB_REF}System.Math::Abs(float64)
+            |    call float64 ${coreLibraryReference}System.Math::Abs(float64)
             |    ldc.r8 10000000.
             |    bge IL_scientific
             |    ldarg.0
-            |    call float64 ${CORE_LIB_REF}System.Math::Abs(float64)
+            |    call float64 ${coreLibraryReference}System.Math::Abs(float64)
             |    ldc.r8 0.001
             |    blt IL_scientific
             |IL_decimal:
             |    ldloc.0
             |    ldc.i4.s 46
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
             |    ldc.i4.0
             |    bge IL_decimalHasDot
             |    ldloc.0
             |    ldstr ".0"
-            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
             |    ret
             |IL_decimalHasDot:
             |    ldloc.0
@@ -2554,14 +2554,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_scientific:
             |    ldloc.0
             |    ldc.i4.s 69
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
             |    stloc.1
             |    ldloc.1
             |    ldc.i4.0
             |    bge IL_scientificFromE
             |    ldloc.0
             |    ldc.i4.0
-            |    callvirt instance char ${CORE_LIB_REF}System.String::get_Chars(int32)
+            |    callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
             |    ldc.i4.s 45
             |    ceq
             |    stloc.s 'neg'
@@ -2569,12 +2569,12 @@ internal object DotNetRuntimeLibraryHelpers {
             |    brfalse IL_signStripped
             |    ldloc.0
             |    ldc.i4.1
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32)
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32)
             |    stloc.0
             |IL_signStripped:
             |    ldloc.0
             |    ldc.i4.s 46
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
             |    stloc.1
             |    ldloc.1
             |    ldc.i4.0
@@ -2582,14 +2582,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |    ldloc.0
             |    stloc.2
             |    ldloc.0
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::get_Length()
+            |    callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
             |    stloc.3
             |    br IL_dotRemoved
             |IL_removeDot:
             |    ldloc.0
             |    ldloc.1
             |    ldc.i4.1
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Remove(int32, int32)
+            |    callvirt instance string ${coreLibraryReference}System.String::Remove(int32, int32)
             |    stloc.2
             |    ldloc.1
             |    stloc.3
@@ -2603,7 +2603,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_leadingZeroLoop:
             |    ldloc.2
             |    ldloc.s 'i'
-            |    callvirt instance char ${CORE_LIB_REF}System.String::get_Chars(int32)
+            |    callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
             |    ldc.i4.s 48
             |    bne.un IL_leadingZerosSkipped
             |    ldloc.s 'i'
@@ -2618,10 +2618,10 @@ internal object DotNetRuntimeLibraryHelpers {
             |IL_leadingZerosSkipped:
             |    ldloc.2
             |    ldloc.s 'i'
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32)
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32)
             |    stloc.2
             |    ldloc.2
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::get_Length()
+            |    callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
             |    stloc.s 'i'
             |IL_trailingZeroLoop:
             |    ldloc.s 'i'
@@ -2631,7 +2631,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |    ldloc.s 'i'
             |    ldc.i4.1
             |    sub
-            |    callvirt instance char ${CORE_LIB_REF}System.String::get_Chars(int32)
+            |    callvirt instance char ${coreLibraryReference}System.String::get_Chars(int32)
             |    ldc.i4.s 48
             |    bne.un IL_trailingZerosTrimmed
             |    ldloc.s 'i'
@@ -2643,64 +2643,64 @@ internal object DotNetRuntimeLibraryHelpers {
             |    ldloc.2
             |    ldc.i4.0
             |    ldloc.s 'i'
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32, int32)
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32, int32)
             |    stloc.2
             |    ldloc.2
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::get_Length()
+            |    callvirt instance int32 ${coreLibraryReference}System.String::get_Length()
             |    ldc.i4.1
             |    bne.un IL_insertDot
             |    ldloc.2
             |    ldstr "0"
-            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
             |    stloc.2
             |IL_insertDot:
             |    ldloc.2
             |    ldc.i4.1
             |    ldstr "."
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Insert(int32, string)
+            |    callvirt instance string ${coreLibraryReference}System.String::Insert(int32, string)
             |    stloc.2
             |    ldloc.s 'neg'
             |    brfalse IL_mantissaSigned
             |    ldstr "-"
             |    ldloc.2
-            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
             |    stloc.2
             |IL_mantissaSigned:
             |    ldloc.2
             |    ldstr "E"
             |    ldloc.3
-            |    box ${CORE_LIB_REF}System.Int32
+            |    box ${coreLibraryReference}System.Int32
             |    ldnull
-            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
-            |    callvirt instance string ${CORE_LIB_REF}System.IFormattable::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)
-            |    call string ${CORE_LIB_REF}System.String::Concat(string, string, string)
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string ${coreLibraryReference}System.IFormattable::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string, string)
             |    ret
             |IL_scientificFromE:
             |    ldloc.0
             |    ldc.i4.0
             |    ldloc.1
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32, int32)
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32, int32)
             |    dup
             |    ldc.i4.s 46
-            |    callvirt instance int32 ${CORE_LIB_REF}System.String::IndexOf(char)
+            |    callvirt instance int32 ${coreLibraryReference}System.String::IndexOf(char)
             |    ldc.i4.0
             |    bge IL_mantissaHasDot
             |    ldstr ".0"
-            |    call string ${CORE_LIB_REF}System.String::Concat(string, string)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string)
             |IL_mantissaHasDot:
             |    ldstr "E"
             |    ldloc.0
             |    ldloc.1
             |    ldc.i4.1
             |    add
-            |    callvirt instance string ${CORE_LIB_REF}System.String::Substring(int32)
-            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
-            |    call int32 ${CORE_LIB_REF}System.Int32::Parse(string, class ${CORE_LIB_REF}System.IFormatProvider)
-            |    box ${CORE_LIB_REF}System.Int32
+            |    callvirt instance string ${coreLibraryReference}System.String::Substring(int32)
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    call int32 ${coreLibraryReference}System.Int32::Parse(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    box ${coreLibraryReference}System.Int32
             |    ldnull
-            |    call class ${CORE_LIB_REF}System.Globalization.CultureInfo ${CORE_LIB_REF}System.Globalization.CultureInfo::get_InvariantCulture()
-            |    callvirt instance string ${CORE_LIB_REF}System.IFormattable::ToString(string, class ${CORE_LIB_REF}System.IFormatProvider)
-            |    call string ${CORE_LIB_REF}System.String::Concat(string, string, string)
+            |    call class ${coreLibraryReference}System.Globalization.CultureInfo ${coreLibraryReference}System.Globalization.CultureInfo::get_InvariantCulture()
+            |    callvirt instance string ${coreLibraryReference}System.IFormattable::ToString(string, class ${coreLibraryReference}System.IFormatProvider)
+            |    call string ${coreLibraryReference}System.String::Concat(string, string, string)
             |    ret
             |  }
             |  }
@@ -2733,60 +2733,60 @@ internal object DotNetRuntimeLibraryHelpers {
                 "${"StringValueOf".toIlIdentifier()}(object)"
 
     /** Nullable shallow content equality for every supported CLR vector representation. */
-    val arrayContentEqualsCallInstruction: String =
+    fun arrayContentEqualsCallInstruction(coreLibraryReference: String): String =
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayContentEquals".toIlIdentifier()}(" +
-                "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array)"
+                "class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)"
 
     /** Nullable recursive content equality for generic arrays and their supported nested arrays. */
-    val arrayContentDeepEqualsCallInstruction: String =
+    fun arrayContentDeepEqualsCallInstruction(coreLibraryReference: String): String =
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayContentDeepEquals".toIlIdentifier()}(" +
-                "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array)"
+                "class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)"
 
     /** Nullable shallow List-compatible content hash for every supported CLR vector. */
-    val arrayContentHashCodeCallInstruction: String =
+    fun arrayContentHashCodeCallInstruction(coreLibraryReference: String): String =
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"ArrayContentHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+                "${"ArrayContentHashCode".toIlIdentifier()}(class ${coreLibraryReference}System.Array)"
 
     /** Nullable recursive List-compatible content hash for generic arrays. */
-    val arrayContentDeepHashCodeCallInstruction: String =
+    fun arrayContentDeepHashCodeCallInstruction(coreLibraryReference: String): String =
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"ArrayContentDeepHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+                "${"ArrayContentDeepHashCode".toIlIdentifier()}(class ${coreLibraryReference}System.Array)"
 
     /** Nullable shallow List-compatible content rendering for every supported CLR vector. */
-    val arrayContentToStringCallInstruction: String =
+    fun arrayContentToStringCallInstruction(coreLibraryReference: String): String =
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"ArrayContentToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+                "${"ArrayContentToString".toIlIdentifier()}(class ${coreLibraryReference}System.Array)"
 
     /** Nullable recursive List-compatible content rendering for generic arrays. */
-    val arrayContentDeepToStringCallInstruction: String =
+    fun arrayContentDeepToStringCallInstruction(coreLibraryReference: String): String =
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"ArrayContentDeepToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+                "${"ArrayContentDeepToString".toIlIdentifier()}(class ${coreLibraryReference}System.Array)"
 
     /** Content hash for the CLR vector behind an array property of a generated data class. */
-    val dataClassArrayHashCodeCallInstruction: String =
+    fun dataClassArrayHashCodeCallInstruction(coreLibraryReference: String): String =
         "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"DataClassArrayHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+                "${"DataClassArrayHashCode".toIlIdentifier()}(class ${coreLibraryReference}System.Array)"
 
     /** Content rendering for the CLR vector behind an array property of a generated data class. */
-    val dataClassArrayToStringCallInstruction: String =
+    fun dataClassArrayToStringCallInstruction(coreLibraryReference: String): String =
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
-                "${"DataClassArrayToString".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+                "${"DataClassArrayToString".toIlIdentifier()}(class ${coreLibraryReference}System.Array)"
 
     /** Kotlin range validation plus overlap-safe CLR copying for `Array.copyInto`. */
-    val arrayCopyIntoCallInstruction: String =
+    fun arrayCopyIntoCallInstruction(coreLibraryReference: String): String =
         "call void [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayCopyInto".toIlIdentifier()}(" +
-                "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array, int32, int32, int32)"
+                "class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array, int32, int32, int32)"
 
 }

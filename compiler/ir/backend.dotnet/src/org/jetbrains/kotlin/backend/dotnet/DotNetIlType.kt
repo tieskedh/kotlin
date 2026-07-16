@@ -121,8 +121,10 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
      * (0x80131506). Every emission site goes through
      * [DotNetIlExpressionCodegen.spillToSyntheticLocal].
      */
-    data class NullableValue(val elementType: DotNetIlValueType) :
-        DotNetIlValueType("valuetype ${CORE_LIB_REF}System.Nullable`1<${elementType.nameInSignature}>") {
+    data class NullableValue(
+        val elementType: DotNetIlValueType,
+        val coreLibraryReference: kotlin.String,
+    ) : DotNetIlValueType("valuetype ${coreLibraryReference}System.Nullable`1<${elementType.nameInSignature}>") {
         /** `newobj` of the `T -> T?` wrap; `!0` is the probe-verified spelling of `T` in member signatures. */
         val ctorInstruction: kotlin.String
             get() = "newobj instance void ${nameInSignature}::.ctor(!0)"
@@ -155,7 +157,7 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
 
     /**
      * A user class emitted into this module, referenced assembly-locally — no bracketed
-     * resolution-scope prefix (see [CORE_LIB_REF]) — through its already-rendered
+     * core-library resolution-scope prefix — through its already-rendered
      * [type reference][DotNetIlClassInfo.ilTypeRef] (`class 'demo.Point'`, or the nested
      * `class 'demo.Outer'/'Companion'` for a companion), the same convention the file facades
      * use. A nullable `C?` maps to the same reference type (CLR reference types are
@@ -179,7 +181,7 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     /**
      * A Kotlin exception class type-mapped onto a CLR exception type (see
      * [DotNetMappedExceptions]). [ilTypeRef] is the bare assembly-qualified reference — either a
-     * [CORE_LIB_REF]-prefixed `System.X` or a `Kotlin.Runtime` exact type, and the operand form a
+     * core-library-prefixed `System.X` or a `Kotlin.Runtime` exact type, and the operand form a
      * `catch` clause takes. [nameInSignature] prefixes it with `class` for signature positions;
      * both spellings are ilasm-probe-verified. A nullable `T?` maps to the same reference type,
      * like [UserClass].
@@ -268,7 +270,10 @@ internal fun DotNetIlValueType.substituteDotNetTypeParameters(
     // A NullableValue element is always concrete (`T?` is rejected at the type mapper), so this
     // arm is defensive symmetry.
     is DotNetIlValueType.NullableValue ->
-        DotNetIlValueType.NullableValue(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
+        DotNetIlValueType.NullableValue(
+            elementType.substituteDotNetTypeParameters(classArguments, methodArguments),
+            coreLibraryReference,
+        )
     is DotNetIlValueType.PrimitiveArray ->
         DotNetIlValueType.PrimitiveArray(elementType.substituteDotNetTypeParameters(classArguments, methodArguments))
     is DotNetIlValueType.GenericArray ->
@@ -328,12 +333,12 @@ internal fun DotNetIlValueType.dotNetViewAsGenericOwner(
  * every non-primitive type (reference types widen to `object` without an instruction; a
  * [DotNetIlValueType.NullableValue] boxes through its own [boxInstruction][DotNetIlValueType.NullableValue.boxInstruction]).
  */
-internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(): String? = when (this) {
-    DotNetIlValueType.Boolean -> "${CORE_LIB_REF}System.Boolean"
-    DotNetIlValueType.Int32 -> "${CORE_LIB_REF}System.Int32"
-    DotNetIlValueType.Int64 -> "${CORE_LIB_REF}System.Int64"
-    DotNetIlValueType.Float64 -> "${CORE_LIB_REF}System.Double"
-    DotNetIlValueType.Char -> "${CORE_LIB_REF}System.Char"
+internal fun DotNetIlValueType.dotNetBoxedCorelibRefOrNull(coreLibraryReference: String): String? = when (this) {
+    DotNetIlValueType.Boolean -> "${coreLibraryReference}System.Boolean"
+    DotNetIlValueType.Int32 -> "${coreLibraryReference}System.Int32"
+    DotNetIlValueType.Int64 -> "${coreLibraryReference}System.Int64"
+    DotNetIlValueType.Float64 -> "${coreLibraryReference}System.Double"
+    DotNetIlValueType.Char -> "${coreLibraryReference}System.Char"
     else -> null
 }
 

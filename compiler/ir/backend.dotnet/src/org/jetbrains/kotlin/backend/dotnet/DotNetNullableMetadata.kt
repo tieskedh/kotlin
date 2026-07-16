@@ -23,11 +23,11 @@ internal object DotNetNullableMetadata {
     const val ATTRIBUTE_FQ_NAME: String = "System.Runtime.CompilerServices.NullableAttribute"
 
     /** The compiler-reserved attribute shape synthesized into a module that contains exports. */
-    val attributeClassIl: String = """
+    fun attributeClassIl(coreLibraryReference: String): String = """
         |.namespace System.Runtime.CompilerServices
         |{
         |  .class private auto ansi sealed beforefieldinit NullableAttribute
-        |         extends [mscorlib]System.Attribute
+        |         extends ${coreLibraryReference}System.Attribute
         |  {
         |    .field public initonly uint8[] NullableFlags
         |
@@ -35,10 +35,10 @@ internal object DotNetNullableMetadata {
         |    {
         |      .maxstack 4
         |      ldarg.0
-        |      call instance void [mscorlib]System.Attribute::.ctor()
+        |      call instance void ${coreLibraryReference}System.Attribute::.ctor()
         |      ldarg.0
         |      ldc.i4.1
-        |      newarr [mscorlib]System.Byte
+        |      newarr ${coreLibraryReference}System.Byte
         |      dup
         |      ldc.i4.0
         |      ldarg.1
@@ -51,7 +51,7 @@ internal object DotNetNullableMetadata {
         |    {
         |      .maxstack 2
         |      ldarg.0
-        |      call instance void [mscorlib]System.Attribute::.ctor()
+        |      call instance void ${coreLibraryReference}System.Attribute::.ctor()
         |      ldarg.0
         |      ldarg.1
         |      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
