@@ -327,6 +327,75 @@
     .get instance string 'DeferredStringValueIterator'::'get_value'()
   }
 }
+.class interface public abstract auto ansi 'IteratorView`1'<+ 'T'>
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .method public hidebysig newslot abstract virtual instance string 'label'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ViewedStringIterator'
+       extends [mscorlib]System.Object
+       implements class 'IteratorView`1'<string>
+{
+  .field private string 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'ViewedStringIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'ViewedStringIterator'::'value'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'next'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'ViewedStringIterator'::'get_value'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'label'() cil managed
+  {
+    .maxstack 1
+    ldstr "view"
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'ViewedStringIterator'::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewedStringIterator'::'next'()
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'ViewedStringIterator'::'get_value'()
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'arrayIteratorsKt'
        extends [mscorlib]System.Object
 {
@@ -453,6 +522,21 @@ IL_tryEnd_0:
     unbox.any !!0
     ret
   }
+  .method public hidebysig static bool 'hasNextThroughView'(class 'IteratorView`1'<string> 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    ret
+  }
+  .method public hidebysig static string 'nextThroughView'(class 'IteratorView`1'<string> 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    castclass [mscorlib]System.String
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
@@ -461,7 +545,8 @@ IL_tryEnd_0:
       [0] int32[] '<arrayOf>',
       [1] int32 '<arrayElement>',
       [2] string[] '<arrayOf>@2',
-      [3] string '<arrayElement>@3'
+      [3] string '<arrayElement>@3',
+      [4] class 'ViewedStringIterator' 'viewed'
     )
     ldc.i4 1
     newarr int32
@@ -511,6 +596,21 @@ IL_tryEnd_0:
     stelem string
     ldloc.2
     call !!0 'arrayIteratorsKt'::'firstFromOpenArray'<string>(!!0[])
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "subinterface"
+    newobj instance void 'ViewedStringIterator'::.ctor(string)
+    stloc 4
+    ldloc 4
+    call bool 'arrayIteratorsKt'::'hasNextThroughView'(class 'IteratorView`1'<string>)
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 4
+    call string 'arrayIteratorsKt'::'nextThroughView'(class 'IteratorView`1'<string>)
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

@@ -1396,7 +1396,8 @@ class DotNetIlEmitter(
      * Everything else stays rejected,
      * whole-interface: `fun interface` (no SAM-conversion model), local interfaces or interfaces
      * that do not have a supported named metadata parent,
-     * out-of-module super-interfaces, members WITH bodies — default methods and accessors with
+     * out-of-module super-interfaces other than the erased Kotlin.Runtime Iterator identity,
+     * members WITH bodies — default methods and accessors with
      * bodies — (modern CoreCLR supports Default Interface Methods, but Framework 4.8 ILAsm
      * rejects their bodies, `dimprobe_s1`), private interface members, overrides of
      * `kotlin.Any` members (the same
@@ -1445,6 +1446,7 @@ class DotNetIlEmitter(
             if (superType.isAny()) continue
             val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                 ?: dotNetUnsupported("interface '$name' has an unsupported supertype")
+            if (superInterface.isDotNetIteratorBase) continue
             if (!superInterface.isInterface || superInterface !in moduleInterfaces) {
                 dotNetUnsupported(
                     "interface '$name' extends '${superInterface.diagnosticName()}', which is not an interface " +
@@ -1500,6 +1502,12 @@ class DotNetIlEmitter(
      */
     private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
         if (member.isFakeOverride) return
+        if (member.allOverridden().any { (it.parent as? IrClass)?.isDotNetIteratorBase == true }) {
+            dotNetUnsupported(
+                "$description of iterator subinterface '$interfaceName' redeclares the erased Iterator runtime slot; " +
+                    "typed iterator-interface redeclarations are not supported"
+            )
+        }
         // Abstract generic interface slots are ordinary CLR generic virtual methods. The same
         // gate as class/top-level methods owns reified, inline, and unsupported constraint shapes
         // (probe-verified together with a generic-class implementation, genmemberprobe_s1).

@@ -54,6 +54,24 @@ private class DeferredStringIterator(private val value: String) : DeferredIterat
     }
 }
 
+private interface IteratorView<out T> : Iterator<T> {
+    fun label(): String
+}
+
+private class ViewedStringIterator(private val value: String) : IteratorView<String> {
+    private var available = true
+
+    override fun hasNext(): Boolean = available
+
+    override fun next(): String {
+        if (!available) throw NoSuchElementException()
+        available = false
+        return value
+    }
+
+    override fun label(): String = "view"
+}
+
 private fun <T> first(iterator: Iterator<T>): T = iterator.next()
 
 private fun <T> openIterator(values: Array<T>): Iterator<T> = values.iterator()
@@ -186,5 +204,13 @@ fun box(): String {
     if (openIterator.next() != "changed" || first(openIterator) != "generic" || openIterator.hasNext()) {
         return "fail 24: open Array<T> iterator"
     }
+
+    val viewed = ViewedStringIterator("subinterface")
+    val asView: IteratorView<String> = viewed
+    val asAnyIterator: Iterator<Any> = asView
+    if (asView.label() != "view" || !asView.hasNext() || asAnyIterator !== viewed || asView.next() != "subinterface") {
+        return "fail 25: iterator subinterface"
+    }
+    if (asView.hasNext() || asAnyIterator.hasNext()) return "fail 26: iterator subinterface shared state"
     return "OK"
 }

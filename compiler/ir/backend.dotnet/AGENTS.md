@@ -342,19 +342,28 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   this POC has no real .NET stdlib build; once one exists, its ordinary Kotlin implementation
   belongs there and the runtime retains the erased interface identity. Primitive specialization
   is a later stdlib/performance choice. Direct array `for` loops keep the existing allocation-free
-  indexed lowering. A user class which directly implements `Iterator<T>` keeps typed `hasNext()` and
-  `next(): T`; a JVM-shaped lowering adds private explicit `HasNext()` and erased `object Next()`
+  indexed lowering. A user class whose contract reaches `Iterator<T>` directly or through a
+  supported subinterface keeps typed `hasNext()` and `next(): T`; a JVM-shaped lowering adds
+  private explicit `HasNext()` and erased `object Next()`
   MethodImpl bridges on the same object. The erased bridge boxes primitive or open-generic
   results exactly once, reference results pass unchanged, and a derived class inherits the bridge
   from a base which owns typed members. An abstract obligation-only base emits no false recursive
-  bridge; the first concrete descendant owns it instead. No adapter or public execution capability
-  is introduced.
+  bridge; the first concrete descendant owns it instead. A bodyless module-local iterator
+  subinterface inherits the same runtime identity and may add unrelated abstract members. Calls
+  through its inherited fake overrides target erased `Iterator` slots, and its implementers use
+  the same class bridges. A subinterface redeclaration of `next` or `hasNext` stays rejected because
+  it would publish a second typed CLR slot beside the canonical erased contract. No default
+  interface methods, adapter, or public execution capability are introduced. The subinterface's
+  own generic identity follows the existing CLR generic-interface rule: variance widening is
+  reference-only, while a value-shaped subinterface view can still widen safely to erased
+  `Iterator<Any>` without an adapter.
   Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector directly to the same
   System.Array-backed producer; erased Next narrows through `unbox.any !n`/`!!n`. The array mapper
   still rejects `Array<T?>`, projections, concrete primitive-element generic arrays, and nested
-  arrays before the intrinsic runs. STAYS REJECTED, loudly: user-defined Iterator subinterfaces
-  and primitive-specialized iterator subclasses, Iterable/collection/sequence iteration, mutable
-  iterators, CLR IEnumerator adapters, and typed fast-path entries. Pins:
+  arrays before the intrinsic runs. STAYS REJECTED, loudly: iterator subinterfaces which redeclare
+  the execution members or contain bodies, primitive-specialized iterator subclasses,
+  Iterable/collection/sequence iteration, mutable iterators, CLR IEnumerator adapters, and typed
+  fast-path entries. Pins:
   `ilText/arrayIterators.kt`, `box/arrayIterators.kt`, and the iterator negatives in
   `ilText/genericArraysRejected.kt`.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
