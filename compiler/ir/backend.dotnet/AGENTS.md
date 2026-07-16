@@ -315,7 +315,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   exact vectors. A concrete `Array<String?>`-like result shares its exact reference vector with
   `Array<String>`; only open `Array<T?>` remains unrepresentable because `T` may be a value type.
   STAYS REJECTED, loudly: copying an open `Array<T>`, `copyOfRange`, mapper-rejected array families,
-  and content operations other than `contentEquals`. Pins: `ilText/arrayCopying.kt`,
+  and content operations other than `contentEquals`/`contentDeepEquals`. Pins: `ilText/arrayCopying.kt`,
   `box/arrayCopying.kt`, and the negative additions in `ilText/genericArraysRejected.kt`. The exact
   golden assembles under modern 10.0.9 and Framework 4.8 ILAsm; both parser boxes execute with
   modern and Framework-selected ILAsm.
@@ -329,15 +329,31 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   collection helpers: `Double` content equality canonicalizes NaNs and distinguishes signed zero,
   matching the common stdlib contract. Reference elements retain null-safe virtual Kotlin
   equality. Nested array elements remain identity-compared because this operation is shallow;
-  recursive traversal belongs only to future `contentDeepEquals`.
+  recursive traversal belongs only to `contentDeepEquals`.
   The five supported primitive vectors, concrete/projected reference vectors, and open invariant
   `Array<T>` consumers all call the same helper without changing their exact CLR storage types.
   Receiver and argument are evaluated once in source order. The helper is internal by namespace,
   public only for cross-assembly access, and creates no new Kotlin array ABI shape.
   `arraycontent_s1` assembled and ran null, primitive, NaN, signed-zero, and nested-identity cases
   on modern CoreCLR and Framework. Pins: `ilText/arrayContentEquals.kt` and
-  `box/arrayContentEquals.kt`. STAYS REJECTED, loudly: `contentDeepEquals`, `contentHashCode`,
-  `contentToString`, unsigned arrays, and mapper-rejected array families.
+  `box/arrayContentEquals.kt`.
+- Recursive array content equality (probe series `arraydeep_s1`; common/JVM `contentDeepEquals`
+  contract) is a separate registry-owned operation exposed only for nullable generic `Array`
+  receivers. It keeps the outer array ABI exact, evaluates both expressions once in source order,
+  and delegates traversal to one runtime-owned `ArrayContentDeepEquals(System.Array,
+  System.Array)` helper. Nested reference vectors recurse; matching supported primitive-vector
+  pairs use the shallow helper; other elements use `Intrinsics.AreEqual`. Mixed primitive kinds
+  fail rather than acquiring CLR numeric coercion. This preserves common-stdlib null, nested-array,
+  reference-equality, NaN, and signed-zero semantics for concrete/projected arrays and open
+  invariant `Array<T>` consumers. Same-reference arrays return before traversal. The common stdlib
+  explicitly leaves behavior undefined for self-containing arrays, so the runtime adds neither a
+  cycle detector nor a stronger cross-target contract. The helper remains public only for
+  cross-assembly access in the reserved internal namespace and creates no new array ABI shape.
+  `arraydeep_s1` assembled and ran nested reference/primitive, mixed-kind, NaN, signed-zero, and
+  null cases on modern CoreCLR and Framework; the exact golden assembles with both ILAsm versions.
+  Pins: `ilText/arrayContentDeepEquals.kt` and `box/arrayContentDeepEquals.kt`. STAYS REJECTED,
+  loudly: `contentHashCode`, `contentDeepHashCode`, `contentToString`, `contentDeepToString`,
+  unsigned arrays, and mapper-rejected array families.
 - Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
   delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
   stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the
