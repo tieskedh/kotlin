@@ -90,7 +90,47 @@ generated common sources, each bootstrap extraction must identify its generator/
 and preserve its semantics. The eventual .NET stdlib build should compile the common generated
 corpus plus narrowly generated .NET actuals rather than maintain a permanent handwritten fork.
 
+## Major-target production precedent
+
+JS and Wasm select either KLIB serialization or executable linking in `WebCliPipeline`; an
+ordinary executable build does not also republish its libraries. Native routes
+`CompilerOutputKind.LIBRARY` through `NativeKlibCliPipeline`, separate from its executable driver.
+JVM does emit Kotlin metadata during ordinary code generation, but that metadata is embedded in
+the same class-file product as the executable declarations. It does not rebuild `kotlin-stdlib`
+while compiling a user program.
+
+The current .NET representation is a split KLIB + DLL product, so the JVM exception does not
+apply. The producer must be an explicit library product, following the JS/Wasm and Native
+lifecycle. Emitting or refreshing `Kotlin.Stdlib.klib` as a side effect of every executable
+compilation is rejected.
+
 ## Bootstrap production model
+
+The POC adds an explicit compiler product route:
+
+```text
+-Xdotnet-produce-stdlib -d <directory> [-Xdotnet-target=netframework|net]
+```
+
+This provisional build control accepts no user source files, owns the `Kotlin.Stdlib` module name,
+and cannot be combined with `-no-stdlib` or CLR export selectors. It is not a source annotation or
+a proposed end-user stdlib API. From one resolved frontend session it serializes all compiler-owned
+bootstrap declarations, lowers their executable implementations, assembles the target-specific
+DLL, and publishes the packed metadata KLIB only after the DLL succeeds:
+
+```text
+compiler-owned stdlib source
+            |
+      frontend resolution
+       /              \
+Kotlin metadata       FIR -> IR -> stdlib-owned IL
+       \              /
+        Kotlin.Stdlib.klib + Kotlin.Stdlib.dll
+```
+
+The two files therefore cannot silently describe different source compilations. A stale KLIB and
+DLL are removed before a replacement build; metadata is written through a temporary packed KLIB
+after the implementation assembly exists.
 
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
@@ -111,11 +151,10 @@ Every assembled executable is supplied `Kotlin.Runtime.dll` and `Kotlin.Stdlib.d
 is retained beside the executable for deterministic inspection, like the program IL. Raw IL-only
 compilation does not yet constitute a distributable multi-assembly library build.
 
-This split emitter is temporary bootstrap production, not a substitute for a library build. The
-consumer half no longer depends on it: with `-no-stdlib` and the bound KLIB on its classpath, a user
-module resolves and calls the prebuilt DLL without injected implementations. The KLIB and DLL do
-not yet have one standalone producer, so same-run production must remain until an explicit stdlib
-build serializes metadata and emits the CLR assembly from the same source compilation.
+This split emitter is temporary bootstrap compatibility, not the library build. The consumer half
+no longer depends on it: with `-no-stdlib` and the produced bound KLIB on its classpath, a user
+module resolves and calls the prebuilt DLL without injected implementations. Same-run production
+remains only until the explicit producer is deterministic on both runtime targets.
 
 ## Rejected alternatives
 
@@ -148,9 +187,10 @@ Costs and limits:
 
 - the stdlib is redundantly rebuilt beside each executable for now;
 - the emitter temporarily recognizes injected stdlib ownership;
+- the explicit producer flag is POC build control rather than a final distribution interface;
 - the metadata-public implementation and facade names are compiler/stdlib contracts;
 - the current physical-member mapping covers only compiler-owned stdlib shapes; and
-- pair production is still split between bootstrap routes rather than one standalone build.
+- the standalone producer is still limited to the compiler-owned bootstrap stdlib.
 
 ## Validation
 
@@ -166,12 +206,14 @@ Iterables. `last()` additionally exercises a mutable generic local, a loop, and 
 Iterator calls inside the stdlib assembly. A focused CLI integration pin compiles a consumer with
 `-no-stdlib`, resolves `first()` from a metadata KLIB, and verifies the generic external DLL call
 without a generated consumer-side CollectionsKt. A manual Framework executable exercised the same
-path against a real generated DLL and user-defined Iterable.
+path against a real generated DLL and user-defined Iterable. Two focused integration pins run the
+explicit producer for CoreCLR and Framework, check each packed KLIB manifest and real target DLL,
+then consume both `first()` and `last()` from each exact produced pair in a separate compilation.
 
 ## Deferred work
 
-This draft does not decide the final .NET KLIB platform marker, standalone pair-production tooling,
-general physical-member metadata for arbitrary Kotlin libraries, package-version distribution,
+This draft does not decide the final .NET KLIB platform marker, general Kotlin/.NET library
+production beyond the compiler-owned stdlib, package-version distribution,
 signing for a future ABI major, CLR/BCL collection adapters, primitive-specialized iterators, or the
 broader collection API. Those features must preserve the runtime/stdlib ownership split rather
 than moving ordinary implementations back into the runtime.

@@ -3,11 +3,13 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -44,6 +46,33 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         configuration: CompilerConfiguration,
     ) {
         val arguments = input.arguments
+        configuration.dotNetProducesStdlib = arguments.dotNetProduceStdlib
+        if (arguments.dotNetProduceStdlib) {
+            if (arguments.freeArgs.isNotEmpty()) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "-Xdotnet-produce-stdlib compiles the compiler-owned bootstrap sources and accepts no user source files."
+                )
+            }
+            if (arguments.noStdlib) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "-Xdotnet-produce-stdlib cannot be combined with -no-stdlib."
+                )
+            }
+            if (!arguments.dotNetExports.isNullOrEmpty() || !arguments.dotNetPropertyExports.isNullOrEmpty()) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "-Xdotnet-produce-stdlib cannot be combined with CLR export options."
+                )
+            }
+            if (arguments.moduleName != null && arguments.moduleName != DotNetStdlibArtifact.ASSEMBLY_NAME) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "-Xdotnet-produce-stdlib owns module name '${DotNetStdlibArtifact.ASSEMBLY_NAME}'."
+                )
+            }
+        }
         val commonSources = arguments.commonSources.toSet()
         val hmppCliModuleStructure = configuration.get(CommonConfigurationKeys.HMPP_MODULE_STRUCTURE)
         for (arg in arguments.freeArgs) {
@@ -121,12 +150,23 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         if (destination == null) {
             configuration.report(COMPILER_ARGUMENTS_ERROR, "Specify destination via -d")
         } else {
-            configuration.dotNetOutput = File(destination)
+            val output = File(destination)
+            if (arguments.dotNetProduceStdlib && output.exists() && !output.isDirectory) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "-Xdotnet-produce-stdlib requires -d to name an output directory."
+                )
+            }
+            configuration.dotNetOutput = output
         }
 
-        val assemblyName = arguments.moduleName
-            ?: destination?.let { File(it).nameWithoutExtension.takeIf(String::isNotBlank) }
-            ?: "main"
+        val assemblyName = if (arguments.dotNetProduceStdlib) {
+            DotNetStdlibArtifact.ASSEMBLY_NAME
+        } else {
+            arguments.moduleName
+                ?: destination?.let { File(it).nameWithoutExtension.takeIf(String::isNotBlank) }
+                ?: "main"
+        }
         configuration.moduleName = assemblyName
         configuration.dotNetAssemblyName = assemblyName
 
@@ -141,7 +181,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
 
         configuration.perfManager?.apply {
-            outputKind = "IL"
+            outputKind = if (arguments.dotNetProduceStdlib) "KLIB + .NET library" else "IL"
             targetDescription = assemblyName
         }
     }

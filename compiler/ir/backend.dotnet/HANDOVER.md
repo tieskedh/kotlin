@@ -8,7 +8,8 @@ structural callable/property-reference Any semantics, and the coherent Function3
 continuation implemented; local delegated-property tokens, explicit user Iterator bridges, open
 invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Iterable
 identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
-committed; the array-backed stdlib Iterable view is implemented in the current feature slice).
+committed; bound stdlib metadata consumption is committed and the explicit paired stdlib producer
+is implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -43,7 +44,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ArrayIterator implementation (`186af0b4d`), followed by the stdlib ArrayIterable/asIterable
   continuation (`ba7260521`) and the first top-level generated-common stdlib operations,
   `Iterable<T>.first()` and `last()` (`311b79bd7`), followed by separate-consumer stdlib metadata
-  KLIB/CLR DLL binding in the current feature slice.
+  KLIB/CLR DLL binding (`df4ab474b`), with one-compilation KLIB/DLL production in the current
+  feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -71,6 +73,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   erased runtime identity, and emits the generic call to the sibling bound DLL without regenerating
   CollectionsKt. A separate manual Framework executable also ran successfully against the real
   previously produced DLL. No fresh full suite was run.
+  The explicit-producer continuation first audited JS/Wasm, Native, and JVM production lifecycles.
+  It rejected an exploratory executable-side-effect writer and instead adds a POC-only explicit
+  stdlib product route. Its focused integration pins produced packed target-bound KLIBs and real
+  CoreCLR and Framework DLLs from one frontend/IR run per target, then compiled separate
+  `-no-stdlib` consumers of both `first()` and `last()`. Together with the existing external-pair
+  consumer pin: 3 tests, 0 failures, 0 errors, 0 skips. The cli-dotnet Kotlin compilation also
+  passes. No full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1091,12 +1100,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the standalone stdlib producer.** Source-level cross-module consumption is now proven:
-   a user module resolves against a metadata KLIB and invokes the bound CLR DLL. The remaining
-   foundational step is to serialize `Kotlin.Stdlib.klib` and emit `Kotlin.Stdlib.dll` from the same
-   explicit compiler build input instead of obtaining them through separate bootstrap routes. Do
-   not remove same-run production until that paired producer is deterministic on both runtime
-   targets.
+1. **Finish the stdlib producer migration gate.** The explicit POC route now emits and consumes the
+   bound KLIB/DLL pair for both CoreCLR and Framework. Establish reproducible output expectations
+   and a deliberate artifact-location migration before removing same-run stdlib rebuilding from
+   ordinary executables. Do not broaden this into general Kotlin/.NET library publication yet.
 2. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part

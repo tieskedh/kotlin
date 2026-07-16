@@ -7,6 +7,8 @@ import java.io.File
 object DotNetConfigurationKeys {
     val OUTPUT: CompilerConfigurationKey<File> = CompilerConfigurationKey.create("output .NET IL file")
     val ASSEMBLY_NAME: CompilerConfigurationKey<String> = CompilerConfigurationKey.create("output .NET assembly name")
+    val PRODUCE_STDLIB: CompilerConfigurationKey<Boolean> =
+        CompilerConfigurationKey.create("produce the bootstrap Kotlin/.NET stdlib pair")
     val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET runtime flavor")
     val EXPORTS: CompilerConfigurationKey<List<DotNetExport>> =
         CompilerConfigurationKey.create("explicit .NET exports")
@@ -20,6 +22,7 @@ object DotNetConfigurationKeys {
 object DotNetStdlibArtifact {
     const val ASSEMBLY_NAME = "Kotlin.Stdlib"
     const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
+    const val METADATA_FILE_NAME = "$ASSEMBLY_NAME.klib"
     const val ASSEMBLY_VERSION = "1.0.0.0"
     const val ASSEMBLY_CULTURE = "neutral"
     const val ASSEMBLY_PUBLIC_KEY_TOKEN = "null"
@@ -177,6 +180,12 @@ var CompilerConfiguration.dotNetAssemblyName: String?
         if (value != null) {
             put(DotNetConfigurationKeys.ASSEMBLY_NAME, value)
         }
+    }
+
+var CompilerConfiguration.dotNetProducesStdlib: Boolean
+    get() = getBoolean(DotNetConfigurationKeys.PRODUCE_STDLIB)
+    set(value) {
+        put(DotNetConfigurationKeys.PRODUCE_STDLIB, value)
     }
 
 var CompilerConfiguration.dotNetTarget: DotNetTarget

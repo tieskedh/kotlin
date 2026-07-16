@@ -99,10 +99,15 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Stdlib.klib` and call implementations in its bound sibling `Kotlin.Stdlib.dll`, with no
   injected implementation source. The KLIB manifest binds the complete unsigned assembly
   identity, file, and requested runtime target; an arbitrary metadata KLIB never becomes a CLR
-  reference. This proves the consumer half only: the KLIB and DLL do not yet have one standalone producer. Every
-  assembled executable receives both platform dlls; raw IL-only compilation is not yet a
-  distributable multi-assembly build. Same-run production remains bootstrap machinery and must
-  disappear without moving ordinary implementations back into `Kotlin.Runtime`.
+  reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
+  explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
+  inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
+  bound target-specific KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
+  class-file metadata is not the applicable lifecycle model because .NET currently has two
+  physical companion artifacts. Every assembled executable still receives both platform dlls;
+  same-run stdlib production remains bootstrap compatibility machinery until the standalone pair
+  is deterministic on both runtime targets, then it must disappear without moving ordinary
+  implementations back into `Kotlin.Runtime`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
   their List fast paths are omitted because List has no target ABI yet. Do not add a generator

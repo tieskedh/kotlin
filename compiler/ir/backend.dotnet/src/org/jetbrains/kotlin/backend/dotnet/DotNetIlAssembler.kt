@@ -135,7 +135,8 @@ object DotNetIlAssembler {
             ?.take(2)
     }
 
-    private fun findFrameworkIlasm(): File? {
+    /** Framework ILAsm discovery, exposed so target-specific integration gates can skip coherently. */
+    fun findFrameworkIlasm(): File? {
         System.getenv("ILASM")?.let { path ->
             File(path).takeIf(File::isFile)?.let { return it }
         }

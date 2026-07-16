@@ -17,6 +17,6 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
             input.result.symbolTable,
             input.configuration,
         )
-        return DotNetBackendPipelineArtifact(output, input.configuration)
+        return DotNetBackendPipelineArtifact(output, input.configuration, input.stdlibMetadata)
     }
 }
