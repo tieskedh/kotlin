@@ -167,7 +167,10 @@ internal class DotNetLocalDeclarationsLowering private constructor(
 
             override fun visitSimpleFunction(declaration: IrSimpleFunction) {
                 if (declaration.visibility == DescriptorVisibilities.LOCAL) {
-                    if (declaration.origin == IrDeclarationOrigin.LOCAL_FUNCTION) {
+                    if (
+                        declaration.origin == IrDeclarationOrigin.LOCAL_FUNCTION ||
+                        declaration.origin == IrDeclarationOrigin.DELEGATED_PROPERTY_ACCESSOR
+                    ) {
                         hasSupportedLocalDeclaration = true
                     } else {
                         hasCallableObjectShape = true
