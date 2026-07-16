@@ -355,9 +355,14 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'<'T'>",
             "newobj instance void class 'Kotlin.Collections.ArrayIterator`1'<!0>::.ctor(!0[])",
             "'<IterableIteratorBridge>'",
+            ".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'",
+            ".method public hidebysig static !!0 'first'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
         )
         requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
             assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }
+        }
+        if (".assembly extern Kotlin.Stdlib" in stdlibIlText) {
+            assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }
         }
         val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")
         val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()

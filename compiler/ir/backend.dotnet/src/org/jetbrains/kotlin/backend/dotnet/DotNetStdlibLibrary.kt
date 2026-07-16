@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import java.io.File
 
@@ -21,16 +22,29 @@ internal object DotNetStdlibLibrary {
     const val ASSEMBLY_VERSION_IL = "1:0:0:0"
     const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator`1"
     const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable`1"
+    const val COLLECTIONS_FACADE_IL_NAME = "Kotlin.Collections.CollectionsKt"
 
     private val implementationClassIlNames = mapOf(
         "kotlin.collections.ArrayIterator" to ARRAY_ITERATOR_IL_NAME,
         "kotlin.collections.ArrayIterable" to ARRAY_ITERABLE_IL_NAME,
     )
+    private val implementationFunctionFacadeIlNames = mapOf(
+        "kotlin.collections.first" to COLLECTIONS_FACADE_IL_NAME,
+    )
 
     fun hasImplementation(module: IrModuleFragment): Boolean =
         module.files.any { file ->
-            file.declarations.filterIsInstance<IrClass>().any { it.isDotNetStdlibImplementation }
+            file.declarations.any { declaration ->
+                when (declaration) {
+                    is IrClass -> declaration.isDotNetStdlibImplementation
+                    is IrSimpleFunction -> declaration.isDotNetStdlibImplementation
+                    else -> false
+                }
+            }
         }
+
+    fun implementationFileFacadeIlName(file: IrFile): String? =
+        COLLECTIONS_FACADE_IL_NAME.takeIf { file.isDotNetStdlibImplementationSource }
 
     /** Writes deterministic IL beside the program and assembles the target-specific stdlib PE. */
     fun assembleNextTo(
@@ -61,20 +75,49 @@ internal object DotNetStdlibLibrary {
                 "<${elementType.nameInSignature}>::.ctor(!0[])"
 
     fun implementationClassIlName(irClass: IrClass): String? {
-        val sourceFileName = (irClass.parent as? IrFile)?.fileEntry?.name
-            ?.replace('\\', '/')
-            ?.substringAfterLast('/')
-        if (sourceFileName != IMPLEMENTATION_SOURCE_FILE_NAME) return null
+        if ((irClass.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
         return irClass.fqNameWhenAvailable?.asString()?.let(implementationClassIlNames::get)
     }
 
+    fun implementationFunctionFacadeIlName(function: IrSimpleFunction): String? {
+        if ((function.parent as? IrFile)?.isDotNetStdlibImplementationSource != true) return null
+        return function.fqNameWhenAvailable?.asString()?.let(implementationFunctionFacadeIlNames::get)
+    }
+
+    /** Calls the open generic stdlib method while instantiating its sole method parameter. */
+    fun iterableFirstCallInstruction(elementType: DotNetIlValueType): String =
+        FIRST_FUNCTION_INFO.renderCallInstruction(
+            methodName = "first",
+            ownerToken = "[$ASSEMBLY_NAME]${FIRST_FUNCTION_INFO.owner.ilTypeRef}",
+            methodInstantiation = listOf(elementType),
+        )
+
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
-    private const val IMPLEMENTATION_SOURCE_FILE_NAME = "DotNetStdlibCollections.kt"
+    private val FIRST_FUNCTION_INFO = DotNetIlFunctionInfo(
+        owner = DotNetIlClassInfo(COLLECTIONS_FACADE_IL_NAME),
+        signature = DotNetIlMethodSignature(
+            returnType = DotNetIlReturnType.Value(
+                DotNetIlValueType.TypeParameter(index = 0, isMethodParameter = true),
+            ),
+            parameterTypes = listOf(DotNetRuntimeTypes.iterableType),
+        ),
+    )
+
+    internal const val IMPLEMENTATION_SOURCE_FILE_NAME = "DotNetStdlibCollections.kt"
 }
+
+/** The temporary same-module source file whose implementations are partitioned into the stdlib. */
+internal val IrFile.isDotNetStdlibImplementationSource: Boolean
+    get() = fileEntry.name.replace('\\', '/').substringAfterLast('/') ==
+            DotNetStdlibLibrary.IMPLEMENTATION_SOURCE_FILE_NAME
 
 /** Marker for implementation source injected by [DOTNET_STDLIB_SOURCES], never a user class. */
 internal val IrClass.isDotNetStdlibImplementation: Boolean
     get() = DotNetStdlibLibrary.implementationClassIlName(this) != null
+
+/** Marker for executable top-level stdlib source, distinct from resolution-only external stubs. */
+internal val IrSimpleFunction.isDotNetStdlibImplementation: Boolean
+    get() = DotNetStdlibLibrary.implementationFunctionFacadeIlName(this) != null
 
 /** Controls whether an emitter owns user declarations or physical target-stdlib implementations. */
 enum class DotNetIlEmissionScope {
@@ -84,5 +127,10 @@ enum class DotNetIlEmissionScope {
     internal fun owns(irClass: IrClass): Boolean = when (this) {
         USER -> !irClass.isDotNetStdlibImplementation
         STDLIB -> irClass.isDotNetStdlibImplementation
+    }
+
+    internal fun owns(function: IrSimpleFunction): Boolean = when (this) {
+        USER -> !function.isDotNetStdlibImplementation
+        STDLIB -> function.isDotNetStdlibImplementation
     }
 }
