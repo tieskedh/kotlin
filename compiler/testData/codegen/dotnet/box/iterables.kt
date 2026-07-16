@@ -59,6 +59,8 @@ private fun sum(values: Iterable<Int>): Int {
     return result
 }
 
+private fun <T> openArrayView(values: Array<T>): Iterable<T> = values.asIterable()
+
 fun box(): String {
     val counting = CountingIterable(4)
     val widened: Iterable<Any> = counting
@@ -83,5 +85,29 @@ fun box(): String {
     val erasedIntView: Iterable<Any> = intView
     if (erasedIntView !== intView) return "fail 10: primitive subinterface identity"
     if (erasedIntView.iterator().next() != 0) return "fail 11: primitive subinterface result"
+
+    val words = arrayOf("before", "second")
+    val wordView: Iterable<String> = words.asIterable()
+    val widenedWordView: Iterable<Any> = wordView
+    if (widenedWordView !== wordView) return "fail 12: array view covariance identity"
+    words[0] = "after"
+    val firstWords = wordView.iterator()
+    val secondWords = wordView.iterator()
+    if (firstWords.next() != "after" || firstWords.next() != "second") {
+        return "fail 13: reference array view"
+    }
+    if (secondWords.next() != "after") return "fail 14: independent array view iterators"
+
+    val numbers = intArrayOf(2, 3, 4)
+    val numberView = numbers.asIterable()
+    numbers[0] = 1
+    if (sum(numberView) != 8) return "fail 15: primitive array view"
+    if (openArrayView(arrayOf("open")).iterator().next() != "open") {
+        return "fail 16: open array view"
+    }
+    if (emptyArray<String>().asIterable().iterator().hasNext()) return "fail 17: empty array view"
+    if (arrayOf<String?>(null).asIterable().iterator().next() != null) {
+        return "fail 18: nullable-element array view"
+    }
     return "OK"
 }

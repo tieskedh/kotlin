@@ -87,6 +87,12 @@ inherited fake override use `GetIterator()` and receive the same erased iterator
 `for` loop over a user-defined `Iterable<T>` therefore follows the ordinary Kotlin lowering:
 `GetIterator()`, erased `HasNext()`, and erased `Next()` with result narrowing at the use site.
 
+The first stdlib producer view is `Kotlin.Collections.ArrayIterable<T>`. Array `asIterable()`
+constructs its closed generic form for supported primitive, reference, and open generic vectors.
+It stores the original vector, observes later mutations, and its ordinary Kotlin `iterator()` body
+constructs a fresh `ArrayIterator<T>`. Widening the view through Iterable covariance preserves the
+same producer object; each requested iterator has independent cursor state.
+
 The first producer is now an ordinary generic Kotlin implementation emitted into
 `Kotlin.Stdlib.dll` as `Kotlin.Collections.ArrayIterator<T>`. It stores an exact `T[]` vector plus
 an index. Primitive elements stay typed inside the implementation and box only in its generated
@@ -192,8 +198,8 @@ implementations:
 
 The array IL pin now carries an AssemblyRef to `Kotlin.Stdlib, Version=1.0.0.0` and constructs
 closed generic stdlib iterators. The box harness requires `Kotlin.Stdlib.dll` and verifies its
-retained IL contains the generic implementation plus compiler-generated `HasNext`/`Next`
-MethodImpl bridges before executing the program on CoreCLR.
+retained IL contains the generic iterator/view implementations, their ordinary composition, and
+compiler-generated Iterator/Iterable MethodImpl bridges before executing the program on CoreCLR.
 
 ## Deferred decisions
 
