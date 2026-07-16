@@ -34,6 +34,11 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
             extraActualDeclarationExtractorsInitializer = { emptyList() },
         )
 
-        return DotNetFir2IrPipelineArtifact(fir2IrResult, input.frontendOutput, configuration)
+        return DotNetFir2IrPipelineArtifact(
+            fir2IrResult,
+            input.frontendOutput,
+            configuration,
+            input.stdlibMetadata,
+        )
     }
 }

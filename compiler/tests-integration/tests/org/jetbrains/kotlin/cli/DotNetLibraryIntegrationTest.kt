@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.cli
 
+import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
@@ -14,10 +15,74 @@ import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler
 import org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.util.Properties
+import java.util.zip.ZipFile
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
+    @Test
+    fun testProducesBoundCoreClrStdlibPairFromOneCompilation() {
+        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        produceAndConsumeBoundStdlibPair("net")
+    }
+
+    @Test
+    fun testProducesBoundFrameworkStdlibPairFromOneCompilation() {
+        assumeTrue(DotNetIlAssembler.findFrameworkIlasm() != null, "Framework ilasm is not available")
+        produceAndConsumeBoundStdlibPair("netframework")
+    }
+
+    private fun produceAndConsumeBoundStdlibPair(target: String) {
+        val pairDirectory = File(tmpdir, "produced-$target-stdlib-pair")
+        compileInProcess(
+            K2DotNetCompiler(),
+            K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::destination.cliArgument, pairDirectory.path,
+        )
+
+        val metadataLibrary = pairDirectory.resolve("Kotlin.Stdlib.klib")
+        val implementationLibrary = pairDirectory.resolve("Kotlin.Stdlib.dll")
+        assertTrue(metadataLibrary.isFile) { "Expected packed metadata KLIB at $metadataLibrary" }
+        assertTrue(implementationLibrary.isFile) { "Expected CLR implementation at $implementationLibrary" }
+        val manifest = ZipFile(metadataLibrary).use { archive ->
+            Properties().apply {
+                load(archive.getInputStream(archive.getEntry("default/manifest")))
+            }
+        }
+        assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
+        assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
+        assertTrue(manifest.getProperty("dotnet_target") == target)
+
+        val consumerSource = pairDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                public fun <T> firstAndLast(values: Iterable<T>): T {
+                    values.first()
+                    return values.last()
+                }
+                """.trimIndent()
+            )
+        }
+        val outputFile = pairDirectory.resolve("consumer.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Consumer",
+            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
+        )
+        val il = outputFile.readText()
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'" in il)
+        assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'" in il)
+    }
+
     @Test
     fun testConsumesExternalStdlibMetadataPair() {
         val pairDirectory = File(tmpdir, "dotnet-stdlib-pair").apply { mkdirs() }

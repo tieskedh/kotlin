@@ -25,6 +25,7 @@ dependencies {
     implementation(project(":compiler:fir:fir-serialization"))
     implementation(project(":compiler:fir:checkers"))
     implementation(project(":compiler:fir:checkers:checkers.jvm"))
+    implementation(project(":kotlin-util-klib-metadata"))
     implementation(project(":kotlin-build-common"))
     implementation(project(":kotlin-util-io"))
 
