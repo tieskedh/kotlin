@@ -82,6 +82,12 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   }
 
   @Test
+  @TestMetadata("functionExportPropertyCollision.args")
+  public void testFunctionExportPropertyCollision() {
+    run("functionExportPropertyCollision.args");
+  }
+
+  @Test
   @TestMetadata("helloWorld.args")
   public void testHelloWorld() {
     run("helloWorld.args");
@@ -127,5 +133,17 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   @TestMetadata("printlnNoArguments.args")
   public void testPrintlnNoArguments() {
     run("printlnNoArguments.args");
+  }
+
+  @Test
+  @TestMetadata("propertyExport.args")
+  public void testPropertyExport() {
+    run("propertyExport.args");
+  }
+
+  @Test
+  @TestMetadata("propertyExportExtension.args")
+  public void testPropertyExportExtension() {
+    run("propertyExportExtension.args");
   }
 }
