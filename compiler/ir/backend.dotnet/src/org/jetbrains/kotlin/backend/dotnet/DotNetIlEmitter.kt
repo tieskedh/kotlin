@@ -64,6 +64,7 @@ internal class DotNetIlEmitter(
     private val propertyExports: List<DotNetPropertyExport> = emptyList(),
     private val emissionScope: DotNetIlEmissionScope = DotNetIlEmissionScope.USER,
     private val coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
+    private val assemblyVersionIl: String? = null,
 ) {
     /**
      * Renders the module to IL text.
@@ -2705,10 +2706,14 @@ internal class DotNetIlEmitter(
             appendLine("  .ver ${DotNetStdlibLibrary.ASSEMBLY_VERSION_IL}")
             appendLine("}")
         }
-        if (emissionScope == DotNetIlEmissionScope.STDLIB) {
+        val emittedAssemblyVersion = when {
+            emissionScope == DotNetIlEmissionScope.STDLIB -> DotNetStdlibLibrary.ASSEMBLY_VERSION_IL
+            else -> assemblyVersionIl
+        }
+        if (emittedAssemblyVersion != null) {
             appendLine(".assembly ${assemblyName.toIlIdentifier()}")
             appendLine("{")
-            appendLine("  .ver ${DotNetStdlibLibrary.ASSEMBLY_VERSION_IL}")
+            appendLine("  .ver $emittedAssemblyVersion")
             coreLibrary.appendTargetFrameworkAttributeTo(this)
             appendLine("}")
         } else {

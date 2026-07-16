@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.KtPsiSourceFile
 import org.jetbrains.kotlin.KtSourceFile
 import org.jetbrains.kotlin.backend.common.loadMetadataKlibs
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
@@ -159,14 +160,14 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     val library = candidates.single()
     val properties = library.manifestProperties
     val expectedProperties = mapOf(
-        DotNetStdlibArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_NAME,
-        DotNetStdlibArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_VERSION,
-        DotNetStdlibArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_CULTURE,
-        DotNetStdlibArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to
+        DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_NAME,
+        DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_VERSION,
+        DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_CULTURE,
+        DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to
                 DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
-        DotNetStdlibArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_FILE_NAME,
-        DotNetStdlibArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to
-                DotNetStdlibArtifact.LIBRARY_TARGET_FRAMEWORK,
+        DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_FILE_NAME,
+        DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to
+                DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK,
     )
     val mismatch = expectedProperties.entries.firstOrNull { entry ->
         properties.getProperty(entry.key) != entry.value

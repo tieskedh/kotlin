@@ -118,9 +118,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Runtime` and `Kotlin.Stdlib` use an explicit netstandard2.0 core-library profile, exact
   AssemblyRef and TargetFrameworkAttribute metadata, and no `mscorlib` MemberRefs. The complete
   profile was audited against the 2.0 reference assembly: 27 BCL types and 55 members, zero
-  misses. Applications retain their executable profile. .NET Standard remains a valid future
-  target for general Kotlin library products, but never an executable runtime; do not conflate
-  either axis with the POC assembler choice. See
+  misses. Applications retain their executable profile. The POC
+  `-Xdotnet-produce-library -d <directory>` mode now emits an ordinary source module as a bound
+  `<module>.klib`/`<module>.dll` pair under the same netstandard2.0 profile, with no entry point or
+  runtimeconfig. Its fixed library TFM is independent of `-Xdotnet-target` and modern ILAsm remains
+  only the portable PE writer. Explicit CLR exports are callable across the resulting assembly
+  edge. Arbitrary Kotlin cross-module calls are not yet enabled: first put durable assembly,
+  facade, and member identity into the library metadata; never reconstruct an external facade from
+  a source filename. .NET Standard is a library target, never an executable runtime. See
   `docs/decisions/draft-adr-dotnet-library-target-profile.md`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
   and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only

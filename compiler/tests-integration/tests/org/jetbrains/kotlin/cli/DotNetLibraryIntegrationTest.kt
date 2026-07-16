@@ -6,11 +6,13 @@
 package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
+import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.K2MetadataCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.cliArgument
+import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler
 import org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
@@ -23,6 +25,98 @@ import java.util.Properties
 import java.util.zip.ZipFile
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
+    @Test
+    fun testProducesPortableUserLibraryPair() {
+        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "library.kt").apply {
+            writeText(
+                """
+                package sample
+
+                public fun increment(value: Int): Int = value + 1
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "sample-library")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Sample.Library",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument, "sample.increment=Increment",
+            K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+        )
+
+        val metadataLibrary = outputDirectory.resolve("Sample.Library.klib")
+        val implementationLibrary = outputDirectory.resolve("Sample.Library.dll")
+        assertTrue(metadataLibrary.isFile) { "Expected packed metadata KLIB at $metadataLibrary" }
+        assertTrue(implementationLibrary.isFile) { "Expected CLR implementation at $implementationLibrary" }
+        val manifest = ZipFile(metadataLibrary).use { archive ->
+            Properties().apply {
+                load(archive.getInputStream(archive.getEntry("default/manifest")))
+            }
+        }
+        assertTrue(manifest.getProperty("unique_name") == "Sample.Library")
+        assertTrue(manifest.getProperty("dotnet_assembly_name") == "Sample.Library")
+        assertTrue(manifest.getProperty("dotnet_assembly_version") == "1.0.0.0")
+        assertTrue(manifest.getProperty("dotnet_assembly_file") == "Sample.Library.dll")
+        assertTrue(manifest.getProperty("dotnet_library_tfm") == "netstandard2.0")
+
+        val il = outputDirectory.resolve("Sample.Library.il").readText()
+        assertTrue(".assembly extern netstandard" in il)
+        assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
+        assertTrue(".ver 1:0:0:0" in il)
+        assertTrue(".module 'Sample.Library.dll'" in il)
+        assertTrue("'Increment'(int32 'value')" in il)
+        assertTrue(".entrypoint" !in il)
+        assertTrue("[mscorlib]" !in il)
+
+        val dotnetHost = DotNetIlAssembler.findModernDotNetHost() ?: return
+        val consumerIl = outputDirectory.resolve("LibraryConsumer.il").apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly extern Sample.Library
+                {
+                  .ver 1:0:0:0
+                }
+                .assembly LibraryConsumer {}
+                .module LibraryConsumer.dll
+
+                .method public static void Main() cil managed
+                {
+                  .entrypoint
+                  .maxstack 2
+                  ldc.i4.s 41
+                  call int32 [Sample.Library]'sample.libraryKt'::'Increment'(int32)
+                  ldc.i4.s 42
+                  beq.s IL_success
+                  ldstr "Portable Kotlin library returned an unexpected result."
+                  newobj instance void [mscorlib]System.Exception::.ctor(string)
+                  throw
+                IL_success:
+                  ret
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = outputDirectory.resolve("LibraryConsumer.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleExecutable(
+                consumerIl,
+                consumerAssembly,
+                DotNetTarget.NET,
+                MessageCollector.NONE,
+            )
+        )
+        val process = ProcessBuilder(dotnetHost.path, "exec", consumerAssembly.path)
+            .directory(outputDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val processOutput = process.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(process.waitFor() == 0) { "Portable library consumer failed:\n$processOutput" }
+    }
+
     @Test
     fun testProducesPortableStdlibPairForModernRuntimeSelection() {
         assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")

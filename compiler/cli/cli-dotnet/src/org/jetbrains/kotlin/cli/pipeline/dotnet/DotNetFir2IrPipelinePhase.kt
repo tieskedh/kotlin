@@ -38,7 +38,7 @@ object DotNetFir2IrPipelinePhase : PipelinePhase<DotNetFrontendPipelineArtifact,
             fir2IrResult,
             input.frontendOutput,
             configuration,
-            input.stdlibMetadata,
+            input.libraryMetadata,
         )
     }
 }

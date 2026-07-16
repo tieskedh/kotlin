@@ -1,8 +1,8 @@
 # Draft ADR: .NET library target profile
 
-- Status: **POC implementation landed locally; general user-library mode deferred**
+- Status: **POC implementation landed locally; cross-module Kotlin consumption deferred**
 - Date: 2026-07-16
-- Scope: target framework/API identity of `Kotlin.Runtime` and `Kotlin.Stdlib`
+- Scope: target framework/API identity of Kotlin-owned platform and user libraries
 
 This is a repository-local decision record for the experimental .NET backend. The `dotnet` branch
 is a proof of concept; this document does not claim a public Kotlin or Kotlin/.NET commitment.
@@ -38,8 +38,9 @@ Keep `netframework` and `net` as concrete executable/runtime selections. They ar
 the library TFM, and `netstandard2.0` must not be presented as something that can launch an
 application. It is nevertheless a real compilation target for libraries. The current
 `-Xdotnet-target` option still means executable runtime plus POC assembler selection; a general
-library product should expose the library TFM explicitly instead of hiding it behind that runtime
-switch.
+library product must select the library TFM independently instead of hiding it behind that runtime
+switch. The first POC product fixes that independent library selection to `netstandard2.0`; adding
+more TFMs later is a library-product decision, not an extension of the runtime enum.
 
 The intended installed shape is one canonical pair rather than one pair per execution target:
 
@@ -101,7 +102,15 @@ The implementation now:
    AssemblyRef and `.NETStandard,Version=v2.0` `TargetFrameworkAttribute`;
 3. binds the KLIB with `dotnet_library_tfm=netstandard2.0`, independently of executable target;
 4. discovers one installed pair under `lib/dotnet/netstandard2.0`; and
-5. keeps ordinary application IL on its existing executable core-library profile.
+5. keeps ordinary application IL on its existing executable core-library profile; and
+6. provides `-Xdotnet-produce-library`, which emits `<module>.klib`, `<module>.il`, and
+   `<module>.dll` for ordinary Kotlin sources with no entry point or runtimeconfig.
+
+The user-library pair uses the module name as its unsigned CLR assembly identity at version
+`1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
+CLR consumers can use the existing explicit export boundary from that DLL. The KLIB does not yet
+define durable external facade/member identities, so Kotlin-to-Kotlin calls across arbitrary
+produced library pairs remain deferred rather than being guessed from source filenames.
 
 Portable PE production uses modern ILAsm independently of executable target. Framework ILAsm
 accepts the same source but injects an `mscorlib` AssemblyRef into the resulting PE; it therefore
@@ -129,7 +138,8 @@ IL churn before the boundary is represented deliberately.
 ## Deferred work
 
 This draft does not choose a modern .NET light-up TFM, NuGet package layout/versioning, or the
-eventual direct PE writer. General Kotlin libraries should be able to select `netstandard2.0`, but
-that requires a proper user-library KLIB+DLL product mode and a separate assembler/toolchain axis;
-it must not reuse executable `main` semantics merely because the current POC option is named
-`-Xdotnet-target`.
+eventual direct PE writer. The fixed `netstandard2.0` user-library mode also does not yet choose a
+public multi-TFM selection syntax. Kotlin cross-module consumption needs a durable mapping from
+Kotlin declarations to physical assembly/type/member identities in metadata; it must not infer
+file facades from local source paths. None of those concerns should reuse executable `main`
+semantics merely because the existing POC runtime option is named `-Xdotnet-target`.

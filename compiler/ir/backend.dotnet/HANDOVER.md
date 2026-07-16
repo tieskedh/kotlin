@@ -10,8 +10,8 @@ invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Ite
 identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
 committed; bound stdlib metadata consumption, the explicit paired stdlib producer, and its
 reproducibility boundary and default Kotlin-home discovery are committed, and the stronger
-`netstandard2.0` platform-library profile is validated and documented in the current feature
-slice).
+`netstandard2.0` platform-library profile is committed; ordinary user-library KLIB/DLL production
+is implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -110,8 +110,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   A follow-up check found that Framework ILAsm injects an otherwise unused `mscorlib` AssemblyRef
   into a netstandard-scoped PE; platform-library production therefore always uses modern ILAsm.
   Framework ILAsm remains the Framework application writer and a source compatibility oracle. No
-  full suite was run. General user libraries should be allowed to select this TFM too, but through a
-  library product mode—not by pretending .NET Standard is an executable runtime.
+  full suite was run. The next continuation added that library product boundary:
+  `-Xdotnet-produce-library` compiles ordinary sources to a bound `<module>.klib`/`<module>.dll`
+  pair using the netstandard2.0 profile, fixed unsigned 1.0.0.0 assembly identity, modern portable
+  writer, and no entry point/runtimeconfig. A focused consumer assembled separately and invoked an
+  explicit exported primitive method from the produced DLL on CoreCLR. General Kotlin
+  cross-module calls remain deferred until the KLIB owns durable facade/member identity rather
+  than asking a consumer to infer it from a source filename. No full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1132,10 +1137,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Add a general Kotlin library product targeting `netstandard2.0`.** Reuse the proven KLIB+DLL
-   pairing and explicit core-library profile, but separate TFM selection from assembler/toolchain
-   selection. A library has no entry point or runtimeconfig; .NET Standard is a valid library
-   target, never an executable host.
+1. **Define durable external declaration identity for Kotlin library consumption.** The general
+   producer now writes a bound KLIB/DLL pair, but an arbitrary external Kotlin callable still
+   needs assembly plus facade/member identity in metadata. Do not infer facades from source paths,
+   and do not make the existing textual export selector a Kotlin dependency ABI.
 2. **Install one portable platform-library pair during the build.** Discovery already uses
    `lib/dotnet/netstandard2.0`; add an explicit host-capability-aware producer/install task. Do not
    make cross-platform `distKotlinc` depend unconditionally on a host ILAsm.
