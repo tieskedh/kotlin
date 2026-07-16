@@ -198,9 +198,13 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * The non-default IL visibility of a Kotlin-`private` member, or null for the historical
-     * default (`public` for methods and accessors; constructors map Kotlin `private` to IL
-     * `private`, the singleton guarantee — see the `.ctor` render):
+     * The non-default IL visibility of a Kotlin member, or null for the historical default
+     * (`public` for methods and accessors; constructors map Kotlin `private` to IL `private`, the
+     * singleton guarantee — see the `.ctor` render). Kotlin `protected` maps directly to CLR
+     * `family`; this is required for compiler/runtime inheritance hooks such as
+     * `FunctionReferenceBase.BoundValueAt`, and is the CLR analogue of JVM protected access.
+     *
+     * For Kotlin-private declarations:
      * - A lifted local function is IL `assembly` on a file facade so lifted sibling types can
      *   call it, and IL `private` under a class because CLR nested→enclosing private access works.
      * - Every Kotlin-private member OF A COMPANION is IL `assembly` (uniform rule). The CLR
@@ -220,6 +224,7 @@ internal class DotNetIlMethodCodegen(
     private fun IrFunction.dotNetMemberVisibility(): String? {
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
+        if (visibility == DescriptorVisibilities.PROTECTED) return "family"
         if (visibility != DescriptorVisibilities.PRIVATE) return null
         return when {
             (parent as? IrClass)?.isCompanion == true -> "assembly"

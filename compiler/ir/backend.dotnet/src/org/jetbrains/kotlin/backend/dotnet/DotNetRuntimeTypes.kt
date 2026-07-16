@@ -97,6 +97,11 @@ internal object DotNetRuntimeTypes {
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
+    private val functionReferenceBase = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.FunctionReferenceBase",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
     private val mutableRefClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Runtime.Internal.MutableRef`1",
         typeParameterVariances = listOf(Variance.INVARIANT),
@@ -156,6 +161,7 @@ internal object DotNetRuntimeTypes {
 
     fun classInfoFor(irClass: IrClass): DotNetIlClassInfo? = when {
         irClass.isDotNetMutableRefStub == true -> mutableRefClass
+        irClass.isDotNetFunctionReferenceBase == true -> functionReferenceBase
         irClass.dotNetExactFunctionArity != null -> exactFunctionClasses[irClass.dotNetExactFunctionArity!!]
         irClass.dotNetTypedArgumentsFunctionArity != null ->
             typedArgumentsFunctionClasses[irClass.dotNetTypedArgumentsFunctionArity!!]

@@ -132,6 +132,177 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  .class public abstract auto ansi beforefieldinit FunctionReferenceBase
+            |         extends [mscorlib]System.Object
+            |  {
+            |    .field private initonly string 'id'
+            |    .field private initonly int32 'arity'
+            |    .field private initonly int32 'flags'
+            |    .field private initonly int32 'boundValueCount'
+            |    .field private initonly string 'name'
+            |
+            |    .method family hidebysig specialname rtspecialname instance void .ctor(
+            |        string 'id', int32 'arity', int32 'flags', int32 'boundValueCount', string 'name') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void [mscorlib]System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'id'
+            |      ldarg.0
+            |      ldarg.2
+            |      stfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      ldarg.0
+            |      ldarg.3
+            |      stfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldarg.0
+            |      ldarg.s 4
+            |      stfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'boundValueCount'
+            |      ldarg.0
+            |      ldarg.s 5
+            |      stfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'name'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig newslot virtual instance object BoundValueAt(int32 'index') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldnull
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance bool Equals(object 'other') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] class Kotlin.Runtime.Internal.FunctionReferenceBase otherReference,
+            |        [1] int32 index
+            |      )
+            |      ldarg.0
+            |      ldarg.1
+            |      beq FR_Equals_True
+            |      ldarg.1
+            |      isinst Kotlin.Runtime.Internal.FunctionReferenceBase
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse FR_Equals_False
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'id'
+            |      ldloc.0
+            |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'id'
+            |      call bool Kotlin.Runtime.Internal.Intrinsics::AreEqual(object, object)
+            |      brfalse FR_Equals_False
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      ldloc.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      bne.un FR_Equals_False
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      ldloc.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      bne.un FR_Equals_False
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'boundValueCount'
+            |      ldloc.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'boundValueCount'
+            |      bne.un FR_Equals_False
+            |      ldc.i4.0
+            |      stloc.1
+            |    FR_Equals_Loop:
+            |      ldloc.1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'boundValueCount'
+            |      bge FR_Equals_True
+            |      ldarg.0
+            |      ldloc.1
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::BoundValueAt(int32)
+            |      ldloc.0
+            |      ldloc.1
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::BoundValueAt(int32)
+            |      call bool Kotlin.Runtime.Internal.Intrinsics::AreEqual(object, object)
+            |      brfalse FR_Equals_False
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br FR_Equals_Loop
+            |    FR_Equals_True:
+            |      ldc.i4.1
+            |      ret
+            |    FR_Equals_False:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance int32 GetHashCode() cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init ([0] int32 result, [1] int32 index)
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'id'
+            |      callvirt instance int32 [mscorlib]System.Object::GetHashCode()
+            |      stloc.0
+            |      ldloc.0
+            |      ldc.i4.s 31
+            |      mul
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'arity'
+            |      add
+            |      stloc.0
+            |      ldloc.0
+            |      ldc.i4.s 31
+            |      mul
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'flags'
+            |      add
+            |      stloc.0
+            |      ldc.i4.0
+            |      stloc.1
+            |    FR_Hash_Loop:
+            |      ldloc.1
+            |      ldarg.0
+            |      ldfld int32 Kotlin.Runtime.Internal.FunctionReferenceBase::'boundValueCount'
+            |      bge FR_Hash_Done
+            |      ldloc.0
+            |      ldc.i4.s 31
+            |      mul
+            |      ldarg.0
+            |      ldloc.1
+            |      callvirt instance object Kotlin.Runtime.Internal.FunctionReferenceBase::BoundValueAt(int32)
+            |      call int32 Kotlin.Runtime.Internal.Intrinsics::HashCode(object)
+            |      add
+            |      stloc.0
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br FR_Hash_Loop
+            |    FR_Hash_Done:
+            |      ldloc.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance string ToString() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'name'
+            |      ldstr "<init>"
+            |      call bool [mscorlib]System.String::op_Equality(string, string)
+            |      brfalse FR_ToString_Function
+            |      ldstr "constructor"
+            |      ret
+            |    FR_ToString_Function:
+            |      ldstr "function "
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.FunctionReferenceBase::'name'
+            |      call string [mscorlib]System.String::Concat(string, string)
+            |      ret
+            |    }
+            |  }
+            |
             |  .class private abstract auto ansi beforefieldinit PropertyReferenceBase
             |         extends [mscorlib]System.Object
             |         implements Kotlin.KProperty
@@ -157,6 +328,101 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
             |      ret
             |    }
+            |
+            |    .method family hidebysig newslot abstract virtual instance object GetGetterIdentity() cil managed
+            |    {
+            |    }
+            |
+            |    .method family hidebysig newslot virtual instance object GetSetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldnull
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance bool Equals(object 'other') cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init ([0] class Kotlin.Runtime.Internal.PropertyReferenceBase otherReference)
+            |      ldarg.0
+            |      ldarg.1
+            |      beq PR_Equals_True
+            |      ldarg.1
+            |      isinst Kotlin.Runtime.Internal.PropertyReferenceBase
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse PR_Equals_False
+            |      ldarg.0
+            |      call instance class [mscorlib]System.Type [mscorlib]System.Object::GetType()
+            |      ldloc.0
+            |      callvirt instance class [mscorlib]System.Type [mscorlib]System.Object::GetType()
+            |      bne.un PR_Equals_False
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      ldloc.0
+            |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      call bool Kotlin.Runtime.Internal.Intrinsics::AreEqual(object, object)
+            |      brfalse PR_Equals_False
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterIdentity()
+            |      ldloc.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterIdentity()
+            |      call bool Kotlin.Runtime.Internal.Intrinsics::AreEqual(object, object)
+            |      brfalse PR_Equals_False
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterIdentity()
+            |      ldloc.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterIdentity()
+            |      call bool Kotlin.Runtime.Internal.Intrinsics::AreEqual(object, object)
+            |      brfalse PR_Equals_False
+            |    PR_Equals_True:
+            |      ldc.i4.1
+            |      ret
+            |    PR_Equals_False:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance int32 GetHashCode() cil managed
+            |    {
+            |      .maxstack 2
+            |      .locals init ([0] int32 result)
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      call int32 Kotlin.Runtime.Internal.Intrinsics::HashCode(object)
+            |      ldc.i4.s 31
+            |      mul
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetGetterIdentity()
+            |      call int32 Kotlin.Runtime.Internal.Intrinsics::HashCode(object)
+            |      add
+            |      stloc.0
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterIdentity()
+            |      brfalse PR_Hash_Done
+            |      ldloc.0
+            |      ldc.i4.s 31
+            |      mul
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Runtime.Internal.PropertyReferenceBase::GetSetterIdentity()
+            |      call int32 Kotlin.Runtime.Internal.Intrinsics::HashCode(object)
+            |      add
+            |      stloc.0
+            |    PR_Hash_Done:
+            |      ldloc.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig virtual instance string ToString() cil managed
+            |    {
+            |      .maxstack 3
+            |      ldstr "property "
+            |      ldarg.0
+            |      ldfld string Kotlin.Runtime.Internal.PropertyReferenceBase::'name'
+            |      ldstr " (Kotlin reflection is not available)"
+            |      call string [mscorlib]System.String::Concat(string, string, string)
+            |      ret
+            |    }
             |  }
             |
             |  .class private auto ansi sealed beforefieldinit Property0Impl
@@ -174,6 +440,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function0 Kotlin.Runtime.Internal.Property0Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig virtual final instance object GetGetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function0 Kotlin.Runtime.Internal.Property0Impl::'getter'
             |      ret
             |    }
             |
@@ -216,6 +490,22 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldarg.3
             |      stfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty0Impl::'setter'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig virtual final instance object GetGetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function0 Kotlin.Runtime.Internal.MutableProperty0Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig virtual final instance object GetSetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty0Impl::'setter'
             |      ret
             |    }
             |
@@ -269,6 +559,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
+            |    .method family hidebysig virtual final instance object GetGetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.Property1Impl::'getter'
+            |      ret
+            |    }
+            |
             |    .method public hidebysig newslot virtual final instance object Get(object receiver) cil managed
             |    {
             |      .override method instance object Kotlin.KProperty1::Get(object)
@@ -310,6 +608,22 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldarg.3
             |      stfld class Kotlin.Function2 Kotlin.Runtime.Internal.MutableProperty1Impl::'setter'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig virtual final instance object GetGetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function1 Kotlin.Runtime.Internal.MutableProperty1Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig virtual final instance object GetSetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function2 Kotlin.Runtime.Internal.MutableProperty1Impl::'setter'
             |      ret
             |    }
             |
@@ -363,6 +677,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldarg.2
             |      stfld class Kotlin.Function2 Kotlin.Runtime.Internal.Property2Impl::'getter'
+            |      ret
+            |    }
+            |
+            |    .method family hidebysig virtual final instance object GetGetterIdentity() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      ldfld class Kotlin.Function2 Kotlin.Runtime.Internal.Property2Impl::'getter'
             |      ret
             |    }
             |
