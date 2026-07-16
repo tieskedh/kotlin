@@ -156,7 +156,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   The explicit CLR export slice gives delegate projection/adaptation an explicit owner without a
   Kotlin source annotation or automatic overloads. Repeatable compiler configuration
   `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects exactly one public, non-generic
-  top-level function with at least one non-null Function0/1/2 parameter or return. The canonical
+  top-level function with at least one Function0/1/2 parameter or return. The canonical
   Kotlin method and all erased FunctionN positions remain unchanged; one user-named static method
   is added to the SAME file facade. Only that method replaces callable positions with typed
   Func/Action (Unit -> CLR void). The metadata-public
@@ -170,15 +170,23 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   falls back through closed generic box/unbox thunks, and uses a void thunk for Action. Repeated
   projection of the same Kotlin object/shape compares delegate-equal without caching. Adapters and
   projections add no catches; a null delegate at a non-null exported parameter throws
-  ArgumentNullException. Overloaded selectors, facade-name/exported-signature clashes, nullable
-  callable positions, generic or suspend functions, KFunction/suspend callable positions, and
-  arities above 2 fail loudly. No projection or adaptation occurs in ordinary Kotlin fields,
+  ArgumentNullException, while a nullable callable position maps null in both directions. Every
+  explicit export carries Roslyn-compatible `NullableAttribute` metadata on each non-empty return
+  and parameter type shape. The compiler synthesizes the reserved attribute into that output
+  module, emits deterministic explicit attributes instead of NullableContext compression, and
+  encodes reference/generic/array nesting in preorder (`0` oblivious, `1` non-null, `2` nullable),
+  skipping value types per Roslyn's contract. The metadata comes from source IR, never physically
+  erased FunctionN. Overloaded selectors, facade-name/exported-signature clashes, generic or
+  suspend functions, KFunction/suspend callable positions, and arities above 2 fail loudly. No
+  projection or adaptation occurs in ordinary Kotlin fields,
   parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
   Func/Action arity under modern and Framework ILAsm; compiler-produced facades plus the landed
   runtime ran both directions, invocation, and same-shape round-trip identity on both runtimes.
-  Pins: `ilText/callableExports.kt`, `ilText/callableParameters.kt`, and CLI
-  `dotnet/callableExport.args`. The detailed invariant and remaining nullability work are in the
-  callable draft ADR.
+  `nullableexport_s1` additionally validated explicit scalar/vector metadata blobs and nullable
+  delegate round trips on both runtimes; CoreCLR's NullabilityInfoContext reads the compiler output
+  as the intended nested nullable states. Pins: `ilText/callableExports.kt`,
+  `ilText/callableParameters.kt`, CLI `dotnet/callableExport.args`, and the reserved-attribute CLI
+  collision fixture. The detailed invariant is in the callable draft ADR.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
   implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin

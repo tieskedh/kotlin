@@ -1,0 +1,2 @@
+error: cannot emit CLR callable exports: 'System.Runtime.CompilerServices.NullableAttribute' is compiler-reserved.
+COMPILATION_ERROR
