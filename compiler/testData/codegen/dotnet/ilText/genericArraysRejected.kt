@@ -56,9 +56,11 @@ fun <T> openCopyInto(source: Array<T>, destination: Array<T>): Array<T> =
 
 fun <T> openIterator(values: Array<T>): Iterator<T> = values.iterator()
 
-class CustomIterator : Iterator<String> {
+interface CustomIteratorView<T> : Iterator<T>
+
+class CustomIntIterator : IntIterator() {
     override fun hasNext(): Boolean = false
-    override fun next(): String = "unused"
+    override fun nextInt(): Int = 0
 }
 
 fun main() {
