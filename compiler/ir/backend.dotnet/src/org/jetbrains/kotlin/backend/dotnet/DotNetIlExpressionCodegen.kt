@@ -661,11 +661,11 @@ internal class DotNetIlExpressionCodegen(
         return resolved.returnType
     }
 
-    /** Uses the same typed callable capability in statement position, then discards its result. */
-    fun tryEmitExactCallableCallForDiscard(call: IrCall): Boolean {
+    /** Uses the same optional callable capabilities in statement position, then discards the result. */
+    fun tryEmitCallableCapabilityCallForDiscard(call: IrCall): Boolean {
         if (call.type.isUnit()) return false
         val logicalResultType = typeMapper.toDotNetIlValueType(call.type) ?: return false
-        if (!emitExactCallableCallOrNull(call, logicalResultType)) return false
+        if (!emitCallableCapabilityCallOrNull(call, logicalResultType)) return false
         methodContext.emit("pop", pops = 1)
         return true
     }
@@ -1179,7 +1179,7 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
-        if (emitExactCallableCallOrNull(call, expectedType)) return
+        if (emitCallableCapabilityCallOrNull(call, expectedType)) return
         val returnType = emitCall(call)
         val producedType = (returnType as? DotNetIlReturnType.Value)?.type
         if (
@@ -1196,18 +1196,18 @@ internal class DotNetIlExpressionCodegen(
     }
 
     /**
-     * Calls an optional typed capability of a Kotlin FunctionN, otherwise falls back to the
-     * stable object-shaped Invoke slot. The call-site shape is always tried first. For an
-     * immutable local alias, the initializer chain can retain a narrower source function type
-     * after Kotlin variance widened the local's view; that original shape is tried second and
-     * its arguments/result are widened explicitly. This recovers typed invocation for cases
-     * such as `(Int) -> Int` stored as `(Int) -> Any` without inventing another runtime ABI.
+     * Calls an optional execution capability of a Kotlin FunctionN, otherwise falls back to the
+     * stable object-shaped Invoke slot. An object-result call with a concrete primitive argument
+     * tries the benchmarked TypedArgumentsFunctionN view first; other calls begin with the exact
+     * call-site shape. For an immutable local alias, the initializer chain can retain a narrower
+     * source function type after Kotlin variance widened the local's view; that original exact
+     * shape follows and its arguments/result are widened explicitly.
      *
      * The receiver and every argument are evaluated once into locals before any runtime test,
      * so every branch preserves source order and side effects. An older module or an explicit
      * user implementation simply fails every `isinst` and takes the erased path.
      */
-    private fun emitExactCallableCallOrNull(call: IrCall, expectedType: DotNetIlValueType): Boolean {
+    private fun emitCallableCapabilityCallOrNull(call: IrCall, expectedType: DotNetIlValueType): Boolean {
         if (!call.symbol.owner.isDotNetErasedCallableInvoke()) return false
         val receiver = call.arguments.firstOrNull() ?: return false
         val receiverType = receiver.type as? IrSimpleType ?: return false
@@ -1250,6 +1250,7 @@ internal class DotNetIlExpressionCodegen(
                 }
             }
             ?.let(invocationShapes::add)
+        val typedArgumentsType = typedArgumentsCallableInvocationTypeOrNull(logicalTypes)
         val erasedReceiverType = DotNetRuntimeTypes.fixedFunctionType(arity)
 
         emitExpression(receiver, erasedReceiverType)
@@ -1263,13 +1264,34 @@ internal class DotNetIlExpressionCodegen(
         val fallbackLabel = methodContext.nextLabel("callableErasedFallback")
         val joinLabel = methodContext.nextLabel("callableExactEnd")
         var resultSlot: DotNetIlSlot.Local? = null
+        if (typedArgumentsType != null) {
+            methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+            methodContext.emit("isinst ${typedArgumentsType.nameInSignature}", pops = 1, pushes = 1)
+            val typedReceiverSlot = spillToSyntheticLocal(typedArgumentsType, "<typedArgumentsCallable>")
+            val typedResultSlot = methodContext.declareSyntheticLocal(resultType, "<callableResult>")
+            resultSlot = typedResultSlot
+            val firstExactLabel = methodContext.nextLabel("callableExactFallback")
+            methodContext.emit(loadLocalInstruction(typedReceiverSlot.index), pushes = 1)
+            methodContext.emitBranch("brfalse", firstExactLabel, pops = 1)
+            methodContext.emit(loadLocalInstruction(typedReceiverSlot.index), pushes = 1)
+            argumentSlots.forEach { slot ->
+                methodContext.emit(loadLocalInstruction(slot.index), pushes = 1)
+            }
+            methodContext.emit(
+                DotNetRuntimeTypes.typedArgumentsInvokeCallInstruction(typedArgumentsType),
+                pops = arity + 1,
+                pushes = 1,
+            )
+            methodContext.emit(storeLocalInstruction(typedResultSlot.index), pops = 1)
+            methodContext.emitGoto(joinLabel)
+            methodContext.emitLabel(firstExactLabel)
+        }
         invocationShapes.forEachIndexed { shapeIndex, shape ->
             methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
             methodContext.emit("isinst ${shape.exactType.nameInSignature}", pops = 1, pushes = 1)
             val exactReceiverSlot = spillToSyntheticLocal(shape.exactType, "<exactCallable>")
-            if (resultSlot == null) {
-                resultSlot = methodContext.declareSyntheticLocal(resultType, "<callableResult>")
-            }
+            val exactResultSlot = resultSlot
+                ?: methodContext.declareSyntheticLocal(resultType, "<callableResult>").also { resultSlot = it }
             val nextShapeLabel = if (shapeIndex == invocationShapes.lastIndex) {
                 fallbackLabel
             } else {
@@ -1293,14 +1315,14 @@ internal class DotNetIlExpressionCodegen(
             shape.resultCoercion?.let { instruction ->
                 methodContext.emit(instruction, pops = 1, pushes = 1)
             }
-            methodContext.emit(storeLocalInstruction(resultSlot.index), pops = 1)
+            methodContext.emit(storeLocalInstruction(exactResultSlot.index), pops = 1)
             methodContext.emitGoto(joinLabel)
             if (nextShapeLabel != fallbackLabel) {
                 methodContext.emitLabel(nextShapeLabel)
             }
         }
         val callableResultSlot = resultSlot
-            ?: error("Internal .NET backend error: exact invocation has no result slot")
+            ?: error("Internal .NET backend error: callable capability invocation has no result slot")
 
         methodContext.emitLabel(fallbackLabel)
         methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
@@ -1328,6 +1350,24 @@ internal class DotNetIlExpressionCodegen(
         methodContext.emit(loadLocalInstruction(callableResultSlot.index), pushes = 1)
         return true
     }
+
+    /**
+     * The partial capability is worth probing only for the evidenced CLR variance hole: an
+     * object-shaped result and at least one concrete primitive-shaped argument. Exact primitive
+     * results keep the existing ExactFunctionN-first path; Unit remains erased-only.
+     */
+    private fun typedArgumentsCallableInvocationTypeOrNull(
+        logicalTypes: List<DotNetIlValueType>,
+    ): DotNetIlValueType.GenericInstance? {
+        val arity = logicalTypes.size - 1
+        if (arity !in 1..2 || logicalTypes.last() != DotNetIlValueType.Object) return null
+        val parameterTypes = logicalTypes.take(arity)
+        if (parameterTypes.none { it.isDotNetConcretePrimitiveShape() }) return null
+        return DotNetRuntimeTypes.typedArgumentsFunctionType(parameterTypes)
+    }
+
+    private fun DotNetIlValueType.isDotNetConcretePrimitiveShape(): Boolean =
+        isSupportedPrimitiveArrayElement() || this is DotNetIlValueType.NullableValue
 
     private fun exactCallableInvocationShapeOrNull(
         callSiteTypes: List<DotNetIlValueType>,

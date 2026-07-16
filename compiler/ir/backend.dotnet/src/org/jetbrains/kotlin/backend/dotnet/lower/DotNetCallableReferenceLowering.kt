@@ -112,13 +112,14 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
     override fun getAdditionalInterfaces(reference: IrRichFunctionReference): List<IrType> {
         val executionType = reference.type.removeProjectionsToMakeValidSuperType()
         val exactType = context.exactCallableSymbols.typeFor(executionType)
+        val typedArgumentsType = context.typedArgumentsCallableSymbols.typeFor(executionType)
         val reflectiveType = reference.type.takeIf { it.isKFunction() && !it.isKSuspendFunction() } as? IrSimpleType
         val erasedExecutionType = reflectiveType?.let {
             val arity = it.arguments.size - 1
             if (arity !in 0..2) null
             else context.irBuiltIns.functionN(arity).symbol.typeWithArguments(it.arguments)
         }
-        return listOfNotNull(erasedExecutionType, exactType)
+        return listOfNotNull(erasedExecutionType, exactType, typedArgumentsType)
     }
 
     override fun postprocessInvoke(invokeFunction: IrSimpleFunction, functionReference: IrRichFunctionReference) {
@@ -138,7 +139,10 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
         val executionType = functionReference.type.removeProjectionsToMakeValidSuperType()
         if (context.exactCallableSymbols.typeFor(executionType) == null) return
         val arity = (executionType as IrSimpleType).arguments.size - 1
-        splitExactInvokeFromErasedBridge(invokeFunction, arity)
+        val exactInvoke = splitExactInvokeFromErasedBridge(invokeFunction, arity)
+        if (context.typedArgumentsCallableSymbols.typeFor(executionType) != null) {
+            addTypedArgumentsBridge(invokeFunction.parent as IrClass, exactInvoke, arity)
+        }
     }
 
     /**
@@ -146,7 +150,7 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
      * small erased bridge which calls it. Both slots live on the same generated object: the
      * bridge is the stable identity ABI, while InvokeExact is an optional execution capability.
      */
-    private fun splitExactInvokeFromErasedBridge(invokeFunction: IrSimpleFunction, arity: Int) {
+    private fun splitExactInvokeFromErasedBridge(invokeFunction: IrSimpleFunction, arity: Int): IrSimpleFunction {
         val functionReferenceClass = invokeFunction.parent as IrClass
         val erasedOverrides = invokeFunction.overriddenSymbols.toList()
         val originalName = invokeFunction.name
@@ -175,6 +179,39 @@ internal class DotNetCallableReferenceLowering(context: DotNetBackendContext) :
             }
             body = context.createIrBuilder(symbol).irBlockBody {
                 +irReturn(irCall(invokeFunction).apply {
+                    arguments[0] = irGet(this@bridge.parameters[0])
+                    this@bridge.parameters.drop(1).forEachIndexed { index, parameter ->
+                        arguments[index + 1] = irGet(parameter)
+                    }
+                })
+            }
+        }
+        return invokeFunction
+    }
+
+    /** Boxes only the result while retaining the generated callable's exact argument slots. */
+    private fun addTypedArgumentsBridge(
+        functionReferenceClass: IrClass,
+        exactInvoke: IrSimpleFunction,
+        arity: Int,
+    ) {
+        val typedInvoke = context.typedArgumentsCallableSymbols.invokeForArity(arity)
+        functionReferenceClass.addFunction {
+            startOffset = exactInvoke.startOffset
+            endOffset = exactInvoke.endOffset
+            origin = IrDeclarationOrigin.DEFINED
+            name = typedInvoke.name
+            visibility = exactInvoke.visibility
+            modality = exactInvoke.modality
+            returnType = context.irBuiltIns.anyNType
+        }.apply bridge@{
+            overriddenSymbols = listOf(typedInvoke.symbol)
+            parameters += createDispatchReceiverParameterWithClassParent()
+            exactInvoke.parameters.drop(1).forEach { parameter ->
+                parameters += parameter.copyTo(this)
+            }
+            body = context.createIrBuilder(symbol).irBlockBody {
+                +irReturn(irCall(exactInvoke).apply {
                     arguments[0] = irGet(this@bridge.parameters[0])
                     this@bridge.parameters.drop(1).forEachIndexed { index, parameter ->
                         arguments[index + 1] = irGet(parameter)

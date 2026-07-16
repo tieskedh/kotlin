@@ -99,7 +99,7 @@
 }
 .class private auto ansi sealed 'callableObjectsKt$main$one$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'callableObjectsKt$main$one$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -134,10 +134,19 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 'callableObjectsKt$main$one$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed 'callableObjectsKt$main$two$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction2`2'<int32, int32>
 {
   .field public static initonly class 'callableObjectsKt$main$two$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -174,10 +183,20 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'left', int32 'right') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance int32 'callableObjectsKt$main$two$1'::'InvokeExact'(int32, int32)
+    box [mscorlib]System.Int32
+    ret
+  }
 }
 .class private auto ansi sealed 'callableObjectsKt$main$reference$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+       implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field public static initonly class 'callableObjectsKt$main$reference$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -207,6 +226,15 @@
     ldarg.0
     ldarg.1
     unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'callableObjectsKt$main$reference$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(int32 'p0') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
     callvirt instance int32 'callableObjectsKt$main$reference$1'::'InvokeExact'(int32)
     box [mscorlib]System.Int32
     ret
@@ -438,7 +466,7 @@
 }
 .class private auto ansi sealed 'callableObjectsKt$main$boolean$1'
        extends [mscorlib]System.Object
-       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<bool>
 {
   .field public static initonly class 'callableObjectsKt$main$boolean$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
@@ -469,6 +497,15 @@
     ldarg.0
     ldarg.1
     unbox.any [mscorlib]System.Boolean
+    callvirt instance bool 'callableObjectsKt$main$boolean$1'::'InvokeExact'(bool)
+    box [mscorlib]System.Boolean
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'InvokeTyped'(bool 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
     callvirt instance bool 'callableObjectsKt$main$boolean$1'::'InvokeExact'(bool)
     box [mscorlib]System.Boolean
     ret
