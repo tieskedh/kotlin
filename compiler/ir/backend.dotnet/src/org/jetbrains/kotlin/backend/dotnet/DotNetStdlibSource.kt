@@ -108,6 +108,16 @@ public external infix fun CharArray?.contentEquals(other: CharArray?): Boolean
 // Deep equality is defined only on generic arrays; nested generic arrays recurse, supported
 // primitive arrays use their shallow content contract, and all other elements use Kotlin equals.
 public external infix fun <T> Array<out T>?.contentDeepEquals(other: Array<out T>?): Boolean
+
+// Content hashes use the List-compatible 31-fold. The shallow family hashes nested arrays by
+// identity; the deep generic-array operation recursively hashes supported nested array shapes.
+public external fun <T> Array<out T>?.contentHashCode(): Int
+public external fun IntArray?.contentHashCode(): Int
+public external fun LongArray?.contentHashCode(): Int
+public external fun DoubleArray?.contentHashCode(): Int
+public external fun BooleanArray?.contentHashCode(): Int
+public external fun CharArray?.contentHashCode(): Int
+public external fun <T> Array<out T>?.contentDeepHashCode(): Int
 """,
     "DotNetStdlibKotlin.kt" to """package kotlin
 

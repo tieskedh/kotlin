@@ -351,9 +351,24 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   cross-assembly access in the reserved internal namespace and creates no new array ABI shape.
   `arraydeep_s1` assembled and ran nested reference/primitive, mixed-kind, NaN, signed-zero, and
   null cases on modern CoreCLR and Framework; the exact golden assembles with both ILAsm versions.
-  Pins: `ilText/arrayContentDeepEquals.kt` and `box/arrayContentDeepEquals.kt`. STAYS REJECTED,
-  loudly: `contentHashCode`, `contentDeepHashCode`, `contentToString`, `contentDeepToString`,
-  unsigned arrays, and mapper-rejected array families.
+  Pins: `ilText/arrayContentDeepEquals.kt` and `box/arrayContentDeepEquals.kt`.
+- Shallow and recursive content hashing (probe series `arrayhash_s1`; JVM `Arrays.hashCode`/
+  `deepHashCode` and common/Native 31-fold precedent) reuse one Kotlin-owned element-hash
+  boundary. Nullable arrays hash to zero; non-null arrays start at one and fold each element as
+  `31 * result + elementHash`, with normal unchecked Int overflow. `contentHashCode` covers the
+  five supported primitive arrays plus generic arrays and deliberately gives nested arrays their
+  ordinary identity hash. Generic-array `contentDeepHashCode` instead recurses into reference
+  vectors and shallow-hashes each supported nested primitive vector. Both paths use
+  `Intrinsics.HashCode` for scalar elements, preserving Kotlin null, Boolean, Char, Double NaN,
+  and signed-zero hashes rather than CLR `GetHashCode` divergences. Open invariant `Array<T>` and
+  projected/concrete reference vectors keep exact storage and call the same `System.Array` helper;
+  the receiver is evaluated once. Data-class array hashing now delegates to the general shallow
+  helper while its existing cross-assembly entry point stays as a compatibility wrapper. Deep
+  self-containing arrays remain undefined and gain no cycle detector, matching the stdlib
+  contract. `arrayhash_s1` assembled and ran on modern CoreCLR and Framework, and the exact golden
+  assembles with both ILAsm versions. Pins: `ilText/arrayContentHashCode.kt` and
+  `box/arrayContentHashCode.kt`. STAYS REJECTED, loudly: `contentToString`,
+  `contentDeepToString`, unsigned arrays, and mapper-rejected array families.
 - Concrete varargs follow the mature JVM/Native/Wasm lowering boundary rather than a separate
   delegate or runtime ABI. `DotNetVarargLowering` runs before closure conversion and default
   stubs, normalizes the source-only `Array<out E>` view of a CONCRETE reference vararg to the

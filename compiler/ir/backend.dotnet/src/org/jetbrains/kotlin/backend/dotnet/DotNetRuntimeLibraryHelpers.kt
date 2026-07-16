@@ -524,7 +524,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
-            |    .method public hidebysig static int32 'DataClassArrayHashCode'(class [mscorlib]System.Array 'value') cil managed
+            |    .method public hidebysig static int32 'ArrayContentHashCode'(class [mscorlib]System.Array 'value') cil managed
             |    {
             |      .maxstack 3
             |      .locals init (
@@ -565,6 +565,127 @@ internal object DotNetRuntimeLibraryHelpers {
             |      br.s IL_arrayHashLoop
             |IL_arrayHashEnd:
             |      ldloc.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'ArrayContentDeepHashCode'(
+            |        class [mscorlib]System.Array 'value') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] int32 'result',
+            |        [1] int32 'index',
+            |        [2] int32 'length',
+            |        [3] object 'element',
+            |        [4] int32 'elementHash'
+            |      )
+            |      ldarg.0
+            |      brtrue.s IL_arrayDeepHashNotNull
+            |      ldc.i4.0
+            |      ret
+            |IL_arrayDeepHashNotNull:
+            |      ldc.i4.1
+            |      stloc.0
+            |      ldc.i4.0
+            |      stloc.1
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      stloc.2
+            |IL_arrayDeepHashLoop:
+            |      ldloc.1
+            |      ldloc.2
+            |      bge IL_arrayDeepHashEnd
+            |      ldarg.0
+            |      ldloc.1
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      stloc.3
+            |      ldloc.3
+            |      isinst object[]
+            |      brfalse IL_arrayDeepHashInt
+            |      ldloc.3
+            |      isinst object[]
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepHashCode'(
+            |          class [mscorlib]System.Array)
+            |      stloc.s 4
+            |      br IL_arrayDeepHashCombine
+            |IL_arrayDeepHashInt:
+            |      ldloc.3
+            |      isinst int32[]
+            |      brfalse IL_arrayDeepHashLong
+            |      ldloc.3
+            |      isinst int32[]
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
+            |          class [mscorlib]System.Array)
+            |      stloc.s 4
+            |      br IL_arrayDeepHashCombine
+            |IL_arrayDeepHashLong:
+            |      ldloc.3
+            |      isinst int64[]
+            |      brfalse IL_arrayDeepHashDouble
+            |      ldloc.3
+            |      isinst int64[]
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
+            |          class [mscorlib]System.Array)
+            |      stloc.s 4
+            |      br IL_arrayDeepHashCombine
+            |IL_arrayDeepHashDouble:
+            |      ldloc.3
+            |      isinst float64[]
+            |      brfalse IL_arrayDeepHashBoolean
+            |      ldloc.3
+            |      isinst float64[]
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
+            |          class [mscorlib]System.Array)
+            |      stloc.s 4
+            |      br IL_arrayDeepHashCombine
+            |IL_arrayDeepHashBoolean:
+            |      ldloc.3
+            |      isinst bool[]
+            |      brfalse IL_arrayDeepHashChar
+            |      ldloc.3
+            |      isinst bool[]
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
+            |          class [mscorlib]System.Array)
+            |      stloc.s 4
+            |      br IL_arrayDeepHashCombine
+            |IL_arrayDeepHashChar:
+            |      ldloc.3
+            |      isinst char[]
+            |      brfalse IL_arrayDeepHashScalar
+            |      ldloc.3
+            |      isinst char[]
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
+            |          class [mscorlib]System.Array)
+            |      stloc.s 4
+            |      br IL_arrayDeepHashCombine
+            |IL_arrayDeepHashScalar:
+            |      ldloc.3
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'HashCode'(object)
+            |      stloc.s 4
+            |IL_arrayDeepHashCombine:
+            |      ldloc.0
+            |      ldc.i4.s 31
+            |      mul
+            |      ldloc.s 4
+            |      add
+            |      stloc.0
+            |      ldloc.1
+            |      ldc.i4.1
+            |      add
+            |      stloc.1
+            |      br IL_arrayDeepHashLoop
+            |IL_arrayDeepHashEnd:
+            |      ldloc.0
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static int32 'DataClassArrayHashCode'(
+            |        class [mscorlib]System.Array 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
+            |          class [mscorlib]System.Array)
             |      ret
             |    }
             |
@@ -952,6 +1073,18 @@ internal object DotNetRuntimeLibraryHelpers {
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayContentDeepEquals".toIlIdentifier()}(" +
                 "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array)"
+
+    /** Nullable shallow List-compatible content hash for every supported CLR vector. */
+    val arrayContentHashCodeCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayContentHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
+
+    /** Nullable recursive List-compatible content hash for generic arrays. */
+    val arrayContentDeepHashCodeCallInstruction: String =
+        "call int32 [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayContentDeepHashCode".toIlIdentifier()}(class ${CORE_LIB_REF}System.Array)"
 
     /** Content hash for the CLR vector behind an array property of a generated data class. */
     val dataClassArrayHashCodeCallInstruction: String =
