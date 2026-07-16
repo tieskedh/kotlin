@@ -48,7 +48,7 @@ internal val IrClass.hasDotNetIteratorBridges: Boolean
             functions.any { it.origin == DOTNET_ITERATOR_NEXT_BRIDGE }
 
 /**
- * Gives a user class which directly implements `Iterator<T>` the existing erased runtime slots.
+ * Gives every user class with an `Iterator<T>` contract the existing erased runtime slots.
  *
  * Kotlin keeps the source members logically typed, most importantly `next(): T`. The CLR runtime
  * identity is deliberately non-generic and instead requires `object Next()`. This is the JVM
@@ -56,10 +56,11 @@ internal val IrClass.hasDotNetIteratorBridges: Boolean
  * the typed Kotlin members, boxing only at the erased `Next` boundary. A `HasNext` bridge is also
  * necessary because the Kotlin-owned runtime contract uses CLR-style method names.
  *
- * A class directly declaring the contract owns the bridges when it has callable typed members.
- * An abstract declaration with no class-owned members may defer them to the first concrete
- * descendant; an already generated base bridge is inherited and dispatches to typed overrides.
- * This pass neither creates iterators nor admits open `Array<T>.iterator()` producers.
+ * The contract may arrive directly, through a user iterator subinterface, or through a base class.
+ * A class declaring the contract owns the bridges when it has callable typed members. An abstract
+ * declaration with no class-owned members may defer them to the first concrete descendant; an
+ * already generated base bridge is inherited and dispatches to typed overrides. This pass does
+ * not create iterator producers; array producer admission is owned by the intrinsic layer.
  */
 internal class DotNetIteratorBridgeLowering(private val context: DotNetBackendContext) : ModuleLoweringPass {
     override fun lower(irModule: IrModuleFragment) {
@@ -70,7 +71,7 @@ internal class DotNetIteratorBridgeLowering(private val context: DotNetBackendCo
             }
 
             override fun visitClass(declaration: IrClass) {
-                if (!declaration.isInterface && declaration.hasIteratorContractThroughClassChain()) {
+                if (!declaration.isInterface && declaration.hasIteratorContract()) {
                     implementers += declaration
                 }
                 declaration.acceptChildrenVoid(this)
@@ -81,14 +82,14 @@ internal class DotNetIteratorBridgeLowering(private val context: DotNetBackendCo
         }
     }
 
-    private fun IrClass.hasIteratorContractThroughClassChain(visited: MutableSet<IrClass> = mutableSetOf()): Boolean {
+    private fun IrClass.hasIteratorContract(visited: MutableSet<IrClass> = mutableSetOf()): Boolean {
         if (!visited.add(this)) return false
         return superTypes.any { superType ->
             val superClass = ((superType as? IrSimpleType)?.classifier?.owner as? IrClass) ?: return@any false
             when {
                 superClass.isDotNetIteratorBase -> true
-                superClass.isInterface || superClass.isDotNetSupportedPrimitiveIterator -> false
-                else -> superClass.hasIteratorContractThroughClassChain(visited)
+                superClass.isDotNetSupportedPrimitiveIterator -> false
+                else -> superClass.hasIteratorContract(visited)
             }
         }
     }

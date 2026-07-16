@@ -7,7 +7,7 @@ bounded typed-argument callable capability implemented; bounded Kotlin property-
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
 continuation implemented; local delegated-property tokens are committed and explicit user
 Iterator bridges are committed and open invariant array iterators are implemented at the current
-working tip).
+working tip; bodyless iterator subinterfaces are implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -36,8 +36,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   capability described below, followed by the bounded erased property-reference representation,
   structural callable-reference identity (`d3433c768`), and the Function3/KMutableProperty2
   continuation (`ef279c65e`), followed by local delegated-property tokens (`417bd3c79`) and
-  explicit user Iterator bridges (`e8cc1fc6d`) and open invariant array iterators at the current
-  working tip.
+  explicit user Iterator bridges (`e8cc1fc6d`), open invariant array iterators (`801c307a7`), and
+  bodyless iterator subinterfaces at the current working tip.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -723,9 +723,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   results pass unchanged, primitive/open-generic results box once, and derived classes inherit a
   bridge-owning base's methods. An abstract obligation-only base defers bridge ownership to the
   first concrete descendant. The same object therefore preserves state and identity through
-  primitive/reference covariance without an adapter. Iterator subinterfaces,
-  primitive-specialized subclasses, collections, and CLR enumeration
-  adapters remain rejected. The handwritten runtime ArrayIterator is now explicitly classified as
+  primitive/reference covariance without an adapter. A bodyless module-local iterator
+  subinterface now inherits the same erased runtime identity, may add unrelated abstract members,
+  and gives its implementing classes the same bridges. Calls through inherited fake overrides use
+  the erased slots. Redeclaring `next`/`hasNext` on the subinterface remains rejected because it
+  would create a second typed execution contract; interface bodies remain outside the Framework
+  4.8 floor. A subinterface's own generic variance remains CLR/reference-only, but widening its
+  value-shaped instance to the erased base Iterator remains identity-preserving.
+  Primitive-specialized subclasses, collections, and CLR enumeration adapters remain rejected. The
+  handwritten runtime ArrayIterator is now explicitly classified as
   bootstrap packaging: a future real .NET stdlib should own its ordinary Kotlin implementation,
   while Kotlin.Runtime retains the erased interface identity. Separate primitive implementations
   remain a later performance decision. The exact golden's dual-ILAsm result and the fresh full
@@ -1017,11 +1023,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit user iterator subinterfaces separately.** Do not generalize the class bridge into
-   Framework-incompatible default interface bodies or weaken the module-interface gate.
-2. **Validate iterator bridges across compiled Kotlin modules when that boundary exists.** The
+1. **Validate iterator bridges across compiled Kotlin modules when that boundary exists.** The
    erased runtime identity is cross-assembly, but this POC does not yet consume Kotlin metadata
    from a separately produced CLR module; do not claim source-level cross-module validation.
+2. **Move the logical array iterator into the target stdlib when that build exists.** Keep the
+   erased interface identity in Kotlin.Runtime and compile the stdlib implementation through the
+   same ordinary user-class bridge path; do not add another handwritten producer model.
+3. **Extract reusable erased-interface bridge policy before adding a second erased interface
+   family.** Use that family's actual member/variance requirements as the second data point; do not
+   turn the Iterator-specific lowering into an untested abstraction in advance.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

@@ -1,6 +1,6 @@
 # Draft ADR: Erased Kotlin iterator ABI on CLR
 
-- Status: **Draft candidate; implemented for array iterators in the prototype**
+- Status: **Draft candidate; implemented for array and user iterators in the prototype**
 - Date: 2026-07-16
 - Scope: Kotlin-to-Kotlin iterator identity and execution across CLR assembly boundaries
 
@@ -87,9 +87,10 @@ lowering evaluates the array once and remains allocation-free. The iterator ABI 
 an explicit `iterator()` call produces a value that can escape or be stored.
 
 The current bounded implementation supports the five established primitive vectors, concrete
-reference-element arrays, open invariant `Array<T>` producers, and ordinary user classes which
-directly implement `Iterator<T>`. An open vector stays exact `!n[]`/`!!n[]` and passes directly to
-the shared `ArrayIterator(System.Array)`; erased `Next()` is narrowed with `unbox.any !n`/`!!n`.
+reference-element arrays, open invariant `Array<T>` producers, and ordinary user classes whose
+contract reaches `Iterator<T>` directly or through a supported subinterface. An open vector stays
+exact `!n[]`/`!!n[]` and passes directly to the shared `ArrayIterator(System.Array)`; erased
+`Next()` is narrowed with `unbox.any !n`/`!!n`.
 This does not admit `Array<T?>`, projections, concrete primitive-element generic arrays, or nested
 arrays: their receiver types remain rejected by the structural array mapper before iterator
 lowering runs.
@@ -104,6 +105,22 @@ typed members, and derived classes inherit them. An abstract base with only the 
 obligation defers bridge ownership to the first concrete descendant. No adapter object, generic
 runtime interface, or public typed capability is added.
 
+A bodyless module-local iterator subinterface inherits the same non-generic runtime identity. It
+may declare unrelated abstract members, but it does not republish typed `next` or `hasNext` slots.
+Calls to inherited fake overrides are emitted against the erased runtime slots, and an implementing
+class receives the same private bridges as a direct implementer. A source redeclaration such as
+`override fun next(): T` is rejected because emitting it on the CLR interface would create a second
+typed execution contract beside the canonical erased one. Interface member bodies remain rejected
+at the .NET Framework 4.8 compatibility floor; this design does not depend on default interface
+methods.
+
+The subinterface's own generic identity remains subject to the backend's existing CLR generic
+interface rules. Declaration-site covariance works for reference-shaped arguments, but a widening
+such as `IteratorView<Int>` to `IteratorView<Any>` remains rejected because CLR variance does not
+apply to value-type instantiations. Widening that object to the canonical `Iterator<Any>` view is
+safe and remains adapter-free because the base identity is erased. This limitation must not be
+mistaken for a second iterator representation.
+
 ## Consequences
 
 Benefits:
@@ -116,7 +133,7 @@ Benefits:
 Costs:
 
 - primitive elements box at the erased `Next()` boundary and unbox at the Kotlin call site;
-- each direct user implementer carries two small private MethodImpl bridges;
+- each bridge-owning user implementer carries two small private MethodImpl bridges;
 - the raw interface is not an idiomatic CLR enumeration surface; and
 - logical element types require Kotlin metadata for future cross-module Kotlin compilation.
 
@@ -127,7 +144,8 @@ producers, and an exact exhaustion catch with modern 10.0.9 and .NET Framework 4
 same-assembler and cross-runtime pairings produced the same results.
 
 Repository pins cover both FIR parsers and real CoreCLR execution, including reference,
-primitive, open-generic producer/consumer, covariant, and inherited user implementations:
+primitive, open-generic producer/consumer, covariant, inherited, and subinterface user
+implementations:
 
 - `compiler/testData/codegen/dotnet/ilText/arrayIterators.kt`;
 - `compiler/testData/codegen/dotnet/box/arrayIterators.kt`; and
@@ -136,7 +154,7 @@ primitive, open-generic producer/consumer, covariant, and inherited user impleme
 ## Deferred decisions
 
 This draft does not decide the target-stdlib packaging migration, separately compiled Kotlin
-producer modules, user-defined iterator subinterfaces,
+producer modules, iterator subinterfaces with typed redeclarations or member bodies,
 primitive-specialized iterator subclasses, collection/list iterators, mutable iterators,
 sequences, `Iterable<T>`, CLR `IEnumerable<T>`/`IEnumerator<T>` adapters, typed fast-path members,
 or Kotlin metadata encoding. Those layers may add views or optimizations, but ordinary Kotlin

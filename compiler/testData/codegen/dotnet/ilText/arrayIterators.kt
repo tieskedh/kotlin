@@ -63,6 +63,18 @@ class DeferredStringValueIterator(private val value: String) : DeferredValueIter
     override fun next(): String = value
 }
 
+interface IteratorView<out T> : Iterator<T> {
+    fun label(): String
+}
+
+class ViewedStringIterator(private val value: String) : IteratorView<String> {
+    override fun hasNext(): Boolean = true
+
+    override fun next(): String = value
+
+    override fun label(): String = "view"
+}
+
 fun directStringNext(values: StringValueIterator): String = values.next()
 
 fun erasedStringNext(values: Iterator<String>): String = values.next()
@@ -71,6 +83,10 @@ fun erasedIntNext(values: Iterator<Int>): Int = values.next()
 
 fun <T> erasedGenericNext(values: Iterator<T>): T = values.next()
 
+fun hasNextThroughView(values: IteratorView<String>): Boolean = values.hasNext()
+
+fun nextThroughView(values: IteratorView<String>): String = values.next()
+
 fun main() {
     println(nextInt(intArrayOf(7).iterator()))
     println(erasedStringNext(StringValueIterator("user")))
@@ -78,4 +94,7 @@ fun main() {
     println(erasedGenericNext(GenericValueIterator("generic")))
     println(erasedStringNext(DeferredStringValueIterator("deferred")))
     println(firstFromOpenArray(arrayOf("open")))
+    val viewed = ViewedStringIterator("subinterface")
+    println(hasNextThroughView(viewed))
+    println(nextThroughView(viewed))
 }
