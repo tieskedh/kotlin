@@ -19,8 +19,11 @@ import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isNullableNothing
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFileClass
+import org.jetbrains.kotlin.ir.util.isFakeOverride
+import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isNullConst
 import org.jetbrains.kotlin.ir.util.render
 import org.jetbrains.kotlin.name.FqName
@@ -549,12 +552,29 @@ internal class DotNetIlIntrinsicMethods(
         // Calls through fake overrides and user overrides are owned by that class rather than by
         // kotlin.Any, so an exact registry key cannot name them. The JVM resolves those calls to
         // java.lang.Object slots; select the CLR counterpart from the transitive override chain.
-        return when ((function as? IrSimpleFunction)?.dotNetAnyMethodOrNull()) {
+        when ((function as? IrSimpleFunction)?.dotNetAnyMethodOrNull()) {
             DotNetAnyMethod.EQUALS -> DotNetIlAnyEqualsIntrinsic
             DotNetAnyMethod.HASH_CODE -> DotNetIlAnyHashCodeIntrinsic
             DotNetAnyMethod.TO_STRING -> DotNetIlAnyToStringIntrinsic
             null -> null
+        }?.let { return it }
+
+        // A module iterator subinterface inherits the erased runtime slots without redeclaring
+        // typed members. Calls arrive through its fake overrides, whose owner has no intrinsic
+        // registry key; route only that interface shape to the canonical erased operations.
+        val simpleFunction = function as? IrSimpleFunction ?: return null
+        val owner = simpleFunction.parent as? IrClass ?: return null
+        if (
+            simpleFunction.isFakeOverride && owner.isInterface &&
+            simpleFunction.allOverridden().any { (it.parent as? IrClass)?.isDotNetIteratorBase == true }
+        ) {
+            return when (name) {
+                "hasNext" -> DotNetIlIteratorHasNextIntrinsic
+                "next" -> DotNetIlIteratorNextIntrinsic
+                else -> null
+            }
         }
+        return null
     }
 
     data class Key(
