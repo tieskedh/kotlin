@@ -8,8 +8,8 @@ structural callable/property-reference Any semantics, and the coherent Function3
 continuation implemented; local delegated-property tokens, explicit user Iterator bridges, open
 invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Iterable
 identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
-committed; bound stdlib metadata consumption is committed and the explicit paired stdlib producer
-is implemented in the current feature slice).
+committed; bound stdlib metadata consumption and the explicit paired stdlib producer are committed,
+and its reproducibility boundary is implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -44,8 +44,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ArrayIterator implementation (`186af0b4d`), followed by the stdlib ArrayIterable/asIterable
   continuation (`ba7260521`) and the first top-level generated-common stdlib operations,
   `Iterable<T>.first()` and `last()` (`311b79bd7`), followed by separate-consumer stdlib metadata
-  KLIB/CLR DLL binding (`df4ab474b`), with one-compilation KLIB/DLL production in the current
-  feature slice.
+  KLIB/CLR DLL binding (`df4ab474b`) and one-compilation KLIB/DLL production (`21eb60d4e`), with
+  producer reproducibility in the current feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -80,6 +80,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `-no-stdlib` consumers of both `first()` and `last()`. Together with the existing external-pair
   consumer pin: 3 tests, 0 failures, 0 errors, 0 skips. The cli-dotnet Kotlin compilation also
   passes. No full suite was run.
+  The reproducibility continuation runs each target producer twice. Packed KLIB bytes and
+  compiler-owned IL bytes are identical within each target; the same focused three-test class is
+  3/0/0/0. DLL byte identity is deliberately excluded because both external ILAsm paths may stamp
+  fresh PE module identity; stable assembly binding plus separate consumption is the current PE
+  contract. No full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -1100,10 +1105,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Finish the stdlib producer migration gate.** The explicit POC route now emits and consumes the
-   bound KLIB/DLL pair for both CoreCLR and Framework. Establish reproducible output expectations
-   and a deliberate artifact-location migration before removing same-run stdlib rebuilding from
-   ordinary executables. Do not broaden this into general Kotlin/.NET library publication yet.
+1. **Migrate default stdlib discovery.** The explicit pair is now functionally and reproducibly
+   pinned on both targets. Follow JVM's `KotlinPaths` and Native's distribution-owned stdlib model:
+   define and populate a target-specific Kotlin-home location, then make ordinary compilation load
+   that bound pair by default unless `-no-stdlib` is present. Preserve classpath + `-no-stdlib` as
+   the explicit override; do not invent another source annotation or general publication syntax.
+   Remove same-run stdlib rebuilding only after that installed-artifact route is covered.
 2. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
