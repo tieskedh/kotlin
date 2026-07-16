@@ -5,10 +5,11 @@ package org.jetbrains.kotlin.backend.dotnet
  * (one file per package, because a Kotlin file has a single package directive).
  *
  * Most declarations remain resolution-only intrinsic stubs. `DotNetStdlibCollections.kt` also
- * contains the first executable target-stdlib implementation, `ArrayIterator<T>`. Until the
- * backend can import Kotlin metadata from a separately compiled library, frontend and lowering
- * see that implementation in the same module as the program; scoped IL emission then places it
- * only in `Kotlin.Stdlib.dll`, never in the user assembly.
+ * contains the first executable target-stdlib implementations: ordinary array-backed collection
+ * classes and the first top-level collection operation. Until the backend can import Kotlin
+ * metadata from a separately compiled library, frontend and lowering see those implementations
+ * in the same module as the program; scoped IL emission then places them only in
+ * `Kotlin.Stdlib.dll`, never in the user assembly.
  */
 val DOTNET_STDLIB_SOURCES: Map<String, String> = mapOf(
     "DotNetStdlibIo.kt" to """@file:Suppress("UNUSED_PARAMETER")
@@ -136,6 +137,18 @@ public external fun LongArray.asIterable(): Iterable<Long>
 public external fun DoubleArray.asIterable(): Iterable<Double>
 public external fun BooleanArray.asIterable(): Iterable<Boolean>
 public external fun CharArray.asIterable(): Iterable<Char>
+
+// Bootstrap subset of libraries/tools/kotlin-stdlib-gen's Elements.f_first common template.
+// The mature template first dispatches Lists to their indexed implementation; that is an
+// optimization, not observable semantics, and remains unavailable until this target has a List
+// ABI. This universal Iterable path is emitted on Kotlin.Collections.CollectionsKt in
+// Kotlin.Stdlib, while user call sites reference that physical facade across the assembly edge.
+public fun <T> Iterable<T>.first(): T {
+    val iterator = iterator()
+    if (!iterator.hasNext())
+        throw NoSuchElementException("Collection is empty.")
+    return iterator.next()
+}
 
 // The first executable target-stdlib implementation. It is private in Kotlin source so injected
 // declarations do not expose a provisional user API. The backend emits this class, with public CLR

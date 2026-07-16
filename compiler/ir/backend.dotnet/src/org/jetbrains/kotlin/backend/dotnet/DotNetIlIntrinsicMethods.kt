@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.name.FqName
  */
 internal class DotNetIlIntrinsicMethods(
     irBuiltIns: IrBuiltIns,
+    emissionScope: DotNetIlEmissionScope,
 ) {
     private val kotlinFqn = StandardNames.BUILT_INS_PACKAGE_FQ_NAME
     private val kotlinIoFqn = FqName("kotlin.io")
@@ -46,6 +47,7 @@ internal class DotNetIlIntrinsicMethods(
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
     private val arrayFqn = StandardNames.FqNames.array.toSafe()
+    private val iterableFqn = FqName("kotlin.collections.Iterable")
     private val stringFqn = StandardNames.FqNames.string.toSafe()
     private val intFqn = StandardNames.FqNames._int.toSafe()
     private val longFqn = StandardNames.FqNames._long.toSafe()
@@ -152,7 +154,8 @@ internal class DotNetIlIntrinsicMethods(
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
-            arrayAsIterableIntrinsics() + erasedCollectionIntrinsics()
+            arrayAsIterableIntrinsics() + erasedCollectionIntrinsics() +
+            if (emissionScope == DotNetIlEmissionScope.USER) stdlibFunctionIntrinsics() else emptyList()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -288,6 +291,11 @@ internal class DotNetIlIntrinsicMethods(
                     to DotNetIlArrayAsIterableIntrinsic(fixedArrayType = null)
         )
     }
+
+    /** Physical calls to executable Kotlin.Stdlib functions, never inline reimplementations. */
+    private fun stdlibFunctionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = listOf(
+        Key(kotlinCollectionsFqn, iterableFqn, "first", emptyList()) to DotNetIlStdlibFirstIntrinsic,
+    )
 
     /** Kotlin-owned array content operations; CLR vector identity/collection helpers are not used. */
     private fun arrayContentIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
@@ -1076,6 +1084,8 @@ private class DotNetIlArrayIteratorIntrinsic(
 private class DotNetIlArrayAsIterableIntrinsic(
     private val fixedArrayType: DotNetIlValueType?,
 ) : DotNetIlIntrinsicMethod() {
+    override val excludesDeclarationFromCodegen: Boolean = true
+
     override fun tryEmitAsExpression(
         call: IrCall,
         codegen: DotNetIlExpressionCodegen,
@@ -1092,6 +1102,37 @@ private class DotNetIlArrayAsIterableIntrinsic(
         codegen.emitExpression(receiver, arrayType)
         codegen.emit(
             DotNetStdlibLibrary.arrayIterableConstructorInstruction(elementType),
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+/**
+ * `Iterable<T>.first()` -> the ordinary generic implementation in Kotlin.Stdlib.
+ *
+ * This intrinsic selects a physical cross-assembly method reference only; it does not reproduce
+ * the library algorithm in user code. The stdlib emitter deliberately omits this intrinsic and
+ * compiles the injected Kotlin body onto the stable CollectionsKt facade.
+ */
+private object DotNetIlStdlibFirstIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (call.arguments.size != 1 || call.typeArguments.size != 1) return false
+        val elementIrType = call.typeArguments.single()
+            ?: dotNetUnsupported("'first' has an unsupported missing type argument")
+        val elementType = codegen.toDotNetIlValueType(elementIrType)
+            ?: dotNetUnsupported("'first' has unsupported element type ${elementIrType.render()}")
+        if (expectedType != elementType) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing iterable receiver for 'first'")
+        codegen.emitExpression(receiver, DotNetRuntimeTypes.iterableType)
+        codegen.emit(
+            DotNetStdlibLibrary.iterableFirstCallInstruction(elementType),
             pops = 1,
             pushes = 1,
         )
