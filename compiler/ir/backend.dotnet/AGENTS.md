@@ -220,10 +220,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `IndexOutOfBoundsException`. Both instead throw `System.OverflowException` for a negative
   `newarr` length; exposing that raw fault would wrongly make `catch (ArithmeticException)` catch
   a Kotlin negative-array-size failure. Constructors therefore branch on a negative size and
-  throw plain `System.Exception`: the supported Kotlin catch edges (`Exception`/`Throwable`)
-  remain correct without inventing an `ArithmeticException` or `IllegalArgumentException` edge;
-  exact negative-array-size identity is deferred until that synthetic guard has an audited
-  Kotlin-owned exception and catch policy.
+  throw compiler-owned `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException`. Common
+  Kotlin promises the RuntimeException parent but exposes no portable source class; JVM's exact
+  child is a Java platform type. The CLR child is consequently metadata-public for generated
+  consumers but absent from the fake stdlib and source mapping. It preserves Exception/Throwable,
+  the future exact RuntimeException edge, a null default message, and no arithmetic/argument/state
+  edge. `negativearray_s1` validates both ILAsm implementations and all four runtime pairings.
   Direct `for (x in array)` iteration is lowered without iterator allocation: evaluate the array
   expression once into `indexedObject`, initialize `inductionVariable = 0`, cache immutable
   `last = indexedObject.size`, then `while (inductionVariable < last)` load

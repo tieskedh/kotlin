@@ -27,6 +27,9 @@ internal object DotNetRuntimeLibrary {
     val noSuchElementExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NoSuchElementException".toIlIdentifier()}"
 
+    val negativeArraySizeExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.NegativeArraySizeException".toIlIdentifier()}"
+
     val numberFormatExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NumberFormatException".toIlIdentifier()}"
 
@@ -189,6 +192,27 @@ internal object DotNetRuntimeLibrary {
           }
 
           .class public auto ansi beforefieldinit NoSuchElementException
+                 extends Kotlin.RuntimeException
+          {
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void Kotlin.RuntimeException::.ctor()
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.RuntimeException::.ctor(string)
+              ret
+            }
+          }
+
+          .class public auto ansi beforefieldinit NegativeArraySizeException
                  extends Kotlin.RuntimeException
           {
             .method public hidebysig specialname rtspecialname instance void .ctor() cil managed

@@ -79,7 +79,7 @@
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
@@ -141,7 +141,7 @@ IL_arraySizeNonNegative_0:
     clt
     brfalse IL_arraySizeNonNegative_0
     pop
-    newobj instance void [mscorlib]System.Exception::.ctor()
+    newobj instance void [Kotlin.Runtime]'Kotlin.NegativeArraySizeException'::.ctor()
     throw
 IL_arraySizeNonNegative_0:
     newarr string
