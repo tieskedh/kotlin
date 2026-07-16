@@ -1,10 +1,10 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
-import org.jetbrains.kotlin.backend.dotnet.DotNetCallableExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
-import org.jetbrains.kotlin.backend.dotnet.dotNetCallableExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
@@ -71,10 +71,10 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             }
         }
 
-        val callableExports = mutableListOf<DotNetCallableExport>()
+        val exports = mutableListOf<DotNetExport>()
         for (rawExport in arguments.dotNetExports.orEmpty()) {
             val export = try {
-                DotNetCallableExport.parse(rawExport)
+                DotNetExport.parse(rawExport)
             } catch (e: IllegalArgumentException) {
                 configuration.report(
                     COMPILER_ARGUMENTS_ERROR,
@@ -82,16 +82,16 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                 )
                 continue
             }
-            if (callableExports.any { it.kotlinFqName == export.kotlinFqName }) {
+            if (exports.any { it.kotlinFqName == export.kotlinFqName }) {
                 configuration.report(
                     COMPILER_ARGUMENTS_ERROR,
                     "Duplicate -Xdotnet-export target '${export.kotlinFqName}'."
                 )
                 continue
             }
-            callableExports += export
+            exports += export
         }
-        configuration.dotNetCallableExports = callableExports
+        configuration.dotNetExports = exports
 
         val destination = arguments.destination
         if (destination == null) {

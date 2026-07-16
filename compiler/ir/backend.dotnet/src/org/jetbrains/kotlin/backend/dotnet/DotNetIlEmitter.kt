@@ -56,7 +56,7 @@ class DotNetIlEmitter(
     private val moduleFileName: String,
     private val producesExecutable: Boolean,
     private val irBuiltIns: IrBuiltIns,
-    private val callableExports: List<DotNetCallableExport> = emptyList(),
+    private val exports: List<DotNetExport> = emptyList(),
 ) {
     /**
      * Renders the module to IL text.
@@ -104,9 +104,9 @@ class DotNetIlEmitter(
         // annotation or an automatic public overload policy. One FQ name must identify exactly
         // one real top-level declaration; overloaded groups require a future signature selector
         // rather than an arbitrary backend pick.
-        val callableExportsByTarget = LinkedHashMap<IrSimpleFunction, DotNetCallableExport>()
+        val exportsByTarget = LinkedHashMap<IrSimpleFunction, DotNetExport>()
         var exportSelectionFailed = false
-        for (export in callableExports) {
+        for (export in exports) {
             val candidates = topLevelFunctionsByFile.values.flatten().filter { function ->
                 !function.isOriginallyLocalDeclaration && function.fqNameWhenAvailable?.asString() == export.kotlinFqName
             }
@@ -120,7 +120,7 @@ class DotNetIlEmitter(
                 continue
             }
             val target = candidates.single()
-            val previous = callableExportsByTarget.putIfAbsent(target, export)
+            val previous = exportsByTarget.putIfAbsent(target, export)
             if (previous != null) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -130,17 +130,6 @@ class DotNetIlEmitter(
             }
         }
         if (exportSelectionFailed) return null
-        if (callableExportsByTarget.isNotEmpty() && topLevelClassesByFile.values.flatten().any { irClass ->
-                irClass.fqNameWhenAvailable?.asString() == DotNetNullableMetadata.ATTRIBUTE_FQ_NAME
-            }
-        ) {
-            messageCollector.report(
-                CompilerMessageSeverity.ERROR,
-                "Cannot emit CLR callable exports: '${DotNetNullableMetadata.ATTRIBUTE_FQ_NAME}' is compiler-reserved."
-            )
-            return null
-        }
-
         val mainFunctions = DotNetMainFunctionDetector().getMainFunctions(moduleFragment)
         if (mainFunctions.size > 1) {
             messageCollector.report(
@@ -698,10 +687,11 @@ class DotNetIlEmitter(
         // allowed to retain a stale signature or call a declaration evicted by a class/body
         // failure. Export failures are compilation errors because the user requested this
         // boundary explicitly; silently dropping the facade would be a false-success ABI.
-        val renderedCallableExports = LinkedHashMap<IrSimpleFunction, List<DotNetIlRenderedMethod>>()
+        val renderedExports = LinkedHashMap<IrSimpleFunction, List<DotNetIlRenderedMethod>>()
         val exportedIlIdentities = hashSetOf<String>()
-        var callableExportFailed = false
-        for ([target, export] in callableExportsByTarget) {
+        var exportsUseNullableMetadata = false
+        var exportFailed = false
+        for ([target, export] in exportsByTarget) {
             val targetInfo = availableFunctions[target]
             if (targetInfo == null) {
                 val reason = skipReasons[target] ?: "the selected function is not in the emitted callable surface"
@@ -709,11 +699,11 @@ class DotNetIlEmitter(
                     CompilerMessageSeverity.ERROR,
                     "Cannot export '${export.kotlinFqName}' as '${export.clrMethodName}': $reason."
                 )
-                callableExportFailed = true
+                exportFailed = true
                 continue
             }
             try {
-                val renderedExport = renderCallableExport(target, export, targetInfo, typeMapper, availableFunctions)
+                val renderedExport = renderExport(target, export, targetInfo, typeMapper, availableFunctions)
                 for (exportedMethod in renderedExport.methods) {
                     val exportedParameterTypes = exportedMethod.parameterTypes.joinToString(", ")
                     val collision = availableFunctions.entries.firstOrNull { [function, info] ->
@@ -734,16 +724,27 @@ class DotNetIlEmitter(
                         dotNetUnsupported("another requested export maps to the same CLR method '$exportIdentity'")
                     }
                 }
-                renderedCallableExports[target] = renderedExport.methods.map { it.method }
+                renderedExports[target] = renderedExport.methods.map { it.method }
+                exportsUseNullableMetadata = exportsUseNullableMetadata || renderedExport.usesNullableMetadata
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
                     "Cannot export '${export.kotlinFqName}' as '${export.clrMethodName}': ${e.reason}."
                 )
-                callableExportFailed = true
+                exportFailed = true
             }
         }
-        if (callableExportFailed) return null
+        if (exportFailed) return null
+        if (exportsUseNullableMetadata && topLevelClassesByFile.values.flatten().any { irClass ->
+                irClass.fqNameWhenAvailable?.asString() == DotNetNullableMetadata.ATTRIBUTE_FQ_NAME
+            }
+        ) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "Cannot emit CLR exports: '${DotNetNullableMetadata.ATTRIBUTE_FQ_NAME}' is compiler-reserved."
+            )
+            return null
+        }
 
         for ([irClass, reason] in classSkipReasons) {
             messageCollector.report(
@@ -813,7 +814,7 @@ class DotNetIlEmitter(
                     when (declaration) {
                         is IrSimpleFunction -> {
                             renderedMethods[declaration]?.let { facadeMethods += it }
-                            renderedCallableExports[declaration]?.let { facadeMethods += it }
+                            renderedExports[declaration]?.let { facadeMethods += it }
                         }
                         is IrProperty -> {
                             declaration.getter?.let { getter -> renderedMethods[getter]?.let { facadeMethods += it } }
@@ -856,7 +857,7 @@ class DotNetIlEmitter(
                 referencesRuntimeAssembly = producesExecutable ||
                         "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody
             )
-            if (renderedCallableExports.isNotEmpty()) {
+            if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl)
             }
             append(moduleBody)
@@ -2055,34 +2056,29 @@ class DotNetIlEmitter(
         fqNameWhenAvailable?.asString() ?: name.asString()
 
     /**
-     * Renders one explicit CLR callable boundary. Supported Function0/1/2 parameters become
-     * typed Func/Action parameters and are adapted back to the canonical erased FunctionN before
-     * the Kotlin method is called. A callable return is projected in the opposite direction;
-     * ordinary parameters and returns stay unchanged. No ordinary Kotlin signature is rewritten.
+     * Renders one explicit CLR function export while leaving the Kotlin method unchanged.
+     * Ordinary parameters and returns retain their mapped CLR shapes. Supported Function0/1/2
+     * parameters become typed Func/Action parameters and are adapted back to the canonical erased
+     * FunctionN before the Kotlin method is called; callable returns project in the other direction.
      */
-    private fun renderCallableExport(
+    private fun renderExport(
         target: IrSimpleFunction,
-        export: DotNetCallableExport,
+        export: DotNetExport,
         targetInfo: DotNetIlFunctionInfo,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
-    ): DotNetRenderedCallableExport {
+    ): DotNetRenderedExport {
         if (target.visibility != DescriptorVisibilities.PUBLIC) {
             dotNetUnsupported("the selected function is not public")
         }
         if (target.typeParameters.isNotEmpty()) {
             dotNetUnsupported("generic functions are not supported by this export slice")
         }
-        if (target.isSuspend) {
-            dotNetUnsupported("suspend functions are outside the CLR delegate boundary")
-        }
+        if (target.isSuspend) dotNetUnsupported("suspend functions are outside this CLR export slice")
         val parameterBoundaries = target.parameters.map { parameter ->
             parameter.type.delegateBoundaryOrNull(typeMapper, "parameter '${parameter.name.asString()}'")
         }
         val returnBoundary = target.returnType.delegateBoundaryOrNull(typeMapper, "return type")
-        if (parameterBoundaries.all { it == null } && returnBoundary == null) {
-            dotNetUnsupported("the selected function has no supported Function0/1/2 parameter or return")
-        }
         val exportedParameterTypes = targetInfo.signature.parameterTypes.mapIndexed { index, type ->
             parameterBoundaries[index]?.delegateBoundary?.closedDelegateType ?: type.nameInSignature
         }
@@ -2103,6 +2099,8 @@ class DotNetIlEmitter(
                 DotNetIlReturnType.Void -> emptyList()
                 is DotNetIlReturnType.Value -> DotNetNullableMetadata.flags(target.returnType, returnType.type)
             }
+        val usesNullableMetadata = returnNullabilityFlags.isNotEmpty() ||
+                parameterNullabilityFlags.any { it.isNotEmpty() }
         val renderedMethods = mutableListOf<DotNetRenderedExportMethod>()
         renderedMethods += DotNetRenderedExportMethod(
             method = DotNetIlRenderedMethod(buildString {
@@ -2141,7 +2139,7 @@ class DotNetIlEmitter(
             }
         }
         if (trailingOverloadStarts.isEmpty()) {
-            return DotNetRenderedCallableExport(renderedMethods)
+            return DotNetRenderedExport(renderedMethods, usesNullableMetadata)
         }
 
         val defaultStub = target.defaultArgumentsDispatchFunction as? IrSimpleFunction
@@ -2222,7 +2220,7 @@ class DotNetIlEmitter(
                 parameterTypes = retainedParameterTypes,
             )
         }
-        return DotNetRenderedCallableExport(renderedMethods)
+        return DotNetRenderedExport(renderedMethods, usesNullableMetadata)
     }
 
     private fun IrType.delegateBoundaryOrNull(
@@ -2326,8 +2324,9 @@ class DotNetIlEmitter(
                 origin != IrDeclarationOrigin.MOVED_DISPATCH_RECEIVER &&
                 origin != IrDeclarationOrigin.MOVED_EXTENSION_RECEIVER
 
-    private data class DotNetRenderedCallableExport(
+    private data class DotNetRenderedExport(
         val methods: List<DotNetRenderedExportMethod>,
+        val usesNullableMetadata: Boolean,
     )
 
     private data class DotNetRenderedExportMethod(

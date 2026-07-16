@@ -6,11 +6,11 @@
 package org.jetbrains.kotlin.test.runners.codegen
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
-import org.jetbrains.kotlin.backend.dotnet.DotNetCallableExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
-import org.jetbrains.kotlin.backend.dotnet.dotNetCallableExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -224,8 +224,8 @@ private class DotNetEnvironmentConfigurator(
         configuration.put(CommonConfigurationKeys.MODULE_NAME, module.name)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
         configuration.dotNetAssemblyName = artifactName
-        configuration.dotNetCallableExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT]
-            .map(DotNetCallableExport::parse)
+        configuration.dotNetExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT]
+            .map(DotNetExport::parse)
         configuration.dotNetOutput = getOutputFile(module, artifactName)
         configuration.dotNetTarget = target
         configuration.addSourcesForDependsOnClosure(module, testServices)
@@ -254,7 +254,7 @@ private class DotNetEnvironmentConfigurator(
 
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     val DOTNET_EXPORT by stringDirective(
-        "Explicit callable boundary export in <kotlin-fq-name>=<clr-method-name> form"
+        "Explicit CLR function export in <kotlin-fq-name>=<clr-method-name> form"
     )
 }
 
