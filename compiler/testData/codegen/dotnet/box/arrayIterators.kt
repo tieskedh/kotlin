@@ -2,6 +2,58 @@ private class IteratorItem(val value: Int)
 
 private class IteratorGenericItem<T>(val value: T)
 
+private class WordIterator(private val values: Array<String>) : Iterator<String> {
+    private var index = 0
+
+    override fun hasNext(): Boolean = index < values.size
+
+    override fun next(): String {
+        if (!hasNext()) throw NoSuchElementException()
+        val value = values[index]
+        index = index + 1
+        return value
+    }
+}
+
+private class IntCountdown(private var current: Int) : Iterator<Int> {
+    override fun hasNext(): Boolean = current > 0
+
+    override fun next(): Int {
+        if (!hasNext()) throw NoSuchElementException()
+        val value = current
+        current = current - 1
+        return value
+    }
+}
+
+private open class SingleIterator<T>(private val value: T) : Iterator<T> {
+    private var available = true
+
+    override fun hasNext(): Boolean = available
+
+    override fun next(): T {
+        if (!available) throw NoSuchElementException()
+        available = false
+        return value
+    }
+}
+
+private class InheritedStringIterator(value: String) : SingleIterator<String>(value)
+
+private abstract class DeferredIterator<T> : Iterator<T>
+
+private class DeferredStringIterator(private val value: String) : DeferredIterator<String>() {
+    private var available = true
+
+    override fun hasNext(): Boolean = available
+
+    override fun next(): String {
+        if (!available) throw NoSuchElementException()
+        available = false
+        return value
+    }
+}
+
 private fun <T> first(iterator: Iterator<T>): T = iterator.next()
 
 private fun isExhaustedTwice(iterator: Iterator<Any>): Boolean {
@@ -88,5 +140,42 @@ fun box(): String {
         loopSum = loopSum + value
     }
     if (loopSum != 5) return "fail 15: direct for loop"
+
+    val words = WordIterator(arrayOf("typed", "erased"))
+    if (words.next() != "typed") return "fail 16: typed user iterator call"
+    val wordsAsIterator: Iterator<String> = words
+    if (!wordsAsIterator.hasNext() || wordsAsIterator.next() != "erased" || wordsAsIterator.hasNext()) {
+        return "fail 17: reference user iterator bridge"
+    }
+    val wordsAsAny: Iterator<Any> = wordsAsIterator
+    if (wordsAsAny !== words || !isExhaustedTwice(wordsAsAny)) {
+        return "fail 18: reference user iterator covariance"
+    }
+
+    val countdown = IntCountdown(2)
+    val countdownAsInt: Iterator<Int> = countdown
+    val countdownAsAny: Iterator<Any> = countdownAsInt
+    if (countdownAsAny !== countdown || countdownAsAny.next() != 2 || first(countdownAsInt) != 1) {
+        return "fail 19: primitive user iterator covariance"
+    }
+    if (!isExhaustedTwice(countdownAsAny)) return "fail 20: primitive user iterator exhaustion"
+
+    val genericItemFromUserIterator = IteratorGenericItem("generic-user")
+    val generic = SingleIterator(genericItemFromUserIterator)
+    val genericAsIterator: Iterator<IteratorGenericItem<String>> = generic
+    val genericValue = first(genericAsIterator)
+    if (genericValue.value != "generic-user" || genericValue !== genericItemFromUserIterator) {
+        return "fail 21: generic user iterator bridge"
+    }
+
+    val inherited: Iterator<String> = InheritedStringIterator("inherited")
+    if (inherited.next() != "inherited" || inherited.hasNext()) {
+        return "fail 22: inherited user iterator bridge"
+    }
+
+    val deferred: Iterator<String> = DeferredStringIterator("deferred")
+    if (!deferred.hasNext() || deferred.next() != "deferred" || deferred.hasNext()) {
+        return "fail 23: bridge deferred through abstract base"
+    }
     return "OK"
 }

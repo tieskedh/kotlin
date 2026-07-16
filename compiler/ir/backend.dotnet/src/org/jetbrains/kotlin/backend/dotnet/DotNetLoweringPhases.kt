@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericDataClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInterfaceDefaultArgumentsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetIteratorBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassTypeParametersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
@@ -83,6 +84,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // masked dispatchers into a compiler-reserved nested helper, and redirect calls to its static
     // methods with the interface receiver explicit. This preserves the Framework 4.8 floor.
     ::DotNetInterfaceDefaultArgumentsLowering,
+    // JVM bridge precedent adapted to the Kotlin-owned CLR iterator identity: keep each user's
+    // logically typed next()/hasNext() members and add private explicit implementations of the
+    // erased Runtime Next()/HasNext() slots. This does not enable any new iterator producer.
+    ::DotNetIteratorBridgeLowering,
     // CLR generics reify C<T>, unlike the erased class identity used by generated data-class
     // equality on the mature targets. Preserve reified storage/signatures, but give each generic
     // data class a private non-generic equality view before later lowerings inspect its members.

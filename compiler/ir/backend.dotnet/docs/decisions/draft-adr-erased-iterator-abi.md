@@ -74,15 +74,32 @@ boxes primitive vector elements and returns reference elements unchanged. Exhaus
 `Kotlin.NoSuchElementException : Kotlin.RuntimeException`; using
 `System.InvalidOperationException` would introduce a false Kotlin IllegalStateException edge.
 
+That handwritten class is bootstrap packaging, not a permanent ownership decision. This POC has
+no real .NET stdlib module in which an ordinary Kotlin `ArrayIterator<T>` implementation can be
+compiled. Once that target stdlib exists and its classes use the bridge policy below, the logical
+array-iterator implementation should move there. The runtime assembly should retain the erased
+interface identity and only narrowly unavoidable low-level helpers. Whether primitive arrays use
+specialized stdlib iterator classes or the current shared `System.Array` implementation is a
+separate performance decision.
+
 Direct `for (element in array)` loops do not use this object. The existing common indexed-loop
 lowering evaluates the array once and remains allocation-free. The iterator ABI is used only when
 an explicit `iterator()` call produces a value that can escape or be stored.
 
-The current bounded implementation supports the five established primitive vectors and concrete
-reference-element arrays. An open `Array<T>.iterator()` producer remains rejected even though an
-already-created `Iterator<T>` can be consumed by a generic function. User classes implementing
-`Iterator<T>` also remain rejected until bridge generation can provide the erased slots from
-their logically typed members.
+The current bounded implementation supports the five established primitive vectors, concrete
+reference-element arrays, and ordinary user classes which directly implement `Iterator<T>`. An
+open `Array<T>.iterator()` producer remains rejected even though an already-created `Iterator<T>`
+can be consumed by a generic function.
+
+A user implementation retains its logically typed Kotlin members, including `next(): T`. The
+backend adds two private explicit CLR interface implementations on the same object: `HasNext()`
+forwards to `hasNext()`, while erased `object Next()` forwards to `next()` and boxes its result at
+that boundary. This follows the JVM's typed-member-plus-erased-bridge semantic pattern; the extra
+`HasNext` forwarder is required only because the Kotlin-owned CLR interface uses CLR-style slot
+names. A base class which directly declares `Iterator<T>` owns the bridges when it has class-owned
+typed members, and derived classes inherit them. An abstract base with only the interface
+obligation defers bridge ownership to the first concrete descendant. No adapter object, generic
+runtime interface, or public typed capability is added.
 
 ## Consequences
 
@@ -96,6 +113,7 @@ Benefits:
 Costs:
 
 - primitive elements box at the erased `Next()` boundary and unbox at the Kotlin call site;
+- each direct user implementer carries two small private MethodImpl bridges;
 - the raw interface is not an idiomatic CLR enumeration surface; and
 - logical element types require Kotlin metadata for future cross-module Kotlin compilation.
 
@@ -105,16 +123,19 @@ Probe series `iteratorabi_s1` assembled the runtime, a generic consumer, primiti
 producers, and an exact exhaustion catch with modern 10.0.9 and .NET Framework 4.8 ILAsm. All four
 same-assembler and cross-runtime pairings produced the same results.
 
-Repository pins cover both FIR parsers and real CoreCLR execution:
+Repository pins cover both FIR parsers and real CoreCLR execution, including reference,
+primitive, open-generic, covariant, and inherited user implementations:
 
 - `compiler/testData/codegen/dotnet/ilText/arrayIterators.kt`;
 - `compiler/testData/codegen/dotnet/box/arrayIterators.kt`; and
-- the open-producer and user-implementation negatives in `genericArraysRejected.kt`.
+- the open-producer negative in `genericArraysRejected.kt`.
 
 ## Deferred decisions
 
-This draft does not decide collection/list iterators, mutable iterators, sequences, user-defined
-iterator bridge generation, `Iterable<T>`, CLR `IEnumerable<T>`/`IEnumerator<T>` adapters, typed
-fast-path members, or Kotlin metadata encoding. Those layers may add views or optimizations, but
-ordinary Kotlin iterator covariance must continue to preserve the erased canonical identity or
-this draft must be explicitly revised.
+This draft does not decide the target-stdlib packaging migration, separately compiled Kotlin
+producer modules, open `Array<T>` producers, user-defined iterator subinterfaces,
+primitive-specialized iterator subclasses, collection/list iterators, mutable iterators,
+sequences, `Iterable<T>`, CLR `IEnumerable<T>`/`IEnumerator<T>` adapters, typed fast-path members,
+or Kotlin metadata encoding. Those layers may add views or optimizations, but ordinary Kotlin
+iterator covariance must continue to preserve the erased canonical identity or this draft must
+be explicitly revised.

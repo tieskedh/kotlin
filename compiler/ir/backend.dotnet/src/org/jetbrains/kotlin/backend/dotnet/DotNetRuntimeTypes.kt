@@ -396,10 +396,10 @@ private val IrClass.isDotNetKPropertyBase: Boolean
 private val IrClass.isDotNetKMutablePropertyBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.reflect.KMutableProperty" && typeParameters.size == 1
 
-private val IrClass.isDotNetIteratorBase: Boolean
+internal val IrClass.isDotNetIteratorBase: Boolean
     get() = fqNameWhenAvailable?.asString() == "kotlin.collections.Iterator" && typeParameters.size == 1
 
-private val IrClass.isDotNetSupportedPrimitiveIterator: Boolean
+internal val IrClass.isDotNetSupportedPrimitiveIterator: Boolean
     get() = fqNameWhenAvailable?.asString() in DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES && typeParameters.isEmpty()
 
 private val DOTNET_SUPPORTED_PRIMITIVE_ITERATOR_FQ_NAMES = setOf(

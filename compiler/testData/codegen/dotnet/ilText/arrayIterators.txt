@@ -6,6 +6,327 @@
 .assembly 'arrayIterators' {}
 .module 'main-arrayIterators.il'
 
+.class public auto ansi sealed beforefieldinit 'StringValueIterator'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .field private string 'value'
+  .field private bool 'available'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'StringValueIterator'::'value'
+    ldarg.0
+    ldc.i4.1
+    stfld bool 'StringValueIterator'::'available'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'StringValueIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld bool 'StringValueIterator'::'available'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld bool 'StringValueIterator'::'available'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance bool 'StringValueIterator'::'get_available'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'next'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4.0
+    call instance void 'StringValueIterator'::'set_available'(bool)
+    ldarg.0
+    call instance string 'StringValueIterator'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'StringValueIterator'::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'StringValueIterator'::'next'()
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'StringValueIterator'::'get_value'()
+  }
+  .property instance bool 'available'()
+  {
+    .get instance bool 'StringValueIterator'::'get_available'()
+    .set instance void 'StringValueIterator'::'set_available'(bool)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'IntValueIterator'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .field private int32 'value'
+  .field private bool 'available'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'IntValueIterator'::'value'
+    ldarg.0
+    ldc.i4.1
+    stfld bool 'IntValueIterator'::'available'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'IntValueIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld bool 'IntValueIterator'::'available'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld bool 'IntValueIterator'::'available'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance bool 'IntValueIterator'::'get_available'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'next'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4.0
+    call instance void 'IntValueIterator'::'set_available'(bool)
+    ldarg.0
+    call instance int32 'IntValueIterator'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'IntValueIterator'::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntValueIterator'::'next'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'IntValueIterator'::'get_value'()
+  }
+  .property instance bool 'available'()
+  {
+    .get instance bool 'IntValueIterator'::'get_available'()
+    .set instance void 'IntValueIterator'::'set_available'(bool)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericValueIterator`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .field private !0 'value'
+  .field private bool 'available'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'GenericValueIterator`1'<!0>::'value'
+    ldarg.0
+    ldc.i4.1
+    stfld bool class 'GenericValueIterator`1'<!0>::'available'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'GenericValueIterator`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld bool class 'GenericValueIterator`1'<!0>::'available'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld bool class 'GenericValueIterator`1'<!0>::'available'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance bool class 'GenericValueIterator`1'<!0>::'get_available'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'next'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4.0
+    call instance void class 'GenericValueIterator`1'<!0>::'set_available'(bool)
+    ldarg.0
+    call instance !0 class 'GenericValueIterator`1'<!0>::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'GenericValueIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericValueIterator`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'GenericValueIterator`1'::'get_value'()
+  }
+  .property instance bool 'available'()
+  {
+    .get instance bool 'GenericValueIterator`1'::'get_available'()
+    .set instance void 'GenericValueIterator`1'::'set_available'(bool)
+  }
+}
+.class public abstract auto ansi beforefieldinit 'DeferredValueIterator`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'DeferredStringValueIterator'
+       extends class 'DeferredValueIterator`1'<string>
+{
+  .field private string 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void class 'DeferredValueIterator`1'<string>::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'DeferredStringValueIterator'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'DeferredStringValueIterator'::'value'
+    ret
+  }
+  .method public hidebysig virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 1
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig virtual instance string 'next'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance string 'DeferredStringValueIterator'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<IteratorHasNextBridge>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool 'DeferredStringValueIterator'::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<IteratorNextBridge>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'DeferredStringValueIterator'::'next'()
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'DeferredStringValueIterator'::'get_value'()
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'arrayIteratorsKt'
        extends [mscorlib]System.Object
 {
@@ -85,6 +406,37 @@ IL_tryEnd_0:
     ldloc.0
     ret
   }
+  .method public hidebysig static string 'directStringNext'(class 'StringValueIterator' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'StringValueIterator'::'next'()
+    ret
+  }
+  .method public hidebysig static string 'erasedStringNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    castclass [mscorlib]System.String
+    ret
+  }
+  .method public hidebysig static int32 'erasedIntNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    unbox.any [mscorlib]System.Int32
+    ret
+  }
+  .method public hidebysig static !!0 'erasedGenericNext'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    unbox.any !!0
+    ret
+  }
   .method public hidebysig static void 'main'() cil managed
   {
     .entrypoint
@@ -109,6 +461,26 @@ IL_tryEnd_0:
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "user"
+    newobj instance void 'StringValueIterator'::.ctor(string)
+    call string 'arrayIteratorsKt'::'erasedStringNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    newobj instance void 'IntValueIterator'::.ctor(int32)
+    call int32 'arrayIteratorsKt'::'erasedIntNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "generic"
+    newobj instance void class 'GenericValueIterator`1'<string>::.ctor(!0)
+    call !!0 'arrayIteratorsKt'::'erasedGenericNext'<string>(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "deferred"
+    newobj instance void 'DeferredStringValueIterator'::.ctor(string)
+    call string 'arrayIteratorsKt'::'erasedStringNext'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

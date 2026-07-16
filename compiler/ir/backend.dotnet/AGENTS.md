@@ -338,10 +338,20 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   reference arrays constructs `Kotlin.Runtime.Internal.ArrayIterator`, which stores System.Array
   plus an index and observes later vector mutations. Exhaustion throws the exact runtime-owned
   `Kotlin.NoSuchElementException`; mapping it to InvalidOperationException would falsely make it
-  an IllegalStateException. Direct array `for` loops keep the existing allocation-free indexed
-  lowering. STAYS REJECTED, loudly: open `Array<T>` producers, user-defined Iterator
-  implementations until typed-to-erased bridge generation exists, Iterable/collection/sequence
-  iteration, mutable iterators, CLR IEnumerator adapters, and typed fast-path entries. Pins:
+  an IllegalStateException. The handwritten runtime ArrayIterator is bootstrap packaging because
+  this POC has no real .NET stdlib build; once one exists, its ordinary Kotlin implementation
+  belongs there and the runtime retains the erased interface identity. Primitive specialization
+  is a later stdlib/performance choice. Direct array `for` loops keep the existing allocation-free
+  indexed lowering. A user class which directly implements `Iterator<T>` keeps typed `hasNext()` and
+  `next(): T`; a JVM-shaped lowering adds private explicit `HasNext()` and erased `object Next()`
+  MethodImpl bridges on the same object. The erased bridge boxes primitive or open-generic
+  results exactly once, reference results pass unchanged, and a derived class inherits the bridge
+  from a base which owns typed members. An abstract obligation-only base emits no false recursive
+  bridge; the first concrete descendant owns it instead. No adapter or public execution capability
+  is introduced.
+  STAYS REJECTED, loudly: open `Array<T>` producers, user-defined Iterator subinterfaces and
+  primitive-specialized iterator subclasses, Iterable/collection/sequence iteration, mutable
+  iterators, CLR IEnumerator adapters, and typed fast-path entries. Pins:
   `ilText/arrayIterators.kt`, `box/arrayIterators.kt`, and the iterator negatives in
   `ilText/genericArraysRejected.kt`.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
