@@ -28,6 +28,18 @@ public class DotNetCliTestGenerated extends AbstractCliTest {
   }
 
   @Test
+  @TestMetadata("callableExport.args")
+  public void testCallableExport() {
+    run("callableExport.args");
+  }
+
+  @Test
+  @TestMetadata("callableExportInvalid.args")
+  public void testCallableExportInvalid() {
+    run("callableExportInvalid.args");
+  }
+
+  @Test
   @TestMetadata("destinationDirectory.args")
   public void testDestinationDirectory() {
     run("destinationDirectory.args");

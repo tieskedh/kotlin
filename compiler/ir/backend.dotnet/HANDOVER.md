@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(array content operations complete; explicit CLR export/interop boundary next).
+(array content operations complete; first explicit CLR callable export boundary implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -23,13 +23,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   callable exact path (`e977cba1b`), the delegate-projection boundary freeze (`9e7c608d5`), and
   exact negative-array-size identity (`2448c404c`), shallow array-content equality (`359d01490`),
   recursive array-content equality (`3c65c82f4`), and array-content hashing (`3fa3ca5b8`), followed
-  by the stringification slice described below.
+  by the stringification slice and first explicit callable-factory export slice described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **480 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **482 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
-  **10 tests, 0 failures, 0 errors, 0 skips**.
+  **12 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -719,16 +719,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   parameter/open-generic calls, nullable primitives, variance, captures, bound references, Unit,
   explicit fallback, and receiver/argument/invocation order. Delegate projection remains a
   separate export layer; the boundary audit follows below.
-- The delegate-projection audit deliberately lands no runtime helper or generated overload before
-  an owner boundary exists. The backend currently has no foreign-type mapper, export annotation,
-  or facade policy that can choose Func versus Action from logical Kotlin types and own names,
-  nullability metadata, and round trips. `delegateprojection_s1` nevertheless validates the
-  mechanism: an exact Func binds directly to InvokeExact; erased Func and Unit Action projections
-  close static generic thunks over the canonical FunctionN object. Repeated same-object/same-shape
-  projections compare delegate-equal and remove event registrations without caching. Both ILAsm
-  versions and all four modern/Framework runtime pairings agree. The callable draft ADR records
-  adapter and round-trip requirements. Do not invent a public source API or automatic overloads;
-  add an explicit export/interop boundary first and co-land the projection mechanism there.
+- The first explicit CLR export boundary is compiler configuration, not a Kotlin annotation or
+  automatic overload policy: repeatable
+  `-Xdotnet-export=<kotlin-fq-name>=<clr-method-name>` selects one public, non-generic top-level
+  factory returning a non-null Function0/1/2. Its canonical FunctionN method remains unchanged;
+  one user-named method on the existing file facade returns typed Func or Action. The runtime
+  projection helper binds exact Func directly to InvokeExact, falls back through closed generic
+  box/unbox thunks for erased implementations, and discards Kotlin.Unit in Action thunks. Same
+  object/shape projections compare delegate-equal; exceptions pass unchanged. Callable parameters,
+  nullable callable returns, overloaded selectors, name/signature collisions, generic factories,
+  KFunction/suspend returns, and arities above two are loud errors. `delegateexport_s1` executed all
+  arities/exact/fallback/Unit shapes with both runtimes; a compiler-produced facade and the landed
+  runtime executed exact, erased, equality, and Action checks on modern and Framework. The dual-
+  parser golden pins every Func/Action arity, and the generated CLI suite pins the option. Reverse
+  delegate adaptation and round trips remain the next interop slice.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -861,10 +865,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Add an explicit CLR export/interop boundary.** Only then co-land the already probe-validated
-   Func/Action projection mechanism. Preserve FunctionN storage/identity and define overload/facade
-   naming, nullability, Unit/void, exception translation, adapter round trips, and delegate equality
-   at that boundary.
+1. **Extend the explicit CLR export boundary to callable parameters.** Add equally explicit
+   Func/Action-to-FunctionN adapters, keep them out of ordinary Kotlin conversion, restore the
+   original delegate on adapter-to-delegate round trips, and pin repeated registration/removal,
+   Unit/void, exceptions, and exact/erased fallback.
+2. **Add CLR nullability metadata at the export boundary.** Only then permit nullable callable
+   returns/parameters; do not infer nullability from physically erased FunctionN.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

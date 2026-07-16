@@ -98,6 +98,7 @@ object DotNetBackend {
             moduleFileName = if (emitsExecutable) binaryOutput.name else ilTarget.name,
             producesExecutable = emitsExecutable,
             irBuiltIns = irBuiltIns,
+            callableExports = configuration.dotNetCallableExports,
         )
         val ilText = emitter.emit(irModuleFragment)
         if (ilText == null) {

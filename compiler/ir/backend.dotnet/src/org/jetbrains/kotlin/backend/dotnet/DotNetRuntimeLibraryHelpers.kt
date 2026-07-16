@@ -71,7 +71,10 @@ internal object DotNetRuntimeLibraryHelpers {
      */
     /**
      * Besides mutable capture storage and Double formatting, this text owns escaping array
-     * iterator storage and the universal Any operations. The iterator deliberately stores a
+     * iterator storage, the universal Any operations, and the explicit-export delegate
+     * projection thunks. Those thunks are called only by generated CLR facade methods; their
+     * metadata visibility is cross-assembly compiler/runtime access, not Kotlin callable identity.
+     * The iterator deliberately stores a
      * `System.Array` and returns object: Kotlin's logical element type remains compiler metadata,
      * while one erased object preserves identity across Kotlin's legal covariant iterator views.
      * The Any primitive branches are semantic, not optimizations: CLR boxed Boolean hashes/string
@@ -112,6 +115,166 @@ internal object DotNetRuntimeLibraryHelpers {
             |  {
             |    .method public hidebysig newslot abstract virtual instance !2 InvokeExact(!0 p1, !1 p2) cil managed
             |    {
+            |    }
+            |  }
+            |
+            |  .class public abstract sealed auto ansi beforefieldinit DelegateProjection
+            |         extends [mscorlib]System.Object
+            |  {
+            |    .method public hidebysig static class [mscorlib]System.Func`1<!!0> ToFunc0<R>(class Kotlin.Function0 callable) cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0> exact)
+            |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0>
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse.s fallback
+            |      ldloc.0
+            |      ldloc.0
+            |      ldvirtftn instance !0 class Kotlin.Runtime.Internal.'ExactFunction0`1'<!!0>::InvokeExact()
+            |      newobj instance void class [mscorlib]System.Func`1<!!0>::.ctor(object, native int)
+            |      ret
+            |    fallback:
+            |      ldarg.0
+            |      ldftn !!0 Kotlin.Runtime.Internal.DelegateProjection::Invoke0<!!0>(class Kotlin.Function0)
+            |      newobj instance void class [mscorlib]System.Func`1<!!0>::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Func`2<!!0, !!1> ToFunc1<P0, R>(class Kotlin.Function1 callable) cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1> exact)
+            |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1>
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse.s fallback
+            |      ldloc.0
+            |      ldloc.0
+            |      ldvirtftn instance !1 class Kotlin.Runtime.Internal.'ExactFunction1`2'<!!0, !!1>::InvokeExact(!0)
+            |      newobj instance void class [mscorlib]System.Func`2<!!0, !!1>::.ctor(object, native int)
+            |      ret
+            |    fallback:
+            |      ldarg.0
+            |      ldftn !!1 Kotlin.Runtime.Internal.DelegateProjection::Invoke1<!!0, !!1>(class Kotlin.Function1, !!0)
+            |      newobj instance void class [mscorlib]System.Func`2<!!0, !!1>::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Func`3<!!0, !!1, !!2> ToFunc2<P0, P1, R>(class Kotlin.Function2 callable) cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init ([0] class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2> exact)
+            |      ldarg.0
+            |      isinst class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2>
+            |      stloc.0
+            |      ldloc.0
+            |      brfalse.s fallback
+            |      ldloc.0
+            |      ldloc.0
+            |      ldvirtftn instance !2 class Kotlin.Runtime.Internal.'ExactFunction2`3'<!!0, !!1, !!2>::InvokeExact(!0, !1)
+            |      newobj instance void class [mscorlib]System.Func`3<!!0, !!1, !!2>::.ctor(object, native int)
+            |      ret
+            |    fallback:
+            |      ldarg.0
+            |      ldftn !!2 Kotlin.Runtime.Internal.DelegateProjection::Invoke2<!!0, !!1, !!2>(class Kotlin.Function2, !!0, !!1)
+            |      newobj instance void class [mscorlib]System.Func`3<!!0, !!1, !!2>::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Action ToAction0(class Kotlin.Function0 callable) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit0(class Kotlin.Function0)
+            |      newobj instance void [mscorlib]System.Action::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Action`1<!!0> ToAction1<P0>(class Kotlin.Function1 callable) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit1<!!0>(class Kotlin.Function1, !!0)
+            |      newobj instance void class [mscorlib]System.Action`1<!!0>::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Action`2<!!0, !!1> ToAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit2<!!0, !!1>(class Kotlin.Function2, !!0, !!1)
+            |      newobj instance void class [mscorlib]System.Action`2<!!0, !!1>::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static !!0 Invoke0<R>(class Kotlin.Function0 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Function0::Invoke()
+            |      unbox.any !!0
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static !!1 Invoke1<P0, R>(class Kotlin.Function1 callable, !!0 p1) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      box !!0
+            |      callvirt instance object Kotlin.Function1::Invoke(object)
+            |      unbox.any !!1
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static !!2 Invoke2<P0, P1, R>(class Kotlin.Function2 callable, !!0 p1, !!1 p2) cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      box !!0
+            |      ldarg.2
+            |      box !!1
+            |      callvirt instance object Kotlin.Function2::Invoke(object, object)
+            |      unbox.any !!2
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static void InvokeUnit0(class Kotlin.Function0 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      callvirt instance object Kotlin.Function0::Invoke()
+            |      pop
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static void InvokeUnit1<P0>(class Kotlin.Function1 callable, !!0 p1) cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldarg.1
+            |      box !!0
+            |      callvirt instance object Kotlin.Function1::Invoke(object)
+            |      pop
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static void InvokeUnit2<P0, P1>(class Kotlin.Function2 callable, !!0 p1, !!1 p2) cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      ldarg.1
+            |      box !!0
+            |      ldarg.2
+            |      box !!1
+            |      callvirt instance object Kotlin.Function2::Invoke(object, object)
+            |      pop
+            |      ret
             |    }
             |  }
             |

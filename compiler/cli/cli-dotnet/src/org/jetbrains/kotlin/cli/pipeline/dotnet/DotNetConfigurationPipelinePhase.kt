@@ -1,8 +1,10 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DotNetCallableExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
+import org.jetbrains.kotlin.backend.dotnet.dotNetCallableExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
@@ -68,6 +70,28 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                 configuration.dotNetTarget = target
             }
         }
+
+        val callableExports = mutableListOf<DotNetCallableExport>()
+        for (rawExport in arguments.dotNetExports.orEmpty()) {
+            val export = try {
+                DotNetCallableExport.parse(rawExport)
+            } catch (e: IllegalArgumentException) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Invalid value '$rawExport' for -Xdotnet-export: ${e.message}"
+                )
+                continue
+            }
+            if (callableExports.any { it.kotlinFqName == export.kotlinFqName }) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Duplicate -Xdotnet-export target '${export.kotlinFqName}'."
+                )
+                continue
+            }
+            callableExports += export
+        }
+        configuration.dotNetCallableExports = callableExports
 
         val destination = arguments.destination
         if (destination == null) {

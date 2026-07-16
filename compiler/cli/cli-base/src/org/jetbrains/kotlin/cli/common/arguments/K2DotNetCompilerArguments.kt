@@ -54,6 +54,19 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
             field = if (value.isNullOrEmpty()) null else value
         }
 
+    @Argument(
+        value = "-Xdotnet-export",
+        delimiter = Argument.Delimiters.none,
+        valueDescription = "<kotlin-fq-name>=<clr-method-name>",
+        description = "Export a top-level callable factory through a typed CLR Func/Action facade method. " +
+                "May be repeated."
+    )
+    var dotNetExports: Array<String>? = null
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
     override fun copyOf(): Freezable {
         val copy = K2DotNetCompilerArguments()
         copyCommonCompilerArguments(this, copy)
@@ -62,6 +75,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         copy.classpath = classpath
         copy.noStdlib = noStdlib
         copy.dotNetTarget = dotNetTarget
+        copy.dotNetExports = dotNetExports?.copyOf()
         return copy
     }
 

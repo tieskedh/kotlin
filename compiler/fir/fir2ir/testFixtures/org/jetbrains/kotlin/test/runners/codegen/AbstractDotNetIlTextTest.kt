@@ -6,9 +6,11 @@
 package org.jetbrains.kotlin.test.runners.codegen
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
+import org.jetbrains.kotlin.backend.dotnet.DotNetCallableExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
+import org.jetbrains.kotlin.backend.dotnet.dotNetCallableExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -40,6 +42,7 @@ import org.jetbrains.kotlin.test.builders.firHandlersStep
 import org.jetbrains.kotlin.test.builders.irHandlersStep
 import org.jetbrains.kotlin.test.directives.configureFirParser
 import org.jetbrains.kotlin.test.directives.model.RegisteredDirectives
+import org.jetbrains.kotlin.test.directives.model.SimpleDirectivesContainer
 import org.jetbrains.kotlin.test.frontend.fir.Fir2IrCliBasedOutputArtifact
 import org.jetbrains.kotlin.test.frontend.fir.Fir2IrCliFacade
 import org.jetbrains.kotlin.test.frontend.fir.FirCliFacade
@@ -132,6 +135,7 @@ private fun TestConfigurationBuilder.configureDotNetBase(
     additionalSourceProvider: Constructor<AdditionalSourceProvider>? = null,
 ) {
     with(this) {
+        useDirectives(DotNetCodegenDirectives)
         globalDefaults {
             frontend = FrontendKinds.FIR
             targetPlatform = DotNetPlatforms.defaultDotNetPlatform
@@ -220,6 +224,8 @@ private class DotNetEnvironmentConfigurator(
         configuration.put(CommonConfigurationKeys.MODULE_NAME, module.name)
         configuration.targetPlatform = DotNetPlatforms.defaultDotNetPlatform
         configuration.dotNetAssemblyName = artifactName
+        configuration.dotNetCallableExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT]
+            .map(DotNetCallableExport::parse)
         configuration.dotNetOutput = getOutputFile(module, artifactName)
         configuration.dotNetTarget = target
         configuration.addSourcesForDependsOnClosure(module, testServices)
@@ -244,6 +250,12 @@ private class DotNetEnvironmentConfigurator(
                 }
             }
         }
+}
+
+private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
+    val DOTNET_EXPORT by stringDirective(
+        "Explicit callable factory export in <kotlin-fq-name>=<clr-method-name> form"
+    )
 }
 
 private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArtifactHandler(testServices) {
