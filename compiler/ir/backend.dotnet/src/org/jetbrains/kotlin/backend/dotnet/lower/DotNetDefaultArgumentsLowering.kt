@@ -10,9 +10,15 @@ import org.jetbrains.kotlin.backend.common.lower.DefaultParameterCleaner
 import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrExpression
+import org.jetbrains.kotlin.ir.irAttribute
 import org.jetbrains.kotlin.ir.types.IrType
+
+/** Source parameters whose default expressions are removed before IL emission. */
+internal var IrSimpleFunction.dotNetDefaultParameterIndices: List<Int>? by irAttribute(copyByDefault = false)
 
 /**
  * The common/JVM masked-default shape for ordinary functions and member functions. Missing
@@ -56,4 +62,16 @@ internal class DotNetDefaultParameterInjector(
 
 internal class DotNetDefaultParameterCleaner(
     context: DotNetBackendContext,
-) : DefaultParameterCleaner(context)
+) : DefaultParameterCleaner(context) {
+    override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? {
+        if (declaration is IrValueParameter && declaration.defaultValue != null) {
+            val function = declaration.parent as? IrSimpleFunction
+            val parameterIndex = function?.parameters?.indexOf(declaration) ?: -1
+            if (function != null && parameterIndex >= 0) {
+                function.dotNetDefaultParameterIndices =
+                    function.dotNetDefaultParameterIndices.orEmpty() + parameterIndex
+            }
+        }
+        return super.transformFlat(declaration)
+    }
+}
