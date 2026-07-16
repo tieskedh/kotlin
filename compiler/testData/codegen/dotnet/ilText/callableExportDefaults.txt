@@ -1,0 +1,830 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'callableExportDefaults' {}
+.module 'main-callableExportDefaults.il'
+
+.namespace System.Runtime.CompilerServices
+{
+  .class private auto ansi sealed beforefieldinit NullableAttribute
+         extends [mscorlib]System.Attribute
+  {
+    .field public initonly uint8[] NullableFlags
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8) cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldc.i4.1
+      newarr [mscorlib]System.Byte
+      dup
+      ldc.i4.0
+      ldarg.1
+      stelem.i1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8[]) cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+  }
+}
+.class private auto ansi sealed beforefieldinit 'demo.callableExportDefaultsKt$apply$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+{
+  .field private int32 '$prefix'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$prefix') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'demo.callableExportDefaultsKt$apply$1'::'$prefix'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.0
+    ldfld int32 'demo.callableExportDefaultsKt$apply$1'::'$prefix'
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.callableExportDefaultsKt$apply$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'demo.callableExportDefaultsKt$invokeWithDefaults$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+{
+  .field public static initonly class 'demo.callableExportDefaultsKt$invokeWithDefaults$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'demo.callableExportDefaultsKt$invokeWithDefaults$1'::.ctor()
+    stsfld class 'demo.callableExportDefaultsKt$invokeWithDefaults$1' 'demo.callableExportDefaultsKt$invokeWithDefaults$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 2
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.callableExportDefaultsKt$invokeWithDefaults$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'demo.callableExportDefaultsKt$invokeNullableDefault$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, int32>
+{
+  .field public static initonly class 'demo.callableExportDefaultsKt$invokeNullableDefault$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'demo.callableExportDefaultsKt$invokeNullableDefault$1'::.ctor()
+    stsfld class 'demo.callableExportDefaultsKt$invokeNullableDefault$1' 'demo.callableExportDefaultsKt$invokeNullableDefault$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(valuetype [mscorlib]System.Nullable`1<int32> 'it') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> 'tmp0_elvis_lhs',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<eq>',
+      [2] valuetype [mscorlib]System.Nullable`1<int32> '<notNull>'
+    )
+    ldarg.1
+    stloc.0
+    ldloc.0
+    stloc.1
+    ldloca 1
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 5
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldloc.0
+    stloc.2
+    ldloca 2
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_notNull_2
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_2:
+    ldloca 2
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    callvirt instance int32 'demo.callableExportDefaultsKt$invokeNullableDefault$1'::'InvokeExact'(valuetype [mscorlib]System.Nullable`1<int32>)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'demo.callableExportDefaultsKt$makeAdder$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+{
+  .field private int32 '$offset'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$offset') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'demo.callableExportDefaultsKt$makeAdder$1'::'$offset'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.0
+    ldfld int32 'demo.callableExportDefaultsKt$makeAdder$1'::'$offset'
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.callableExportDefaultsKt$makeAdder$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed 'demo.callableExportDefaultsKt$nonTrailing$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+{
+  .field public static initonly class 'demo.callableExportDefaultsKt$nonTrailing$1' 'INSTANCE'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'demo.callableExportDefaultsKt$nonTrailing$1'::.ctor()
+    stsfld class 'demo.callableExportDefaultsKt$nonTrailing$1' 'demo.callableExportDefaultsKt$nonTrailing$1'::'INSTANCE'
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.callableExportDefaultsKt$nonTrailing$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class private auto ansi sealed beforefieldinit 'demo.callableExportDefaultsKt$extensionApply$1'
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+{
+  .field private int32 '$this_extensionApply'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 '$this_extensionApply') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'demo.callableExportDefaultsKt$extensionApply$1'::'$this_extensionApply'
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual final instance int32 'InvokeExact'(int32 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldarg.0
+    ldfld int32 'demo.callableExportDefaultsKt$extensionApply$1'::'$this_extensionApply'
+    add
+    ret
+  }
+  .method public hidebysig newslot virtual final instance object 'Invoke'(object 'it') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance int32 'demo.callableExportDefaultsKt$extensionApply$1'::'InvokeExact'(int32)
+    box [mscorlib]System.Int32
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'demo.callableExportDefaultsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'apply'(int32 'prefix', class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.1
+    stloc.0
+    ldarg.2
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'applyDelegate'(int32 'prefix', class [mscorlib]System.Func`2<int32, int32> 'callback', int32 'value') cil managed
+  {
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 3
+    ldarg 0
+    ldarg 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 2
+    call int32 'demo.callableExportDefaultsKt'::'apply'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'applyDelegate'(int32 'prefix', class [mscorlib]System.Func`2<int32, int32> 'callback') cil managed
+  {
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 4
+    ldarg 0
+    ldarg 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldc.i4 0
+    ldc.i4 4
+    call int32 'demo.callableExportDefaultsKt'::'apply$default'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'applyDelegate'(int32 'prefix') cil managed
+  {
+    .maxstack 4
+    ldarg 0
+    ldnull
+    ldc.i4 0
+    ldc.i4 6
+    call int32 'demo.callableExportDefaultsKt'::'apply$default'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'apply$default'(int32 'prefix', class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value', int32 '$mask0') cil managed
+  {
+    .maxstack 3
+    ldarg.3
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    newobj instance void 'demo.callableExportDefaultsKt$apply$1'::.ctor(int32)
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.3
+    ldc.i4 4
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldc.i4 1
+    add
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call int32 'demo.callableExportDefaultsKt'::'apply'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeWithDefaults'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'invokeWithDefaultsDelegate'(class [mscorlib]System.Func`2<int32, int32> 'callback', int32 'value') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 1
+    call int32 'demo.callableExportDefaultsKt'::'invokeWithDefaults'(class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeWithDefaultsDelegate'(class [mscorlib]System.Func`2<int32, int32> 'callback') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 3
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldc.i4 0
+    ldc.i4 2
+    call int32 'demo.callableExportDefaultsKt'::'invokeWithDefaults$default'(class [Kotlin.Runtime]'Kotlin.Function1', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeWithDefaultsDelegate'() cil managed
+  {
+    .maxstack 3
+    ldnull
+    ldc.i4 0
+    ldc.i4 3
+    call int32 'demo.callableExportDefaultsKt'::'invokeWithDefaults$default'(class [Kotlin.Runtime]'Kotlin.Function1', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeWithDefaults$default'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value', int32 '$mask0') cil managed
+  {
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld class 'demo.callableExportDefaultsKt$invokeWithDefaults$1' 'demo.callableExportDefaultsKt$invokeWithDefaults$1'::'INSTANCE'
+    starg 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.2
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldc.i4 40
+    starg 1
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    call int32 'demo.callableExportDefaultsKt'::'invokeWithDefaults'(class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeNullableDefault'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', valuetype [mscorlib]System.Nullable`1<int32> 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] valuetype [mscorlib]System.Nullable`1<int32> '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box valuetype [mscorlib]System.Nullable`1<int32>
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'invokeNullableDefaultDelegate'(class [mscorlib]System.Func`2<valuetype [mscorlib]System.Nullable`1<int32>, int32> 'callback', valuetype [mscorlib]System.Nullable`1<int32> 'value') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<valuetype [mscorlib]System.Nullable`1<int32>, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 1
+    call int32 'demo.callableExportDefaultsKt'::'invokeNullableDefault'(class [Kotlin.Runtime]'Kotlin.Function1', valuetype [mscorlib]System.Nullable`1<int32>)
+    ret
+  }
+  .method public hidebysig static int32 'invokeNullableDefaultDelegate'(class [mscorlib]System.Func`2<valuetype [mscorlib]System.Nullable`1<int32>, int32> 'callback') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<default0>'
+    )
+    .maxstack 3
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<valuetype [mscorlib]System.Nullable`1<int32>, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldloc 0
+    ldc.i4 2
+    call int32 'demo.callableExportDefaultsKt'::'invokeNullableDefault$default'(class [Kotlin.Runtime]'Kotlin.Function1', valuetype [mscorlib]System.Nullable`1<int32>, int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeNullableDefaultDelegate'() cil managed
+  {
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<default0>'
+    )
+    .maxstack 3
+    ldnull
+    ldloc 0
+    ldc.i4 3
+    call int32 'demo.callableExportDefaultsKt'::'invokeNullableDefault$default'(class [Kotlin.Runtime]'Kotlin.Function1', valuetype [mscorlib]System.Nullable`1<int32>, int32)
+    ret
+  }
+  .method public hidebysig static int32 'invokeNullableDefault$default'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', valuetype [mscorlib]System.Nullable`1<int32> 'value', int32 '$mask0') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld class 'demo.callableExportDefaultsKt$invokeNullableDefault$1' 'demo.callableExportDefaultsKt$invokeNullableDefault$1'::'INSTANCE'
+    starg 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.2
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    starg 1
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    call int32 'demo.callableExportDefaultsKt'::'invokeNullableDefault'(class [Kotlin.Runtime]'Kotlin.Function1', valuetype [mscorlib]System.Nullable`1<int32>)
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'makeAdder'(int32 'offset') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    newobj instance void 'demo.callableExportDefaultsKt$makeAdder$1'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig static class [mscorlib]System.Func`2<int32, int32> 'makeAdderDelegate'(int32 'offset') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableExportDefaultsKt'::'makeAdder'(int32)
+    call class [mscorlib]System.Func`2<!!0, !!1> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToFunc1'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig static class [mscorlib]System.Func`2<int32, int32> 'makeAdderDelegate'() cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldc.i4 0
+    ldc.i4 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableExportDefaultsKt'::'makeAdder$default'(int32, int32)
+    call class [mscorlib]System.Func`2<!!0, !!1> [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'ToFunc1'<int32, int32>(class [Kotlin.Runtime]'Kotlin.Function1')
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function1' 'makeAdder$default'(int32 'offset', int32 '$mask0') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 2
+    starg 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    call class [Kotlin.Runtime]'Kotlin.Function1' 'demo.callableExportDefaultsKt'::'makeAdder'(int32)
+    ret
+  }
+  .method public hidebysig static int32 'nonTrailing'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldarg.1
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'nonTrailingDelegate'(class [mscorlib]System.Func`2<int32, int32> 'callback', int32 'value') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 1
+    call int32 'demo.callableExportDefaultsKt'::'nonTrailing'(class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'nonTrailing$default'(class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value', int32 '$mask0') cil managed
+  {
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld class 'demo.callableExportDefaultsKt$nonTrailing$1' 'demo.callableExportDefaultsKt$nonTrailing$1'::'INSTANCE'
+    starg 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call int32 'demo.callableExportDefaultsKt'::'nonTrailing'(class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'extensionApply'(int32 '<this>', class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Function1' '<callableReceiver>',
+      [1] int32 '<callableArgument>',
+      [2] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>',
+      [3] int32 '<callableResult>'
+    )
+    ldarg.1
+    stloc.0
+    ldarg.2
+    stloc.1
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_callableErasedFallback_0
+    ldloc.2
+    ldloc.1
+    callvirt instance !1 class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>::'InvokeExact'(!0)
+    stloc.3
+    br IL_callableExactEnd_1
+IL_callableErasedFallback_0:
+    ldloc.0
+    ldloc.1
+    box [mscorlib]System.Int32
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Function1'::'Invoke'(object)
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_callableExactEnd_1:
+    ldloc.3
+    ret
+  }
+  .method public hidebysig static int32 'extensionApplyDelegate'(int32 '<this>', class [mscorlib]System.Func`2<int32, int32> 'callback', int32 'value') cil managed
+  {
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 3
+    ldarg 0
+    ldarg 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldarg 2
+    call int32 'demo.callableExportDefaultsKt'::'extensionApply'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+  .method public hidebysig static int32 'extensionApplyDelegate'(int32 '<this>', class [mscorlib]System.Func`2<int32, int32> 'callback') cil managed
+  {
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 4
+    ldarg 0
+    ldarg 1
+    call class [Kotlin.Runtime]'Kotlin.Function1' [Kotlin.Runtime]'Kotlin.Runtime.Internal.DelegateProjection'::'FromFunc1'<int32, int32>(class [mscorlib]System.Func`2<!!0, !!1>)
+    ldc.i4 0
+    ldc.i4 2
+    call int32 'demo.callableExportDefaultsKt'::'extensionApply$default'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'extensionApplyDelegate'(int32 '<this>') cil managed
+  {
+    .maxstack 4
+    ldarg 0
+    ldnull
+    ldc.i4 0
+    ldc.i4 3
+    call int32 'demo.callableExportDefaultsKt'::'extensionApply$default'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32, int32)
+    ret
+  }
+  .method public hidebysig static int32 'extensionApply$default'(int32 '<this>', class [Kotlin.Runtime]'Kotlin.Function1' 'callback', int32 'value', int32 '$mask0') cil managed
+  {
+    .maxstack 3
+    ldarg.3
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    newobj instance void 'demo.callableExportDefaultsKt$extensionApply$1'::.ctor(int32)
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.3
+    ldc.i4 2
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    ldc.i4 1
+    add
+    starg 2
+    br IL_whenEnd_2
+IL_whenNext_3:
+IL_whenEnd_2:
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call int32 'demo.callableExportDefaultsKt'::'extensionApply'(int32, class [Kotlin.Runtime]'Kotlin.Function1', int32)
+    ret
+  }
+}
