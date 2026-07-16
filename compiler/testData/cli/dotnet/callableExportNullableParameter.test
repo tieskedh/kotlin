@@ -1,0 +1,3 @@
+// EXISTS: callableExportNullableParameter.il
+// CONTAINS: callableExportNullableParameter.il, FromNullableFunc1'<int32, int32>
+// CONTAINS: callableExportNullableParameter.il, NullableAttribute::.ctor(uint8) = (01 00 02 00 00)

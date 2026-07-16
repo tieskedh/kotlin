@@ -127,6 +127,16 @@ class DotNetIlEmitter(
             }
         }
         if (exportSelectionFailed) return null
+        if (callableExportsByTarget.isNotEmpty() && topLevelClassesByFile.values.flatten().any { irClass ->
+                irClass.fqNameWhenAvailable?.asString() == DotNetNullableMetadata.ATTRIBUTE_FQ_NAME
+            }
+        ) {
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "Cannot emit CLR callable exports: '${DotNetNullableMetadata.ATTRIBUTE_FQ_NAME}' is compiler-reserved."
+            )
+            return null
+        }
 
         val mainFunctions = DotNetMainFunctionDetector().getMainFunctions(moduleFragment)
         if (mainFunctions.size > 1) {
@@ -841,6 +851,9 @@ class DotNetIlEmitter(
                 referencesRuntimeAssembly = producesExecutable ||
                         "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody
             )
+            if (renderedCallableExports.isNotEmpty()) {
+                append(DotNetNullableMetadata.attributeClassIl)
+            }
             append(moduleBody)
         }
     }
@@ -2065,29 +2078,45 @@ class DotNetIlEmitter(
             dotNetUnsupported("the selected function has no supported Function0/1/2 parameter or return")
         }
         val exportedParameterTypes = targetInfo.signature.parameterTypes.mapIndexed { index, type ->
-            parameterBoundaries[index]?.closedDelegateType ?: type.nameInSignature
+            parameterBoundaries[index]?.delegateBoundary?.closedDelegateType ?: type.nameInSignature
+        }
+        val parameterNullabilityFlags = target.parameters.indices.map { index ->
+            parameterBoundaries[index]?.nullabilityFlags
+                ?: DotNetNullableMetadata.flags(
+                    target.parameters[index].type,
+                    targetInfo.signature.parameterTypes[index],
+                )
         }
         val parameters = target.parameters.indices.joinToString(", ") { index ->
             "${exportedParameterTypes[index]} ${target.parameters[index].name.asString().toIlIdentifier()}"
         }
-        val exportedReturnType = returnBoundary?.closedDelegateType
+        val exportedReturnType = returnBoundary?.delegateBoundary?.closedDelegateType
             ?: targetInfo.signature.returnType.nameInSignature
+        val returnNullabilityFlags = returnBoundary?.nullabilityFlags
+            ?: when (val returnType = targetInfo.signature.returnType) {
+                DotNetIlReturnType.Void -> emptyList()
+                is DotNetIlReturnType.Value -> DotNetNullableMetadata.flags(target.returnType, returnType.type)
+            }
         val ilText = buildString {
             appendLine(
                 "  .method public hidebysig static $exportedReturnType " +
                         "${export.clrMethodName.toIlIdentifier()}($parameters) cil managed"
             )
             appendLine("  {")
+            appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
+            parameterNullabilityFlags.forEachIndexed { index, flags ->
+                appendNullableAttribute(parameterIndex = index + 1, flags = flags)
+            }
             appendLine("    .maxstack ${maxOf(1, target.parameters.size)}")
             target.parameters.indices.forEach { index ->
                 appendLine("    ldarg $index")
                 parameterBoundaries[index]?.let { boundary ->
-                    appendLine("    ${boundary.adaptationCallInstruction}")
+                    appendLine("    ${boundary.delegateBoundary.adaptationCallInstruction}")
                 }
             }
             appendLine("    ${targetInfo.renderCallInstruction(target.dotNetIlMethodName())}")
             returnBoundary?.let { boundary ->
-                appendLine("    ${boundary.projectionCallInstruction}")
+                appendLine("    ${boundary.delegateBoundary.projectionCallInstruction}")
             }
             appendLine("    ret")
             appendLine("  }")
@@ -2101,7 +2130,7 @@ class DotNetIlEmitter(
     private fun IrType.delegateBoundaryOrNull(
         typeMapper: DotNetIlTypeMapper,
         position: String,
-    ): DotNetDelegateBoundary? {
+    ): DotNetExportedCallableBoundary? {
         val mappedCallableType = DotNetRuntimeTypes.mapCallableType(this)
         if (mappedCallableType == null && !isSuspendFunction() && !isKFunction()) return null
         if (isSuspendFunction()) {
@@ -2114,9 +2143,6 @@ class DotNetIlEmitter(
             ?: dotNetUnsupported("$position is not a supported Function0/1/2")
         if (!callableType.isFunction()) {
             dotNetUnsupported("callable marker $position has no fixed CLR delegate shape")
-        }
-        if (callableType.isMarkedNullable()) {
-            dotNetUnsupported("nullable callable $position requires a CLR nullability-metadata policy")
         }
         val logicalTypes = callableType.arguments.map { argument ->
             (argument as? IrTypeProjection)?.type
@@ -2137,14 +2163,41 @@ class DotNetIlEmitter(
             null
         } else {
             typeMapper.toDotNetIlValueType(logicalResultType)
-                ?: dotNetUnsupported("callable result type '${logicalResultType.render()}' in $position cannot be mapped to CLR")
+                ?: dotNetUnsupported(
+                    "callable result type '${logicalResultType.render()}' in $position cannot be mapped to CLR"
+                )
         }
-        return DotNetRuntimeTypes.delegateBoundary(callableParameterTypes, callableResultType)
+        val physicalLogicalTypes = callableParameterTypes + listOfNotNull(callableResultType)
+        val metadataLogicalTypes = logicalTypes.dropLast(1) +
+                if (callableResultType == null) emptyList() else listOf(logicalResultType)
+        return DotNetExportedCallableBoundary(
+            delegateBoundary = DotNetRuntimeTypes.delegateBoundary(
+                callableParameterTypes,
+                callableResultType,
+                nullable = callableType.isMarkedNullable(),
+            ),
+            nullabilityFlags = DotNetNullableMetadata.delegateFlags(
+                callableType,
+                metadataLogicalTypes,
+                physicalLogicalTypes,
+            ),
+        )
+    }
+
+    private fun StringBuilder.appendNullableAttribute(parameterIndex: Int, flags: List<Int>) {
+        if (flags.isEmpty()) return
+        appendLine("    .param [$parameterIndex]")
+        appendLine("    ${DotNetNullableMetadata.renderAttribute(flags)}")
     }
 
     private data class DotNetRenderedCallableExport(
         val method: DotNetIlRenderedMethod,
         val parameterTypes: List<String>,
+    )
+
+    private data class DotNetExportedCallableBoundary(
+        val delegateBoundary: DotNetDelegateBoundary,
+        val nullabilityFlags: List<Int>,
     )
 
     private fun StringBuilder.appendHeader(referencesRuntimeAssembly: Boolean) {

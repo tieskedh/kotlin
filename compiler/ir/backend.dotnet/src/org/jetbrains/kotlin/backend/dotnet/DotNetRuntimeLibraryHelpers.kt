@@ -421,6 +421,84 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
+            |    .method public hidebysig static class Kotlin.Function0 FromNullableFunc0<R>(class [mscorlib]System.Func`1<!!0>) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class Kotlin.Function0 Kotlin.Runtime.Internal.DelegateProjection::FromFunc0<!!0>(class [mscorlib]System.Func`1<!!0>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function1 FromNullableFunc1<P0, R>(class [mscorlib]System.Func`2<!!0, !!1>) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class Kotlin.Function1 Kotlin.Runtime.Internal.DelegateProjection::FromFunc1<!!0, !!1>(class [mscorlib]System.Func`2<!!0, !!1>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function2 FromNullableFunc2<P0, P1, R>(class [mscorlib]System.Func`3<!!0, !!1, !!2>) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class Kotlin.Function2 Kotlin.Runtime.Internal.DelegateProjection::FromFunc2<!!0, !!1, !!2>(class [mscorlib]System.Func`3<!!0, !!1, !!2>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function0 FromNullableAction0(class [mscorlib]System.Action) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class Kotlin.Function0 Kotlin.Runtime.Internal.DelegateProjection::FromAction0(class [mscorlib]System.Action)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function1 FromNullableAction1<P0>(class [mscorlib]System.Action`1<!!0>) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class Kotlin.Function1 Kotlin.Runtime.Internal.DelegateProjection::FromAction1<!!0>(class [mscorlib]System.Action`1<!!0>)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class Kotlin.Function2 FromNullableAction2<P0, P1>(class [mscorlib]System.Action`2<!!0, !!1>) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class Kotlin.Function2 Kotlin.Runtime.Internal.DelegateProjection::FromAction2<!!0, !!1>(class [mscorlib]System.Action`2<!!0, !!1>)
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static class [mscorlib]System.Func`1<!!0> ToFunc0<R>(class Kotlin.Function0 callable) cil managed
             |    {
             |      .maxstack 3
@@ -556,6 +634,84 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ldarg.0
             |      ldftn void Kotlin.Runtime.Internal.DelegateProjection::InvokeUnit2<!!0, !!1>(class Kotlin.Function2, !!0, !!1)
             |      newobj instance void class [mscorlib]System.Action`2<!!0, !!1>::.ctor(object, native int)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Func`1<!!0> ToNullableFunc0<R>(class Kotlin.Function0 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class [mscorlib]System.Func`1<!!0> Kotlin.Runtime.Internal.DelegateProjection::ToFunc0<!!0>(class Kotlin.Function0)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Func`2<!!0, !!1> ToNullableFunc1<P0, R>(class Kotlin.Function1 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class [mscorlib]System.Func`2<!!0, !!1> Kotlin.Runtime.Internal.DelegateProjection::ToFunc1<!!0, !!1>(class Kotlin.Function1)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Func`3<!!0, !!1, !!2> ToNullableFunc2<P0, P1, R>(class Kotlin.Function2 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class [mscorlib]System.Func`3<!!0, !!1, !!2> Kotlin.Runtime.Internal.DelegateProjection::ToFunc2<!!0, !!1, !!2>(class Kotlin.Function2)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Action ToNullableAction0(class Kotlin.Function0 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class [mscorlib]System.Action Kotlin.Runtime.Internal.DelegateProjection::ToAction0(class Kotlin.Function0)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Action`1<!!0> ToNullableAction1<P0>(class Kotlin.Function1 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class [mscorlib]System.Action`1<!!0> Kotlin.Runtime.Internal.DelegateProjection::ToAction1<!!0>(class Kotlin.Function1)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class [mscorlib]System.Action`2<!!0, !!1> ToNullableAction2<P0, P1>(class Kotlin.Function2 callable) cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      brtrue.s nonnull
+            |      ldnull
+            |      ret
+            |    nonnull:
+            |      ldarg.0
+            |      call class [mscorlib]System.Action`2<!!0, !!1> Kotlin.Runtime.Internal.DelegateProjection::ToAction2<!!0, !!1>(class Kotlin.Function2)
             |      ret
             |    }
             |
