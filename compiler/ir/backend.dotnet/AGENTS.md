@@ -122,6 +122,19 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   capture the cell reference, so sibling closures and later outer writes share storage without
   boxing the cell's primitive, nullable-primitive, reference, or open-`T` element. The cell and
   generated fields are compiler/runtime layout details, not Kotlin callable identity.
+  Direct function references additionally follow Native's structural `Any` semantics without
+  adding another callable interface. Every rich reference with a real declaration target extends
+  metadata-public, compiler-internal `Kotlin.Runtime.Internal.FunctionReferenceBase`; lambdas
+  still extend System.Object directly. Its constructor and bound-value hook are CLR `family`, so
+  generated subclasses in consumer assemblies can use them without making either hook public. The
+  base compares the target's serialized Kotlin signature (or a deterministic module-local
+  fallback), arity, adaptation flags, and structurally compared bound values, and renders
+  `function <name>`/`constructor`. Equivalent references from different source sites therefore
+  compare equal and hash equally; overloads, different adaptations, and unequal bound receivers do
+  not. The base class is generated implementation machinery, never a field/parameter/return ABI,
+  execution interface, or source API. Explicit user function implementations retain their own Any
+  behavior. Fun-interface constructor references remain rejected with the existing no-SAM-model
+  boundary; their mature identity rule belongs with that future feature.
   Common closure conversion adds captured type arguments to constructor calls even when their IR
   class type is bare; codegen reconstructs that generated generic instance from the constructor
   type arguments. An erased Unit `Invoke` whose lowered block falls through materializes
@@ -285,8 +298,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   than source API. Immutable arities 0..2 and mutable arities 0..1 are constructed; mutable arity
   2 remains unsupported until Function3 is designed as part of the callable family. Direct
   `get`/`set`, FunctionN invocation, primitive result variance, bound mutation, and explicit user
-  implementations use the universal erased slots. Full reflection, local delegated-property
-  reflection, equality/hash/rendering, and exact property-access capabilities remain deferred.
+  implementations use the universal erased slots. Following Native/Wasm, runtime-owned wrappers
+  compare their exact private wrapper kind, name, structurally equal getter, and optional setter;
+  bound receivers participate through those callable references. Equal wrappers hash the same and
+  render `property <name> (Kotlin reflection is not available)`. User implementations keep their
+  own Any behavior. Full reflection, local delegated-property reflection, and exact property-
+  access capabilities remain deferred.
   Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
 - Iterator ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
   series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an
@@ -998,8 +1015,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   slots, pinned by `ilText/inheritanceAnyOverride.kt` and `box/anyMembers.kt`; detection walks
   `allOverridden()` against the TYPE-based `isAny`, because
   `IrClass.isAny`/`findOverriddenMethodOfAny` compare IdSignatures and this pipeline's symbols
-  carry none. `protected` visibility is untouched (renders with the historical default like
-  before). End-to-end: `box/inheritanceBasic.kt` (three-level
+  carry none. Kotlin `protected` methods render as CLR `family`; this follows the JVM access
+  boundary while allowing compiler/runtime subclasses in other assemblies to reach protected
+  hooks without making them public. End-to-end: `box/inheritanceBasic.kt` (three-level
   chain: polymorphic dispatch through base-typed values, super chains, final override,
   inherited state/methods, upcast positions) and `box/inheritanceInitOrder.kt` (base init runs
   before derived init; `beforefieldinit` semantics unchanged — instance init order is a

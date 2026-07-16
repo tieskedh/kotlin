@@ -42,7 +42,7 @@
   }
 }
 .class private auto ansi sealed 'propertyReferencesKt$main$read$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field public static initonly class 'propertyReferencesKt$main$read$1' 'INSTANCE'
@@ -55,9 +55,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:251:271:#<get-topRead>(){}"
+    ldc.i4 0
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "<get-topRead>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
@@ -76,7 +81,7 @@
   }
 }
 .class private auto ansi sealed 'propertyReferencesKt$main$mutable$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field public static initonly class 'propertyReferencesKt$main$mutable$1' 'INSTANCE'
@@ -89,9 +94,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:199:216:#<get-topValue>(){}"
+    ldc.i4 0
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "<get-topValue>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'() cil managed
@@ -110,7 +120,7 @@
   }
 }
 .class private auto ansi sealed 'propertyReferencesKt$main$mutable$2'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
   .field public static initonly class 'propertyReferencesKt$main$mutable$2' 'INSTANCE'
@@ -123,9 +133,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:199:216:#<set-topValue>(kotlin.Int){}"
+    ldc.i4 1
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "<set-topValue>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0') cil managed
@@ -139,7 +154,7 @@
   }
 }
 .class private auto ansi sealed 'propertyReferencesKt$main$unbound$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>
 {
   .field public static initonly class 'propertyReferencesKt$main$unbound$1' 'INSTANCE'
@@ -152,9 +167,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:292:306:Cell#<get-value>(){}"
+    ldc.i4 1
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "<get-value>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance int32 'InvokeExact'(class 'Cell' 'p0') cil managed
@@ -176,7 +196,7 @@
   }
 }
 .class private auto ansi sealed 'propertyReferencesKt$main$unbound$2'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function2'
 {
   .field public static initonly class 'propertyReferencesKt$main$unbound$2' 'INSTANCE'
@@ -189,9 +209,14 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
-    .maxstack 1
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:292:306:Cell#<set-value>(kotlin.Int){}"
+    ldc.i4 2
+    ldc.i4 0
+    ldc.i4 0
+    ldstr "<set-value>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ret
   }
   .method public hidebysig newslot virtual final instance object 'Invoke'(object 'p0', object 'p1') cil managed
@@ -207,15 +232,20 @@
   }
 }
 .class private auto ansi sealed beforefieldinit 'propertyReferencesKt$main$bound$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private class 'Cell' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Cell' 'p0') cil managed
   {
-    .maxstack 2
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:292:306:Cell#<get-value>(){}"
+    ldc.i4 0
+    ldc.i4 0
+    ldc.i4 1
+    ldstr "<get-value>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ldarg.0
     ldarg.1
     stfld class 'Cell' 'propertyReferencesKt$main$bound$1'::'f$0'
@@ -242,17 +272,29 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method family hidebysig virtual final instance object 'BoundValueAt'(int32 'index') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Cell' 'propertyReferencesKt$main$bound$1'::'f$0'
+    ret
+  }
 }
 .class private auto ansi sealed beforefieldinit 'propertyReferencesKt$main$bound$2'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
   .field private class 'Cell' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Cell' 'p0') cil managed
   {
-    .maxstack 2
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:propertyReferences.kt:292:306:Cell#<set-value>(kotlin.Int){}"
+    ldc.i4 1
+    ldc.i4 0
+    ldc.i4 1
+    ldstr "<set-value>"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ldarg.0
     ldarg.1
     stfld class 'Cell' 'propertyReferencesKt$main$bound$2'::'f$0'
@@ -272,6 +314,13 @@
     unbox.any [mscorlib]System.Int32
     call instance void 'Cell'::'set_value'(int32)
     ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
+    ret
+  }
+  .method family hidebysig virtual final instance object 'BoundValueAt'(int32 'index') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Cell' 'propertyReferencesKt$main$bound$2'::'f$0'
     ret
   }
 }

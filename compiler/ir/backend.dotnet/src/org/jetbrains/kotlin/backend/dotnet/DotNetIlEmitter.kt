@@ -1297,7 +1297,7 @@ class DotNetIlEmitter(
                 dotNetUnsupported("internal: class '$name' has more than one class supertype")
             }
             val superClass = properSuperClasses.singleOrNull()
-            if (superClass != null && superClass !in moduleClasses) {
+            if (superClass != null && superClass !in moduleClasses && superClass.isDotNetFunctionReferenceBase != true) {
                 dotNetUnsupported(
                     "class '$name' extends '${superClass.diagnosticName()}', which is not a class " +
                             "of the compiled module; only module-local base classes are supported"

@@ -181,15 +181,20 @@
   }
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundPrimitive$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field private int32 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'p0') cil managed
   {
-    .maxstack 2
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:<unknown>:-1:-1:kotlin.Int#inc(){}"
+    ldc.i4 0
+    ldc.i4 0
+    ldc.i4 1
+    ldstr "inc"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ldarg.0
     ldarg.1
     stfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
@@ -217,6 +222,14 @@
     box [mscorlib]System.Int32
     ret
   }
+  .method family hidebysig virtual final instance object 'BoundValueAt'(int32 'index') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'callableCapturesKt$boundPrimitive$1'::'f$0'
+    box [mscorlib]System.Int32
+    ret
+  }
   .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed
   {
     .maxstack 1
@@ -229,15 +242,20 @@
   }
 }
 .class private auto ansi sealed beforefieldinit 'callableCapturesKt$boundMember$1'
-       extends [mscorlib]System.Object
+       extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field private class 'Offset' 'f$0'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Offset' 'p0') cil managed
   {
-    .maxstack 2
+    .maxstack 6
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldstr "local:callableCaptures.kt:304:346:Offset#apply(kotlin.Int){}"
+    ldc.i4 1
+    ldc.i4 0
+    ldc.i4 1
+    ldstr "apply"
+    call instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'::.ctor(string, int32, int32, int32, string)
     ldarg.0
     ldarg.1
     stfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
@@ -274,6 +292,13 @@
     ldarg.1
     callvirt instance int32 'callableCapturesKt$boundMember$1'::'InvokeExact'(int32)
     box [mscorlib]System.Int32
+    ret
+  }
+  .method family hidebysig virtual final instance object 'BoundValueAt'(int32 'index') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Offset' 'callableCapturesKt$boundMember$1'::'f$0'
     ret
   }
   .method public hidebysig specialname newslot virtual final instance string 'get_name'() cil managed

@@ -4,7 +4,7 @@ Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dot
 (array content operations complete; explicit CLR function/property boundaries, nullability,
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values
-implemented at the current tip).
+and structural callable/property-reference Any semantics implemented at the current tip).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -830,10 +830,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   arities 0..1 construct; mutable arity 2 waits for a deliberate Function3 extension. Direct
   get/set, inherited invocation, primitive result widening, bound mutation, and explicit user
   implementations are pinned by `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
-  The draft property-reference ADR records target precedent, CLR distinction, and the deferred
-  reflection/equality/exact-access boundaries. Focused PSI box and IL-text tests pass; the box
-  path assembled the runtime and program with modern and Framework 4.8 ILAsm selections and
-  executed both products on CoreCLR.
+  The structural-identity continuation follows Native for function references and Native/Wasm for
+  property wrappers. Every rich reference with a declaration target extends metadata-public,
+  compiler-internal `FunctionReferenceBase`; its stable declaration signature, arity, adaptation
+  flags, and structurally compared bound values drive Equals/GetHashCode, while lambdas remain
+  System.Object identity values. Fun-interface constructor references remain rejected at the
+  established no-SAM-model boundary. The base constructor and bound-value hook are protected CLR
+  `family` members, so the runtime adds no new public hook beyond the required public Any-member
+  overrides. Property wrappers compare exact private wrapper kind, name, getter, and optional
+  setter, so equivalent expressions at different source sites compare equal without exposing
+  implementation class names. Rendering is `function <name>`/`constructor` and
+  `property <name> (Kotlin reflection is not available)`.
+  Explicit user implementations retain their own Any behavior. The callable and
+  property-reference draft ADRs record why the runtime base is an implementation class rather than
+  another callable ABI. Focused PSI/LightTree box and IL-text tests pass; the box path assembled the
+  runtime and program with modern and Framework 4.8 ILAsm selections and executed both products on
+  CoreCLR.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -966,12 +978,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit property-reference equality, hashing, and rendering before implementing them.** Compare
-   JVM reflection reference classes with Native/Wasm wrappers and separate language-observable
-   callable-reference semantics from unavailable full-reflection metadata. Preserve the erased
-   KPropertyN/FunctionN identities and private wrapper boundary; do not make wrapper class names,
-   factory methods, or the provisional export-selector grammar observable.
-2. **Then audit reflective getter/setter objects.** Determine the smallest coherent KProperty
+1. **Audit reflective getter/setter objects.** Determine the smallest coherent KProperty
    reflection continuation (if any) without pretending owner/return-type/parameter metadata exists.
    Keep KMutableProperty2 blocked on a deliberate Function3-family decision rather than adding a
    one-off setter representation.

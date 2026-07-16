@@ -137,6 +137,30 @@ function type even if future optimization members are themselves visible. The im
 KFunction reflection contract currently exposes only the stable common `name` property; complete
 signature/owner/parameter metadata is a separate contract.
 
+Generated function-reference objects follow Native's structural identity model. Every rich
+reference with a real reflection target—including a reference used internally as a property
+getter or setter—extends metadata-public `Kotlin.Runtime.Internal.FunctionReferenceBase`.
+Lambdas continue to extend `System.Object` directly. The base is public in CLR metadata only so
+generated subclasses in other assemblies can extend it. Its constructor and bound-value hook are
+protected CLR `family` members, so cross-assembly subclasses can use the implementation contract
+without publishing those members as general host-callable APIs. It is a runtime implementation
+class, not a callable interface, storage type, execution capability, or Kotlin source API.
+
+The base compares the target's stable serialized Kotlin signature, callable arity, adaptation
+flags, bound-value count, and each bound value using Kotlin structural equality. When the current
+IR has no serialized signature, it uses a deterministic file-local identity containing the logical
+file name, declaration offsets, and full Kotlin mangle. Thus two reference expressions for the same
+declaration compare equal even though they are distinct generated classes and instances, overloads
+and differently adapted references remain distinct, and equal references have equal hashes. Bound
+receivers participate by value. Rendering follows Native: `function <name>`, or `constructor` for a
+constructor reference. This policy does not change the erased `FunctionN` identity ABI: ordinary
+function-type conversions still preserve the same object, while equality between separately created
+references is an `Any` semantic supplied by the implementation base. User function implementations
+and lambdas remain ordinary identity-equality objects unless their own class overrides `Any`
+members. Fun-interface constructor references remain outside this implemented slice because the
+backend deliberately rejects fun interfaces until it has a SAM-conversion model; their mature
+identity rule must be decided and pinned with that feature.
+
 The candidate is only the Kotlin identity ABI and universal invocation fallback. It does not claim
 that erased invocation or untyped CLR signatures are sufficient final execution and export
 surfaces.
@@ -407,8 +431,8 @@ same-target and cross-runtime pairings read `KCallable.name`, observed one objec
 KFunction and Function1 views, and invoked the erased Function1 slot. Repository IL and CoreCLR
 pins cover non-capturing, bound, and local references, name metadata, erased invocation,
 KFunction-to-Function identity, KFunction variance identity, singleton reuse, and stateful
-freshness in `ilText/callableReferences.kt`, `box/callableReferences.kt`, and the local-function
-fixtures.
+freshness and structural equality/hash/rendering in `ilText/callableReferences.kt`,
+`box/callableReferences.kt`, and the local-function fixtures.
 
 Probe series `callableexact_s1` assembled the optional interfaces, exact-capable and erased-only
 implementations, and one guarded consumer with modern 10.0.9 and .NET Framework 4.8 ILAsm. All

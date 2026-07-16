@@ -62,5 +62,27 @@ fun box(): String {
     if (manual.name != "manual" || manual.get(cell) != 43 || manual(cell) != 43) {
         return "fail 11: user implementation"
     }
+
+    val readFirst = ::topRead
+    val readSecond = ::topRead
+    if (readFirst === readSecond || readFirst != readSecond) return "fail 12: immutable equality"
+    if (readFirst.hashCode() != readSecond.hashCode()) return "fail 13: immutable hash"
+    if (readFirst.toString() != "property topRead (Kotlin reflection is not available)") {
+        return "fail 14: property rendering"
+    }
+
+    val mutableFirst = ::topValue
+    val mutableSecond = ::topValue
+    if (mutableFirst === mutableSecond || mutableFirst != mutableSecond) return "fail 15: mutable equality"
+    if (mutableFirst.hashCode() != mutableSecond.hashCode()) return "fail 16: mutable hash"
+    if (readFirst.equals(mutableFirst)) return "fail 17: different property"
+
+    val boundFirst = cell::value
+    val boundSecond = cell::value
+    if (boundFirst === boundSecond || boundFirst != boundSecond) return "fail 18: bound equality"
+    if (boundFirst.hashCode() != boundSecond.hashCode()) return "fail 19: bound hash"
+    if (boundFirst == Cell(43)::value) return "fail 20: distinct bound receiver"
+
+    if (manual == ManualProperty()) return "fail 21: user implementation identity"
     return "OK"
 }
