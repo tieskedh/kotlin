@@ -7,8 +7,8 @@ bounded typed-argument callable capability implemented; bounded Kotlin property-
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
 continuation implemented; local delegated-property tokens, explicit user Iterator bridges, open
 invariant array iterators, bodyless iterator subinterfaces, and Kotlin-owned Iterable
-identity/bridges are committed; the first physical target-stdlib assembly and ordinary Kotlin
-array-iterator implementation are implemented in the current feature slice).
+identity/bridges and the first physical target-stdlib assembly/ordinary Kotlin array iterator are
+committed; the array-backed stdlib Iterable view is implemented in the current feature slice).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -40,7 +40,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   explicit user Iterator bridges (`e8cc1fc6d`), open invariant array iterators (`801c307a7`), and
   bodyless iterator subinterfaces (`f2ca42e73`), followed by Kotlin-owned Iterable identity and
   compiler-generated bridges (`87c9d7711`), and the first `Kotlin.Stdlib.dll`/ordinary Kotlin
-  ArrayIterator implementation in the current feature slice.
+  ArrayIterator implementation (`186af0b4d`), followed by the stdlib ArrayIterable/asIterable
+  continuation in the current feature slice.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -53,6 +54,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The target-stdlib slice has focused passing IL-text and CoreCLR box pins for both parsers, plus
   the PSI Iterable box; the box harness now also inspects the physical stdlib artifact. No fresh
   full suite has been run.
+  The ArrayIterable continuation passes the focused IL-text and CoreCLR box pins for both parsers;
+  the updated IL golden also assembles with Framework 4.8 ILAsm. No fresh full suite was run.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -766,6 +769,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   packaging, not a claim that separately compiled Kotlin libraries can already be consumed.
   `docs/decisions/draft-adr-target-stdlib-bootstrap.md` records the boundary. Separate primitive
   implementations remain a later performance decision.
+  The first follow-on stdlib class is generic `ArrayIterable<T>`. Exact `asIterable()` overloads
+  for the five established primitive arrays plus generic arrays construct it across the stdlib
+  boundary. It holds the original exact vector, observes mutations, creates an independent
+  `ArrayIterator<T>` for each iterator request through ordinary stdlib Kotlin code, and preserves
+  erased Iterable covariance identity. Empty arrays currently get the same view instead of the
+  common stdlib's `emptyList()` optimization because List has no coherent ABI yet; no observable
+  Iterable semantics are changed.
 - The callable exact-path slice preserves erased `Kotlin.Function0/1/2/3` as the only Kotlin
   callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge
   pattern, eligible generated non-Unit callables keep their original typed body as `InvokeExact`

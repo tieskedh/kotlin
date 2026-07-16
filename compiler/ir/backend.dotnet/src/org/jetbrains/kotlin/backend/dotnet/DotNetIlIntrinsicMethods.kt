@@ -152,7 +152,7 @@ internal class DotNetIlIntrinsicMethods(
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
-            erasedCollectionIntrinsics()
+            arrayAsIterableIntrinsics() + erasedCollectionIntrinsics()
 
     /**
      * The same constructor/member registry shape as JVM `IrIntrinsicMethods.arrayMethods`, plus
@@ -272,6 +272,20 @@ internal class DotNetIlIntrinsicMethods(
         add(
             Key(kotlinCollectionsFqn, arrayFqn, "copyOf", listOf(intFqn))
                     to DotNetIlArrayCopyOfIntrinsic(fixedArrayType = null, resized = true)
+        )
+    }
+
+    /** Array-backed Iterable views are ordinary target-stdlib objects, not BCL adapters. */
+    private fun arrayAsIterableIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
+        for (info in primitiveArrays) {
+            add(
+                Key(kotlinCollectionsFqn, info.arrayFqn, "asIterable", emptyList())
+                        to DotNetIlArrayAsIterableIntrinsic(info.arrayType)
+            )
+        }
+        add(
+            Key(kotlinCollectionsFqn, arrayFqn, "asIterable", emptyList())
+                    to DotNetIlArrayAsIterableIntrinsic(fixedArrayType = null)
         )
     }
 
@@ -1047,13 +1061,7 @@ private class DotNetIlArrayIteratorIntrinsic(
                 codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
                 ?: dotNetUnsupported("'iterator' has unsupported array receiver ${receiver.type.render()}")
         )
-        val elementType = when (arrayType) {
-            is DotNetIlValueType.PrimitiveArray -> arrayType.elementType
-            is DotNetIlValueType.GenericArray -> arrayType.elementType
-            else -> dotNetUnsupported(
-                "'iterator' has unsupported CLR array representation ${arrayType.nameInSignature}"
-            )
-        }
+        val elementType = arrayType.elementTypeForArrayProducer("iterator")
         codegen.emitExpression(receiver, arrayType)
         codegen.emit(
             DotNetStdlibLibrary.arrayIteratorConstructorInstruction(elementType),
@@ -1062,6 +1070,39 @@ private class DotNetIlArrayIteratorIntrinsic(
         )
         return true
     }
+}
+
+/** Array.asIterable -> the ordinary generic target-stdlib Iterable view. */
+private class DotNetIlArrayAsIterableIntrinsic(
+    private val fixedArrayType: DotNetIlValueType?,
+) : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        if (expectedType != DotNetRuntimeTypes.iterableType || call.arguments.size != 1) return false
+        val receiver = call.arguments.single()
+            ?: dotNetUnsupported("missing array receiver for 'asIterable'")
+        val arrayType = fixedArrayType ?: (
+                codegen.toDotNetIlValueType(receiver.type) as? DotNetIlValueType.GenericArray
+                ?: dotNetUnsupported("'asIterable' has unsupported array receiver ${receiver.type.render()}")
+        )
+        val elementType = arrayType.elementTypeForArrayProducer("asIterable")
+        codegen.emitExpression(receiver, arrayType)
+        codegen.emit(
+            DotNetStdlibLibrary.arrayIterableConstructorInstruction(elementType),
+            pops = 1,
+            pushes = 1,
+        )
+        return true
+    }
+}
+
+private fun DotNetIlValueType.elementTypeForArrayProducer(operationName: String): DotNetIlValueType = when (this) {
+    is DotNetIlValueType.PrimitiveArray -> elementType
+    is DotNetIlValueType.GenericArray -> elementType
+    else -> dotNetUnsupported("'$operationName' has unsupported CLR array representation $nameInSignature")
 }
 
 /** Kotlin Iterator.hasNext -> the erased Kotlin.Runtime execution slot. */

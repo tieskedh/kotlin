@@ -130,6 +130,13 @@ public external fun BooleanArray?.contentToString(): String
 public external fun CharArray?.contentToString(): String
 public external fun <T> Array<out T>?.contentDeepToString(): String
 
+public external fun <T> Array<out T>.asIterable(): Iterable<T>
+public external fun IntArray.asIterable(): Iterable<Int>
+public external fun LongArray.asIterable(): Iterable<Long>
+public external fun DoubleArray.asIterable(): Iterable<Double>
+public external fun BooleanArray.asIterable(): Iterable<Boolean>
+public external fun CharArray.asIterable(): Iterable<Char>
+
 // The first executable target-stdlib implementation. It is private in Kotlin source so injected
 // declarations do not expose a provisional user API. The backend emits this class, with public CLR
 // metadata for cross-assembly construction, only into Kotlin.Stdlib. Its Iterator MethodImpl
@@ -143,6 +150,13 @@ private class ArrayIterator<T>(private val array: Array<T>) : Iterator<T> {
         if (!hasNext()) throw NoSuchElementException()
         return array[index++]
     }
+}
+
+// Unlike the common stdlib implementation, this always returns a view object, including for an
+// empty array. The common emptyList() optimization is not observable Kotlin semantics and remains
+// unavailable until this target has a coherent List ABI.
+private class ArrayIterable<T>(private val array: Array<T>) : Iterable<T> {
+    override fun iterator(): Iterator<T> = ArrayIterator(array)
 }
 """,
     "DotNetStdlibKotlin.kt" to """package kotlin

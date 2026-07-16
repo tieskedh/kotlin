@@ -40,11 +40,14 @@ Ownership is split as follows:
 - `Kotlin.Stdlib.dll` owns ordinary Kotlin library implementations; and
 - the user assembly owns only user declarations and calls into those platform assemblies.
 
-The first stdlib implementation is a generic Kotlin `ArrayIterator<T>`. It is compiled through the
-ordinary class pipeline and receives the same compiler-generated erased Iterator MethodImpl
-bridges as a user implementation. Explicit array `iterator()` constructs the appropriate closed
-generic class from `Kotlin.Stdlib`; the handwritten `System.Array` iterator is removed from
-`Kotlin.Runtime`. Direct array `for` loops remain allocation-free indexed loops.
+The first stdlib implementations are generic Kotlin `ArrayIterator<T>` and `ArrayIterable<T>`
+classes. They are compiled through the ordinary class pipeline and receive the same
+compiler-generated erased Iterator/Iterable MethodImpl bridges as user implementations. Explicit
+array `iterator()` constructs the appropriate closed iterator class from `Kotlin.Stdlib`; the
+handwritten `System.Array` iterator is removed from `Kotlin.Runtime`. Array `asIterable()`
+constructs the corresponding closed view, which stores the original vector and creates a fresh
+`ArrayIterator<T>` per request through ordinary Kotlin code. Direct array `for` loops remain
+allocation-free indexed loops.
 
 The implementation class is private to Kotlin source resolution, but its CLR metadata and
 constructor are public because generated user assemblies construct it across the assembly
@@ -115,7 +118,8 @@ Costs and limits:
 The focused IL-text pin verifies that array iterator construction references
 `Kotlin.Stdlib, Version=1.0.0.0`. The CoreCLR box pin assembles and loads the runtime, stdlib, and
 program together. The box harness also checks the retained stdlib IL for its assembly version,
-generic `Kotlin.Collections.ArrayIterator<T>` class, and compiler-generated Iterator bridges.
+generic `Kotlin.Collections.ArrayIterator<T>`/`ArrayIterable<T>` classes, their ordinary internal
+composition, and compiler-generated Iterator/Iterable bridges.
 
 ## Deferred work
 
