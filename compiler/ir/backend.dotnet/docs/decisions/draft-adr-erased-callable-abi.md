@@ -211,14 +211,13 @@ uses this spelling:
 -Xdotnet-export=<kotlin-fq-name>=<clr-method-name>
 ```
 
-It deliberately is not a Kotlin source annotation and does not synthesize overloads for every
-public declaration. One mapping must select exactly one public, non-generic top-level function
-with at least one Function0/1/2 parameter or return. The original Kotlin method and its FunctionN
-signature remain unchanged. The compiler adds one user-named static method to that file's existing
-facade, replacing only callable positions with typed Func/Action positions and leaving ordinary
-parameters and returns unchanged. Requiring the CLR name in configuration makes naming an explicit
-owner decision; overloaded Kotlin names and an occupied facade method with the same exported
-parameter signature are errors rather than backend guesses.
+It deliberately is not a Kotlin source annotation and does not export every public declaration.
+One mapping must select exactly one public, non-generic top-level function with at least one
+Function0/1/2 parameter or return. The original Kotlin method and its FunctionN signature remain
+unchanged. The compiler adds a user-named static method to that file's existing facade, replacing
+only callable positions with typed Func/Action positions and leaving ordinary parameters and
+returns unchanged. Requiring the CLR name in configuration makes naming an explicit owner decision;
+overloaded Kotlin names and occupied exported signatures are errors rather than backend guesses.
 
 Generic or suspend functions, KFunction/suspend callable positions, callable markers without a
 fixed arity, and arities above two remain outside the slice. These gates keep an incomplete facade
@@ -262,6 +261,11 @@ null in both directions; a null delegate supplied to a non-null exported paramet
 delegate invocation unchanged because the boundary adds no catch/translation. Any future explicit
 exception translation belongs to the interop boundary, not the canonical callable or projection
 thunk.
+
+Trailing source defaults add shorter overloads to this explicit surface without changing callable
+identity. They call the existing masked `$default` dispatcher; the separate
+[CLR default-export draft ADR](draft-adr-clr-default-argument-exports.md) owns that decision and its
+deliberate rejection of implicit CLR optional constants.
 
 Probe series `delegateprojection_s1` first validated direct-exact, erased-thunk, generic-thunk,
 Func, Action, repeated-equality, and callback-removal shapes. `delegateexport_s1` then executed all
