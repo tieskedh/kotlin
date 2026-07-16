@@ -71,11 +71,7 @@ internal class DotNetPropertyReferenceSymbols(
         factories[arity to mutable]
             ?: error("Internal .NET backend error: no property-reference factory for arity $arity")
 
-    /** Mutable arity two is intentionally not a runtime member until Function3 exists. */
-    fun implementedFactories(): List<IrSimpleFunction> = factories
-        .filterKeys { [arity, mutable] -> !mutable || arity < 2 }
-        .values
-        .toList()
+    fun implementedFactories(): List<IrSimpleFunction> = factories.values.toList()
 
     private fun createFactory(arity: Int, mutable: Boolean): IrSimpleFunction {
         val function = factoryClass.addFunction(

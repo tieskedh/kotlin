@@ -44,8 +44,9 @@ Kotlin.KMutableProperty2 : Kotlin.KProperty2, Kotlin.KMutableProperty { void Set
 
 Logical receiver/value types remain in IR and, eventually, Kotlin metadata. Calls cast or unbox
 the erased results and box arguments at this first universal boundary. The existing erased
-`Kotlin.Function0/1/2` interfaces remain the only callable execution identity: `KPropertyN` merely
-inherits the matching interface, and invocation uses that existing slot.
+`Kotlin.Function0/1/2/3` family remains the only callable execution identity: `KPropertyN` merely
+inherits the matching Function0/1/2 interface, invocation uses that existing slot, and a mutable
+arity-two wrapper stores an ordinary Function3 setter.
 
 Following Native/Wasm, the runtime implementation object stores the property name, a lowered
 getter `FunctionN`, and an optional lowered setter `FunctionN+1`. The wrapper delegates `Get`,
@@ -68,19 +69,24 @@ through those contained references. Hashing combines the same components. Render
 `property <name> (Kotlin reflection is not available)`. Explicit user implementations do not
 inherit these private-wrapper semantics and retain their own `Any` behavior.
 
-The first slice constructs immutable arities zero through two and mutable arities zero and one.
-The `KMutableProperty2` identity and erased `Set` slot can be represented, but constructing its
-wrapper requires a three-argument setter callable and the callable POC currently ends at
-`Function2`. This ADR does not expand the callable ABI as a side effect of property references;
-mutable arity-two references stay explicitly unsupported until `Function3` is designed as part of
-the callable family.
+The current slice constructs immutable and mutable arities zero through two. Mutable arity two was
+enabled only after Function3 and ExactFunction3 were added coherently to the callable family; its
+Unit-returning setter object implements the universal erased Function3 slot and does not gain a
+property-specific callable representation. This ADR therefore consumes the callable extension
+rather than expanding callable ABI as an incidental property-reference detail.
 
 ## Boundaries
 
 - This decision does not reuse or extend the provisional export-selector grammar. Property
   references are Kotlin runtime values, not CLR facade-selection controls.
-- It does not define full reflection (`getter`, `setter`, `returnType`, parameters, owner,
-  annotations) or local delegated-property reflection.
+- It does not define full reflection (`returnType`, parameters, owner, annotations) or local
+  delegated-property reflection.
+- It does not expose JVM-shaped `getter`/`setter` accessor objects. The common expect declaration
+  and the Native, Wasm, and JS actual interfaces omit those members; JVM adds them as a
+  target-specific reflection surface whose accessors are KFunctions and point back through
+  `Accessor.property`. Returning the private stored FunctionN fields would not satisfy that
+  contract. Adding real accessor objects is deferred until the .NET reflection model can define
+  the accessor-to-property link and the required KFunction metadata together.
 - It does not promise exact typed property access. Optional execution capabilities may be added
   later, but erased `Get`/`Set` and the inherited erased `FunctionN.Invoke` remain universal.
 - Consumers may not depend on the private wrapper names or assume that a property reference
@@ -106,7 +112,8 @@ unrecoverable without adapters.
 
 The focused property-reference box assembles the generated program and Kotlin.Runtime with both
 modern ILAsm and the .NET Framework 4.8 ILAsm selection, then executes both products on CoreCLR.
-It covers immutable and mutable arities zero/one, direct Get/Set, inherited FunctionN invocation,
-primitive-result variance, one-time bound-receiver evaluation, cross-site and bound structural
-equality/hash behavior, rendering, and an explicit user implementation.
+It covers immutable and mutable arities zero through two, direct Get/Set, inherited FunctionN
+invocation, primitive-result variance, one-time bound-receiver evaluation, cross-site and bound
+structural equality/hash behavior, rendering, a delegated member-extension property that requires
+KMutableProperty2, and explicit user implementations.
 The exact IL-text pin separately records the generated wrapper-construction and erased-call shapes.

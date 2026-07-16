@@ -80,6 +80,7 @@ Kotlin.Function
 Kotlin.Function0 : Kotlin.Function { object Invoke() }
 Kotlin.Function1 : Kotlin.Function { object Invoke(object) }
 Kotlin.Function2 : Kotlin.Function { object Invoke(object, object) }
+Kotlin.Function3 : Kotlin.Function { object Invoke(object, object, object) }
 ```
 
 Direct function references additionally expose this orthogonal reflection view:
@@ -91,7 +92,8 @@ Kotlin.KFunction : Kotlin.KCallable, Kotlin.Function
 
 `KFunction` deliberately has no `Invoke` member and no arity. A generated direct-reference object
 implements `KFunction` and exactly one erased `FunctionN` on the same object. Source
-`KFunction0`/`KFunction1`/`KFunction2` signatures map to the non-generic reflection view, while
+`KFunction0`/`KFunction1`/`KFunction2`/`KFunction3` signatures map to the non-generic reflection
+view, while
 invocation and widening to a function type use a checked interface view change to the object's
 existing `FunctionN` implementation. That operation creates no adapter and preserves reference
 identity. Lambdas and adapted references without a KFunction source type remain FunctionN-only.
@@ -100,7 +102,8 @@ execution identity or fallback ABI.
 
 This identity is an invariant for subsequent callable work in this POC:
 
-- erased `Kotlin.Function0`/`Function1`/`Function2` remains the only Kotlin callable identity ABI;
+- erased `Kotlin.Function0`/`Function1`/`Function2`/`Function3` remains the only Kotlin callable
+  identity ABI;
 - captured values, mutable-capture cells, and bound-reference receivers are fields of generated
   callable classes and do not introduce another callable ABI shape; and
 - optional exact-shape members or foreign delegate projections are execution or export
@@ -112,7 +115,7 @@ Its generated callable object may store a receiver and may expose an exact-shape
 but its Kotlin-facing identity remains the erased `Kotlin.FunctionN` interface and its erased
 `Invoke` remains the universal fallback.
 
-The first implementation supports arities zero through two; later arities must follow the same
+The current implementation supports arities zero through three; later arities must follow the same
 shape. A Kotlin function type maps to `Kotlin.FunctionN` solely by arity, while its common
 `kotlin.Function<R>` view maps to the non-invokable `Kotlin.Function` marker. Projections such as
 `Function<*>` do not change that physical marker. A variance conversion is an instruction-free
@@ -173,6 +176,7 @@ the reserved compiler/runtime namespace:
 Kotlin.Runtime.Internal.ExactFunction0<out R> { R InvokeExact() }
 Kotlin.Runtime.Internal.ExactFunction1<in P0, out R> { R InvokeExact(P0) }
 Kotlin.Runtime.Internal.ExactFunction2<in P0, in P1, out R> { R InvokeExact(P0, P1) }
+Kotlin.Runtime.Internal.ExactFunction3<in P0, in P1, in P2, out R> { R InvokeExact(P0, P1, P2) }
 ```
 
 These interfaces are not Kotlin source declarations or a storage ABI. They are public in CLR
@@ -207,6 +211,12 @@ nullable-primitive parameter implements this optional interface in addition to F
 ExactFunctionN. `InvokeTyped` calls the same `InvokeExact` body with unboxed arguments and erases
 only the result. Func1/2 adapters at the explicit CLR boundary expose the same capability; Action
 adapters do not.
+
+Function3 deliberately receives the exact capability but not a `TypedArgumentsFunction3`
+capability. The latter would be another metadata-public runtime contract, and the cross-module
+allocation/throughput evidence that justified the narrow Function1/2 surface has not been gathered
+for arity three. A widened Function3 call therefore uses the call-site exact probe, any safely
+recovered immutable-local exact shape, and then erased fallback.
 
 Codegen probes this view only when the call site's logical result is `Any`/`Any?` (`object`) and at
 least one argument is primitive-shaped. It evaluates the receiver and arguments once, probes the
@@ -244,8 +254,9 @@ An upstream-quality design needs three distinct layers:
    runtime capability. The partial invocation requires an object-shaped logical result, at least
    one concrete primitive-shaped argument, and a matching runtime capability. Otherwise codegen
    uses erased `Invoke`. Neither optimization changes callable identity or adds required members to
-   `Kotlin.FunctionN`. Unit, higher arities, broader partial capabilities, and any future direct
-   generated-class call remain deliberate follow-ups rather than alternate identities.
+   `Kotlin.FunctionN`. Unit, partial capabilities at arity three or higher, higher fixed callable
+   arities, broader partial capabilities, and any future direct generated-class call remain
+   deliberate follow-ups rather than alternate identities.
 3. **CLR export ABI.** Ordinary public APIs intended for C# and other CLR languages need typed
    projections, such as generated `Func`/`Action` adapters or typed facade members. Those
    projections do not participate in Kotlin subtype conversion and may allocate wrappers.
@@ -414,6 +425,12 @@ Repository pins cover both FIR parsers and real CoreCLR execution:
 - `compiler/testData/codegen/dotnet/ilText/callableCaptures.kt`;
 - `compiler/testData/codegen/dotnet/ilText/callableObjectsRejected.kt`; and
 - `compiler/testData/codegen/dotnet/box/callableObjects.kt`.
+
+The Function3 continuation pins a generated lambda, a direct KFunction3 reference, an explicit
+user Function3 implementation, the erased bridge, and the guarded ExactFunction3 path. A source
+boundary audit separately confirms that no TypedArgumentsFunction3 or Func/Action3 export contract
+was added. Function3 also supplies the ordinary setter callable required by KMutableProperty2
+without introducing a property-specific callable shape.
 
 Probe series `captureabi_s3` then compiled the capturing implementation itself with both ILAsm
 versions. All four same-target and cross-runtime pairings executed immutable and mutable captures,
