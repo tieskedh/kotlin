@@ -6,7 +6,8 @@ defaults, overload-aware function selection, immutable callable-provenance invoc
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
 continuation implemented; local delegated-property tokens are committed and explicit user
-Iterator bridges are implemented at the current working tip).
+Iterator bridges are committed and open invariant array iterators are implemented at the current
+working tip).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -35,7 +36,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   capability described below, followed by the bounded erased property-reference representation,
   structural callable-reference identity (`d3433c768`), and the Function3/KMutableProperty2
   continuation (`ef279c65e`), followed by local delegated-property tokens (`417bd3c79`) and
-  explicit user Iterator bridges at the current working tip.
+  explicit user Iterator bridges (`e8cc1fc6d`) and open invariant array iterators at the current
+  working tip.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -705,8 +707,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `bool HasNext()` and `object Next()`; logical element types remain in IR/metadata and call sites
   cast or `unbox.any` the result. This preserves the same object/cursor across Kotlin covariance,
   including `Iterator<Int> -> Iterator<Any>`, where CLR generic variance cannot help. Explicit
-  `iterator()` over the five primitive vectors and concrete reference arrays constructs the shared
-  internal ArrayIterator over System.Array; direct array `for` loops remain allocation-free.
+  `iterator()` over the five primitive vectors, concrete reference arrays, and open invariant
+  `Array<T>` constructs the shared internal ArrayIterator over System.Array; open vectors retain
+  their exact `!n[]`/`!!n[]` signature and consumers use `unbox.any !n`/`!!n`. Nullable type
+  parameters, projections, concrete primitive-element generic arrays, and nested arrays still
+  fail in the structural array mapper. Direct array `for` loops remain allocation-free.
   Exhaustion uses exact runtime-owned `Kotlin.NoSuchElementException` rather than CLR
   InvalidOperationException, which would create a false IllegalStateException edge.
   `iteratorabi_s1` assembled generic/primitive/reference consumers and the exact catch with modern
@@ -718,8 +723,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   results pass unchanged, primitive/open-generic results box once, and derived classes inherit a
   bridge-owning base's methods. An abstract obligation-only base defers bridge ownership to the
   first concrete descendant. The same object therefore preserves state and identity through
-  primitive/reference covariance without an adapter. Open `Array<T>` producers,
-  iterator subinterfaces, primitive-specialized subclasses, collections, and CLR enumeration
+  primitive/reference covariance without an adapter. Iterator subinterfaces,
+  primitive-specialized subclasses, collections, and CLR enumeration
   adapters remain rejected. The handwritten runtime ArrayIterator is now explicitly classified as
   bootstrap packaging: a future real .NET stdlib should own its ordinary Kotlin implementation,
   while Kotlin.Runtime retains the erased interface identity. Separate primitive implementations
@@ -1012,13 +1017,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit open `Array<T>.iterator()` producers.** The physical open vector and runtime
-   `ArrayIterator(System.Array)` are individually valid; determine whether admitting this producer
-   composes with the existing open-array gates without silently enabling nullable/projected/nested
-   array families.
-2. **Audit user iterator subinterfaces separately.** Do not generalize the class bridge into
+1. **Audit user iterator subinterfaces separately.** Do not generalize the class bridge into
    Framework-incompatible default interface bodies or weaken the module-interface gate.
-3. **Validate iterator bridges across compiled Kotlin modules when that boundary exists.** The
+2. **Validate iterator bridges across compiled Kotlin modules when that boundary exists.** The
    erased runtime identity is cross-assembly, but this POC does not yet consume Kotlin metadata
    from a separately produced CLR module; do not claim source-level cross-module validation.
 

@@ -56,6 +56,8 @@ private class DeferredStringIterator(private val value: String) : DeferredIterat
 
 private fun <T> first(iterator: Iterator<T>): T = iterator.next()
 
+private fun <T> openIterator(values: Array<T>): Iterator<T> = values.iterator()
+
 private fun isExhaustedTwice(iterator: Iterator<Any>): Boolean {
     try {
         iterator.next()
@@ -176,6 +178,13 @@ fun box(): String {
     val deferred: Iterator<String> = DeferredStringIterator("deferred")
     if (!deferred.hasNext() || deferred.next() != "deferred" || deferred.hasNext()) {
         return "fail 23: bridge deferred through abstract base"
+    }
+
+    val openValues = arrayOf("open", "generic")
+    val openIterator = openIterator(openValues)
+    openValues[0] = "changed"
+    if (openIterator.next() != "changed" || first(openIterator) != "generic" || openIterator.hasNext()) {
+        return "fail 24: open Array<T> iterator"
     }
     return "OK"
 }
