@@ -99,6 +99,7 @@ object DotNetBackend {
             producesExecutable = emitsExecutable,
             irBuiltIns = irBuiltIns,
             exports = configuration.dotNetExports,
+            propertyExports = configuration.dotNetPropertyExports,
         )
         val ilText = emitter.emit(irModuleFragment)
         if (ilText == null) {

@@ -207,9 +207,12 @@ An upstream-quality design needs three distinct layers:
 
 The non-generic top-level function subset of layer 3 is implemented below, including ordinary
 functions, Function0/1/2 adaptation, explicit CLR nullability metadata, and Kotlin-default
-overloads, including overload-aware selection. Non-function declarations remain open. Performance
-validation of layer 2 and representative evidence for the remaining layer-3 directions are
-requirements for promoting this draft rather than optional post-promotion work.
+overloads, including overload-aware selection. The top-level property subset reuses the same
+callable boundary and is specified separately in the
+[CLR property-export draft ADR](draft-adr-clr-property-exports.md). Other non-function declarations
+remain open. Performance validation of layer 2 and representative evidence for the remaining
+layer-3 directions are requirements for promoting this draft rather than optional post-promotion
+work.
 
 ## Identity boundary
 
@@ -261,7 +264,8 @@ disambiguator rather than standardize this spelling as public ABI.
 Generic or suspend functions, KFunction/suspend callable positions, callable markers without a
 fixed arity, and arities above two remain outside the slice. These gates keep an incomplete facade
 from exposing erased FunctionN in a position that claims to be CLR-friendly. Member functions,
-properties, constructors, classes, and automatic whole-module export also remain out of scope.
+member properties, constructors, classes, and automatic whole-module export also remain out of
+scope.
 
 The implementation does not require another Kotlin callable representation. The generated facade
 passes the canonical FunctionN object to metadata-public

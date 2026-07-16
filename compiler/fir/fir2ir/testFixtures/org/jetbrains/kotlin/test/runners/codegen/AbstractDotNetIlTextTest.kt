@@ -8,10 +8,12 @@ package org.jetbrains.kotlin.test.runners.codegen
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
+import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
+import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
@@ -226,6 +228,8 @@ private class DotNetEnvironmentConfigurator(
         configuration.dotNetAssemblyName = artifactName
         configuration.dotNetExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT]
             .map(DotNetExport::parse)
+        configuration.dotNetPropertyExports = module.directives[DotNetCodegenDirectives.DOTNET_EXPORT_PROPERTY]
+            .map(DotNetPropertyExport::parse)
         configuration.dotNetOutput = getOutputFile(module, artifactName)
         configuration.dotNetTarget = target
         configuration.addSourcesForDependsOnClosure(module, testServices)
@@ -255,6 +259,9 @@ private class DotNetEnvironmentConfigurator(
 private object DotNetCodegenDirectives : SimpleDirectivesContainer() {
     val DOTNET_EXPORT by stringDirective(
         "Explicit CLR function export in <kotlin-selector>=<clr-method-name> form"
+    )
+    val DOTNET_EXPORT_PROPERTY by stringDirective(
+        "Provisional CLR property export in <kotlin-fq-name>=<clr-property-name> form"
     )
 }
 

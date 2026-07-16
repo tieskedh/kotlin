@@ -1,0 +1,4 @@
+$TESTDATA_DIR$/propertyExport.kt
+-Xdotnet-export=sample.readValue=value
+-d
+$TEMP_DIR$/functionExportPropertyCollision.il

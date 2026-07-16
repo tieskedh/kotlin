@@ -1,0 +1,4 @@
+$TESTDATA_DIR$/propertyExport.kt
+-Xdotnet-export-property=sample.value=Value
+-d
+$TEMP_DIR$/propertyExport.il

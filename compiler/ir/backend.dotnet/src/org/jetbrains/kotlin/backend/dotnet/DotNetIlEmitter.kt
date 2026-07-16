@@ -58,6 +58,7 @@ class DotNetIlEmitter(
     private val producesExecutable: Boolean,
     private val irBuiltIns: IrBuiltIns,
     private val exports: List<DotNetExport> = emptyList(),
+    private val propertyExports: List<DotNetPropertyExport> = emptyList(),
 ) {
     /**
      * Renders the module to IL text.
@@ -102,9 +103,8 @@ class DotNetIlEmitter(
         }
 
         // Export selection is deliberately external compiler configuration, not a Kotlin source
-        // annotation or an automatic public overload policy. One FQ name must identify exactly
-        // one real top-level declaration; overloaded groups require a future signature selector
-        // rather than an arbitrary backend pick.
+        // annotation or an automatic public overload policy. This is provisional POC control
+        // plane only: none of its selector text reaches metadata or the runtime.
         val exportsByTarget = LinkedHashMap<IrSimpleFunction, DotNetExport>()
         var exportSelectionFailed = false
         for (export in exports) {
@@ -144,6 +144,34 @@ class DotNetIlEmitter(
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
                     "Cannot export '${export.kotlinSelector}' more than once."
+                )
+                exportSelectionFailed = true
+            }
+        }
+        val propertyExportsByTarget = LinkedHashMap<IrProperty, DotNetPropertyExport>()
+        for (export in propertyExports) {
+            val candidates = topLevelPropertiesByFile.values.flatten().filter { property ->
+                property.fqNameWhenAvailable?.asString() == export.kotlinFqName
+            }
+            if (candidates.size != 1) {
+                val reason = if (candidates.isEmpty()) {
+                    "no top-level property was found"
+                } else {
+                    "the property name is overloaded; the provisional selector only supports a unique property"
+                }
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "Cannot export property '${export.kotlinFqName}' as '${export.clrPropertyName}': $reason."
+                )
+                exportSelectionFailed = true
+                continue
+            }
+            val target = candidates.single()
+            val previous = propertyExportsByTarget.putIfAbsent(target, export)
+            if (previous != null) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "Cannot export property '${export.kotlinFqName}' more than once."
                 )
                 exportSelectionFailed = true
             }
@@ -706,10 +734,36 @@ class DotNetIlEmitter(
         // allowed to retain a stale signature or call a declaration evicted by a class/body
         // failure. Export failures are compilation errors because the user requested this
         // boundary explicitly; silently dropping the facade would be a false-success ABI.
-        val renderedExports = LinkedHashMap<IrSimpleFunction, List<DotNetIlRenderedMethod>>()
+        val renderedExports = LinkedHashMap<IrSimpleFunction, DotNetRenderedExport>()
+        val renderedPropertyExports = LinkedHashMap<IrProperty, DotNetRenderedPropertyExport>()
         val exportedIlIdentities = hashSetOf<String>()
+        val exportedPropertyIdentities = hashSetOf<String>()
         var exportsUseNullableMetadata = false
         var exportFailed = false
+
+        fun reserveExportedMethod(
+            exportedMethod: DotNetRenderedExportMethod,
+            owner: DotNetIlClassInfo,
+        ) {
+            val exportedParameterTypes = exportedMethod.parameterTypes.joinToString(", ")
+            val collidesWithExistingMethod = availableFunctions.any { [function, info] ->
+                info.owner.ilTypeRef == owner.ilTypeRef &&
+                        function.typeParameters.isEmpty() &&
+                        function.dotNetIlMethodName() == exportedMethod.methodName &&
+                        info.signature.renderParameterTypes() == exportedParameterTypes
+            }
+            if (collidesWithExistingMethod) {
+                dotNetUnsupported(
+                    "CLR method '${exportedMethod.methodName}($exportedParameterTypes)' " +
+                            "already exists on facade ${owner.ilTypeRef}"
+                )
+            }
+            val exportIdentity = "${owner.ilTypeRef}::${exportedMethod.methodName}($exportedParameterTypes)"
+            if (!exportedIlIdentities.add(exportIdentity)) {
+                dotNetUnsupported("another requested export maps to the same CLR method '$exportIdentity'")
+            }
+        }
+
         for ([target, export] in exportsByTarget) {
             val targetInfo = availableFunctions[target]
             if (targetInfo == null) {
@@ -722,33 +776,116 @@ class DotNetIlEmitter(
                 continue
             }
             try {
-                val renderedExport = renderExport(target, export, targetInfo, typeMapper, availableFunctions)
-                for (exportedMethod in renderedExport.methods) {
-                    val exportedParameterTypes = exportedMethod.parameterTypes.joinToString(", ")
-                    val collision = availableFunctions.entries.firstOrNull { [function, info] ->
-                        info.owner.ilTypeRef == targetInfo.owner.ilTypeRef &&
-                                function.typeParameters.isEmpty() &&
-                                function.dotNetIlMethodName() == export.clrMethodName &&
-                                info.signature.renderParameterTypes() == exportedParameterTypes
-                    }
-                    if (collision != null) {
-                        dotNetUnsupported(
-                            "CLR method '${export.clrMethodName}($exportedParameterTypes)' " +
-                                    "already exists on facade ${targetInfo.owner.ilTypeRef}"
-                        )
-                    }
-                    val exportIdentity = "${targetInfo.owner.ilTypeRef}::${export.clrMethodName}(" +
-                            "$exportedParameterTypes)"
-                    if (!exportedIlIdentities.add(exportIdentity)) {
-                        dotNetUnsupported("another requested export maps to the same CLR method '$exportIdentity'")
-                    }
+                val file = target.parent as? IrFile
+                    ?: error("Internal .NET backend error: selected top-level function has no file parent")
+                val propertyCollision = topLevelPropertiesByFile.getValue(file).firstOrNull { property ->
+                    property !in propertySkipReasons && !property.isConst &&
+                            !property.isDotNetExtensionProperty() &&
+                            property.name.asString() == export.clrMethodName
                 }
-                renderedExports[target] = renderedExport.methods.map { it.method }
+                if (propertyCollision != null) {
+                    dotNetUnsupported(
+                        "CLR property '${export.clrMethodName}' already exists on facade ${targetInfo.owner.ilTypeRef}"
+                    )
+                }
+                if (constFieldLines.keys.any { property ->
+                        property.parent == file && property.name.asString() == export.clrMethodName
+                    }
+                ) {
+                    dotNetUnsupported(
+                        "CLR field '${export.clrMethodName}' already exists on facade ${targetInfo.owner.ilTypeRef}"
+                    )
+                }
+                val renderedExport = renderExport(
+                    target = target,
+                    clrMethodName = export.clrMethodName,
+                    targetInfo = targetInfo,
+                    typeMapper = typeMapper,
+                    availableFunctions = availableFunctions,
+                )
+                for (exportedMethod in renderedExport.methods) {
+                    reserveExportedMethod(exportedMethod, targetInfo.owner)
+                }
+                renderedExports[target] = renderedExport
                 exportsUseNullableMetadata = exportsUseNullableMetadata || renderedExport.usesNullableMetadata
             } catch (e: DotNetIlUnsupportedException) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
                     "Cannot export '${export.kotlinSelector}' as '${export.clrMethodName}': ${e.reason}."
+                )
+                exportFailed = true
+            }
+        }
+        for ([target, export] in propertyExportsByTarget) {
+            val getter = target.getter
+            val getterInfo = getter?.let(availableFunctions::get)
+            if (getter == null || getterInfo == null) {
+                val reason = when {
+                    target.isConst -> "const properties already have CLR literal-field semantics"
+                    else -> propertySkipReasons[target]
+                        ?: "the selected property has no getter in the emitted callable surface"
+                }
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "Cannot export property '${export.kotlinFqName}' as '${export.clrPropertyName}': $reason."
+                )
+                exportFailed = true
+                continue
+            }
+            try {
+                val file = target.parent as? IrFile
+                    ?: error("Internal .NET backend error: selected top-level property has no file parent")
+                val owner = getterInfo.owner
+                val propertyIdentity = "${owner.ilTypeRef}::${export.clrPropertyName}"
+                if (!exportedPropertyIdentities.add(propertyIdentity)) {
+                    dotNetUnsupported("another requested export maps to the same CLR property '$propertyIdentity'")
+                }
+                val existingProperty = topLevelPropertiesByFile.getValue(file).firstOrNull { property ->
+                    property !in propertySkipReasons && !property.isConst &&
+                            !property.isDotNetExtensionProperty() &&
+                            property.name.asString() == export.clrPropertyName
+                }
+                if (existingProperty != null) {
+                    dotNetUnsupported(
+                        "CLR property '${export.clrPropertyName}' already exists on facade ${owner.ilTypeRef}"
+                    )
+                }
+                if (constFieldLines.keys.any { property ->
+                        property.parent == file && property.name.asString() == export.clrPropertyName
+                    }
+                ) {
+                    dotNetUnsupported(
+                        "CLR field '${export.clrPropertyName}' already exists on facade ${owner.ilTypeRef}"
+                    )
+                }
+                val hasExistingMethod = availableFunctions.any { [function, info] ->
+                    info.owner.ilTypeRef == owner.ilTypeRef && function.dotNetIlMethodName() == export.clrPropertyName
+                }
+                val hasExistingExport = renderedExports.any { [function, renderedExport] ->
+                    availableFunctions[function]?.owner?.ilTypeRef == owner.ilTypeRef &&
+                            renderedExport.methods.any { method -> method.methodName == export.clrPropertyName }
+                }
+                if (hasExistingMethod || hasExistingExport) {
+                    dotNetUnsupported(
+                        "CLR member '${export.clrPropertyName}' already exists on facade ${owner.ilTypeRef}"
+                    )
+                }
+
+                val renderedExport = renderPropertyExport(
+                    property = target,
+                    export = export,
+                    getterInfo = getterInfo,
+                    typeMapper = typeMapper,
+                    availableFunctions = availableFunctions,
+                )
+                renderedExport.methods.forEach { method -> reserveExportedMethod(method, owner) }
+                renderedPropertyExports[target] = renderedExport
+                exportsUseNullableMetadata =
+                    exportsUseNullableMetadata || renderedExport.usesNullableMetadata
+            } catch (e: DotNetIlUnsupportedException) {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "Cannot export property '${export.kotlinFqName}' as '${export.clrPropertyName}': ${e.reason}."
                 )
                 exportFailed = true
             }
@@ -833,11 +970,16 @@ class DotNetIlEmitter(
                     when (declaration) {
                         is IrSimpleFunction -> {
                             renderedMethods[declaration]?.let { facadeMethods += it }
-                            renderedExports[declaration]?.let { facadeMethods += it }
+                            renderedExports[declaration]?.methods?.let { methods ->
+                                facadeMethods += methods.map { it.method }
+                            }
                         }
                         is IrProperty -> {
                             declaration.getter?.let { getter -> renderedMethods[getter]?.let { facadeMethods += it } }
                             declaration.setter?.let { setter -> renderedMethods[setter]?.let { facadeMethods += it } }
+                            renderedPropertyExports[declaration]?.methods?.let { methods ->
+                                facadeMethods += methods.map { it.method }
+                            }
                         }
                         else -> {}
                     }
@@ -856,6 +998,9 @@ class DotNetIlEmitter(
                     val setter = property.setter
                     if ((getter != null || setter != null) && !property.isDotNetExtensionProperty()) {
                         facadePropertyBlocks += renderPropertyBlock(property, getter, setter, availableFunctions, isStatic = true)
+                    }
+                    renderedPropertyExports[property]?.let { rendered ->
+                        facadePropertyBlocks += rendered.propertyBlock
                     }
                 }
                 if (facadeMethods.isEmpty() && facadeFields.isEmpty() && facadePropertyBlocks.isEmpty()) continue
@@ -2101,6 +2246,84 @@ class DotNetIlEmitter(
     }
 
     /**
+     * Renders one durable CLR property shape selected through the deliberately minimal POC
+     * control plane. The alias owns real `.property` metadata plus public static `specialname`
+     * accessors. Those wrappers preserve source visibility, project/adapt callable values, and
+     * carry the same explicit nullable contract on both the property row and accessor positions.
+     */
+    private fun renderPropertyExport(
+        property: IrProperty,
+        export: DotNetPropertyExport,
+        getterInfo: DotNetIlFunctionInfo,
+        typeMapper: DotNetIlTypeMapper,
+        availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+    ): DotNetRenderedPropertyExport {
+        if (property.visibility != DescriptorVisibilities.PUBLIC) {
+            dotNetUnsupported("the selected property is not public")
+        }
+        if (property.isConst) {
+            dotNetUnsupported("const properties already have CLR literal-field semantics")
+        }
+        if (property.isDotNetExtensionProperty()) {
+            dotNetUnsupported("extension properties need a separate CLR indexer or method policy")
+        }
+        val getter = property.getter
+            ?: dotNetUnsupported("the selected property has no getter")
+        if (getter.visibility != DescriptorVisibilities.PUBLIC) {
+            dotNetUnsupported("the selected property's getter is not public")
+        }
+        val clrPropertyName = export.clrPropertyName
+        val renderedGetter = renderExport(
+            target = getter,
+            clrMethodName = "get_$clrPropertyName",
+            targetInfo = getterInfo,
+            typeMapper = typeMapper,
+            availableFunctions = availableFunctions,
+            isPropertyAccessor = true,
+            includeDefaultOverloads = false,
+        )
+        val getterMethod = renderedGetter.methods.single()
+        val setter = property.setter?.takeIf { it.visibility == DescriptorVisibilities.PUBLIC }
+        val renderedSetter = setter?.let { publicSetter ->
+            val setterInfo = availableFunctions[publicSetter]
+                ?: dotNetUnsupported("the selected property's public setter is not in the emitted callable surface")
+            renderExport(
+                target = publicSetter,
+                clrMethodName = "set_$clrPropertyName",
+                targetInfo = setterInfo,
+                typeMapper = typeMapper,
+                availableFunctions = availableFunctions,
+                isPropertyAccessor = true,
+                includeDefaultOverloads = false,
+            )
+        }
+        val setterMethod = renderedSetter?.methods?.single()
+        if (setterMethod != null && setterMethod.parameterTypes.singleOrNull() != getterMethod.returnType) {
+            dotNetUnsupported("the projected getter and setter types do not form one CLR property")
+        }
+        val propertyBlock = buildString {
+            appendLine(
+                "  .property ${getterMethod.returnType} ${clrPropertyName.toIlIdentifier()}()"
+            )
+            appendLine("  {")
+            if (renderedGetter.returnNullabilityFlags.isNotEmpty()) {
+                appendLine("    ${DotNetNullableMetadata.renderAttribute(renderedGetter.returnNullabilityFlags)}")
+            }
+            appendLine("    .get ${getterMethod.renderStaticReference(getterInfo.owner)}")
+            setterMethod?.let { method ->
+                appendLine("    .set ${method.renderStaticReference(getterInfo.owner)}")
+            }
+            appendLine("  }")
+        }
+        return DotNetRenderedPropertyExport(
+            methods = listOfNotNull(getterMethod, setterMethod),
+            propertyBlock = propertyBlock,
+            usesNullableMetadata = renderedGetter.usesNullableMetadata ||
+                    renderedSetter?.usesNullableMetadata == true,
+        )
+    }
+
+    /**
      * Renders one explicit CLR function export while leaving the Kotlin method unchanged.
      * Ordinary parameters and returns retain their mapped CLR shapes. Supported Function0/1/2
      * parameters become typed Func/Action parameters and are adapted back to the canonical erased
@@ -2108,10 +2331,12 @@ class DotNetIlEmitter(
      */
     private fun renderExport(
         target: IrSimpleFunction,
-        export: DotNetExport,
+        clrMethodName: String,
         targetInfo: DotNetIlFunctionInfo,
         typeMapper: DotNetIlTypeMapper,
         availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+        isPropertyAccessor: Boolean = false,
+        includeDefaultOverloads: Boolean = true,
     ): DotNetRenderedExport {
         if (target.visibility != DescriptorVisibilities.PUBLIC) {
             dotNetUnsupported("the selected function is not public")
@@ -2149,9 +2374,10 @@ class DotNetIlEmitter(
         val renderedMethods = mutableListOf<DotNetRenderedExportMethod>()
         renderedMethods += DotNetRenderedExportMethod(
             method = DotNetIlRenderedMethod(buildString {
+                val specialName = if (isPropertyAccessor) "specialname " else ""
                 appendLine(
-                    "  .method public hidebysig static $exportedReturnType " +
-                            "${export.clrMethodName.toIlIdentifier()}($parameters) cil managed"
+                    "  .method public hidebysig ${specialName}static $exportedReturnType " +
+                            "${clrMethodName.toIlIdentifier()}($parameters) cil managed"
                 )
                 appendLine("  {")
                 appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
@@ -2172,9 +2398,14 @@ class DotNetIlEmitter(
                 appendLine("    ret")
                 appendLine("  }")
             }),
+            methodName = clrMethodName,
+            returnType = exportedReturnType,
             parameterTypes = exportedParameterTypes,
         )
 
+        if (!includeDefaultOverloads) {
+            return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
+        }
         val defaultParameterIndices = target.dotNetDefaultParameterIndices.orEmpty().toSet()
         val trailingOverloadStarts = buildList {
             var firstOmitted = target.parameters.size
@@ -2184,7 +2415,7 @@ class DotNetIlEmitter(
             }
         }
         if (trailingOverloadStarts.isEmpty()) {
-            return DotNetRenderedExport(renderedMethods, usesNullableMetadata)
+            return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
         }
 
         val defaultStub = target.defaultArgumentsDispatchFunction as? IrSimpleFunction
@@ -2223,7 +2454,7 @@ class DotNetIlEmitter(
                 method = DotNetIlRenderedMethod(buildString {
                     appendLine(
                         "  .method public hidebysig static $exportedReturnType " +
-                                "${export.clrMethodName.toIlIdentifier()}($retainedParameters) cil managed"
+                                "${clrMethodName.toIlIdentifier()}($retainedParameters) cil managed"
                     )
                     appendLine("  {")
                     appendNullableAttribute(parameterIndex = 0, flags = returnNullabilityFlags)
@@ -2262,10 +2493,12 @@ class DotNetIlEmitter(
                     appendLine("    ret")
                     appendLine("  }")
                 }),
+                methodName = clrMethodName,
+                returnType = exportedReturnType,
                 parameterTypes = retainedParameterTypes,
             )
         }
-        return DotNetRenderedExport(renderedMethods, usesNullableMetadata)
+        return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
     }
 
     private fun IrType.delegateBoundaryOrNull(
@@ -2372,11 +2605,24 @@ class DotNetIlEmitter(
     private data class DotNetRenderedExport(
         val methods: List<DotNetRenderedExportMethod>,
         val usesNullableMetadata: Boolean,
+        val returnNullabilityFlags: List<Int>,
     )
 
     private data class DotNetRenderedExportMethod(
         val method: DotNetIlRenderedMethod,
+        val methodName: String,
+        val returnType: String,
         val parameterTypes: List<String>,
+    ) {
+        fun renderStaticReference(owner: DotNetIlClassInfo): String =
+            "$returnType ${owner.ilTypeRef}::${methodName.toIlIdentifier()}(" +
+                    "${parameterTypes.joinToString(", ")})"
+    }
+
+    private data class DotNetRenderedPropertyExport(
+        val methods: List<DotNetRenderedExportMethod>,
+        val propertyBlock: String,
+        val usesNullableMetadata: Boolean,
     )
 
     private data class DotNetExportedCallableBoundary(

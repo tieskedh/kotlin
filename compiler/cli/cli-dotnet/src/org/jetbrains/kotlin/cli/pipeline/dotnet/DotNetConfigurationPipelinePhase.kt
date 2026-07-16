@@ -2,10 +2,12 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
+import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -92,6 +94,28 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             exports += export
         }
         configuration.dotNetExports = exports
+
+        val propertyExports = mutableListOf<DotNetPropertyExport>()
+        for (rawExport in arguments.dotNetPropertyExports.orEmpty()) {
+            val export = try {
+                DotNetPropertyExport.parse(rawExport)
+            } catch (e: IllegalArgumentException) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Invalid value '$rawExport' for -Xdotnet-export-property: ${e.message}"
+                )
+                continue
+            }
+            if (propertyExports.any { it.kotlinFqName == export.kotlinFqName }) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Duplicate -Xdotnet-export-property target '${export.kotlinFqName}'."
+                )
+                continue
+            }
+            propertyExports += export
+        }
+        configuration.dotNetPropertyExports = propertyExports
 
         val destination = arguments.destination
         if (destination == null) {

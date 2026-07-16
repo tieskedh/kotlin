@@ -10,6 +10,40 @@ object DotNetConfigurationKeys {
     val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET runtime flavor")
     val EXPORTS: CompilerConfigurationKey<List<DotNetExport>> =
         CompilerConfigurationKey.create("explicit .NET exports")
+    val PROPERTY_EXPORTS: CompilerConfigurationKey<List<DotNetPropertyExport>> =
+        CompilerConfigurationKey.create("explicit .NET property exports")
+}
+
+/**
+ * One provisional selection of a unique top-level property for CLR property-shape evaluation.
+ *
+ * This intentionally has no parameter/type grammar and is separate from [DotNetExport]. It is
+ * POC control-plane state, not metadata or a candidate source annotation contract.
+ */
+data class DotNetPropertyExport(
+    val kotlinFqName: String,
+    val clrPropertyName: String,
+) {
+    companion object {
+        private val KOTLIN_FQ_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*")
+        private val CLR_PROPERTY_NAME = Regex("[A-Za-z_][A-Za-z0-9_]*")
+
+        fun parse(value: String): DotNetPropertyExport {
+            val separator = value.indexOf('=')
+            require(separator > 0 && separator < value.lastIndex && value.indexOf('=', separator + 1) < 0) {
+                "expected '<kotlin-fq-name>=<clr-property-name>'"
+            }
+            val kotlinFqName = value.substring(0, separator)
+            val clrPropertyName = value.substring(separator + 1)
+            require(KOTLIN_FQ_NAME.matches(kotlinFqName)) {
+                "'$kotlinFqName' is not a supported Kotlin fully qualified property name"
+            }
+            require(CLR_PROPERTY_NAME.matches(clrPropertyName)) {
+                "'$clrPropertyName' is not a supported CLR property name"
+            }
+            return DotNetPropertyExport(kotlinFqName, clrPropertyName)
+        }
+    }
 }
 
 /**
@@ -131,4 +165,10 @@ var CompilerConfiguration.dotNetExports: List<DotNetExport>
     get() = get(DotNetConfigurationKeys.EXPORTS, emptyList())
     set(value) {
         put(DotNetConfigurationKeys.EXPORTS, value)
+    }
+
+var CompilerConfiguration.dotNetPropertyExports: List<DotNetPropertyExport>
+    get() = get(DotNetConfigurationKeys.PROPERTY_EXPORTS, emptyList())
+    set(value) {
+        put(DotNetConfigurationKeys.PROPERTY_EXPORTS, value)
     }

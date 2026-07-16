@@ -211,8 +211,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Non-trailing defaults create no overload; any generated-signature collision fails the requested
   export as a whole. Missing or ambiguous selectors, facade-name/exported-signature clashes,
   generic or suspend functions, KFunction/suspend callable positions, and arities above 2 fail
-  loudly. Member
-  functions, properties, constructors, classes, and automatic whole-module export remain out. No
+  loudly. Member functions, member properties, constructors, classes, and automatic whole-module
+  export remain out. No
   projection or adaptation occurs in ordinary Kotlin fields,
   parameters, returns, subtyping, or calls. `delegateexport_s1` and `delegateadapter_s1` ran every
   Func/Action arity under modern and Framework ILAsm; compiler-produced facades plus the landed
@@ -229,8 +229,22 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   the primitive-only reserved-name CLI pin proves nullable metadata is demand-driven.
   `overloadedexport_s1` assembled signature-selected aliases under both ILAsm versions; Roslyn
   5.6.0 consumers executed primitive/reference overloads, typed callable adaptation, a defaulted
-  extension, and a nested nullable generic argument on CoreCLR and Framework. Detailed
-  decisions are in the callable and CLR-default draft ADRs.
+  extension, and a nested nullable generic argument on CoreCLR and Framework. The selector is now
+  FROZEN: it remains compiler-only, no later feature may depend on its textual type grammar, and
+  documentation must keep calling it provisional.
+  A separate minimal `-Xdotnet-export-property=<kotlin-fq-name>=<clr-property-name>` path selects
+  one unique public, non-extension, non-const top-level property without adding any type grammar.
+  The durable output is a real static CLR `.property` plus public `specialname` wrapper accessors
+  on the same file facade. `val` and a non-public Kotlin setter produce a getter-only alias; public
+  `var` produces both wrappers. Ordinary types retain their mapped shape, Function0/1/2 uses the
+  established Func/Action projection and adaptation, and nullable metadata is repeated on the
+  property row, getter return, and setter value following Roslyn. Property, accessor, method, and
+  const-field collisions are loud whole-export errors; function exports reciprocally reject an
+  occupied property/const-field name. Extension/indexer policy, const-property wrapping, member
+  properties, and all additional selector grammar remain deferred. `propertyexport_s1` assembled
+  with both ILAsm versions; Roslyn consumers ran mutability, nullability, callable identity and
+  invocation, read-only access, and reflection checks on CoreCLR and Framework. Detailed
+  decisions are in the callable, CLR-default, and CLR-property draft ADRs.
   STAYS REJECTED, loudly: suspend callables, callable arity above 2,
   KCallable metadata beyond `name`, property-reference reflection, reflective lookup/call APIs,
   implicit delegate conversion outside an explicit export, Unit exact entry points, and Kotlin

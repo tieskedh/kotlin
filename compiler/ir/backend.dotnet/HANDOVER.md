@@ -1,8 +1,9 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(array content operations complete; explicit CLR function boundary, nullability, defaults,
-overload-aware selection, and immutable callable-provenance invocation implemented).
+(array content operations complete; explicit CLR function/property boundaries, nullability,
+defaults, overload-aware function selection, and immutable callable-provenance invocation
+implemented).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -27,13 +28,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   by the stringification slice, first explicit callable-factory export, callable-parameter
   adapters, nullable export metadata, default-argument export continuation, immutable
   callable-provenance exact invocation, ordinary top-level function exports, and overload-aware
-  export selection described below.
+  export selection and top-level property exports described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **492 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **494 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
-  **18 tests, 0 failures, 0 errors, 0 skips**.
+  **21 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
   textual IL plus modern ILAsm for the POC and Framework ILAsm as its target/compatibility oracle.
   The permanent direction is a structured compiler-owned CIL/metadata model with deterministic
@@ -790,6 +791,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   extension, and a nested nullable generic argument on CoreCLR and Framework. The dual-parser
   golden pins the canonical signatures, while CLI fixtures pin successful independent selection
   and rejection of the legacy bare-name spelling for an overloaded group.
+  The function selector is frozen at that scope: it stays compiler-only and provisional, no later
+  feature may depend on its textual type grammar, and a future source-bound annotation should
+  remove it.
+  Top-level property representation now has a separate minimal POC selection path with no type
+  grammar: `-Xdotnet-export-property=<kotlin-fq-name>=<clr-property-name>`. One unique public,
+  non-extension, non-const property becomes a real static CLR `.property` plus public
+  `specialname` wrappers. The original Kotlin declaration stays unchanged; ordinary types retain
+  their mapped shape, callable getters/setters reuse Func/Action projection/adaptation, and a
+  non-public Kotlin setter yields a getter-only exported alias. Explicit nullable flags live on
+  the property row, getter return, and setter value. Cross-kind property/method/const-field and
+  accessor collisions reject the whole export. `propertyexport_s1` assembled with both ILAsm
+  versions; Roslyn 5.6.0 consumers executed mutability, nullable values, callable identity and
+  invocation, and read-only reflection on CoreCLR and Framework. The property draft ADR records
+  representation, selection limits, evidence, and the deferred extension/indexer and const-field
+  policies.
 - Negative dynamic array sizes now construct compiler-owned
   `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException` before CLR `newarr`. The common
   Kotlin API promises the RuntimeException parent while JVM's named child is a Java platform type,
@@ -922,9 +938,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Evaluate top-level property export separately.** A CLR property is more than two renamed
-   accessor methods: decide metadata ownership, mutability, indexer behavior, and naming before
-   adding it to `-Xdotnet-export`.
+1. **Measure the deferred partial typed-argument callable capability across module boundaries.**
+   The local raw probe established feasibility; do not add another runtime interface until a
+   separately compiled consumer or representative benchmark shows that provenance-free primitive
+   argument boxing is material.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

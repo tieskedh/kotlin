@@ -1,0 +1,4 @@
+// EXISTS: propertyExport.il
+// CONTAINS: propertyExport.il, .method public hidebysig specialname static string 'get_Value'()
+// CONTAINS: propertyExport.il, .method public hidebysig specialname static void 'set_Value'(string '<set-?>')
+// CONTAINS: propertyExport.il, .property string 'Value'()
