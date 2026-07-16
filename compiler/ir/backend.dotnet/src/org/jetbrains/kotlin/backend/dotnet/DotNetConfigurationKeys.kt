@@ -12,7 +12,31 @@ object DotNetConfigurationKeys {
         CompilerConfigurationKey.create("explicit .NET exports")
     val PROPERTY_EXPORTS: CompilerConfigurationKey<List<DotNetPropertyExport>> =
         CompilerConfigurationKey.create("explicit .NET property exports")
+    val EXTERNAL_STDLIB: CompilerConfigurationKey<DotNetExternalStdlib> =
+        CompilerConfigurationKey.create("external Kotlin/.NET stdlib artifact pair")
 }
+
+/** Stable manifest and CLR identity shared by the CLI dependency loader and IL backend. */
+object DotNetStdlibArtifact {
+    const val ASSEMBLY_NAME = "Kotlin.Stdlib"
+    const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
+    const val ASSEMBLY_VERSION = "1.0.0.0"
+    const val ASSEMBLY_CULTURE = "neutral"
+    const val ASSEMBLY_PUBLIC_KEY_TOKEN = "null"
+    const val METADATA_UNIQUE_NAME = ASSEMBLY_NAME
+    const val METADATA_ASSEMBLY_NAME_PROPERTY = "dotnet_assembly_name"
+    const val METADATA_ASSEMBLY_VERSION_PROPERTY = "dotnet_assembly_version"
+    const val METADATA_ASSEMBLY_CULTURE_PROPERTY = "dotnet_assembly_culture"
+    const val METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY = "dotnet_assembly_public_key_token"
+    const val METADATA_ASSEMBLY_FILE_PROPERTY = "dotnet_assembly_file"
+    const val METADATA_TARGET_PROPERTY = "dotnet_target"
+}
+
+/** Kotlin compile-time metadata paired with the CLR assembly that owns its implementations. */
+data class DotNetExternalStdlib(
+    val metadataFile: File,
+    val implementationFile: File,
+)
 
 /**
  * One provisional selection of a unique top-level property for CLR property-shape evaluation.
@@ -171,4 +195,12 @@ var CompilerConfiguration.dotNetPropertyExports: List<DotNetPropertyExport>
     get() = get(DotNetConfigurationKeys.PROPERTY_EXPORTS, emptyList())
     set(value) {
         put(DotNetConfigurationKeys.PROPERTY_EXPORTS, value)
+    }
+
+var CompilerConfiguration.dotNetExternalStdlib: DotNetExternalStdlib?
+    get() = get(DotNetConfigurationKeys.EXTERNAL_STDLIB)
+    set(value) {
+        if (value != null) {
+            put(DotNetConfigurationKeys.EXTERNAL_STDLIB, value)
+        }
     }

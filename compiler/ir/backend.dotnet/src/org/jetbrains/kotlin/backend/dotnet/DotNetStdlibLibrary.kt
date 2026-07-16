@@ -12,13 +12,15 @@ import java.io.File
  * The first physical Kotlin/.NET target-stdlib boundary.
  *
  * Like `Kotlin.Runtime`, ABI major 1 is unsigned and keeps AssemblyVersion 1.0.0.0. The bootstrap
- * compiler rebuilds this assembly beside every executable because Kotlin metadata import and
- * standalone target-stdlib compilation are not available yet.
+ * The bootstrap compiler still rebuilds this assembly beside ordinary executables. A separate
+ * consumer may instead import the bound metadata KLIB/CLR DLL pair; one standalone producer for
+ * both artifacts is not available yet.
  */
 internal object DotNetStdlibLibrary {
-    const val ASSEMBLY_NAME = "Kotlin.Stdlib"
-    const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
+    const val ASSEMBLY_NAME = DotNetStdlibArtifact.ASSEMBLY_NAME
+    const val ASSEMBLY_FILE_NAME = DotNetStdlibArtifact.ASSEMBLY_FILE_NAME
     const val ASSEMBLY_IL_FILE_NAME = "$ASSEMBLY_NAME.il"
+    const val ASSEMBLY_VERSION = DotNetStdlibArtifact.ASSEMBLY_VERSION
     const val ASSEMBLY_VERSION_IL = "1:0:0:0"
     const val ARRAY_ITERATOR_IL_NAME = "Kotlin.Collections.ArrayIterator`1"
     const val ARRAY_ITERABLE_IL_NAME = "Kotlin.Collections.ArrayIterable`1"

@@ -16,9 +16,8 @@ and no general compiler-generated Iterator bridges.
 
 Those bridges now exist. Keeping an ordinary collection implementation in the runtime would blur
 the boundary between stable execution identity and library policy, while emitting it into every
-program would duplicate its type identity. A precompiled stdlib cannot yet replace injected source
-for frontend compilation because this POC cannot import Kotlin declarations and metadata from a
-separately compiled CLR assembly.
+program would duplicate its type identity. A CLR assembly by itself is not a Kotlin compile-time
+library: the frontend needs Kotlin declaration metadata in addition to the physical methods.
 
 ## Decision
 
@@ -41,10 +40,10 @@ Ownership is split as follows:
 - the user assembly owns only user declarations and calls into those platform assemblies.
 
 The first stdlib implementations are generic Kotlin `ArrayIterator<T>` and `ArrayIterable<T>`
-classes plus the top-level `Iterable<T>.first()` and `last()` operations. The classes are compiled through the
-ordinary class pipeline and receive the same compiler-generated erased Iterator/Iterable
-MethodImpl bridges as user implementations. Explicit
-array `iterator()` constructs the appropriate closed iterator class from `Kotlin.Stdlib`; the
+classes plus the top-level `Iterable<T>.first()` and `last()` operations. The classes are compiled
+through the ordinary class pipeline and receive the same compiler-generated erased
+Iterator/Iterable MethodImpl bridges as user implementations. Explicit array `iterator()`
+constructs the appropriate closed iterator class from `Kotlin.Stdlib`; the
 handwritten `System.Array` iterator is removed from `Kotlin.Runtime`. Array `asIterable()`
 constructs the corresponding closed view, which stores the original vector and creates a fresh
 `ArrayIterator<T>` per request through ordinary Kotlin code. Direct array `for` loops remain
@@ -57,6 +56,22 @@ The implementation classes are private to Kotlin source resolution, but their CL
 constructors are public because generated user assemblies construct them across the assembly
 boundary. Their physical names and the callable facade name are therefore compiler/stdlib ABI
 details, not additional Kotlin source APIs.
+
+A separately compiled consumer uses a paired artifact:
+
+```text
+Kotlin.Stdlib.klib  -> Kotlin declaration/type metadata used by FIR
+Kotlin.Stdlib.dll   -> CLR implementations referenced by emitted IL
+```
+
+The metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
+unsigned ABI-1 identity (`dotnet_assembly_name=Kotlin.Stdlib`, version `1.0.0.0`, neutral culture,
+and null public-key token), `dotnet_assembly_file=Kotlin.Stdlib.dll`, and the requested
+`dotnet_target`. This binding is what turns that one metadata dependency into a physical CLR
+reference; arbitrary KLIBs remain compile-time-only. The compiler requires the named sibling DLL
+and copies it beside an executable consumer. The metadata encoding is currently the common KLIB
+encoding because there is no durable .NET KLIB platform kind yet; the custom target binding
+prevents that implementation detail from claiming cross-target executability.
 
 ## Relationship to the stdlib generator
 
@@ -71,15 +86,14 @@ Adding a `KotlinTarget.DotNet` generator entry now would produce a broad corpus 
 cannot compile and would falsely suggest a supported target surface. `first()` and `last()` prove
 straight-line and looping generic common bodies respectively; adding more piecemeal operations
 would not prove standalone dependency consumption. Until standalone stdlib compilation can consume
-generated common sources, each bootstrap extraction must identify its generator/template origin and preserve its semantics. The eventual .NET stdlib build should
-compile the common generated corpus plus narrowly generated .NET actuals rather than maintain a
-permanent handwritten fork.
+generated common sources, each bootstrap extraction must identify its generator/template origin
+and preserve its semantics. The eventual .NET stdlib build should compile the common generated
+corpus plus narrowly generated .NET actuals rather than maintain a permanent handwritten fork.
 
 ## Bootstrap production model
 
-Until standalone Kotlin library compilation and metadata import exist, the compiler injects the
-stdlib source into the same frontend/IR run as the program, lowers the combined IR once, and emits
-it through two declaration-ownership scopes:
+The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
+program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
 
 ```text
 injected stdlib source + user source
@@ -97,9 +111,11 @@ Every assembled executable is supplied `Kotlin.Runtime.dll` and `Kotlin.Stdlib.d
 is retained beside the executable for deterministic inspection, like the program IL. Raw IL-only
 compilation does not yet constitute a distributable multi-assembly library build.
 
-This split emitter is temporary bootstrap control, not a substitute for module metadata. Once the
-backend can compile and consume a standalone stdlib, the injected implementation source and
-same-run stdlib emission must be removed without changing the runtime/stdlib ownership boundary.
+This split emitter is temporary bootstrap production, not a substitute for a library build. The
+consumer half no longer depends on it: with `-no-stdlib` and the bound KLIB on its classpath, a user
+module resolves and calls the prebuilt DLL without injected implementations. The KLIB and DLL do
+not yet have one standalone producer, so same-run production must remain until an explicit stdlib
+build serializes metadata and emits the CLR assembly from the same source compilation.
 
 ## Rejected alternatives
 
@@ -113,11 +129,11 @@ prevents the implementation from exercising the same source and bridge pipeline 
 This avoids an extra assembly but duplicates physical type identity and makes library behavior a
 per-program compiler artifact.
 
-### Pretend a prebuilt stdlib is already consumable
+### Treat the CLR DLL alone as a Kotlin library
 
-Producing a PE is not enough. Without Kotlin metadata serialization/import, frontend resolution
-cannot compile ordinary user source against the separately built Kotlin declarations. The current
-same-run partition states that limitation honestly while establishing the physical boundary.
+Producing a PE is not enough: CLR metadata does not describe Kotlin extension receivers, source
+visibility, nullability, expect/actual relationships, or other Kotlin declaration semantics. The
+accepted input is an explicitly bound Kotlin metadata KLIB plus DLL, not assembly reflection.
 
 ## Consequences
 
@@ -132,8 +148,9 @@ Costs and limits:
 
 - the stdlib is redundantly rebuilt beside each executable for now;
 - the emitter temporarily recognizes injected stdlib ownership;
-- the metadata-public implementation and facade names are compiler/stdlib contracts; and
-- source-level cross-module Kotlin compilation remains unproven.
+- the metadata-public implementation and facade names are compiler/stdlib contracts;
+- the current physical-member mapping covers only compiler-owned stdlib shapes; and
+- pair production is still split between bootstrap routes rather than one standalone build.
 
 ## Validation
 
@@ -146,11 +163,15 @@ composition, compiler-generated Iterator/Iterable bridges, and the generic
 open generic user wrappers call both methods across the stdlib assembly boundary; the box pin
 covers primitive, widened, reference, nullable, empty, stdlib-produced, and user-produced
 Iterables. `last()` additionally exercises a mutable generic local, a loop, and repeated erased
-Iterator calls inside the stdlib assembly.
+Iterator calls inside the stdlib assembly. A focused CLI integration pin compiles a consumer with
+`-no-stdlib`, resolves `first()` from a metadata KLIB, and verifies the generic external DLL call
+without a generated consumer-side CollectionsKt. A manual Framework executable exercised the same
+path against a real generated DLL and user-defined Iterable.
 
 ## Deferred work
 
-This draft does not decide standalone stdlib build tooling, Kotlin metadata format/import,
-package-version distribution, signing for a future ABI major, CLR/BCL collection adapters,
-primitive-specialized iterators, or the broader collection API. Those features must preserve the
-runtime/stdlib ownership split rather than moving ordinary implementations back into the runtime.
+This draft does not decide the final .NET KLIB platform marker, standalone pair-production tooling,
+general physical-member metadata for arbitrary Kotlin libraries, package-version distribution,
+signing for a future ABI major, CLR/BCL collection adapters, primitive-specialized iterators, or the
+broader collection API. Those features must preserve the runtime/stdlib ownership split rather
+than moving ordinary implementations back into the runtime.
