@@ -1,6 +1,8 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ITERATOR_HAS_NEXT_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_ITERATOR_NEXT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -183,6 +185,11 @@ internal class DotNetIlMethodCodegen(
             appendLine("  {")
             if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
                 appendGenericDataClassComponentOverride()
+            } else if (
+                function.origin == DOTNET_ITERATOR_HAS_NEXT_BRIDGE ||
+                function.origin == DOTNET_ITERATOR_NEXT_BRIDGE
+            ) {
+                appendIteratorBridgeOverride()
             }
             if (!isAbstractMember) {
                 if (isEntryPoint) {
@@ -223,6 +230,7 @@ internal class DotNetIlMethodCodegen(
      */
     private fun IrFunction.dotNetMemberVisibility(): String? {
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
+        if (origin == DOTNET_ITERATOR_HAS_NEXT_BRIDGE || origin == DOTNET_ITERATOR_NEXT_BRIDGE) return "private"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
         if (visibility == DescriptorVisibilities.PROTECTED) return "family"
         if (visibility != DescriptorVisibilities.PRIVATE) return null
@@ -245,6 +253,19 @@ internal class DotNetIlMethodCodegen(
             ?: dotNetUnsupported("generic data-class erased-view interface is unavailable")
         val overrideInfo = DotNetIlFunctionInfo(interfaceInfo, overridden.dotNetSignature(typeMapper))
         appendLine("    .override method ${overrideInfo.renderMethodReference(overridden.dotNetIlMethodName())}")
+    }
+
+    /** Binds one private bridge to the non-generic Kotlin.Runtime iterator execution slot. */
+    private fun StringBuilder.appendIteratorBridgeOverride() {
+        val [returnType, methodName] = when (function.origin) {
+            DOTNET_ITERATOR_HAS_NEXT_BRIDGE -> "bool" to "HasNext"
+            DOTNET_ITERATOR_NEXT_BRIDGE -> "object" to "Next"
+            else -> error("Internal .NET backend error: function is not an iterator bridge")
+        }
+        appendLine(
+            "    .override method instance $returnType [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                    "${"Kotlin.Collections.Iterator".toIlIdentifier()}::${methodName.toIlIdentifier()}()"
+        )
     }
 
     /**
@@ -277,6 +298,9 @@ internal class DotNetIlMethodCodegen(
      *   no virtual flags — the established plain-`call` model.
      */
     private fun IrFunction.dotNetVirtualFlags(): String {
+        if (origin == DOTNET_ITERATOR_HAS_NEXT_BRIDGE || origin == DOTNET_ITERATOR_NEXT_BRIDGE) {
+            return "newslot virtual final "
+        }
         if (this !is IrSimpleFunction || !signature.hasThis) return ""
         if ((parent as? IrClass)?.isInterface == true) return "newslot abstract virtual "
         val abstractFlag = if (modality == Modality.ABSTRACT) "abstract " else ""

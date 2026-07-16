@@ -5,7 +5,8 @@ Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dot
 defaults, overload-aware function selection, immutable callable-provenance invocation, and the
 bounded typed-argument callable capability implemented; bounded Kotlin property-reference values,
 structural callable/property-reference Any semantics, and the coherent Function3/KMutableProperty2
-continuation implemented; local delegated-property tokens are implemented at the current tip).
+continuation implemented; local delegated-property tokens are committed and explicit user
+Iterator bridges are implemented at the current working tip).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -33,7 +34,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   export selection, top-level property exports, and the measured typed-argument callable
   capability described below, followed by the bounded erased property-reference representation,
   structural callable-reference identity (`d3433c768`), and the Function3/KMutableProperty2
-  continuation (`ef279c65e`), followed by local delegated-property tokens at the current tip.
+  continuation (`ef279c65e`), followed by local delegated-property tokens (`417bd3c79`) and
+  explicit user Iterator bridges at the current working tip.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
@@ -709,8 +711,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   InvalidOperationException, which would create a false IllegalStateException edge.
   `iteratorabi_s1` assembled generic/primitive/reference consumers and the exact catch with modern
   and Framework ILAsm; all four same/cross-runtime pairings ran. Both parser IL/box pins pass on
-  CoreCLR. Open `Array<T>` producers and user Iterator implementations stay rejected pending a
-  deliberately designed erased bridge. The exact golden's dual-ILAsm result and the fresh full
+  CoreCLR. User classes which directly implement `Iterator<T>` now retain their typed Kotlin
+  methods and receive private explicit MethodImpl bridges for runtime `HasNext()` and erased
+  `object Next()`. This follows the JVM typed-member-plus-erased-bridge pattern; the additional
+  HasNext forwarder exists because the Kotlin-owned CLR slots use CLR-style names. Reference
+  results pass unchanged, primitive/open-generic results box once, and derived classes inherit a
+  bridge-owning base's methods. An abstract obligation-only base defers bridge ownership to the
+  first concrete descendant. The same object therefore preserves state and identity through
+  primitive/reference covariance without an adapter. Open `Array<T>` producers,
+  iterator subinterfaces, primitive-specialized subclasses, collections, and CLR enumeration
+  adapters remain rejected. The handwritten runtime ArrayIterator is now explicitly classified as
+  bootstrap packaging: a future real .NET stdlib should own its ordinary Kotlin implementation,
+  while Kotlin.Runtime retains the erased interface identity. Separate primitive implementations
+  remain a later performance decision. The exact golden's dual-ILAsm result and the fresh full
   suite count are recorded in Branch state above.
 - The callable exact-path slice preserves erased `Kotlin.Function0/1/2/3` as the only Kotlin
   callable identity and universal fallback. Following the JVM typed-body-plus-erased-bridge
@@ -999,9 +1012,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Audit explicit user Iterator implementations.** Determine the smallest JVM-shaped
-   typed-to-erased bridge that lets a user `Iterator<T>` implement the existing non-generic
-   runtime execution identity without weakening the current open-array and collection gates.
+1. **Audit open `Array<T>.iterator()` producers.** The physical open vector and runtime
+   `ArrayIterator(System.Array)` are individually valid; determine whether admitting this producer
+   composes with the existing open-array gates without silently enabling nullable/projected/nested
+   array families.
+2. **Audit user iterator subinterfaces separately.** Do not generalize the class bridge into
+   Framework-incompatible default interface bodies or weaken the module-interface gate.
+3. **Validate iterator bridges across compiled Kotlin modules when that boundary exists.** The
+   erased runtime identity is cross-assembly, but this POC does not yet consume Kotlin metadata
+   from a separately produced CLR module; do not claim source-level cross-module validation.
 
 ## Known warts (fine to leave; do not "fix" casually)
 

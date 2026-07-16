@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
+import org.jetbrains.kotlin.backend.dotnet.lower.hasDotNetIteratorBridges
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetDefaultParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
@@ -1272,12 +1273,24 @@ class DotNetIlEmitter(
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
             }
             // A class may implement any number of recursively declared module-local interfaces,
-            // plus the supported Kotlin.Runtime callable/property interfaces, next to its (at most one)
+            // plus the supported Kotlin.Runtime callable/property/iterator interfaces, next to its (at most one)
             // base class; whether each module interface itself compiles is deliberately
             // NOT checked here — the render re-resolves the `implements` list every fixpoint
             // round, so an evicted interface cascades whole-class with a carried reason, exactly
             // like an evicted base class.
             for (superInterface in superClasses.filter { it.isInterface }) {
+                if (superInterface.isDotNetIteratorBase) {
+                    if (
+                        !irClass.hasDotNetIteratorBridges &&
+                        irClass.modality !in setOf(Modality.ABSTRACT, Modality.SEALED)
+                    ) {
+                        dotNetUnsupported(
+                            "class '$name' implements Iterator<T> without class-owned typed members " +
+                                    "from which the erased runtime bridges can be generated"
+                        )
+                    }
+                    continue
+                }
                 if (superInterface !in moduleInterfaces &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKFunctionArityOrNull() == null &&
