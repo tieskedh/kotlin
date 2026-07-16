@@ -382,6 +382,148 @@ internal object DotNetRuntimeLibraryHelpers {
             |      ret
             |    }
             |
+            |    .method public hidebysig static bool 'ArrayContentDeepEquals'(
+            |        class [mscorlib]System.Array 'left',
+            |        class [mscorlib]System.Array 'right') cil managed
+            |    {
+            |      .maxstack 3
+            |      .locals init (
+            |        [0] int32 'index',
+            |        [1] int32 'length',
+            |        [2] object 'leftValue',
+            |        [3] object 'rightValue'
+            |      )
+            |      ldarg.0
+            |      ldarg.1
+            |      ceq
+            |      brfalse IL_arrayDeepNotSame
+            |      ldc.i4.1
+            |      ret
+            |IL_arrayDeepNotSame:
+            |      ldarg.0
+            |      brfalse IL_arrayDeepFalse
+            |      ldarg.1
+            |      brfalse IL_arrayDeepFalse
+            |      ldarg.0
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      stloc.1
+            |      ldloc.1
+            |      ldarg.1
+            |      callvirt instance int32 [mscorlib]System.Array::get_Length()
+            |      bne.un IL_arrayDeepFalse
+            |      ldc.i4.0
+            |      stloc.0
+            |IL_arrayDeepLoop:
+            |      ldloc.0
+            |      ldloc.1
+            |      bge IL_arrayDeepTrue
+            |      ldarg.0
+            |      ldloc.0
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      stloc.2
+            |      ldarg.1
+            |      ldloc.0
+            |      callvirt instance object [mscorlib]System.Array::GetValue(int32)
+            |      stloc.3
+            |      ldloc.2
+            |      ldloc.3
+            |      ceq
+            |      brtrue IL_arrayDeepNext
+            |      ldloc.2
+            |      brfalse IL_arrayDeepFalse
+            |      ldloc.3
+            |      brfalse IL_arrayDeepFalse
+            |
+            |      ldloc.2
+            |      isinst object[]
+            |      brfalse IL_arrayDeepInt
+            |      ldloc.2
+            |      isinst object[]
+            |      ldloc.3
+            |      isinst object[]
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepEquals'(
+            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |      brfalse IL_arrayDeepFalse
+            |      br IL_arrayDeepNext
+            |IL_arrayDeepInt:
+            |      ldloc.2
+            |      isinst int32[]
+            |      brfalse IL_arrayDeepLong
+            |      ldloc.2
+            |      isinst int32[]
+            |      ldloc.3
+            |      isinst int32[]
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
+            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |      brfalse IL_arrayDeepFalse
+            |      br IL_arrayDeepNext
+            |IL_arrayDeepLong:
+            |      ldloc.2
+            |      isinst int64[]
+            |      brfalse IL_arrayDeepDouble
+            |      ldloc.2
+            |      isinst int64[]
+            |      ldloc.3
+            |      isinst int64[]
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
+            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |      brfalse IL_arrayDeepFalse
+            |      br IL_arrayDeepNext
+            |IL_arrayDeepDouble:
+            |      ldloc.2
+            |      isinst float64[]
+            |      brfalse IL_arrayDeepBoolean
+            |      ldloc.2
+            |      isinst float64[]
+            |      ldloc.3
+            |      isinst float64[]
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
+            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |      brfalse IL_arrayDeepFalse
+            |      br IL_arrayDeepNext
+            |IL_arrayDeepBoolean:
+            |      ldloc.2
+            |      isinst bool[]
+            |      brfalse IL_arrayDeepChar
+            |      ldloc.2
+            |      isinst bool[]
+            |      ldloc.3
+            |      isinst bool[]
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
+            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |      brfalse IL_arrayDeepFalse
+            |      br IL_arrayDeepNext
+            |IL_arrayDeepChar:
+            |      ldloc.2
+            |      isinst char[]
+            |      brfalse IL_arrayDeepScalar
+            |      ldloc.2
+            |      isinst char[]
+            |      ldloc.3
+            |      isinst char[]
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
+            |          class [mscorlib]System.Array, class [mscorlib]System.Array)
+            |      brfalse IL_arrayDeepFalse
+            |      br IL_arrayDeepNext
+            |IL_arrayDeepScalar:
+            |      ldloc.2
+            |      ldloc.3
+            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+            |      brfalse IL_arrayDeepFalse
+            |IL_arrayDeepNext:
+            |      ldloc.0
+            |      ldc.i4.1
+            |      add
+            |      stloc.0
+            |      br IL_arrayDeepLoop
+            |IL_arrayDeepTrue:
+            |      ldc.i4.1
+            |      ret
+            |IL_arrayDeepFalse:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
             |    .method public hidebysig static int32 'DataClassArrayHashCode'(class [mscorlib]System.Array 'value') cil managed
             |    {
             |      .maxstack 3
@@ -802,6 +944,13 @@ internal object DotNetRuntimeLibraryHelpers {
         "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"ArrayContentEquals".toIlIdentifier()}(" +
+                "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array)"
+
+    /** Nullable recursive content equality for generic arrays and their supported nested arrays. */
+    val arrayContentDeepEqualsCallInstruction: String =
+        "call bool [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
+                "${"ArrayContentDeepEquals".toIlIdentifier()}(" +
                 "class ${CORE_LIB_REF}System.Array, class ${CORE_LIB_REF}System.Array)"
 
     /** Content hash for the CLR vector behind an array property of a generated data class. */

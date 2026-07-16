@@ -1,7 +1,7 @@
 # Handover — Kotlin/.NET backend, interim development
 
 Written 2026-07-14 and updated 2026-07-16 for the next agent working on the `dotnet` branch
-(remaining array content operations after shallow `contentEquals`).
+(remaining array content operations after shallow and recursive equality).
 **Read `AGENTS.md` in this directory FIRST — it is the binding design law.** This file only adds
 session state, process, and a curated task menu. Keep both files updated as you work.
 
@@ -21,12 +21,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   concrete varargs (`44ec10c33`) and concrete array initializer constructors (`fb8b20d0a`),
   followed by concrete array copying (`afd686b1f`), escaping array iterators (`603b6f46d`), the
   callable exact path (`e977cba1b`), the delegate-projection boundary freeze (`9e7c608d5`), and
-  exact negative-array-size identity (`2448c404c`), followed by the shallow array-content slice
-  described below.
+  exact negative-array-size identity (`2448c404c`), followed by shallow array-content equality
+  (`359d01490`) and the recursive array-content slice described below.
   The stack is based directly on `origin/master` (`995cf26a0`, rebased 2026-07-13).
   HANDOVER/AGENTS updates that describe a feature belong in that functional commit; do not create
   handover-only follow-up commits.
-- Full DotNet suite: **468 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
+- Full DotNet suite: **472 tests, 0 failures, 0 errors, 0 skips** across 8 XML suites
   (`FirLightTree`/`FirPsi` × IlText/Box(+Strings,Typealias)); the separate generated CLI suite is
   **10 tests, 0 failures, 0 errors, 0 skips**.
 - `docs/decisions/draft-adr-il-assembly-pipeline.md` records the assembly-writer direction. Keep
@@ -748,6 +748,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   traversal selects no consumer-side element opcode. `arraycontent_s1` assembled and ran on modern
   CoreCLR and Framework, and the exact golden assembles with both ILAsm versions. The focused
   PSI/LightTree IL and box matrix is clean; the full-suite result is recorded in Branch state.
+- `contentDeepEquals` now implements the separate common/JVM recursive contract for nullable
+  generic arrays without changing their exact CLR vector ABI. One runtime helper recursively
+  compares nested reference vectors, routes matching supported primitive vectors through shallow
+  content equality, and uses `Intrinsics.AreEqual` for scalar elements; mixed primitive kinds fail.
+  Null/same-reference/length handling, Kotlin scalar equality, NaN canonicalization, signed-zero
+  distinction, concrete/projected vectors, open invariant `Array<T>`, and evaluation order are
+  pinned. Same-reference cyclic arrays return immediately; no cycle detector is added because the
+  common stdlib explicitly leaves self-containing arrays undefined. `arraydeep_s1` ran on modern
+  CoreCLR and Framework, the exact golden assembles under both ILAsm versions, and the focused
+  PSI/LightTree IL and box matrix is clean.
 - The last module-local runtime helper has moved into the established runtime boundary. Generated
   code now calls the cross-assembly member
   `Kotlin.Runtime.Internal.DoubleFormatting.DoubleToString`; its CLR type and method are public
@@ -830,10 +840,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Continue array content operations in semantic slices.** Shallow `contentEquals` is complete.
-   Audit `contentDeepEquals` recursion/cycle behavior next, then add `contentHashCode` and
-   `contentToString` without conflating shallow and recursive contracts. Keep identity equality
-   unchanged and reuse runtime helpers only where their exact Kotlin semantics match.
+1. **Continue array content operations in semantic slices.** Shallow `contentEquals` and recursive
+   `contentDeepEquals` are complete. Add `contentHashCode`/`contentDeepHashCode`, then
+   `contentToString`/`contentDeepToString`, without conflating shallow and recursive contracts.
+   Keep identity equality unchanged and reuse runtime helpers only where their exact Kotlin
+   semantics match.
 2. **Add an explicit CLR export/interop boundary.** Only then co-land the already probe-validated
    Func/Action projection mechanism. Preserve FunctionN storage/identity and define overload/facade
    naming, nullability, Unit/void, exception translation, adapter round trips, and delegate equality
