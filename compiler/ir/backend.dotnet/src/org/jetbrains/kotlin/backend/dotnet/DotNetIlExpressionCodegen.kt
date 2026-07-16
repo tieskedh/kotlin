@@ -409,7 +409,9 @@ internal class DotNetIlExpressionCodegen(
                 // A frontend-proven reference smartcast may target either a non-generic class
                 // or an instantiated generic class/interface. Both are ordinary CLR reference
                 // view changes and therefore use the same checked instruction.
-                operandType.isDotNetReferenceShaped() && castType.isDotNetReferenceShaped() -> {
+                operandType.isDotNetReferenceShaped() &&
+                        castType.isDotNetReferenceShaped() &&
+                        castType.isDotNetAssignableTo(operandType) -> {
                     emitExpression(expression.argument, operandType)
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
@@ -666,7 +668,7 @@ internal class DotNetIlExpressionCodegen(
         }
         methodContext.emit(
             resolved.info.renderCallInstruction(
-                resolved.callee.dotNetIlMethodName(),
+                resolved.info.physicalMethodName ?: resolved.callee.dotNetIlMethodName(),
                 virtual = resolved.virtual,
                 ownerToken = resolved.ownerToken,
                 methodInstantiation = resolved.methodInstantiation,
@@ -710,7 +712,7 @@ internal class DotNetIlExpressionCodegen(
         // same-signature interface slot (probe-verified, ifaceprobe_s9).
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
-        val info = availableFunctions[callee]
+        val info = availableFunctions[callee] ?: typeMapper.externalFunctionInfoOrNull(callee)
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
         // A generic FUNCTION call, top-level or member, carries its instantiation on the method token —
         // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration
@@ -1603,7 +1605,10 @@ internal class DotNetIlExpressionCodegen(
             // local necessarily keeps its declared wider type. A checked `castclass` is the
             // verifier-visible form of that proof (and preserves Kotlin's failure mode if an
             // unsound upstream smartcast ever reaches this backend).
-            if (slotType.isDotNetReferenceShaped() && expectedType.isDotNetReferenceShaped()) {
+            if (slotType.isDotNetReferenceShaped() &&
+                expectedType.isDotNetReferenceShaped() &&
+                expectedType.isDotNetAssignableTo(slotType)
+            ) {
                 emitLoadSlot(slot)
                 methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
                 return

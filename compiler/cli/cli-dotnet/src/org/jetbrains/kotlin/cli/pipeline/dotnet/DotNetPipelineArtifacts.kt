@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.KtSourceFile
+import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.cli.pipeline.Fir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.FrontendPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.PipelineArtifact
@@ -39,6 +40,7 @@ data class DotNetBackendPipelineArtifact(
     val output: File,
     override val configuration: CompilerConfiguration,
     val libraryMetadata: SerializedMetadata?,
+    val declarations: Map<String, DotNetPhysicalDeclaration>,
 ) : PipelineArtifact() {
     @CliPipelineInternals(OPT_IN_MESSAGE)
     override fun withCompilerConfiguration(newConfiguration: CompilerConfiguration): DotNetBackendPipelineArtifact =
