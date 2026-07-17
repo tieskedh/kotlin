@@ -2,7 +2,14 @@
 .assembly 'abstractClasses' {}
 .module 'main-abstractClasses.il'
 
+.class interface public abstract auto ansi 'Named'
+{
+  .method public hidebysig newslot abstract virtual instance object 'name__KotlinErased__489b96762c05856ad7d43c19bc03506a'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'Named`1'<'T'>
+       implements 'Named'
 {
   .method public hidebysig newslot abstract virtual instance !0 'name'() cil managed
   {
@@ -48,7 +55,7 @@
 }
 .class public abstract auto ansi beforefieldinit 'AbstractBase`1'<'T'>
        extends 'Root'
-       implements class 'Named`1'<!0>
+       implements 'Named', class 'Named`1'<!0>
 {
   .field private !0 'stored'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored', int32 'seed') cil managed
@@ -110,6 +117,23 @@
   }
   .method public hidebysig newslot abstract virtual instance !!0 'echo'<'M'>(!!0 'value') cil managed
   {
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Named-name-489b96762c05856ad7d43c19bc03506a>'() cil managed
+  {
+    .override method instance object 'Named'::'name__KotlinErased__489b96762c05856ad7d43c19bc03506a'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'AbstractBase`1'<!0>::'name'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-Named-name-489b96762c05856ad7d43c19bc03506a>'() cil managed
+  {
+    .override method instance !0 class 'Named`1'<!0>::'name'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'AbstractBase`1'<!0>::'name'()
+    ret
   }
   .property instance !0 'stored'()
   {
@@ -577,11 +601,32 @@
     callvirt instance string 'Root'::'render'(int32)
     ret
   }
-  .method public hidebysig static string 'callNamed'(class 'Named`1'<string> 'value') cil managed
+  .method public hidebysig static string 'callNamed'(class 'Named' 'value') cil managed
   {
     .maxstack 1
+    .locals init (
+      [0] class 'Named' '<genericInterfaceReceiver>',
+      [1] class 'Named`1'<string> '<genericInterfaceCapability>',
+      [2] string '<genericInterfaceResult>'
+    )
     ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class 'Named`1'<string>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
     callvirt instance !0 class 'Named`1'<string>::'name'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object 'Named'::'name__KotlinErased__489b96762c05856ad7d43c19bc03506a'()
+    castclass [mscorlib]System.String
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -646,7 +691,7 @@
     call string 'abstractClassesKt'::'callRoot'(class 'Root')
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.0
-    call string 'abstractClassesKt'::'callNamed'(class 'Named`1'<string>)
+    call string 'abstractClassesKt'::'callNamed'(class 'Named')
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "deferred"
     newobj instance void 'DeferredLeaf'::.ctor(string)

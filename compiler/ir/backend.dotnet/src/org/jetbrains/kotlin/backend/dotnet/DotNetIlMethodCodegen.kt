@@ -2,8 +2,9 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetErasedCollectionBridgeResult
-import org.jetbrains.kotlin.backend.dotnet.lower.dotNetErasedCollectionBridgeSlotOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
@@ -38,7 +39,10 @@ import org.jetbrains.kotlin.ir.expressions.IrTypeOperatorCall
 import org.jetbrains.kotlin.ir.expressions.IrWhen
 import org.jetbrains.kotlin.ir.expressions.IrWhileLoop
 import org.jetbrains.kotlin.ir.types.isAny
+import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isUnit
+import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isAccessor
@@ -66,9 +70,9 @@ internal class DotNetIlRenderedMethod(val ilText: String)
  */
 internal class DotNetIlMethodCodegen(
     private val function: IrFunction,
-    functionInfo: DotNetIlFunctionInfo,
+    private val functionInfo: DotNetIlFunctionInfo,
     private val isEntryPoint: Boolean,
-    availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
+    private val availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
@@ -167,7 +171,8 @@ internal class DotNetIlMethodCodegen(
                 val visibility = function.dotNetMemberVisibility() ?: "public"
                 val specialname = if (function.isAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
-                val methodName = (function as IrSimpleFunction).dotNetIlMethodName()
+                val methodName = functionInfo.physicalMethodName
+                    ?: (function as IrSimpleFunction).dotNetIlMethodName()
                 // A generic METHOD declares its formal list between the name and parameters:
                 // `<'T'>`, or `<(class 'Base', class 'Mark') 'T'>` with supported constraints.
                 // Class/interface members use the identical formal spelling while the owner may
@@ -185,8 +190,10 @@ internal class DotNetIlMethodCodegen(
             appendLine("  {")
             if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
                 appendGenericDataClassComponentOverride()
-            } else if (function.origin.dotNetErasedCollectionBridgeSlotOrNull != null) {
-                appendErasedCollectionBridgeOverride()
+            } else if (function.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
+                appendGenericInterfaceCanonicalBridgeOverride()
+            } else if (function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null) {
+                appendGenericInterfaceTypedBridgeOverride()
             }
             if (!isAbstractMember) {
                 if (isEntryPoint) {
@@ -227,7 +234,8 @@ internal class DotNetIlMethodCodegen(
      */
     private fun IrFunction.dotNetMemberVisibility(): String? {
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
-        if (origin.dotNetErasedCollectionBridgeSlotOrNull != null) return "private"
+        if (origin.isDotNetGenericInterfaceBridge) return "private"
+        if (this is IrConstructor && constructedClass.isDotNetStdlibImplementation) return "assembly"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
         if (visibility == DescriptorVisibilities.PROTECTED) return "family"
         if (visibility != DescriptorVisibilities.PRIVATE) return null
@@ -252,18 +260,78 @@ internal class DotNetIlMethodCodegen(
         appendLine("    .override method ${overrideInfo.renderMethodReference(overridden.dotNetIlMethodName())}")
     }
 
-    /** Binds one private bridge to its non-generic Kotlin.Runtime collection execution slot. */
-    private fun StringBuilder.appendErasedCollectionBridgeOverride() {
-        val slot = function.origin.dotNetErasedCollectionBridgeSlotOrNull
-            ?: error("Internal .NET backend error: function is not an erased collection bridge")
-        val returnType = when (slot.result) {
-            DotNetErasedCollectionBridgeResult.BOOLEAN -> "bool"
-            DotNetErasedCollectionBridgeResult.OBJECT -> "object"
-            DotNetErasedCollectionBridgeResult.ITERATOR -> DotNetRuntimeTypes.iteratorType.nameInSignature
+    /** Binds a private bridge to the canonical identity slot of a Kotlin-owned interface. */
+    private fun StringBuilder.appendGenericInterfaceCanonicalBridgeOverride() {
+        val bridge = function as? IrSimpleFunction
+            ?: error("Internal .NET backend error: a generic interface bridge is not a simple function")
+        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
+            ?: error("Internal .NET backend error: a generic interface bridge has no unique canonical slot")
+        val interfaceClass = overridden.parent as? IrClass
+            ?: error("Internal .NET backend error: a generic interface slot has no interface owner")
+        val interfaceInfo = typeMapper.classInfoOrNull(interfaceClass)
+            ?: dotNetUnsupported("generic interface canonical identity is unavailable")
+        check(interfaceInfo.typeParameterCount == 0) {
+            "Internal .NET backend error: a canonical generic-interface identity must be non-generic"
         }
+        val ownerToken = interfaceInfo.ilTypeRef
+        val overrideInfo = availableFunctions[overridden]
+            ?: typeMapper.referencedFunctionInfoOrNull(overridden)
+            ?: dotNetUnsupported("generic interface canonical slot is unavailable")
+        val physicalMethodName = overrideInfo.physicalMethodName
+            ?: overridden.dotNetGenericInterfaceCanonicalMethodName()
         appendLine(
-            "    .override method instance $returnType [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
-                    "${slot.runtimeOwnerIlName.toIlIdentifier()}::${slot.runtimeMemberName.toIlIdentifier()}()"
+            "    .override method " +
+                    overrideInfo.renderOverrideMethodReference(
+                        physicalMethodName,
+                        ownerToken,
+                        bridge.typeParameters.size,
+                    )
+        )
+    }
+
+    /** Binds a forwarding bridge to the closed declared or exact capability slot. */
+    private fun StringBuilder.appendGenericInterfaceTypedBridgeOverride() {
+        val bridge = function as? IrSimpleFunction
+            ?: error("Internal .NET backend error: a typed generic interface bridge is not a simple function")
+        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
+            ?: error("Internal .NET backend error: a typed generic interface bridge has no unique slot")
+        val interfaceClass = overridden.parent as? IrClass
+            ?: error("Internal .NET backend error: a typed generic interface slot has no interface owner")
+        val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
+            ?: dotNetUnsupported("generic interface typed capability is unavailable")
+        val memberView = bridge.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
+            ?: error("Internal .NET backend error: typed generic interface bridge has no physical view")
+        val capabilityInfo = interfaceInfo.classInfo(memberView.physicalView)
+            ?: dotNetUnsupported("generic interface ${memberView.name.lowercase()} capability is unavailable")
+        val bridgeClass = bridge.parent as? IrClass
+            ?: error("Internal .NET backend error: a typed generic interface bridge has no class owner")
+        val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+            interfaceClass.symbol,
+            bridgeClass.defaultType,
+        ) ?: error(
+            "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
+                    "generic interface '${interfaceClass.name}'"
+        )
+        val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
+        val arguments = interfaceClass.typeParameters.map { parameter ->
+            val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
+            signatureMapper.toDotNetIlValueType(argumentType)
+                ?: dotNetUnsupported(
+                    "typed generic interface argument '${argumentType.render()}' is unavailable"
+                )
+        }
+        val ownerToken = DotNetIlValueType.GenericInstance(capabilityInfo, arguments).nameInSignature
+        val overrideInfo = DotNetIlFunctionInfo(
+            capabilityInfo,
+            overridden.dotNetSignature(signatureMapper),
+        )
+        appendLine(
+            "    .override method " +
+                    overrideInfo.renderOverrideMethodReference(
+                        typeMapper.genericInterfaceTypedMethodName(overridden),
+                        ownerToken,
+                        bridge.typeParameters.size,
+                    )
         )
     }
 
@@ -297,13 +365,16 @@ internal class DotNetIlMethodCodegen(
      *   no virtual flags — the established plain-`call` model.
      */
     private fun IrFunction.dotNetVirtualFlags(): String {
-        if (origin.dotNetErasedCollectionBridgeSlotOrNull != null) {
-            return "newslot virtual final "
-        }
+        if (origin.isDotNetGenericInterfaceBridge) return "newslot virtual final "
         if (this !is IrSimpleFunction || !signature.hasThis) return ""
         if ((parent as? IrClass)?.isInterface == true) return "newslot abstract virtual "
         val abstractFlag = if (modality == Modality.ABSTRACT) "abstract " else ""
         val final = if (modality == Modality.FINAL) "final " else ""
+        // Some built-in-interface fake-override chains do not retain kotlin.Any in
+        // overriddenSymbols. dotNetAnyMethodOrNull recognizes the frontend-validated shape;
+        // it must reuse System.Object's slot (virtual, never newslot) just like a direct Any
+        // override, or interface-typed hashCode/toString/equals calls bypass the implementation.
+        if (dotNetAnyMethodOrNull() != null) return "${abstractFlag}virtual $final"
         val overridesClassMember = overriddenSymbols.any { (it.owner.parent as? IrClass)?.isInterface != true }
         return when {
             overridesClassMember -> "${abstractFlag}virtual $final"
@@ -394,6 +465,7 @@ internal class DotNetIlMethodCodegen(
         val slot = methodContext.declareLocal(variable)
         val initializer = variable.initializer ?: return
         expressionCodegen.emitExpression(initializer, slot.type)
+        if (methodContext.isTerminated) return
         methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
     }
 
@@ -452,6 +524,7 @@ internal class DotNetIlMethodCodegen(
             }
             DotNetIlReturnType.Void -> {
                 emitVoidExpression(expression.value)
+                if (methodContext.isTerminated) return
                 methodContext.emitReturn()
             }
         }
@@ -562,6 +635,7 @@ internal class DotNetIlMethodCodegen(
     private fun emitSetValue(expression: IrSetValue) {
         val slot = methodContext.reference(expression.symbol)
         expressionCodegen.emitExpression(expression.value, slot.type)
+        if (methodContext.isTerminated) return
         val instruction = when (slot) {
             is DotNetIlSlot.Local -> storeLocalInstruction(slot.index)
             // Source parameters are immutable. This shape is produced by the common masked
@@ -607,7 +681,10 @@ internal class DotNetIlMethodCodegen(
      * simply occupy distinct slots (per-symbol) with deduplicated names.
      */
     private fun emitBlockStatement(block: IrContainerExpression) {
-        block.statements.forEach { emitStatement(it) }
+        for (statement in block.statements) {
+            emitStatement(statement)
+            if (methodContext.isTerminated) return
+        }
     }
 
     /**
@@ -708,6 +785,7 @@ internal class DotNetIlMethodCodegen(
                     if (intrinsic.tryEmitAsStatement(expression, expressionCodegen)) return
                     val valueType = typeMapper.toDotNetIlValueType(expression.type)
                     if (valueType != null && intrinsic.tryEmitAsExpression(expression, expressionCodegen, valueType)) {
+                        if (methodContext.isTerminated) return
                         methodContext.emit("pop", pops = 1)
                         return
                     }
@@ -723,14 +801,16 @@ internal class DotNetIlMethodCodegen(
                 val valueType = typeMapper.toDotNetIlValueType(expression.type)
                     ?: dotNetUnsupported("cannot discard value of unsupported type ${expression.javaClass.simpleName}")
                 expressionCodegen.emitExpression(expression, valueType)
+                if (methodContext.isTerminated) return
                 methodContext.emit("pop", pops = 1)
             }
         }
     }
 
     private fun emitCallStatement(call: IrCall) {
-        if (expressionCodegen.tryEmitCallableCapabilityCallForDiscard(call)) return
+        if (expressionCodegen.tryEmitCapabilityCallForDiscard(call)) return
         if (expressionCodegen.emitCall(call) is DotNetIlReturnType.Value) {
+            if (methodContext.isTerminated) return
             methodContext.emit("pop", pops = 1)
         }
     }
@@ -797,8 +877,10 @@ internal class DotNetIlMethodCodegen(
      * Unit-typed `try` statement arrives bare in [emitVoidExpression]). When the try's type
      * maps, it is emitted in expression form and the reloaded result is popped — the branch
      * values are expressions (e.g. a trailing constant) that statement emission cannot handle.
-     * A `Nothing`-typed (or otherwise unmapped) `try` uses statement form instead, whose
-     * branches are emitted as statements.
+     * A non-null `Nothing`-typed `try` deliberately uses statement form even though it now maps
+     * to the physical `Kotlin.Nothing` carrier: it cannot complete normally, so value form would
+     * only manufacture a phantom result and a dead `pop`. Other unmapped tries use statement form
+     * as before.
      *
      * An `object`-typed `try` ALSO uses statement form: since `kotlin.Any` maps to CLR `object`
      * (the hybrid nullability model's storage type), a `try` whose branch types merely LUB to
@@ -808,11 +890,11 @@ internal class DotNetIlMethodCodegen(
      * statement path (the exact pre-hybrid behavior, when `Any` was unmapped) is kept; mapped
      * NON-`object` types imply every branch result is value-shaped (a statement-shaped branch
      * would have pushed the LUB to `Any`), so the expression form stays correct for them.
-     * Pinned by `box/tryDiscardedValue.kt`.
+     * Pinned by `box/tryDiscardedValue.kt` and `ilText/tryCatchExpressionNothing.kt`.
      */
     private fun emitDiscardedTry(expression: IrTry) {
         val valueType = typeMapper.toDotNetIlValueType(expression.type)
-        if (valueType == null || valueType == DotNetIlValueType.Object) {
+        if (expression.type.isNothing() || valueType == null || valueType == DotNetIlValueType.Object) {
             emitTryStatement(expression)
         } else {
             emitTryExpression(expression, valueType)
@@ -898,7 +980,10 @@ internal class DotNetIlMethodCodegen(
         }
         val last = expression.statements.lastOrNull()
             ?: dotNetUnsupported("empty block in value position")
-        expression.statements.dropLast(1).forEach { emitStatement(it) }
+        for (statement in expression.statements.dropLast(1)) {
+            emitStatement(statement)
+            if (methodContext.isTerminated) return
+        }
         when (last) {
             is IrReturn -> emitReturn(last)
             is IrBreakContinue -> emitBreakContinue(last)

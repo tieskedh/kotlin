@@ -88,14 +88,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   platform identity. `Kotlin.Runtime` retains language identities and compiler/runtime services;
   `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementations are the
   generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
-  class and erased Iterator/Iterable bridge pipelines as user code, followed by the common
-  `Iterable<T>.first()` and `last()` operations on the stable physical
+  class and split generic-interface bridge pipeline as user code, followed by the common
+  `Iterable<T>`/`List<T>` `first()` and `last()` overloads on the stable physical
   `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function
-  bodies run in the stdlib and work through the erased Iterable/Iterator ABI for every
-  implementation.
-  The implementation classes are private to Kotlin source but metadata-public because generated
-  user assemblies construct them across the boundary; their names are therefore compiler/stdlib
-  ABI details, not Kotlin source APIs. The default bootstrap path still injects stdlib source into
+  bodies run in the stdlib and use split Iterable/Iterator/List capabilities with canonical
+  fallback for every implementation.
+  The implementation classes are private in both Kotlin source and CLR metadata. Generated user
+  assemblies call the Kotlin-internal, metadata-public generic `dotNetArrayIterator` and
+  `dotNetArrayIterable` factories on `Kotlin.Collections.CollectionsKt`; those methods, rather
+  than implementation class names or constructors, are the compiler/stdlib ABI. This follows the
+  JVM/JS helper boundary for host-array iteration. The default bootstrap path still injects stdlib source into
   the same frontend/lowering run and `DotNetIlEmitter` partitions the lowered module into USER and
   STDLIB ownership scopes. A separate consumer can now resolve Kotlin declarations from a metadata
   `Kotlin.Stdlib.klib` and call implementations in its bound sibling `Kotlin.Stdlib.dll`, with no
@@ -114,7 +116,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
   Ordinary compilation prefers the single complete pair at
   `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}` and rejects a half-installed
-  pair; absence still falls back to injected sources until the build installs these artifacts.
+  pair; absence still falls back to injected sources. Repository production is deliberately
+  opt-in: `:kotlin-compiler:produceDotNetStdlib` runs the compiler from the assembled distribution
+  and writes the bound pair plus diagnostic IL under `prepare/compiler/build/dotnet-stdlib`, while
+  `:kotlin-compiler:installDotNetStdlib` installs only the KLIB/DLL pair into that Kotlin-home
+  location. Neither task is a dependency of ordinary `dist`/`distKotlinc`, so a normal build does
+  not acquire a modern-ILAsm requirement. Because `distKotlinc` is a whole-home `Sync`, a later
+  standalone invocation intentionally removes the optional pair; run the install task afterward
+  to restore it.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use an explicit netstandard2.0 core-library profile, exact
   AssemblyRef and TargetFrameworkAttribute metadata, and no `mscorlib` MemberRefs. The complete
   profile was audited against the 2.0 reference assembly: 27 BCL types and 55 members, zero
@@ -132,11 +141,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   compatibility policy. .NET Standard is a library target, never an executable runtime. See
   `docs/decisions/draft-adr-dotnet-library-target-profile.md`.
   The current stdlib generator has Common/JVM/JS/WASM/Native targets but no .NET target. `first()`
-  and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`; only
-  their List fast paths are omitted because List has no target ABI yet. Do not add a generator
+  and `last()` are traceable bootstrap extractions of common `Elements.f_first` and `f_last`,
+  including their List overloads and runtime List dispatch. The generated `lastIndex` property is
+  expanded to its exact `size - 1` body because generic extension properties remain deferred. Do not add a generator
   target that emits an uncompilable broad corpus. The durable endpoint is compiling generated
-  common sources plus narrow .NET actuals once the standalone producer can emit the bound KLIB/DLL
-  pair from one source compilation.
+  common sources plus narrow .NET actuals once the backend can compile the required generated
+  collection surface; the standalone producer already emits the bound KLIB/DLL pair from one
+  source compilation.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
@@ -383,78 +394,120 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   emitted as runtime or module ABI. Full reflection, accessor objects, and exact property-access
   capabilities remain deferred.
   Pins: `ilText/propertyReferences.kt` and `box/propertyReferences.kt`.
-- Iteration ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; probe
-  series `iteratorabi_s1`; follows the JVM split between logical generic Iterator types and an
-  object-shaped execution boundary, with CLR `object` replacing JVM Object): source
-  `Iterator<T>` and the supported primitive iterator classes map to one public non-generic
-  `[Kotlin.Runtime]Kotlin.Collections.Iterator` interface with `bool HasNext()` and
-  `object Next()`. Kotlin's logical covariant element type remains in IR/metadata, so
-  `Iterator<Int> -> Iterator<Any>` and reference-element covariance preserve the same object and
-  cursor state instead of relying on CLR generic variance, which excludes value instantiations.
-  Call sites cast or `unbox.any` the erased result, including `unbox.any !!n` in generic
-  consumers. Explicit `iterator()` over the five supported primitive vectors and concrete
-  reference arrays constructs the corresponding closed generic
-  `[Kotlin.Stdlib]Kotlin.Collections.ArrayIterator<T>`. The ordinary Kotlin implementation stores
-  an exact `T[]`, observes later vector mutations, and receives the same private erased bridges as
-  user code. Primitive elements box only at its generated `object Next()` boundary; reference
-  elements pass unchanged. Exhaustion throws the exact runtime-owned
-  `Kotlin.NoSuchElementException`; mapping it to InvalidOperationException would falsely make it
-  an IllegalStateException. The former handwritten System.Array producer has been removed from
-  `Kotlin.Runtime`; that assembly retains only the erased collection identities and exception.
-  Primitive specialization is a later stdlib/performance choice. Direct array `for` loops keep
-  the existing allocation-free indexed lowering. A user class whose contract reaches
-  `Iterator<T>` directly or through a supported subinterface keeps typed `hasNext()` and
-  `next(): T`; a JVM-shaped lowering adds
-  private explicit `HasNext()` and erased `object Next()`
-  MethodImpl bridges on the same object. The erased bridge boxes primitive or open-generic
-  results exactly once, reference results pass unchanged, and a derived class inherits the bridge
-  from a base which owns typed members. An abstract obligation-only base emits no false recursive
-  bridge; the first concrete descendant owns it instead. A bodyless module-local iterator
-  subinterface inherits the same runtime identity and may add unrelated abstract members. Calls
-  through its inherited fake overrides target erased `Iterator` slots, and its implementers use
-  the same class bridges. A subinterface redeclaration of `next` or `hasNext` stays rejected because
-  it would publish a second typed CLR slot beside the canonical erased contract. No default
-  interface methods, adapter, or public execution capability are introduced. The subinterface's
-  own generic identity follows the existing CLR generic-interface rule: variance widening is
-  reference-only, while a value-shaped subinterface view can still widen safely to erased
-  `Iterator<Any>` without an adapter.
-  Source `Iterable<T>` likewise maps to one public non-generic
-  `[Kotlin.Runtime]Kotlin.Collections.Iterable` identity with
-  `Kotlin.Collections.Iterator GetIterator()`. An ordinary implementation retains its typed
-  Kotlin `iterator()` member and receives one private explicit MethodImpl bridge. Base ownership,
-  abstract-obligation deferral, bodyless subinterfaces, inherited fake-override calls, and typed
-  redeclaration rejection follow the same table-driven policy as Iterator. Consequently a real
-  `for` loop over a user-defined Iterable uses erased `GetIterator`/`HasNext`/`Next`, and both
-  `Iterable<Int> -> Iterable<Any>` and a value-shaped `IterableView<Int> -> Iterable<Any>` preserve
-  identity without a wrapper. Reference smartcasts proven by the frontend are materialized as
-  checked `castclass` view changes when the CLR local keeps its wider declared type; instantiated
-  generic interface targets are ordinary reference smartcast targets, not a special Iterable rule.
-  The common stdlib's array `asIterable()` surface now constructs the ordinary generic
-  `[Kotlin.Stdlib]Kotlin.Collections.ArrayIterable<T>` for the five established primitive vectors,
-  concrete reference arrays, and open invariant `Array<T>`. Each view stores the original exact
-  vector, so later mutations are observed, and each `iterator()` constructs a fresh stdlib
-  `ArrayIterator<T>` through ordinary compiled Kotlin code. The view preserves erased Iterable
-  covariance identity. Unlike the common implementation, an empty array currently gets the same
-  view object instead of the `emptyList()` singleton; that optimization has no specified semantic
-  effect and must wait for a coherent List ABI rather than inventing one here.
-  The first top-level collection implementations are `Iterable<T>.first()` and `last()` in
+- Iteration ABI candidate (argumentation: `docs/decisions/draft-adr-erased-iterator-abi.md`; the
+  CLR-specific application of the general split generic-interface ABI): source `Iterator<T>` uses
+  canonical `[Kotlin.Runtime]Kotlin.Collections.Iterator` (`bool HasNext()`, `object Next()`) for
+  every Kotlin ABI position, plus the optional same-object covariant
+  `[Kotlin.Runtime]Kotlin.Collections.Iterator<T>` capability (`bool HasNext()`, `T Next()`).
+  `ListIterator<T>` follows the same two-view rule and extends both matching Iterator views;
+  canonical `Next`/`Previous` return `object`, while the covariant declared view returns `T`.
+  It has no exact view because its element type occurs only in result positions. Both physical
+  views redeclare `HasNext` and `Next`, matching the common declaration and giving its logical
+  slots real CLR owners. A derived ListIterator whose inherited base supplies those two methods
+  receives ListIterator MethodImpls that still dispatch through the base's virtual source slots.
+  `Iterable<T>` likewise uses canonical `Kotlin.Collections.Iterable` plus covariant
+  `Iterable<T>`; both `GetIterator()` slots return canonical Iterator because a nested typed
+  capability is not universally guaranteed. Kotlin's logical covariance remains IR/metadata, so
+  primitive and reference widening preserves object/cursor identity without CLR generic
+  conversion or adapters. Exact calls probe the closed typed capability and avoid primitive
+  boxing; a miss calls the canonical object slot and casts or `unbox.any`s the result.
+  `DotNetGenericInterfaceBridgeLowering` is the ONLY Iterator/ListIterator/Iterable bridge engine. It emits
+  canonical and declared MethodImpl forwarders for ordinary stdlib and user implementations;
+  the former collection contract table, bridge origins, emitter branch, and generic collection
+  call intrinsics are removed. The stable runtime slot names remain `HasNext`, `Next`,
+  `HasPrevious`, `Previous`, `NextIndex`, `PreviousIndex`, and `GetIterator`. A bridge-owning base supplies the complete set to descendants and forwards
+  through virtual source members; an abstract obligation-only base defers ownership to the first
+  concrete implementation. Generic subinterfaces receive their own canonical/declared views and
+  may redeclare execution members under the same general physical-slot rules. Imported CLR
+  interfaces never enter this representation.
+  The five primitive iterator classes still alias canonical Iterator and retain narrow call
+  intrinsics until the target stdlib produces those ordinary classes. Explicit `iterator()` over
+  supported vectors calls the metadata-public, Kotlin-internal generic factory
+  `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt.dotNetArrayIterator<T>(T[])`. The factory
+  constructs the private ordinary Kotlin `ArrayIterator<T>` implementation, which stores an exact
+  `T[]`, observes mutations, implements both runtime views, and boxes only in its canonical
+  `object Next()` bridge. Exhaustion throws runtime-owned
+  `Kotlin.NoSuchElementException`; direct array `for` loops remain allocation-free indexed loops.
+  The common stdlib's array `asIterable()` surface calls the corresponding generic
+  `dotNetArrayIterable<T>(T[])` factory for the five established primitive vectors, concrete
+  reference arrays, and open invariant `Array<T>`. Its private `ArrayIterable<T>` view stores the
+  original exact vector, so later mutations are observed, and each `iterator()` constructs a fresh
+  private stdlib `ArrayIterator<T>` through ordinary compiled Kotlin code. The view preserves
+  canonical Iterable covariance identity. Empty generic and supported primitive vectors now take
+  the common `emptyList()` path and return the one target-stdlib EmptyList singleton; non-empty
+  vectors retain the ordinary view object.
+  The common `EmptyIterator : ListIterator<Nothing>` and `EmptyList : List<Nothing>` shapes are
+  compiled as ordinary Kotlin objects in `Kotlin.Stdlib`, through the same object and generic-
+  interface bridge lowerings as user code. All `emptyList<T>()` views are therefore one canonical
+  reference, not `EmptyList<T>` constructions or adapters. EmptyList implements the public inert
+  Kotlin `RandomAccess` marker and the internal inert `kotlin.io.Serializable` target marker; the
+  latter deliberately does not claim the BCL serialization protocol.
+  The first top-level collection implementations are the `Iterable<T>` and `List<T>` overloads of
+  `first()` and `last()` in
   `Kotlin.Stdlib`. Calls use real generic method instantiations on
   `Kotlin.Collections.CollectionsKt`, not intrinsic copies of the algorithms in each user
-  assembly. Their universal iterator bodies preserve the common generator's semantics for stdlib
-  and user Iterables; the common List branches remain deferred optimizations. Empty input throws
-  the exact runtime-owned NoSuchElementException with the common message `Collection is empty.`
-  Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector to
-  `ArrayIterator<!n>`/`ArrayIterator<!!n>`; erased Next narrows through
+  assembly. The Iterable overloads retain the common runtime List dispatch; Lists use indexed
+  access without calling `iterator()`, including after primitive widening, while other Iterables
+  use the universal iterator algorithm. Empty Lists throw the exact runtime-owned
+  NoSuchElementException with `List is empty.`; other empty Iterables use `Collection is empty.`
+  Open invariant `Array<T>.iterator()` passes its exact `!n[]`/`!!n[]` vector through the generic
+  factory instantiated at `!n`/`!!n`; canonical Next narrows through
   `unbox.any !n`/`!!n`. The array mapper still rejects `Array<T?>`, projections, concrete
   primitive-element generic arrays, and nested arrays before the intrinsic runs. The contract is
   Kotlin-owned: imported CLR generic interfaces,
   `IEnumerable<T>`/`IEnumerator<T>`, and any future foreign variance views remain a separate interop
-  decision and may not alter these erased identities. STAYS REJECTED, loudly: iterator/iterable
-  subinterfaces which redeclare execution members or contain bodies, primitive-specialized
-  iterator subclasses, collection/sequence iteration, mutable iterators, CLR enumeration adapters,
-  and typed fast-path entries. Pins: `ilText/arrayIterators.kt`, `box/arrayIterators.kt`,
-  `ilText/iterables.kt`, `box/iterables.kt`, and the iterator-family negatives in
+  decision and may not alter these canonical identities. STAYS REJECTED, loudly: interface
+  bodies, primitive-specialized iterator subclasses, collection/sequence iteration, mutable
+  iterators, and CLR enumeration adapters. Pins: `ilText/arrayIterators.kt`, `box/arrayIterators.kt`,
+  `ilText/iterables.kt`, `box/iterables.kt`, `ilText/listIterators.kt`,
+  `box/listIterators.kt`, and the iterator-family negatives in
   `ilText/genericArraysRejected.kt`.
+- Read-only Collection ABI candidate (the first stdlib validation of
+  `docs/decisions/draft-adr-variant-interface-abi.md`): source `Collection<out E>` uses canonical
+  `[Kotlin.Runtime]Kotlin.Collections.Collection` for Kotlin identity, covariant
+  `Collection<E>` for the CLR-valid `Size`, `IsEmpty`, `GetIterator`, and `ContainsAll` members,
+  and invariant `Collection__KotlinExact<E>` for typed `Contains(E)`. The exact view inherits the
+  declared view and every newly compiled Kotlin implementation supplies canonical plus exact on
+  the same object. All Kotlin storage and variance conversions remain canonical reference copies.
+  The canonical input slot is deliberately named `ContainsErased(object)`, not
+  `Contains(object)`: an inherited same-named instance member would prevent C# from considering a
+  future typed extension helper. Exact calls probe `Collection__KotlinExact<E>`; declaration-safe
+  calls probe `Collection<E>`; every miss uses the canonical slot.
+  `Collection.contains` uses common `SpecialBridgeMethods` policy. Its canonical bridge tests the
+  implementation parameter's actual runtime shape before narrowing and returns `false` for a
+  mismatch, including primitive, reference, nullable, and open `T` implementations. This is not an
+  `@UnsafeVariance` rule: an ordinary user unsafe member still casts/unboxes and can throw. The
+  generated open-parameter test uses `isinst !n` plus a boxed `default(!n)` nullability test, a
+  shape probed on modern CoreCLR and .NET Framework. `containsAll(Collection<E>)` carries canonical
+  Collection physically because nested Kotlin-owned split interfaces never promise a typed
+  capability. Imported CLR collections remain outside this mapping. Pins: `ilText/collections.kt`,
+  `box/collections.kt`, and `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary`.
+- Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
+  Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
+  `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
+  `SubList` results, and the members List redeclares from Collection. Covariant `List<E>` owns
+  typed `Get(int): E` plus the declaration-variance-safe members. Invariant
+  `List__KotlinExact<E>` extends both `List<E>` and `Collection__KotlinExact<E>` and owns typed
+  `Contains(E)`, `IndexOf(E)`, and `LastIndexOf(E)`. Every view is the same object; `List<Int>` to
+  `List<Any?>` is an instruction-free canonical reference copy. A widened primitive call may miss
+  the closed capability and use the canonical bridge, but it never allocates an adapter.
+  The erased search names deliberately leave `Contains`, `IndexOf`, and `LastIndexOf` available
+  for typed capabilities and future C# helpers. Common `SpecialBridgeMethods` policy returns
+  `false` for a wrong-shaped canonical Contains argument and `-1` for wrong-shaped IndexOf or
+  LastIndexOf; this policy does not apply to arbitrary user `@UnsafeVariance` members. Nested
+  ListIterator/List returns remain canonical because capability presence is not universal. Pins:
+  `ilText/lists.kt`, `box/lists.kt`, and
+  `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary` (separate KLIB/DLL
+  consumer plus raw CLR calls).
+- Bottom-type carrier: both `Nothing` and `Nothing?` map physically to the public sealed,
+  private-constructor reference class `[Kotlin.Runtime]Kotlin.Nothing`, the CLR counterpart of
+  JVM `java.lang.Void` and Native/Wasm's uninstantiable class. Nullability remains Kotlin
+  metadata; legal `Nothing?` widening is an explicit codegen coercion and never a claim that the
+  carrier is CLR-assignable to every reference/value type. Plain `Nothing` calls are followed by
+  the shared mature-backend `KotlinNothingValueException` guard, emitted as an inline throw of the
+  runtime-owned exception if foreign or malformed code returns. This carrier is what permits
+  ordinary `ListIterator<Nothing>`/`List<Nothing>` typed capabilities without using `System.Void`
+  or collapsing them to `object`.
 - Kotlin `Unit` is not an IL value type. CLR `void` is only a return encoding; Unit-returning
   functions are emitted as `void`, and `IMPLICIT_COERCION_TO_UNIT` discards values with `pop`.
   The erased callable `Invoke` boundary is the one exception: it materializes
@@ -883,7 +936,8 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   with the nullable side's HasValue; `T? == null` is a negated HasValue; `Double?` arrives via
   the ieee754equals symbols and the extracted-`float64` `ceq` IS the JVM's
   areEqual(Double, Double) semantics (NaN? != NaN?, -0.0? == 0.0? — runtime-pinned). A null-only
-  operand (`Nothing?` maps to `object` — the frontend narrows known-null when-subjects to it)
+  operand (`Nothing?` maps to the `Kotlin.Nothing` carrier — the frontend narrows known-null
+  when-subjects to it)
   against a plain primitive is statically false with operands still evaluated. Safe calls and
   elvis are the frontend's block+when shape — value-position `IrBlock` dispatches through the
   same statement-scope hook as `try` expressions, and a `?:` whose branches are `Int` and `Int?`
@@ -919,8 +973,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   classes — not expressible in compilable Kotlin, so not pinnable in an ilText test),
   `object -> T?` narrowing (`unbox.any` accepts null and boxed T,
   boxprobe_s3, but no supported IR shape produces the cast — rejected like every downcast),
-  `is`/`as`/safe-cast (existing type-operator rejections stay authoritative), `const val`
-  of nullable type (defensive; frontend-rejected anyway). Exhaustive `when` without a source
+  runtime tests/casts of nullable primitive or type-parameter shapes (the canonical split-generic-
+  interface reference exception is described below), `const val` of nullable type (defensive;
+  frontend-rejected anyway). Exhaustive `when` without a source
   `else` over nullable or plain Boolean subjects is supported by the registered intrinsic
   described in the exception-model bullets below. Pins: `ilText/nullablePrimitives.kt`
   (every declaration-position spelling, wrap/initobj/HasValue/extraction incl. the
@@ -1128,11 +1183,17 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   such an upcast emits just its operand. A runtime type test against a non-generic module class
   boxes/widens its operand to object, uses `isinst class 'C'`, then compares the returned
   reference with null (`cgt.un` for `is`, `ceq` for `!is`); the checked IMPLICIT_CAST produced by
-  its positive smartcast is `castclass class 'C'`. This is the CLR spelling of JVM
-  INSTANCEOF/CHECKCAST and is intentionally narrower than generic CLR `isinst`: a reified
-  `C<T>` token would change Kotlin's erased type-test/equality semantics. IMPLICIT_NOTNULL keeps
-  its established checked nullability path. Explicit CAST/SAFE_CAST, generic type operands,
-  value-type tests, and every other non-upcast IMPLICIT_CAST stay rejected loudly. STAYS
+  its positive smartcast is `castclass class 'C'`. A Kotlin-owned split generic interface uses
+  that same classifier-only rule: every concrete argument, use-site projection, and star maps to
+  its non-generic canonical identity for `is`/`!is`, `as`, and `as?`; nullable `is D<*>?` handles
+  null before `isinst`, non-null hard casts add the mapped-NPE guard which CLR `castclass` lacks,
+  and safe casts are one `isinst` yielding canonical-or-null. This follows JVM raw-descriptor,
+  JS interface-symbol, and Native TypeInfo semantics. Declared/exact capability siblings never
+  decide a Kotlin cast. Reified generic classes and foreign CLR generic interfaces are deliberately
+  not broadened to this path: a closed `C<T>` token would strengthen Kotlin's erased check, while
+  foreign interfaces retain CLR construction/variance rules. IMPLICIT_NOTNULL keeps its
+  established checked nullability path. Explicit casts outside the canonical split-interface
+  slice, value-type tests, and every other non-upcast IMPLICIT_CAST stay rejected loudly. STAYS
   REJECTED, whole-class: exception supertypes (existing message; interface supertypes are
   SUPPORTED since the interface model, see its bullet), out-of-module bases,
   objects/companions with any supertype, covariant-return overrides
@@ -1182,27 +1243,34 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   and every redeclared slot, including diamonds and open/composed generic views
   (`ifaceredeclareprobe_s1`). Calls name the interface that owns the selected declaration.
   Mapped covariant-return redeclarations remain rejected by the shared override pre-pass because
-  one implicit class member cannot fill slots with different CLR return signatures. GENERIC
-  interfaces use real CLR reified generics: the CLS arity suffix and formal list are the class
-  canon, declaration-site `out`/`in` is preserved as `+`/`-` metadata
-  (`'Producer`1'<+ 'T'>`, `'Consumer`1'<- 'T'>`), invariant parameters stay unmarked, and direct
-  supported constraints compose as `<+ (class 'Base') 'T'>` (genifaceprobe_s1). Generic
-  interface signatures stay open `!n`; a generic or non-generic class may implement an open or
-  closed instantiation, and a generic interface may extend another with composed or permuted
-  arguments. An interface member may independently declare method parameters (`!!n`), including
-  supported constraints; its implementing class method uses the same open generic method slot
-  (`genmemberprobe_s1`). NESTING uses the JVM static-nested model: an interface may appear inside
+  one implicit class member cannot fill slots with different CLR return signatures. KOTLIN-OWNED
+  GENERIC interfaces use the split ABI in
+  `docs/decisions/draft-adr-variant-interface-abi.md`: non-generic `Producer` is the sole Kotlin
+  storage/cast identity and owns deterministic erased slots; declaration-variant
+  `'Producer`1'<+ 'T'> : Producer` is the same object's C#-friendly typed capability; and an
+  all-invariant exact sibling is emitted only when member placement or a superedge requires it.
+  Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
+  parameters stay unmarked, and direct supported constraints compose as
+  `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
+  explicit canonical and typed MethodImpl bridges to one source body. A generic or non-generic
+  class may implement an open or closed typed capability, while Kotlin ABI fields, parameters,
+  returns, projections, and stars use canonical identity. A generic interface member may
+  independently declare method parameters (`!!n`), including supported constraints; generated
+  bridges copy those method parameters and forward their type arguments (`genericMembers`).
+  NESTING uses the JVM static-nested model: an interface may appear inside
   any supported named class, interface, object, or companion, and may itself contain named
   classes, interfaces, objects, and a companion. Every child has an independent generic-parameter
   space; a generic interface's named object is safe because `INSTANCE` lives on the independently
   non-generic object type. A non-generic interface's companion singleton field and `.cctor` live
   on the interface owner and assemble/run on both runtimes. A generic interface companion is
   rejected because CLR statics are per constructed owner (`nestedifaceprobe_s2`/`_s3`). A class
-  lists its DIRECT interfaces comma-separated on an `implements` line after `extends`
-  (`extends 'Base'` / `implements 'A', 'B'`, s3; a generic edge is the FULL token
-  `implements class 'Producer`1'<!0>`, genifaceprobe_s1); interface-extends-interface is the same
-  `implements` list on the interface declaration, and transitively implied super-interfaces are
-  never repeated (s6). MEMBER FLAGS: `isDotNetVirtual` widens — every interface member and
+  lists its DIRECT physical interfaces comma-separated on an `implements` line after `extends`
+  (`extends 'Base'` / `implements 'A', 'B'`, s3). A Kotlin-owned generic logical edge expands to
+  canonical identity plus its most-specific representable declared/exact capability, e.g.
+  `implements 'Producer', class 'Producer`1'<!0>`; a typed capability's owner token is always the
+  full construction (`genifaceprobe_s1`). Interface-extends-interface uses the same physical
+  `implements` list, and transitively implied super-interfaces are never repeated (s6). MEMBER
+  FLAGS: `isDotNetVirtual` widens — every interface member and
   every member overriding one is virtual even in a FINAL class, because a non-virtual
   implementation assembles cleanly but load-poisons the type (TypeLoadException at first JIT of
   a using method, s1b). A Kotlin override of ONLY interface members introduces a fresh class
@@ -1219,11 +1287,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   members resolves to null otherwise); naming a sub-interface that merely inherits the member
   is a runtime MissingMethodException (s6) — NO fake-override leniency, unlike the class-side
   rule. One class member implicitly fills every same-signature interface slot (the
-  diamond/merge shape, s9). A base-class member satisfying a derived class's interface works
-  iff the inherited member is VIRTUAL (s5a — Kotlin fake-override semantics for free) AND its
-  mapped IL signature matches the interface slot EXACTLY, return type included: ECMA-335
-  interface mapping matches the full signature and this backend emits no `.override`/bridge
-  machinery (the JVM supports the covariant flavor via generated bridge methods), so the
+  diamond/merge shape, s9). For an ordinary non-generic interface, a base-class member satisfying
+  a derived class's interface works iff the inherited member is VIRTUAL (s5a — Kotlin
+  fake-override semantics for free) AND its mapped IL signature matches the interface slot
+  EXACTLY, return type included: ECMA-335 interface mapping matches the full signature and that
+  path emits no `.override`/bridge machinery, so the
   non-virtual variant is gated whole-class at compile time with a message citing s5b and the
   inherited covariant-return variant (`class Combo : Factory(), Maker` where
   `Factory.make(): Bottom` is meant to fill `Maker.make(): Top`) is gated whole-class in the
@@ -1233,17 +1301,18 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `ilText/interfaceNonVirtualImplRejected.kt` and `ilText/interfaceCovariantImplRejected.kt`);
   same-IL-type Kotlin covariance (`String?` filled by an inherited `String` member) stays
   supported — the comparison runs on MAPPED types UNDER the implementing class's instantiated
-  interface view, like the declared-override covariant gate of the inheritance bullet. UPCASTS:
+  interface view, like the declared-override covariant gate of the inheritance bullet. Split
+  generic interfaces are the exception: their lowering always emits explicit canonical and typed
+  MethodImpl bridges, including the boxing/widening bridge needed for refined returns. UPCASTS:
   class→interface and
   interface→super-interface are free reference widenings in every position (field, parameter,
-  return, local — s7); `isDotNetAssignableTo` walks the supertype DAG (`baseType` plus FULL
-  instantiated `interfaces` links, BFS with substitution/dedup — diamonds are legal). For two
-  instantiations of one generic interface, exact arguments always pass; differing `out`/`in`
-  arguments apply the corresponding assignability direction only when BOTH are statically
-  reference-shaped. Thus `Producer<Derived> -> Producer<Base>` and
-  `Consumer<Base> -> Consumer<Derived>` are free, including through transitive interface links,
-  while `Producer<Int> -> Producer<Any>` and conversions over open unconstrained `T` reject:
-  CLR variance does not apply to value-type instantiations. Generic classes remain invariant.
+  return, local — s7); `isDotNetAssignableTo` walks the supertype DAG (`baseType` plus physical
+  `interfaces` links, BFS with substitution/dedup — diamonds are legal). Two logical
+  instantiations of one Kotlin-owned generic interface use the same canonical CLR identity in
+  Kotlin ABI positions. Thus reference, value, open, and use-site-projected conversions—including
+  `Producer<Int> -> Producer<Any>`—are instruction-free copies preserving `===`; only a transient
+  typed call probe depends on a closed declared/exact construction. Imported CLR interfaces keep
+  CLR reference-only variance, and generic classes remain invariant.
   The reference `ceq` is type-agnostic across interface-typed and class-typed views (s7; sibling
   widening — see the equality bullet).
   INTERFACE DELEGATION follows the JVM frontend-owned model: FIR supplies ordinary forwarding
@@ -1294,13 +1363,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Framework 4.8 ILAsm rejects the same body; lifting this would raise the backend's runtime
   floor), private callable interface members, companions on generic interfaces,
   `fun interface` (no SAM-conversion model),
-  out-of-module interfaces and local/anonymous interfaces,
+  interfaces imported from arbitrary CLR metadata without a bound Kotlin KLIB/physical-ABI index,
+  and local/anonymous interfaces,
   `super<I>.f()` (needs DIM and therefore exceeds the Framework 4.8 floor; rejected up front in
   `emitCall`),
-  `is`/`as`/safe-cast on interface types (the existing type-operator rejection stays
-  authoritative — including the IMPLICIT_CAST downcast a positive `===` smartcast inserts
-  afterwards), and interface members redeclaring `kotlin.Any` members (the System.Object class
-  slots exist, but the exact CLR interface contract/MethodImpl policy is not yet audited).
+  explicit `as`/`as?` on non-generic interfaces and on foreign/reified CLR generic interface
+  constructions (Kotlin-owned split generic interfaces instead cast only their canonical identity
+  as described above), and interface members redeclaring `kotlin.Any` members (the System.Object
+  class slots exist, but the exact CLR interface contract/MethodImpl policy is not yet audited).
   Failure-mode calibration: every interface-mapping mistake (missing virtual, wrong operand
   interface) assembles CLEAN and fails only lazily at runtime, so box coverage is mandatory per
   dispatch shape — `box/interfaceBasic.kt` (dispatch through interface-typed values, abstract property
@@ -1322,10 +1392,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   rejection are pinned by `ilText/interfaceRedeclarations.kt`,
   `ilText/interfaceRedeclarationsRejected.kt`, and `box/interfaceRedeclarations.kt`. Generic
   metadata, open/closed/permuted edges,
-  owner-token dispatch and reference variance are pinned by `ilText/genericInterfaces.kt` and
-  `box/genericInterfaces.kt`; `ilText/genericInterfacesRejected.kt` pins value/open-parameter
-  conversions, use-site projections/stars, nullable slots, unsupported interface bounds, and
-  substituted covariant-return poisoning.
+  owner-token dispatch, reference/value variance, canonical erased casts/type tests, nullable
+  cast semantics, and same-object identity are pinned by `ilText/genericInterfaces.kt` and
+  `box/genericInterfaces.kt`; `ilText/genericInterfacesRejected.kt` pins the remaining open-`T?`
+  slot boundary, unsupported instantiated interface bounds, capability edges involving an evicted
+  argument type, and the rejection of a strengthened closed generic-class cast.
 - Properties use the CLR's first-class property model: private backing fields, `get_x`/`set_x`
   `specialname` accessor methods, and a `.property` metadata block binding them (spellings
   ilasm-probe-verified) — a stated deviation from the JVM's `PropertiesLowering`, which the CLR
@@ -1531,7 +1602,7 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
 - The bootstrap stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package.
   Resolution-only declarations such as `println`, `Char.code`, and array operations are filtered
   through the intrinsic/exception registries and never emitted into a facade. The ordinary Kotlin
-  `ArrayIterator<T>`/`ArrayIterable<T>` declarations and `Iterable<T>.first()`/`last()` bodies are
+  `ArrayIterator<T>`/`ArrayIterable<T>` declarations and the Iterable/List `first()`/`last()` bodies are
   different: STDLIB-scoped emission owns them and USER-scoped emission excludes them, yielding the
   classes and stable `Kotlin.Collections.CollectionsKt` facade only in `Kotlin.Stdlib.dll`. USER
   codegen's stdlib operation intrinsics select those external generic methods; they do not inline
@@ -1655,16 +1726,21 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   OUT of a finally body are rejected (`dotNetUnsupported`) — even `leave` may not exit a
   finally handler; exits within it (a loop or try/catch declared inside the finally body) work
   normally.
-- Generics stance: the type representation stays structural so that generics target real
-  CLR reified generics (Roslyn shape), not JVM-style erasure. Unsupported generic shapes are
-  rejected, never erased.
+- Generics stance: generic classes and generic methods stay structural and target real CLR
+  reified generics (Roslyn shape). Kotlin-owned generic interfaces are the deliberate exception:
+  their Kotlin storage/cast identity is a non-generic canonical interface, while reified declared
+  and exact siblings are same-object execution/C# capabilities. This follows Kotlin's erased
+  interface cast/projection semantics and is not a fallback erasure for unsupported generic
+  classes. Unsupported shapes outside that selected interface ABI are rejected, never silently
+  erased.
 - Generics model (stages 1-6) (probe series `genprobe_s1`–`_s9`, `genconstraintprobe_s1`–`_s2`,
   `genarrayprobe_s1`, `genifaceprobe_s1`, `genmemberprobe_s1`, `geninheritprobe_s1`; precedent:
   Roslyn — the CLR has REAL reified generics,
-  so like every prior
-  model bullet there is NO erasure/monomorphization/lowering machinery: the type mapper and
+  so generic classes and methods use no erasure or monomorphization machinery: the type mapper and
   emitters learn generic declarations, type-parameter references and instantiation tokens, and
-  the frontend owns all type checking):
+  the frontend owns all type checking. Kotlin-owned generic interfaces additionally use the
+  canonical/declared/exact split in
+  `docs/decisions/draft-adr-variant-interface-abi.md`):
   - SUPPORTED: generic FUNCTIONS (top-level, or members of any otherwise-supported class, object,
     companion, or all-abstract interface; non-inline; invariant method parameters, either
     unconstrained or directly constrained by non-null, non-generic, module-local classes and
@@ -1675,8 +1751,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     the same direct module-local constraint rule without the String exception), with nested
     classes owning an independent `!n` space even inside generic outers (the outer's parameters are
     not captured); generic TOP-LEVEL ALL-ABSTRACT
-    INTERFACES with
-    invariant, `out`, or `in` parameters under that same constraint rule; generic and non-generic
+    INTERFACES with invariant, `out`, or `in` parameters under that same constraint rule, emitted
+    as one non-generic canonical Kotlin identity plus a declaration-variant generic sibling and,
+    where required by member placement or superedges, an invariant exact sibling; generic and non-generic
     classes implementing open or closed generic-interface instantiations; generic-interface
     inheritance with composed arguments; any supported class extending a module-local plain or
     generic base through a mapped closed/open instantiation — including permuted, nested,
@@ -1728,12 +1805,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     derived receiver name the instantiated BASE, genprobe_s5) and emit argument VALUES against the
     IL-level SUBSTITUTED types (`substituteDotNetTypeParameters`). Base/interface edges substitute
     recursively at every hop, so a chain such as `Leaf<P,Q> : Mid<Q,P> : Base<P,Q>` recovers the
-    exact open declaring-owner view (`geninheritprobe_s1`). Assignability stays structural:
-    generic classes and exact generic arguments are invariant, while interface `out`/`in`
-    conversions recurse in the appropriate direction only for statically reference-shaped
-    differing arguments (the CLR excludes value-type instantiations). The supertype walk carries
-    both the base instantiation and full open/closed interface instantiations, substituting at
-    every edge. CLR method identity includes
+    exact open declaring-owner view (`geninheritprobe_s1`). Generic-class assignability stays
+    structural and invariant. Ordinary Kotlin-owned interface storage, projections, and casts use
+    the canonical non-generic identity, so value/open/reference variance conversions preserve the
+    same object without asking CLR generic variance to implement Kotlin variance. A call may probe
+    the structurally mapped declared/exact sibling transiently; imported CLR interfaces instead
+    retain CLR reference-only generic assignability. The supertype walk carries the base
+    instantiation plus the physical interface views needed for calls and overrides, substituting
+    at every edge. CLR method identity includes
     generic ARITY, so the member/facade identity gates key on it (`fun <T> pick(x: String)` and
     `fun pick(x: String)` are legal coexisting overloads, pinned by `ilText/genericArity.kt`).
     OVERRIDES in a class with a generic base MUST be spelled with the SUBSTITUTED types — that
@@ -1765,12 +1844,12 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   - STAYS REJECTED, loudly (each with a specific message; pinned by `ilText/genericRejected.kt`
     and `ilText/genericInterfacesRejected.kt`): declaration-site variance on CLASSES
     (`out`/`in` — ECMA-335 II.10.1.7 allows variance only on interfaces and delegates; emitting
-    invariant would silently change assignability), variant interface conversions when either
-    differing argument is value-shaped or an open type parameter (a CLR caller may instantiate
-    it with a value type). This is the current REIFIED-IDENTITY boundary, not a Kotlin-common
-    semantic decision: `docs/decisions/draft-adr-variant-interface-abi.md` records the candidate
-    per-declaration erased identity plus same-object exact capability. Never broaden `castclass`
-    to simulate the missing representation. Also rejected: constraints whose bounds are nullable,
+    invariant would silently change assignability). Kotlin-owned generic-interface value/open
+    variance is supported through the canonical identity, never by treating a closed CLR
+    `castclass D<T>` operation as a variance conversion.
+    Imported CLR generic interfaces remain at the foreign CLR boundary: reference variance is
+    accepted only when the CLR proves reference-shaped arguments; value-shaped and conservatively
+    open cases require an explicit identity-changing adapter. Also rejected: constraints whose bounds are nullable,
     generic instantiations, other type
     parameters, builtins/mapped types, or anything outside the module-local supported class and
     interface model, `T?` ANYWHERE in a generic declaration (NO uniform CLR representation for
@@ -1778,9 +1857,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     `Nullable<T>` or a reference type needing nothing; the declaration is rejected, never given an
     ad-hoc representation), identity `===` on `T` operands (a value-type instantiation has no
     stable reference identity, and boxing would manufacture unrelated references), other member
-    calls on an unconstrained `T` or outside its declared bounds, `is`/`as` on `T` or generic types
-    (existing type-operator
-    rejections stay authoritative), inline/reified generic functions (no inlining model), declared
+    calls on an unconstrained `T` or outside its declared bounds, `is`/`as` on `T` or reified
+    generic classes (Kotlin-owned split generic interfaces are the canonical-erased exception
+    described above), inline/reified generic functions (no inlining model), declared
     varargs of `T` (their projected-array ABI and general vararg lowering remain unsupported),
     generic (extension) properties (the property metadata/accessor binding model does not cover
     generic accessors), and a companion declared directly in a generic class (its field would be
@@ -1808,9 +1887,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     `ilText/genericArrays.kt` (open/concrete vector signatures, construction and typed element
     access), `ilText/genericArraysRejected.kt` (array shapes outside the invariant reference/open
     element boundary), `ilText/genericInterfaces.kt` (variance metadata, constrained formals,
-    open/closed/permuted interface edges, owner tokens and reference conversions),
-    `ilText/genericInterfacesRejected.kt` (value/open variance conversions, projections/stars,
-    nullable slots, unsupported interface bounds and substituted covariant returns),
+    open/closed/permuted interface edges, owner tokens, reference conversions, and canonical-only
+    `isinst`/`castclass` spellings),
+    `ilText/genericInterfacesRejected.kt` (open-`T?` slots, unsupported instantiated interface
+    bounds, and evicted interface arguments),
     `ilText/genericMembers.kt` (independent owner/method parameter spaces, nested generic owners,
     constrained members, generic interface slots and implementations, instantiated-base
     overrides/super calls, object/companion owners, member extensions and arity overloads),
@@ -1835,9 +1915,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
     dispatch, interface properties/methods, non-virtual class members, bound/Any widening, class
     type parameters and multiple generic instantiations), `box/genericArrays.kt` (construction,
     fields, open and constrained element access, indexed iteration, identity/null behavior and
-    multiple reference element shapes), `box/genericInterfaces.kt` (reference covariance and
-    contravariance, transitive/permuted interface inheritance, nested variance, generic
-    implementers and exact value-type instantiations), `box/genericMembers.kt` (method
+    multiple reference element shapes), `box/genericInterfaces.kt` (reference/value covariance
+    and contravariance, transitive/permuted interface inheritance, nested variance, generic
+    implementers, exact value-type instantiations, canonical hard/safe casts, erased logical
+    arguments, nullable type tests, failure categories, and single operand evaluation),
+    `box/genericMembers.kt` (method
     pass-through, nullable method instantiations, inherited interface implementation, generic
     virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
     member extensions), `box/genericInheritanceChains.kt` (multi-hop constructor/state flow,

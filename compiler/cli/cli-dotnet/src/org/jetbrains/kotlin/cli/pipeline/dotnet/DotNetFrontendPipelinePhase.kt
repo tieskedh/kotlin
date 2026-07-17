@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
@@ -164,6 +165,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     val library = candidates.single()
     val properties = library.manifestProperties
     val expectedProperties = mapOf(
+        DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to DotNetLibraryAbiCodec.ABI_VERSION,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_NAME,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_VERSION,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_CULTURE,
@@ -190,13 +192,12 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     dotNetExternalStdlib = DotNetExternalStdlib(metadataFile, implementationFile)
 }
 
-/** Loads only KLIBs explicitly produced as bound Kotlin/.NET library pairs. */
+/** Loads every KLIB explicitly produced as a bound Kotlin/.NET library pair, including stdlib. */
 private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotNetLibraries(
     klibs: List<KotlinLibrary>,
 ) {
     val candidates = klibs.filter { library ->
-        library.uniqueName != DotNetStdlibArtifact.METADATA_UNIQUE_NAME &&
-                library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) != null
+        library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) != null
     }
     if (candidates.isEmpty()) return
 
@@ -219,6 +220,22 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             }
         }
         val assemblyName = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY) ?: return
+        val platformAssemblyName = DotNetPlatformAssemblyIdentity.canonicalNameOrNull(assemblyName)
+        if (platformAssemblyName == DotNetPlatformAssemblyIdentity.RUNTIME_ASSEMBLY_NAME) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' cannot bind declarations to the compiler-owned " +
+                        "runtime assembly '$platformAssemblyName'.",
+            )
+            return
+        }
+        if (platformAssemblyName != null && assemblyName != platformAssemblyName) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET platform assembly '$assemblyName' must use canonical name '$platformAssemblyName'.",
+            )
+            return
+        }
         val assemblyVersion = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY) ?: return
         val assemblyCulture = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY) ?: return
         val publicKeyToken = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY) ?: return

@@ -709,7 +709,7 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'GenericMetadataOwner`1'<'T'>
+.class interface public abstract auto ansi 'GenericMetadataOwner'
 {
   .class nested public auto ansi sealed 'Singleton'
          extends [mscorlib]System.Object
@@ -725,19 +725,19 @@
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         ldarg.1
-        stfld !0 class 'GenericMetadataOwner`1'/'Singleton'/'Independent`1'<!0>::'item'
+        stfld !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<!0>::'item'
         ret
       }
       .method public hidebysig specialname instance !0 'get_item'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld !0 class 'GenericMetadataOwner`1'/'Singleton'/'Independent`1'<!0>::'item'
+        ldfld !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<!0>::'item'
         ret
       }
       .property instance !0 'item'()
       {
-        .get instance !0 'GenericMetadataOwner`1'/'Singleton'/'Independent`1'::'get_item'()
+        .get instance !0 'GenericMetadataOwner'/'Singleton'/'Independent`1'::'get_item'()
       }
     }
     .class nested public auto ansi sealed 'NestedObject'
@@ -754,28 +754,28 @@
           call instance void [mscorlib]System.Object::.ctor()
           ldarg.0
           ldarg.1
-          stfld int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'/'Leaf'::'item'
+          stfld int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'/'Leaf'::'item'
           ret
         }
         .method public hidebysig specialname instance int32 'get_item'() cil managed
         {
           .maxstack 1
           ldarg.0
-          ldfld int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'/'Leaf'::'item'
+          ldfld int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'/'Leaf'::'item'
           ret
         }
         .property instance int32 'item'()
         {
-          .get instance int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'/'Leaf'::'get_item'()
+          .get instance int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'/'Leaf'::'get_item'()
         }
       }
-      .field public static initonly class 'GenericMetadataOwner`1'/'Singleton'/'NestedObject' 'INSTANCE'
+      .field public static initonly class 'GenericMetadataOwner'/'Singleton'/'NestedObject' 'INSTANCE'
       .field private int32 'initialized'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        newobj instance void 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::.ctor()
-        stsfld class 'GenericMetadataOwner`1'/'Singleton'/'NestedObject' 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::'INSTANCE'
+        newobj instance void 'GenericMetadataOwner'/'Singleton'/'NestedObject'::.ctor()
+        stsfld class 'GenericMetadataOwner'/'Singleton'/'NestedObject' 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'INSTANCE'
         ret
       }
       .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -785,19 +785,19 @@
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
         call int32 'nestedObjectDeclarationsKt'::'nextNestedOwnerInitialization'()
-        stfld int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::'initialized'
+        stfld int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'initialized'
         ret
       }
       .method public hidebysig specialname instance int32 'get_initialized'() cil managed
       {
         .maxstack 1
         ldarg.0
-        ldfld int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::'initialized'
+        ldfld int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'initialized'
         ret
       }
       .property instance int32 'initialized'()
       {
-        .get instance int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::'get_initialized'()
+        .get instance int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'get_initialized'()
       }
     }
     .class nested public auto ansi sealed 'CompanionOwner'
@@ -814,27 +814,27 @@
           call instance void [mscorlib]System.Object::.ctor()
           ldarg.0
           call int32 'nestedObjectDeclarationsKt'::'nextNestedOwnerInitialization'()
-          stfld int32 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion'::'initialized'
+          stfld int32 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion'::'initialized'
           ret
         }
         .method public hidebysig specialname instance int32 'get_initialized'() cil managed
         {
           .maxstack 1
           ldarg.0
-          ldfld int32 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion'::'initialized'
+          ldfld int32 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion'::'initialized'
           ret
         }
         .property instance int32 'initialized'()
         {
-          .get instance int32 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion'::'get_initialized'()
+          .get instance int32 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion'::'get_initialized'()
         }
       }
-      .field public static initonly class 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion' 'Companion'
+      .field public static initonly class 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion' 'Companion'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        newobj instance void 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion'::.ctor()
-        stsfld class 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion' 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'::'Companion'
+        newobj instance void 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion'::.ctor()
+        stsfld class 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion' 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'::'Companion'
         ret
       }
       .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -845,12 +845,12 @@
         ret
       }
     }
-    .field public static initonly class 'GenericMetadataOwner`1'/'Singleton' 'INSTANCE'
+    .field public static initonly class 'GenericMetadataOwner'/'Singleton' 'INSTANCE'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'GenericMetadataOwner`1'/'Singleton'::.ctor()
-      stsfld class 'GenericMetadataOwner`1'/'Singleton' 'GenericMetadataOwner`1'/'Singleton'::'INSTANCE'
+      newobj instance void 'GenericMetadataOwner'/'Singleton'::.ctor()
+      stsfld class 'GenericMetadataOwner'/'Singleton' 'GenericMetadataOwner'/'Singleton'::'INSTANCE'
       ret
     }
     .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -861,6 +861,10 @@
       ret
     }
   }
+}
+.class interface public abstract auto ansi 'GenericMetadataOwner`1'<'T'>
+       implements 'GenericMetadataOwner'
+{
 }
 .class public abstract sealed auto ansi 'nestedObjectDeclarationsKt'
        extends [mscorlib]System.Object
@@ -1061,26 +1065,26 @@
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
-    newobj instance void class 'GenericMetadataOwner`1'/'Singleton'/'Independent`1'<string>::.ctor(!0)
-    call instance !0 class 'GenericMetadataOwner`1'/'Singleton'/'Independent`1'<string>::'get_item'()
+    newobj instance void class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<string>::.ctor(!0)
+    call instance !0 class 'GenericMetadataOwner'/'Singleton'/'Independent`1'<string>::'get_item'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldsfld class 'GenericMetadataOwner`1'/'Singleton'/'NestedObject' 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::'INSTANCE'
-    call instance int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'::'get_initialized'()
+    ldsfld class 'GenericMetadataOwner'/'Singleton'/'NestedObject' 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'INSTANCE'
+    call instance int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'::'get_initialized'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 22
-    newobj instance void 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'/'Leaf'::.ctor(int32)
-    call instance int32 'GenericMetadataOwner`1'/'Singleton'/'NestedObject'/'Leaf'::'get_item'()
+    newobj instance void 'GenericMetadataOwner'/'Singleton'/'NestedObject'/'Leaf'::.ctor(int32)
+    call instance int32 'GenericMetadataOwner'/'Singleton'/'NestedObject'/'Leaf'::'get_item'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldsfld class 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion' 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'::'Companion'
-    call instance int32 'GenericMetadataOwner`1'/'Singleton'/'CompanionOwner'/'Companion'::'get_initialized'()
+    ldsfld class 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion' 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'::'Companion'
+    call instance int32 'GenericMetadataOwner'/'Singleton'/'CompanionOwner'/'Companion'::'get_initialized'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()

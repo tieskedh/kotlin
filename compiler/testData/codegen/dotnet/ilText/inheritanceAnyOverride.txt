@@ -89,6 +89,39 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'AnyNameNonMembers'
+{
+  .method public hidebysig newslot abstract virtual instance int32 'hashCode'(string '<this>') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance string 'toString'(int32 '$context-Int') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AnyNameNonMembersImpl'
+       extends [mscorlib]System.Object
+       implements 'AnyNameNonMembers'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'hashCode'(string '<this>') cil managed
+  {
+    .maxstack 1
+    ldc.i4 11
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'toString'(int32 '$context-Int') cil managed
+  {
+    .maxstack 1
+    ldstr "context"
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'inheritanceAnyOverrideKt'
        extends [mscorlib]System.Object
 {

@@ -1,6 +1,7 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.lower.ArrayConstructorLowering
+import org.jetbrains.kotlin.backend.common.lower.KotlinNothingValueExceptionLowering
 import org.jetbrains.kotlin.backend.common.lower.LocalDelegatedPropertiesLowering
 import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
@@ -15,7 +16,6 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericDataClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersCleanupLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInitializersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInterfaceDefaultArgumentsLowering
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetErasedCollectionBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassConstructorCallsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassTypeParametersLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetInnerClassesLowering
@@ -34,11 +34,15 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticCallableReferenceLo
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStringConcatenationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetUpgradeCallableReferences
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetVarargLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetGenericInterfaceBridgeLowering
 import org.jetbrains.kotlin.config.phaseConfig
 import org.jetbrains.kotlin.config.phaser.NamedCompilerPhase
 import org.jetbrains.kotlin.config.phaser.PhaseConfig
 import org.jetbrains.kotlin.config.phaser.PhaserState
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+
+private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendContext) :
+    KotlinNothingValueExceptionLowering(context)
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
     // Common/JVM local-class closure conversion: invent collision-resistant CLR names, move
@@ -84,10 +88,13 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // masked dispatchers into a compiler-reserved nested helper, and redirect calls to its static
     // methods with the interface receiver explicit. This preserves the Framework 4.8 floor.
     ::DotNetInterfaceDefaultArgumentsLowering,
-    // JVM bridge precedent adapted to the Kotlin-owned CLR iterator identity: keep each user's
-    // logically typed next()/hasNext() members and add private explicit implementations of the
-    // erased Runtime Next()/HasNext() slots. This does not enable any new iterator producer.
-    ::DotNetErasedCollectionBridgeLowering,
+    // Apply the erased-identity/typed-member split uniformly to module, library, and runtime-owned
+    // generic interfaces, including Iterator/Iterable. Every implementation receives its
+    // same-object canonical and typed bridges from this one lowering. Invariant declarations are
+    // included because Kotlin use-site projections and stars also change the logical view without
+    // changing object identity.
+    // Imported CLR interfaces never enter this lowering and retain their native variance rules.
+    ::DotNetGenericInterfaceBridgeLowering,
     // CLR generics reify C<T>, unlike the erased class identity used by generated data-class
     // equality on the mature targets. Preserve reified storage/signatures, but give each generic
     // data class a private non-generic equality view before later lowerings inspect its members.
@@ -127,6 +134,10 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // DotNetFlattenStringConcatenationLowering for the CLR rendering reason.
     ::DotNetFlattenStringConcatenationLowering,
     ::DotNetStringConcatenationLowering,
+    // JVM/JS/Wasm/Native invariant: if a call statically returning Nothing somehow returns
+    // (for example from foreign CLR code), throw the dedicated Kotlin exception immediately.
+    // Run last so calls introduced by every earlier bridge/helper lowering receive the guard.
+    ::DotNetKotlinNothingValueExceptionLowering,
 )
 
 internal object DotNetLoweringPhases {
