@@ -24,11 +24,16 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.isMarkedNullable
+import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.constructedClass
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isNullConst
+import org.jetbrains.kotlin.ir.util.isNullable
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
@@ -63,6 +68,12 @@ internal class DotNetIlExpressionCodegen(
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
     internal val coreLibraryReference = typeMapper.coreLibrary.reference
+    private val declaredGenericSignatureTypeMapper by lazy(LazyThreadSafetyMode.NONE) {
+        typeMapper.declaredGenericInterfaceSignatureView()
+    }
+    private val exactGenericSignatureTypeMapper by lazy(LazyThreadSafetyMode.NONE) {
+        typeMapper.exactGenericInterfaceSignatureView()
+    }
 
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
@@ -89,7 +100,8 @@ internal class DotNetIlExpressionCodegen(
         if (
             expression is IrCall &&
             intrinsicMethods.getIntrinsic(expression.symbol) == null &&
-            !expression.symbol.owner.isDotNetErasedObjectResult()
+            !expression.symbol.owner.isDotNetErasedObjectResult() &&
+            !expression.symbol.owner.isSplitGenericInterfaceMember()
         ) {
             val returnType = resolveCall(expression).returnType
             if (returnType is DotNetIlReturnType.Value) return returnType.type
@@ -135,6 +147,52 @@ internal class DotNetIlExpressionCodegen(
             emitDefaultArgumentPlaceholder(expectedType)
             return
         }
+        if (
+            expression != null &&
+            expression.type.isNullableNothing() &&
+            expectedType != DotNetRuntimeTypes.nothingType
+        ) {
+            // The null literal needs no physical Kotlin.Nothing view. Emitting it directly in the
+            // requested slot avoids a redundant `castclass` for references and a throwaway
+            // carrier value for Nullable<T>. Non-constant Nothing? expressions still have to be
+            // evaluated through their declared carrier because they may have side effects.
+            if (expression.isNullConst()) {
+                when {
+                    expectedType is DotNetIlValueType.NullableValue -> emitEmptyNullable(expectedType)
+                    expectedType.isDotNetReferenceShaped() -> methodContext.emit("ldnull", pushes = 1)
+                    else -> dotNetUnsupported(
+                        "nullable Nothing cannot be widened to ${expectedType.nameInSignature}"
+                    )
+                }
+                return
+            }
+            // `Nothing?` has the precise physical carrier Kotlin.Nothing, but its sole legal
+            // value must still widen to every nullable Kotlin type. Evaluate the source first
+            // (it may be a side-effecting call), then materialize the requested CLR view. This
+            // is bottom-type semantics, not a claim that Kotlin.Nothing is a CLR subtype of
+            // every reference type.
+            emitExpression(expression, DotNetRuntimeTypes.nothingType)
+            if (methodContext.isTerminated) return
+            when {
+                expectedType is DotNetIlValueType.NullableValue -> {
+                    methodContext.emit("pop", pops = 1)
+                    emitEmptyNullable(expectedType)
+                }
+                expectedType.isDotNetReferenceShaped() -> {
+                    if (!DotNetRuntimeTypes.nothingType.isDotNetAssignableTo(expectedType)) {
+                        methodContext.emit(
+                            "castclass ${expectedType.nameInSignature}",
+                            pops = 1,
+                            pushes = 1,
+                        )
+                    }
+                }
+                else -> dotNetUnsupported(
+                    "nullable Nothing cannot be widened to ${expectedType.nameInSignature}"
+                )
+            }
+            return
+        }
         // Widening-coercion interception, the hybrid nullability model's conversion layer (JVM
         // precedent: the JVM backend coerces at codegen time through StackValue — boxing is
         // never an IR node — and Roslyn converts `T -> T?` / `-> object` at every use site the
@@ -156,6 +214,7 @@ internal class DotNetIlExpressionCodegen(
                     // are sibling interfaces on the same generated object. Materialize that
                     // source-level widening as a checked interface view change.
                     emitExpression(expression, naturalType)
+                    if (methodContext.isTerminated) return
                     methodContext.emit("castclass ${expectedType.nameInSignature}", pops = 1, pushes = 1)
                     return
                 }
@@ -166,6 +225,7 @@ internal class DotNetIlExpressionCodegen(
                 val coercion = dotNetWideningCoercionOrNull(naturalType, expectedType, coreLibraryReference)
                 if (coercion != null) {
                     emitExpression(expression, naturalType)
+                    if (methodContext.isTerminated) return
                     methodContext.emit(coercion, pops = 1, pushes = 1)
                     return
                 }
@@ -346,35 +406,59 @@ internal class DotNetIlExpressionCodegen(
      * - [IrTypeOperator.IMPLICIT_NOTNULL]: the `!!` shape — a HasValue-branch + mapped-NPE throw
      *   on nullable primitives, a `dup`/`brtrue` null check on references (JVM precedent: the
      *   checkNotNull intrinsic shape).
-     * - [IrTypeOperator.INSTANCEOF]/[IrTypeOperator.NOT_INSTANCEOF] against a non-generic
-     *   module-local class: box/widen the operand to object, use CLR `isinst`, then compare the
-     *   resulting reference with null. This is the JVM `INSTANCEOF` shape expressed with the
-     *   CLR instruction that also returns the checked reference.
+     * - [IrTypeOperator.INSTANCEOF]/[IrTypeOperator.NOT_INSTANCEOF]: box/widen the operand to
+     *   object, use CLR `isinst`, then compare the resulting reference with null. This covers
+     *   reference types, concrete boxed primitives, and open `!n`/`!!n` parameters. A nullable
+     *   target accepts null first; for an open nullable parameter, `box default(!n)` determines
+     *   at runtime whether the current instantiation can represent null. A boxed non-empty
+     *   `Nullable<T>` has the identity of `T`, so its non-null test uses the element token.
      * - IMPLICIT_CAST from a reference-shaped value to such a class: CLR `castclass`. Fir2ir
      *   emits this checked downcast after a successful smartcast test, including generated data
      *   class `equals` bodies.
-     * Everything else — explicit `as` (CAST), `as?` (SAFE_CAST), generic runtime type operands,
-     * and value-type tests — stays rejected loudly until its own audited model exists.
+     * - [IrTypeOperator.CAST]/[IrTypeOperator.SAFE_CAST] to a Kotlin-owned split generic
+     *   interface: box/widen the operand to object and cast/test only the non-generic canonical
+     *   identity. Logical arguments, projections, and stars are deliberately absent from the
+     *   CLR check, following JVM/Native erasure. A non-null `as` additionally rejects null with
+     *   the mapped Kotlin NPE; `as?` uses `isinst` and therefore returns null on either failure.
+     * Everything else — explicit casts to reified generic CLR shapes and value-type tests —
+     * stays rejected loudly until its own audited model exists.
      */
     private fun emitTypeOperatorCall(expression: IrTypeOperatorCall, expectedType: DotNetIlValueType) {
         val operandType = mappedNaturalType(expression.argument)
             ?: dotNetUnsupported("implicit cast of a value of unsupported type ${expression.argument.type.render()}")
         val castType = typeMapper.toDotNetIlValueType(expression.typeOperand)
             ?: dotNetUnsupported("implicit cast to unsupported type ${expression.typeOperand.render()}")
+        if (expression.operator == IrTypeOperator.CAST || expression.operator == IrTypeOperator.SAFE_CAST) {
+            if (!typeMapper.isSplitGenericInterfaceType(expression.typeOperand) ||
+                castType !is DotNetIlValueType.UserClass
+            ) {
+                dotNetUnsupported("type operator ${expression.operator} is not supported")
+            }
+            if (!castType.isDotNetAssignableTo(expectedType)) {
+                dotNetUnsupported(
+                    "type operator ${expression.operator} produces ${castType.nameInSignature} " +
+                            "where ${expectedType.nameInSignature} is expected"
+                )
+            }
+            emitExpression(expression.argument, DotNetIlValueType.Object)
+            if (methodContext.isTerminated) return
+            if (expression.operator == IrTypeOperator.SAFE_CAST) {
+                methodContext.emit("isinst ${castType.nameInSignature}", pops = 1, pushes = 1)
+            } else {
+                methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
+                if (!expression.typeOperand.isMarkedNullable()) {
+                    emitReferenceNotNullOrThrowNpe()
+                }
+            }
+            return
+        }
         if (expression.operator == IrTypeOperator.INSTANCEOF || expression.operator == IrTypeOperator.NOT_INSTANCEOF) {
-            if (expectedType != DotNetIlValueType.Boolean || castType !is DotNetIlValueType.UserClass) {
+            if (expectedType != DotNetIlValueType.Boolean) {
                 dotNetUnsupported(
                     "runtime type test against ${castType.nameInSignature} is not supported"
                 )
             }
-            emitExpression(expression.argument, DotNetIlValueType.Object)
-            methodContext.emit("isinst ${castType.nameInSignature}", pops = 1, pushes = 1)
-            methodContext.emit("ldnull", pushes = 1)
-            methodContext.emit(
-                if (expression.operator == IrTypeOperator.INSTANCEOF) "cgt.un" else "ceq",
-                pops = 2,
-                pushes = 1,
-            )
+            emitRuntimeTypeTest(expression, castType)
             return
         }
         if (expression.operator != IrTypeOperator.IMPLICIT_CAST && expression.operator != IrTypeOperator.IMPLICIT_NOTNULL) {
@@ -382,6 +466,7 @@ internal class DotNetIlExpressionCodegen(
         }
         if (expression.operator == IrTypeOperator.IMPLICIT_NOTNULL) {
             emitExpression(expression.argument, operandType)
+            if (methodContext.isTerminated) return
             when {
                 operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType ->
                     emitNullableUnwrapOrThrowNpe(operandType)
@@ -403,6 +488,7 @@ internal class DotNetIlExpressionCodegen(
                     // view change is the CLR counterpart of JVM's KFunction-to-Function CHECKCAST;
                     // it does not introduce a second callable execution ABI.
                     emitExpression(expression.argument, operandType)
+                    if (methodContext.isTerminated) return
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
                 operandType.isDotNetAssignableTo(castType) -> emitExpression(expression.argument, operandType)
@@ -413,6 +499,7 @@ internal class DotNetIlExpressionCodegen(
                         castType.isDotNetReferenceShaped() &&
                         castType.isDotNetAssignableTo(operandType) -> {
                     emitExpression(expression.argument, operandType)
+                    if (methodContext.isTerminated) return
                     methodContext.emit("castclass ${castType.nameInSignature}", pops = 1, pushes = 1)
                 }
                 else -> {
@@ -420,11 +507,27 @@ internal class DotNetIlExpressionCodegen(
                     when {
                         coercion != null -> {
                             emitExpression(expression.argument, operandType)
+                            if (methodContext.isTerminated) return
                             methodContext.emit(coercion, pops = 1, pushes = 1)
                         }
                         operandType is DotNetIlValueType.NullableValue && castType == operandType.elementType -> {
                             emitExpression(expression.argument, operandType)
+                            if (methodContext.isTerminated) return
                             emitNullableUnwrapOrThrowNpe(operandType)
+                        }
+                        operandType == DotNetIlValueType.Object -> {
+                            val narrowing = castType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference)
+                                ?: dotNetUnsupported(
+                                    "implicit cast from object to ${castType.nameInSignature} is not supported"
+                                )
+                            // `unbox.any !n` is the single CLR operation that correctly recovers
+                            // an unconstrained generic parameter from an erased object slot: it
+                            // unboxes value instantiations and acts as a checked reference cast
+                            // for reference instantiations. Canonical generic-interface bridges
+                            // require precisely this operation for erased input parameters.
+                            emitExpression(expression.argument, operandType)
+                            if (methodContext.isTerminated) return
+                            methodContext.emit(narrowing, pops = 1, pushes = 1)
                         }
                         else -> dotNetUnsupported(
                             "implicit cast from ${operandType.nameInSignature} to ${castType.nameInSignature} " +
@@ -434,6 +537,7 @@ internal class DotNetIlExpressionCodegen(
                 }
             }
         }
+        if (methodContext.isTerminated) return
         if (!castType.isDotNetAssignableTo(expectedType)) {
             val outerCoercion = dotNetWideningCoercionOrNull(castType, expectedType, coreLibraryReference)
                 ?: dotNetUnsupported(
@@ -442,6 +546,52 @@ internal class DotNetIlExpressionCodegen(
                 )
             methodContext.emit(outerCoercion, pops = 1, pushes = 1)
         }
+    }
+
+    private fun emitRuntimeTypeTest(
+        expression: IrTypeOperatorCall,
+        castType: DotNetIlValueType,
+    ) {
+        val positive = expression.operator == IrTypeOperator.INSTANCEOF
+        val matchesNullInstruction = if (positive) "ceq" else "cgt.un"
+        val matchesNonNullInstruction = if (positive) "cgt.un" else "ceq"
+
+        emitExpression(expression.argument, DotNetIlValueType.Object)
+        if (methodContext.isTerminated) return
+        if (expression.typeOperand.isNullableNothing()) {
+            methodContext.emit("ldnull", pushes = 1)
+            methodContext.emit(matchesNullInstruction, pops = 2, pushes = 1)
+            return
+        }
+
+        val nullableJoinLabel = if (expression.typeOperand.isNullable()) {
+            val nonNullLabel = methodContext.nextLabel("nullableTypeTestNonNull")
+            val joinLabel = methodContext.nextLabel("nullableTypeTestJoin")
+            methodContext.emit("dup", pops = 1, pushes = 2)
+            methodContext.emitBranch("brtrue", nonNullLabel, pops = 1)
+            methodContext.emit("pop", pops = 1)
+            if (castType is DotNetIlValueType.TypeParameter) {
+                val defaultSlot = methodContext.declareSyntheticLocal(castType, "<typeTestDefault>")
+                methodContext.emit(loadLocalAddressInstruction(defaultSlot.index), pushes = 1)
+                methodContext.emit("initobj ${castType.nameInSignature}", pops = 1)
+                methodContext.emit(loadLocalInstruction(defaultSlot.index), pushes = 1)
+                methodContext.emit("box ${castType.nameInSignature}", pops = 1, pushes = 1)
+                methodContext.emit("ldnull", pushes = 1)
+                methodContext.emit(matchesNullInstruction, pops = 2, pushes = 1)
+            } else {
+                methodContext.emit(if (positive) "ldc.i4.1" else "ldc.i4.0", pushes = 1)
+            }
+            methodContext.emitGoto(joinLabel)
+            methodContext.emitLabel(nonNullLabel)
+            joinLabel
+        } else {
+            null
+        }
+        val runtimeTestType = if (castType is DotNetIlValueType.NullableValue) castType.elementType else castType
+        methodContext.emit("isinst ${runtimeTestType.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emit("ldnull", pushes = 1)
+        methodContext.emit(matchesNonNullInstruction, pops = 2, pushes = 1)
+        nullableJoinLabel?.let(methodContext::emitLabel)
     }
 
     private fun IrType.dotNetKFunctionExecutionArityOrNull(): Int? =
@@ -679,12 +829,13 @@ internal class DotNetIlExpressionCodegen(
         return resolved.returnType
     }
 
-    /** Uses the same optional callable capabilities in statement position, then discards the result. */
-    fun tryEmitCallableCapabilityCallForDiscard(call: IrCall): Boolean {
-        if (call.type.isUnit()) return false
-        val logicalResultType = typeMapper.toDotNetIlValueType(call.type) ?: return false
-        if (!emitCallableCapabilityCallOrNull(call, logicalResultType)) return false
-        methodContext.emit("pop", pops = 1)
+    /** Uses an optional typed capability in statement position, then discards any produced value. */
+    fun tryEmitCapabilityCallForDiscard(call: IrCall): Boolean {
+        val logicalResultType = if (call.type.isUnit()) null else typeMapper.toDotNetIlValueType(call.type) ?: return false
+        val emitted = emitGenericInterfaceCapabilityCallOrNull(call, logicalResultType) ||
+                (logicalResultType != null && emitCallableCapabilityCallOrNull(call, logicalResultType))
+        if (!emitted) return false
+        if (logicalResultType != null) methodContext.emit("pop", pops = 1)
         return true
     }
 
@@ -712,7 +863,7 @@ internal class DotNetIlExpressionCodegen(
         // same-signature interface slot (probe-verified, ifaceprobe_s9).
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
-        val info = availableFunctions[callee] ?: typeMapper.externalFunctionInfoOrNull(callee)
+        val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
         // A generic FUNCTION call, top-level or member, carries its instantiation on the method token —
         // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration
@@ -1200,12 +1351,14 @@ internal class DotNetIlExpressionCodegen(
     }
 
     private fun emitCallExpression(call: IrCall, expectedType: DotNetIlValueType) {
+        if (emitGenericInterfaceCapabilityCallOrNull(call, expectedType)) return
         if (emitCallableCapabilityCallOrNull(call, expectedType)) return
         val returnType = emitCall(call)
         val producedType = (returnType as? DotNetIlReturnType.Value)?.type
         if (
             producedType == DotNetIlValueType.Object &&
-            call.symbol.owner.isDotNetErasedObjectResult()
+            (call.symbol.owner.isDotNetErasedObjectResult() ||
+                    call.symbol.owner.isSplitGenericInterfaceMember())
         ) {
             emitErasedObjectAs(expectedType, "${call.symbol.owner.name.asString()} result")
         } else if (producedType?.isDotNetAssignableTo(expectedType) != true) {
@@ -1214,6 +1367,140 @@ internal class DotNetIlExpressionCodegen(
                         "where ${expectedType.nameInSignature} is expected"
             )
         }
+    }
+
+    private fun IrSimpleFunction.isSplitGenericInterfaceMember(): Boolean =
+        (parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true ||
+                allOverridden().any { overridden ->
+                    (overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true
+                }
+
+    /**
+     * Probes the member's legal typed home, then falls back to the canonical erased slot.
+     * Receiver and arguments are each evaluated exactly once. A primitive/reference widening
+     * that CLR generic variance cannot express simply misses the probe and uses the same object's
+     * canonical slot; no adapter or identity substitution is involved.
+     */
+    private fun emitGenericInterfaceCapabilityCallOrNull(
+        call: IrCall,
+        expectedType: DotNetIlValueType?,
+    ): Boolean {
+        val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
+        val interfaceClass = callee.parent as? IrClass ?: return false
+        if (!typeMapper.isSplitGenericInterface(interfaceClass)) return false
+        if (callee.typeParameters.isNotEmpty()) return false
+        val receiver = call.arguments.firstOrNull() ?: return false
+        val receiverType = receiver.type as? IrSimpleType ?: return false
+        if ((receiverType.classifier as? IrClassSymbol)?.owner != interfaceClass) return false
+
+        val canonical = resolveCall(call)
+        val canonicalReceiverType = canonical.receiverType ?: return false
+        val memberView = typeMapper.genericInterfaceMemberView(callee, interfaceClass)
+        val capabilitySignatureMapper = when (memberView) {
+            DotNetGenericInterfaceMemberView.DECLARED -> declaredGenericSignatureTypeMapper
+            DotNetGenericInterfaceMemberView.EXACT -> exactGenericSignatureTypeMapper
+        }
+        val capabilityReceiverType = try {
+            typeMapper.genericInterfaceCapabilityTypeOrNull(
+                receiver.type,
+                memberView.physicalView,
+            )
+        } catch (_: DotNetIlUnsupportedException) {
+            null
+        } ?: return false
+        val capabilitySignature = callee.dotNetSignature(capabilitySignatureMapper)
+        val capabilityParameterTypes = capabilitySignature.parameterTypes.map { parameterType ->
+            parameterType.substituteDotNetTypeParameters(capabilityReceiverType.arguments)
+        }
+        if (call.arguments.size != capabilityParameterTypes.size || call.arguments.size != canonical.parameterTypes.size) {
+            return false
+        }
+        val capabilityReturnType = capabilitySignature.returnType
+            .substituteDotNetTypeParameters(capabilityReceiverType.arguments)
+        val capabilityResultCoercion: DotNetOptionalInstruction?
+        val canonicalResultInstruction: String?
+        if (expectedType == null) {
+            if (capabilityReturnType != DotNetIlReturnType.Void || canonical.returnType != DotNetIlReturnType.Void) {
+                return false
+            }
+            capabilityResultCoercion = null
+            canonicalResultInstruction = null
+        } else {
+            val capabilityResultType = (capabilityReturnType as? DotNetIlReturnType.Value)?.type ?: return false
+            val canonicalResultType = (canonical.returnType as? DotNetIlReturnType.Value)?.type ?: return false
+            capabilityResultCoercion = wideningCoercionOrNull(capabilityResultType, expectedType) ?: return false
+            canonicalResultInstruction = when {
+                canonicalResultType.isDotNetAssignableTo(expectedType) -> null
+                canonicalResultType == DotNetIlValueType.Object ->
+                    expectedType.dotNetObjectNarrowingInstructionOrNull(coreLibraryReference) ?: return false
+                else -> wideningCoercionOrNull(canonicalResultType, expectedType)?.instruction ?: return false
+            }
+        }
+
+        emitExpression(receiver, canonicalReceiverType)
+        val receiverSlot = spillToSyntheticLocal(canonicalReceiverType, "<genericInterfaceReceiver>")
+        val capabilitySlot = methodContext.declareSyntheticLocal(
+            capabilityReceiverType,
+            "<genericInterfaceCapability>",
+        )
+        val resultSlot = expectedType?.let { resultType ->
+            methodContext.declareSyntheticLocal(resultType, "<genericInterfaceResult>")
+        }
+        val fallbackLabel = methodContext.nextLabel("genericInterfaceErasedFallback")
+        val joinLabel = methodContext.nextLabel("genericInterfaceJoin")
+
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        methodContext.emit("isinst ${capabilityReceiverType.nameInSignature}", pops = 1, pushes = 1)
+        methodContext.emit(storeLocalInstruction(capabilitySlot.index), pops = 1)
+        methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        methodContext.emitBranch("brfalse", fallbackLabel, pops = 1)
+
+        methodContext.emit(loadLocalInstruction(capabilitySlot.index), pushes = 1)
+        emitArguments(
+            call.arguments.drop(1),
+            capabilityParameterTypes.drop(1),
+            "typed generic-interface call to '${callee.name.asString()}'",
+        )
+        val capabilityInfo = DotNetIlFunctionInfo(capabilityReceiverType.classInfo, capabilitySignature)
+        methodContext.emit(
+            capabilityInfo.renderCallInstruction(
+                typeMapper.genericInterfaceTypedMethodName(callee),
+                virtual = true,
+                ownerToken = capabilityReceiverType.nameInSignature,
+            ),
+            pops = capabilitySignature.parameterTypes.size,
+            pushes = if (capabilityReturnType is DotNetIlReturnType.Value) 1 else 0,
+        )
+        capabilityResultCoercion?.instruction?.let { instruction ->
+            methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
+        resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+        methodContext.emitGoto(joinLabel)
+
+        methodContext.emitLabel(fallbackLabel)
+        methodContext.emit(loadLocalInstruction(receiverSlot.index), pushes = 1)
+        emitArguments(
+            call.arguments.drop(1),
+            canonical.parameterTypes.drop(1),
+            "canonical generic-interface call to '${callee.name.asString()}'",
+        )
+        methodContext.emit(
+            canonical.info.renderCallInstruction(
+                canonical.info.physicalMethodName ?: callee.dotNetIlMethodName(),
+                virtual = true,
+                ownerToken = canonical.ownerToken,
+            ),
+            pops = canonical.info.signature.parameterTypes.size,
+            pushes = if (canonical.returnType is DotNetIlReturnType.Value) 1 else 0,
+        )
+        canonicalResultInstruction?.let { instruction ->
+            methodContext.emit(instruction, pops = 1, pushes = 1)
+        }
+        resultSlot?.let { slot -> methodContext.emit(storeLocalInstruction(slot.index), pops = 1) }
+
+        methodContext.emitLabel(joinLabel)
+        resultSlot?.let { slot -> methodContext.emit(loadLocalInstruction(slot.index), pushes = 1) }
+        return true
     }
 
     /**
@@ -1697,6 +1984,8 @@ internal fun storeLocalInstruction(index: Int): String =
  *   implementation of an interface bound (genconstraintprobe_s2).
  * Roslyn precedent: C# performs exactly these conversions implicitly at typed/object boundaries;
  * JVM precedent: the JVM backend's StackValue boxing coercions.
+ * A `Kotlin.Nothing -> R` reference cast is the physical realization of Kotlin bottom-type
+ * widening for exact-capability results; it is deliberately not modeled as CLR assignability.
  */
 internal fun dotNetWideningCoercionOrNull(
     from: DotNetIlValueType,
@@ -1704,6 +1993,8 @@ internal fun dotNetWideningCoercionOrNull(
     coreLibraryReference: String,
 ): String? = when {
     to is DotNetIlValueType.NullableValue && from == to.elementType -> to.ctorInstruction
+    from == DotNetRuntimeTypes.nothingType && to.isDotNetReferenceShaped() ->
+        "castclass ${to.nameInSignature}"
     to == DotNetIlValueType.Object && from is DotNetIlValueType.NullableValue -> from.boxInstruction
     from is DotNetIlValueType.TypeParameter && (to == DotNetIlValueType.Object || from.isConstrainedTo(to)) ->
         "box ${from.nameInSignature}"

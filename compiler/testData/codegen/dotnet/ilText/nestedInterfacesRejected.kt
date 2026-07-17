@@ -2,7 +2,8 @@
 // omitted for its default body while its metadata parent and Good sibling survive. Likewise, an
 // unsupported annotation class inside an interface removes only its own subtree. A companion
 // failure remains owner-sensitive, and a generic interface cannot own a companion because CLR
-// statics are per constructed generic owner.
+// statics are per constructed generic owner. A companion on a non-generic interface may implement
+// another supported interface and remains an ordinary nested singleton.
 
 interface NestedInterfaceMarker
 

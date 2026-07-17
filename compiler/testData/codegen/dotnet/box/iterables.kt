@@ -128,7 +128,9 @@ fun box(): String {
         emptyArray<String>().asIterable().first()
         return "fail 24: stdlib first empty did not throw"
     } catch (failure: NoSuchElementException) {
-        if (failure.message != "Collection is empty.") {
+        // Array.asIterable() follows the common stdlib and returns emptyList() for an empty array,
+        // so Iterable.first() takes its List fast path and preserves the List-specific diagnostic.
+        if (failure.message != "List is empty.") {
             return "fail 25: stdlib first message: ${failure.message}"
         }
     }
@@ -144,7 +146,7 @@ fun box(): String {
         emptyArray<String>().asIterable().last()
         return "fail 30: stdlib last empty did not throw"
     } catch (failure: NoSuchElementException) {
-        if (failure.message != "Collection is empty.") {
+        if (failure.message != "List is empty.") {
             return "fail 31: stdlib last message: ${failure.message}"
         }
     }

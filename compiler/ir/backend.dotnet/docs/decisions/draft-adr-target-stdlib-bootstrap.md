@@ -1,7 +1,7 @@
 # Draft ADR: Bootstrap Kotlin/.NET target stdlib assembly
 
 - Status: **Draft candidate; first implementation slice is present in the prototype**
-- Date: 2026-07-16
+- Date: 2026-07-17
 - Scope: physical ownership and bootstrap production of Kotlin standard-library implementations
 
 This is a repository-local decision record for the experimental .NET backend. The `dotnet` branch
@@ -9,9 +9,10 @@ is a proof of concept; this document does not claim a public Kotlin or Kotlin/.N
 
 ## Context
 
-`Kotlin.Runtime.dll` already owns stable language/runtime ABI types such as erased callable and
-collection interfaces, Kotlin-owned exception identities, and compiler support helpers. It also
-contained a handwritten IL `ArrayIterator` only because the backend had no target stdlib assembly
+`Kotlin.Runtime.dll` already owns stable language/runtime ABI types such as erased callable
+identities and the canonical/typed collection-interface views, Kotlin-owned exception identities,
+and compiler support helpers. It also contained a handwritten IL `ArrayIterator` only because the
+backend had no target stdlib assembly
 and no general compiler-generated Iterator bridges.
 
 Those bridges now exist. Keeping an ordinary collection implementation in the runtime would blur
@@ -29,34 +30,46 @@ Kotlin.Stdlib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
 
 ABI major 1 is unsigned. AssemblyVersion stays fixed for compatible ABI-1 builds; product/package
 versions belong outside CLR AssemblyVersion. `Kotlin.Stdlib.dll` references `Kotlin.Runtime.dll`
-and currently uses the .NET Framework 4.8 API floor so the same logical IL can be assembled for
-either supported runtime target. `draft-adr-dotnet-library-target-profile.md` records the stronger
-candidate: one `netstandard2.0` platform-library profile shared by both executable targets.
+and uses the `netstandard2.0` platform-library profile shared by both executable targets. The
+consumer's selected runtime does not change this portable library product; see
+`draft-adr-dotnet-library-target-profile.md`.
 
 Ownership is split as follows:
 
-- `Kotlin.Runtime.dll` owns Kotlin callable/collection identities, exceptions, and narrowly shared
-  compiler/runtime services;
+- `Kotlin.Runtime.dll` owns Kotlin callable identities, canonical and typed collection-interface
+  views, exceptions, and narrowly shared compiler/runtime services;
 - `Kotlin.Stdlib.dll` owns ordinary Kotlin library implementations; and
 - the user assembly owns only user declarations and calls into those platform assemblies.
 
-The first stdlib implementations are generic Kotlin `ArrayIterator<T>` and `ArrayIterable<T>`
-classes plus the top-level `Iterable<T>.first()` and `last()` operations. The classes are compiled
-through the ordinary class pipeline and receive the same compiler-generated erased
-Iterator/Iterable MethodImpl bridges as user implementations. Explicit array `iterator()`
-constructs the appropriate closed iterator class from `Kotlin.Stdlib`; the
+The first stdlib implementations are generic Kotlin `ArrayIterator<T>` and `ArrayIterable<T>`,
+the common-shaped `EmptyIterator`/`EmptyList` singleton pair, `emptyList<T>()`, and the top-level
+`Iterable<T>`/`List<T>` `first()` and `last()` operations. The classes and objects are compiled
+through the ordinary pipeline and receive the same compiler-generated canonical and typed
+MethodImpl bridges as user implementations. Explicit array `iterator()`
+calls a generic compiler-facing factory in `Kotlin.Stdlib`; the
 handwritten `System.Array` iterator is removed from `Kotlin.Runtime`. Array `asIterable()`
-constructs the corresponding closed view, which stores the original vector and creates a fresh
-`ArrayIterator<T>` per request through ordinary Kotlin code. Direct array `for` loops remain
+calls the corresponding generic factory, whose private view stores the original vector and creates
+a fresh private `ArrayIterator<T>` per request through ordinary Kotlin code. Direct array `for` loops remain
 allocation-free indexed loops. User calls to `first()` and `last()` target the stable physical
-facade `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt`; their implementations use the universal
-erased Iterable/Iterator contract and therefore work equally for stdlib and user-defined
-producers.
+facade `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt`; their implementations use guarded typed
+capabilities with universal canonical fallbacks and therefore work equally for stdlib and
+user-defined producers. The Iterable overloads retain the common runtime List dispatch, so a List
+uses indexed access and its List-specific empty exception path.
 
-The implementation classes are private to Kotlin source resolution, but their CLR metadata and
-constructors are public because generated user assemblies construct them across the assembly
-boundary. Their physical names and the callable facade name are therefore compiler/stdlib ABI
-details, not additional Kotlin source APIs.
+`EmptyIterator : ListIterator<Nothing>` and `EmptyList : List<Nothing>` remain non-generic
+singletons, preserving one reference across every logical element view. Their typed CLR
+capabilities close over `[Kotlin.Runtime]Kotlin.Nothing`; canonical bridges remain the universal
+fallback for `List<Int>`, `List<String>`, and other views. Empty arrays return this singleton via
+the common `asIterable()` fast path. `RandomAccess` is a public inert target-stdlib marker.
+The internal `kotlin.io.Serializable` actual is also inert and intentionally has no relationship
+to `System.Runtime.Serialization.ISerializable` or a promised .NET serialization format.
+
+The implementation classes, objects, and constructors are private to the stdlib assembly;
+`RandomAccess` is the public marker exception. Generated user assemblies instead call
+Kotlin-internal, metadata-public generic factory methods and public stdlib functions on
+`Kotlin.Collections.CollectionsKt`. The factory names and signatures are compiler/stdlib ABI;
+the implementation class names are not. This follows JVM's public-metadata iterator helper around
+a private `ArrayIterator` and JS's compiler-used internal array-iterator helpers.
 
 A separately compiled consumer uses a paired artifact:
 
@@ -77,11 +90,16 @@ records the portable CLR API contract without claiming that .NET Standard is an 
 ## Relationship to the stdlib generator
 
 The mature stdlib generator currently emits Common, JVM, JS, WASM, and Native sources; it has no
-.NET target. `Iterable<T>.first()` and `last()` are owned by the common `Elements.f_first` and
-`Elements.f_last` templates, not by platform-specific implementations. The bootstrap source
-carries the universal parts of those common bodies. It omits the templates' `List` fast paths
-because this target has no coherent List ABI yet; the omission changes performance only, not
-Iterable semantics or exception behavior.
+.NET target. The Iterable/List `first()` and `last()` overloads are owned by the common
+`Elements.f_first` and `Elements.f_last` templates, not by platform-specific implementations. The
+bootstrap source retains their runtime List dispatch now that the target has a coherent List ABI.
+The generated `List.last()` spells its index through the separately generated `lastIndex`
+extension property; this narrow extraction expands that property to its exact `size - 1` body
+because generic extension properties remain outside the current backend surface.
+`EmptyIterator`, `EmptyList`, and `emptyList()` follow the ordinary common
+`kotlin.collections.Collections.kt` source shape. The only target decisions are the physical
+Nothing carrier plus inert `RandomAccess`/internal Serializable actuals; no singleton intrinsic
+or hand-written collection bridge is introduced.
 
 Adding a `KotlinTarget.DotNet` generator entry now would produce a broad corpus that this POC
 cannot compile and would falsely suggest a supported target surface. `first()` and `last()` prove
@@ -164,13 +182,25 @@ a half-installed pair is an error rather than permission to rebuild a different 
 silently. `-no-stdlib` remains the opt-out and, together with an explicit classpath, the bootstrap
 override.
 
-Until the repository build populates those directories, absence of both files still selects the
-injected-source compatibility path. Installed-pair use no longer enables `kotlin.*` packages in
-user sources; that temporary permission is limited to compiler-owned injected sources.
+Absence of both files still selects the injected-source compatibility path. Installed-pair use no
+longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
+compiler-owned injected sources.
 
-The repository build does not install this pair yet. Its future producer must be
-host-capability-aware: modern ILAsm is currently required because Framework ILAsm injects an
-`mscorlib` AssemblyRef even when it accepts netstandard-scoped source.
+Repository production and installation are explicit opt-in tasks:
+
+```text
+./gradlew :kotlin-compiler:produceDotNetStdlib
+./gradlew :kotlin-compiler:installDotNetStdlib
+```
+
+The producer depends on the assembled compiler distribution, runs that distribution's complete
+compiler classpath, and writes `Kotlin.Stdlib.{klib,dll,il}` under
+`prepare/compiler/build/dotnet-stdlib/netstandard2.0`. It requires modern ILAsm because Framework
+ILAsm injects an `mscorlib` AssemblyRef even when it accepts netstandard-scoped source. The install
+task copies only the bound KLIB/DLL pair into the Kotlin-home location above; the IL remains a build
+diagnostic. Neither task participates in ordinary `dist` or `distKotlinc`, so ordinary builds do
+not acquire that host-tool requirement. `distKotlinc` is a whole-home `Sync` and therefore removes
+an earlier optional installation; invoking `installDotNetStdlib` afterward restores it.
 
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
@@ -225,10 +255,11 @@ Benefits:
 
 Costs and limits:
 
-- the stdlib is redundantly rebuilt beside each executable for now;
+- the compatibility path still rebuilds the stdlib beside an executable when no installed pair is
+  available;
 - the emitter temporarily recognizes injected stdlib ownership;
 - the explicit producer flag is POC build control rather than a final distribution interface;
-- the normal distribution does not yet install the discoverable target pairs;
+- installing the discoverable target pair is opt-in rather than part of the normal distribution;
 - the metadata-public implementation and facade names are compiler/stdlib contracts;
 - the current physical-member mapping covers only compiler-owned stdlib shapes; and
 - the standalone producer is still limited to the compiler-owned bootstrap stdlib.
@@ -237,24 +268,34 @@ Costs and limits:
 
 The focused IL-text pin verifies that array iterator construction references
 `Kotlin.Stdlib, Version=1.0.0.0`. The CoreCLR box pin assembles and loads the runtime, stdlib, and
-program together. The box harness also checks the retained stdlib IL for its assembly version,
-generic `Kotlin.Collections.ArrayIterator<T>`/`ArrayIterable<T>` classes, their ordinary internal
-composition, compiler-generated Iterator/Iterable bridges, and the generic
-`Kotlin.Collections.CollectionsKt.first<T>` and `last<T>` methods. The Iterable IL pin verifies that
-open generic user wrappers call both methods across the stdlib assembly boundary; the box pin
-covers primitive, widened, reference, nullable, empty, stdlib-produced, and user-produced
-Iterables. `last()` additionally exercises a mutable generic local, a loop, and repeated erased
+program together. The box harness keeps a small product smoke check for the stdlib assembly,
+profile, facade, implementation classes, Empty objects, RandomAccess, and `emptyList()`. The
+focused standalone-product integration pin owns the detailed physical assertions for private
+`Kotlin.Collections.ArrayIterator<T>`/`ArrayIterable<T>` classes, private EmptyIterator/EmptyList
+objects, the public RandomAccess and private inert Serializable markers, their ordinary internal
+composition, compiler-generated collection bridges, and the generic
+`Kotlin.Collections.CollectionsKt.first<T>` and `last<T>` methods for both canonical Iterable and
+canonical List receivers. The IL pins verify that open generic user wrappers select the correct
+overload across the stdlib assembly boundary; the box pins cover primitive, widened, reference,
+nullable, empty, stdlib-produced, and user-produced Iterables and Lists. The List-as-Iterable pin
+also proves indexed dispatch without calling `iterator()` and the `List is empty.` path. `last()`
+additionally exercises a mutable generic local, a loop, and repeated erased
 Iterator calls inside the stdlib assembly. A focused CLI integration pin compiles a consumer with
-`-no-stdlib`, resolves `first()` from a metadata KLIB, and verifies the generic external DLL call
+`-no-stdlib`, resolves both receiver overloads from a metadata KLIB, and verifies the generic external DLL call
 without a generated consumer-side CollectionsKt. A manual Framework executable exercised the same
 path against a real generated DLL and user-defined Iterable. Two focused integration pins run the
 explicit producer under modern and Framework runtime selection, check each packed KLIB manifest
-and portable DLL, then consume both `first()` and `last()` from each produced pair in a separate
-compilation. Each producer is also run twice; the packed KLIB and compiler-owned IL are
+and portable DLL, then consume `first()`, `last()`, `emptyList()`, and RandomAccess from each
+produced pair in a separate
+compilation. The stdlib KLIB participates in the same physical-declaration binder as any other
+Kotlin/.NET library; the separate stdlib record controls installation and packaging only. Each
+producer is also run twice; the packed KLIB and compiler-owned IL are
 byte-identical. Finally, each produced pair is installed into a temporary portable-profile Kotlin
-home and consumed
-by an ordinary compilation with neither `-no-stdlib` nor a manual metadata classpath; the consumer
-does not regenerate the stdlib facade.
+home and consumed by an ordinary compilation with neither `-no-stdlib` nor a manual metadata
+classpath; the consumer does not regenerate the stdlib facade. The repository producer and install
+tasks are also exercised as products: the producer emits the expected KLIB/DLL/IL set, while
+installation copies exactly the byte-matching KLIB/DLL pair into the distribution and does not
+install the diagnostic IL.
 
 ## Deferred work
 

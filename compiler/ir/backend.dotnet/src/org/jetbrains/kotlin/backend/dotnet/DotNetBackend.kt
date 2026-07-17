@@ -64,7 +64,7 @@ object DotNetBackend {
             DotNetRuntimeLibrary.ASSEMBLY_NAME to DotNetRuntimeLibrary.ASSEMBLY_FILE_NAME,
             DotNetStdlibLibrary.ASSEMBLY_NAME to DotNetStdlibLibrary.ASSEMBLY_FILE_NAME,
         ).firstOrNull { reserved ->
-            assemblyName.equals(reserved.first, ignoreCase = true) ||
+            DotNetPlatformAssemblyIdentity.canonicalNameOrNull(assemblyName) == reserved.first ||
                     (emitsExecutable && binaryOutput.name.equals(reserved.second, ignoreCase = true))
         }
         if (reservedAssembly != null) {
@@ -120,7 +120,7 @@ object DotNetBackend {
             return result(ilTarget)
         }
 
-        val stdlibIlText = if (DotNetStdlibLibrary.hasImplementation(irModuleFragment)) {
+        val stdlibEmission = if (DotNetStdlibLibrary.hasImplementation(irModuleFragment)) {
             DotNetIlEmitter(
                 messageCollector = messageCollector,
                 assemblyName = DotNetStdlibLibrary.ASSEMBLY_NAME,
@@ -130,10 +130,11 @@ object DotNetBackend {
                 propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
                 emissionScope = DotNetIlEmissionScope.STDLIB,
                 coreLibrary = DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY,
-            ).emit(irModuleFragment)?.ilText ?: return result(ilTarget)
+            ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
             null
         }
+        val stdlibIlText = stdlibEmission?.ilText
 
         if (producesStdlib) {
             if (stdlibIlText == null) {
@@ -145,7 +146,8 @@ object DotNetBackend {
             }
             return result(
                 DotNetStdlibLibrary.assembleIn(output, stdlibIlText, messageCollector)
-                    ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
+                    ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
+                stdlibEmission.declarations,
             )
         }
 
@@ -204,6 +206,10 @@ object DotNetBackend {
             }
         }
         for (library in externalLibraries) {
+            // Kotlin.Stdlib has a dedicated installation/packaging path above. It still belongs
+            // to externalLibraries for ordinary declaration binding, but must not be copied or
+            // validated a second time as an arbitrary user library here.
+            if (DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)) continue
             if ("[${library.artifact.assemblyName}]" !in ilText) continue
             if (!library.implementationFile.isFile) {
                 messageCollector.report(

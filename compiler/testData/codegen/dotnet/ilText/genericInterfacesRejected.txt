@@ -2,60 +2,42 @@
 .assembly 'genericInterfacesRejected' {}
 .module 'main-genericInterfacesRejected.il'
 
-.class public auto ansi beforefieldinit 'RejectTop'
-       extends [mscorlib]System.Object
+.class interface public abstract auto ansi 'RejectProducer'
 {
-  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  .method public hidebysig newslot abstract virtual instance object 'produce__KotlinErased__4ccbdb667f94a31463777c07fbf70fd8'() cil managed
   {
-    .maxstack 1
-    ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
-    ret
-  }
-}
-.class public auto ansi sealed beforefieldinit 'RejectBottom'
-       extends 'RejectTop'
-{
-  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
-  {
-    .maxstack 1
-    ldarg.0
-    call instance void 'RejectTop'::.ctor()
-    ret
   }
 }
 .class interface public abstract auto ansi 'RejectProducer`1'<+ 'T'>
+       implements 'RejectProducer'
 {
   .method public hidebysig newslot abstract virtual instance !0 'produce'() cil managed
   {
   }
 }
-.class interface public abstract auto ansi 'RejectConsumer`1'<- 'T'>
-{
-  .method public hidebysig newslot abstract virtual instance void 'consume'(!0 'value') cil managed
-  {
-  }
-}
-.class interface public abstract auto ansi 'RejectInvariant`1'<'T'>
-{
-  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
-  {
-  }
-}
-.class public auto ansi beforefieldinit 'InheritedProvider'
+.class public auto ansi sealed beforefieldinit 'ReifiedBox`1'<'T'>
        extends [mscorlib]System.Object
 {
-  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  .field private !0 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'ReifiedBox`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
-    call instance void [mscorlib]System.Object::.ctor()
+    ldfld !0 class 'ReifiedBox`1'<!0>::'value'
     ret
   }
-  .method public hidebysig newslot virtual instance class 'RejectBottom' 'produce'() cil managed
+  .property instance !0 'value'()
   {
-    .maxstack 1
-    newobj instance void 'RejectBottom'::.ctor()
-    ret
+    .get instance !0 'ReifiedBox`1'::'get_value'()
   }
 }
