@@ -443,6 +443,48 @@ val distKotlinc = distTask<Sync>("distKotlinc") {
     }
 }
 
+// The .NET target stdlib remains opt-in while its portable PE writer is an external modern
+// ILAsm. Run the compiler from the assembled distribution: cli-dotnet's project runtime
+// classpath intentionally leaves several host dependencies compile-only, while the distribution
+// owns the complete executable compiler classpath.
+val dotNetStdlibOutputDirectory = layout.buildDirectory.dir("dotnet-stdlib/netstandard2.0")
+val dotNetStdlibKlib = dotNetStdlibOutputDirectory.map { it.file("Kotlin.Stdlib.klib") }
+val dotNetStdlibDll = dotNetStdlibOutputDirectory.map { it.file("Kotlin.Stdlib.dll") }
+val dotNetStdlibIl = dotNetStdlibOutputDirectory.map { it.file("Kotlin.Stdlib.il") }
+
+val produceDotNetStdlib = tasks.register<JavaExec>("produceDotNetStdlib") {
+    group = "distribution"
+    description = "Produces the experimental bound Kotlin/.NET stdlib KLIB/DLL pair."
+    dependsOn(distKotlinc)
+
+    classpath = fileTree(File("$distDir/kotlinc/lib")) {
+        include("*.jar")
+    }
+    mainClass.set("org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler")
+    workingDir = rootDir
+    maxHeapSize = "2g"
+    args(
+        "-Xdotnet-produce-stdlib",
+        "-d", dotNetStdlibOutputDirectory.get().asFile.absolutePath,
+    )
+
+    outputs.files(dotNetStdlibKlib, dotNetStdlibDll, dotNetStdlibIl)
+}
+
+// `distKotlinc` is a Sync over the complete Kotlin home and therefore intentionally removes an
+// optional pair installed by an earlier invocation. This task always runs after that Sync and can
+// be invoked again to restore the opt-in product; ordinary distribution builds never depend on it.
+val installDotNetStdlib = tasks.register<Sync>("installDotNetStdlib") {
+    group = "distribution"
+    description = "Installs the experimental Kotlin/.NET stdlib pair into the Kotlin distribution."
+    dependsOn(produceDotNetStdlib)
+    from(dotNetStdlibOutputDirectory) {
+        include("Kotlin.Stdlib.klib", "Kotlin.Stdlib.dll")
+    }
+    into(File("$distDir/kotlinc/lib/dotnet/netstandard2.0"))
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+}
+
 val distCommon = distTask<Sync>("distCommon") {
     destinationDir = File("$distDir/common")
     from(distCommonContents) {

@@ -1,8 +1,8 @@
-# Draft ADR: Erased Kotlin iteration ABI on CLR
+# Draft ADR: Split Kotlin iteration ABI on CLR
 
-- Status: **Draft candidate; implemented for array/user iterators, user iterables, and the first target-stdlib producer**
-- Date: 2026-07-16
-- Scope: Kotlin-to-Kotlin `Iterator`/`Iterable` identity and execution across CLR assembly boundaries
+- Status: **Draft candidate; canonical and typed views implemented for Iterator/Iterable**
+- Date: 2026-07-17
+- Scope: Kotlin-to-Kotlin iteration identity, execution, and the typed CLR view
 
 This is a repository-local decision record for the experimental .NET backend. The entire `dotnet`
 branch is a proof of concept; this document keeps that POC internally coherent while evidence is
@@ -10,203 +10,198 @@ collected. It does not claim acceptance by the Kotlin project and is not a publi
 
 ## Context
 
-Kotlin `Iterator<out T>` is covariant for every logical element type. A value can therefore move
-from `Iterator<Int>` to `Iterator<Any>` without an adapter, and Kotlin reference identity must
-still observe the same iterator object and state.
+Kotlin `Iterator<out T>` and `Iterable<out T>` are covariant for every logical element type. In
+particular, `Iterator<Int>` and `Iterable<Int>` can be viewed as their `Any` forms without an
+adapter, and `===` must continue to observe the original object and state.
 
-`Iterable<out T>` has the same representational requirement one level earlier. An
-`Iterable<Int>` must widen to `Iterable<Any>` without replacing the producer object, and its
-`iterator()` result must enter the canonical iterator ABI rather than a second generic CLR slot.
+The CLR cannot express that rule with one constructed generic identity. Variance conversions of
+`Iterator<int>` or `IEnumerable<int>` do not produce the corresponding `<object>` construction.
+`IEnumerator<T>` is also the wrong semantic contract: it has `MoveNext`/`Current` state and
+exception rules rather than Kotlin's `hasNext`/`next` contract. An implicit wrapper would repair
+some calls but would break Kotlin identity.
 
-The CLR does not provide that model directly. `IEnumerator<T>` has different execution semantics
-(`MoveNext` plus `Current`) and CLR generic variance conversions apply only to reference-type
-arguments. In particular, `IEnumerator<int>` cannot be converted to `IEnumerator<object>`. A
-wrapper would make the conversion work but would change observable identity and split one Kotlin
-rule into multiple physical representations.
+The mature targets establish the semantic direction:
+
+- common stdlib owns the logical `expect` declarations;
+- Native and Wasm use Kotlin-owned `actual` iteration interfaces;
+- JVM and JS treat host-array `iterator()` production as a compiler/runtime-helper boundary; and
+- no target makes a host enumeration interface the canonical Kotlin identity.
+
+The CLR-specific distinction is that an optional constructed generic interface is useful for
+unboxed execution and C# consumption, but it cannot carry Kotlin identity across value/reference
+variance. That distinction is the reason for a split representation rather than a direct copy of
+one mature target.
 
 ## Decision drivers
 
-The candidate must:
+The representation must:
 
-1. preserve identity and state across every legal Kotlin iterator covariance conversion;
-2. keep `hasNext`/`next` and `NoSuchElementException` semantics rather than importing the
-   `IEnumerator` state machine and exception contract;
-3. have one stable Kotlin-owned physical identity across modules and runtime versions;
-4. support primitive, reference, nullable-reference, and open generic consumers; and
-5. run on both .NET Framework 4.8 and modern CoreCLR.
-
-## Considered alternatives
-
-### `IEnumerator<T>` as the Kotlin ABI
-
-This is attractive for direct CLR interop, but it is not semantically or representationally
-faithful. Its API does not match Kotlin Iterator, its variance cannot convert value-type
-instantiations, and adapters would break identity. CLR enumeration belongs in an explicit interop
-layer rather than Kotlin-to-Kotlin signatures.
-
-### Generic `Kotlin.Collections.Iterator<out T>`
-
-A Kotlin-owned generic interface could expose Kotlin method names, but CLR variance would still
-exclude the `Iterator<Int>` to `Iterator<Any>` case. Making only reference-element iterators use
-that representation would leave Kotlin with two physical identity rules.
-
-### Non-generic Kotlin-owned interface with erased execution
-
-This is the selected candidate. Kotlin's logical element type remains compiler and metadata
-information, while every supported iterator view shares one CLR interface and one object.
+1. preserve identity and cursor state across every legal Kotlin covariance conversion;
+2. retain Kotlin iteration and `NoSuchElementException` semantics;
+3. give every Kotlin module a stable, versioned physical identity and fallback slot;
+4. permit unboxed primitive execution when the same object exposes an exact closed capability;
+5. provide a useful typed interface to C# without making it the universal Kotlin ABI; and
+6. remain valid on .NET Framework 4.8 and modern CoreCLR.
 
 ## Candidate decision
 
-The runtime exposes this Kotlin-owned execution identity:
+`Iterator` and `Iterable` are runtime-owned instances of the general Kotlin generic-interface
+ABI. Each logical declaration has a non-generic canonical identity and a covariant typed sibling:
 
 ```text
 Kotlin.Collections.Iterator {
     bool HasNext()
     object Next()
 }
-```
 
-and the corresponding Kotlin-owned producer identity:
+Kotlin.Collections.Iterator<out T> : Kotlin.Collections.Iterator {
+    bool HasNext()
+    T Next()
+}
 
-```text
 Kotlin.Collections.Iterable {
+    Kotlin.Collections.Iterator GetIterator()
+}
+
+Kotlin.Collections.Iterable<out T> : Kotlin.Collections.Iterable {
     Kotlin.Collections.Iterator GetIterator()
 }
 ```
 
-Source `kotlin.collections.Iterator<T>` and the supported primitive iterator classes map to that
-same non-generic interface. `Next()` is the universal erased slot. The compiler casts reference
-results and uses `unbox.any` for primitives, nullable primitives, and open method/class type
-parameters. A covariance conversion changes only the logical Kotlin view; it emits no wrapper and
-preserves the same object and cursor state.
+The second `GetIterator` deliberately returns the canonical iterator identity. A typed outer
+capability may be supplied by an erased-only provider, so the ABI does not promise that an
+arbitrary returned object also exposes `Iterator<T>`. A later C# convenience API may probe and
+return that nested capability explicitly; it must not make an unsound promise in the base
+interface.
 
-Source `kotlin.collections.Iterable<T>` maps to the non-generic producer interface. An ordinary
-implementation keeps its source-visible `iterator(): Iterator<T>` member, while the compiler adds
-a private explicit `GetIterator()` MethodImpl forwarding to it. Calls through `Iterable<T>` or an
-inherited fake override use `GetIterator()` and receive the same erased iterator object. A real
-`for` loop over a user-defined `Iterable<T>` therefore follows the ordinary Kotlin lowering:
-`GetIterator()`, erased `HasNext()`, and erased `Next()` with result narrowing at the use site.
+All ordinary Kotlin storage, parameters, returns, casts, projections, stars, and variance
+conversions use the canonical non-generic identity. The logical `T` remains in Kotlin IR and,
+eventually, Kotlin metadata. Consequently this is an instruction-free reference copy:
 
-The first stdlib producer view is `Kotlin.Collections.ArrayIterable<T>`. Array `asIterable()`
-constructs its closed generic form for supported primitive, reference, and open generic vectors.
-It stores the original vector, observes later mutations, and its ordinary Kotlin `iterator()` body
-constructs a fresh `ArrayIterator<T>`. Widening the view through Iterable covariance preserves the
-same producer object; each requested iterator has independent cursor state.
+```kotlin
+val ints: Iterator<Int> = producer
+val anys: Iterator<Any> = ints
+check(ints === anys)
+```
 
-The first producer is now an ordinary generic Kotlin implementation emitted into
-`Kotlin.Stdlib.dll` as `Kotlin.Collections.ArrayIterator<T>`. It stores an exact `T[]` vector plus
-an index. Primitive elements stay typed inside the implementation and box only in its generated
-erased `Next()` bridge; reference elements pass through that bridge unchanged. Exhaustion throws
-exact `Kotlin.NoSuchElementException : Kotlin.RuntimeException`; using
-`System.InvalidOperationException` would introduce a false Kotlin IllegalStateException edge.
+The typed sibling is an optional execution and interop capability on that same object. A call
+through an exact logical receiver probes `Iterator<T>` or `Iterable<T>`, invokes the typed slot
+when present, and otherwise invokes the canonical slot. A primitive `Iterator<Int>.next()` can
+therefore return `int32` without boxing on the typed path. A widened or erased-only provider still
+works through `object Next()` and narrows or unboxes at the call site. Failure of a typed probe is
+not a failed Kotlin cast and never authorizes an adapter.
 
-`Kotlin.Runtime.dll` retains only the erased Iterator/Iterable identities and exact exception
-types. The former handwritten `Kotlin.Runtime.Internal.ArrayIterator(System.Array)` has been
-removed. The stdlib source is compiled through the same bridge policy as user code; its class is
-not a compiler-special implementation. Because the POC cannot yet import Kotlin metadata from a
-separately compiled module, source is currently injected into the same frontend/lowering run and
-scoped emission places the implementation only in `Kotlin.Stdlib.dll`. This bootstrap packaging is
-recorded separately in `draft-adr-target-stdlib-bootstrap.md`.
+Every Kotlin-compiled implementation exposes both views on the same object. The general
+`DotNetGenericInterfaceBridgeLowering` generates explicit forwarding MethodImpls for the
+canonical and declared slots. It handles stdlib classes and user classes identically:
 
-Direct `for (element in array)` loops do not use this object. The existing common indexed-loop
-lowering evaluates the array once and remains allocation-free. The iterator ABI is used only when
-an explicit `iterator()` call produces a value that can escape or be stored.
+```text
+class CountingIterator :
+    Kotlin.Collections.Iterator,
+    Kotlin.Collections.Iterator<int>
+{
+    int next()                    // source implementation
+    object <canonical bridge>()  // boxes only here
+    int <declared bridge>()       // unboxed
+}
+```
 
-The current bounded implementation supports the five established primitive vectors, concrete
-reference-element arrays, open invariant `Array<T>` producers, and ordinary user classes whose
-contract reaches `Iterator<T>` directly or through a supported subinterface. Each array producer
-constructs the corresponding closed stdlib class, such as `ArrayIterator<int32>` or
-`ArrayIterator<string>`. An open vector stays exact `!n[]`/`!!n[]` and constructs
-`ArrayIterator<!n>`/`ArrayIterator<!!n>`; erased `Next()` is narrowed with
-`unbox.any !n`/`!!n`.
-This does not admit `Array<T?>`, projections, concrete primitive-element generic arrays, or nested
-arrays: their receiver types remain rejected by the structural array mapper before iterator
-lowering runs.
+The stable canonical member names remain `HasNext`, `Next`, and `GetIterator`; this preserves the
+existing POC runtime ABI. The typed sibling uses the same CLR-friendly names. General user-owned
+interfaces retain the hashed canonical member-name scheme recorded in the generic-interface ADR.
+The collection bridge table, collection-specific lowering origins, special MethodImpl emitter,
+and generic Iterator/Iterable call intrinsics have been removed. Primitive iterator aliases keep
+a small temporary intrinsic boundary until `IntIterator`, `LongIterator`, and the other ordinary
+stdlib classes are produced.
 
-A user implementation retains its logically typed Kotlin members, including `next(): T`. The
-backend adds two private explicit CLR interface implementations on the same object: `HasNext()`
-forwards to `hasNext()`, while erased `object Next()` forwards to `next()` and boxes its result at
-that boundary. This follows the JVM's typed-member-plus-erased-bridge semantic pattern; the extra
-`HasNext` forwarder is required only because the Kotlin-owned CLR interface uses CLR-style slot
-names. A base class which directly declares `Iterator<T>` owns the bridges when it has class-owned
-typed members, and derived classes inherit them. An abstract base with only the interface
-obligation defers bridge ownership to the first concrete descendant. No adapter object, generic
-runtime interface, or public typed capability is added.
+A base class that already owns the complete bridge set supplies it to descendants. Its bridge
+forwards through the virtual source implementation, so an override still dispatches correctly.
+An abstract obligation-only base has no bridge to inherit; the first concrete implementation owns
+the bridges. The lowering orders classes base-first and generates a bridge set only where one is
+not already inherited.
 
-The same ownership rule applies table-wise to `Iterable`: a class with a class-owned typed
-`iterator()` receives the private `GetIterator()` bridge, a derived class inherits a base bridge,
-and an abstract obligation-only base defers bridge ownership to the first implementing descendant.
-The bridge policy is compiler-owned and contract-driven; `ArrayIterator` is not a privileged
-source class and user implementations use the same path.
+Generic subinterfaces use the same split machinery. A declaration such as
+`IteratorView<out T> : Iterator<T>` has its own canonical identity and covariant typed sibling;
+the typed sibling extends `Iterator<T>`, while the canonical sibling extends canonical `Iterator`.
+Redeclarations are no longer rejected merely for being collection members. Their physical slots
+and implementing bridges follow the same rules as every other Kotlin-owned generic interface.
+Interface bodies remain outside the .NET Framework 4.8-compatible slice.
 
-A bodyless module-local iterator or iterable subinterface inherits the corresponding non-generic
-runtime identity. It may declare unrelated abstract members, but it does not republish typed
-`next`, `hasNext`, or `iterator` slots. Calls to inherited fake overrides are emitted against the
-erased runtime slots, and an implementing class receives the same private bridges as a direct
-implementer. A source redeclaration such as `override fun next(): T` or
-`override fun iterator(): Iterator<T>` is rejected because emitting it on the CLR interface would
-create a second typed execution contract beside the canonical erased one. Interface member bodies
-remain rejected at the .NET Framework 4.8 compatibility floor; this design does not depend on
-default interface methods.
+## Target stdlib placement
 
-The subinterface's own generic identity remains subject to the backend's existing CLR generic
-interface rules. Declaration-site covariance works for reference-shaped arguments, but a widening
-such as `IteratorView<Int>` to `IteratorView<Any>` or `IterableView<Int>` to
-`IterableView<Any>` remains rejected because CLR variance does not apply to value-type
-instantiations. Widening those objects to the canonical `Iterator<Any>` or `Iterable<Any>` view is
-safe and remains adapter-free because the base identity is erased. This limitation must not be
-mistaken for a second representation.
+`ArrayIterator<T>` and `ArrayIterable<T>` are ordinary Kotlin implementations emitted into
+`Kotlin.Stdlib.dll`. They are not compiler-privileged bridge implementations. `ArrayIterator<T>`
+stores the exact CLR vector and cursor, observes later mutations, and throws Kotlin
+`NoSuchElementException` when exhausted. `ArrayIterable<T>` stores the vector and constructs a
+fresh iterator for each request. Both now receive the same general canonical and typed bridges as
+user classes.
 
-This decision is deliberately limited to Kotlin-owned contracts. It does not claim that an
-arbitrary imported CLR covariant interface can preserve Kotlin value-type covariance, raw CLR
-object identity, and exact closed CLR signatures simultaneously. Imported `IEnumerable<T>` /
-`IEnumerator<T>` and any future compiler-internal foreign variance views are a separate interop
-design. They must not change the Kotlin-owned erased identities or make this bridge policy depend
-on BCL interfaces.
+Direct `for (element in array)` remains an allocation-free indexed lowering. An escaping
+`array.iterator()` calls a Kotlin-internal, metadata-public generic stdlib factory through a
+compiler intrinsic. The implementation class and constructor remain private, matching the JVM/JS
+compiler-helper boundary for host arrays. Array `asIterable()` uses the corresponding factory, and
+the first common operations, `Iterable<T>.first()` and `last()`, remain in the bootstrap stdlib
+source until the explicit stdlib product consumes the checked-in common source graph.
+
+The mature product is a paired `Kotlin.Stdlib.klib` plus `Kotlin.Stdlib.dll`, built once from the
+common/common-non-JVM and .NET-specific source sets against the selected target profile. The
+embedded `DOTNET_STDLIB_SOURCES` corpus is bootstrap machinery, not the final source-distribution
+model. No new stdlib-generator target is needed merely for `first`/`last`; those bodies already
+belong to the common generated corpus. A future builtins generator entry may supply the bodyless
+.NET array actuals.
+
+## C# and foreign CLR boundaries
+
+C# can explicitly ask whether a Kotlin iterator implements
+`Kotlin.Collections.Iterator<int>` and call `Next()` without boxing. It may also use the canonical
+`Kotlin.Collections.Iterator` interface for a universal object-shaped fallback. This is an
+honest capability boundary: the CLR generic sibling is never presented as though
+`Iterator<int>` were assignable to `Iterator<object>`.
+
+`IEnumerable<T>` and `IEnumerator<T>` remain foreign CLR contracts. Imported implementations keep
+their actual CLR restrictions. Kotlin/.NET will require explicit adapters or export helpers to
+cross that boundary; it will not redefine `===`, silently wrap a foreign object during ordinary
+subtyping, or make `Any` physically distinct from `System.Object` to fake a generic conversion.
 
 ## Consequences
 
 Benefits:
 
-- primitive and reference iterator covariance preserves `===` and shared cursor state;
-- Kotlin iteration semantics stay independent from `IEnumerator` rules;
-- a generic consumer can return `T` through `unbox.any !!n`; and
-- CLR enumeration adapters can be added without changing Kotlin iterator identity.
+- primitive and reference covariance preserves `===` and shared state;
+- exact primitive calls can avoid boxing while erased providers remain universally valid;
+- C# gets a real typed capability rather than an object-only API;
+- stdlib and user implementations use one bridge algorithm; and
+- BCL adapters can evolve without changing Kotlin identity.
 
 Costs:
 
-- primitive elements box at the erased `Next()` boundary and unbox at the Kotlin call site;
-- each bridge-owning iterator carries two small private MethodImpl bridges and each iterable one;
-- the raw interface is not an idiomatic CLR enumeration surface; and
-- logical element types require Kotlin metadata for future cross-module Kotlin compilation.
+- an exact-capable iterator implementation carries canonical and declared MethodImpl bridges;
+- erased fallback calls still box primitive results;
+- `Iterable<T>.GetIterator()` cannot universally promise a nested typed capability; and
+- logical type arguments require Kotlin metadata for complete separate-module reconstruction.
 
 ## Validation
 
-Probe series `iteratorabi_s1` assembled the runtime, a generic consumer, primitive/reference array
-producers, and an exact exhaustion catch with modern 10.0.9 and .NET Framework 4.8 ILAsm. All four
-same-assembler and cross-runtime pairings produced the same results.
-
-Repository pins cover both FIR parsers and real CoreCLR execution, including reference,
-primitive, open-generic producer/consumer, covariant, inherited, and subinterface user
-implementations:
+Repository pins cover both FIR parsers and real CoreCLR execution for primitive, reference,
+nullable-reference, open-generic, covariant, inherited, abstract-deferred, subinterface, array,
+and user-defined implementations:
 
 - `compiler/testData/codegen/dotnet/ilText/arrayIterators.kt`;
 - `compiler/testData/codegen/dotnet/box/arrayIterators.kt`;
 - `compiler/testData/codegen/dotnet/ilText/iterables.kt`;
 - `compiler/testData/codegen/dotnet/box/iterables.kt`; and
-- the remaining iterator-family negatives in `genericArraysRejected.kt`.
+- the iterator-family negatives in `genericArraysRejected.kt`.
 
-The array IL pin now carries an AssemblyRef to `Kotlin.Stdlib, Version=1.0.0.0` and constructs
-closed generic stdlib iterators. The box harness requires `Kotlin.Stdlib.dll` and verifies its
-retained IL contains the generic iterator/view implementations, their ordinary composition, and
-compiler-generated Iterator/Iterable MethodImpl bridges before executing the program on CoreCLR.
+The IL pins require canonical and closed declared interfaces on the same objects, both MethodImpl
+families, the guarded typed call and erased fallback, and typed primitive/open-generic returns.
+The box harness inspects retained `Kotlin.Stdlib.il`, assembles the new runtime interface metadata,
+and executes the result on CoreCLR. The cross-library integration suite separately validates the
+paired stdlib KLIB/DLL product and consumers.
 
 ## Deferred decisions
 
-This draft does not decide separately compiled Kotlin producer modules, subinterfaces with member
-bodies, primitive-specialized iterator subclasses, collection/list iterators, mutable iterators,
-sequences, CLR `IEnumerable<T>`/`IEnumerator<T>` adapters or foreign variance views, typed
-fast-path members, or Kotlin metadata encoding. The target-stdlib migration of `ArrayIterator` is
-implemented, but standalone stdlib production/consumption is not. Later layers may add views or
-optimizations, but ordinary Kotlin iteration covariance must continue to preserve the erased
-canonical identities or this draft must be explicitly revised.
+This draft does not decide the final common-source build wiring, primitive-specialized iterator
+class production, collection/list/mutable-iterator/sequence implementations, a nested typed
+iterator convenience API for C#, `IEnumerable<T>`/`IEnumerator<T>` adapters, or the final Kotlin
+metadata encoding. These layers may add capabilities and optimizations, but must keep canonical
+Kotlin iteration identity adapter-free.

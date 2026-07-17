@@ -383,7 +383,17 @@
     .set instance void 'ExpressionCounter'::'set_value'(int32)
   }
 }
+.class interface public abstract auto ansi 'Source'
+{
+  .method public hidebysig newslot abstract virtual instance object 'current__KotlinErased__7a7797ee98b2da08c38da2400bb279fe'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<'M'>(!!0 'item') cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'Source`1'<'T'>
+       implements 'Source'
 {
   .method public hidebysig newslot abstract virtual instance !0 'current'() cil managed
   {
@@ -394,7 +404,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'StringSource'
        extends [mscorlib]System.Object
-       implements class 'Source`1'<string>
+       implements 'Source', class 'Source`1'<string>
 {
   .field private string 'item'
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'item') cil managed
@@ -427,6 +437,40 @@
     ldarg.1
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Source-current-7a7797ee98b2da08c38da2400bb279fe>'() cil managed
+  {
+    .override method instance object 'Source'::'current__KotlinErased__7a7797ee98b2da08c38da2400bb279fe'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'StringSource'::'current'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-Source-current-7a7797ee98b2da08c38da2400bb279fe>'() cil managed
+  {
+    .override method instance !0 class 'Source`1'<string>::'current'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'StringSource'::'current'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-Source-choose-96378802b130e1645ac22dff355ebaa2>'<'M'>(!!0 'item') cil managed
+  {
+    .override method instance !!0 'Source'::'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'StringSource'::'choose'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-Source-choose-96378802b130e1645ac22dff355ebaa2>'<'M'>(!!0 'item') cil managed
+  {
+    .override method instance !!0 class 'Source`1'<string>::'choose'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'StringSource'::'choose'<!!0>(!!0)
+    ret
+  }
   .property instance string 'item'()
   {
     .get instance string 'StringSource'::'get_item'()
@@ -434,34 +478,90 @@
 }
 .class public auto ansi sealed beforefieldinit 'GenericSource`1'<'T'>
        extends [mscorlib]System.Object
-       implements class 'Source`1'<!0>
+       implements 'Source', class 'Source`1'<!0>
 {
-  .field private class 'Source`1'<!0> '$$delegate_0'
-  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Source`1'<!0> 'delegate') cil managed
+  .field private class 'Source' '$$delegate_0'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Source' 'delegate') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld class 'Source`1'<!0> class 'GenericSource`1'<!0>::'$$delegate_0'
+    stfld class 'Source' class 'GenericSource`1'<!0>::'$$delegate_0'
     ret
   }
   .method public hidebysig newslot virtual instance !0 'current'() cil managed
   {
     .maxstack 1
+    .locals init (
+      [0] class 'Source' '<genericInterfaceReceiver>',
+      [1] class 'Source`1'<!0> '<genericInterfaceCapability>',
+      [2] !0 '<genericInterfaceResult>'
+    )
     ldarg.0
-    ldfld class 'Source`1'<!0> class 'GenericSource`1'<!0>::'$$delegate_0'
+    ldfld class 'Source' class 'GenericSource`1'<!0>::'$$delegate_0'
+    stloc.0
+    ldloc.0
+    isinst class 'Source`1'<!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
     callvirt instance !0 class 'Source`1'<!0>::'current'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object 'Source'::'current__KotlinErased__7a7797ee98b2da08c38da2400bb279fe'()
+    unbox.any !0
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
     ret
   }
   .method public hidebysig newslot virtual instance !!0 'choose'<'M'>(!!0 'item') cil managed
   {
     .maxstack 2
     ldarg.0
-    ldfld class 'Source`1'<!0> class 'GenericSource`1'<!0>::'$$delegate_0'
+    ldfld class 'Source' class 'GenericSource`1'<!0>::'$$delegate_0'
     ldarg.1
-    callvirt instance !!0 class 'Source`1'<!0>::'choose'<!!0>(!!0)
+    callvirt instance !!0 'Source'::'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Source-current-7a7797ee98b2da08c38da2400bb279fe>'() cil managed
+  {
+    .override method instance object 'Source'::'current__KotlinErased__7a7797ee98b2da08c38da2400bb279fe'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericSource`1'<!0>::'current'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-Source-current-7a7797ee98b2da08c38da2400bb279fe>'() cil managed
+  {
+    .override method instance !0 class 'Source`1'<!0>::'current'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericSource`1'<!0>::'current'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-Source-choose-96378802b130e1645ac22dff355ebaa2>'<'M'>(!!0 'item') cil managed
+  {
+    .override method instance !!0 'Source'::'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 class 'GenericSource`1'<!0>::'choose'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-Source-choose-96378802b130e1645ac22dff355ebaa2>'<'M'>(!!0 'item') cil managed
+  {
+    .override method instance !!0 class 'Source`1'<!0>::'choose'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 class 'GenericSource`1'<!0>::'choose'<!!0>(!!0)
     ret
   }
 }
@@ -635,10 +735,13 @@
       [0] class 'CounterImpl' 'implementation',
       [1] class 'PlainCounter' 'plain',
       [2] class 'PropertyCounter' 'property',
-      [3] class 'Source`1'<string> 'generic',
-      [4] class 'RedeclaredForwarder' 'redeclared',
-      [5] class 'RootId' 'root',
-      [6] class 'MultiForwarder' 'multi'
+      [3] class 'Source' 'generic',
+      [4] class 'Source' '<genericInterfaceReceiver>',
+      [5] class 'Source`1'<string> '<genericInterfaceCapability>',
+      [6] string '<genericInterfaceResult>',
+      [7] class 'RedeclaredForwarder' 'redeclared',
+      [8] class 'RootId' 'root',
+      [9] class 'MultiForwarder' 'multi'
     )
     ldc.i4 1
     ldstr "shared"
@@ -695,14 +798,30 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "generic"
     newobj instance void 'StringSource'::.ctor(string)
-    newobj instance void class 'GenericSource`1'<string>::.ctor(class 'Source`1'<!0>)
+    newobj instance void class 'GenericSource`1'<string>::.ctor(class 'Source')
     stloc.3
     ldloc.3
+    stloc 4
+    ldloc 4
+    isinst class 'Source`1'<string>
+    stloc 5
+    ldloc 5
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc 5
     callvirt instance !0 class 'Source`1'<string>::'current'()
+    stloc 6
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc 4
+    callvirt instance object 'Source'::'current__KotlinErased__7a7797ee98b2da08c38da2400bb279fe'()
+    castclass [mscorlib]System.String
+    stloc 6
+IL_genericInterfaceJoin_1:
+    ldloc 6
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
     ldc.i4 12
-    callvirt instance !!0 class 'Source`1'<string>::'choose'<int32>(!!0)
+    callvirt instance !!0 'Source'::'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<int32>(!!0)
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -710,13 +829,13 @@
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'LeafIdImpl'::.ctor()
     newobj instance void 'RedeclaredForwarder'::.ctor(class 'LeafId')
-    stloc 4
-    ldloc 4
-    stloc 5
-    ldloc 5
+    stloc 7
+    ldloc 7
+    stloc 8
+    ldloc 8
     callvirt instance string 'RootId'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 4
+    ldloc 7
     callvirt instance string 'RedeclaredForwarder'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 20
@@ -724,8 +843,8 @@
     newobj instance void 'CounterImpl'::.ctor(int32, string)
     newobj instance void 'NamedImpl'::.ctor()
     newobj instance void 'MultiForwarder'::.ctor(class 'Counter', class 'Named')
-    stloc 6
-    ldloc 6
+    stloc 9
+    ldloc 9
     ldc.i4 2
     callvirt instance int32 'MultiForwarder'::'add'(int32)
     box [mscorlib]System.Int32
@@ -733,7 +852,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 6
+    ldloc 9
     callvirt instance string 'MultiForwarder'::'name'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret

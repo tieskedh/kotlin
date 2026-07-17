@@ -187,7 +187,14 @@
     {
     }
   }
+  .class nested public interface abstract auto ansi 'Producer'
+  {
+    .method public hidebysig newslot abstract virtual instance object 'produce__KotlinErased__dab285453cb8c1fa7cc9990c9327860a'() cil managed
+    {
+    }
+  }
   .class nested public interface abstract auto ansi 'Producer`1'<+ 'T'>
+         implements 'InterfaceDeclarationHost'/'Producer'
   {
     .method public hidebysig newslot abstract virtual instance !0 'produce'() cil managed
     {
@@ -195,7 +202,7 @@
   }
   .class nested public auto ansi sealed beforefieldinit 'ProducerImplementation`1'<'T'>
          extends [mscorlib]System.Object
-         implements class 'InterfaceDeclarationHost'/'Producer`1'<!0>
+         implements 'InterfaceDeclarationHost'/'Producer', class 'InterfaceDeclarationHost'/'Producer`1'<!0>
   {
     .field private !0 'stored'
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored') cil managed
@@ -220,6 +227,23 @@
       .maxstack 1
       ldarg.0
       call instance !0 class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>::'get_stored'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-InterfaceDeclarationHost.Producer-produce-dab285453cb8c1fa7cc9990c9327860a>'() cil managed
+    {
+      .override method instance object 'InterfaceDeclarationHost'/'Producer'::'produce__KotlinErased__dab285453cb8c1fa7cc9990c9327860a'()
+      .maxstack 1
+      ldarg.0
+      callvirt instance !0 class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>::'produce'()
+      box !0
+      ret
+    }
+    .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-InterfaceDeclarationHost.Producer-produce-dab285453cb8c1fa7cc9990c9327860a>'() cil managed
+    {
+      .override method instance !0 class 'InterfaceDeclarationHost'/'Producer`1'<!0>::'produce'()
+      .maxstack 1
+      ldarg.0
+      callvirt instance !0 class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>::'produce'()
       ret
     }
     .property instance !0 'stored'()
@@ -314,9 +338,16 @@
     ret
   }
 }
-.class interface public abstract auto ansi 'GenericInterfaceDeclarationHost`1'<'T'>
+.class interface public abstract auto ansi 'GenericInterfaceDeclarationHost'
 {
+  .class nested public interface abstract auto ansi 'Independent'
+  {
+    .method public hidebysig newslot abstract virtual instance object 'item__KotlinErased__6b920256c659c76c6bdbdfb965beed60'() cil managed
+    {
+    }
+  }
   .class nested public interface abstract auto ansi 'Independent`1'<+ 'U'>
+         implements 'GenericInterfaceDeclarationHost'/'Independent'
   {
     .method public hidebysig newslot abstract virtual instance !0 'item'() cil managed
     {
@@ -324,7 +355,7 @@
   }
   .class nested public auto ansi sealed beforefieldinit 'IndependentImplementation`1'<'U'>
          extends [mscorlib]System.Object
-         implements class 'GenericInterfaceDeclarationHost`1'/'Independent`1'<!0>
+         implements 'GenericInterfaceDeclarationHost'/'Independent', class 'GenericInterfaceDeclarationHost'/'Independent`1'<!0>
   {
     .field private !0 'stored'
     .method public hidebysig specialname rtspecialname instance void .ctor(!0 'stored') cil managed
@@ -334,38 +365,55 @@
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       ldarg.1
-      stfld !0 class 'GenericInterfaceDeclarationHost`1'/'IndependentImplementation`1'<!0>::'stored'
+      stfld !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'stored'
       ret
     }
     .method public hidebysig specialname instance !0 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld !0 class 'GenericInterfaceDeclarationHost`1'/'IndependentImplementation`1'<!0>::'stored'
+      ldfld !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'stored'
       ret
     }
     .method public hidebysig newslot virtual instance !0 'item'() cil managed
     {
       .maxstack 1
       ldarg.0
-      call instance !0 class 'GenericInterfaceDeclarationHost`1'/'IndependentImplementation`1'<!0>::'get_stored'()
+      call instance !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'get_stored'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericInterfaceDeclarationHost.Independent-item-6b920256c659c76c6bdbdfb965beed60>'() cil managed
+    {
+      .override method instance object 'GenericInterfaceDeclarationHost'/'Independent'::'item__KotlinErased__6b920256c659c76c6bdbdfb965beed60'()
+      .maxstack 1
+      ldarg.0
+      callvirt instance !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'item'()
+      box !0
+      ret
+    }
+    .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-GenericInterfaceDeclarationHost.Independent-item-6b920256c659c76c6bdbdfb965beed60>'() cil managed
+    {
+      .override method instance !0 class 'GenericInterfaceDeclarationHost'/'Independent`1'<!0>::'item'()
+      .maxstack 1
+      ldarg.0
+      callvirt instance !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'item'()
       ret
     }
     .property instance !0 'stored'()
     {
-      .get instance !0 'GenericInterfaceDeclarationHost`1'/'IndependentImplementation`1'::'get_stored'()
+      .get instance !0 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'::'get_stored'()
     }
   }
   .class nested public auto ansi sealed 'Singleton'
          extends [mscorlib]System.Object
   {
-    .field public static initonly class 'GenericInterfaceDeclarationHost`1'/'Singleton' 'INSTANCE'
+    .field public static initonly class 'GenericInterfaceDeclarationHost'/'Singleton' 'INSTANCE'
     .field private int32 'initialized'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'GenericInterfaceDeclarationHost`1'/'Singleton'::.ctor()
-      stsfld class 'GenericInterfaceDeclarationHost`1'/'Singleton' 'GenericInterfaceDeclarationHost`1'/'Singleton'::'INSTANCE'
+      newobj instance void 'GenericInterfaceDeclarationHost'/'Singleton'::.ctor()
+      stsfld class 'GenericInterfaceDeclarationHost'/'Singleton' 'GenericInterfaceDeclarationHost'/'Singleton'::'INSTANCE'
       ret
     }
     .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -375,21 +423,25 @@
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
       call int32 'nestedInterfacesKt'::'nextNestedInterfaceInitialization'()
-      stfld int32 'GenericInterfaceDeclarationHost`1'/'Singleton'::'initialized'
+      stfld int32 'GenericInterfaceDeclarationHost'/'Singleton'::'initialized'
       ret
     }
     .method public hidebysig specialname instance int32 'get_initialized'() cil managed
     {
       .maxstack 1
       ldarg.0
-      ldfld int32 'GenericInterfaceDeclarationHost`1'/'Singleton'::'initialized'
+      ldfld int32 'GenericInterfaceDeclarationHost'/'Singleton'::'initialized'
       ret
     }
     .property instance int32 'initialized'()
     {
-      .get instance int32 'GenericInterfaceDeclarationHost`1'/'Singleton'::'get_initialized'()
+      .get instance int32 'GenericInterfaceDeclarationHost'/'Singleton'::'get_initialized'()
     }
   }
+}
+.class interface public abstract auto ansi 'GenericInterfaceDeclarationHost`1'<'T'>
+       implements 'GenericInterfaceDeclarationHost'
+{
 }
 .class interface public abstract auto ansi 'DeepInterfaceHost'
 {
@@ -461,10 +513,16 @@
     .maxstack 3
     .locals init (
       [0] class 'RootNestedContract' 'rootContract',
-      [1] class 'InterfaceDeclarationHost'/'Producer`1'<string> 'producer',
-      [2] class 'GenericInterfaceDeclarationHost`1'/'Independent`1'<int32> 'independent',
-      [3] class 'DeepInterfaceHost'/'Middle'/'Leaf' 'leaf',
-      [4] class 'ObjectInterfaceHost'/'NestedContract' 'objectContract'
+      [1] class 'InterfaceDeclarationHost'/'Producer' 'producer',
+      [2] class 'InterfaceDeclarationHost'/'Producer' '<genericInterfaceReceiver>',
+      [3] class 'InterfaceDeclarationHost'/'Producer`1'<string> '<genericInterfaceCapability>',
+      [4] string '<genericInterfaceResult>',
+      [5] class 'GenericInterfaceDeclarationHost'/'Independent' 'independent',
+      [6] class 'GenericInterfaceDeclarationHost'/'Independent' '<genericInterfaceReceiver>@6',
+      [7] class 'GenericInterfaceDeclarationHost'/'Independent`1'<int32> '<genericInterfaceCapability>@7',
+      [8] int32 '<genericInterfaceResult>@8',
+      [9] class 'DeepInterfaceHost'/'Middle'/'Leaf' 'leaf',
+      [10] class 'ObjectInterfaceHost'/'NestedContract' 'objectContract'
     )
     call int32 'nestedInterfacesKt'::'get_nestedInterfaceInitializationCount'()
     box [mscorlib]System.Int32
@@ -502,7 +560,23 @@
     newobj instance void class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<string>::.ctor(!0)
     stloc.1
     ldloc.1
+    stloc.2
+    ldloc.2
+    isinst class 'InterfaceDeclarationHost'/'Producer`1'<string>
+    stloc.3
+    ldloc.3
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.3
     callvirt instance !0 class 'InterfaceDeclarationHost'/'Producer`1'<string>::'produce'()
+    stloc 4
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.2
+    callvirt instance object 'InterfaceDeclarationHost'/'Producer'::'produce__KotlinErased__dab285453cb8c1fa7cc9990c9327860a'()
+    castclass [mscorlib]System.String
+    stloc 4
+IL_genericInterfaceJoin_1:
+    ldloc 4
     call void [mscorlib]System.Console::WriteLine(string)
     ldsfld class 'InterfaceDeclarationHost'/'Singleton' 'InterfaceDeclarationHost'/'Singleton'::'INSTANCE'
     call instance int32 'InterfaceDeclarationHost'/'Singleton'::'get_initialized'()
@@ -512,25 +586,41 @@
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 4
-    newobj instance void class 'GenericInterfaceDeclarationHost`1'/'IndependentImplementation`1'<int32>::.ctor(!0)
-    stloc.2
-    ldloc.2
-    callvirt instance !0 class 'GenericInterfaceDeclarationHost`1'/'Independent`1'<int32>::'item'()
+    newobj instance void class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<int32>::.ctor(!0)
+    stloc 5
+    ldloc 5
+    stloc 6
+    ldloc 6
+    isinst class 'GenericInterfaceDeclarationHost'/'Independent`1'<int32>
+    stloc 7
+    ldloc 7
+    brfalse IL_genericInterfaceErasedFallback_2
+    ldloc 7
+    callvirt instance !0 class 'GenericInterfaceDeclarationHost'/'Independent`1'<int32>::'item'()
+    stloc 8
+    br IL_genericInterfaceJoin_3
+IL_genericInterfaceErasedFallback_2:
+    ldloc 6
+    callvirt instance object 'GenericInterfaceDeclarationHost'/'Independent'::'item__KotlinErased__6b920256c659c76c6bdbdfb965beed60'()
+    unbox.any [mscorlib]System.Int32
+    stloc 8
+IL_genericInterfaceJoin_3:
+    ldloc 8
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldsfld class 'GenericInterfaceDeclarationHost`1'/'Singleton' 'GenericInterfaceDeclarationHost`1'/'Singleton'::'INSTANCE'
-    call instance int32 'GenericInterfaceDeclarationHost`1'/'Singleton'::'get_initialized'()
+    ldsfld class 'GenericInterfaceDeclarationHost'/'Singleton' 'GenericInterfaceDeclarationHost'/'Singleton'::'INSTANCE'
+    call instance int32 'GenericInterfaceDeclarationHost'/'Singleton'::'get_initialized'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'DeepInterfaceImplementation'::.ctor()
-    stloc.3
-    ldloc.3
+    stloc 9
+    ldloc 9
     callvirt instance int32 'DeepInterfaceHost'/'Middle'/'Leaf'::'leaf'()
     box [mscorlib]System.Int32
     ldnull
@@ -538,8 +628,8 @@
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ObjectInterfaceImplementation'::.ctor()
-    stloc 4
-    ldloc 4
+    stloc 10
+    ldloc 10
     callvirt instance string 'ObjectInterfaceHost'/'NestedContract'::'text'()
     call void [mscorlib]System.Console::WriteLine(string)
     call int32 'nestedInterfacesKt'::'get_nestedInterfaceInitializationCount'()

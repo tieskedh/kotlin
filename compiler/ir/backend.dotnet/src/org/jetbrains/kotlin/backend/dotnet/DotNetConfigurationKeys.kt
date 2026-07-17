@@ -22,10 +22,28 @@ object DotNetConfigurationKeys {
         CompilerConfigurationKey.create("external Kotlin/.NET library artifact pairs")
 }
 
+/** Canonical names of compiler-owned CLR assemblies; CLR assembly-name matching is case-insensitive. */
+object DotNetPlatformAssemblyIdentity {
+    const val RUNTIME_ASSEMBLY_NAME = "Kotlin.Runtime"
+    const val STDLIB_ASSEMBLY_NAME = "Kotlin.Stdlib"
+
+    fun canonicalNameOrNull(assemblyName: String): String? = when {
+        isRuntime(assemblyName) -> RUNTIME_ASSEMBLY_NAME
+        isStdlib(assemblyName) -> STDLIB_ASSEMBLY_NAME
+        else -> null
+    }
+
+    fun isRuntime(assemblyName: String): Boolean =
+        assemblyName.equals(RUNTIME_ASSEMBLY_NAME, ignoreCase = true)
+
+    fun isStdlib(assemblyName: String): Boolean =
+        assemblyName.equals(STDLIB_ASSEMBLY_NAME, ignoreCase = true)
+}
+
 /** Stable manifest and CLR identity shared by the CLI dependency loader and IL backend. */
 object DotNetStdlibArtifact {
     const val DISTRIBUTION_DIRECTORY_NAME = "dotnet"
-    const val ASSEMBLY_NAME = "Kotlin.Stdlib"
+    const val ASSEMBLY_NAME = DotNetPlatformAssemblyIdentity.STDLIB_ASSEMBLY_NAME
     const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
     const val METADATA_FILE_NAME = "$ASSEMBLY_NAME.klib"
     const val ASSEMBLY_VERSION = "1.0.0.0"

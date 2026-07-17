@@ -69,31 +69,37 @@ private object DotNetInlineClassesUtils : InlineClassesUtils {
 
 @OptIn(InternalSymbolFinderAPI::class)
 internal class DotNetSymbols(
-    irBuiltIns: IrBuiltIns,
-    irFactory: IrFactory,
+    private val irBuiltIns: IrBuiltIns,
+    private val irFactory: IrFactory,
     irModuleFragment: IrModuleFragment,
 ) : BackendSymbols(irBuiltIns) {
-    override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
-    override val syntheticConstructorMarker: IrClassSymbol
-        get() = unsupportedSymbol("syntheticConstructorMarker")
-    override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("throwUninitializedPropertyAccessException")
-    override val throwUnsupportedOperationException: IrSimpleFunctionSymbol = run {
-        val kotlinInternalPackage = createEmptyExternalPackageFragment(
-            irModuleFragment,
-            FqName("kotlin.internal"),
-        )
+    private val kotlinInternalPackage = createEmptyExternalPackageFragment(
+        irModuleFragment,
+        FqName("kotlin.internal"),
+    )
+
+    private fun buildInternalThrowFunction(
+        name: String,
+        hasMessageParameter: Boolean = false,
+    ): IrSimpleFunctionSymbol =
         irFactory.buildFun {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB
-            name = Name.identifier("throwUnsupportedOperationException")
+            this.name = Name.identifier(name)
             visibility = DescriptorVisibilities.INTERNAL
             modality = Modality.FINAL
             returnType = irBuiltIns.nothingType
         }.apply {
             parent = kotlinInternalPackage
-            addValueParameter("message", irBuiltIns.stringType)
+            if (hasMessageParameter) addValueParameter("message", irBuiltIns.stringType)
         }.symbol
-    }
+
+    override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
+    override val syntheticConstructorMarker: IrClassSymbol
+        get() = unsupportedSymbol("syntheticConstructorMarker")
+    override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol
+        get() = unsupportedSymbol("throwUninitializedPropertyAccessException")
+    override val throwUnsupportedOperationException: IrSimpleFunctionSymbol =
+        buildInternalThrowFunction("throwUnsupportedOperationException", hasMessageParameter = true)
     override val coroutineContextGetter: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("coroutineContextGetter")
     override val suspendCoroutineUninterceptedOrReturn: IrSimpleFunctionSymbol
@@ -104,8 +110,8 @@ internal class DotNetSymbols(
         get() = unsupportedSymbol("throwNullPointerException")
     override val throwTypeCastException: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("throwTypeCastException")
-    override val throwKotlinNothingValueException: IrSimpleFunctionSymbol
-        get() = unsupportedSymbol("throwKotlinNothingValueException")
+    override val throwKotlinNothingValueException: IrSimpleFunctionSymbol =
+        buildInternalThrowFunction("throwKotlinNothingValueException")
     override val stringBuilder: IrClassSymbol
         get() = unsupportedSymbol("stringBuilder")
     override val coroutineSuspendedGetter: IrSimpleFunctionSymbol

@@ -1,7 +1,5 @@
 package org.jetbrains.kotlin.backend.dotnet
 
-import org.jetbrains.kotlin.backend.dotnet.lower.DotNetErasedCollectionContract
-import org.jetbrains.kotlin.backend.dotnet.lower.dotNetErasedCollectionContractOrNull
 import org.jetbrains.kotlin.builtins.StandardNames
 import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -21,7 +19,6 @@ import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.types.classifierOrNull
 import org.jetbrains.kotlin.ir.types.isNullableNothing
-import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFileClass
 import org.jetbrains.kotlin.ir.util.isFakeOverride
@@ -42,12 +39,14 @@ internal class DotNetIlIntrinsicMethods(
     emissionScope: DotNetIlEmissionScope,
 ) {
     private val kotlinFqn = StandardNames.BUILT_INS_PACKAGE_FQ_NAME
+    private val kotlinInternalFqn = FqName("kotlin.internal")
     private val kotlinIoFqn = FqName("kotlin.io")
     private val kotlinCollectionsFqn = FqName("kotlin.collections")
 
     private val anyFqn = StandardNames.FqNames.any.toSafe()
     private val arrayFqn = StandardNames.FqNames.array.toSafe()
     private val iterableFqn = FqName("kotlin.collections.Iterable")
+    private val listFqn = FqName("kotlin.collections.List")
     private val stringFqn = StandardNames.FqNames.string.toSafe()
     private val intFqn = StandardNames.FqNames._int.toSafe()
     private val longFqn = StandardNames.FqNames._long.toSafe()
@@ -134,6 +133,8 @@ internal class DotNetIlIntrinsicMethods(
         // fir2ir appends this synthetic call as the final branch of an exhaustive `when`
         // without a source `else`, exactly the symbol the JVM backend intrinsifies.
         irBuiltIns.noWhenBranchMatchedExceptionSymbol.toKey()!! to DotNetIlNoWhenBranchMatchedIntrinsic,
+        Key(kotlinInternalFqn, null, "throwKotlinNothingValueException", emptyList())
+                to DotNetIlThrowKotlinNothingValueExceptionIntrinsic,
         Key(kotlinIoFqn, null, "println", emptyList()) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(stringFqn)) to DotNetIlPrintlnIntrinsic,
         Key(kotlinIoFqn, null, "println", listOf(intFqn)) to DotNetIlPrintlnIntrinsic,
@@ -154,7 +155,7 @@ internal class DotNetIlIntrinsicMethods(
     ) + comparisonIntrinsics(irBuiltIns) + numericOperatorIntrinsics() + charOperatorIntrinsics() +
             conversionIntrinsics() + exceptionMemberIntrinsics() + primitiveArrayIntrinsics() +
             genericArrayIntrinsics() + arrayCopyIntrinsics() + arrayContentIntrinsics() +
-            arrayAsIterableIntrinsics() + erasedCollectionIntrinsics() +
+            arrayAsIterableIntrinsics() + primitiveIteratorIntrinsics() +
             if (emissionScope == DotNetIlEmissionScope.USER) stdlibFunctionIntrinsics() else emptyList()
 
     /**
@@ -295,9 +296,13 @@ internal class DotNetIlIntrinsicMethods(
     /** Physical calls to executable Kotlin.Stdlib functions, never inline reimplementations. */
     private fun stdlibFunctionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = listOf(
         Key(kotlinCollectionsFqn, iterableFqn, "first", emptyList())
-                to DotNetIlStdlibIterableElementIntrinsic("first"),
+                to DotNetIlStdlibCollectionElementIntrinsic("first", DotNetRuntimeTypes.iterableType),
         Key(kotlinCollectionsFqn, iterableFqn, "last", emptyList())
-                to DotNetIlStdlibIterableElementIntrinsic("last"),
+                to DotNetIlStdlibCollectionElementIntrinsic("last", DotNetRuntimeTypes.iterableType),
+        Key(kotlinCollectionsFqn, listFqn, "first", emptyList())
+                to DotNetIlStdlibCollectionElementIntrinsic("first", DotNetRuntimeTypes.listType),
+        Key(kotlinCollectionsFqn, listFqn, "last", emptyList())
+                to DotNetIlStdlibCollectionElementIntrinsic("last", DotNetRuntimeTypes.listType),
     )
 
     /** Kotlin-owned array content operations; CLR vector identity/collection helpers are not used. */
@@ -343,17 +348,12 @@ internal class DotNetIlIntrinsicMethods(
     }
 
     /**
-     * The logical Iterable<T>/Iterator<T> APIs and supported primitive-specialized iterator APIs
-     * dispatch through Kotlin-owned erased runtime slots. Registering the primitive owners is
-     * necessary because their final `next()` bridge and specialized `nextX()` calls retain that
-     * static owner in IR.
+     * Primitive-specialized iterator calls retain their abstract stdlib class as the static IR
+     * owner. Those classes still alias the canonical Iterator identity until they are produced as
+     * ordinary target-stdlib classes; generic Iterator/Iterable calls already use the general
+     * split-interface call path and therefore need no intrinsic entries here.
      */
-    private fun erasedCollectionIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
-        val iterableFqn = FqName("kotlin.collections.Iterable")
-        val iteratorFqn = FqName("kotlin.collections.Iterator")
-        add(Key(iterableFqn, null, "iterator", emptyList()) to DotNetIlIterableIteratorIntrinsic)
-        add(Key(iteratorFqn, null, "hasNext", emptyList()) to DotNetIlIteratorHasNextIntrinsic)
-        add(Key(iteratorFqn, null, "next", emptyList()) to DotNetIlIteratorNextIntrinsic)
+    private fun primitiveIteratorIntrinsics(): List<Pair<Key, DotNetIlIntrinsicMethod>> = buildList {
         for (info in listOf(
             FqName("kotlin.collections.IntIterator") to "nextInt",
             FqName("kotlin.collections.LongIterator") to "nextLong",
@@ -589,25 +589,7 @@ internal class DotNetIlIntrinsicMethods(
             null -> null
         }?.let { return it }
 
-        // A module collection subinterface inherits erased runtime slots without redeclaring typed
-        // members. Calls arrive through fake overrides, whose owner has no registry key; route
-        // only those compiler-owned shapes to their canonical erased operations.
-        val simpleFunction = function as? IrSimpleFunction ?: return null
-        val owner = simpleFunction.parent as? IrClass ?: return null
-        if (!simpleFunction.isFakeOverride || !owner.isInterface) return null
-        val erasedCollectionContract = simpleFunction.allOverridden().firstNotNullOfOrNull {
-            (it.parent as? IrClass)?.dotNetErasedCollectionContractOrNull
-        }
-        return when (erasedCollectionContract) {
-            DotNetErasedCollectionContract.ITERABLE ->
-                if (name == "iterator") DotNetIlIterableIteratorIntrinsic else null
-            DotNetErasedCollectionContract.ITERATOR -> when (name) {
-                "hasNext" -> DotNetIlIteratorHasNextIntrinsic
-                "next" -> DotNetIlIteratorNextIntrinsic
-                else -> null
-            }
-            null -> null
-        }
+        return null
     }
 
     data class Key(
@@ -1027,35 +1009,13 @@ private object DotNetIlGenericArraySetIntrinsic : DotNetIlIntrinsicMethod() {
     }
 }
 
-/** Kotlin Iterable.iterator -> the erased Kotlin.Runtime Iterable execution slot. */
-private object DotNetIlIterableIteratorIntrinsic : DotNetIlIntrinsicMethod() {
-    override fun tryEmitAsExpression(
-        call: IrCall,
-        codegen: DotNetIlExpressionCodegen,
-        expectedType: DotNetIlValueType,
-    ): Boolean {
-        if (expectedType != DotNetRuntimeTypes.iteratorType || call.arguments.size != 1) return false
-        val receiver = call.arguments.single()
-            ?: dotNetUnsupported("missing iterable receiver for 'iterator'")
-        codegen.emitExpression(receiver, DotNetRuntimeTypes.iterableType)
-        codegen.emit(
-            "callvirt instance ${DotNetRuntimeTypes.iteratorType.nameInSignature} " +
-                    "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
-                    "${"Kotlin.Collections.Iterable".toIlIdentifier()}::${"GetIterator".toIlIdentifier()}()",
-            pops = 1,
-            pushes = 1,
-        )
-        return true
-    }
-}
-
 /**
- * An explicit array `iterator()` value -> the ordinary generic target-stdlib ArrayIterator.
+ * An explicit array `iterator()` value -> the target-stdlib's compiler-facing iterator factory.
  *
- * The closed class instantiation retains the vector element type (`int32`, `string`, `!n`/`!!n`),
- * while its compiler-generated erased Iterator bridge boxes only at Next. Receiver mapping still
- * rejects nullable type parameters, projections, and nested arrays before this intrinsic runs, so
- * accepting the producer does not broaden those array families.
+ * The generic factory retains the vector element type (`int32`, `string`, `!n`/`!!n`) while
+ * keeping the private implementation class and constructor out of the compiler/stdlib ABI.
+ * Receiver mapping still rejects nullable type parameters, projections, and nested arrays before
+ * this intrinsic runs, so accepting the producer does not broaden those array families.
  */
 private class DotNetIlArrayIteratorIntrinsic(
     private val fixedArrayType: DotNetIlValueType?,
@@ -1075,7 +1035,7 @@ private class DotNetIlArrayIteratorIntrinsic(
         val elementType = arrayType.elementTypeForArrayProducer("iterator")
         codegen.emitExpression(receiver, arrayType)
         codegen.emit(
-            DotNetStdlibLibrary.arrayIteratorConstructorInstruction(elementType),
+            DotNetStdlibLibrary.arrayIteratorFactoryCallInstruction(elementType),
             pops = 1,
             pushes = 1,
         )
@@ -1083,7 +1043,7 @@ private class DotNetIlArrayIteratorIntrinsic(
     }
 }
 
-/** Array.asIterable -> the ordinary generic target-stdlib Iterable view. */
+/** Array.asIterable -> the target-stdlib's compiler-facing Iterable factory. */
 private class DotNetIlArrayAsIterableIntrinsic(
     private val fixedArrayType: DotNetIlValueType?,
 ) : DotNetIlIntrinsicMethod() {
@@ -1104,7 +1064,7 @@ private class DotNetIlArrayAsIterableIntrinsic(
         val elementType = arrayType.elementTypeForArrayProducer("asIterable")
         codegen.emitExpression(receiver, arrayType)
         codegen.emit(
-            DotNetStdlibLibrary.arrayIterableConstructorInstruction(elementType),
+            DotNetStdlibLibrary.arrayIterableFactoryCallInstruction(elementType),
             pops = 1,
             pushes = 1,
         )
@@ -1113,14 +1073,15 @@ private class DotNetIlArrayAsIterableIntrinsic(
 }
 
 /**
- * An `Iterable<T> -> T` operation -> its ordinary generic implementation in Kotlin.Stdlib.
+ * An `Iterable<T>/List<T> -> T` operation -> its ordinary generic implementation in Kotlin.Stdlib.
  *
  * This intrinsic selects a physical cross-assembly method reference only; it does not reproduce
  * the library algorithm in user code. The stdlib emitter deliberately omits this intrinsic and
  * compiles the injected Kotlin body onto the stable CollectionsKt facade.
  */
-private class DotNetIlStdlibIterableElementIntrinsic(
+private class DotNetIlStdlibCollectionElementIntrinsic(
     private val functionName: String,
+    private val receiverType: DotNetIlValueType,
 ) : DotNetIlIntrinsicMethod() {
     override fun tryEmitAsExpression(
         call: IrCall,
@@ -1134,10 +1095,14 @@ private class DotNetIlStdlibIterableElementIntrinsic(
             ?: dotNetUnsupported("'$functionName' has unsupported element type ${elementIrType.render()}")
         if (expectedType != elementType) return false
         val receiver = call.arguments.single()
-            ?: dotNetUnsupported("missing iterable receiver for '$functionName'")
-        codegen.emitExpression(receiver, DotNetRuntimeTypes.iterableType)
+            ?: dotNetUnsupported("missing collection receiver for '$functionName'")
+        codegen.emitExpression(receiver, receiverType)
         codegen.emit(
-            DotNetStdlibLibrary.iterableElementFunctionCallInstruction(functionName, elementType),
+            DotNetStdlibLibrary.collectionElementFunctionCallInstruction(
+                functionName,
+                receiverType,
+                elementType,
+            ),
             pops = 1,
             pushes = 1,
         )
@@ -1663,6 +1628,37 @@ private object DotNetIlNoWhenBranchMatchedIntrinsic : DotNetIlIntrinsicMethod() 
     }
 }
 
+/** Mature-backend guard for a call whose statically impossible `Nothing` result returned. */
+private object DotNetIlThrowKotlinNothingValueExceptionIntrinsic : DotNetIlIntrinsicMethod() {
+    override fun tryEmitAsExpression(
+        call: IrCall,
+        codegen: DotNetIlExpressionCodegen,
+        expectedType: DotNetIlValueType,
+    ): Boolean {
+        requireNoArguments(call)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = DotNetRuntimeLibrary.kotlinNothingValueExceptionTypeRef,
+            valuePosition = true,
+        )
+        return true
+    }
+
+    override fun tryEmitAsStatement(call: IrCall, codegen: DotNetIlExpressionCodegen): Boolean {
+        requireNoArguments(call)
+        codegen.emitParameterlessExceptionThrow(
+            exceptionTypeRef = DotNetRuntimeLibrary.kotlinNothingValueExceptionTypeRef,
+            valuePosition = false,
+        )
+        return true
+    }
+
+    private fun requireNoArguments(call: IrCall) {
+        if (call.arguments.isNotEmpty()) {
+            dotNetUnsupported("throwKotlinNothingValueException has an unsupported argument shape")
+        }
+    }
+}
+
 /**
  * `==`/`===`/`ieee754equals`. All value primitives use `ceq`: for `int32`-backed values
  * (Boolean/Int/Char) and `int64` it is bitwise equality, and for `float64` it is IEEE 754
@@ -1922,7 +1918,7 @@ private class DotNetIlEqualityIntrinsic(
 
     /**
      * Evaluates a null-only operand for its side effects: the bare null literal emits nothing;
-     * a `Nothing?`-typed expression (mapped to `object`) is emitted and popped.
+     * a `Nothing?`-typed expression is emitted through the `Kotlin.Nothing` carrier and popped.
      */
     private fun emitDiscardedNullLikeOperand(
         codegen: DotNetIlExpressionCodegen,

@@ -1,3 +1,6 @@
+// LANGUAGE: +ContextParameters
+@file:Suppress("EXTENSION_SHADOWED_BY_MEMBER")
+
 // Kotlin Any is physically System.Object. These declarations therefore reuse the existing
 // Equals/GetHashCode/ToString virtual slots (`virtual`, no `newslot`), while calls through Any
 // name System.Object and still dispatch to the Kotlin overrides. `parentString` pins the
@@ -16,6 +19,22 @@ open class EqualsBase(val hash: Int) {
 
 class Indirect : EqualsBase(7) {
     override fun toString(): String = "I"
+}
+
+// These names resemble Any members, but their extension/context receivers are real CLR
+// parameters. They must retain their Kotlin names and independent interface slots.
+interface AnyNameNonMembers {
+    fun String.hashCode(): Int
+
+    context(_: Int)
+    fun toString(): String
+}
+
+class AnyNameNonMembersImpl : AnyNameNonMembers {
+    override fun String.hashCode(): Int = 11
+
+    context(_: Int)
+    override fun toString(): String = "context"
 }
 
 fun same(left: Any?, right: Any?): Boolean = left == right

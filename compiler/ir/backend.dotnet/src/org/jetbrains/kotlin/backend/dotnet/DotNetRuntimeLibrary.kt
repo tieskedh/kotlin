@@ -8,8 +8,8 @@ import java.io.File
  *
  * The assembly boundary was established before its first public ABI candidate types. It now owns
  * the fixed, physically erased Function0/1/2/3 interfaces, the orthogonal KCallable/KFunction
- * reflection view, erased KProperty0/1/2 identities, the erased Iterator/Iterable execution
- * interfaces,
+ * reflection view, erased KProperty0/1/2 identities, the split Iterator/ListIterator/Iterable/
+ * Collection/List execution interfaces,
  * the singleton Unit value required when a callable result crosses the object-shaped invocation
  * boundary, and Kotlin-owned exception identities that have no faithful BCL type. Compiler
  * support shared by generated modules, including the constructor-default ABI marker, optional
@@ -23,7 +23,7 @@ import java.io.File
  * portable-library writer, because it injects an `mscorlib` AssemblyRef into its output PE.
  */
 internal object DotNetRuntimeLibrary {
-    const val ASSEMBLY_NAME = "Kotlin.Runtime"
+    const val ASSEMBLY_NAME = DotNetPlatformAssemblyIdentity.RUNTIME_ASSEMBLY_NAME
     const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
     const val ASSEMBLY_VERSION_IL = "1:0:0:0"
 
@@ -41,6 +41,9 @@ internal object DotNetRuntimeLibrary {
 
     val errorTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.Error".toIlIdentifier()}"
+
+    val kotlinNothingValueExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.KotlinNothingValueException".toIlIdentifier()}"
 
     fun assembleNextTo(
         executableOutput: File,
@@ -163,6 +166,61 @@ $targetFrameworkAttributeIl
             .property instance string Message()
             {
               .get instance string Kotlin.RuntimeException::'get_Message'()
+            }
+          }
+
+          // Physical bottom-type carrier. It is a reference type so it can close CLR generics,
+          // but ordinary managed code cannot construct a value. This is the CLR counterpart of
+          // the JVM backend's java.lang.Void mapping for non-null kotlin.Nothing.
+          .class public sealed auto ansi Nothing
+                 extends ${coreLibraryReference}System.Object
+          {
+            .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void ${coreLibraryReference}System.Object::.ctor()
+              ret
+            }
+          }
+
+          .class public auto ansi beforefieldinit KotlinNothingValueException
+                 extends Kotlin.RuntimeException
+          {
+            .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+            {
+              .maxstack 1
+              ldarg.0
+              call instance void Kotlin.RuntimeException::.ctor()
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.RuntimeException::.ctor(string)
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(string 'message', class ${coreLibraryReference}System.Exception 'cause') cil managed
+            {
+              .maxstack 3
+              ldarg.0
+              ldarg.1
+              ldarg.2
+              call instance void Kotlin.RuntimeException::.ctor(string, class ${coreLibraryReference}System.Exception)
+              ret
+            }
+
+            .method public hidebysig specialname rtspecialname instance void .ctor(class ${coreLibraryReference}System.Exception 'cause') cil managed
+            {
+              .maxstack 2
+              ldarg.0
+              ldarg.1
+              call instance void Kotlin.RuntimeException::.ctor(class ${coreLibraryReference}System.Exception)
+              ret
             }
           }
 
@@ -513,9 +571,261 @@ $targetFrameworkAttributeIl
             }
           }
 
+          .class interface public abstract auto ansi 'Iterator`1'<+ T>
+                 implements Kotlin.Collections.Iterator
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !0 Next() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi ListIterator
+                 implements Kotlin.Collections.Iterator
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Next() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool HasPrevious() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Previous() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 NextIndex() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 PreviousIndex() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi 'ListIterator`1'<+ T>
+                 implements Kotlin.Collections.ListIterator,
+                            class 'Kotlin.Collections.Iterator`1'<!0>
+          {
+            .method public hidebysig newslot abstract virtual instance bool HasNext() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !0 Next() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool HasPrevious() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !0 Previous() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 NextIndex() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 PreviousIndex() cil managed
+            {
+            }
+          }
+
           .class interface public abstract auto ansi Iterable
           {
             .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi 'Iterable`1'<+ T>
+                 implements Kotlin.Collections.Iterable
+          {
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi Collection
+                 implements Kotlin.Collections.Iterable
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 Kotlin.Collections.Collection::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'Collection`1'<+ T>
+                 implements Kotlin.Collections.Collection,
+                            class 'Kotlin.Collections.Iterable`1'<!0>
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 'Kotlin.Collections.Collection`1'::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'Collection__KotlinExact`1'<T>
+                 implements class 'Kotlin.Collections.Collection`1'<!0>
+          {
+            .method public hidebysig newslot abstract virtual instance bool Contains(!0 element) cil managed
+            {
+            }
+          }
+
+          .class interface public abstract auto ansi List
+                 implements Kotlin.Collections.Collection
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance object Get(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 IndexOfErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 LastIndexOfErased(object element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.ListIterator GetListIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.ListIterator GetListIterator(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.List SubList(int32 fromIndex, int32 toIndex) cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 Kotlin.Collections.List::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'List`1'<+ T>
+                 implements Kotlin.Collections.List,
+                            class 'Kotlin.Collections.Collection`1'<!0>
+          {
+            .method public hidebysig specialname newslot abstract virtual instance int32 get_Size() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool IsEmpty() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.Iterator GetIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance bool ContainsAll(class Kotlin.Collections.Collection elements) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance !0 Get(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.ListIterator GetListIterator() cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.ListIterator GetListIterator(int32 index) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance class Kotlin.Collections.List SubList(int32 fromIndex, int32 toIndex) cil managed
+            {
+            }
+
+            .property instance int32 Size()
+            {
+              .get instance int32 'Kotlin.Collections.List`1'::get_Size()
+            }
+          }
+
+          .class interface public abstract auto ansi 'List__KotlinExact`1'<T>
+                 implements class 'Kotlin.Collections.List`1'<!0>,
+                            class 'Kotlin.Collections.Collection__KotlinExact`1'<!0>
+          {
+            .method public hidebysig newslot abstract virtual instance bool Contains(!0 element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 IndexOf(!0 element) cil managed
+            {
+            }
+
+            .method public hidebysig newslot abstract virtual instance int32 LastIndexOf(!0 element) cil managed
             {
             }
           }

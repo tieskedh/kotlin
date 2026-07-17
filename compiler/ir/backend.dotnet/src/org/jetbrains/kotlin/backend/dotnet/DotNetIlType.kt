@@ -441,12 +441,34 @@ internal class DotNetIlFunctionInfo(
         ownerToken: String = owner.ilTypeRef,
         methodInstantiation: List<DotNetIlValueType> = emptyList(),
     ): String {
-        val instancePrefix = if (isInstance) "instance " else ""
         val instantiation =
             if (methodInstantiation.isEmpty()) ""
             else methodInstantiation.joinToString(", ", "<", ">") { it.nameInSignature }
+        return renderMethodReferenceWithSuffix(methodName, ownerToken, instantiation)
+    }
+
+    /**
+     * The method-declaration reference accepted by ILAsm's `.override method` grammar. A generic
+     * declaration is identified by arity (`<[n]>`), not by a MethodSpec instantiation such as
+     * `<!!0>`; the latter is valid on call operands but is a syntax error in a MethodImpl row.
+     */
+    fun renderOverrideMethodReference(
+        methodName: String,
+        ownerToken: String = owner.ilTypeRef,
+        genericArity: Int = 0,
+    ): String {
+        val arity = if (genericArity == 0) "" else "<[$genericArity]>"
+        return renderMethodReferenceWithSuffix(methodName, ownerToken, arity)
+    }
+
+    private fun renderMethodReferenceWithSuffix(
+        methodName: String,
+        ownerToken: String,
+        genericSuffix: String,
+    ): String {
+        val instancePrefix = if (isInstance) "instance " else ""
         return "$instancePrefix${signature.returnType.nameInSignature} " +
-                "$ownerToken::${methodName.toIlIdentifier()}$instantiation(${signature.renderParameterTypes()})"
+                "$ownerToken::${methodName.toIlIdentifier()}$genericSuffix(${signature.renderParameterTypes()})"
     }
 
     /**

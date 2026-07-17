@@ -1,0 +1,250 @@
+/*
+ * Copyright 2010-2026 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
+package org.jetbrains.kotlin.backend.dotnet
+
+import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrParameterKind
+import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.types.Variance
+
+/**
+ * The physical CLR views of one Kotlin-owned generic interface.
+ *
+ * [canonicalClassInfo] is the non-generic Kotlin identity used by every Kotlin ABI position.
+ * [declaredClassInfo] is the source-friendly CLR generic view with the declaration's original
+ * variance. [exactClassInfo], when present, is an all-invariant capability containing members
+ * that cannot legally be declared on the variant CLR view. All views describe the same object;
+ * none is an adapter representation.
+ */
+internal data class DotNetGenericInterfaceInfo(
+    val canonicalClassInfo: DotNetIlClassInfo,
+    val declaredClassInfo: DotNetIlClassInfo,
+    val exactClassInfo: DotNetIlClassInfo?,
+) {
+    val mostSpecificCapabilityView: DotNetGenericInterfaceView
+        get() = if (exactClassInfo != null) DotNetGenericInterfaceView.EXACT
+        else DotNetGenericInterfaceView.DECLARED
+
+    val mostSpecificCapabilityClassInfo: DotNetIlClassInfo
+        get() = exactClassInfo ?: declaredClassInfo
+
+    fun classInfo(view: DotNetGenericInterfaceView): DotNetIlClassInfo? = when (view) {
+        DotNetGenericInterfaceView.CANONICAL -> canonicalClassInfo
+        DotNetGenericInterfaceView.DECLARED -> declaredClassInfo
+        DotNetGenericInterfaceView.EXACT -> exactClassInfo
+    }
+}
+
+internal enum class DotNetGenericInterfaceView {
+    CANONICAL,
+    DECLARED,
+    EXACT,
+}
+
+/** Which typed capability owns a Kotlin interface member in addition to its canonical slot. */
+internal enum class DotNetGenericInterfaceMemberView {
+    DECLARED,
+    EXACT,
+}
+
+internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfaceView
+    get() = when (this) {
+        DotNetGenericInterfaceMemberView.DECLARED -> DotNetGenericInterfaceView.DECLARED
+        DotNetGenericInterfaceMemberView.EXACT -> DotNetGenericInterfaceView.EXACT
+    }
+
+/**
+ * Every Kotlin-owned generic interface needs a canonical identity, including an invariant one:
+ * use-site projections and stars can change its logical view without changing object identity.
+ *
+ * Ownership is deliberately established by the emitter (local declarations) or the bound KLIB
+ * before this predicate is acted on. It must not be used to rewrite an imported CLR interface.
+ */
+internal val IrClass.isDotNetGenericInterfaceDeclaration: Boolean
+    get() = isInterface && typeParameters.isNotEmpty()
+
+/**
+ * Chooses the member's single typed home. A declaration-variance-safe signature belongs to the
+ * public same-name generic view; a signature made legal only by `@UnsafeVariance` (or by an
+ * invariant nested occurrence) belongs to the invariant exact capability.
+ */
+internal fun IrSimpleFunction.dotNetGenericInterfaceMemberView(
+    interfaceClass: IrClass,
+    isSplitGenericInterface: (IrClass) -> Boolean,
+): DotNetGenericInterfaceMemberView {
+    require(interfaceClass.isDotNetGenericInterfaceDeclaration)
+    fun IrType.isLegalAt(polarity: TypePolarity): Boolean = isClrLegalAtDeclaredVariance(
+        interfaceClass,
+        polarity,
+        isSplitGenericInterface,
+        preserveCurrentSplitInterface = false,
+    )
+    val safeReturn = returnType.isLegalAt(TypePolarity.OUT)
+    val safeParameters = parameters
+        .asSequence()
+        .filter { it.kind != IrParameterKind.DispatchReceiver }
+        .all { parameter -> parameter.type.isLegalAt(TypePolarity.IN) }
+    return if (safeReturn && safeParameters) {
+        DotNetGenericInterfaceMemberView.DECLARED
+    } else {
+        DotNetGenericInterfaceMemberView.EXACT
+    }
+}
+
+/**
+ * All typed CLR views that must contain this accessor. An accessor normally has one typed home.
+ * The only duplication is a complete exact property: when either accessor requires the exact
+ * capability, its declaration-safe sibling is repeated there so C# observes one coherent
+ * read/write property instead of a setter-only member hiding an inherited getter.
+ */
+internal fun IrSimpleFunction.dotNetGenericInterfaceMemberViews(
+    interfaceClass: IrClass,
+    isSplitGenericInterface: (IrClass) -> Boolean,
+): List<DotNetGenericInterfaceMemberView> {
+    val primaryView = dotNetGenericInterfaceMemberView(interfaceClass, isSplitGenericInterface)
+    if (primaryView == DotNetGenericInterfaceMemberView.EXACT) {
+        return listOf(DotNetGenericInterfaceMemberView.EXACT)
+    }
+    val property = correspondingPropertySymbol?.owner ?: return listOf(primaryView)
+    val requiresCompleteExactProperty = listOfNotNull(property.getter, property.setter).any { accessor ->
+        accessor.dotNetGenericInterfaceMemberView(interfaceClass, isSplitGenericInterface) ==
+                DotNetGenericInterfaceMemberView.EXACT
+    }
+    return if (requiresCompleteExactProperty) {
+        listOf(DotNetGenericInterfaceMemberView.DECLARED, DotNetGenericInterfaceMemberView.EXACT)
+    } else {
+        listOf(DotNetGenericInterfaceMemberView.DECLARED)
+    }
+}
+
+private fun IrClass.hasDotNetExactGenericInterfaceMembers(
+    isSplitGenericInterface: (IrClass) -> Boolean,
+): Boolean =
+    declaredGenericInterfaceFunctions().any { member ->
+        !member.isFakeOverride &&
+                member.dotNetGenericInterfaceMemberView(this, isSplitGenericInterface) ==
+                DotNetGenericInterfaceMemberView.EXACT
+    }
+
+internal fun IrClass.requiresDotNetExactGenericInterfaceView(
+    isSplitGenericInterface: (IrClass) -> Boolean,
+): Boolean = requiresDotNetExactGenericInterfaceView(isSplitGenericInterface, hashSetOf())
+
+private fun IrClass.requiresDotNetExactGenericInterfaceView(
+    isSplitGenericInterface: (IrClass) -> Boolean,
+    visited: MutableSet<IrClass>,
+): Boolean {
+    if (!visited.add(this)) return false
+    if (hasDotNetExactGenericInterfaceMembers(isSplitGenericInterface)) return true
+    return superTypes.any { superType ->
+        val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+        superInterface?.let(isSplitGenericInterface) == true &&
+                (!superType.isDotNetClrLegalDeclaredSupertype(this, isSplitGenericInterface) ||
+                        superInterface.requiresDotNetExactGenericInterfaceView(isSplitGenericInterface, visited))
+    }
+}
+
+/** Whether this direct typed super-interface edge is legal on the declaration-variant CLR view. */
+internal fun IrType.isDotNetClrLegalDeclaredSupertype(
+    owner: IrClass,
+    isSplitGenericInterface: (IrClass) -> Boolean,
+): Boolean = isClrLegalAtDeclaredVariance(
+    owner,
+    TypePolarity.OUT,
+    isSplitGenericInterface,
+    preserveCurrentSplitInterface = true,
+)
+
+private fun IrClass.declaredGenericInterfaceFunctions(): Sequence<IrSimpleFunction> =
+    declarations.asSequence().flatMap { declaration ->
+        when (declaration) {
+            is IrSimpleFunction -> sequenceOf(declaration)
+            is IrProperty -> sequenceOf(declaration.getter, declaration.setter).filterNotNull()
+            else -> emptySequence()
+        }
+    }
+
+/** A stable, C#-spellable generated name. The physical KLIB index records it explicitly. */
+internal fun dotNetExactGenericInterfaceName(canonicalName: String, parameterCount: Int): String =
+    canonicalName + "__KotlinExact" + parameterCount.takeIf { it > 0 }?.let { "`$it" }.orEmpty()
+
+private enum class TypePolarity {
+    OUT,
+    IN,
+    BOTH;
+
+    fun through(variance: Variance): TypePolarity = when {
+        this == BOTH || variance == Variance.INVARIANT -> BOTH
+        variance == Variance.OUT_VARIANCE -> this
+        else -> if (this == OUT) IN else OUT
+    }
+}
+
+/**
+ * ECMA-335 variance validity for one member-signature position. This is intentionally structural:
+ * it handles any number and mixture of declaration parameters, nested declaration-site variance,
+ * and Kotlin use-site projections. An invariant nested carrier requires both polarities, which is
+ * precisely why a covariant parameter hidden inside such a carrier must move to the invariant
+ * exact capability rather than being emitted as invalid CLR metadata.
+ */
+private fun IrType.isClrLegalAtDeclaredVariance(
+    owner: IrClass,
+    polarity: TypePolarity,
+    isSplitGenericInterface: (IrClass) -> Boolean,
+    preserveCurrentSplitInterface: Boolean,
+): Boolean {
+    val simpleType = this as? IrSimpleType ?: return true
+    val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+    if (parameter?.parent == owner) {
+        return when (polarity) {
+            TypePolarity.OUT -> parameter.variance != Variance.IN_VARIANCE
+            TypePolarity.IN -> parameter.variance != Variance.OUT_VARIANCE
+            TypePolarity.BOTH -> parameter.variance == Variance.INVARIANT
+        }
+    }
+
+    val classifier = (simpleType.classifier as? IrClassSymbol)?.owner ?: return true
+    if (!preserveCurrentSplitInterface && isSplitGenericInterface(classifier)) {
+        // A Kotlin-owned generic interface nested in a typed member or supertype argument maps to
+        // its non-generic canonical identity. Its logical arguments are absent from the physical
+        // signature, so they cannot make that signature illegal under CLR variance. A direct
+        // declared-superinterface edge is the exception: its outer construction remains typed.
+        return true
+    }
+    return simpleType.arguments.withIndex().all { indexedArgument ->
+        val index = indexedArgument.index
+        val argument = indexedArgument.value
+        val projection = argument as? IrTypeProjection ?: return@all true
+        // ECMA-335 permits variance only on interfaces and delegates. Kotlin also permits
+        // declaration-site variance on classes, but a class occurrence is physically invariant
+        // on the CLR regardless of its Kotlin modifier. Treating a `class Box<out T>` as a
+        // covariant CLR carrier would let an illegal use of the owner's `out T` leak onto the
+        // declared capability metadata.
+        val declarationVariance = if (classifier.isInterface) {
+            classifier.typeParameters.getOrNull(index)?.variance ?: Variance.INVARIANT
+        } else {
+            Variance.INVARIANT
+        }
+        val effectiveVariance = if (projection.variance == Variance.INVARIANT) {
+            declarationVariance
+        } else {
+            projection.variance
+        }
+        projection.type.isClrLegalAtDeclaredVariance(
+            owner,
+            polarity.through(effectiveVariance),
+            isSplitGenericInterface,
+            preserveCurrentSplitInterface = false,
+        )
+    }
+}

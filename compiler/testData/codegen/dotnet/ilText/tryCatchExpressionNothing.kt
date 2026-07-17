@@ -25,6 +25,17 @@ fun allBranchesThrow(c: Boolean): Int {
     return 0
 }
 
+// The result of this try is discarded and both arms have type Nothing. Even though Nothing now
+// has a physical Kotlin.Nothing carrier, statement lowering must not create a result local,
+// phantom value, or dead pop for a construct that cannot complete normally.
+fun discardedAllBranchesThrow() {
+    try {
+        throw IllegalStateException("discarded-a")
+    } catch (e: Exception) {
+        throw IllegalStateException("discarded-b")
+    }
+}
+
 fun main() {
     println(allBranchesThrow(false))
 }

@@ -53,6 +53,29 @@
     }
   }
 }
+.class interface public abstract auto ansi 'MarkedCompanionInterface'
+{
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+         implements 'NestedInterfaceMarker'
+  {
+    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
+  .field public static initonly class 'MarkedCompanionInterface'/'Companion' 'Companion'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'MarkedCompanionInterface'/'Companion'::.ctor()
+    stsfld class 'MarkedCompanionInterface'/'Companion' 'MarkedCompanionInterface'::'Companion'
+    ret
+  }
+}
 .class public auto ansi sealed beforefieldinit 'UsesNestedInterfaceSurvivors'
        extends [mscorlib]System.Object
 {

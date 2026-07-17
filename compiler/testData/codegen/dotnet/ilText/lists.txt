@@ -1,0 +1,1560 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly extern Kotlin.Stdlib
+{
+  .ver 1:0:0:0
+}
+.assembly 'lists' {}
+.module 'main-lists.il'
+
+.class public auto ansi sealed beforefieldinit 'PairListIterator`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
+{
+  .field private class [Kotlin.Runtime]'Kotlin.Collections.List' 'list'
+  .field private int32 'position'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list', int32 'position') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairListIterator`1'<!0>::'list'
+    ldarg.0
+    ldarg.2
+    stfld int32 class 'PairListIterator`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig specialname instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'get_list'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairListIterator`1'<!0>::'list'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_position'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 class 'PairListIterator`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_position'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 class 'PairListIterator`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairListIterator`1'<!0>::'get_list'()
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'get_Size'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'get_Size'()
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    clt
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'next'() cil managed
+  {
+    .maxstack 4
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0> '<genericInterfaceCapability>',
+      [2] !0 '<genericInterfaceResult>',
+      [3] int32 '<unary>'
+    )
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairListIterator`1'<!0>::'get_list'()
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    stloc.3
+    ldarg.0
+    ldloc.3
+    ldc.i4.1
+    add
+    call instance void class 'PairListIterator`1'<!0>::'set_position'(int32)
+    ldloc.3
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'Get'(int32)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    stloc.3
+    ldarg.0
+    ldloc.3
+    ldc.i4.1
+    add
+    call instance void class 'PairListIterator`1'<!0>::'set_position'(int32)
+    ldloc.3
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    unbox.any !0
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasPrevious'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    ldc.i4 0
+    cgt
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'previous'() cil managed
+  {
+    .maxstack 4
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0> '<genericInterfaceCapability>',
+      [2] !0 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    call instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairListIterator`1'<!0>::'get_list'()
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldarg.0
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    ldc.i4.1
+    sub
+    call instance void class 'PairListIterator`1'<!0>::'set_position'(int32)
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'Get'(int32)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldarg.0
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    ldc.i4.1
+    sub
+    call instance void class 'PairListIterator`1'<!0>::'set_position'(int32)
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    unbox.any !0
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'nextIndex'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'previousIndex'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'PairListIterator`1'<!0>::'get_position'()
+    ldc.i4 1
+    sub
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'next'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'next'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-hasPrevious-3683e5d1784a800319401939ebc20dc1>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasPrevious'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasPrevious-3683e5d1784a800319401939ebc20dc1>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasPrevious'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairListIterator`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previous-20108fb9bce3e3c8712769c9e7794aa3>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'previous'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previous-20108fb9bce3e3c8712769c9e7794aa3>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Previous'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairListIterator`1'<!0>::'previous'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-nextIndex-9a842c5c8937df12773de63a754ec7b8>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'NextIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairListIterator`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-nextIndex-9a842c5c8937df12773de63a754ec7b8>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'NextIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairListIterator`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previousIndex-73dd609eaf019a13b32b6fa1818f9d13>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'PreviousIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairListIterator`1'<!0>::'previousIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previousIndex-73dd609eaf019a13b32b6fa1818f9d13>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'PreviousIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairListIterator`1'<!0>::'previousIndex'()
+    ret
+  }
+  .property instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'list'()
+  {
+    .get instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'PairListIterator`1'::'get_list'()
+  }
+  .property instance int32 'position'()
+  {
+    .get instance int32 'PairListIterator`1'::'get_position'()
+    .set instance void 'PairListIterator`1'::'set_position'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'PairList`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.List', class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<!0>
+{
+  .field private !0 'first'
+  .field private !0 'second'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !0 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'PairList`1'<!0>::'first'
+    ldarg.0
+    ldarg.2
+    stfld !0 class 'PairList`1'<!0>::'second'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'PairList`1'<!0>::'first'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'PairList`1'<!0>::'second'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_size'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 2
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'isEmpty'() cil managed
+  {
+    .maxstack 1
+    ldc.i4.0
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'contains'(!0 'element') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_first'()
+    box !0
+    ldarg.1
+    box !0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brfalse IL_whenNext_1
+    ldc.i4.1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_second'()
+    box !0
+    ldarg.1
+    box !0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig newslot virtual instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'iterator',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.Collection' '<genericInterfaceReceiver>',
+      [2] class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0> '<genericInterfaceCapability>',
+      [3] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceResult>',
+      [4] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@4',
+      [5] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0> '<genericInterfaceCapability>@5',
+      [6] bool '<genericInterfaceResult>@6',
+      [7] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@7',
+      [8] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0> '<genericInterfaceCapability>@8',
+      [9] !0 '<genericInterfaceResult>@9'
+    )
+    ldarg.1
+    stloc.1
+    ldloc.1
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>
+    stloc.2
+    ldloc.2
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.2
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>::'GetIterator'()
+    stloc.3
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
+    stloc.3
+IL_genericInterfaceJoin_1:
+    ldloc.3
+    stloc.0
+IL_whileCond_2:
+    ldloc.0
+    stloc 4
+    ldloc 4
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
+    stloc 5
+    ldloc 5
+    brfalse IL_genericInterfaceErasedFallback_4
+    ldloc 5
+    callvirt instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'HasNext'()
+    stloc 6
+    br IL_genericInterfaceJoin_5
+IL_genericInterfaceErasedFallback_4:
+    ldloc 4
+    callvirt instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    stloc 6
+IL_genericInterfaceJoin_5:
+    ldloc 6
+    brfalse IL_whileEnd_3
+    ldarg.0
+    ldloc.0
+    stloc 7
+    ldloc 7
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
+    stloc 8
+    ldloc 8
+    brfalse IL_genericInterfaceErasedFallback_8
+    ldloc 8
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'Next'()
+    stloc 9
+    br IL_genericInterfaceJoin_9
+IL_genericInterfaceErasedFallback_8:
+    ldloc 7
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    unbox.any !0
+    stloc 9
+IL_genericInterfaceJoin_9:
+    ldloc 9
+    callvirt instance bool class 'PairList`1'<!0>::'contains'(!0)
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_7
+    ldc.i4.0
+    ret
+IL_whenNext_7:
+    br IL_whileCond_2
+IL_whileEnd_3:
+    ldc.i4.1
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'get'(int32 'index') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_first'()
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_second'()
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'indexOf'(!0 'element') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_first'()
+    box !0
+    ldarg.1
+    box !0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brfalse IL_whenNext_1
+    ldc.i4 0
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_second'()
+    box !0
+    ldarg.1
+    box !0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brfalse IL_whenNext_2
+    ldc.i4 1
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldc.i4 -1
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'lastIndexOf'(!0 'element') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_second'()
+    box !0
+    ldarg.1
+    box !0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brfalse IL_whenNext_1
+    ldc.i4 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    call instance !0 class 'PairList`1'<!0>::'get_first'()
+    box !0
+    ldarg.1
+    box !0
+    call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+    brfalse IL_whenNext_2
+    ldc.i4 0
+    br IL_whenEnd_0
+IL_whenNext_2:
+    ldc.i4 -1
+IL_whenEnd_0:
+    ret
+  }
+  .method public hidebysig newslot virtual instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIterator'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldc.i4 0
+    newobj instance void class 'PairListIterator`1'<!0>::.ctor(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIterator'(int32 'index') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    newobj instance void class 'PairListIterator`1'<!0>::.ctor(class [Kotlin.Runtime]'Kotlin.Collections.List', int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance class [Kotlin.Runtime]'Kotlin.Collections.List' 'subList'(int32 'fromIndex', int32 'toIndex') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.List-<get-size>-9fac28915e9ef08c1791dfc7efde8deb>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'get_Size'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairList`1'<!0>::'get_size'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.List-<get-size>-9fac28915e9ef08c1791dfc7efde8deb>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'get_Size'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairList`1'<!0>::'get_size'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-<get-size>-31760bb0ba6c55569d5dab7b60c4e260>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.Collection'::'get_Size'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairList`1'<!0>::'get_size'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.Collection-<get-size>-31760bb0ba6c55569d5dab7b60c4e260>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>::'get_Size'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairList`1'<!0>::'get_size'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.List-isEmpty-fe5186441d35a5cec1ced7515eee3078>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.List'::'IsEmpty'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairList`1'<!0>::'isEmpty'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.List-isEmpty-fe5186441d35a5cec1ced7515eee3078>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'IsEmpty'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairList`1'<!0>::'isEmpty'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-isEmpty-abe617404d8a3735b92c41fa3a651092>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'IsEmpty'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairList`1'<!0>::'isEmpty'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Collection-isEmpty-abe617404d8a3735b92c41fa3a651092>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>::'IsEmpty'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairList`1'<!0>::'isEmpty'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.List-contains-b7f1e2f3620e66e9084f41efe3eda9c0>'(object 'element') cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.List'::'ContainsErased'(object)
+    .maxstack 2
+    .locals init (
+      [0] !0 '<typeTestDefault>'
+    )
+    ldarg.1
+    dup
+    brtrue IL_nullableTypeTestNonNull_2
+    pop
+    ldloca 0
+    initobj !0
+    ldloc.0
+    box !0
+    ldnull
+    ceq
+    br IL_nullableTypeTestJoin_3
+IL_nullableTypeTestNonNull_2:
+    isinst !0
+    ldnull
+    cgt.un
+IL_nullableTypeTestJoin_3:
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    unbox.any !0
+    callvirt instance bool class 'PairList`1'<!0>::'contains'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceExactBridge-kotlin.collections.List-contains-b7f1e2f3620e66e9084f41efe3eda9c0>'(!0 'element') cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<!0>::'Contains'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'contains'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-contains-46c3601c4db21bb395814913be67e3fb>'(object 'element') cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsErased'(object)
+    .maxstack 2
+    .locals init (
+      [0] !0 '<typeTestDefault>'
+    )
+    ldarg.1
+    dup
+    brtrue IL_nullableTypeTestNonNull_2
+    pop
+    ldloca 0
+    initobj !0
+    ldloc.0
+    box !0
+    ldnull
+    ceq
+    br IL_nullableTypeTestJoin_3
+IL_nullableTypeTestNonNull_2:
+    isinst !0
+    ldnull
+    cgt.un
+IL_nullableTypeTestJoin_3:
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.0
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    unbox.any !0
+    callvirt instance bool class 'PairList`1'<!0>::'contains'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceExactBridge-kotlin.collections.Collection-contains-46c3601c4db21bb395814913be67e3fb>'(!0 'element') cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection__KotlinExact`1'<!0>::'Contains'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'contains'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericInterfaceCanonicalBridge-kotlin.collections.List-iterator-2a598c5937ff09c460a2bbec2e68027f>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.List'::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericInterfaceDeclaredBridge-kotlin.collections.List-iterator-2a598c5937ff09c460a2bbec2e68027f>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-iterator-fe76ae3a642088c648765d3295a4d0cf>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Collection'::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericInterfaceDeclaredBridge-kotlin.collections.Collection-iterator-fe76ae3a642088c648765d3295a4d0cf>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterable-iterator-b2bc25898ef9b04bc726b4fb49e9c573>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Runtime]'Kotlin.Collections.Iterable'::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterable-iterator-b2bc25898ef9b04bc726b4fb49e9c573>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<!0>::'GetIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.Iterator' class 'PairList`1'<!0>::'iterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.List-containsAll-c4043aca869f76b4fcb5558a6ae9f603>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.List'::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.List-containsAll-c4043aca869f76b4fcb5558a6ae9f603>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Collection-containsAll-3db9b5bd21e43fcf9c1bef255b7353e1>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Collection'::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Collection-containsAll-3db9b5bd21e43fcf9c1bef255b7353e1>'(class [Kotlin.Runtime]'Kotlin.Collections.Collection' 'elements') cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Collection`1'<!0>::'ContainsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool class 'PairList`1'<!0>::'containsAll'(class [Kotlin.Runtime]'Kotlin.Collections.Collection')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.List-get-1d8c0b8266a640abc5a4c3bc2e6c98dc>'(int32 'index') cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !0 class 'PairList`1'<!0>::'get'(int32)
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.List-get-1d8c0b8266a640abc5a4c3bc2e6c98dc>'(int32 'index') cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'Get'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !0 class 'PairList`1'<!0>::'get'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.List-indexOf-4ca6b427ef799e0a15708eab565aa8eb>'(object 'element') cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'IndexOfErased'(object)
+    .maxstack 2
+    .locals init (
+      [0] !0 '<typeTestDefault>'
+    )
+    ldarg.1
+    dup
+    brtrue IL_nullableTypeTestNonNull_2
+    pop
+    ldloca 0
+    initobj !0
+    ldloc.0
+    box !0
+    ldnull
+    ceq
+    br IL_nullableTypeTestJoin_3
+IL_nullableTypeTestNonNull_2:
+    isinst !0
+    ldnull
+    cgt.un
+IL_nullableTypeTestJoin_3:
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 -1
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    unbox.any !0
+    callvirt instance int32 class 'PairList`1'<!0>::'indexOf'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceExactBridge-kotlin.collections.List-indexOf-4ca6b427ef799e0a15708eab565aa8eb>'(!0 'element') cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<!0>::'IndexOf'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 class 'PairList`1'<!0>::'indexOf'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.List-lastIndexOf-5299b13270d357365d3e5c7849b41178>'(object 'element') cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'LastIndexOfErased'(object)
+    .maxstack 2
+    .locals init (
+      [0] !0 '<typeTestDefault>'
+    )
+    ldarg.1
+    dup
+    brtrue IL_nullableTypeTestNonNull_2
+    pop
+    ldloca 0
+    initobj !0
+    ldloc.0
+    box !0
+    ldnull
+    ceq
+    br IL_nullableTypeTestJoin_3
+IL_nullableTypeTestNonNull_2:
+    isinst !0
+    ldnull
+    cgt.un
+IL_nullableTypeTestJoin_3:
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4 -1
+    ret
+IL_whenNext_1:
+    ldarg.0
+    ldarg.1
+    unbox.any !0
+    callvirt instance int32 class 'PairList`1'<!0>::'lastIndexOf'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceExactBridge-kotlin.collections.List-lastIndexOf-5299b13270d357365d3e5c7849b41178>'(!0 'element') cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<!0>::'LastIndexOf'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance int32 class 'PairList`1'<!0>::'lastIndexOf'(!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<GenericInterfaceCanonicalBridge-kotlin.collections.List-listIterator-4eaf485ff8bddb7ade8cfa1067cdbad2>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' [Kotlin.Runtime]'Kotlin.Collections.List'::'GetListIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<GenericInterfaceDeclaredBridge-kotlin.collections.List-listIterator-4eaf485ff8bddb7ade8cfa1067cdbad2>'() cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'GetListIterator'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<GenericInterfaceCanonicalBridge-kotlin.collections.List-listIterator-b86d6de95ee8606ab7435a3bb7ca5fa4>'(int32 'index') cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' [Kotlin.Runtime]'Kotlin.Collections.List'::'GetListIterator'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<GenericInterfaceDeclaredBridge-kotlin.collections.List-listIterator-b86d6de95ee8606ab7435a3bb7ca5fa4>'(int32 'index') cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'GetListIterator'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class 'PairList`1'<!0>::'listIterator'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' '<GenericInterfaceCanonicalBridge-kotlin.collections.List-subList-0d8a5c2d20bf6aaf32c06addba469442>'(int32 'fromIndex', int32 'toIndex') cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Collections.List'::'SubList'(int32, int32)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairList`1'<!0>::'subList'(int32, int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class [Kotlin.Runtime]'Kotlin.Collections.List' '<GenericInterfaceDeclaredBridge-kotlin.collections.List-subList-0d8a5c2d20bf6aaf32c06addba469442>'(int32 'fromIndex', int32 'toIndex') cil managed
+  {
+    .override method instance class [Kotlin.Runtime]'Kotlin.Collections.List' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!0>::'SubList'(int32, int32)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' class 'PairList`1'<!0>::'subList'(int32, int32)
+    ret
+  }
+  .property instance !0 'first'()
+  {
+    .get instance !0 'PairList`1'::'get_first'()
+  }
+  .property instance !0 'second'()
+  {
+    .get instance !0 'PairList`1'::'get_second'()
+  }
+  .property instance int32 'size'()
+  {
+    .get instance int32 'PairList`1'::'get_size'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'listsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'exactGet'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldc.i4 0
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'Get'(int32)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldc.i4 0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static object 'wideGet'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<object> '<genericInterfaceCapability>',
+      [2] object '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<object>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldc.i4 0
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<object>::'Get'(int32)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldc.i4 0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32 'exactIndexOf'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<int32> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldc.i4 7
+    callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<int32>::'IndexOf'(!0)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldc.i4 7
+    box [mscorlib]System.Int32
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'IndexOfErased'(object)
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32 'wideIndexOf'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<object> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<object>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldc.i4 7
+    box [mscorlib]System.Int32
+    callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<object>::'IndexOf'(!0)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldc.i4 7
+    box [mscorlib]System.Int32
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'IndexOfErased'(object)
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32 'wrongIndexOf'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<object> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<object>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldstr "7"
+    callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List__KotlinExact`1'<object>::'IndexOf'(!0)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldstr "7"
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'IndexOfErased'(object)
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'exactListIterator'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32> '<genericInterfaceCapability>',
+      [2] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'GetListIterator'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' [Kotlin.Runtime]'Kotlin.Collections.List'::'GetListIterator'()
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' 'exactSubList'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32> '<genericInterfaceCapability>',
+      [2] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldc.i4 0
+    ldc.i4 1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'SubList'(int32, int32)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldc.i4 0
+    ldc.i4 1
+    callvirt instance class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Runtime]'Kotlin.Collections.List'::'SubList'(int32, int32)
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static !!0 'openGet'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!!0> '<genericInterfaceCapability>',
+      [2] !!0 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldc.i4 0
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<!!0>::'Get'(int32)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    ldc.i4 0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    unbox.any !!0
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static !!0 'firstFromList'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ret
+  }
+  .method public hidebysig static !!0 'lastFromList'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ret
+  }
+  .method public hidebysig static !!0 'firstFromIterable'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'iterable') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    ret
+  }
+  .method public hidebysig static !!0 'lastFromIterable'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'iterable') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'last'<!!0>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' 'emptyInts'() cil managed
+  {
+    .maxstack 1
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>()
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' 'emptyStrings'() cil managed
+  {
+    .maxstack 1
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<string>()
+    ret
+  }
+  .method public hidebysig static string 'nullableBottomAsString'(class [Kotlin.Runtime]'Kotlin.Nothing' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    castclass string
+    ret
+  }
+  .method public hidebysig static valuetype [mscorlib]System.Nullable`1<int32> 'nullableBottomAsInt'(class [Kotlin.Runtime]'Kotlin.Nothing' 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<null>'
+    )
+    ldarg.0
+    pop
+    ldloca 0
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Nothing' 'neverReturns'() cil managed
+  {
+    .maxstack 1
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    throw
+  }
+  .method public hidebysig static string 'guardedNeverReturn'() cil managed
+  {
+    .maxstack 1
+    call class [Kotlin.Runtime]'Kotlin.Nothing' 'listsKt'::'neverReturns'()
+    pop
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' 'widen'(class [Kotlin.Runtime]'Kotlin.Collections.List' 'list') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.List' 'list',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
+      [2] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32> '<genericInterfaceCapability>',
+      [3] int32 '<genericInterfaceResult>',
+      [4] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>@4',
+      [5] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32> '<genericInterfaceCapability>@5',
+      [6] int32 '<genericInterfaceResult>@6',
+      [7] class [Kotlin.Runtime]'Kotlin.Collections.List' 'empty',
+      [8] class [Kotlin.Runtime]'Kotlin.Collections.List' '<genericInterfaceReceiver>@8',
+      [9] class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32> '<genericInterfaceCapability>@9',
+      [10] int32 '<genericInterfaceResult>@10',
+      [11] valuetype [mscorlib]System.Nullable`1<int32> '<eq>'
+    )
+    ldc.i4 7
+    ldc.i4 9
+    newobj instance void class 'PairList`1'<int32>::.ctor(!0, !0)
+    stloc.0
+    ldloc.0
+    call int32 'listsKt'::'exactGet'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    call object 'listsKt'::'wideGet'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call int32 'listsKt'::'exactIndexOf'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    call int32 'listsKt'::'wideIndexOf'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    call int32 'listsKt'::'wrongIndexOf'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listsKt'::'exactListIterator'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    stloc.1
+    ldloc.1
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>
+    stloc.2
+    ldloc.2
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.2
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Next'()
+    stloc.3
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.1
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    unbox.any [mscorlib]System.Int32
+    stloc.3
+IL_genericInterfaceJoin_1:
+    ldloc.3
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'exactSubList'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    stloc 4
+    ldloc 4
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>
+    stloc 5
+    ldloc 5
+    brfalse IL_genericInterfaceErasedFallback_2
+    ldloc 5
+    ldc.i4 0
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'Get'(int32)
+    stloc 6
+    br IL_genericInterfaceJoin_3
+IL_genericInterfaceErasedFallback_2:
+    ldloc 4
+    ldc.i4 0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.List'::'Get'(int32)
+    unbox.any [mscorlib]System.Int32
+    stloc 6
+IL_genericInterfaceJoin_3:
+    ldloc 6
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call !!0 'listsKt'::'openGet'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call !!0 'listsKt'::'firstFromList'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call !!0 'listsKt'::'lastFromList'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call !!0 'listsKt'::'firstFromIterable'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call !!0 'listsKt'::'lastFromIterable'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.List')
+    ldloc.0
+    ceq
+    brtrue IL_boolStrTrue_4
+    ldstr "false"
+    br IL_boolStrEnd_5
+IL_boolStrTrue_4:
+    ldstr "true"
+IL_boolStrEnd_5:
+    call void [mscorlib]System.Console::WriteLine(string)
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'emptyInts'()
+    stloc 7
+    ldloc 7
+    stloc 8
+    ldloc 8
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>
+    stloc 9
+    ldloc 9
+    brfalse IL_genericInterfaceErasedFallback_6
+    ldloc 9
+    callvirt instance int32 class [Kotlin.Runtime]'Kotlin.Collections.List`1'<int32>::'get_Size'()
+    stloc 10
+    br IL_genericInterfaceJoin_7
+IL_genericInterfaceErasedFallback_6:
+    ldloc 8
+    callvirt instance int32 [Kotlin.Runtime]'Kotlin.Collections.List'::'get_Size'()
+    stloc 10
+IL_genericInterfaceJoin_7:
+    ldloc 10
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'
+    ldnull
+    cgt.un
+    brtrue IL_boolStrTrue_8
+    ldstr "false"
+    br IL_boolStrEnd_9
+IL_boolStrTrue_8:
+    ldstr "true"
+IL_boolStrEnd_9:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'emptyStrings'()
+    ceq
+    brtrue IL_boolStrTrue_10
+    ldstr "false"
+    br IL_boolStrEnd_11
+IL_boolStrTrue_10:
+    ldstr "true"
+IL_boolStrEnd_11:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4.0
+    newarr string
+    call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<string>(!!0[])
+    call class [Kotlin.Runtime]'Kotlin.Collections.List' 'listsKt'::'emptyStrings'()
+    ceq
+    brtrue IL_boolStrTrue_12
+    ldstr "false"
+    br IL_boolStrEnd_13
+IL_boolStrTrue_12:
+    ldstr "true"
+IL_boolStrEnd_13:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldnull
+    call string 'listsKt'::'nullableBottomAsString'(class [Kotlin.Runtime]'Kotlin.Nothing')
+    ldnull
+    call bool [mscorlib]System.String::op_Equality(string, string)
+    brtrue IL_boolStrTrue_14
+    ldstr "false"
+    br IL_boolStrEnd_15
+IL_boolStrTrue_14:
+    ldstr "true"
+IL_boolStrEnd_15:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldnull
+    call valuetype [mscorlib]System.Nullable`1<int32> 'listsKt'::'nullableBottomAsInt'(class [Kotlin.Runtime]'Kotlin.Nothing')
+    stloc 11
+    ldloca 11
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    ldc.i4.0
+    ceq
+    brtrue IL_boolStrTrue_16
+    ldstr "false"
+    br IL_boolStrEnd_17
+IL_boolStrTrue_16:
+    ldstr "true"
+IL_boolStrEnd_17:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

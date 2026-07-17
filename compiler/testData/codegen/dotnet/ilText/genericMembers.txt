@@ -118,19 +118,30 @@
     .get instance !0 'MemberHost`1'::'get_captured'()
   }
 }
+.class interface public abstract auto ansi 'GenericPicker'
+{
+  .method public hidebysig newslot abstract virtual instance !!0 'pick__KotlinErased__41dbc5f7a47e7672cf15c571ddc59992'<'M'>(object 'context', !!0 'value') cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'GenericPicker`1'<'C'>
+       implements 'GenericPicker'
 {
   .method public hidebysig newslot abstract virtual instance !!0 'pick'<'M'>(!0 'context', !!0 'value') cil managed
   {
   }
 }
+.class interface public abstract auto ansi 'ChildPicker'
+       implements 'GenericPicker'
+{
+}
 .class interface public abstract auto ansi 'ChildPicker`1'<'C'>
-       implements class 'GenericPicker`1'<!0>
+       implements 'ChildPicker', class 'GenericPicker`1'<!0>
 {
 }
 .class public auto ansi sealed beforefieldinit 'Picker`1'<'C'>
        extends [mscorlib]System.Object
-       implements class 'ChildPicker`1'<!0>
+       implements 'ChildPicker', class 'ChildPicker`1'<!0>
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -143,6 +154,27 @@
   {
     .maxstack 1
     ldarg.2
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-GenericPicker-pick-41dbc5f7a47e7672cf15c571ddc59992>'<'M'>(object 'context', !!0 'value') cil managed
+  {
+    .override method instance !!0 'GenericPicker'::'pick__KotlinErased__41dbc5f7a47e7672cf15c571ddc59992'<[1]>(object, !!0)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    unbox.any !0
+    ldarg.2
+    callvirt instance !!0 class 'Picker`1'<!0>::'pick'<!!0>(!0, !!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-GenericPicker-pick-41dbc5f7a47e7672cf15c571ddc59992>'<'M'>(!0 'context', !!0 'value') cil managed
+  {
+    .override method instance !!0 class 'GenericPicker`1'<!0>::'pick'<[1]>(!0, !!0)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance !!0 class 'Picker`1'<!0>::'pick'<!!0>(!0, !!0)
     ret
   }
 }
@@ -362,13 +394,13 @@
 .class public abstract sealed auto ansi beforefieldinit 'genericMembersKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static int32 'childPick'(class 'ChildPicker`1'<string> 'value') cil managed
+  .method public hidebysig static int32 'childPick'(class 'ChildPicker' 'value') cil managed
   {
     .maxstack 3
     ldarg.0
     ldstr "child"
     ldc.i4 9
-    callvirt instance !!0 class 'GenericPicker`1'<string>::'pick'<int32>(!0, !!0)
+    callvirt instance !!0 'GenericPicker'::'pick__KotlinErased__41dbc5f7a47e7672cf15c571ddc59992'<int32>(object, !!0)
     ret
   }
   .method public hidebysig static int32 'basePick'(class 'GenericBase`1'<string> 'value') cil managed
@@ -386,7 +418,7 @@
     .maxstack 3
     .locals init (
       [0] class 'MemberHost`1'<string> 'host',
-      [1] class 'ChildPicker`1'<int32> 'intPicker',
+      [1] class 'ChildPicker' 'intPicker',
       [2] class 'GenericIdentity' 'inherited',
       [3] class 'ArityOverloads' 'overloads'
     )
@@ -430,7 +462,7 @@
     call instance string class 'MemberHost`1'<string>::'labelOf'<class 'MarkedValue'>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'Picker`1'<string>::.ctor()
-    call int32 'genericMembersKt'::'childPick'(class 'ChildPicker`1'<string>)
+    call int32 'genericMembersKt'::'childPick'(class 'ChildPicker')
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -440,8 +472,9 @@
     stloc.1
     ldloc.1
     ldc.i4 1
+    box [mscorlib]System.Int32
     ldstr "value-owner"
-    callvirt instance !!0 class 'GenericPicker`1'<int32>::'pick'<string>(!0, !!0)
+    callvirt instance !!0 'GenericPicker'::'pick__KotlinErased__41dbc5f7a47e7672cf15c571ddc59992'<string>(object, !!0)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'BoundMemberImpl'::.ctor()
     ldstr "bound-interface"

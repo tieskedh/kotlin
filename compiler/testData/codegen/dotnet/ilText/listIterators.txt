@@ -1,0 +1,857 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'listIterators' {}
+.module 'main-listIterators.il'
+
+.class public auto ansi sealed beforefieldinit 'PairCursor`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
+{
+  .field private !0 'first'
+  .field private !0 'second'
+  .field private int32 'position'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !0 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'PairCursor`1'<!0>::'first'
+    ldarg.0
+    ldarg.2
+    stfld !0 class 'PairCursor`1'<!0>::'second'
+    ldarg.0
+    ldc.i4 0
+    stfld int32 class 'PairCursor`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'PairCursor`1'<!0>::'first'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'PairCursor`1'<!0>::'second'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_position'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 class 'PairCursor`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_position'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 class 'PairCursor`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 2
+    clt
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'next'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !0 'result',
+      [1] int32 '<unary>'
+    )
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    call instance !0 class 'PairCursor`1'<!0>::'get_first'()
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 1
+    ceq
+    brfalse IL_whenNext_2
+    ldarg.0
+    call instance !0 class 'PairCursor`1'<!0>::'get_second'()
+    br IL_whenEnd_0
+IL_whenNext_2:
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    throw
+IL_whenEnd_0:
+    stloc.0
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    stloc.1
+    ldarg.0
+    ldloc.1
+    ldc.i4.1
+    add
+    call instance void class 'PairCursor`1'<!0>::'set_position'(int32)
+    ldloc.0
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasPrevious'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    cgt
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'previous'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 '<unary>'
+    )
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_1
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    throw
+IL_whenNext_1:
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    stloc.0
+    ldarg.0
+    ldloc.0
+    ldc.i4.1
+    sub
+    call instance void class 'PairCursor`1'<!0>::'set_position'(int32)
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    call instance !0 class 'PairCursor`1'<!0>::'get_first'()
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldarg.0
+    call instance !0 class 'PairCursor`1'<!0>::'get_second'()
+IL_whenEnd_2:
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'nextIndex'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'previousIndex'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'PairCursor`1'<!0>::'get_position'()
+    ldc.i4 1
+    sub
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairCursor`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairCursor`1'<!0>::'next'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairCursor`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairCursor`1'<!0>::'next'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-hasPrevious-3683e5d1784a800319401939ebc20dc1>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasPrevious'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasPrevious-3683e5d1784a800319401939ebc20dc1>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasPrevious'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'PairCursor`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previous-20108fb9bce3e3c8712769c9e7794aa3>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairCursor`1'<!0>::'previous'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previous-20108fb9bce3e3c8712769c9e7794aa3>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Previous'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'PairCursor`1'<!0>::'previous'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-nextIndex-9a842c5c8937df12773de63a754ec7b8>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'NextIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairCursor`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-nextIndex-9a842c5c8937df12773de63a754ec7b8>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'NextIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairCursor`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previousIndex-73dd609eaf019a13b32b6fa1818f9d13>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'PreviousIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairCursor`1'<!0>::'previousIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previousIndex-73dd609eaf019a13b32b6fa1818f9d13>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'PreviousIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'PairCursor`1'<!0>::'previousIndex'()
+    ret
+  }
+  .property instance !0 'first'()
+  {
+    .get instance !0 'PairCursor`1'::'get_first'()
+  }
+  .property instance !0 'second'()
+  {
+    .get instance !0 'PairCursor`1'::'get_second'()
+  }
+  .property instance int32 'position'()
+  {
+    .get instance int32 'PairCursor`1'::'get_position'()
+    .set instance void 'PairCursor`1'::'set_position'(int32)
+  }
+}
+.class public auto ansi beforefieldinit 'ForwardCursor`1'<'T'>
+       extends [mscorlib]System.Object
+       implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
+{
+  .field private !0 'first'
+  .field private !0 'second'
+  .field private int32 'position'
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !0 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'ForwardCursor`1'<!0>::'first'
+    ldarg.0
+    ldarg.2
+    stfld !0 class 'ForwardCursor`1'<!0>::'second'
+    ldarg.0
+    ldc.i4 0
+    stfld int32 class 'ForwardCursor`1'<!0>::'position'
+    ret
+  }
+  .method family hidebysig specialname instance !0 'get_first'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'ForwardCursor`1'<!0>::'first'
+    ret
+  }
+  .method family hidebysig specialname instance !0 'get_second'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'ForwardCursor`1'<!0>::'second'
+    ret
+  }
+  .method family hidebysig specialname instance int32 'get_position'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 class 'ForwardCursor`1'<!0>::'position'
+    ret
+  }
+  .method family hidebysig specialname instance void 'set_position'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 class 'ForwardCursor`1'<!0>::'position'
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasNext'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 2
+    clt
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'next'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] !0 'result',
+      [1] int32 '<unary>'
+    )
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    call instance !0 class 'ForwardCursor`1'<!0>::'get_first'()
+    br IL_whenEnd_0
+IL_whenNext_1:
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 1
+    ceq
+    brfalse IL_whenNext_2
+    ldarg.0
+    call instance !0 class 'ForwardCursor`1'<!0>::'get_second'()
+    br IL_whenEnd_0
+IL_whenNext_2:
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    throw
+IL_whenEnd_0:
+    stloc.0
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    stloc.1
+    ldarg.0
+    ldloc.1
+    ldc.i4.1
+    add
+    call instance void class 'ForwardCursor`1'<!0>::'set_position'(int32)
+    ldloc.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-hasNext-70378ad6e1b7b4af42812f91cacd2d1e>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.Iterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.Iterator-next-913f879b908193fc535b171109057901>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    ret
+  }
+  .property instance !0 'first'()
+  {
+    .get instance !0 'ForwardCursor`1'::'get_first'()
+  }
+  .property instance !0 'second'()
+  {
+    .get instance !0 'ForwardCursor`1'::'get_second'()
+  }
+  .property instance int32 'position'()
+  {
+    .get instance int32 'ForwardCursor`1'::'get_position'()
+    .set instance void 'ForwardCursor`1'::'set_position'(int32)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'InheritedPairCursor`1'<'T'>
+       extends class 'ForwardCursor`1'<!0>
+       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'first', !0 'second') cil managed
+  {
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    call instance void class 'ForwardCursor`1'<!0>::.ctor(!0, !0)
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'hasPrevious'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    cgt
+    ret
+  }
+  .method public hidebysig newslot virtual instance !0 'previous'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32 '<unary>'
+    )
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_1
+    newobj instance void [Kotlin.Runtime]'Kotlin.NoSuchElementException'::.ctor()
+    throw
+IL_whenNext_1:
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    stloc.0
+    ldarg.0
+    ldloc.0
+    ldc.i4.1
+    sub
+    call instance void class 'ForwardCursor`1'<!0>::'set_position'(int32)
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 0
+    ceq
+    brfalse IL_whenNext_3
+    ldarg.0
+    call instance !0 class 'ForwardCursor`1'<!0>::'get_first'()
+    br IL_whenEnd_2
+IL_whenNext_3:
+    ldarg.0
+    call instance !0 class 'ForwardCursor`1'<!0>::'get_second'()
+IL_whenEnd_2:
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'nextIndex'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'previousIndex'() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance int32 class 'ForwardCursor`1'<!0>::'get_position'()
+    ldc.i4 1
+    sub
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-hasPrevious-3683e5d1784a800319401939ebc20dc1>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasPrevious'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'InheritedPairCursor`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasPrevious-3683e5d1784a800319401939ebc20dc1>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasPrevious'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'InheritedPairCursor`1'<!0>::'hasPrevious'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previous-20108fb9bce3e3c8712769c9e7794aa3>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'InheritedPairCursor`1'<!0>::'previous'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previous-20108fb9bce3e3c8712769c9e7794aa3>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Previous'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'InheritedPairCursor`1'<!0>::'previous'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-nextIndex-9a842c5c8937df12773de63a754ec7b8>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'NextIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'InheritedPairCursor`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-nextIndex-9a842c5c8937df12773de63a754ec7b8>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'NextIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'InheritedPairCursor`1'<!0>::'nextIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-previousIndex-73dd609eaf019a13b32b6fa1818f9d13>'() cil managed
+  {
+    .override method instance int32 [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'PreviousIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'InheritedPairCursor`1'<!0>::'previousIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-previousIndex-73dd609eaf019a13b32b6fa1818f9d13>'() cil managed
+  {
+    .override method instance int32 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'PreviousIndex'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 class 'InheritedPairCursor`1'<!0>::'previousIndex'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
+  {
+    .override method instance bool [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-hasNext-e9da7bcc10da566104b0b1004324a3d7>'() cil managed
+  {
+    .override method instance bool class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'HasNext'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance bool class 'ForwardCursor`1'<!0>::'hasNext'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
+  {
+    .override method instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-kotlin.collections.ListIterator-next-3c1f5063f0e7629b648c57b8483c87ad>'() cil managed
+  {
+    .override method instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!0>::'Next'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'ForwardCursor`1'<!0>::'next'()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'listIteratorsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'exactNext'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Next'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static object 'wideNext'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object> '<genericInterfaceCapability>',
+      [2] object '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>::'Next'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32 'exactPrevious'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<int32>::'Previous'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static object 'widePrevious'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object> '<genericInterfaceCapability>',
+      [2] object '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<object>::'Previous'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Previous'()
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static !!0 'openNext'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' '<genericInterfaceReceiver>',
+      [1] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!!0> '<genericInterfaceCapability>',
+      [2] !!0 '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<!!0>::'Next'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object [Kotlin.Runtime]'Kotlin.Collections.ListIterator'::'Next'()
+    unbox.any !!0
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static int32 'inheritedNext'(class 'InheritedPairCursor`1'<int32> 'iterator') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'ForwardCursor`1'<int32>::'next'()
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'widen'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'iterator'
+    )
+    ldc.i4 4
+    ldc.i4 9
+    newobj instance void class 'PairCursor`1'<int32>::.ctor(!0, !0)
+    stloc.0
+    ldloc.0
+    call int32 'listIteratorsKt'::'exactNext'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIteratorsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    call object 'listIteratorsKt'::'wideNext'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call int32 'listIteratorsKt'::'exactPrevious'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIteratorsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    call object 'listIteratorsKt'::'widePrevious'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 1
+    ldc.i4 2
+    newobj instance void class 'PairCursor`1'<int32>::.ctor(!0, !0)
+    call !!0 'listIteratorsKt'::'openNext'<int32>(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 6
+    ldc.i4 8
+    newobj instance void class 'InheritedPairCursor`1'<int32>::.ctor(!0, !0)
+    call int32 'listIteratorsKt'::'inheritedNext'(class 'InheritedPairCursor`1'<int32>)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call class [Kotlin.Runtime]'Kotlin.Collections.ListIterator' 'listIteratorsKt'::'widen'(class [Kotlin.Runtime]'Kotlin.Collections.ListIterator')
+    ldloc.0
+    ceq
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

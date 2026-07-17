@@ -2,7 +2,35 @@
 .assembly 'interfaceRedeclarations' {}
 .module 'main-interfaceRedeclarations.il'
 
+.class interface public abstract auto ansi 'BaseView'
+{
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__599de141ced331e43447b1e5f5a51f18'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_label__KotlinErased__9297ce6bfa98abd12e912e5185e1d02c'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_count__KotlinErased__b45441df0ce68f1c1edd7111cc8b51ae'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_count__KotlinErased__f28a1320b5c0269309a1efb67d0e51f6'(int32 '<set-?>') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__59e18f1f0aa7b5e92ba76edd87bbf3b6'<'M'>(!!0 'value') cil managed
+  {
+  }
+  .property instance string 'label__KotlinErased__9297ce6bfa98abd12e912e5185e1d02c'()
+  {
+    .get instance string 'BaseView'::'get_label__KotlinErased__9297ce6bfa98abd12e912e5185e1d02c'()
+  }
+  .property instance int32 'count__KotlinErased__b45441df0ce68f1c1edd7111cc8b51ae'()
+  {
+    .get instance int32 'BaseView'::'get_count__KotlinErased__b45441df0ce68f1c1edd7111cc8b51ae'()
+    .set instance void 'BaseView'::'set_count__KotlinErased__f28a1320b5c0269309a1efb67d0e51f6'(int32)
+  }
+}
 .class interface public abstract auto ansi 'BaseView`1'<'T'>
+       implements 'BaseView'
 {
   .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
   {
@@ -29,8 +57,36 @@
     .set instance void 'BaseView`1'::'set_count'(int32)
   }
 }
+.class interface public abstract auto ansi 'RedeclaredView'
+       implements 'BaseView'
+{
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__706e80b3dfe11213beb7b7282de90939'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance int32 'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_count__KotlinErased__7b4511345d2a0a02253840af86efcc01'(int32 '<set-?>') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__69432d31b8db3ea5d11f43deda8b0994'<'M'>(!!0 'value') cil managed
+  {
+  }
+  .property instance string 'label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'()
+  {
+    .get instance string 'RedeclaredView'::'get_label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'()
+  }
+  .property instance int32 'count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
+  {
+    .get instance int32 'RedeclaredView'::'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
+    .set instance void 'RedeclaredView'::'set_count__KotlinErased__7b4511345d2a0a02253840af86efcc01'(int32)
+  }
+}
 .class interface public abstract auto ansi 'RedeclaredView`1'<'T'>
-       implements class 'BaseView`1'<!0>
+       implements 'RedeclaredView', class 'BaseView`1'<!0>
 {
   .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
   {
@@ -57,8 +113,15 @@
     .set instance void 'RedeclaredView`1'::'set_count'(int32)
   }
 }
+.class interface public abstract auto ansi 'LeafView'
+       implements 'RedeclaredView'
+{
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__86ac0db650960e5200d05cdb2149f63b'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'LeafView`1'<'T'>
-       implements class 'RedeclaredView`1'<!0>
+       implements 'LeafView', class 'RedeclaredView`1'<!0>
 {
   .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
   {
@@ -66,7 +129,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'ViewImpl'
        extends [mscorlib]System.Object
-       implements class 'LeafView`1'<string>
+       implements 'LeafView', class 'LeafView`1'<string>
 {
   .field private string 'item'
   .field private int32 'count'
@@ -127,6 +190,194 @@
     ldarg.1
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-LeafView-value-86ac0db650960e5200d05cdb2149f63b>'() cil managed
+  {
+    .override method instance object 'LeafView'::'value__KotlinErased__86ac0db650960e5200d05cdb2149f63b'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-LeafView-value-86ac0db650960e5200d05cdb2149f63b>'() cil managed
+  {
+    .override method instance !0 class 'LeafView`1'<string>::'value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-RedeclaredView-value-706e80b3dfe11213beb7b7282de90939>'() cil managed
+  {
+    .override method instance object 'RedeclaredView'::'value__KotlinErased__706e80b3dfe11213beb7b7282de90939'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-RedeclaredView-value-706e80b3dfe11213beb7b7282de90939>'() cil managed
+  {
+    .override method instance !0 class 'RedeclaredView`1'<string>::'value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-BaseView-value-599de141ced331e43447b1e5f5a51f18>'() cil managed
+  {
+    .override method instance object 'BaseView'::'value__KotlinErased__599de141ced331e43447b1e5f5a51f18'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-BaseView-value-599de141ced331e43447b1e5f5a51f18>'() cil managed
+  {
+    .override method instance !0 class 'BaseView`1'<string>::'value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceCanonicalBridge-RedeclaredView-<get-label>-653f1b6b82573dfbe082de580ddc4b5f>'() cil managed
+  {
+    .override method instance string 'RedeclaredView'::'get_label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'get_label'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-RedeclaredView-<get-label>-653f1b6b82573dfbe082de580ddc4b5f>'() cil managed
+  {
+    .override method instance string class 'RedeclaredView`1'<string>::'get_label'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'get_label'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceCanonicalBridge-BaseView-<get-label>-9297ce6bfa98abd12e912e5185e1d02c>'() cil managed
+  {
+    .override method instance string 'BaseView'::'get_label__KotlinErased__9297ce6bfa98abd12e912e5185e1d02c'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'get_label'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-BaseView-<get-label>-9297ce6bfa98abd12e912e5185e1d02c>'() cil managed
+  {
+    .override method instance string class 'BaseView`1'<string>::'get_label'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'ViewImpl'::'get_label'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-RedeclaredView-<get-count>-813e0e3ac696635eb04e96d57901288f>'() cil managed
+  {
+    .override method instance int32 'RedeclaredView'::'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'ViewImpl'::'get_count'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-RedeclaredView-<get-count>-813e0e3ac696635eb04e96d57901288f>'() cil managed
+  {
+    .override method instance int32 class 'RedeclaredView`1'<string>::'get_count'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'ViewImpl'::'get_count'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceCanonicalBridge-BaseView-<get-count>-b45441df0ce68f1c1edd7111cc8b51ae>'() cil managed
+  {
+    .override method instance int32 'BaseView'::'get_count__KotlinErased__b45441df0ce68f1c1edd7111cc8b51ae'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'ViewImpl'::'get_count'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-BaseView-<get-count>-b45441df0ce68f1c1edd7111cc8b51ae>'() cil managed
+  {
+    .override method instance int32 class 'BaseView`1'<string>::'get_count'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'ViewImpl'::'get_count'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-RedeclaredView-<set-count>-7b4511345d2a0a02253840af86efcc01>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void 'RedeclaredView'::'set_count__KotlinErased__7b4511345d2a0a02253840af86efcc01'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'ViewImpl'::'set_count'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceDeclaredBridge-RedeclaredView-<set-count>-7b4511345d2a0a02253840af86efcc01>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void class 'RedeclaredView`1'<string>::'set_count'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'ViewImpl'::'set_count'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-BaseView-<set-count>-f28a1320b5c0269309a1efb67d0e51f6>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void 'BaseView'::'set_count__KotlinErased__f28a1320b5c0269309a1efb67d0e51f6'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'ViewImpl'::'set_count'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceDeclaredBridge-BaseView-<set-count>-f28a1320b5c0269309a1efb67d0e51f6>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void class 'BaseView`1'<string>::'set_count'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'ViewImpl'::'set_count'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-RedeclaredView-echo-69432d31b8db3ea5d11f43deda8b0994>'<'M'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 'RedeclaredView'::'echo__KotlinErased__69432d31b8db3ea5d11f43deda8b0994'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'ViewImpl'::'echo'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-RedeclaredView-echo-69432d31b8db3ea5d11f43deda8b0994>'<'M'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 class 'RedeclaredView`1'<string>::'echo'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'ViewImpl'::'echo'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-BaseView-echo-59e18f1f0aa7b5e92ba76edd87bbf3b6>'<'M'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 'BaseView'::'echo__KotlinErased__59e18f1f0aa7b5e92ba76edd87bbf3b6'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'ViewImpl'::'echo'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-BaseView-echo-59e18f1f0aa7b5e92ba76edd87bbf3b6>'<'M'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 class 'BaseView`1'<string>::'echo'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'ViewImpl'::'echo'<!!0>(!!0)
+    ret
+  }
   .property instance string 'item'()
   {
     .get instance string 'ViewImpl'::'get_item'()
@@ -141,7 +392,17 @@
     .set instance void 'ViewImpl'::'set_count'(int32)
   }
 }
+.class interface public abstract auto ansi 'PairView'
+{
+  .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance object 'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'PairView`2'<'A', 'B'>
+       implements 'PairView'
 {
   .method public hidebysig newslot abstract virtual instance !0 'first'() cil managed
   {
@@ -150,8 +411,18 @@
   {
   }
 }
+.class interface public abstract auto ansi 'Swapped'
+       implements 'PairView'
+{
+  .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__4ae76b180c999fa8a4086a535dc149a6'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance object 'second__KotlinErased__42dcf4c1734264228da8f3670ac9f7fa'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'Swapped`2'<'X', 'Y'>
-       implements class 'PairView`2'<!1, !0>
+       implements 'Swapped', class 'PairView`2'<!1, !0>
 {
   .method public hidebysig newslot abstract virtual instance !1 'first'() cil managed
   {
@@ -162,7 +433,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'PairImpl'
        extends [mscorlib]System.Object
-       implements class 'Swapped`2'<int32, string>
+       implements 'Swapped', class 'Swapped`2'<int32, string>
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -181,6 +452,72 @@
   {
     .maxstack 1
     ldc.i4 2
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Swapped-first-4ae76b180c999fa8a4086a535dc149a6>'() cil managed
+  {
+    .override method instance object 'Swapped'::'first__KotlinErased__4ae76b180c999fa8a4086a535dc149a6'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'PairImpl'::'first'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-Swapped-first-4ae76b180c999fa8a4086a535dc149a6>'() cil managed
+  {
+    .override method instance !1 class 'Swapped`2'<int32, string>::'first'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'PairImpl'::'first'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-PairView-first-0176ea3e592ec134a49b32eea211a9ce>'() cil managed
+  {
+    .override method instance object 'PairView'::'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'PairImpl'::'first'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance string '<GenericInterfaceDeclaredBridge-PairView-first-0176ea3e592ec134a49b32eea211a9ce>'() cil managed
+  {
+    .override method instance !0 class 'PairView`2'<string, int32>::'first'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'PairImpl'::'first'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Swapped-second-42dcf4c1734264228da8f3670ac9f7fa>'() cil managed
+  {
+    .override method instance object 'Swapped'::'second__KotlinErased__42dcf4c1734264228da8f3670ac9f7fa'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'PairImpl'::'second'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-Swapped-second-42dcf4c1734264228da8f3670ac9f7fa>'() cil managed
+  {
+    .override method instance !0 class 'Swapped`2'<int32, string>::'second'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'PairImpl'::'second'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-PairView-second-c65582e5b30a609225382a6fff86b1c5>'() cil managed
+  {
+    .override method instance object 'PairView'::'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'PairImpl'::'second'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-PairView-second-c65582e5b30a609225382a6fff86b1c5>'() cil managed
+  {
+    .override method instance !1 class 'PairView`2'<string, int32>::'second'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'PairImpl'::'second'()
     ret
   }
 }
@@ -281,18 +618,52 @@
     .maxstack 3
     .locals init (
       [0] class 'ViewImpl' 'impl',
-      [1] class 'BaseView`1'<string> 'base',
-      [2] class 'RedeclaredView`1'<string> 'redeclared',
-      [3] class 'LeafView`1'<string> 'leaf',
-      [4] class 'PairImpl' 'pair',
-      [5] class 'PairView`2'<string, int32> 'pairBase',
-      [6] class 'Swapped`2'<int32, string> 'swapped',
-      [7] class 'Node' 'node',
-      [8] class 'Root' 'root',
-      [9] class 'Left' 'left',
-      [10] class 'Right' 'right',
-      [11] class 'Diamond' 'diamond',
-      [12] class 'RedeclaredAction' 'action'
+      [1] class 'BaseView' 'base',
+      [2] class 'RedeclaredView' 'redeclared',
+      [3] class 'LeafView' 'leaf',
+      [4] class 'BaseView' '<genericInterfaceReceiver>',
+      [5] class 'BaseView`1'<string> '<genericInterfaceCapability>',
+      [6] string '<genericInterfaceResult>',
+      [7] class 'RedeclaredView' '<genericInterfaceReceiver>@7',
+      [8] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@8',
+      [9] string '<genericInterfaceResult>@9',
+      [10] class 'LeafView' '<genericInterfaceReceiver>@10',
+      [11] class 'LeafView`1'<string> '<genericInterfaceCapability>@11',
+      [12] string '<genericInterfaceResult>@12',
+      [13] class 'BaseView' '<genericInterfaceReceiver>@13',
+      [14] class 'BaseView`1'<string> '<genericInterfaceCapability>@14',
+      [15] string '<genericInterfaceResult>@15',
+      [16] class 'RedeclaredView' '<genericInterfaceReceiver>@16',
+      [17] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@17',
+      [18] string '<genericInterfaceResult>@18',
+      [19] class 'BaseView' '<genericInterfaceReceiver>@19',
+      [20] class 'BaseView`1'<string> '<genericInterfaceCapability>@20',
+      [21] class 'RedeclaredView' '<genericInterfaceReceiver>@21',
+      [22] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@22',
+      [23] int32 '<genericInterfaceResult>@23',
+      [24] class 'RedeclaredView' '<genericInterfaceReceiver>@24',
+      [25] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@25',
+      [26] class 'PairImpl' 'pair',
+      [27] class 'PairView' 'pairBase',
+      [28] class 'Swapped' 'swapped',
+      [29] class 'PairView' '<genericInterfaceReceiver>@29',
+      [30] class 'PairView`2'<string, int32> '<genericInterfaceCapability>@30',
+      [31] string '<genericInterfaceResult>@31',
+      [32] class 'PairView' '<genericInterfaceReceiver>@32',
+      [33] class 'PairView`2'<string, int32> '<genericInterfaceCapability>@33',
+      [34] int32 '<genericInterfaceResult>@34',
+      [35] class 'Swapped' '<genericInterfaceReceiver>@35',
+      [36] class 'Swapped`2'<int32, string> '<genericInterfaceCapability>@36',
+      [37] string '<genericInterfaceResult>@37',
+      [38] class 'Swapped' '<genericInterfaceReceiver>@38',
+      [39] class 'Swapped`2'<int32, string> '<genericInterfaceCapability>@39',
+      [40] int32 '<genericInterfaceResult>@40',
+      [41] class 'Node' 'node',
+      [42] class 'Root' 'root',
+      [43] class 'Left' 'left',
+      [44] class 'Right' 'right',
+      [45] class 'Diamond' 'diamond',
+      [46] class 'RedeclaredAction' 'action'
     )
     ldstr "item"
     ldc.i4 1
@@ -305,30 +676,108 @@
     ldloc.0
     stloc.3
     ldloc.1
+    stloc 4
+    ldloc 4
+    isinst class 'BaseView`1'<string>
+    stloc 5
+    ldloc 5
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc 5
     callvirt instance !0 class 'BaseView`1'<string>::'value'()
+    stloc 6
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc 4
+    callvirt instance object 'BaseView'::'value__KotlinErased__599de141ced331e43447b1e5f5a51f18'()
+    castclass [mscorlib]System.String
+    stloc 6
+IL_genericInterfaceJoin_1:
+    ldloc 6
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
+    stloc 7
+    ldloc 7
+    isinst class 'RedeclaredView`1'<string>
+    stloc 8
+    ldloc 8
+    brfalse IL_genericInterfaceErasedFallback_2
+    ldloc 8
     callvirt instance !0 class 'RedeclaredView`1'<string>::'value'()
+    stloc 9
+    br IL_genericInterfaceJoin_3
+IL_genericInterfaceErasedFallback_2:
+    ldloc 7
+    callvirt instance object 'RedeclaredView'::'value__KotlinErased__706e80b3dfe11213beb7b7282de90939'()
+    castclass [mscorlib]System.String
+    stloc 9
+IL_genericInterfaceJoin_3:
+    ldloc 9
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
+    stloc 10
+    ldloc 10
+    isinst class 'LeafView`1'<string>
+    stloc 11
+    ldloc 11
+    brfalse IL_genericInterfaceErasedFallback_4
+    ldloc 11
     callvirt instance !0 class 'LeafView`1'<string>::'value'()
+    stloc 12
+    br IL_genericInterfaceJoin_5
+IL_genericInterfaceErasedFallback_4:
+    ldloc 10
+    callvirt instance object 'LeafView'::'value__KotlinErased__86ac0db650960e5200d05cdb2149f63b'()
+    castclass [mscorlib]System.String
+    stloc 12
+IL_genericInterfaceJoin_5:
+    ldloc 12
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
+    stloc 13
+    ldloc 13
+    isinst class 'BaseView`1'<string>
+    stloc 14
+    ldloc 14
+    brfalse IL_genericInterfaceErasedFallback_6
+    ldloc 14
     callvirt instance string class 'BaseView`1'<string>::'get_label'()
+    stloc 15
+    br IL_genericInterfaceJoin_7
+IL_genericInterfaceErasedFallback_6:
+    ldloc 13
+    callvirt instance string 'BaseView'::'get_label__KotlinErased__9297ce6bfa98abd12e912e5185e1d02c'()
+    stloc 15
+IL_genericInterfaceJoin_7:
+    ldloc 15
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
+    stloc 16
+    ldloc 16
+    isinst class 'RedeclaredView`1'<string>
+    stloc 17
+    ldloc 17
+    brfalse IL_genericInterfaceErasedFallback_8
+    ldloc 17
     callvirt instance string class 'RedeclaredView`1'<string>::'get_label'()
+    stloc 18
+    br IL_genericInterfaceJoin_9
+IL_genericInterfaceErasedFallback_8:
+    ldloc 16
+    callvirt instance string 'RedeclaredView'::'get_label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'()
+    stloc 18
+IL_genericInterfaceJoin_9:
+    ldloc 18
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
-    callvirt instance string class 'RedeclaredView`1'<string>::'get_label'()
+    callvirt instance string 'RedeclaredView'::'get_label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
     ldstr "base-echo"
-    callvirt instance !!0 class 'BaseView`1'<string>::'echo'<string>(!!0)
+    callvirt instance !!0 'BaseView'::'echo__KotlinErased__59e18f1f0aa7b5e92ba76edd87bbf3b6'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
     ldc.i4 7
-    callvirt instance !!0 class 'RedeclaredView`1'<string>::'echo'<int32>(!!0)
+    callvirt instance !!0 'RedeclaredView'::'echo__KotlinErased__69432d31b8db3ea5d11f43deda8b0994'<int32>(!!0)
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -336,79 +785,184 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
     ldstr "leaf-echo"
-    callvirt instance !!0 class 'RedeclaredView`1'<string>::'echo'<string>(!!0)
+    callvirt instance !!0 'RedeclaredView'::'echo__KotlinErased__69432d31b8db3ea5d11f43deda8b0994'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
+    stloc 19
+    ldloc 19
+    isinst class 'BaseView`1'<string>
+    stloc 20
+    ldloc 20
+    brfalse IL_genericInterfaceErasedFallback_10
+    ldloc 20
     ldc.i4 2
     callvirt instance void class 'BaseView`1'<string>::'set_count'(int32)
+    br IL_genericInterfaceJoin_11
+IL_genericInterfaceErasedFallback_10:
+    ldloc 19
+    ldc.i4 2
+    callvirt instance void 'BaseView'::'set_count__KotlinErased__f28a1320b5c0269309a1efb67d0e51f6'(int32)
+IL_genericInterfaceJoin_11:
     ldloc.2
+    stloc 21
+    ldloc 21
+    isinst class 'RedeclaredView`1'<string>
+    stloc 22
+    ldloc 22
+    brfalse IL_genericInterfaceErasedFallback_12
+    ldloc 22
     callvirt instance int32 class 'RedeclaredView`1'<string>::'get_count'()
+    stloc 23
+    br IL_genericInterfaceJoin_13
+IL_genericInterfaceErasedFallback_12:
+    ldloc 21
+    callvirt instance int32 'RedeclaredView'::'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
+    stloc 23
+IL_genericInterfaceJoin_13:
+    ldloc 23
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
+    stloc 24
+    ldloc 24
+    isinst class 'RedeclaredView`1'<string>
+    stloc 25
+    ldloc 25
+    brfalse IL_genericInterfaceErasedFallback_14
+    ldloc 25
     ldc.i4 3
     callvirt instance void class 'RedeclaredView`1'<string>::'set_count'(int32)
+    br IL_genericInterfaceJoin_15
+IL_genericInterfaceErasedFallback_14:
+    ldloc 24
+    ldc.i4 3
+    callvirt instance void 'RedeclaredView'::'set_count__KotlinErased__7b4511345d2a0a02253840af86efcc01'(int32)
+IL_genericInterfaceJoin_15:
     ldloc.3
-    callvirt instance int32 class 'RedeclaredView`1'<string>::'get_count'()
+    callvirt instance int32 'RedeclaredView'::'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'PairImpl'::.ctor()
-    stloc 4
-    ldloc 4
-    stloc 5
-    ldloc 4
-    stloc 6
-    ldloc 5
+    stloc 26
+    ldloc 26
+    stloc 27
+    ldloc 26
+    stloc 28
+    ldloc 27
+    stloc 29
+    ldloc 29
+    isinst class 'PairView`2'<string, int32>
+    stloc 30
+    ldloc 30
+    brfalse IL_genericInterfaceErasedFallback_16
+    ldloc 30
     callvirt instance !0 class 'PairView`2'<string, int32>::'first'()
+    stloc 31
+    br IL_genericInterfaceJoin_17
+IL_genericInterfaceErasedFallback_16:
+    ldloc 29
+    callvirt instance object 'PairView'::'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'()
+    castclass [mscorlib]System.String
+    stloc 31
+IL_genericInterfaceJoin_17:
+    ldloc 31
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 5
+    ldloc 27
+    stloc 32
+    ldloc 32
+    isinst class 'PairView`2'<string, int32>
+    stloc 33
+    ldloc 33
+    brfalse IL_genericInterfaceErasedFallback_18
+    ldloc 33
     callvirt instance !1 class 'PairView`2'<string, int32>::'second'()
+    stloc 34
+    br IL_genericInterfaceJoin_19
+IL_genericInterfaceErasedFallback_18:
+    ldloc 32
+    callvirt instance object 'PairView'::'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'()
+    unbox.any [mscorlib]System.Int32
+    stloc 34
+IL_genericInterfaceJoin_19:
+    ldloc 34
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 6
+    ldloc 28
+    stloc 35
+    ldloc 35
+    isinst class 'Swapped`2'<int32, string>
+    stloc 36
+    ldloc 36
+    brfalse IL_genericInterfaceErasedFallback_20
+    ldloc 36
     callvirt instance !1 class 'Swapped`2'<int32, string>::'first'()
+    stloc 37
+    br IL_genericInterfaceJoin_21
+IL_genericInterfaceErasedFallback_20:
+    ldloc 35
+    callvirt instance object 'Swapped'::'first__KotlinErased__4ae76b180c999fa8a4086a535dc149a6'()
+    castclass [mscorlib]System.String
+    stloc 37
+IL_genericInterfaceJoin_21:
+    ldloc 37
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 6
+    ldloc 28
+    stloc 38
+    ldloc 38
+    isinst class 'Swapped`2'<int32, string>
+    stloc 39
+    ldloc 39
+    brfalse IL_genericInterfaceErasedFallback_22
+    ldloc 39
     callvirt instance !0 class 'Swapped`2'<int32, string>::'second'()
+    stloc 40
+    br IL_genericInterfaceJoin_23
+IL_genericInterfaceErasedFallback_22:
+    ldloc 38
+    callvirt instance object 'Swapped'::'second__KotlinErased__42dcf4c1734264228da8f3670ac9f7fa'()
+    unbox.any [mscorlib]System.Int32
+    stloc 40
+IL_genericInterfaceJoin_23:
+    ldloc 40
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'Node'::.ctor()
-    stloc 7
-    ldloc 7
-    stloc 8
-    ldloc 7
-    stloc 9
-    ldloc 7
-    stloc 10
-    ldloc 7
-    stloc 11
-    ldloc 8
+    stloc 41
+    ldloc 41
+    stloc 42
+    ldloc 41
+    stloc 43
+    ldloc 41
+    stloc 44
+    ldloc 41
+    stloc 45
+    ldloc 42
     callvirt instance string 'Root'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 9
+    ldloc 43
     callvirt instance string 'Left'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 10
+    ldloc 44
     callvirt instance string 'Right'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 11
+    ldloc 45
     callvirt instance string 'Diamond'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ActionDerived'::.ctor()
-    stloc 12
-    ldloc 12
+    stloc 46
+    ldloc 46
     callvirt instance string 'RedeclaredAction'::'act'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret
