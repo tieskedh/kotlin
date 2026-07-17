@@ -162,11 +162,13 @@ object DotNetLibraryMetadataPackagingPipelinePhase :
                         DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
                         DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK,
                     )
-                    if (configuration.dotNetProducesLibrary) {
-                        setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
-                        for (entry in DotNetLibraryAbiCodec.encode(input.declarations)) {
-                            setProperty(entry.key, entry.value)
-                        }
+                    // Both explicit library products and the target-stdlib product pair Kotlin
+                    // metadata with a CLR implementation. Persist the same physical declaration
+                    // index for both; otherwise ordinary stdlib functions can resolve in FIR but
+                    // have no durable cross-module CLR owner/method binding.
+                    setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
+                    for (entry in DotNetLibraryAbiCodec.encode(input.declarations)) {
+                        setProperty(entry.key, entry.value)
                     }
                 }
             }

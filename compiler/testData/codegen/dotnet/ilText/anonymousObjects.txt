@@ -8,7 +8,14 @@
   {
   }
 }
+.class interface public abstract auto ansi 'AnonymousValue'
+{
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'AnonymousValue`1'<'T'>
+       implements 'AnonymousValue'
 {
   .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
   {
@@ -98,7 +105,7 @@
 {
   .class nested private auto ansi sealed beforefieldinit 'AnonymousOwner$source$1`1'<'T'>
          extends [mscorlib]System.Object
-         implements class 'AnonymousValue`1'<!0>
+         implements 'AnonymousValue', class 'AnonymousValue`1'<!0>
   {
     .field private class 'AnonymousOwner`1'<!0> 'this$0'
     .method public hidebysig specialname rtspecialname instance void .ctor(class 'AnonymousOwner`1'<!0> 'this$0') cil managed
@@ -117,6 +124,23 @@
       ldarg.0
       ldfld class 'AnonymousOwner`1'<!0> class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'this$0'
       call instance !0 class 'AnonymousOwner`1'<!0>::'get_seed'()
+      ret
+    }
+    .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
+    {
+      .override method instance object 'AnonymousValue'::'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'()
+      .maxstack 1
+      ldarg.0
+      callvirt instance !0 class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'value'()
+      box !0
+      ret
+    }
+    .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
+    {
+      .override method instance !0 class 'AnonymousValue`1'<!0>::'value'()
+      .maxstack 1
+      ldarg.0
+      callvirt instance !0 class 'AnonymousOwner`1'/'AnonymousOwner$source$1`1'<!0>::'value'()
       ret
     }
   }
@@ -138,7 +162,7 @@
     ldfld !0 class 'AnonymousOwner`1'<!0>::'seed'
     ret
   }
-  .method public hidebysig instance class 'AnonymousValue`1'<!0> 'source'() cil managed
+  .method public hidebysig instance class 'AnonymousValue' 'source'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -398,7 +422,7 @@
 }
 .class private auto ansi sealed beforefieldinit 'anonymousObjectsKt$genericAnonymous$source$1`1'<'T'>
        extends [mscorlib]System.Object
-       implements class 'AnonymousValue`1'<!0>
+       implements 'AnonymousValue', class 'AnonymousValue`1'<!0>
 {
   .field private !0 '$value'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 '$value') cil managed
@@ -416,6 +440,23 @@
     .maxstack 1
     ldarg.0
     ldfld !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'$value'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
+  {
+    .override method instance object 'AnonymousValue'::'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'value'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-AnonymousValue-value-5a8ae3f11b4e947866756e11da5ad753>'() cil managed
+  {
+    .override method instance !0 class 'AnonymousValue`1'<!0>::'value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!0>::'value'()
     ret
   }
 }
@@ -697,13 +738,32 @@ IL_whenNext_1:
   {
     .maxstack 1
     .locals init (
-      [0] class 'AnonymousValue`1'<!!0> 'source'
+      [0] class 'AnonymousValue' 'source',
+      [1] class 'AnonymousValue' '<genericInterfaceReceiver>',
+      [2] class 'AnonymousValue`1'<!!0> '<genericInterfaceCapability>',
+      [3] !!0 '<genericInterfaceResult>'
     )
     ldarg.0
     newobj instance void class 'anonymousObjectsKt$genericAnonymous$source$1`1'<!!0>::.ctor(!0)
     stloc.0
     ldloc.0
+    stloc.1
+    ldloc.1
+    isinst class 'AnonymousValue`1'<!!0>
+    stloc.2
+    ldloc.2
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.2
     callvirt instance !0 class 'AnonymousValue`1'<!!0>::'value'()
+    stloc.3
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.1
+    callvirt instance object 'AnonymousValue'::'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'()
+    unbox.any !!0
+    stloc.3
+IL_genericInterfaceJoin_1:
+    ldloc.3
     ret
   }
   .method public hidebysig static int32 'nestedAnonymous'(int32 'seed') cil managed
@@ -754,6 +814,11 @@ IL_whenNext_1:
   {
     .entrypoint
     .maxstack 3
+    .locals init (
+      [0] class 'AnonymousValue' '<genericInterfaceReceiver>',
+      [1] class 'AnonymousValue`1'<string> '<genericInterfaceCapability>',
+      [2] string '<genericInterfaceResult>'
+    )
     call class 'AnonymousIntValue' 'anonymousObjectsKt'::'get_topLevelAnonymous'()
     callvirt instance int32 'AnonymousIntValue'::'value'()
     box [mscorlib]System.Int32
@@ -790,8 +855,24 @@ IL_whenNext_1:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "owner"
     newobj instance void class 'AnonymousOwner`1'<string>::.ctor(!0)
-    call instance class 'AnonymousValue`1'<!0> class 'AnonymousOwner`1'<string>::'source'()
+    call instance class 'AnonymousValue' class 'AnonymousOwner`1'<string>::'source'()
+    stloc.0
+    ldloc.0
+    isinst class 'AnonymousValue`1'<string>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
     callvirt instance !0 class 'AnonymousValue`1'<string>::'value'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object 'AnonymousValue'::'value__KotlinErased__5a8ae3f11b4e947866756e11da5ad753'()
+    castclass [mscorlib]System.String
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 8
     newobj instance void 'AnonymousInInitializer'::.ctor(int32)
@@ -819,12 +900,12 @@ IL_whenNext_1:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     call bool 'anonymousObjectsKt'::'freshAnonymousObjects'()
-    brtrue IL_boolStrTrue_0
+    brtrue IL_boolStrTrue_2
     ldstr "false"
-    br IL_boolStrEnd_1
-IL_boolStrTrue_0:
+    br IL_boolStrEnd_3
+IL_boolStrTrue_2:
     ldstr "true"
-IL_boolStrEnd_1:
+IL_boolStrEnd_3:
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 9
     call int32 'anonymousObjectsKt'::'mixedNamedAndAnonymous'(int32)

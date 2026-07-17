@@ -54,18 +54,6 @@ fun <T> openResize(values: Array<T>, size: Int): Array<T?> = values.copyOf(size)
 fun <T> openCopyInto(source: Array<T>, destination: Array<T>): Array<T> =
     source.copyInto(destination)
 
-interface RedeclaredIteratorView<T> : Iterator<T> {
-    override fun next(): T
-}
-
-interface RedeclaredHasNextIteratorView<T> : Iterator<T> {
-    override fun hasNext(): Boolean
-}
-
-interface RedeclaredIterableView<T> : Iterable<T> {
-    override fun iterator(): Iterator<T>
-}
-
 class CustomIntIterator : IntIterator() {
     override fun hasNext(): Boolean = false
     override fun nextInt(): Int = 0

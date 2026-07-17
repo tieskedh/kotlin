@@ -350,16 +350,14 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             ".assembly extern netstandard\n{\n  .ver 2:0:0:0\n  .publickeytoken = (CC 7B 13 FF CD 2D DD 51)\n}",
             ".assembly 'Kotlin.Stdlib'\n{\n  .ver 1:0:0:0",
             "System.Runtime.Versioning.TargetFrameworkAttribute",
-            ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'<'T'>",
-            "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator'",
-            "'<IteratorHasNextBridge>'",
-            "'<IteratorNextBridge>'",
-            ".class public auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'<'T'>",
-            "newobj instance void class 'Kotlin.Collections.ArrayIterator`1'<!0>::.ctor(!0[])",
-            "'<IterableIteratorBridge>'",
+            ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'<'T'>",
+            ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterable`1'<'T'>",
             ".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'",
-            ".method public hidebysig static !!0 'first'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
-            ".method public hidebysig static !!0 'last'<'T'>(class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<this>')",
+            "'Kotlin.Collections.EmptyIterator'",
+            "'Kotlin.Collections.EmptyList'",
+            ".class interface public abstract auto ansi 'Kotlin.Collections.RandomAccess'",
+            ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
+                    "'emptyList'<'T'>()",
         )
         requiredStdlibIl.firstOrNull { it !in stdlibIlText }?.let { missing ->
             assertions.fail { "Expected Kotlin.Stdlib IL to contain '$missing': ${stdlibIlFile.path}" }

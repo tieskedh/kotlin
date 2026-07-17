@@ -16,6 +16,11 @@ val DOTNET_STDLIB_SOURCES: Map<String, String> = mapOf(
     "DotNetStdlibIo.kt" to """@file:Suppress("UNUSED_PARAMETER")
 package kotlin.io
 
+// Target-local inert marker, matching the JS/Native/Wasm actual rather than claiming the BCL's
+// serialization protocol. It is internal Kotlin API and exists only so common implementations
+// retain their source-level marker relationship.
+internal interface Serializable
+
 public fun println() {}
 
 public fun println(message: String) {}
@@ -33,6 +38,56 @@ public fun println(message: Boolean) {}
 public fun println(message: Any?) {}
 """,
     "DotNetStdlibCollections.kt" to """package kotlin.collections
+
+import kotlin.io.Serializable
+
+// The ordinary target actual of the common marker. It intentionally has no relationship to a
+// CLR collection interface; algorithms use it only as a Kotlin-owned capability marker.
+public interface RandomAccess
+
+internal object EmptyIterator : ListIterator<Nothing> {
+    override fun hasNext(): Boolean = false
+    override fun hasPrevious(): Boolean = false
+    override fun nextIndex(): Int = 0
+    override fun previousIndex(): Int = -1
+    override fun next(): Nothing = throw NoSuchElementException()
+    override fun previous(): Nothing = throw NoSuchElementException()
+}
+
+// Kept as the same non-generic singleton as the common stdlib. Logical List<T> views therefore
+// preserve ===; the ordinary split-interface bridge lowering supplies canonical erased slots and
+// the List<Nothing> typed capabilities on this one object.
+internal object EmptyList : List<Nothing>, Serializable, RandomAccess {
+    override fun equals(other: Any?): Boolean = other is List<*> && other.isEmpty()
+    override fun hashCode(): Int = 1
+    override fun toString(): String = "[]"
+
+    override val size: Int get() = 0
+    override fun isEmpty(): Boolean = true
+    override fun contains(element: Nothing): Boolean = false
+    override fun containsAll(elements: Collection<Nothing>): Boolean = elements.isEmpty()
+
+    override fun get(index: Int): Nothing =
+        throw IndexOutOfBoundsException("Empty list doesn't contain element at index ${'$'}index.")
+
+    override fun indexOf(element: Nothing): Int = -1
+    override fun lastIndexOf(element: Nothing): Int = -1
+
+    override fun iterator(): Iterator<Nothing> = EmptyIterator
+    override fun listIterator(): ListIterator<Nothing> = EmptyIterator
+
+    override fun listIterator(index: Int): ListIterator<Nothing> {
+        if (index != 0) throw IndexOutOfBoundsException("Index: ${'$'}index")
+        return EmptyIterator
+    }
+
+    override fun subList(fromIndex: Int, toIndex: Int): List<Nothing> {
+        if (fromIndex == 0 && toIndex == 0) return this
+        throw IndexOutOfBoundsException("fromIndex: ${'$'}fromIndex, toIndex: ${'$'}toIndex")
+    }
+}
+
+public fun <T> emptyList(): List<T> = EmptyList
 
 // Resolution-only declarations for the first array-operation slices. The backend intercepts every
 // call through DotNetIlIntrinsicMethods and excludes these declarations from emitted facades.
@@ -139,34 +194,63 @@ public external fun DoubleArray.asIterable(): Iterable<Double>
 public external fun BooleanArray.asIterable(): Iterable<Boolean>
 public external fun CharArray.asIterable(): Iterable<Char>
 
-// Bootstrap subset of libraries/tools/kotlin-stdlib-gen's Elements.f_first common template.
-// The mature template first dispatches Lists to their indexed implementation; that is an
-// optimization, not observable semantics, and remains unavailable until this target has a List
-// ABI. This universal Iterable path is emitted on Kotlin.Collections.CollectionsKt in
-// Kotlin.Stdlib, while user call sites reference that physical facade across the assembly edge.
+// Bootstrap subset of libraries/tools/kotlin-stdlib-gen's Elements.f_first common template. The
+// generated List dispatch is retained now that the target has the corresponding physical ABI.
+// Both overloads are emitted on Kotlin.Collections.CollectionsKt in Kotlin.Stdlib, while user call
+// sites reference that physical facade across the assembly edge.
 public fun <T> Iterable<T>.first(): T {
-    val iterator = iterator()
-    if (!iterator.hasNext())
-        throw NoSuchElementException("Collection is empty.")
-    return iterator.next()
+    when (this) {
+        is List -> return this.first()
+        else -> {
+            val iterator = iterator()
+            if (!iterator.hasNext())
+                throw NoSuchElementException("Collection is empty.")
+            return iterator.next()
+        }
+    }
 }
 
-// Bootstrap subset of the same generator's Elements.f_last common template. Its List fast path
-// is likewise only an unavailable optimization; the universal Iterator algorithm is the contract.
+public fun <T> List<T>.first(): T {
+    if (isEmpty())
+        throw NoSuchElementException("List is empty.")
+    return get(0)
+}
+
+// Bootstrap subset of the same generator's Elements.f_last common template. The mature source
+// spells the final index through the generated List.lastIndex property; `size - 1` is that
+// property's body and avoids expanding this bootstrap slice with an unrelated property export.
 public fun <T> Iterable<T>.last(): T {
-    val iterator = iterator()
-    if (!iterator.hasNext())
-        throw NoSuchElementException("Collection is empty.")
-    var last = iterator.next()
-    while (iterator.hasNext())
-        last = iterator.next()
-    return last
+    when (this) {
+        is List -> return this.last()
+        else -> {
+            val iterator = iterator()
+            if (!iterator.hasNext())
+                throw NoSuchElementException("Collection is empty.")
+            var last = iterator.next()
+            while (iterator.hasNext())
+                last = iterator.next()
+            return last
+        }
+    }
 }
 
-// The first executable target-stdlib implementation. It is private in Kotlin source so injected
-// declarations do not expose a provisional user API. The backend emits this class, with public CLR
-// metadata for cross-assembly construction, only into Kotlin.Stdlib. Its Iterator MethodImpl
-// bridges are generated by the same lowering as for an ordinary user class.
+public fun <T> List<T>.last(): T {
+    if (isEmpty())
+        throw NoSuchElementException("List is empty.")
+    return get(size - 1)
+}
+
+// Compiler-facing factories are Kotlin-internal but metadata-public: generated user assemblies
+// call them across the Kotlin.Stdlib boundary without making the implementation classes part of
+// the compiler ABI. This follows the JVM/JS helper boundary for array iteration.
+internal fun <T> ${DotNetStdlibLibrary.ARRAY_ITERATOR_FACTORY_NAME}(array: Array<T>): Iterator<T> = ArrayIterator(array)
+
+internal fun <T> ${DotNetStdlibLibrary.ARRAY_ITERABLE_FACTORY_NAME}(array: Array<T>): Iterable<T> =
+    if (array.size == 0) emptyList() else ArrayIterable(array)
+
+// The first executable target-stdlib implementation. It is private in both Kotlin source and CLR
+// metadata. Its Iterator MethodImpl bridges are generated by the same lowering as for an ordinary
+// user class; only the factory above crosses the assembly boundary.
 private class ArrayIterator<T>(private val array: Array<T>) : Iterator<T> {
     private var index: Int = 0
 
@@ -178,9 +262,8 @@ private class ArrayIterator<T>(private val array: Array<T>) : Iterator<T> {
     }
 }
 
-// Unlike the common stdlib implementation, this always returns a view object, including for an
-// empty array. The common emptyList() optimization is not observable Kotlin semantics and remains
-// unavailable until this target has a coherent List ABI.
+// The factory above owns the common empty-array singleton fast path. Non-empty arrays use this
+// ordinary view class, whose bridge shape is shared with user-defined Iterable implementations.
 private class ArrayIterable<T>(private val array: Array<T>) : Iterable<T> {
     override fun iterator(): Iterator<T> = ArrayIterator(array)
 }

@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericInterfaces' {}
 .module 'main-genericInterfaces.il'
 
@@ -40,7 +44,21 @@
     ret
   }
 }
+.class interface public abstract auto ansi 'Producer'
+{
+  .method public hidebysig newslot abstract virtual instance object 'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'() cil managed
+  {
+  }
+  .property instance object 'value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+  {
+    .get instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+  }
+}
 .class interface public abstract auto ansi 'Producer`1'<+ 'T'>
+       implements 'Producer'
 {
   .method public hidebysig newslot abstract virtual instance !0 'produce'() cil managed
   {
@@ -53,17 +71,38 @@
     .get instance !0 'Producer`1'::'get_value'()
   }
 }
+.class interface public abstract auto ansi 'Consumer'
+{
+  .method public hidebysig newslot abstract virtual instance void 'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object 'value') cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'Consumer`1'<- 'T'>
+       implements 'Consumer'
 {
   .method public hidebysig newslot abstract virtual instance void 'consume'(!0 'value') cil managed
   {
   }
 }
-.class interface public abstract auto ansi 'Channel`1'<'T'>
-       implements class 'Producer`1'<!0>, class 'Consumer`1'<!0>
+.class interface public abstract auto ansi 'Channel'
+       implements 'Producer', 'Consumer'
 {
 }
+.class interface public abstract auto ansi 'Channel`1'<'T'>
+       implements 'Channel', class 'Producer`1'<!0>, class 'Consumer`1'<!0>
+{
+}
+.class interface public abstract auto ansi 'PairView'
+{
+  .method public hidebysig newslot abstract virtual instance object 'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance object 'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'PairView`2'<'A', 'B'>
+       implements 'PairView'
 {
   .method public hidebysig newslot abstract virtual instance !0 'first'() cil managed
   {
@@ -72,11 +111,45 @@
   {
   }
 }
-.class interface public abstract auto ansi 'Swapped`2'<'A', 'B'>
-       implements class 'PairView`2'<!1, !0>
+.class interface public abstract auto ansi 'Mixed'
+{
+  .method public hidebysig newslot abstract virtual instance object 'run__KotlinErased__9d6b95b1f0e236655436814c917cd213'(object 'input', object 'state') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'acceptsOutput__KotlinErased__5ffdd748feb0419758a90b53d9cbf280'(object 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Mixed`3'<- 'I', + 'O', 'X'>
+       implements 'Mixed'
+{
+  .method public hidebysig newslot abstract virtual instance !1 'run'(!0 'input', !2 'state') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Mixed__KotlinExact`3'<'I', 'O', 'X'>
+       implements class 'Mixed`3'<!0, !1, !2>
+{
+  .method public hidebysig newslot abstract virtual instance bool 'acceptsOutput'(!1 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'Swapped'
+       implements 'PairView'
 {
 }
+.class interface public abstract auto ansi 'Swapped`2'<'A', 'B'>
+       implements 'Swapped', class 'PairView`2'<!1, !0>
+{
+}
+.class interface public abstract auto ansi 'BoundedProducer'
+{
+  .method public hidebysig newslot abstract virtual instance object 'bounded__KotlinErased__d7d775f8c47b30158f80c6a307c7af61'() cil managed
+  {
+  }
+}
 .class interface public abstract auto ansi 'BoundedProducer`1'<+ (class 'Item') 'T'>
+       implements 'BoundedProducer'
 {
   .method public hidebysig newslot abstract virtual instance !0 'bounded'() cil managed
   {
@@ -84,7 +157,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'GenericChannel`1'<'T'>
        extends [mscorlib]System.Object
-       implements class 'Channel`1'<!0>
+       implements 'Channel', class 'Channel`1'<!0>
 {
   .field private !0 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'current') cil managed
@@ -134,6 +207,61 @@
     call instance void class 'GenericChannel`1'<!0>::'set_current'(!0)
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericChannel`1'<!0>::'produce'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<!0>::'produce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericChannel`1'<!0>::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericChannel`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<!0>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericChannel`1'<!0>::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-Consumer-consume-0c36d333dff500c0a56d9f7ca1568568>'(object 'value') cil managed
+  {
+    .override method instance void 'Consumer'::'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any !0
+    callvirt instance void class 'GenericChannel`1'<!0>::'consume'(!0)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceDeclaredBridge-Consumer-consume-0c36d333dff500c0a56d9f7ca1568568>'(!0 'value') cil managed
+  {
+    .override method instance void class 'Consumer`1'<!0>::'consume'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void class 'GenericChannel`1'<!0>::'consume'(!0)
+    ret
+    ret
+  }
   .property instance !0 'current'()
   {
     .get instance !0 'GenericChannel`1'::'get_current'()
@@ -146,7 +274,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'GenericProducer`1'<'T'>
        extends [mscorlib]System.Object
-       implements class 'Producer`1'<!0>
+       implements 'Producer', class 'Producer`1'<!0>
 {
   .field private !0 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'current') cil managed
@@ -180,6 +308,40 @@
     call instance !0 class 'GenericProducer`1'<!0>::'get_current'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericProducer`1'<!0>::'produce'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<!0>::'produce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericProducer`1'<!0>::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericProducer`1'<!0>::'get_value'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<!0>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'GenericProducer`1'<!0>::'get_value'()
+    ret
+  }
   .property instance !0 'current'()
   {
     .get instance !0 'GenericProducer`1'::'get_current'()
@@ -191,7 +353,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'SpecialProducer'
        extends [mscorlib]System.Object
-       implements class 'Producer`1'<class 'Special'>
+       implements 'Producer', class 'Producer`1'<class 'Special'>
 {
   .field private class 'Special' 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Special' 'current') cil managed
@@ -225,6 +387,38 @@
     call instance class 'Special' 'SpecialProducer'::'get_current'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'SpecialProducer'::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Special' '<GenericInterfaceDeclaredBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<class 'Special'>::'produce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'SpecialProducer'::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'SpecialProducer'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Special' '<GenericInterfaceDeclaredBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<class 'Special'>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'SpecialProducer'::'get_value'()
+    ret
+  }
   .property instance class 'Special' 'current'()
   {
     .get instance class 'Special' 'SpecialProducer'::'get_current'()
@@ -236,7 +430,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'ItemConsumer'
        extends [mscorlib]System.Object
-       implements class 'Consumer`1'<class 'Item'>
+       implements 'Consumer', class 'Consumer`1'<class 'Item'>
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
@@ -253,10 +447,31 @@
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-Consumer-consume-0c36d333dff500c0a56d9f7ca1568568>'(object 'value') cil managed
+  {
+    .override method instance void 'Consumer'::'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    castclass class 'Item'
+    callvirt instance void 'ItemConsumer'::'consume'(class 'Item')
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceDeclaredBridge-Consumer-consume-0c36d333dff500c0a56d9f7ca1568568>'(class 'Item' 'value') cil managed
+  {
+    .override method instance void class 'Consumer`1'<class 'Item'>::'consume'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'ItemConsumer'::'consume'(class 'Item')
+    ret
+    ret
+  }
 }
 .class public auto ansi sealed beforefieldinit 'SwappedPair`2'<'A', 'B'>
        extends [mscorlib]System.Object
-       implements class 'Swapped`2'<!0, !1>
+       implements 'Swapped', class 'Swapped`2'<!0, !1>
 {
   .field private !0 'a'
   .field private !1 'b'
@@ -301,6 +516,40 @@
     call instance !0 class 'SwappedPair`2'<!0, !1>::'get_a'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-PairView-first-0176ea3e592ec134a49b32eea211a9ce>'() cil managed
+  {
+    .override method instance object 'PairView'::'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !1 class 'SwappedPair`2'<!0, !1>::'first'()
+    box !1
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !1 '<GenericInterfaceDeclaredBridge-PairView-first-0176ea3e592ec134a49b32eea211a9ce>'() cil managed
+  {
+    .override method instance !0 class 'PairView`2'<!1, !0>::'first'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !1 class 'SwappedPair`2'<!0, !1>::'first'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-PairView-second-c65582e5b30a609225382a6fff86b1c5>'() cil managed
+  {
+    .override method instance object 'PairView'::'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'SwappedPair`2'<!0, !1>::'second'()
+    box !0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !0 '<GenericInterfaceDeclaredBridge-PairView-second-c65582e5b30a609225382a6fff86b1c5>'() cil managed
+  {
+    .override method instance !1 class 'PairView`2'<!1, !0>::'second'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance !0 class 'SwappedPair`2'<!0, !1>::'second'()
+    ret
+  }
   .property instance !0 'a'()
   {
     .get instance !0 'SwappedPair`2'::'get_a'()
@@ -310,9 +559,76 @@
     .get instance !1 'SwappedPair`2'::'get_b'()
   }
 }
+.class public auto ansi sealed beforefieldinit 'MixedImplementation'
+       extends [mscorlib]System.Object
+       implements 'Mixed', class 'Mixed__KotlinExact`3'<object, int32, string>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'run'(object 'input', string 'state') cil managed
+  {
+    .maxstack 1
+    ldc.i4 5
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'acceptsOutput'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.1
+    ldc.i4 0
+    cgt
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Mixed-run-9d6b95b1f0e236655436814c917cd213>'(object 'input', object 'state') cil managed
+  {
+    .override method instance object 'Mixed'::'run__KotlinErased__9d6b95b1f0e236655436814c917cd213'(object, object)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    castclass string
+    callvirt instance int32 'MixedImplementation'::'run'(object, string)
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-Mixed-run-9d6b95b1f0e236655436814c917cd213>'(object 'input', string 'state') cil managed
+  {
+    .override method instance !1 class 'Mixed`3'<object, int32, string>::'run'(!0, !2)
+    .maxstack 3
+    ldarg.0
+    ldarg.1
+    ldarg.2
+    callvirt instance int32 'MixedImplementation'::'run'(object, string)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-Mixed-acceptsOutput-5ffdd748feb0419758a90b53d9cbf280>'(object 'value') cil managed
+  {
+    .override method instance bool 'Mixed'::'acceptsOutput__KotlinErased__5ffdd748feb0419758a90b53d9cbf280'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance bool 'MixedImplementation'::'acceptsOutput'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceExactBridge-Mixed-acceptsOutput-5ffdd748feb0419758a90b53d9cbf280>'(int32 'value') cil managed
+  {
+    .override method instance bool class 'Mixed__KotlinExact`3'<object, int32, string>::'acceptsOutput'(!1)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool 'MixedImplementation'::'acceptsOutput'(int32)
+    ret
+  }
+}
 .class public auto ansi sealed beforefieldinit 'BoundedSpecial'
        extends [mscorlib]System.Object
-       implements class 'BoundedProducer`1'<class 'Special'>
+       implements 'BoundedProducer', class 'BoundedProducer`1'<class 'Special'>
 {
   .field private class 'Special' 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(class 'Special' 'current') cil managed
@@ -339,6 +655,22 @@
     call instance class 'Special' 'BoundedSpecial'::'get_current'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-BoundedProducer-bounded-d7d775f8c47b30158f80c6a307c7af61>'() cil managed
+  {
+    .override method instance object 'BoundedProducer'::'bounded__KotlinErased__d7d775f8c47b30158f80c6a307c7af61'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'BoundedSpecial'::'bounded'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Special' '<GenericInterfaceDeclaredBridge-BoundedProducer-bounded-d7d775f8c47b30158f80c6a307c7af61>'() cil managed
+  {
+    .override method instance !0 class 'BoundedProducer`1'<class 'Special'>::'bounded'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'BoundedSpecial'::'bounded'()
+    ret
+  }
   .property instance class 'Special' 'current'()
   {
     .get instance class 'Special' 'BoundedSpecial'::'get_current'()
@@ -346,7 +678,7 @@
 }
 .class public auto ansi sealed beforefieldinit 'IntProducer'
        extends [mscorlib]System.Object
-       implements class 'Producer`1'<int32>
+       implements 'Producer', class 'Producer`1'<int32>
 {
   .field private int32 'current'
   .method public hidebysig specialname rtspecialname instance void .ctor(int32 'current') cil managed
@@ -380,6 +712,40 @@
     call instance int32 'IntProducer'::'get_current'()
     ret
   }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntProducer'::'produce'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<int32>::'produce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntProducer'::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntProducer'::'get_value'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<int32>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntProducer'::'get_value'()
+    ret
+  }
   .property instance int32 'current'()
   {
     .get instance int32 'IntProducer'::'get_current'()
@@ -389,43 +755,553 @@
     .get instance int32 'IntProducer'::'get_value'()
   }
 }
+.class public auto ansi sealed beforefieldinit 'RefinedProducer'
+       extends [mscorlib]System.Object
+       implements 'Producer', class 'Producer`1'<object>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'produce'() cil managed
+  {
+    .maxstack 1
+    ldstr "refined"
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldstr "refined property"
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'RefinedProducer'::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceDeclaredBridge-Producer-produce-e265bd63d2e773b3299b6d33eccbf61c>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<object>::'produce'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'RefinedProducer'::'produce'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'RefinedProducer'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceDeclaredBridge-Producer-<get-value>-2f135b5a16a291e1cba6e7ec059d25f9>'() cil managed
+  {
+    .override method instance !0 class 'Producer`1'<object>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance string 'RefinedProducer'::'get_value'()
+    ret
+  }
+  .property instance string 'value'()
+  {
+    .get instance string 'RefinedProducer'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'AnyConsumer'
+       extends [mscorlib]System.Object
+       implements 'Consumer', class 'Consumer`1'<object>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance void 'consume'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-Consumer-consume-0c36d333dff500c0a56d9f7ca1568568>'(object 'value') cil managed
+  {
+    .override method instance void 'Consumer'::'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'AnyConsumer'::'consume'(object)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceDeclaredBridge-Consumer-consume-0c36d333dff500c0a56d9f7ca1568568>'(object 'value') cil managed
+  {
+    .override method instance void class 'Consumer`1'<object>::'consume'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'AnyConsumer'::'consume'(object)
+    ret
+    ret
+  }
+}
+.class interface public abstract auto ansi 'NestedFactory'
+{
+  .method public hidebysig newslot abstract virtual instance class 'Producer' 'make__KotlinErased__53c8d0f4325e3658880e57746a2e67c0'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'NestedFactory`1'<+ 'T'>
+       implements 'NestedFactory'
+{
+  .method public hidebysig newslot abstract virtual instance class 'Producer' 'make'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'IntFactory'
+       extends [mscorlib]System.Object
+       implements 'NestedFactory', class 'NestedFactory`1'<int32>
+{
+  .field private class 'Producer' 'producer'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class 'Producer' 'producer') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld class 'Producer' 'IntFactory'::'producer'
+    ret
+  }
+  .method public hidebysig specialname instance class 'Producer' 'get_producer'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Producer' 'IntFactory'::'producer'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Producer' 'make'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance class 'Producer' 'IntFactory'::'get_producer'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Producer' '<GenericInterfaceCanonicalBridge-NestedFactory-make-53c8d0f4325e3658880e57746a2e67c0>'() cil managed
+  {
+    .override method instance class 'Producer' 'NestedFactory'::'make__KotlinErased__53c8d0f4325e3658880e57746a2e67c0'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Producer' 'IntFactory'::'make'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Producer' '<GenericInterfaceDeclaredBridge-NestedFactory-make-53c8d0f4325e3658880e57746a2e67c0>'() cil managed
+  {
+    .override method instance class 'Producer' class 'NestedFactory`1'<int32>::'make'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Producer' 'IntFactory'::'make'()
+    ret
+  }
+  .property instance class 'Producer' 'producer'()
+  {
+    .get instance class 'Producer' 'IntFactory'::'get_producer'()
+  }
+}
+.class interface public abstract auto ansi 'NestedSink'
+{
+  .method public hidebysig newslot abstract virtual instance bool 'accepts__KotlinErased__6adf7aeba7ffe6688a3fbb7293847e0a'(class 'Producer' 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'NestedSink`1'<+ 'T'>
+       implements 'NestedSink'
+{
+  .method public hidebysig newslot abstract virtual instance bool 'accepts'(class 'Producer' 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'IntNestedSink'
+       extends [mscorlib]System.Object
+       implements 'NestedSink', class 'NestedSink`1'<int32>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance bool 'accepts'(class 'Producer' 'value') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'Producer' '<genericInterfaceReceiver>',
+      [1] class 'Producer`1'<int32> '<genericInterfaceCapability>',
+      [2] int32 '<genericInterfaceResult>'
+    )
+    ldarg.1
+    stloc.0
+    ldloc.0
+    isinst class 'Producer`1'<int32>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance !0 class 'Producer`1'<int32>::'produce'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    unbox.any [mscorlib]System.Int32
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ldc.i4 17
+    ceq
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-NestedSink-accepts-6adf7aeba7ffe6688a3fbb7293847e0a>'(class 'Producer' 'value') cil managed
+  {
+    .override method instance bool 'NestedSink'::'accepts__KotlinErased__6adf7aeba7ffe6688a3fbb7293847e0a'(class 'Producer')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool 'IntNestedSink'::'accepts'(class 'Producer')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDeclaredBridge-NestedSink-accepts-6adf7aeba7ffe6688a3fbb7293847e0a>'(class 'Producer' 'value') cil managed
+  {
+    .override method instance bool class 'NestedSink`1'<int32>::'accepts'(class 'Producer')
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool 'IntNestedSink'::'accepts'(class 'Producer')
+    ret
+  }
+}
+.class interface public abstract auto ansi 'VariantCell'
+{
+  .method public hidebysig specialname newslot abstract virtual instance object 'get_value__KotlinErased__6c03bc9abcbed2de33a724a4fdafe09f'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_value__KotlinErased__2c73dad5ce63287fb90db4e740926776'(object '<set-?>') cil managed
+  {
+  }
+  .property instance object 'value__KotlinErased__6c03bc9abcbed2de33a724a4fdafe09f'()
+  {
+    .get instance object 'VariantCell'::'get_value__KotlinErased__6c03bc9abcbed2de33a724a4fdafe09f'()
+    .set instance void 'VariantCell'::'set_value__KotlinErased__2c73dad5ce63287fb90db4e740926776'(object)
+  }
+}
+.class interface public abstract auto ansi 'VariantCell`1'<+ 'T'>
+       implements 'VariantCell'
+{
+  .method public hidebysig specialname newslot abstract virtual instance !0 'get_value'() cil managed
+  {
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'VariantCell`1'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'VariantCell__KotlinExact`1'<'T'>
+       implements class 'VariantCell`1'<!0>
+{
+  .method public hidebysig specialname newslot abstract virtual instance !0 'get_value'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance void 'set_value'(!0 '<set-?>') cil managed
+  {
+  }
+  .property instance !0 'value'()
+  {
+    .get instance !0 'VariantCell__KotlinExact`1'::'get_value'()
+    .set instance void 'VariantCell__KotlinExact`1'::'set_value'(!0)
+  }
+}
+.class public auto ansi sealed beforefieldinit 'IntCell'
+       extends [mscorlib]System.Object
+       implements 'VariantCell', class 'VariantCell__KotlinExact`1'<int32>
+{
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'IntCell'::'value'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'IntCell'::'value'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance void 'set_value'(int32 '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld int32 'IntCell'::'value'
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-VariantCell-<get-value>-6c03bc9abcbed2de33a724a4fdafe09f>'() cil managed
+  {
+    .override method instance object 'VariantCell'::'get_value__KotlinErased__6c03bc9abcbed2de33a724a4fdafe09f'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntCell'::'get_value'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-VariantCell-<get-value>-6c03bc9abcbed2de33a724a4fdafe09f>'() cil managed
+  {
+    .override method instance !0 class 'VariantCell`1'<int32>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntCell'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceExactBridge-VariantCell-<get-value>-6c03bc9abcbed2de33a724a4fdafe09f>'() cil managed
+  {
+    .override method instance !0 class 'VariantCell__KotlinExact`1'<int32>::'get_value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'IntCell'::'get_value'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceCanonicalBridge-VariantCell-<set-value>-2c73dad5ce63287fb90db4e740926776>'(object '<set-?>') cil managed
+  {
+    .override method instance void 'VariantCell'::'set_value__KotlinErased__2c73dad5ce63287fb90db4e740926776'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance void 'IntCell'::'set_value'(int32)
+    ret
+    ret
+  }
+  .method private hidebysig newslot virtual final instance void '<GenericInterfaceExactBridge-VariantCell-<set-value>-2c73dad5ce63287fb90db4e740926776>'(int32 '<set-?>') cil managed
+  {
+    .override method instance void class 'VariantCell__KotlinExact`1'<int32>::'set_value'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance void 'IntCell'::'set_value'(int32)
+    ret
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'IntCell'::'get_value'()
+    .set instance void 'IntCell'::'set_value'(int32)
+  }
+}
+.class interface public abstract auto ansi 'ResultSource'
+{
+  .method public hidebysig newslot abstract virtual instance object 'result__KotlinErased__10e303668695d953a0f995f8c1355a3a'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'ResultSource`1'<+ 'T'>
+       implements 'ResultSource'
+{
+  .method public hidebysig newslot abstract virtual instance !0 'result'() cil managed
+  {
+  }
+}
+.class public auto ansi beforefieldinit 'InheritedSource'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Special' 'result'() cil managed
+  {
+    .maxstack 1
+    ldstr "inherited"
+    newobj instance void 'Special'::.ctor(string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'InheritedResultSource'
+       extends 'InheritedSource'
+       implements 'ResultSource', class 'ResultSource`1'<class 'Item'>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'InheritedSource'::.ctor()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-ResultSource-result-10e303668695d953a0f995f8c1355a3a>'() cil managed
+  {
+    .override method instance object 'ResultSource'::'result__KotlinErased__10e303668695d953a0f995f8c1355a3a'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'InheritedSource'::'result'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Item' '<GenericInterfaceDeclaredBridge-ResultSource-result-10e303668695d953a0f995f8c1355a3a>'() cil managed
+  {
+    .override method instance !0 class 'ResultSource`1'<class 'Item'>::'result'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Special' 'InheritedSource'::'result'()
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'genericInterfacesKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static class 'Producer`1'<class 'Item'> 'widen'(class 'Producer`1'<class 'Special'> 'value') cil managed
+  .method public hidebysig static class 'Producer' 'widen'(class 'Producer' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
     ret
   }
-  .method public hidebysig static class 'Producer`1'<class 'Item'> 'widenImplementation'(class 'SpecialProducer' 'value') cil managed
+  .method public hidebysig static class 'Producer' 'widenImplementation'(class 'SpecialProducer' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
     ret
   }
-  .method public hidebysig static class 'Consumer`1'<class 'Special'> 'narrow'(class 'Consumer`1'<class 'Item'> 'value') cil managed
+  .method public hidebysig static class 'Consumer' 'narrow'(class 'Consumer' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
     ret
   }
-  .method public hidebysig static class 'Producer`1'<class 'Producer`1'<class 'Item'>> 'nested'(class 'Producer`1'<class 'Producer`1'<class 'Special'>> 'value') cil managed
+  .method public hidebysig static class 'Mixed' 'widenMixed'(class 'Mixed' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
     ret
   }
-  .method public hidebysig static class 'Producer`1'<object> 'nullableReference'(class 'Producer`1'<string> 'value') cil managed
+  .method public hidebysig static class 'Producer' 'nested'(class 'Producer' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
     ret
   }
-  .method public hidebysig static class 'Producer`1'<int32> 'exactValue'(class 'Producer`1'<int32> 'value') cil managed
+  .method public hidebysig static class 'Producer' 'nullableReference'(class 'Producer' 'value') cil managed
   {
     .maxstack 1
     ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer' 'nullableValue'(class 'Producer' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer' 'widenOpen'<'T'>(class 'Producer' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer' 'exactValue'(class 'Producer' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer' 'widenValue'(class 'Producer' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Consumer' 'narrowValue'(class 'Consumer' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'NestedFactory' 'widenFactory'(class 'NestedFactory' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'NestedSink' 'widenNestedSink'(class 'NestedSink' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'VariantCell' 'widenCell'(class 'VariantCell' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static class 'Producer' 'castProducer'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    castclass class 'Producer'
+    dup
+    brtrue IL_notNull_0
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
+    ret
+  }
+  .method public hidebysig static class 'Producer' 'safeProducer'(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    isinst class 'Producer'
+    ret
+  }
+  .method public hidebysig static bool 'isProducer'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    isinst class 'Producer'
+    ldnull
+    cgt.un
+    ret
+  }
+  .method public hidebysig static bool 'isNullableProducer'(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    dup
+    brtrue IL_nullableTypeTestNonNull_0
+    pop
+    ldc.i4.1
+    br IL_nullableTypeTestJoin_1
+IL_nullableTypeTestNonNull_0:
+    isinst class 'Producer'
+    ldnull
+    cgt.un
+IL_nullableTypeTestJoin_1:
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -433,80 +1309,737 @@
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] class 'Producer`1'<class 'Item'> 'producer',
-      [1] class 'Consumer`1'<class 'Special'> 'consumer',
-      [2] class 'Channel`1'<string> 'channel',
-      [3] class 'PairView`2'<int32, string> 'pair',
-      [4] class 'BoundedProducer`1'<class 'Item'> 'bounded',
-      [5] class 'GenericProducer`1'<class 'Producer`1'<class 'Special'>> 'nestedValue'
+      [0] class 'Producer' 'producer',
+      [1] class 'Producer' '<genericInterfaceReceiver>',
+      [2] class 'Producer`1'<class 'Item'> '<genericInterfaceCapability>',
+      [3] class 'Item' '<genericInterfaceResult>',
+      [4] class 'Consumer' 'consumer',
+      [5] class 'Consumer' '<genericInterfaceReceiver>@5',
+      [6] class 'Consumer`1'<class 'Special'> '<genericInterfaceCapability>@6',
+      [7] class 'Channel' 'channel',
+      [8] class 'PairView' 'pair',
+      [9] class 'PairView' '<genericInterfaceReceiver>@9',
+      [10] class 'PairView`2'<int32, string> '<genericInterfaceCapability>@10',
+      [11] int32 '<genericInterfaceResult>@11',
+      [12] class 'PairView' '<genericInterfaceReceiver>@12',
+      [13] class 'PairView`2'<int32, string> '<genericInterfaceCapability>@13',
+      [14] string '<genericInterfaceResult>@14',
+      [15] class 'Mixed' 'originalMixed',
+      [16] class 'Mixed' 'mixed',
+      [17] class 'Mixed' '<genericInterfaceReceiver>@17',
+      [18] class 'Mixed`3'<int32, object, string> '<genericInterfaceCapability>@18',
+      [19] object '<genericInterfaceResult>@19',
+      [20] class 'Mixed' '<genericInterfaceReceiver>@20',
+      [21] class 'Mixed__KotlinExact`3'<int32, object, string> '<genericInterfaceCapability>@21',
+      [22] bool '<genericInterfaceResult>@22',
+      [23] class 'BoundedProducer' 'bounded',
+      [24] class 'BoundedProducer' '<genericInterfaceReceiver>@24',
+      [25] class 'BoundedProducer`1'<class 'Item'> '<genericInterfaceCapability>@25',
+      [26] class 'Item' '<genericInterfaceResult>@26',
+      [27] class 'GenericProducer`1'<class 'Producer'> 'nestedValue',
+      [28] class 'Producer' '<genericInterfaceReceiver>@28',
+      [29] class 'Producer`1'<class 'Producer'> '<genericInterfaceCapability>@29',
+      [30] class 'Producer' '<genericInterfaceResult>@30',
+      [31] class 'Producer' '<genericInterfaceReceiver>@31',
+      [32] class 'Producer`1'<class 'Item'> '<genericInterfaceCapability>@32',
+      [33] class 'Item' '<genericInterfaceResult>@33',
+      [34] class 'Producer' '<genericInterfaceReceiver>@34',
+      [35] class 'Producer`1'<int32> '<genericInterfaceCapability>@35',
+      [36] int32 '<genericInterfaceResult>@36',
+      [37] class 'Producer' '<genericInterfaceReceiver>@37',
+      [38] class 'Producer`1'<object> '<genericInterfaceCapability>@38',
+      [39] object '<genericInterfaceResult>@39',
+      [40] class 'Consumer' '<genericInterfaceReceiver>@40',
+      [41] class 'Consumer`1'<int32> '<genericInterfaceCapability>@41',
+      [42] class 'Producer' 'refined',
+      [43] class 'Producer' '<genericInterfaceReceiver>@43',
+      [44] class 'Producer`1'<object> '<genericInterfaceCapability>@44',
+      [45] object '<genericInterfaceResult>@45',
+      [46] class 'Producer' '<genericInterfaceReceiver>@46',
+      [47] class 'Producer`1'<object> '<genericInterfaceCapability>@47',
+      [48] object '<genericInterfaceResult>@48',
+      [49] class 'NestedFactory' '<genericInterfaceReceiver>@49',
+      [50] class 'NestedFactory`1'<object> '<genericInterfaceCapability>@50',
+      [51] class 'Producer' '<genericInterfaceResult>@51',
+      [52] class 'Producer' '<genericInterfaceReceiver>@52',
+      [53] class 'Producer`1'<object> '<genericInterfaceCapability>@53',
+      [54] object '<genericInterfaceResult>@54',
+      [55] class 'VariantCell' 'cell',
+      [56] class 'VariantCell' '<genericInterfaceReceiver>@56',
+      [57] class 'VariantCell`1'<object> '<genericInterfaceCapability>@57',
+      [58] object '<genericInterfaceResult>@58',
+      [59] class 'VariantCell' '<genericInterfaceReceiver>@59',
+      [60] class 'VariantCell__KotlinExact`1'<object> '<genericInterfaceCapability>@60',
+      [61] class 'GenericProducer`1'<valuetype [mscorlib]System.Nullable`1<int32>> 'nullableInt',
+      [62] class 'Producer' '<genericInterfaceReceiver>@62',
+      [63] class 'Producer`1'<object> '<genericInterfaceCapability>@63',
+      [64] object '<genericInterfaceResult>@64',
+      [65] valuetype [mscorlib]System.Nullable`1<int32> '<null>',
+      [66] class 'Producer' '<genericInterfaceReceiver>@66',
+      [67] class 'Producer`1'<object> '<genericInterfaceCapability>@67',
+      [68] object '<genericInterfaceResult>@68',
+      [69] class 'Producer' '<genericInterfaceReceiver>@69',
+      [70] class 'Producer`1'<object> '<genericInterfaceCapability>@70',
+      [71] object '<genericInterfaceResult>@71',
+      [72] class 'Producer' '<genericInterfaceReceiver>@72',
+      [73] class 'Producer`1'<object> '<genericInterfaceCapability>@73',
+      [74] object '<genericInterfaceResult>@74',
+      [75] class 'Channel' 'projectedChannel',
+      [76] class 'Channel' 'starredChannel',
+      [77] class 'ResultSource' 'inherited',
+      [78] class 'ResultSource' '<genericInterfaceReceiver>@78',
+      [79] class 'ResultSource`1'<class 'Item'> '<genericInterfaceCapability>@79',
+      [80] class 'Item' '<genericInterfaceResult>@80',
+      [81] class 'NestedSink' '<genericInterfaceReceiver>@81',
+      [82] class 'NestedSink`1'<object> '<genericInterfaceCapability>@82',
+      [83] bool '<genericInterfaceResult>@83',
+      [84] object 'castOperand',
+      [85] class 'Producer' '<genericInterfaceReceiver>@85',
+      [86] class 'Producer`1'<int32> '<genericInterfaceCapability>@86',
+      [87] int32 '<genericInterfaceResult>@87'
     )
     ldstr "special"
     newobj instance void 'Special'::.ctor(string)
     newobj instance void 'SpecialProducer'::.ctor(class 'Special')
     stloc.0
     ldloc.0
+    stloc.1
+    ldloc.1
+    isinst class 'Producer`1'<class 'Item'>
+    stloc.2
+    ldloc.2
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.2
     callvirt instance !0 class 'Producer`1'<class 'Item'>::'produce'()
+    stloc.3
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.1
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    castclass 'Item'
+    stloc.3
+IL_genericInterfaceJoin_1:
+    ldloc.3
     call instance string 'Item'::'get_name'()
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ItemConsumer'::.ctor()
-    stloc.1
-    ldloc.1
+    stloc 4
+    ldloc 4
+    stloc 5
+    ldloc 5
+    isinst class 'Consumer`1'<class 'Special'>
+    stloc 6
+    ldloc 6
+    brfalse IL_genericInterfaceErasedFallback_2
+    ldloc 6
     ldstr "consumed"
     newobj instance void 'Special'::.ctor(string)
     callvirt instance void class 'Consumer`1'<class 'Special'>::'consume'(!0)
+    br IL_genericInterfaceJoin_3
+IL_genericInterfaceErasedFallback_2:
+    ldloc 5
+    ldstr "consumed"
+    newobj instance void 'Special'::.ctor(string)
+    callvirt instance void 'Consumer'::'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object)
+IL_genericInterfaceJoin_3:
     ldstr "channel"
     newobj instance void class 'GenericChannel`1'<string>::.ctor(!0)
-    stloc.2
-    ldloc.2
-    callvirt instance !0 class 'Producer`1'<string>::'produce'()
+    stloc 7
+    ldloc 7
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.2
+    ldloc 7
     ldstr "changed"
-    callvirt instance void class 'Consumer`1'<string>::'consume'(!0)
-    ldloc.2
-    callvirt instance !0 class 'Producer`1'<string>::'get_value'()
+    callvirt instance void 'Consumer'::'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object)
+    ldloc 7
+    callvirt instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    castclass [mscorlib]System.String
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "left"
     ldc.i4 7
     newobj instance void class 'SwappedPair`2'<string, int32>::.ctor(!0, !1)
-    stloc.3
-    ldloc.3
+    stloc 8
+    ldloc 8
+    stloc 9
+    ldloc 9
+    isinst class 'PairView`2'<int32, string>
+    stloc 10
+    ldloc 10
+    brfalse IL_genericInterfaceErasedFallback_4
+    ldloc 10
     callvirt instance !0 class 'PairView`2'<int32, string>::'first'()
+    stloc 11
+    br IL_genericInterfaceJoin_5
+IL_genericInterfaceErasedFallback_4:
+    ldloc 9
+    callvirt instance object 'PairView'::'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'()
+    unbox.any [mscorlib]System.Int32
+    stloc 11
+IL_genericInterfaceJoin_5:
+    ldloc 11
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc.3
+    ldloc 8
+    stloc 12
+    ldloc 12
+    isinst class 'PairView`2'<int32, string>
+    stloc 13
+    ldloc 13
+    brfalse IL_genericInterfaceErasedFallback_6
+    ldloc 13
     callvirt instance !1 class 'PairView`2'<int32, string>::'second'()
+    stloc 14
+    br IL_genericInterfaceJoin_7
+IL_genericInterfaceErasedFallback_6:
+    ldloc 12
+    callvirt instance object 'PairView'::'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'()
+    castclass [mscorlib]System.String
+    stloc 14
+IL_genericInterfaceJoin_7:
+    ldloc 14
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'MixedImplementation'::.ctor()
+    stloc 15
+    ldloc 15
+    call class 'Mixed' 'genericInterfacesKt'::'widenMixed'(class 'Mixed')
+    stloc 16
+    ldloc 16
+    ldloc 15
+    ceq
+    brtrue IL_boolStrTrue_8
+    ldstr "false"
+    br IL_boolStrEnd_9
+IL_boolStrTrue_8:
+    ldstr "true"
+IL_boolStrEnd_9:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 16
+    stloc 17
+    ldloc 17
+    isinst class 'Mixed`3'<int32, object, string>
+    stloc 18
+    ldloc 18
+    brfalse IL_genericInterfaceErasedFallback_10
+    ldloc 18
+    ldc.i4 123
+    ldstr "ab"
+    callvirt instance !1 class 'Mixed`3'<int32, object, string>::'run'(!0, !2)
+    stloc 19
+    br IL_genericInterfaceJoin_11
+IL_genericInterfaceErasedFallback_10:
+    ldloc 17
+    ldc.i4 123
+    box [mscorlib]System.Int32
+    ldstr "ab"
+    callvirt instance object 'Mixed'::'run__KotlinErased__9d6b95b1f0e236655436814c917cd213'(object, object)
+    stloc 19
+IL_genericInterfaceJoin_11:
+    ldloc 19
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 16
+    stloc 20
+    ldloc 20
+    isinst class 'Mixed__KotlinExact`3'<int32, object, string>
+    stloc 21
+    ldloc 21
+    brfalse IL_genericInterfaceErasedFallback_12
+    ldloc 21
+    ldc.i4 1
+    box [mscorlib]System.Int32
+    callvirt instance bool class 'Mixed__KotlinExact`3'<int32, object, string>::'acceptsOutput'(!1)
+    stloc 22
+    br IL_genericInterfaceJoin_13
+IL_genericInterfaceErasedFallback_12:
+    ldloc 20
+    ldc.i4 1
+    box [mscorlib]System.Int32
+    callvirt instance bool 'Mixed'::'acceptsOutput__KotlinErased__5ffdd748feb0419758a90b53d9cbf280'(object)
+    stloc 22
+IL_genericInterfaceJoin_13:
+    ldloc 22
+    brtrue IL_boolStrTrue_14
+    ldstr "false"
+    br IL_boolStrEnd_15
+IL_boolStrTrue_14:
+    ldstr "true"
+IL_boolStrEnd_15:
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "bounded"
     newobj instance void 'Special'::.ctor(string)
     newobj instance void 'BoundedSpecial'::.ctor(class 'Special')
-    stloc 4
-    ldloc 4
+    stloc 23
+    ldloc 23
+    stloc 24
+    ldloc 24
+    isinst class 'BoundedProducer`1'<class 'Item'>
+    stloc 25
+    ldloc 25
+    brfalse IL_genericInterfaceErasedFallback_16
+    ldloc 25
     callvirt instance !0 class 'BoundedProducer`1'<class 'Item'>::'bounded'()
+    stloc 26
+    br IL_genericInterfaceJoin_17
+IL_genericInterfaceErasedFallback_16:
+    ldloc 24
+    callvirt instance object 'BoundedProducer'::'bounded__KotlinErased__d7d775f8c47b30158f80c6a307c7af61'()
+    castclass 'Item'
+    stloc 26
+IL_genericInterfaceJoin_17:
+    ldloc 26
     call instance string 'Item'::'get_name'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldstr "nested"
     newobj instance void 'Special'::.ctor(string)
     newobj instance void 'SpecialProducer'::.ctor(class 'Special')
-    newobj instance void class 'GenericProducer`1'<class 'Producer`1'<class 'Special'>>::.ctor(!0)
-    stloc 5
-    ldloc 5
-    call class 'Producer`1'<class 'Producer`1'<class 'Item'>> 'genericInterfacesKt'::'nested'(class 'Producer`1'<class 'Producer`1'<class 'Special'>>)
-    callvirt instance !0 class 'Producer`1'<class 'Producer`1'<class 'Item'>>::'produce'()
+    newobj instance void class 'GenericProducer`1'<class 'Producer'>::.ctor(!0)
+    stloc 27
+    ldloc 27
+    call class 'Producer' 'genericInterfacesKt'::'nested'(class 'Producer')
+    stloc 28
+    ldloc 28
+    isinst class 'Producer`1'<class 'Producer'>
+    stloc 29
+    ldloc 29
+    brfalse IL_genericInterfaceErasedFallback_18
+    ldloc 29
+    callvirt instance !0 class 'Producer`1'<class 'Producer'>::'produce'()
+    stloc 30
+    br IL_genericInterfaceJoin_19
+IL_genericInterfaceErasedFallback_18:
+    ldloc 28
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    castclass 'Producer'
+    stloc 30
+IL_genericInterfaceJoin_19:
+    ldloc 30
+    stloc 31
+    ldloc 31
+    isinst class 'Producer`1'<class 'Item'>
+    stloc 32
+    ldloc 32
+    brfalse IL_genericInterfaceErasedFallback_20
+    ldloc 32
     callvirt instance !0 class 'Producer`1'<class 'Item'>::'produce'()
+    stloc 33
+    br IL_genericInterfaceJoin_21
+IL_genericInterfaceErasedFallback_20:
+    ldloc 31
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    castclass 'Item'
+    stloc 33
+IL_genericInterfaceJoin_21:
+    ldloc 33
     call instance string 'Item'::'get_name'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 9
     newobj instance void 'IntProducer'::.ctor(int32)
-    call class 'Producer`1'<int32> 'genericInterfacesKt'::'exactValue'(class 'Producer`1'<int32>)
+    call class 'Producer' 'genericInterfacesKt'::'exactValue'(class 'Producer')
+    stloc 34
+    ldloc 34
+    isinst class 'Producer`1'<int32>
+    stloc 35
+    ldloc 35
+    brfalse IL_genericInterfaceErasedFallback_22
+    ldloc 35
     callvirt instance !0 class 'Producer`1'<int32>::'produce'()
+    stloc 36
+    br IL_genericInterfaceJoin_23
+IL_genericInterfaceErasedFallback_22:
+    ldloc 34
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    unbox.any [mscorlib]System.Int32
+    stloc 36
+IL_genericInterfaceJoin_23:
+    ldloc 36
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 10
+    newobj instance void 'IntProducer'::.ctor(int32)
+    call class 'Producer' 'genericInterfacesKt'::'widenValue'(class 'Producer')
+    stloc 37
+    ldloc 37
+    isinst class 'Producer`1'<object>
+    stloc 38
+    ldloc 38
+    brfalse IL_genericInterfaceErasedFallback_24
+    ldloc 38
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 39
+    br IL_genericInterfaceJoin_25
+IL_genericInterfaceErasedFallback_24:
+    ldloc 37
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 39
+IL_genericInterfaceJoin_25:
+    ldloc 39
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'AnyConsumer'::.ctor()
+    call class 'Consumer' 'genericInterfacesKt'::'narrowValue'(class 'Consumer')
+    stloc 40
+    ldloc 40
+    isinst class 'Consumer`1'<int32>
+    stloc 41
+    ldloc 41
+    brfalse IL_genericInterfaceErasedFallback_26
+    ldloc 41
+    ldc.i4 11
+    callvirt instance void class 'Consumer`1'<int32>::'consume'(!0)
+    br IL_genericInterfaceJoin_27
+IL_genericInterfaceErasedFallback_26:
+    ldloc 40
+    ldc.i4 11
+    box [mscorlib]System.Int32
+    callvirt instance void 'Consumer'::'consume__KotlinErased__0c36d333dff500c0a56d9f7ca1568568'(object)
+IL_genericInterfaceJoin_27:
+    newobj instance void 'RefinedProducer'::.ctor()
+    stloc 42
+    ldloc 42
+    stloc 43
+    ldloc 43
+    isinst class 'Producer`1'<object>
+    stloc 44
+    ldloc 44
+    brfalse IL_genericInterfaceErasedFallback_28
+    ldloc 44
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 45
+    br IL_genericInterfaceJoin_29
+IL_genericInterfaceErasedFallback_28:
+    ldloc 43
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 45
+IL_genericInterfaceJoin_29:
+    ldloc 45
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 42
+    stloc 46
+    ldloc 46
+    isinst class 'Producer`1'<object>
+    stloc 47
+    ldloc 47
+    brfalse IL_genericInterfaceErasedFallback_30
+    ldloc 47
+    callvirt instance !0 class 'Producer`1'<object>::'get_value'()
+    stloc 48
+    br IL_genericInterfaceJoin_31
+IL_genericInterfaceErasedFallback_30:
+    ldloc 46
+    callvirt instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    stloc 48
+IL_genericInterfaceJoin_31:
+    ldloc 48
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 12
+    newobj instance void 'IntProducer'::.ctor(int32)
+    newobj instance void 'IntFactory'::.ctor(class 'Producer')
+    call class 'NestedFactory' 'genericInterfacesKt'::'widenFactory'(class 'NestedFactory')
+    stloc 49
+    ldloc 49
+    isinst class 'NestedFactory`1'<object>
+    stloc 50
+    ldloc 50
+    brfalse IL_genericInterfaceErasedFallback_32
+    ldloc 50
+    callvirt instance class 'Producer' class 'NestedFactory`1'<object>::'make'()
+    stloc 51
+    br IL_genericInterfaceJoin_33
+IL_genericInterfaceErasedFallback_32:
+    ldloc 49
+    callvirt instance class 'Producer' 'NestedFactory'::'make__KotlinErased__53c8d0f4325e3658880e57746a2e67c0'()
+    stloc 51
+IL_genericInterfaceJoin_33:
+    ldloc 51
+    stloc 52
+    ldloc 52
+    isinst class 'Producer`1'<object>
+    stloc 53
+    ldloc 53
+    brfalse IL_genericInterfaceErasedFallback_34
+    ldloc 53
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 54
+    br IL_genericInterfaceJoin_35
+IL_genericInterfaceErasedFallback_34:
+    ldloc 52
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 54
+IL_genericInterfaceJoin_35:
+    ldloc 54
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 13
+    newobj instance void 'IntCell'::.ctor(int32)
+    call class 'VariantCell' 'genericInterfacesKt'::'widenCell'(class 'VariantCell')
+    stloc 55
+    ldloc 55
+    stloc 56
+    ldloc 56
+    isinst class 'VariantCell`1'<object>
+    stloc 57
+    ldloc 57
+    brfalse IL_genericInterfaceErasedFallback_36
+    ldloc 57
+    callvirt instance !0 class 'VariantCell`1'<object>::'get_value'()
+    stloc 58
+    br IL_genericInterfaceJoin_37
+IL_genericInterfaceErasedFallback_36:
+    ldloc 56
+    callvirt instance object 'VariantCell'::'get_value__KotlinErased__6c03bc9abcbed2de33a724a4fdafe09f'()
+    stloc 58
+IL_genericInterfaceJoin_37:
+    ldloc 58
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 55
+    stloc 59
+    ldloc 59
+    isinst class 'VariantCell__KotlinExact`1'<object>
+    stloc 60
+    ldloc 60
+    brfalse IL_genericInterfaceErasedFallback_38
+    ldloc 60
+    ldc.i4 14
+    box [mscorlib]System.Int32
+    callvirt instance void class 'VariantCell__KotlinExact`1'<object>::'set_value'(!0)
+    br IL_genericInterfaceJoin_39
+IL_genericInterfaceErasedFallback_38:
+    ldloc 59
+    ldc.i4 14
+    box [mscorlib]System.Int32
+    callvirt instance void 'VariantCell'::'set_value__KotlinErased__2c73dad5ce63287fb90db4e740926776'(object)
+IL_genericInterfaceJoin_39:
+    ldc.i4 15
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    newobj instance void class 'GenericProducer`1'<valuetype [mscorlib]System.Nullable`1<int32>>::.ctor(!0)
+    stloc 61
+    ldloc 61
+    call class 'Producer' 'genericInterfacesKt'::'nullableValue'(class 'Producer')
+    stloc 62
+    ldloc 62
+    isinst class 'Producer`1'<object>
+    stloc 63
+    ldloc 63
+    brfalse IL_genericInterfaceErasedFallback_40
+    ldloc 63
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 64
+    br IL_genericInterfaceJoin_41
+IL_genericInterfaceErasedFallback_40:
+    ldloc 62
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 64
+IL_genericInterfaceJoin_41:
+    ldloc 64
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloca 65
+    initobj valuetype [mscorlib]System.Nullable`1<int32>
+    ldloc 65
+    newobj instance void class 'GenericProducer`1'<valuetype [mscorlib]System.Nullable`1<int32>>::.ctor(!0)
+    call class 'Producer' 'genericInterfacesKt'::'nullableValue'(class 'Producer')
+    stloc 66
+    ldloc 66
+    isinst class 'Producer`1'<object>
+    stloc 67
+    ldloc 67
+    brfalse IL_genericInterfaceErasedFallback_42
+    ldloc 67
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 68
+    br IL_genericInterfaceJoin_43
+IL_genericInterfaceErasedFallback_42:
+    ldloc 66
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 68
+IL_genericInterfaceJoin_43:
+    ldloc 68
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 16
+    newobj instance void class 'GenericProducer`1'<int32>::.ctor(!0)
+    call class 'Producer' 'genericInterfacesKt'::'widenOpen'<int32>(class 'Producer')
+    stloc 69
+    ldloc 69
+    isinst class 'Producer`1'<object>
+    stloc 70
+    ldloc 70
+    brfalse IL_genericInterfaceErasedFallback_44
+    ldloc 70
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 71
+    br IL_genericInterfaceJoin_45
+IL_genericInterfaceErasedFallback_44:
+    ldloc 69
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 71
+IL_genericInterfaceJoin_45:
+    ldloc 71
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "open"
+    newobj instance void class 'GenericProducer`1'<string>::.ctor(!0)
+    call class 'Producer' 'genericInterfacesKt'::'widenOpen'<string>(class 'Producer')
+    stloc 72
+    ldloc 72
+    isinst class 'Producer`1'<object>
+    stloc 73
+    ldloc 73
+    brfalse IL_genericInterfaceErasedFallback_46
+    ldloc 73
+    callvirt instance !0 class 'Producer`1'<object>::'produce'()
+    stloc 74
+    br IL_genericInterfaceJoin_47
+IL_genericInterfaceErasedFallback_46:
+    ldloc 72
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    stloc 74
+IL_genericInterfaceJoin_47:
+    ldloc 74
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 7
+    stloc 75
+    ldloc 7
+    stloc 76
+    ldloc 75
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    castclass [mscorlib]System.String
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 76
+    callvirt instance object 'Producer'::'get_value__KotlinErased__2f135b5a16a291e1cba6e7ec059d25f9'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'InheritedResultSource'::.ctor()
+    stloc 77
+    ldloc 77
+    stloc 78
+    ldloc 78
+    isinst class 'ResultSource`1'<class 'Item'>
+    stloc 79
+    ldloc 79
+    brfalse IL_genericInterfaceErasedFallback_48
+    ldloc 79
+    callvirt instance !0 class 'ResultSource`1'<class 'Item'>::'result'()
+    stloc 80
+    br IL_genericInterfaceJoin_49
+IL_genericInterfaceErasedFallback_48:
+    ldloc 78
+    callvirt instance object 'ResultSource'::'result__KotlinErased__10e303668695d953a0f995f8c1355a3a'()
+    castclass 'Item'
+    stloc 80
+IL_genericInterfaceJoin_49:
+    ldloc 80
+    call instance string 'Item'::'get_name'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'IntNestedSink'::.ctor()
+    call class 'NestedSink' 'genericInterfacesKt'::'widenNestedSink'(class 'NestedSink')
+    stloc 81
+    ldloc 81
+    isinst class 'NestedSink`1'<object>
+    stloc 82
+    ldloc 82
+    brfalse IL_genericInterfaceErasedFallback_50
+    ldloc 82
+    ldc.i4 17
+    newobj instance void 'IntProducer'::.ctor(int32)
+    callvirt instance bool class 'NestedSink`1'<object>::'accepts'(class 'Producer')
+    stloc 83
+    br IL_genericInterfaceJoin_51
+IL_genericInterfaceErasedFallback_50:
+    ldloc 81
+    ldc.i4 17
+    newobj instance void 'IntProducer'::.ctor(int32)
+    callvirt instance bool 'NestedSink'::'accepts__KotlinErased__6adf7aeba7ffe6688a3fbb7293847e0a'(class 'Producer')
+    stloc 83
+IL_genericInterfaceJoin_51:
+    ldloc 83
+    brtrue IL_boolStrTrue_52
+    ldstr "false"
+    br IL_boolStrEnd_53
+IL_boolStrTrue_52:
+    ldstr "true"
+IL_boolStrEnd_53:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 18
+    newobj instance void 'IntProducer'::.ctor(int32)
+    stloc 84
+    ldloc 84
+    call class 'Producer' 'genericInterfacesKt'::'castProducer'(object)
+    stloc 85
+    ldloc 85
+    isinst class 'Producer`1'<int32>
+    stloc 86
+    ldloc 86
+    brfalse IL_genericInterfaceErasedFallback_54
+    ldloc 86
+    callvirt instance !0 class 'Producer`1'<int32>::'produce'()
+    stloc 87
+    br IL_genericInterfaceJoin_55
+IL_genericInterfaceErasedFallback_54:
+    ldloc 85
+    callvirt instance object 'Producer'::'produce__KotlinErased__e265bd63d2e773b3299b6d33eccbf61c'()
+    unbox.any [mscorlib]System.Int32
+    stloc 87
+IL_genericInterfaceJoin_55:
+    ldloc 87
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 84
+    call class 'Producer' 'genericInterfacesKt'::'safeProducer'(object)
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brtrue IL_boolStrTrue_56
+    ldstr "false"
+    br IL_boolStrEnd_57
+IL_boolStrTrue_56:
+    ldstr "true"
+IL_boolStrEnd_57:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "not a producer"
+    newobj instance void 'Item'::.ctor(string)
+    call class 'Producer' 'genericInterfacesKt'::'safeProducer'(object)
+    ldnull
+    ceq
+    brtrue IL_boolStrTrue_58
+    ldstr "false"
+    br IL_boolStrEnd_59
+IL_boolStrTrue_58:
+    ldstr "true"
+IL_boolStrEnd_59:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 84
+    call bool 'genericInterfacesKt'::'isProducer'(object)
+    brtrue IL_boolStrTrue_60
+    ldstr "false"
+    br IL_boolStrEnd_61
+IL_boolStrTrue_60:
+    ldstr "true"
+IL_boolStrEnd_61:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldnull
+    call bool 'genericInterfacesKt'::'isNullableProducer'(object)
+    brtrue IL_boolStrTrue_62
+    ldstr "false"
+    br IL_boolStrEnd_63
+IL_boolStrTrue_62:
+    ldstr "true"
+IL_boolStrEnd_63:
     call void [mscorlib]System.Console::WriteLine(string)
     ret
   }

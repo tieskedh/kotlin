@@ -28,10 +28,7 @@
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
       throw
     }
-    stloc.0
-    br IL_whenEnd_0
 IL_whenNext_1:
-IL_whenEnd_0:
     .try {
       ldstr "later"
       call void [mscorlib]System.Console::WriteLine(string)
@@ -48,6 +45,25 @@ IL_tryEnd_3:
     ret
 IL_returnJoin_4:
     ldloc 4
+    ret
+  }
+  .method public hidebysig static void 'discardedAllBranchesThrow'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class [mscorlib]System.Exception 'e'
+    )
+    .try {
+      ldstr "discarded-a"
+      newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+      throw
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldstr "discarded-b"
+      newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+      throw
+    }
     ret
   }
   .method public hidebysig static void 'main'() cil managed
