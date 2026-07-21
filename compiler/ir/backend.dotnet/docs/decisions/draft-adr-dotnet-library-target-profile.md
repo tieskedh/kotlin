@@ -1,6 +1,6 @@
 # Draft ADR: .NET library target profile
 
-- Status: **POC implementation landed locally, including bounded Kotlin cross-module consumption**
+- Status: **Accepted pre-ABI direction; explicit profile axis implemented, capability policies incomplete**
 - Date: 2026-07-16
 - Scope: target framework/API identity of Kotlin-owned platform and user libraries
 
@@ -9,7 +9,7 @@ is a proof of concept; this document does not claim a public Kotlin or Kotlin/.N
 
 ## Context
 
-The current `-Xdotnet-target=netframework|net` switch combines two concerns:
+The original `-Xdotnet-target=netframework|net` switch combined two concerns:
 
 - which ILAsm and runtime execute an application; and
 - which library API surface the emitted assemblies claim to use.
@@ -18,41 +18,68 @@ Those are not the same axis. `.NET Standard` is an immutable library API contrac
 that launches an executable. This is close to the JVM distinction between the selected execution
 environment and the conservative Java API/release floor used to compile a portable library.
 
-The current backend emits the same `mscorlib`-scoped logical IL for Framework and CoreCLR. Only the
-assembler/runtime path and the KLIB's provisional target property differ. Producing two permanent
-stdlib packages from that toolchain distinction would create duplicate artifacts without proving a
-real Kotlin or CLR API distinction.
+That backend emitted the same `mscorlib`-scoped logical IL for Framework and CoreCLR. Only the
+assembler/runtime path and the KLIB's provisional target property differed. Treating that
+toolchain distinction as a final target model would have prevented profile-specific lowering and
+made dependency compatibility implicit.
 
-## Candidate decision
+## Decision
 
-Use `netstandard2.0` as the baseline target-framework/API profile for the Kotlin-owned platform
-libraries:
+Keep three first-class target profiles:
+
+| Profile | Applications | Libraries | Capability role |
+| --- | --- | --- | --- |
+| `net48` | yes | yes | .NET Framework 4.8/4.8.1 |
+| `netstandard2.0` | no | yes | portable intersection consumable from both runtime targets |
+| `net10.0` | yes | yes | modern .NET 10 LTS |
+
+The target profile and product kind are independent compiler configuration axes. `.NET Standard`
+has no application host and must be rejected for executable output. A library selects one profile;
+an application selects one executable profile. Dependency compatibility is explicit:
+
+- `net48` consumes `net48` and `netstandard2.0` libraries;
+- `net10.0` consumes `net10.0` and `netstandard2.0` libraries;
+- `netstandard2.0` consumes only `netstandard2.0` libraries.
+
+Do not assume that identical Kotlin IR requires identical IL. The selected profile is available to
+target lowerings, type/member mapping, interface strategy, metadata references, runtime/stdlib
+selection, assembly writing, and packaging. The compiler emits different physical code when CLR
+capabilities require it. The logical Kotlin declarations and observable common Kotlin semantics
+remain the same.
+
+Kotlin-owned platform artifacts are multi-targeted:
 
 ```text
-Kotlin.Runtime.dll
-Kotlin.Stdlib.dll
-Kotlin.Stdlib.klib
-```
-
-Keep `netframework` and `net` as concrete executable/runtime selections. They are not aliases for
-the library TFM, and `netstandard2.0` must not be presented as something that can launch an
-application. It is nevertheless a real compilation target for libraries. The current
-`-Xdotnet-target` option still means executable runtime plus POC assembler selection; a general
-library product must select the library TFM independently instead of hiding it behind that runtime
-switch. The first POC product fixes that independent library selection to `netstandard2.0`; adding
-more TFMs later is a library-product decision, not an extension of the runtime enum.
-
-The intended installed shape is one canonical pair rather than one pair per execution target:
-
-```text
+<kotlin-home>/lib/dotnet/net48/Kotlin.Runtime.dll
+<kotlin-home>/lib/dotnet/net48/Kotlin.Stdlib.{klib,dll}
 <kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Runtime.dll
-<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.klib
-<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll
+<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}
+<kotlin-home>/lib/dotnet/net10.0/Kotlin.Runtime.dll
+<kotlin-home>/lib/dotnet/net10.0/Kotlin.Stdlib.{klib,dll}
 ```
 
-Future modern-.NET-specific implementations may add a higher TFM as a multi-targeted asset, but
-they must preserve a compatible public API. They do not change Kotlin callable or collection
-identity.
+The variants share Kotlin logical identities and source contracts but may have different physical
+implementation and interface-body placement. Each KLIB/DLL binding records its exact profile;
+resolution rejects incompatible variants. Packaging may later use a variant map instead of one
+KLIB per profile, but it must preserve this selection and binding rule.
+
+An application deploys exactly one `Kotlin.Runtime` and one `Kotlin.Stdlib` variant. The `net48`
+and `net10.0` variants must each be a binary superset of the `netstandard2.0` platform surface so a
+portable library can bind to the application-selected runtime without loading a second Kotlin
+runtime identity. Profile-specific code may add members, use a different body strategy, or call
+newer BCL APIs; it may not remove the portable helper/member surface on which a
+`netstandard2.0` consumer was compiled. Modern interface bodies can therefore coexist with portable
+helper entry points where the shared-library ABI requires both.
+
+This superset rule applies to Kotlin-owned platform assemblies. Arbitrary `net48` and `net10.0`
+user-library binaries are profile-specific assets and are not interchangeable merely because their
+Kotlin sources have the same declarations.
+
+`netstandard2.0` is the shared-library choice when one binary must be consumed by both runtime
+targets. APIs or implementations that require Framework-only or modern-only capabilities select
+`net48` or `net10.0`; they do not leak into the portable surface. Target-specific Kotlin APIs use
+the normal multiplatform/source-set model rather than conditional meanings for one common
+declaration.
 
 ## Why 2.0
 
@@ -100,13 +127,23 @@ The implementation now:
    references, nullable metadata, runtime helpers, and platform-library production;
 2. emits the exact `netstandard, Version=2.0.0.0, PublicKeyToken=cc7b13ffcd2ddd51`
    AssemblyRef and `.NETStandard,Version=v2.0` `TargetFrameworkAttribute`;
-3. binds the KLIB with `dotnet_library_tfm=netstandard2.0`, independently of executable target;
-4. discovers one installed pair under `lib/dotnet/netstandard2.0`; and
-5. keeps ordinary application IL on its existing executable core-library profile;
-6. provides `-Xdotnet-produce-library`, which emits `<module>.klib`, `<module>.il`, and
+3. exposes only `net48`, `netstandard2.0`, and `net10.0` as explicit profile values and rejects an
+   executable product under `netstandard2.0` before frontend/code generation;
+4. binds every produced KLIB to its selected profile with `dotnet_library_tfm` and rejects an
+   incompatible dependency before FIR analysis;
+5. discovers an installed exact-profile stdlib first, then the portable `netstandard2.0` variant
+   for either executable profile;
+6. selects the profile before IR lowerings and carries it through user IL, runtime/stdlib
+   generation, assembly metadata, assembly writing, deployment, and packaging;
+7. provides `-Xdotnet-produce-library`, which emits `<module>.klib`, `<module>.il`, and
    `<module>.dll` for ordinary Kotlin sources with no entry point or runtimeconfig; and
-7. writes a versioned declaration-binding index into an ordinary produced KLIB and uses it to
+8. writes a versioned declaration-binding index into an ordinary produced KLIB and uses it to
    resolve Kotlin calls and types to the paired CLR assembly.
+
+The repository's opt-in stdlib producer and installer create all three profile variants under
+their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
+single `netstandard2.0` stdlib pair is discovered as fallback, compiled against, assembled, and
+executed by both `net48` and `net10.0` applications.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
@@ -118,17 +155,25 @@ carried by that logical signature: physical owner-type path, method name, and st
 dispatch. Parameter and return signatures are still derived from Kotlin metadata.
 
 The producer indexes only declarations that survive backend emission. The loader recognizes only
-KLIBs with the explicit index ABI marker, validates their complete unsigned netstandard2.0
-assembly binding, and requires the named sibling DLL. Arbitrary metadata KLIBs remain
+KLIBs with the explicit index ABI marker, validates their complete unsigned sibling-assembly and
+target-profile binding, and requires the named sibling DLL. Arbitrary metadata KLIBs remain
 compile-time-only. A consumer never reconstructs a facade from a source filename; it uses the
 producer-recorded owner. Executable consumers copy referenced sibling DLLs next to their output.
 The current manifest-property encoding is a bounded POC schema, not a public annotation or final
 KLIB component design.
 
-Portable PE production uses modern ILAsm independently of executable target. Framework ILAsm
+`netstandard2.0` PE production uses modern ILAsm independently of consumer runtime. Framework ILAsm
 accepts the same source but injects an `mscorlib` AssemblyRef into the resulting PE; it therefore
-remains the Framework application writer and a compatibility oracle, not the canonical
-netstandard2.0 library writer. A direct PE writer should eventually replace this tool constraint.
+remains the `net48` application/library writer and a compatibility oracle, not the canonical
+portable-library writer. Modern ILAsm writes `net10.0` applications/libraries. A direct PE writer
+should eventually replace this tool constraint.
+
+The present `net10.0` core profile deliberately has a `.NETCoreApp,Version=v10.0`
+`TargetFrameworkAttribute` and modern product/runtime path, but temporarily retains `mscorlib`
+MemberRefs for the implemented common surface. That is a compatibility-oriented implementation
+stage, not a premise that `net48` and `net10.0` code must remain identical. Newer BCL references,
+default-interface placement, and other capability-dependent code must be selected through the
+profile, with explicit tests for the resulting metadata and behavior.
 
 ## Rejected alternatives
 
@@ -137,10 +182,12 @@ netstandard2.0 library writer. A direct PE writer should eventually replace this
 There is no .NET Standard runtime or application host. This would preserve the current conflation
 instead of fixing it.
 
-### Permanently publish separate Framework and CoreCLR stdlibs
+### Publish one physical platform-library asset for every profile
 
-The current logical IL and public ABI are the same. Separate assets are justified only by a real
-TFM-specific implementation need, not by the external assembler selected during the POC.
+Rejected. The profiles have materially different CLR capabilities and core-library identities.
+Forcing one physical artifact would either deny `net10.0` sound modern implementations or emit IL
+that cannot run on Framework. The variants may share Kotlin metadata inputs and logical identities;
+they do not share one mandatory physical implementation.
 
 ### Globally rename `mscorlib` to `netstandard`
 
@@ -150,10 +197,10 @@ IL churn before the boundary is represented deliberately.
 
 ## Deferred work
 
-This draft does not choose a modern .NET light-up TFM, NuGet package layout/versioning, or the
-eventual direct PE writer. The fixed `netstandard2.0` user-library mode also does not yet choose a
-public multi-TFM selection syntax. Before productionization, the declaration index needs a proper
-versioned KLIB component and a compatibility policy for Kotlin signature-mangler evolution; the
-current manifest encoding is intentionally provisional. Transitive dependency publication and
-package-manager layout also remain open. None of those concerns should reuse executable `main`
-semantics merely because the existing POC runtime option is named `-Xdotnet-target`.
+This decision does not choose NuGet package layout/versioning, the public multi-TFM selection
+syntax, or the eventual direct PE writer. Before productionization, the declaration index needs a
+proper versioned KLIB component and a compatibility policy for Kotlin signature-mangler evolution;
+the current manifest encoding is intentionally provisional. Transitive dependency publication,
+asset selection in Gradle/KMP, and package-manager layout also remain open. None of those concerns
+should reuse executable `main` semantics merely because the existing POC runtime option is named
+`-Xdotnet-target`.

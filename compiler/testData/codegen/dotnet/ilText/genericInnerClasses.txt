@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericInnerClasses' {}
 .module 'main-genericInnerClasses.il'
 
@@ -20,14 +24,14 @@
     stfld !1 class 'GenericInnerPairBase`2'<!0, !1>::'second'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_first'() cil managed
+  .method private hidebysig specialname instance !0 'get_first'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'GenericInnerPairBase`2'<!0, !1>::'first'
     ret
   }
-  .method public hidebysig specialname instance !1 'get_second'() cil managed
+  .method private hidebysig specialname instance !1 'get_second'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -110,7 +114,7 @@
       stfld !0 class 'GenericInnerOuter`1'/'Own`2'<!0, !1>::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance !0 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -155,7 +159,7 @@
       stfld !0 class 'GenericInnerOuter`1'/'Base`2'<!0, !1>::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance !0 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -246,7 +250,7 @@
         stfld !0 class 'GenericInnerOuter`1'/'First`2'/'Second`3'<!0, !1, !2>::'own'
         ret
       }
-      .method public hidebysig specialname instance !0 'get_own'() cil managed
+      .method private hidebysig specialname instance !0 'get_own'() cil managed
       {
         .maxstack 1
         ldarg.0
@@ -297,7 +301,7 @@
       stfld !0 class 'GenericInnerOuter`1'/'First`2'<!0, !1>::'middle'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_middle'() cil managed
+    .method private hidebysig specialname instance !0 'get_middle'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -314,7 +318,7 @@
   {
     .field private !0 'value'
     .field private class 'GenericInnerOuter`1'<!0> 'this$0'
-    .method public hidebysig specialname instance !0 'get_value'() cil managed
+    .method private hidebysig specialname instance !0 'get_value'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -367,7 +371,7 @@
     stfld !0 class 'GenericInnerOuter`1'<!0>::'seed'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_seed'() cil managed
+  .method private hidebysig specialname instance !0 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -415,7 +419,7 @@
       stfld !0 class 'DuplicateGenericInnerOuter`1'/'Duplicate`2'<!0, !1>::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance !0 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0

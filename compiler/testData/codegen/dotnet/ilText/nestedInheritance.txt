@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'nestedInheritance' {}
 .module 'main-nestedInheritance.il'
 
@@ -47,7 +51,7 @@
       stfld int32 'ForwardFamily'/'Base'::'seed'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_seed'() cil managed
+    .method private hidebysig specialname instance int32 'get_seed'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -109,7 +113,7 @@
   .class nested public abstract auto ansi beforefieldinit 'Choice'
          extends [mscorlib]System.Object
   {
-    .method family hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method famandassem hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -162,7 +166,7 @@
       stfld !0 class 'GenericFamily`1'/'Base`1'<!0>::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance !0 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -237,7 +241,7 @@
       stfld int32 'DepthFamily'/'Parent'::'stored'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_stored'() cil managed
+    .method private hidebysig specialname instance int32 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -273,7 +277,7 @@
         stfld int32 'DepthFamily'/'Middle'/'Base'::'stored'
         ret
       }
-      .method public hidebysig specialname instance int32 'get_stored'() cil managed
+      .method private hidebysig specialname instance int32 'get_stored'() cil managed
       {
         .maxstack 1
         ldarg.0
@@ -337,7 +341,7 @@
       stfld int32 'SharedFamily'/'Base'::'stored'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_stored'() cil managed
+    .method private hidebysig specialname instance int32 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0

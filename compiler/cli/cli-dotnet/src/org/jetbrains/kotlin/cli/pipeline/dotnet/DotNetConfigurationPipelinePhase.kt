@@ -2,12 +2,15 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetExport
+import org.jetbrains.kotlin.backend.dotnet.DotNetFriendAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetPropertyExport
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
 import org.jetbrains.kotlin.backend.dotnet.dotNetExports
+import org.jetbrains.kotlin.backend.dotnet.dotNetFriendAssemblies
+import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducesLibrary
@@ -25,8 +28,12 @@ import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.ConfigurationUpdater
 import org.jetbrains.kotlin.cli.report
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
+import org.jetbrains.kotlin.config.AnalysisFlag
+import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.CompilerConfiguration
+import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.config.getModuleNameForSource
+import org.jetbrains.kotlin.config.languageVersionSettings
 import org.jetbrains.kotlin.config.moduleName
 import org.jetbrains.kotlin.config.perfManager
 import org.jetbrains.kotlin.config.targetPlatform
@@ -76,6 +83,12 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
                     "-Xdotnet-produce-stdlib cannot be combined with CLR export options."
                 )
             }
+            if (arguments.friendPaths.isNotEmpty() || !arguments.dotNetFriendAssemblies.isNullOrEmpty()) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "-Xdotnet-produce-stdlib cannot be combined with friend-module options."
+                )
+            }
             if (arguments.moduleName != null && arguments.moduleName != DotNetStdlibArtifact.ASSEMBLY_NAME) {
                 configuration.report(
                     COMPILER_ARGUMENTS_ERROR,
@@ -113,6 +126,15 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
             } else {
                 configuration.dotNetTarget = target
             }
+        }
+        if (!configuration.dotNetTarget.supportsExecutables &&
+            !arguments.dotNetProduceStdlib && !arguments.dotNetProduceLibrary
+        ) {
+            configuration.report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Target profile '${configuration.dotNetTarget.flagValue}' is library-only; " +
+                        "use -Xdotnet-produce-library or -Xdotnet-produce-stdlib."
+            )
         }
 
         val exports = mutableListOf<DotNetExport>()
@@ -159,6 +181,31 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
         configuration.dotNetPropertyExports = propertyExports
 
+        val friendAssemblies = mutableListOf<DotNetFriendAssemblyIdentity>()
+        for (rawIdentity in arguments.dotNetFriendAssemblies.orEmpty()) {
+            val identity = try {
+                DotNetFriendAssemblyIdentity.parse(rawIdentity)
+            } catch (exception: IllegalArgumentException) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Invalid value '$rawIdentity' for -Xdotnet-friend-assembly: ${exception.message}"
+                )
+                continue
+            }
+            if (friendAssemblies.any { existing ->
+                    existing.displayName.equals(identity.displayName, ignoreCase = true)
+                }
+            ) {
+                configuration.report(
+                    COMPILER_ARGUMENTS_ERROR,
+                    "Duplicate CLR friend assembly identity '${identity.displayName}'."
+                )
+                continue
+            }
+            friendAssemblies += identity
+        }
+        configuration.dotNetFriendAssemblies = friendAssemblies.sortedBy { it.displayName.lowercase() }
+
         val destination = arguments.destination
         if (destination == null) {
             configuration.report(COMPILER_ARGUMENTS_ERROR, "Specify destination via -d")
@@ -184,6 +231,12 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
         configuration.moduleName = assemblyName
         configuration.dotNetAssemblyName = assemblyName
+        if (friendAssemblies.any { it.authorizes(assemblyName) }) {
+            configuration.report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Output assembly '$assemblyName' cannot authorize itself as an unsigned CLR friend."
+            )
+        }
 
         val usesBootstrapStdlibSources = when {
             arguments.dotNetProduceStdlib -> true
@@ -196,16 +249,21 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
         // Only the temporary compiler-owned source corpus needs permission to declare kotlin.*
         // packages. An installed stdlib must not broaden the user's source-package permissions.
-        configuration.put(
-            CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE,
-            arguments.allowKotlinPackage || usesBootstrapStdlibSources,
-        )
+        val allowsKotlinPackage = arguments.allowKotlinPackage || usesBootstrapStdlibSources
+        configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, allowsKotlinPackage)
+        configuration.languageVersionSettings =
+            configuration.languageVersionSettings.withAllowKotlinPackage(allowsKotlinPackage)
 
+        val classpathFiles = linkedSetOf<File>()
         for (path in arguments.classpath?.split(File.pathSeparatorChar).orEmpty()) {
             if (path.isNotEmpty()) {
-                configuration.add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(File(path)))
+                classpathFiles += File(path).canonicalFile
             }
         }
+        val friendPaths = arguments.friendPaths.map { File(it).canonicalFile }
+        configuration.dotNetFriendPaths = friendPaths.map(File::getPath)
+        classpathFiles += friendPaths
+        classpathFiles.forEach { configuration.add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(it)) }
 
         configuration.perfManager?.apply {
             outputKind =
@@ -215,23 +273,42 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
     }
 }
 
-/** Adds the portable stdlib pair installed under `<kotlin-home>/lib/dotnet/netstandard2.0`. */
+private fun LanguageVersionSettings.withAllowKotlinPackage(value: Boolean): LanguageVersionSettings {
+    val delegate = this
+    return object : LanguageVersionSettings by delegate {
+        override fun <T> getFlag(flag: AnalysisFlag<T>): T {
+            @Suppress("UNCHECKED_CAST")
+            if (flag == AnalysisFlags.allowKotlinPackage) return value as T
+            return delegate.getFlag(flag)
+        }
+    }
+}
+
+/** Adds the best compatible installed stdlib pair for the selected target profile. */
 private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
     val kotlinLibDirectory = kotlinPaths?.libPath ?: return false
-    val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory)
-    val metadataFile = directory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
-    val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
-    if (!metadataFile.exists() && !implementationFile.exists()) return false
-    if (!metadataFile.isFile || !implementationFile.isFile) {
-        report(
-            COMPILER_ARGUMENTS_ERROR,
-            "Incomplete Kotlin/.NET ${DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK} stdlib installation in '$directory': " +
-                    "both ${DotNetStdlibArtifact.METADATA_FILE_NAME} and ${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME} are required.",
-        )
+    val targetFrameworks = buildList {
+        add(dotNetTarget.flagValue)
+        if (dotNetTarget != DotNetTarget.NETSTANDARD_2_0) add(DotNetTarget.NETSTANDARD_2_0.flagValue)
+    }
+    for (targetFramework in targetFrameworks) {
+        val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory, targetFramework)
+        val metadataFile = directory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
+        val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
+        if (!metadataFile.exists() && !implementationFile.exists()) continue
+        if (!metadataFile.isFile || !implementationFile.isFile) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Incomplete Kotlin/.NET $targetFramework stdlib installation in '$directory': " +
+                        "both ${DotNetStdlibArtifact.METADATA_FILE_NAME} and " +
+                        "${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME} are required.",
+            )
+            return true
+        }
+        add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(metadataFile))
         return true
     }
-    add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(metadataFile))
-    return true
+    return false
 }
 
 private fun CompilerConfiguration.addDotNetStdlibSourceRoots() {

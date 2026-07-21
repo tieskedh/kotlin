@@ -3,13 +3,20 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_HELPER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -42,13 +49,16 @@ import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isNothing
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
+import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.defaultType
+import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
+import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 
@@ -152,7 +162,7 @@ internal class DotNetIlMethodCodegen(
                 // class's `.cctor` is probe-verified, objprobe_s1). A COMPANION's Kotlin-private
                 // constructor is the one exception, emitted as IL `assembly` instead — see
                 // [dotNetMemberVisibility].
-                val visibility = function.dotNetMemberVisibility() ?: "public"
+                val visibility = function.dotNetMemberVisibility()
                 appendLine("  .method $visibility hidebysig specialname rtspecialname instance void .ctor($parameters) cil managed")
             } else if (function.origin == DOTNET_STATIC_INITIALIZER) {
                 // The synthetic `<clinit>` (see DotNetStaticInitializersLowering) — file-parented
@@ -164,11 +174,12 @@ internal class DotNetIlMethodCodegen(
             } else {
                 // Instance member methods differ from static ones only in the `instance` flag;
                 // property accessors additionally carry `specialname`, binding them to the
-                // `.property` metadata (both spellings are ilasm-probe-verified). Kotlin-private
-                // members of a COMPANION are `assembly` instead of the historical `public` — see
-                // [dotNetMemberVisibility]. Members of the inheritance model additionally carry
-                // virtual flags — see [dotNetVirtualFlags].
-                val visibility = function.dotNetMemberVisibility() ?: "public"
+                // `.property` metadata (both spellings are ilasm-probe-verified). Source-private
+                // companion members remain private; illegal enclosing-to-nested calls were
+                // redirected to synthetic assembly bridges by DotNetPrivateNestedAccessLowering.
+                // Members of the inheritance model additionally carry virtual flags — see
+                // [dotNetVirtualFlags].
+                val visibility = function.dotNetMemberVisibility()
                 val specialname = if (function.isAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = functionInfo.physicalMethodName
@@ -188,11 +199,25 @@ internal class DotNetIlMethodCodegen(
                 )
             }
             appendLine("  {")
-            if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
+            if (function.isDotNetCompilerAbiSurface()) {
+                appendLine("    ${DotNetCompilerAbi.markerAttributeIl()}")
+                appendLine(
+                    "    ${DotNetCompilerAbi.editorBrowsableNeverAttributeIl(typeMapper.coreLibrary.editorBrowsableReference)}"
+                )
+            }
+            if (function.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER || function.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) {
+                appendInterfaceDefaultSlotOverrides()
+            } else if (function.origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) {
                 appendGenericDataClassComponentOverride()
-            } else if (function.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE) {
+            } else if (
+                function.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE ||
+                function.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER
+            ) {
                 appendGenericInterfaceCanonicalBridgeOverride()
-            } else if (function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null) {
+            } else if (
+                function.origin.dotNetGenericInterfaceBridgeMemberViewOrNull != null ||
+                function.origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null
+            ) {
                 appendGenericInterfaceTypedBridgeOverride()
             }
             if (!isAbstractMember) {
@@ -209,40 +234,94 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * The non-default IL visibility of a Kotlin member, or null for the historical default
-     * (`public` for methods and accessors; constructors map Kotlin `private` to IL `private`, the
-     * singleton guarantee — see the `.ctor` render). Kotlin `protected` maps directly to CLR
-     * `family`; this is required for compiler/runtime inheritance hooks such as
-     * `FunctionReferenceBase.BoundValueAt`, and is the CLR analogue of JVM protected access.
+     * The CLR visibility of a Kotlin callable. Public/internal/protected map to
+     * public/assembly/family. A normal private member maps to private; a private top-level
+     * callable maps to assembly because code in another CLR type generated from the same Kotlin
+     * file may call it. The facade type and Kotlin metadata keep that callable non-public across
+     * module boundaries.
      *
      * For Kotlin-private declarations:
      * - A lifted local function is IL `assembly` on a file facade so lifted sibling types can
      *   call it, and IL `private` under a class because CLR nested→enclosing private access works.
-     * - Every Kotlin-private member OF A COMPANION is IL `assembly` (uniform rule). The CLR
-     *   grants nested→enclosing private access but NOT the reverse (objprobe_s7a/objprobe_s7b):
-     *   the enclosing class's `.cctor` must `newobj` the companion's Kotlin-private constructor
-     *   — IL `private` there throws at runtime (TypeInitializationException wrapping
-     *   MethodAccessException, objprobe_s7b; and a throwing `.cctor` permanently poisons the
-     *   type) — and enclosing-class code may call companion-private members through the
-     *   singleton field. The `.method assembly ... .ctor()` spelling `newobj`'d from the
-     *   enclosing `.cctor` is probe-verified (objprobe_s7c). Stated deviation from the JVM
-     *   backend, whose analogue is the synthetic `access$` bridge it generates for
-     *   outer→companion-private access. Ordinary named nested classes need no such widening:
-     *   Kotlin does not allow their enclosing class to call private nested members. The reverse
-     *   direction needs nothing: Kotlin-private members of the ENCLOSING class reached from
-     *   nested code are fine at IL private visibility (objprobe_s7a, nestedprobe_s2).
+     * - Kotlin-private companion declarations remain IL `private`. CLR grants
+     *   nested→enclosing private access but NOT the reverse (objprobe_s7a/objprobe_s7b), so
+     *   [DotNetPrivateNestedAccessLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering]
+     *   redirects enclosing→companion calls through assembly-visible `access$...` methods or a
+     *   constructor-marker overload. This follows the mature synthetic-accessor architecture
+     *   without widening the source declaration. Ordinary named nested classes need no such
+     *   accessor: Kotlin does not allow their enclosing class to call private nested members.
+     * - A private nested object is physically different: object lowering creates a private
+     *   singleton field on that nested type and Kotlin references it from the enclosing type.
+     *   [DotNetPrivateNestedAccessLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering]
+     *   redirects that synthesized field read through an assembly-visible getter while retaining
+     *   the private field.
+     *   The reverse direction needs nothing because CLR nested→enclosing private access works
+     *   directly (objprobe_s7a, nestedprobe_s2).
      */
-    private fun IrFunction.dotNetMemberVisibility(): String? {
+    private fun IrFunction.dotNetMemberVisibility(): String {
+        if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return "private"
+        if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "private"
+        if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET) return "private"
+        if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "private"
+        if (origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null) return "private"
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
         if (origin.isDotNetGenericInterfaceBridge) return "private"
         if (this is IrConstructor && constructedClass.isDotNetStdlibImplementation) return "assembly"
+        if (this is IrSimpleFunction && isDotNetStdlibImplementation) return "public"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
-        if (visibility == DescriptorVisibilities.PROTECTED) return "family"
-        if (visibility != DescriptorVisibilities.PRIVATE) return null
-        return when {
-            (parent as? IrClass)?.isCompanion == true -> "assembly"
-            this is IrConstructor -> "private"
-            else -> null
+        if (isDotNetPublishedCompilerAbi()) return "public"
+        if (
+            this is IrConstructor &&
+            constructedClass.modality == Modality.SEALED &&
+            visibility == DescriptorVisibilities.PROTECTED
+        ) {
+            // CLR has no top-level `sealed hierarchy` metadata equivalent. Restrict construction
+            // to derived types in this assembly: Kotlin subclasses in the defining module keep
+            // working, while a foreign C# assembly cannot derive merely because the metadata
+            // class itself must be CLR `abstract` rather than CLR `sealed`.
+            return "famandassem"
+        }
+        return when (visibility) {
+            DescriptorVisibilities.PUBLIC -> "public"
+            DescriptorVisibilities.INTERNAL -> "assembly"
+            DescriptorVisibilities.PROTECTED -> "family"
+            DescriptorVisibilities.PRIVATE -> {
+                val isTopLevelCallable = parent is IrFile ||
+                        (parent as? org.jetbrains.kotlin.ir.declarations.IrProperty)?.parent is IrFile
+                if (isTopLevelCallable) "assembly" else "private"
+            }
+            else -> error("Internal .NET backend error: unsupported function visibility '$visibility'")
+        }
+    }
+
+    /** Whether this method is CLR-public for compiler linking rather than Kotlin/C# user API. */
+    private fun IrFunction.isDotNetCompilerAbiSurface(): Boolean =
+        dotNetMemberVisibility() == "public" &&
+                (origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
+                        origin == DOTNET_INTERFACE_DEFAULT_HELPER ||
+                        (this is IrSimpleFunction && name.asString().endsWith("\$default")) ||
+                        visibility != DescriptorVisibilities.PUBLIC)
+
+    /** `@PublishedApi internal` is Kotlin-internal metadata backed by CLR-public compiler ABI. */
+    private fun IrFunction.isDotNetPublishedCompilerAbi(): Boolean =
+        visibility == DescriptorVisibilities.INTERNAL &&
+                (isPublishedApi() ||
+                        (this as? IrSimpleFunction)?.correspondingPropertySymbol?.owner?.isPublishedApi() == true)
+
+    /** Maps a hidden helper-backed class or DIM bridge to every physical Kotlin interface slot. */
+    private fun StringBuilder.appendInterfaceDefaultSlotOverrides() {
+        val bridge = function as? IrSimpleFunction
+            ?: error("Internal .NET backend error: an interface-default slot bridge is not a simple function")
+        check(bridge.overriddenSymbols.isNotEmpty()) {
+            "Internal .NET backend error: an interface-default slot bridge has no slots"
+        }
+        bridge.overriddenSymbols.forEach { overriddenSymbol ->
+            val overridden = overriddenSymbol.owner
+            val overrideInfo = availableFunctions[overridden]
+                ?: typeMapper.referencedFunctionInfoOrNull(overridden)
+                ?: dotNetUnsupported("interface-default slot is unavailable")
+            val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+            appendLine("    .override method ${overrideInfo.renderMethodReference(physicalMethodName)}")
         }
     }
 
@@ -260,33 +339,48 @@ internal class DotNetIlMethodCodegen(
         appendLine("    .override method ${overrideInfo.renderMethodReference(overridden.dotNetIlMethodName())}")
     }
 
-    /** Binds a private bridge to the canonical identity slot of a Kotlin-owned interface. */
+    /** Binds one private erased adapter to every canonical identity selected by Kotlin override resolution. */
     private fun StringBuilder.appendGenericInterfaceCanonicalBridgeOverride() {
         val bridge = function as? IrSimpleFunction
             ?: error("Internal .NET backend error: a generic interface bridge is not a simple function")
-        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
-            ?: error("Internal .NET backend error: a generic interface bridge has no unique canonical slot")
-        val interfaceClass = overridden.parent as? IrClass
-            ?: error("Internal .NET backend error: a generic interface slot has no interface owner")
-        val interfaceInfo = typeMapper.classInfoOrNull(interfaceClass)
-            ?: dotNetUnsupported("generic interface canonical identity is unavailable")
-        check(interfaceInfo.typeParameterCount == 0) {
-            "Internal .NET backend error: a canonical generic-interface identity must be non-generic"
+        check(bridge.overriddenSymbols.isNotEmpty()) {
+            "Internal .NET backend error: a generic interface bridge has no canonical slots"
         }
-        val ownerToken = interfaceInfo.ilTypeRef
-        val overrideInfo = availableFunctions[overridden]
-            ?: typeMapper.referencedFunctionInfoOrNull(overridden)
-            ?: dotNetUnsupported("generic interface canonical slot is unavailable")
-        val physicalMethodName = overrideInfo.physicalMethodName
-            ?: overridden.dotNetGenericInterfaceCanonicalMethodName()
-        appendLine(
-            "    .override method " +
-                    overrideInfo.renderOverrideMethodReference(
-                        physicalMethodName,
-                        ownerToken,
-                        bridge.typeParameters.size,
-                    )
-        )
+        val canonicalTypeMapper = typeMapper.canonicalGenericInterfaceSignatureView()
+        for (overriddenSymbol in bridge.overriddenSymbols) {
+            val overridden = overriddenSymbol.owner
+            val interfaceClass = overridden.parent as? IrClass
+                ?: error("Internal .NET backend error: a generic interface slot has no interface owner")
+            val interfaceInfo = canonicalTypeMapper.classInfoOrNull(interfaceClass)
+                ?: dotNetUnsupported("generic interface canonical identity is unavailable")
+            check(interfaceInfo.typeParameterCount == 0) {
+                "Internal .NET backend error: a canonical generic-interface identity must be non-generic"
+            }
+            check(overridden.typeParameters.size == bridge.typeParameters.size) {
+                "Internal .NET backend error: canonical generic-interface override changed method arity"
+            }
+            val referencedInfo = canonicalTypeMapper.referencedFunctionInfoOrNull(overridden)
+            val physicalMethodName = referencedInfo?.physicalMethodName ?: if (
+                interfaceClass.isDotNetGenericInterfaceDeclaration
+            ) {
+                overridden.dotNetGenericInterfaceCanonicalMethodName()
+            } else {
+                overridden.dotNetIlMethodName()
+            }
+            val overrideInfo = referencedInfo ?: DotNetIlFunctionInfo(
+                interfaceInfo,
+                overridden.dotNetSignature(canonicalTypeMapper),
+                physicalMethodName,
+            )
+            appendLine(
+                "    .override method " +
+                        overrideInfo.renderOverrideMethodReference(
+                            physicalMethodName,
+                            interfaceInfo.ilTypeRef,
+                            bridge.typeParameters.size,
+                        )
+            )
+        }
     }
 
     /** Binds a forwarding bridge to the closed declared or exact capability slot. */
@@ -300,6 +394,7 @@ internal class DotNetIlMethodCodegen(
         val interfaceInfo = typeMapper.genericInterfaceInfoOrNull(interfaceClass)
             ?: dotNetUnsupported("generic interface typed capability is unavailable")
         val memberView = bridge.origin.dotNetGenericInterfaceBridgeMemberViewOrNull
+            ?: bridge.origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull
             ?: error("Internal .NET backend error: typed generic interface bridge has no physical view")
         val capabilityInfo = interfaceInfo.classInfo(memberView.physicalView)
             ?: dotNetUnsupported("generic interface ${memberView.name.lowercase()} capability is unavailable")
@@ -365,9 +460,15 @@ internal class DotNetIlMethodCodegen(
      *   no virtual flags — the established plain-`call` model.
      */
     private fun IrFunction.dotNetVirtualFlags(): String {
+        if (origin == DOTNET_INTERFACE_DEFAULT_FORWARDER) return "newslot virtual final "
+        if (origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE) return "newslot virtual final "
+        if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "newslot virtual final "
+        if (origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null) return "newslot virtual final "
         if (origin.isDotNetGenericInterfaceBridge) return "newslot virtual final "
         if (this !is IrSimpleFunction || !signature.hasThis) return ""
-        if ((parent as? IrClass)?.isInterface == true) return "newslot abstract virtual "
+        if ((parent as? IrClass)?.isInterface == true) {
+            return if (modality == Modality.ABSTRACT) "newslot abstract virtual " else "newslot virtual "
+        }
         val abstractFlag = if (modality == Modality.ABSTRACT) "abstract " else ""
         val final = if (modality == Modality.FINAL) "final " else ""
         // Some built-in-interface fake-override chains do not retain kotlin.Any in
@@ -598,6 +699,24 @@ internal class DotNetIlMethodCodegen(
             methodContext.emit(
                 "call instance void ${typeMapper.coreLibrary.reference}System.Object::.ctor()",
                 pops = 1,
+            )
+            return
+        }
+        DotNetMappedExceptions.mappedEntry(targetClass.fqNameWhenAvailable)?.let { entry ->
+            val parameterTypes = target.parameters.map { parameter ->
+                typeMapper.toDotNetIlValueType(parameter.type)
+                    ?: dotNetUnsupported(
+                        "parameter '${parameter.name.asString()}' of mapped exception constructor " +
+                                "has unsupported type ${parameter.type.render()}"
+                    )
+            }
+            val className = targetClass.name.asString()
+            entry.checkConstructorShape(className, parameterTypes, typeMapper.coreLibrary.reference)
+            expressionCodegen.emitArguments(call.arguments, parameterTypes, "constructor of '$className'")
+            methodContext.emit(
+                "call instance void ${entry.subclassBaseTypeRef(typeMapper.coreLibrary.reference)}" +
+                        "::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
+                pops = 1 + parameterTypes.size,
             )
             return
         }
@@ -904,11 +1023,12 @@ internal class DotNetIlMethodCodegen(
 
     /**
      * The region structure shared by both `try` forms. Without a `finally` this is `.try {`
-     * around the try branch, then one `catch <clrTypeRef> {` per Kotlin catch clause in source
-     * order — the CLR matches handlers strictly in declaration order (probe-verified), and
-     * Kotlin source order is authoritative (the frontend owns unreachable-catch diagnostics).
-     * Each handler first binds its catch parameter with a `stloc` of the exception object the
-     * CLR pushes at handler entry.
+     * around the try branch, then one CLR handler per Kotlin catch clause in source order. A
+     * logical class exactly expressible by one CLR type uses a typed catch; broad Exception,
+     * RuntimeException, and Error categories use a filter over `System.Exception` and the single
+     * Kotlin.Runtime classifier. The CLR searches typed handlers and filters strictly in metadata
+     * order, so Kotlin source ordering and first-pass filter semantics are retained. Each selected
+     * handler binds the original exception object to its catch local.
      *
      * A `finally` wraps that whole try/catch construct in an OUTER `.try { } finally { }`: a
      * `.try` may carry either catch handlers or one `finally`, never both — combining them on
@@ -944,8 +1064,17 @@ internal class DotNetIlMethodCodegen(
         methodContext.beginTry()
         emitBranchResult(expression.tryResult)
         for (irCatch in expression.catches) {
-            methodContext.beginCatch(catchTypeRef(irCatch))
+            val filtered = beginCatchHandler(irCatch)
             val slot = methodContext.declareLocal(irCatch.catchParameter)
+            if (filtered) {
+                // A filter handler receives the original thrown value with stack type object.
+                // Narrow its physical view to the universal carrier without replacing it.
+                methodContext.emit(
+                    "castclass ${DotNetMappedExceptions.exceptionTypeRef(typeMapper.coreLibrary.reference)}",
+                    pops = 1,
+                    pushes = 1,
+                )
+            }
             methodContext.emit(storeLocalInstruction(slot.index), pops = 1)
             emitBranchResult(irCatch.result)
         }
@@ -953,18 +1082,53 @@ internal class DotNetIlMethodCodegen(
     }
 
     /**
-     * The `catch` clause operand: the bare assembly-qualified reference of the caught type, which
-     * must be a [mapped exception type][DotNetIlValueType.MappedClass]. `catch (e: Throwable)`
-     * becomes corelib `System.Exception`, while an exact runtime-owned exception names
-     * `Kotlin.Runtime`.
+     * Opens the CLR handler for one Kotlin catch. Returns true for a classified filter handler so
+     * the caller can narrow the handler-entry `object` stack value to `System.Exception` before
+     * binding it. A mapped built-in uses a typed handler only when the registry proves it
+     * equivalent to the same runtime classifier rule; Throwable -> System.Exception and
+     * exact/BCL-mapped classes satisfy that condition. A user-defined Kotlin exception is already
+     * one exact CLR class, so its ordinary typed handler preserves Kotlin exact-type semantics.
      */
-    private fun catchTypeRef(irCatch: IrCatch): String {
+    private fun beginCatchHandler(irCatch: IrCatch): Boolean {
         val parameter = irCatch.catchParameter
         val type = typeMapper.toDotNetIlValueType(parameter.type)
-        if (type !is DotNetIlValueType.MappedClass) {
-            dotNetUnsupported("catch of a non-exception-mapped type ${parameter.type.render()} is not supported")
+        if (type is DotNetIlValueType.UserClass || type is DotNetIlValueType.GenericInstance) {
+            val exceptionCarrier = DotNetIlValueType.MappedClass(
+                DotNetMappedExceptions.exceptionTypeRef(typeMapper.coreLibrary.reference)
+            )
+            if (!type.isDotNetAssignableTo(exceptionCarrier)) {
+                dotNetUnsupported(
+                    "catch type ${parameter.type.render()} is not physically assignable to System.Exception"
+                )
+            }
+            methodContext.beginCatch(type.nameInSignature)
+            return false
         }
-        return type.ilTypeRef
+        if (type !is DotNetIlValueType.MappedClass) {
+            dotNetUnsupported("catch type ${parameter.type.render()} has no CLR exception representation")
+        }
+        val entry = DotNetMappedExceptions.mappedEntry(parameter.type.classFqName)
+            ?: dotNetUnsupported("catch type ${parameter.type.render()} has no logical exception classifier id")
+        val typedCatchTypeRef = entry.typedCatchTypeRefOrNull(typeMapper.coreLibrary.reference)
+        if (typedCatchTypeRef != null) {
+            methodContext.beginCatch(typedCatchTypeRef)
+            return false
+        }
+
+        methodContext.beginFilter()
+        methodContext.emit(
+            "isinst ${DotNetMappedExceptions.exceptionTypeRef(typeMapper.coreLibrary.reference)}",
+            pops = 1,
+            pushes = 1,
+        )
+        methodContext.emit("ldc.i4 ${entry.classifierTypeId.abiValue}", pushes = 1)
+        methodContext.emit(
+            DotNetRuntimeLibrary.exceptionClassifierCallInstruction(typeMapper.coreLibrary.reference),
+            pops = 2,
+            pushes = 1,
+        )
+        methodContext.endFilterAndBeginHandler()
+        return true
     }
 
     /**

@@ -40,54 +40,49 @@ internal sealed class DotNetIlValueType(val nameInSignature: kotlin.String) {
     object Object : DotNetIlValueType("object")
 
     /**
-     * A CLR zero-based vector for one of the five supported primitive element types. The vector
-     * is a reference type even though its elements are values, so nullable and non-null Kotlin
-     * primitive arrays share this representation and widen to [Object] without boxing.
-     *
-     * The element-specific instructions are deliberately carried by the structural type: every
-     * array producer and consumer then derives its signature and opcode spelling from one source
-     * of truth. `arrprobe_s1` assembled and executed all five spellings on both CoreCLR and the
-     * .NET Framework CLR.
+     * A canonical Kotlin-owned specialized primitive-array wrapper. The corresponding CLR vector
+     * is available through [storageType] only while implementing compiler/runtime intrinsics; it
+     * is never this type's signature spelling. Nullable and non-null Kotlin primitive arrays share
+     * the wrapper reference representation, exactly like other CLR reference types.
      */
     data class PrimitiveArray(val elementType: DotNetIlValueType) :
-        DotNetIlValueType("${elementType.nameInSignature}[]") {
+        DotNetIlValueType("class ${DotNetPrimitiveArrays.entry(elementType).wrapperTypeRef}") {
         init {
             require(elementType.isSupportedPrimitiveArrayElement()) {
                 "unsupported CLR vector element type ${elementType.nameInSignature}"
             }
         }
 
-        val newArrayInstruction: kotlin.String
-            get() = "newarr ${elementType.nameInSignature}"
+        val abi: DotNetPrimitiveArrays.Entry
+            get() = DotNetPrimitiveArrays.entry(elementType)
 
-        val loadElementInstruction: kotlin.String
-            get() = when (elementType) {
-                Boolean -> "ldelem.u1"
-                Int32 -> "ldelem.i4"
-                Int64 -> "ldelem.i8"
-                Float64 -> "ldelem.r8"
-                Char -> "ldelem.u2"
-                else -> error("Internal .NET backend error: unsupported vector element $elementType")
-            }
+        val storageType: GenericArray
+            get() = abi.storageType
 
-        val storeElementInstruction: kotlin.String
-            get() = when (elementType) {
-                Boolean -> "stelem.i1"
-                Int32 -> "stelem.i4"
-                Int64 -> "stelem.i8"
-                Float64 -> "stelem.r8"
-                Char -> "stelem.i2"
-                else -> error("Internal .NET backend error: unsupported vector element $elementType")
-            }
+        val newStorageInstruction: kotlin.String
+            get() = abi.newStorageInstruction
+
+        val wrapStorageInstruction: kotlin.String
+            get() = abi.wrapStorageInstruction
+
+        val sizeCallInstruction: kotlin.String
+            get() = abi.sizeCallInstruction
+
+        val getCallInstruction: kotlin.String
+            get() = abi.getCallInstruction
+
+        val setCallInstruction: kotlin.String
+            get() = abi.setCallInstruction
+
+        val getStorageCallInstruction: kotlin.String
+            get() = abi.getStorageCallInstruction
     }
 
     /**
      * A Kotlin `Array<E>` as a CLR zero-based vector. This stays a distinct structural type from
-     * [PrimitiveArray] even when substitution produces the same CLR spelling: Kotlin
-     * `Array<Int>` and `IntArray` are different invariant types, while CLR represents both as
-     * `int32[]`. The mapper rejects that concrete source collision, but an open `Array<T>` must
-     * still be able to substitute `T = Int` at a generic call site without losing its Kotlin
-     * identity inside assignability checks.
+     * [PrimitiveArray]. Kotlin `Array<Int>` naturally becomes `int32[]`, while `IntArray` is the
+     * runtime-owned `Kotlin.IntArray` wrapper. An open `Array<T>` substitutes `T = Int` without
+     * losing either source type's nominal identity.
      *
      * Typed element instructions work uniformly for reference tokens and open `!n`/`!!n`
      * tokens; `genarrayprobe_s1` assembles and executes both forms on CoreCLR and Framework.
@@ -505,7 +500,7 @@ internal class DotNetIlClassInfo(
     val ilClassName: String,
     private val enclosingClass: DotNetIlClassInfo? = null,
     val typeParameterVariances: List<Variance> = emptyList(),
-    private val assemblyName: String? = null,
+    val assemblyName: String? = null,
 ) {
     val typeParameterCount: Int
         get() = typeParameterVariances.size

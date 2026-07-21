@@ -6,7 +6,7 @@
 .assembly 'callableCaptures' {}
 .module 'main-callableCaptures.il'
 
-.class public auto ansi sealed beforefieldinit 'Offset'
+.class private auto ansi sealed beforefieldinit 'Offset'
        extends [mscorlib]System.Object
 {
   .field private int32 'delta'
@@ -20,7 +20,7 @@
     stfld int32 'Offset'::'delta'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_delta'() cil managed
+  .method private hidebysig specialname instance int32 'get_delta'() cil managed
   {
     .maxstack 1
     ldarg.0

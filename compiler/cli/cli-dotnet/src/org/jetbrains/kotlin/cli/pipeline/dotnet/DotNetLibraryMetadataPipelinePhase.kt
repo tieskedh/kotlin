@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.cli.pipeline.dotnet
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.dotNetFriendAssemblies
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducedLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducesLibrary
@@ -160,13 +161,33 @@ object DotNetLibraryMetadataPackagingPipelinePhase :
                     setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY, artifact.assemblyFileName)
                     setProperty(
                         DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
-                        DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK,
+                        artifact.targetFramework,
                     )
                     // Both explicit library products and the target-stdlib product pair Kotlin
                     // metadata with a CLR implementation. Persist the same physical declaration
                     // index for both; otherwise ordinary stdlib functions can resolve in FIR but
                     // have no durable cross-module CLR owner/method binding.
                     setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
+                    setProperty(
+                        DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY,
+                        DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+                    )
+                    setProperty(
+                        DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY,
+                        DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION,
+                    )
+                    setProperty(
+                        DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY,
+                        DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
+                    )
+                    setProperty(
+                        DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY,
+                        DotNetLibraryAbiCodec.encodeFriendAssemblies(configuration.dotNetFriendAssemblies),
+                    )
+                    setProperty(
+                        DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY,
+                        DotNetLibraryAbiCodec.implementationSha256(implementationFile),
+                    )
                     for (entry in DotNetLibraryAbiCodec.encode(input.declarations)) {
                         setProperty(entry.key, entry.value)
                     }

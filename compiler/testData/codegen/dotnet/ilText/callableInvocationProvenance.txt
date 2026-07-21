@@ -6,7 +6,7 @@
 .assembly 'callableInvocationProvenance' {}
 .module 'main-callableInvocationProvenance.il'
 
-.class public auto ansi sealed beforefieldinit 'UserDoubler'
+.class private auto ansi sealed beforefieldinit 'UserDoubler'
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
@@ -33,7 +33,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
-  .field public static initonly class 'callableInvocationProvenanceKt$main$zero$1' 'INSTANCE'
+  .field assembly static initonly class 'callableInvocationProvenanceKt$main$zero$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -67,7 +67,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
-  .field public static initonly class 'callableInvocationProvenanceKt$main$lambda$1' 'INSTANCE'
+  .field assembly static initonly class 'callableInvocationProvenanceKt$main$lambda$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -114,7 +114,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction2`2'<int32, int32>
 {
-  .field public static initonly class 'callableInvocationProvenanceKt$main$sum$1' 'INSTANCE'
+  .field assembly static initonly class 'callableInvocationProvenanceKt$main$sum$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -164,7 +164,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
-  .field public static initonly class 'callableInvocationProvenanceKt$main$reference$1' 'INSTANCE'
+  .field assembly static initonly class 'callableInvocationProvenanceKt$main$reference$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -225,7 +225,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<object, int32>
 {
-  .field public static initonly class 'callableInvocationProvenanceKt$main$acceptsAny$1' 'INSTANCE'
+  .field assembly static initonly class 'callableInvocationProvenanceKt$main$acceptsAny$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -259,7 +259,7 @@
 .class public abstract sealed auto ansi beforefieldinit 'callableInvocationProvenanceKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static int32 'increment'(int32 'value') cil managed
+  .method assembly hidebysig static int32 'increment'(int32 'value') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -267,7 +267,7 @@
     add
     ret
   }
-  .method public hidebysig static object 'invokeAcrossBoundary'(class [Kotlin.Runtime]'Kotlin.Function1' 'callable', int32 'value') cil managed
+  .method assembly hidebysig static object 'invokeAcrossBoundary'(class [Kotlin.Runtime]'Kotlin.Function1' 'callable', int32 'value') cil managed
   {
     .maxstack 2
     .locals init (
@@ -312,7 +312,7 @@ IL_callableExactEnd_1:
     ldloc.3
     ret
   }
-  .method public hidebysig static object 'invokeMutable'(class [Kotlin.Runtime]'Kotlin.Function1' 'initial', class [Kotlin.Runtime]'Kotlin.Function1' 'replacement', int32 'value') cil managed
+  .method assembly hidebysig static object 'invokeMutable'(class [Kotlin.Runtime]'Kotlin.Function1' 'initial', class [Kotlin.Runtime]'Kotlin.Function1' 'replacement', int32 'value') cil managed
   {
     .maxstack 2
     .locals init (

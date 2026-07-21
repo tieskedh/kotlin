@@ -155,7 +155,14 @@ IL_whenEnd_1:
       stloc.0
       leave IL_tryEnd_0
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.3
       ldstr "caught"
       stloc.0

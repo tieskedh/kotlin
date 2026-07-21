@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'innerClasses' {}
 .module 'main-innerClasses.il'
 
@@ -39,14 +43,14 @@
       stfld int32 'InnerOuter'/'Base'::'initialized'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_delta'() cil managed
+    .method private hidebysig specialname instance int32 'get_delta'() cil managed
     {
       .maxstack 1
       ldarg.0
       ldfld int32 'InnerOuter'/'Base'::'delta'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_initialized'() cil managed
+    .method private hidebysig specialname instance int32 'get_initialized'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -124,7 +128,7 @@
       stfld !0 class 'InnerOuter'/'Generic`1'<!0>::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance !0 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -172,7 +176,7 @@
         stfld int32 'InnerOuter'/'First'/'Second'::'second'
         ret
       }
-      .method public hidebysig specialname instance int32 'get_second'() cil managed
+      .method private hidebysig specialname instance int32 'get_second'() cil managed
       {
         .maxstack 1
         ldarg.0
@@ -215,7 +219,7 @@
       stfld int32 'InnerOuter'/'First'::'first'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_first'() cil managed
+    .method private hidebysig specialname instance int32 'get_first'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -245,7 +249,7 @@
       stfld class 'InnerOuter'/'Later' 'InnerOuter'/'UsesLater'::'later'
       ret
     }
-    .method public hidebysig specialname instance class 'InnerOuter'/'Later' 'get_later'() cil managed
+    .method private hidebysig specialname instance class 'InnerOuter'/'Later' 'get_later'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -304,7 +308,7 @@
   {
     .field private int32 'value'
     .field private class 'InnerOuter' 'this$0'
-    .method public hidebysig specialname instance int32 'get_value'() cil managed
+    .method private hidebysig specialname instance int32 'get_value'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -391,14 +395,14 @@
     stfld int32 'InnerOuter'::'offset'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  .method private hidebysig specialname instance int32 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'InnerOuter'::'seed'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_offset'() cil managed
+  .method private hidebysig specialname instance int32 'get_offset'() cil managed
   {
     .maxstack 1
     ldarg.0

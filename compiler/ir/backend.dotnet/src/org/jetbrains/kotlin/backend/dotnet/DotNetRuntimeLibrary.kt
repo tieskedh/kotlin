@@ -30,6 +30,9 @@ internal object DotNetRuntimeLibrary {
     val noWhenBranchMatchedExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NoWhenBranchMatchedException".toIlIdentifier()}"
 
+    val runtimeExceptionTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.RuntimeException".toIlIdentifier()}"
+
     val noSuchElementExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.NoSuchElementException".toIlIdentifier()}"
 
@@ -45,8 +48,16 @@ internal object DotNetRuntimeLibrary {
     val kotlinNothingValueExceptionTypeRef: String =
         "[$ASSEMBLY_NAME]${"Kotlin.KotlinNothingValueException".toIlIdentifier()}"
 
+    val exceptionClassifierTypeRef: String =
+        "[$ASSEMBLY_NAME]${"Kotlin.Runtime.Internal.ExceptionClassifier".toIlIdentifier()}"
+
+    fun exceptionClassifierCallInstruction(coreLibraryReference: String): String =
+        "call bool $exceptionClassifierTypeRef::'IsKotlinExceptionInstance'(" +
+                "class ${coreLibraryReference}System.Exception, int32)"
+
     fun assembleNextTo(
         executableOutput: File,
+        target: DotNetTarget,
         messageCollector: MessageCollector,
     ): File? {
         val outputDirectory = executableOutput.parentFile ?: File(".")
@@ -56,30 +67,50 @@ internal object DotNetRuntimeLibrary {
         return try {
             // ILAsm decodes BOM-less input as ANSI; keep the runtime source on the same UTF-8+BOM
             // path as generated program IL even though its current text is ASCII-only.
-            ilFile.writeBytes(UTF8_BOM + ilText().toByteArray(Charsets.UTF_8))
-            output.takeIf { DotNetIlAssembler.assemblePortableLibrary(ilFile, output, messageCollector) }
+            ilFile.writeBytes(UTF8_BOM + ilText(target).toByteArray(Charsets.UTF_8))
+            output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
         } finally {
             ilFile.delete()
         }
     }
 
-    private fun ilText(): String {
-        val coreLibrary = DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY
+    private fun ilText(target: DotNetTarget): String {
+        val coreLibrary = target.coreLibrary
         val coreLibraryReference = coreLibrary.reference
         val assemblyReferenceIl = buildString {
             coreLibrary.appendAssemblyReferenceTo(this)
+            coreLibrary.appendEditorBrowsableAssemblyReferenceTo(this)
         }.trimEnd().prependIndent("        ")
         val targetFrameworkAttributeIl = buildString {
             coreLibrary.appendTargetFrameworkAttributeTo(this)
         }.trimEnd().prependIndent("        ")
+        val runtimeSurfaceAttributeIl = buildString {
+            coreLibrary.appendAssemblyMetadataAttributeTo(
+                this,
+                DotNetLibraryAbiCodec.RUNTIME_SURFACE_METADATA_KEY,
+                DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
+            )
+        }.trimEnd().prependIndent("        ")
+        val compilerAbiAttributeTypeIl =
+            DotNetCompilerAbi.attributeTypeIl(
+                coreLibraryReference,
+                coreLibrary.editorBrowsableReference,
+            ).prependIndent("        ")
+        val primitiveArrayTypesIl = DotNetPrimitiveArrays.runtimeTypesIl(
+            coreLibraryReference,
+            coreLibrary.editorBrowsableReference,
+        )
         return """
 $assemblyReferenceIl
         .assembly Kotlin.Runtime
         {
           .ver $ASSEMBLY_VERSION_IL
 $targetFrameworkAttributeIl
+$runtimeSurfaceAttributeIl
         }
         .module Kotlin.Runtime.dll
+
+$compilerAbiAttributeTypeIl
 
         .namespace Kotlin.Runtime
         {
@@ -91,6 +122,8 @@ $targetFrameworkAttributeIl
 
         .namespace Kotlin
         {
+$primitiveArrayTypesIl
+
           .class public auto ansi beforefieldinit RuntimeException
                  extends ${coreLibraryReference}System.Exception
           {
@@ -830,8 +863,11 @@ $targetFrameworkAttributeIl
             }
           }
         }
-    """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText(coreLibraryReference)
-    }
+    """.trimIndent() + "\n" + DotNetRuntimeLibraryHelpers.ilText(
+        coreLibraryReference,
+        coreLibrary.editorBrowsableReference,
+    )
+}
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
 }

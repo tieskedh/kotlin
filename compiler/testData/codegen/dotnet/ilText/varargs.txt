@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -16,11 +21,11 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig instance int64 'combine'(int32 'prefix', int64[] 'values') cil managed
+  .method public hidebysig instance int64 'combine'(int32 'prefix', class [Kotlin.Runtime]'Kotlin.LongArray' 'values') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int64[] '<arrayGet>',
+      [0] class [Kotlin.Runtime]'Kotlin.LongArray' '<arrayGet>',
       [1] int32 '<arrayIndex>'
     )
     ldarg.1
@@ -31,7 +36,7 @@
     stloc.1
     ldloc.0
     ldloc.1
-    ldelem.i8
+    call instance int64 [Kotlin.Runtime]'Kotlin.LongArray'::'Get'(int32)
     add
     ret
   }
@@ -40,11 +45,11 @@
        extends [mscorlib]System.Object
 {
   .field private char 'first'
-  .method public hidebysig specialname rtspecialname instance void .ctor(char[] 'values') cil managed
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.CharArray' 'values') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] char[] '<arrayGet>',
+      [0] class [Kotlin.Runtime]'Kotlin.CharArray' '<arrayGet>',
       [1] int32 '<arrayIndex>'
     )
     ldarg.0
@@ -56,7 +61,7 @@
     stloc.1
     ldloc.0
     ldloc.1
-    ldelem.u2
+    call instance char [Kotlin.Runtime]'Kotlin.CharArray'::'Get'(int32)
     stfld char 'VarargConstructor'::'first'
     ret
   }
@@ -74,7 +79,7 @@
 }
 .class interface public abstract auto ansi 'VarargInterface'
 {
-  .method public hidebysig newslot abstract virtual instance float64 'collect'(float64[] 'values') cil managed
+  .method public hidebysig newslot abstract virtual instance float64 'collect'(class [Kotlin.Runtime]'Kotlin.DoubleArray' 'values') cil managed
   {
   }
 }
@@ -89,11 +94,11 @@
     call instance void [mscorlib]System.Object::.ctor()
     ret
   }
-  .method public hidebysig newslot virtual instance float64 'collect'(float64[] 'values') cil managed
+  .method public hidebysig newslot virtual instance float64 'collect'(class [Kotlin.Runtime]'Kotlin.DoubleArray' 'values') cil managed
   {
     .maxstack 2
     .locals init (
-      [0] float64[] '<arrayGet>',
+      [0] class [Kotlin.Runtime]'Kotlin.DoubleArray' '<arrayGet>',
       [1] int32 '<arrayIndex>'
     )
     ldarg.1
@@ -102,20 +107,20 @@
     stloc.1
     ldloc.0
     ldloc.1
-    ldelem.r8
+    call instance float64 [Kotlin.Runtime]'Kotlin.DoubleArray'::'Get'(int32)
     ret
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'varargsKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static int32 'sum'(int32[] 'values') cil managed
+  .method public hidebysig static int32 'sum'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int32[] '<arrayGet>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [1] int32 '<arrayIndex>',
-      [2] int32[] '<arrayGet>@2',
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>@2',
       [3] int32 '<arrayIndex>@3'
     )
     ldarg.0
@@ -124,14 +129,14 @@
     stloc.1
     ldloc.0
     ldloc.1
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     ldarg.0
     stloc.2
     ldc.i4 1
     stloc.3
     ldloc.2
     ldloc.3
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     add
     ret
   }
@@ -187,7 +192,7 @@ IL_whenEnd_2:
   {
     .maxstack 3
     .locals init (
-      [0] int32[] 'tmp0_<vararg>'
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp0_<vararg>'
     )
     ldc.i4 0
     dup
@@ -199,20 +204,21 @@ IL_whenEnd_2:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.0
     ldloc.0
-    call int32 'varargsKt'::'sum'(int32[])
+    call int32 'varargsKt'::'sum'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
   .method public hidebysig static int32 'literals'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int32[] 'tmp0_<vararg>',
-      [1] int32[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp0_<vararg>',
+      [1] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [2] int32 '<arrayIndex>',
       [3] int32 '<arrayValue>',
-      [4] int32[] '<arraySet>@4',
+      [4] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@4',
       [5] int32 '<arrayIndex>@5',
       [6] int32 '<arrayValue>@6'
     )
@@ -226,6 +232,7 @@ IL_arraySizeNonNegative_0:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.0
     ldloc.0
     stloc.1
@@ -236,7 +243,7 @@ IL_arraySizeNonNegative_0:
     ldloc.1
     ldloc.2
     ldloc.3
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc.0
     stloc 4
     ldc.i4 1
@@ -246,31 +253,31 @@ IL_arraySizeNonNegative_0:
     ldloc 4
     ldloc 5
     ldloc 6
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc.0
-    call int32 'varargsKt'::'sum'(int32[])
+    call int32 'varargsKt'::'sum'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
-  .method public hidebysig static int32 'primitiveSpread'(int32[] 'values') cil managed
+  .method public hidebysig static int32 'primitiveSpread'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 3
     .locals init (
       [0] int32 'tmp0_<varargElement>',
-      [1] int32[] 'tmp1_<varargElement>',
+      [1] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp1_<varargElement>',
       [2] int32 'tmp2_<varargElement>',
       [3] int32 'tmp3_<spreadSize>',
-      [4] int32[] 'tmp4_<vararg>',
+      [4] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp4_<vararg>',
       [5] int32 'tmp5_<varargIndex>',
-      [6] int32[] '<arraySet>',
+      [6] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [7] int32 '<arrayIndex>',
       [8] int32 '<arrayValue>',
       [9] int32 'tmp6_<spreadIndex>',
-      [10] int32[] '<arraySet>@10',
+      [10] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@10',
       [11] int32 '<arrayIndex>@11',
-      [12] int32[] '<arrayGet>',
+      [12] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [13] int32 '<arrayIndex>@13',
       [14] int32 '<arrayValue>@14',
-      [15] int32[] '<arraySet>@15',
+      [15] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@15',
       [16] int32 '<arrayIndex>@16',
       [17] int32 '<arrayValue>@17'
     )
@@ -281,8 +288,7 @@ IL_arraySizeNonNegative_0:
     ldc.i4 2
     stloc.2
     ldloc.1
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.3
     ldc.i4 0
     ldc.i4 1
@@ -300,6 +306,7 @@ IL_arraySizeNonNegative_0:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc 4
     ldc.i4 0
     stloc 5
@@ -312,7 +319,7 @@ IL_arraySizeNonNegative_0:
     ldloc 6
     ldloc 7
     ldloc 8
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
@@ -334,12 +341,12 @@ IL_whileCond_1:
     stloc 13
     ldloc 12
     ldloc 13
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     stloc 14
     ldloc 10
     ldloc 11
     ldloc 14
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
@@ -359,13 +366,13 @@ IL_whileEnd_2:
     ldloc 15
     ldloc 16
     ldloc 17
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
     stloc 5
     ldloc 4
-    call int32 'varargsKt'::'sum'(int32[])
+    call int32 'varargsKt'::'sum'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
   .method public hidebysig static string 'referenceSpread'(string[] 'values') cil managed
@@ -485,26 +492,26 @@ IL_whileEnd_2:
     call string 'varargsKt'::'join'(string[])
     ret
   }
-  .method public hidebysig static int32[] 'arrayOfSpread'(int32[] 'values') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'arrayOfSpread'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 3
     .locals init (
       [0] int32 'tmp0_<varargElement>',
-      [1] int32[] 'tmp1_<varargElement>',
+      [1] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp1_<varargElement>',
       [2] int32 'tmp2_<varargElement>',
       [3] int32 'tmp3_<spreadSize>',
-      [4] int32[] 'tmp4_<vararg>',
+      [4] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp4_<vararg>',
       [5] int32 'tmp5_<varargIndex>',
-      [6] int32[] '<arraySet>',
+      [6] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [7] int32 '<arrayIndex>',
       [8] int32 '<arrayValue>',
       [9] int32 'tmp6_<spreadIndex>',
-      [10] int32[] '<arraySet>@10',
+      [10] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@10',
       [11] int32 '<arrayIndex>@11',
-      [12] int32[] '<arrayGet>',
+      [12] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [13] int32 '<arrayIndex>@13',
       [14] int32 '<arrayValue>@14',
-      [15] int32[] '<arraySet>@15',
+      [15] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>@15',
       [16] int32 '<arrayIndex>@16',
       [17] int32 '<arrayValue>@17'
     )
@@ -515,8 +522,7 @@ IL_whileEnd_2:
     ldc.i4 2
     stloc.2
     ldloc.1
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.3
     ldc.i4 0
     ldc.i4 1
@@ -534,6 +540,7 @@ IL_whileEnd_2:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc 4
     ldc.i4 0
     stloc 5
@@ -546,7 +553,7 @@ IL_arraySizeNonNegative_0:
     ldloc 6
     ldloc 7
     ldloc 8
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
@@ -568,12 +575,12 @@ IL_whileCond_1:
     stloc 13
     ldloc 12
     ldloc 13
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     stloc 14
     ldloc 10
     ldloc 11
     ldloc 14
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
@@ -593,7 +600,7 @@ IL_whileEnd_2:
     ldloc 15
     ldloc 16
     ldloc 17
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
@@ -721,8 +728,8 @@ IL_whileEnd_2:
   {
     .maxstack 5
     .locals init (
-      [0] int64[] 'tmp0_<vararg>',
-      [1] int64[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.LongArray' 'tmp0_<vararg>',
+      [1] class [Kotlin.Runtime]'Kotlin.LongArray' '<arraySet>',
       [2] int32 '<arrayIndex>',
       [3] int64 '<arrayValue>'
     )
@@ -738,6 +745,7 @@ IL_whileEnd_2:
     throw
 IL_arraySizeNonNegative_0:
     newarr int64
+    newobj instance void [Kotlin.Runtime]'Kotlin.LongArray'::.ctor(int64[])
     stloc.0
     ldloc.0
     stloc.1
@@ -748,17 +756,17 @@ IL_arraySizeNonNegative_0:
     ldloc.1
     ldloc.2
     ldloc.3
-    stelem.i8
+    call instance void [Kotlin.Runtime]'Kotlin.LongArray'::'Set'(int32, int64)
     ldloc.0
-    call instance int64 'VarargMember'::'combine'(int32, int64[])
+    call instance int64 'VarargMember'::'combine'(int32, class [Kotlin.Runtime]'Kotlin.LongArray')
     ret
   }
   .method public hidebysig static char 'constructed'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] char[] 'tmp0_<vararg>',
-      [1] char[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.CharArray' 'tmp0_<vararg>',
+      [1] class [Kotlin.Runtime]'Kotlin.CharArray' '<arraySet>',
       [2] int32 '<arrayIndex>',
       [3] char '<arrayValue>'
     )
@@ -772,6 +780,7 @@ IL_arraySizeNonNegative_0:
     throw
 IL_arraySizeNonNegative_0:
     newarr char
+    newobj instance void [Kotlin.Runtime]'Kotlin.CharArray'::.ctor(char[])
     stloc.0
     ldloc.0
     stloc.1
@@ -782,9 +791,9 @@ IL_arraySizeNonNegative_0:
     ldloc.1
     ldloc.2
     ldloc.3
-    stelem.i2
+    call instance void [Kotlin.Runtime]'Kotlin.CharArray'::'Set'(int32, char)
     ldloc.0
-    newobj instance void 'VarargConstructor'::.ctor(char[])
+    newobj instance void 'VarargConstructor'::.ctor(class [Kotlin.Runtime]'Kotlin.CharArray')
     call instance char 'VarargConstructor'::'get_first'()
     ret
   }
@@ -792,8 +801,8 @@ IL_arraySizeNonNegative_0:
   {
     .maxstack 4
     .locals init (
-      [0] float64[] 'tmp0_<vararg>',
-      [1] float64[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.DoubleArray' 'tmp0_<vararg>',
+      [1] class [Kotlin.Runtime]'Kotlin.DoubleArray' '<arraySet>',
       [2] int32 '<arrayIndex>',
       [3] float64 '<arrayValue>'
     )
@@ -808,6 +817,7 @@ IL_arraySizeNonNegative_0:
     throw
 IL_arraySizeNonNegative_0:
     newarr float64
+    newobj instance void [Kotlin.Runtime]'Kotlin.DoubleArray'::.ctor(float64[])
     stloc.0
     ldloc.0
     stloc.1
@@ -818,23 +828,23 @@ IL_arraySizeNonNegative_0:
     ldloc.1
     ldloc.2
     ldloc.3
-    stelem.r8
+    call instance void [Kotlin.Runtime]'Kotlin.DoubleArray'::'Set'(int32, float64)
     ldloc.0
-    callvirt instance float64 'VarargInterface'::'collect'(float64[])
+    callvirt instance float64 'VarargInterface'::'collect'(class [Kotlin.Runtime]'Kotlin.DoubleArray')
     ret
   }
-  .method public hidebysig static int32 'withDefault'(int32 'prefix', int32[] 'values') cil managed
+  .method public hidebysig static int32 'withDefault'(int32 'prefix', class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 4
     .locals init (
-      [0] int32[] 'tmp0_<varargElement>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp0_<varargElement>',
       [1] int32 'tmp1_<spreadSize>',
-      [2] int32[] 'tmp2_<vararg>',
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp2_<vararg>',
       [3] int32 'tmp3_<varargIndex>',
       [4] int32 'tmp4_<spreadIndex>',
-      [5] int32[] '<arraySet>',
+      [5] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [6] int32 '<arrayIndex>',
-      [7] int32[] '<arrayGet>',
+      [7] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [8] int32 '<arrayIndex>@8',
       [9] int32 '<arrayValue>'
     )
@@ -842,8 +852,7 @@ IL_arraySizeNonNegative_0:
     ldarg.1
     stloc.0
     ldloc.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.1
     ldc.i4 0
     ldloc.1
@@ -857,6 +866,7 @@ IL_arraySizeNonNegative_0:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.2
     ldc.i4 0
     stloc.3
@@ -877,12 +887,12 @@ IL_whileCond_1:
     stloc 8
     ldloc 7
     ldloc 8
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     stloc 9
     ldloc 5
     ldloc 6
     ldloc 9
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc.3
     ldc.i4 1
     add
@@ -894,12 +904,14 @@ IL_whileCond_1:
     br IL_whileCond_1
 IL_whileEnd_2:
     ldloc.2
-    call int32 'varargsKt'::'sum'(int32[])
+    call int32 'varargsKt'::'sum'(class [Kotlin.Runtime]'Kotlin.IntArray')
     add
     ret
   }
-  .method public hidebysig static int32 'withDefault$default'(int32 'prefix', int32[] 'values', int32 '$mask0') cil managed
+  .method public hidebysig static int32 'withDefault$default'(int32 'prefix', class [Kotlin.Runtime]'Kotlin.IntArray' 'values', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 2
     ldarg.2
     ldc.i4 1
@@ -916,23 +928,23 @@ IL_whenNext_1:
 IL_whenEnd_0:
     ldarg.0
     ldarg.1
-    call int32 'varargsKt'::'withDefault'(int32, int32[])
+    call int32 'varargsKt'::'withDefault'(int32, class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
   .method public hidebysig static int32 'defaultCall'() cil managed
   {
     .maxstack 4
     .locals init (
-      [0] int32[] 'tmp0_<varargElement>',
-      [1] int32[] '<arrayOf>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp0_<varargElement>',
+      [1] int32[] '<arrayOfStorage>',
       [2] int32 '<arrayElement>',
       [3] int32 'tmp1_<spreadSize>',
-      [4] int32[] 'tmp2_<vararg>',
+      [4] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp2_<vararg>',
       [5] int32 'tmp3_<varargIndex>',
       [6] int32 'tmp4_<spreadIndex>',
-      [7] int32[] '<arraySet>',
+      [7] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [8] int32 '<arrayIndex>',
-      [9] int32[] '<arrayGet>',
+      [9] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [10] int32 '<arrayIndex>@10',
       [11] int32 '<arrayValue>'
     )
@@ -945,18 +957,18 @@ IL_whenEnd_0:
     ldloc.1
     ldc.i4 0
     ldloc.2
-    stelem.i4
+    stelem int32
     ldc.i4 2
     stloc.2
     ldloc.1
     ldc.i4 1
     ldloc.2
-    stelem.i4
+    stelem int32
     ldloc.1
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.0
     ldloc.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.3
     ldc.i4 0
     ldloc.3
@@ -970,6 +982,7 @@ IL_whenEnd_0:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc 4
     ldc.i4 0
     stloc 5
@@ -990,12 +1003,12 @@ IL_whileCond_1:
     stloc 10
     ldloc 9
     ldloc 10
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     stloc 11
     ldloc 7
     ldloc 8
     ldloc 11
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc 5
     ldc.i4 1
     add
@@ -1008,29 +1021,28 @@ IL_whileCond_1:
 IL_whileEnd_2:
     ldloc 4
     ldc.i4 1
-    call int32 'varargsKt'::'withDefault$default'(int32, int32[], int32)
+    call int32 'varargsKt'::'withDefault$default'(int32, class [Kotlin.Runtime]'Kotlin.IntArray', int32)
     ret
   }
-  .method public hidebysig static int32 'configured'(int32[] 'values') cil managed
+  .method public hidebysig static int32 'configured'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int32[] 'tmp0_<varargElement>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp0_<varargElement>',
       [1] int32 'tmp1_<spreadSize>',
-      [2] int32[] 'tmp2_<vararg>',
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' 'tmp2_<vararg>',
       [3] int32 'tmp3_<varargIndex>',
       [4] int32 'tmp4_<spreadIndex>',
-      [5] int32[] '<arraySet>',
+      [5] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [6] int32 '<arrayIndex>',
-      [7] int32[] '<arrayGet>',
+      [7] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [8] int32 '<arrayIndex>@8',
       [9] int32 '<arrayValue>'
     )
     ldarg.0
     stloc.0
     ldloc.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.1
     ldc.i4 0
     ldloc.1
@@ -1044,6 +1056,7 @@ IL_whileEnd_2:
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.2
     ldc.i4 0
     stloc.3
@@ -1064,12 +1077,12 @@ IL_whileCond_1:
     stloc 8
     ldloc 7
     ldloc 8
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     stloc 9
     ldloc 5
     ldloc 6
     ldloc 9
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldloc.3
     ldc.i4 1
     add
@@ -1081,14 +1094,16 @@ IL_whileCond_1:
     br IL_whileCond_1
 IL_whileEnd_2:
     ldloc.2
-    call int32 'varargsKt'::'sum'(int32[])
+    call int32 'varargsKt'::'sum'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
-  .method public hidebysig static int32 'configured$default'(int32[] 'values', int32 '$mask0') cil managed
+  .method public hidebysig static int32 'configured$default'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 3
     .locals init (
-      [0] int32[] '<arrayOf>',
+      [0] int32[] '<arrayOfStorage>',
       [1] int32 '<arrayElement>'
     )
     ldarg.1
@@ -1107,20 +1122,21 @@ IL_whileEnd_2:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i4
+    stelem int32
     ldc.i4 8
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i4
+    stelem int32
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     starg 0
     br IL_whenEnd_0
 IL_whenNext_1:
 IL_whenEnd_0:
     ldarg.0
-    call int32 'varargsKt'::'configured'(int32[])
+    call int32 'varargsKt'::'configured'(class [Kotlin.Runtime]'Kotlin.IntArray')
     ret
   }
   .method public hidebysig static int32 'configuredCall'() cil managed
@@ -1128,7 +1144,7 @@ IL_whenEnd_0:
     .maxstack 2
     ldnull
     ldc.i4 1
-    call int32 'varargsKt'::'configured$default'(int32[], int32)
+    call int32 'varargsKt'::'configured$default'(class [Kotlin.Runtime]'Kotlin.IntArray', int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

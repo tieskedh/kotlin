@@ -82,12 +82,37 @@ internal object DotNetRuntimeLibraryHelpers {
      * Kotlin's JVM-backed object contract, and Framework also preserves NaN payloads in
      * Double.GetHashCode.
      */
-    fun ilText(coreLibraryReference: String): String = """
+    fun ilText(coreLibraryReference: String, editorBrowsableReference: String): String {
+        val compilerAbiTypeAttributesIl = listOf(
+            DotNetCompilerAbi.markerAttributeIl(runtimeAssemblyReference = ""),
+            DotNetCompilerAbi.editorBrowsableNeverAttributeIl(editorBrowsableReference),
+        ).joinToString("\n            |    ")
+        val primitiveArrayHelperTypeIl = DotNetPrimitiveArrays.runtimeHelperTypeIl(
+            coreLibraryReference,
+            compilerAbiTypeAttributesIl.replace("            |", ""),
+        ).prependIndent("            |")
+        return """
             |.namespace Kotlin.Runtime.Internal
             |{
+$primitiveArrayHelperTypeIl
+            |
             |  .class public auto ansi sealed beforefieldinit DefaultConstructorMarker
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
+            |    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
+            |      ret
+            |    }
+            |  }
+            |
+            |  .class public auto ansi sealed beforefieldinit SyntheticConstructorMarker
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
             |    {
             |      .maxstack 1
@@ -99,6 +124,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class interface public abstract auto ansi 'ExactFunction0`1'<+ R>
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig newslot abstract virtual instance !0 InvokeExact() cil managed
             |    {
             |    }
@@ -106,6 +132,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class interface public abstract auto ansi 'ExactFunction1`2'<- P0, + R>
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig newslot abstract virtual instance !1 InvokeExact(!0 p1) cil managed
             |    {
             |    }
@@ -113,6 +140,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class interface public abstract auto ansi 'ExactFunction2`3'<- P0, - P1, + R>
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig newslot abstract virtual instance !2 InvokeExact(!0 p1, !1 p2) cil managed
             |    {
             |    }
@@ -120,6 +148,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class interface public abstract auto ansi 'ExactFunction3`4'<- P0, - P1, - P2, + R>
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig newslot abstract virtual instance !3 InvokeExact(!0 p1, !1 p2, !2 p3) cil managed
             |    {
             |    }
@@ -127,6 +156,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class interface public abstract auto ansi 'TypedArgumentsFunction1`1'<- P0>
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig newslot abstract virtual instance object InvokeTyped(!0 p1) cil managed
             |    {
             |    }
@@ -134,6 +164,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |
             |  .class interface public abstract auto ansi 'TypedArgumentsFunction2`2'<- P0, - P1>
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig newslot abstract virtual instance object InvokeTyped(!0 p1, !1 p2) cil managed
             |    {
             |    }
@@ -142,6 +173,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  .class public abstract auto ansi beforefieldinit FunctionReferenceBase
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .field private initonly string 'id'
             |    .field private initonly int32 'arity'
             |    .field private initonly int32 'flags'
@@ -895,6 +927,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  .class public abstract sealed auto ansi beforefieldinit PropertyReferenceFactory
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig static class Kotlin.KProperty0 CreateProperty0<V>(string 'name', class Kotlin.Function0 'getter') cil managed
             |    {
             |      .maxstack 2
@@ -1215,6 +1248,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  .class public abstract sealed auto ansi beforefieldinit DelegateProjection
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig static class Kotlin.Function0 FromFunc0<R>(class ${coreLibraryReference}System.Func`1<!!0>) cil managed
             |    {
             |      .maxstack 2
@@ -1663,6 +1697,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  .class public auto ansi sealed beforefieldinit 'MutableRef`1'<'T'>
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .field public !0 'element'
             |
             |    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -1674,9 +1709,177 @@ internal object DotNetRuntimeLibraryHelpers {
             |    }
             |  }
             |
+            |  // The only runtime authority for Kotlin logical exception membership. Broad
+            |  // categories cannot be represented by the CLR inheritance tree without either
+            |  // wrapping foreign exceptions or collapsing Kotlin's Exception/Error split.
+            |  // Keep this method allocation-free and nonthrowing: generated IL calls it from
+            |  // first-pass CLR exception filters.
+            |  .class public abstract sealed auto ansi beforefieldinit ExceptionClassifier
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    $compilerAbiTypeAttributesIl
+            |    .method public hidebysig static bool 'IsKotlinExceptionInstance'(
+            |        class ${coreLibraryReference}System.Exception 'value', int32 'targetTypeId') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      brfalse EC_False
+            |
+            |      ldarg.1
+            |      ldc.i4.1
+            |      beq EC_True
+            |      ldarg.1
+            |      ldc.i4.2
+            |      beq EC_Exception
+            |      ldarg.1
+            |      ldc.i4.3
+            |      beq EC_RuntimeException
+            |      ldarg.1
+            |      ldc.i4.4
+            |      beq EC_Error
+            |      ldarg.1
+            |      ldc.i4.5
+            |      beq EC_IllegalArgument
+            |      ldarg.1
+            |      ldc.i4.6
+            |      beq EC_IllegalState
+            |      ldarg.1
+            |      ldc.i4.7
+            |      beq EC_UnsupportedOperation
+            |      ldarg.1
+            |      ldc.i4.8
+            |      beq EC_NoSuchElement
+            |      ldarg.1
+            |      ldc.i4.s 9
+            |      beq EC_IndexOutOfBounds
+            |      ldarg.1
+            |      ldc.i4.s 10
+            |      beq EC_Arithmetic
+            |      ldarg.1
+            |      ldc.i4.s 11
+            |      beq EC_NumberFormat
+            |      ldarg.1
+            |      ldc.i4.s 12
+            |      beq EC_NullPointer
+            |      ldarg.1
+            |      ldc.i4.s 13
+            |      beq EC_ClassCast
+            |      br EC_False
+            |
+            |    EC_Exception:
+            |      ldarg.0
+            |      call bool Kotlin.Runtime.Internal.ExceptionClassifier::IsError(
+            |          class ${coreLibraryReference}System.Exception)
+            |      ldc.i4.0
+            |      ceq
+            |      ret
+            |
+            |    EC_RuntimeException:
+            |      ldarg.0
+            |      isinst Kotlin.RuntimeException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.ArgumentException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.InvalidOperationException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.NotSupportedException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.ArithmeticException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.IndexOutOfRangeException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.NullReferenceException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.InvalidCastException
+            |      brtrue EC_True
+            |      br EC_False
+            |
+            |    EC_Error:
+            |      ldarg.0
+            |      call bool Kotlin.Runtime.Internal.ExceptionClassifier::IsError(
+            |          class ${coreLibraryReference}System.Exception)
+            |      ret
+            |
+            |    EC_IllegalArgument:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.ArgumentException
+            |      br EC_MatchedObject
+            |    EC_IllegalState:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.InvalidOperationException
+            |      br EC_MatchedObject
+            |    EC_UnsupportedOperation:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.NotSupportedException
+            |      br EC_MatchedObject
+            |    EC_NoSuchElement:
+            |      ldarg.0
+            |      isinst Kotlin.NoSuchElementException
+            |      br EC_MatchedObject
+            |    EC_IndexOutOfBounds:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.IndexOutOfRangeException
+            |      br EC_MatchedObject
+            |    EC_Arithmetic:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.ArithmeticException
+            |      br EC_MatchedObject
+            |    EC_NumberFormat:
+            |      ldarg.0
+            |      isinst Kotlin.NumberFormatException
+            |      br EC_MatchedObject
+            |    EC_NullPointer:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.NullReferenceException
+            |      br EC_MatchedObject
+            |    EC_ClassCast:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.InvalidCastException
+            |    EC_MatchedObject:
+            |      ldnull
+            |      cgt.un
+            |      ret
+            |
+            |    EC_True:
+            |      ldc.i4.1
+            |      ret
+            |    EC_False:
+            |      ldc.i4.0
+            |      ret
+            |    }
+            |
+            |    .method private hidebysig static bool IsError(
+            |        class ${coreLibraryReference}System.Exception 'value') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      isinst Kotlin.Error
+            |      brtrue EC_IsError_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.OutOfMemoryException
+            |      brtrue EC_IsError_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.StackOverflowException
+            |      brtrue EC_IsError_True
+            |      ldc.i4.0
+            |      ret
+            |    EC_IsError_True:
+            |      ldc.i4.1
+            |      ret
+            |    }
+            |  }
+            |
             |  .class public abstract sealed auto ansi beforefieldinit Intrinsics
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
             |    .method public hidebysig static bool 'AreEqual'(object, object) cil managed
             |    {
             |      .maxstack 2
@@ -1877,7 +2080,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |        [0] int32 'index',
             |        [1] int32 'length',
             |        [2] object 'leftValue',
-            |        [3] object 'rightValue'
+            |        [3] object 'rightValue',
+            |        [4] class ${coreLibraryReference}System.Array 'leftArray',
+            |        [5] class ${coreLibraryReference}System.Array 'rightArray'
             |      )
             |      ldarg.0
             |      ldarg.1
@@ -1921,72 +2126,27 @@ internal object DotNetRuntimeLibraryHelpers {
             |      brfalse IL_arrayDeepFalse
             |
             |      ldloc.2
-            |      isinst object[]
-            |      brfalse IL_arrayDeepInt
-            |      ldloc.2
-            |      isinst object[]
             |      ldloc.3
+            |      call class ${coreLibraryReference}System.Array 'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+            |      stloc.s 5
+            |      call class ${coreLibraryReference}System.Array 'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+            |      stloc.s 4
+            |      ldloc.s 4
+            |      brfalse IL_arrayDeepScalar
+            |      ldloc.s 5
+            |      brfalse IL_arrayDeepFalse
+            |      ldloc.s 4
             |      isinst object[]
+            |      brfalse IL_arrayDeepShallow
+            |      ldloc.s 4
+            |      ldloc.s 5
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepEquals'(
             |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
             |      br IL_arrayDeepNext
-            |IL_arrayDeepInt:
-            |      ldloc.2
-            |      isinst int32[]
-            |      brfalse IL_arrayDeepLong
-            |      ldloc.2
-            |      isinst int32[]
-            |      ldloc.3
-            |      isinst int32[]
-            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
-            |      brfalse IL_arrayDeepFalse
-            |      br IL_arrayDeepNext
-            |IL_arrayDeepLong:
-            |      ldloc.2
-            |      isinst int64[]
-            |      brfalse IL_arrayDeepDouble
-            |      ldloc.2
-            |      isinst int64[]
-            |      ldloc.3
-            |      isinst int64[]
-            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
-            |      brfalse IL_arrayDeepFalse
-            |      br IL_arrayDeepNext
-            |IL_arrayDeepDouble:
-            |      ldloc.2
-            |      isinst float64[]
-            |      brfalse IL_arrayDeepBoolean
-            |      ldloc.2
-            |      isinst float64[]
-            |      ldloc.3
-            |      isinst float64[]
-            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
-            |      brfalse IL_arrayDeepFalse
-            |      br IL_arrayDeepNext
-            |IL_arrayDeepBoolean:
-            |      ldloc.2
-            |      isinst bool[]
-            |      brfalse IL_arrayDeepChar
-            |      ldloc.2
-            |      isinst bool[]
-            |      ldloc.3
-            |      isinst bool[]
-            |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
-            |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
-            |      brfalse IL_arrayDeepFalse
-            |      br IL_arrayDeepNext
-            |IL_arrayDeepChar:
-            |      ldloc.2
-            |      isinst char[]
-            |      brfalse IL_arrayDeepScalar
-            |      ldloc.2
-            |      isinst char[]
-            |      ldloc.3
-            |      isinst char[]
+            |IL_arrayDeepShallow:
+            |      ldloc.s 4
+            |      ldloc.s 5
             |      call bool 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentEquals'(
             |          class ${coreLibraryReference}System.Array, class ${coreLibraryReference}System.Array)
             |      brfalse IL_arrayDeepFalse
@@ -2063,7 +2223,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |        [1] int32 'index',
             |        [2] int32 'length',
             |        [3] object 'element',
-            |        [4] int32 'elementHash'
+            |        [4] int32 'elementHash',
+            |        [5] class ${coreLibraryReference}System.Array 'elementArray'
             |      )
             |      ldarg.0
             |      brtrue.s IL_arrayDeepHashNotNull
@@ -2086,60 +2247,20 @@ internal object DotNetRuntimeLibraryHelpers {
             |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      stloc.3
             |      ldloc.3
+            |      call class ${coreLibraryReference}System.Array 'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+            |      stloc.s 5
+            |      ldloc.s 5
+            |      brfalse IL_arrayDeepHashScalar
+            |      ldloc.s 5
             |      isinst object[]
-            |      brfalse IL_arrayDeepHashInt
-            |      ldloc.3
-            |      isinst object[]
+            |      brfalse IL_arrayDeepHashShallow
+            |      ldloc.s 5
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentDeepHashCode'(
             |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
             |      br IL_arrayDeepHashCombine
-            |IL_arrayDeepHashInt:
-            |      ldloc.3
-            |      isinst int32[]
-            |      brfalse IL_arrayDeepHashLong
-            |      ldloc.3
-            |      isinst int32[]
-            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class ${coreLibraryReference}System.Array)
-            |      stloc.s 4
-            |      br IL_arrayDeepHashCombine
-            |IL_arrayDeepHashLong:
-            |      ldloc.3
-            |      isinst int64[]
-            |      brfalse IL_arrayDeepHashDouble
-            |      ldloc.3
-            |      isinst int64[]
-            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class ${coreLibraryReference}System.Array)
-            |      stloc.s 4
-            |      br IL_arrayDeepHashCombine
-            |IL_arrayDeepHashDouble:
-            |      ldloc.3
-            |      isinst float64[]
-            |      brfalse IL_arrayDeepHashBoolean
-            |      ldloc.3
-            |      isinst float64[]
-            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class ${coreLibraryReference}System.Array)
-            |      stloc.s 4
-            |      br IL_arrayDeepHashCombine
-            |IL_arrayDeepHashBoolean:
-            |      ldloc.3
-            |      isinst bool[]
-            |      brfalse IL_arrayDeepHashChar
-            |      ldloc.3
-            |      isinst bool[]
-            |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
-            |          class ${coreLibraryReference}System.Array)
-            |      stloc.s 4
-            |      br IL_arrayDeepHashCombine
-            |IL_arrayDeepHashChar:
-            |      ldloc.3
-            |      isinst char[]
-            |      brfalse IL_arrayDeepHashScalar
-            |      ldloc.3
-            |      isinst char[]
+            |IL_arrayDeepHashShallow:
+            |      ldloc.s 5
             |      call int32 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentHashCode'(
             |          class ${coreLibraryReference}System.Array)
             |      stloc.s 4
@@ -2242,7 +2363,8 @@ internal object DotNetRuntimeLibraryHelpers {
             |      .locals init (
             |        [0] int32 'index',
             |        [1] int32 'length',
-            |        [2] object 'element'
+            |        [2] object 'element',
+            |        [3] class ${coreLibraryReference}System.Array 'elementArray'
             |      )
             |      ldarg.2
             |      ldarg.0
@@ -2283,10 +2405,14 @@ internal object DotNetRuntimeLibraryHelpers {
             |      callvirt instance object ${coreLibraryReference}System.Array::GetValue(int32)
             |      stloc.2
             |      ldloc.2
+            |      call class ${coreLibraryReference}System.Array 'Kotlin.Runtime.Internal.PrimitiveArrays'::'GetStorageOrNull'(object)
+            |      stloc.3
+            |      ldloc.3
+            |      brfalse IL_arrayDeepStringScalar
+            |      ldloc.3
             |      isinst object[]
-            |      brfalse IL_arrayDeepStringInt
-            |      ldloc.2
-            |      isinst object[]
+            |      brfalse IL_arrayDeepStringShallow
+            |      ldloc.3
             |      ldarg.1
             |      ldarg.2
             |      call void 'Kotlin.Runtime.Internal.Intrinsics'::'AppendArrayContentDeepToString'(
@@ -2294,61 +2420,9 @@ internal object DotNetRuntimeLibraryHelpers {
             |          class ${coreLibraryReference}System.Text.StringBuilder,
             |          class ${coreLibraryReference}System.Collections.ArrayList)
             |      br IL_arrayDeepStringNext
-            |IL_arrayDeepStringInt:
-            |      ldloc.2
-            |      isinst int32[]
-            |      brfalse IL_arrayDeepStringLong
+            |IL_arrayDeepStringShallow:
             |      ldarg.1
-            |      ldloc.2
-            |      isinst int32[]
-            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class ${coreLibraryReference}System.Array)
-            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
-            |      pop
-            |      br IL_arrayDeepStringNext
-            |IL_arrayDeepStringLong:
-            |      ldloc.2
-            |      isinst int64[]
-            |      brfalse IL_arrayDeepStringDouble
-            |      ldarg.1
-            |      ldloc.2
-            |      isinst int64[]
-            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class ${coreLibraryReference}System.Array)
-            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
-            |      pop
-            |      br IL_arrayDeepStringNext
-            |IL_arrayDeepStringDouble:
-            |      ldloc.2
-            |      isinst float64[]
-            |      brfalse IL_arrayDeepStringBoolean
-            |      ldarg.1
-            |      ldloc.2
-            |      isinst float64[]
-            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class ${coreLibraryReference}System.Array)
-            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
-            |      pop
-            |      br IL_arrayDeepStringNext
-            |IL_arrayDeepStringBoolean:
-            |      ldloc.2
-            |      isinst bool[]
-            |      brfalse IL_arrayDeepStringChar
-            |      ldarg.1
-            |      ldloc.2
-            |      isinst bool[]
-            |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
-            |          class ${coreLibraryReference}System.Array)
-            |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
-            |      pop
-            |      br IL_arrayDeepStringNext
-            |IL_arrayDeepStringChar:
-            |      ldloc.2
-            |      isinst char[]
-            |      brfalse IL_arrayDeepStringScalar
-            |      ldarg.1
-            |      ldloc.2
-            |      isinst char[]
+            |      ldloc.3
             |      call string 'Kotlin.Runtime.Internal.Intrinsics'::'ArrayContentToString'(
             |          class ${coreLibraryReference}System.Array)
             |      callvirt instance class ${coreLibraryReference}System.Text.StringBuilder ${coreLibraryReference}System.Text.StringBuilder::Append(string)
@@ -2486,6 +2560,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |  .class public abstract sealed auto ansi beforefieldinit DoubleFormatting
             |         extends ${coreLibraryReference}System.Object
             |  {
+            |    $compilerAbiTypeAttributesIl
             |  .method public hidebysig static string 'DoubleToString'(float64 'value') cil managed
             |  {
             |    .maxstack 5
@@ -2707,6 +2782,7 @@ internal object DotNetRuntimeLibraryHelpers {
             |}
             |
         """.trimMargin()
+    }
 
     /** The cross-assembly call emitted by compiled Kotlin code; one float64 in, one string out. */
     val doubleToStringCallInstruction: String =

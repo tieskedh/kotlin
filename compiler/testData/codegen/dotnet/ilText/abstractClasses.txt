@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'abstractClasses' {}
 .module 'main-abstractClasses.il'
 
@@ -308,7 +312,7 @@
        extends [mscorlib]System.Object
 {
   .field private int32 'code'
-  .method family hidebysig specialname rtspecialname instance void .ctor(int32 'code') cil managed
+  .method famandassem hidebysig specialname rtspecialname instance void .ctor(int32 'code') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -371,7 +375,7 @@
        extends [mscorlib]System.Object
 {
   .field private !0 'value'
-  .method family hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
+  .method famandassem hidebysig specialname rtspecialname instance void .ctor(!0 'value') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -436,7 +440,7 @@
     stfld string 'Token'::'text'
     ret
   }
-  .method public hidebysig specialname instance string 'get_text'() cil managed
+  .method private hidebysig specialname instance string 'get_text'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -523,7 +527,7 @@
   .class nested public auto ansi sealed beforefieldinit 'Companion'
          extends [mscorlib]System.Object
   {
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -537,12 +541,20 @@
       newobj instance void 'FactoryLeaf'::.ctor(string)
       ret
     }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'FactoryBase'/'Companion'::.ctor()
+      ret
+    }
   }
   .field public static initonly class 'FactoryBase'/'Companion' 'Companion'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'FactoryBase'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'FactoryBase'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'FactoryBase'/'Companion' 'FactoryBase'::'Companion'
     ret
   }
@@ -571,7 +583,7 @@
     stfld string 'FactoryLeaf'::'value'
     ret
   }
-  .method public hidebysig specialname instance string 'get_value'() cil managed
+  .method private hidebysig specialname instance string 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
