@@ -57,12 +57,14 @@ internal class DotNetCompanionStaticsLowering(
         for (declaration in companionDeclarations) {
             if (declaration is IrProperty) declaration.backingField?.isStatic = true
         }
-        if (
-            companionDeclarations.isEmpty() ||
-            irClass.typeParameters.isEmpty() && irClass.kind != ClassKind.INTERFACE
-        ) return
+        if (companionDeclarations.isEmpty()) return
+        if (irClass.typeParameters.isEmpty() && irClass.kind != ClassKind.INTERFACE) {
+            context.companionStaticOwners[irClass] = irClass
+            return
+        }
 
         val holder = createHolder(irClass, companionDeclarations)
+        context.companionStaticOwners[irClass] = holder
         val firstIndex = irClass.declarations.indexOf(companionDeclarations.first())
         irClass.declarations.removeAll(companionDeclarations.toSet())
         irClass.declarations.add(firstIndex, holder)

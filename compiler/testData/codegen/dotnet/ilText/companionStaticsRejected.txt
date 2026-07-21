@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -17,6 +22,13 @@
     stsfld int32 'Parent'::'parentState'
     ret
   }
+  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 1
+    ret
+  }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
@@ -33,6 +45,118 @@
   .property int32 'parentState'()
   {
     .get int32 'Parent'::'get_parentState'()
+  }
+}
+.class public auto ansi sealed 'Inherited'
+       extends 'Parent'
+{
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    call void 'Parent'::'<EnsureCompanionInitialized>'()
+    ret
+  }
+  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 1
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'Parent'::.ctor()
+    ret
+  }
+  .method public hidebysig static int32 'inheritedValue'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 2
+    ret
+  }
+}
+.class public auto ansi sealed 'GenericState`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public abstract sealed auto ansi '<CompanionStatics>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .field private static int32 'genericState'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      ldc.i4 3
+      stsfld int32 'GenericState`1'/'<CompanionStatics>'::'genericState'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ret
+    }
+    .method public hidebysig specialname static int32 'get_genericState'() cil managed
+    {
+      .maxstack 1
+      ldsfld int32 'GenericState`1'/'<CompanionStatics>'::'genericState'
+      ret
+    }
+    .property int32 'genericState'()
+    {
+      .get int32 'GenericState`1'/'<CompanionStatics>'::'get_genericState'()
+    }
+  }
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    call void 'GenericState`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class interface public abstract auto ansi 'InterfaceState'
+{
+  .class nested public abstract sealed auto ansi '<CompanionStatics>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .field private static int32 'interfaceState'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      ldc.i4 5
+      stsfld int32 'InterfaceState'/'<CompanionStatics>'::'interfaceState'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ret
+    }
+    .method public hidebysig specialname static int32 'get_interfaceState'() cil managed
+    {
+      .maxstack 1
+      ldsfld int32 'InterfaceState'/'<CompanionStatics>'::'interfaceState'
+      ret
+    }
+    .property int32 'interfaceState'()
+    {
+      .get int32 'InterfaceState'/'<CompanionStatics>'::'get_interfaceState'()
+    }
   }
 }
 .class public abstract sealed auto ansi beforefieldinit 'companionStaticsRejectedKt'
