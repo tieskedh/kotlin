@@ -104,8 +104,15 @@ internal class DotNetInitializersLowering(context: DotNetBackendContext) : Initi
 }
 
 /**
- * Removes the merged-away `IrAnonymousInitializer`s and nulls out `IrField.initializer`
- * expressions after [DotNetInitializersLowering] copied them into the constructors, exactly like
- * the JVM backend runs the shared cleanup after its initializer merging.
+ * Removes merged-away `IrAnonymousInitializer`s and nulls instance-field initializers after
+ * [DotNetInitializersLowering] copied them into constructors. Static field initializers are
+ * preserved (including companion-block state) for [DotNetStaticInitializersLowering], which
+ * moves them into the physical owner's `.cctor`. Const initializers retain the common lowering's
+ * copied constant expression for literal-field emission.
  */
-internal class DotNetInitializersCleanupLowering(context: DotNetBackendContext) : InitializersCleanupLowering(context)
+internal class DotNetInitializersCleanupLowering(context: DotNetBackendContext) : InitializersCleanupLowering(
+    context,
+    shouldEraseFieldInitializer = { field ->
+        !field.isStatic && field.correspondingPropertySymbol?.owner?.isConst != true
+    },
+)
