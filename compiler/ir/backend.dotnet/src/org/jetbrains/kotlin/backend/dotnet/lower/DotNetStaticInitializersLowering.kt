@@ -88,7 +88,7 @@ internal class DotNetStaticInitializersLowering(private val context: DotNetBacke
             statements += moveFieldInitializerOrNull(field) ?: continue
         }
         if (statements.isEmpty()) return
-        irFile.declarations += buildStaticInitializer(irFile, statements)
+        irFile.declarations += buildDotNetStaticInitializer(context, irFile, statements)
     }
 
     private fun lowerClassStatics(irClass: IrClass) {
@@ -108,7 +108,7 @@ internal class DotNetStaticInitializersLowering(private val context: DotNetBacke
             statements += moveFieldInitializerOrNull(field) ?: continue
         }
         if (statements.isEmpty()) return
-        irClass.declarations += buildStaticInitializer(irClass, statements)
+        irClass.declarations += buildDotNetStaticInitializer(context, irClass, statements)
     }
 
     private fun moveFieldInitializerOrNull(field: IrField): IrStatement? {
@@ -125,21 +125,22 @@ internal class DotNetStaticInitializersLowering(private val context: DotNetBacke
         )
     }
 
-    private fun buildStaticInitializer(parent: IrDeclarationParent, statements: List<IrStatement>): IrSimpleFunction {
-        val staticInitializer = context.irFactory.buildFun {
-            name = CLINIT_NAME
-            returnType = context.irBuiltIns.unitType
-            visibility = DescriptorVisibilities.PRIVATE
-            origin = DOTNET_STATIC_INITIALIZER
-        }
-        staticInitializer.parent = parent
-        staticInitializer.body = context.irFactory
-            .createBlockBody(staticInitializer.startOffset, staticInitializer.endOffset, statements)
-            .patchDeclarationParents(staticInitializer)
-        return staticInitializer
-    }
+}
 
-    private companion object {
-        val CLINIT_NAME = Name.special("<clinit>")
+internal fun buildDotNetStaticInitializer(
+    context: DotNetBackendContext,
+    parent: IrDeclarationParent,
+    statements: List<IrStatement>,
+): IrSimpleFunction {
+    val staticInitializer = context.irFactory.buildFun {
+        name = Name.special("<clinit>")
+        returnType = context.irBuiltIns.unitType
+        visibility = DescriptorVisibilities.PRIVATE
+        origin = DOTNET_STATIC_INITIALIZER
     }
+    staticInitializer.parent = parent
+    staticInitializer.body = context.irFactory
+        .createBlockBody(staticInitializer.startOffset, staticInitializer.endOffset, statements)
+        .patchDeclarationParents(staticInitializer)
+    return staticInitializer
 }

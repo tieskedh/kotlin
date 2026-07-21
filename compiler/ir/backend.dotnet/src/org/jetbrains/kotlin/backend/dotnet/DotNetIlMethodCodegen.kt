@@ -2,6 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_INITIALIZATION_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
@@ -299,6 +300,7 @@ internal class DotNetIlMethodCodegen(
         dotNetMemberVisibility() == "public" &&
                 (origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
                         origin == DOTNET_INTERFACE_DEFAULT_HELPER ||
+                        origin == DOTNET_COMPANION_INITIALIZATION_ENTRY ||
                         (this is IrSimpleFunction && name.asString().endsWith("\$default")) ||
                         visibility != DescriptorVisibilities.PUBLIC)
 
