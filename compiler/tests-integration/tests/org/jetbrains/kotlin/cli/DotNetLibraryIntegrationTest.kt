@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultImplementation
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
+import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.DotNetPortablePhysicalAbiDifference
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
@@ -57,6 +58,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 companionInitialization = DotNetCompanionInitialization(
                     ownerPath = listOf("sample.Counter", "<CompanionStatics>"),
                     methodName = "<EnsureCompanionInitialized>",
+                ),
+                objectInstance = DotNetObjectInstance(
+                    ownerPath = listOf("sample.Counter", "<CompanionStatics>"),
+                    fieldName = "INSTANCE",
                 ),
             ),
             "F:sample/increment" to DotNetPhysicalDeclaration.Function(
@@ -108,7 +113,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("9", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("10", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -2136,6 +2141,50 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     override fun abstractMember(): String = "abstract"
                 }
+
+                public object ProducerSingleton {
+                    public val state: String = recordInitialization("O")
+                }
+
+                public class GenericProducer<T> {
+                    companion object {
+                        public val state: String = recordInitialization("G")
+                    }
+                }
+
+                public open class GenericPrivateState<T> {
+                    companion {
+                        private val state: String = recordInitialization("H")
+                    }
+                }
+
+                public class PortableMixed<T> {
+                    companion {
+                        public val first: String = "first"
+                    }
+
+                    companion object {
+                        public val second: String = "second"
+                    }
+
+                    companion {
+                        public val third: String = "third"
+                    }
+                }
+
+                public interface PortableInterfaceMixed {
+                    companion {
+                        public val first: String = "first"
+                    }
+
+                    companion object {
+                        public val second: String = "second"
+                    }
+
+                    companion {
+                        public val third: String = "third"
+                    }
+                }
                 """.trimIndent()
             )
         }
@@ -2167,13 +2216,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package consumer
 
                 import companioninit.AbstractOnly
+                import companioninit.GenericProducer
+                import companioninit.GenericPrivateState
                 import companioninit.ProducerChild
+                import companioninit.ProducerSingleton
                 import companioninit.currentInitializationOrder
                 import companioninit.recordInitialization
 
                 class ConsumerChild : ProducerChild() {
                     companion {
                         val state: String = recordInitialization("D")
+                    }
+                }
+
+
+                class GenericPrivateConsumer : GenericPrivateState<String>() {
+                    companion {
+                        val state: String = recordInitialization("J")
                     }
                 }
 
@@ -2188,6 +2247,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                     ConsumerChild()
                     if (currentInitializationOrder() != "PICDA") throw Error("reinitialized")
+
+                    if (ProducerSingleton.state != "O") throw Error("ordinary object state")
+                    if (GenericProducer.state != "G") throw Error("generic companion state")
+                    GenericProducer<String>()
+                    GenericProducer<Int>()
+                    if (currentInitializationOrder() != "PICDAOG") {
+                        throw Error("object binding order=" + currentInitializationOrder())
+                    }
+                    if (GenericPrivateConsumer.state != "J") throw Error("private holder state")
+                    if (currentInitializationOrder() != "PICDAOGHJ") {
+                        throw Error("private holder order=" + currentInitializationOrder())
+                    }
                 }
                 """.trimIndent()
             )
@@ -2208,6 +2279,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "call void [Companion.Initialization.Library]'companioninit.ProducerChild'::" +
                     "'<EnsureCompanionInitialized>'()" in consumerIl
+        ) { consumerIl }
+        assertTrue("ldsfld" in consumerIl && "'<CompanionStatics>'::'Companion'" in consumerIl) { consumerIl }
+        assertTrue("'companioninit.ProducerSingleton'::'INSTANCE'" in consumerIl) { consumerIl }
+        assertTrue(
+            "call void [Companion.Initialization.Library]'companioninit.GenericPrivateState`1'/" +
+                    "'<CompanionStatics>'::'<EnsureCompanionInitialized>'()" in consumerIl
         ) { consumerIl }
         runDotNet(
             modernDotNetHostOrSkip(),

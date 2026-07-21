@@ -1410,7 +1410,8 @@ internal class DotNetIlExpressionCodegen(
         }
         val [classInfo, isStatic] = when (val parent = field.parent) {
             is IrClass -> {
-                val classInfo = typeMapper.classInfoOrNull(parent)
+                val classInfo = typeMapper.externalObjectInstanceOwnerInfoOrNull(field)
+                    ?: typeMapper.classInfoOrNull(parent)
                     ?: dotNetUnsupported("access to a field of unsupported class '${parent.name.asString()}'")
                 classInfo to field.isStatic
             }

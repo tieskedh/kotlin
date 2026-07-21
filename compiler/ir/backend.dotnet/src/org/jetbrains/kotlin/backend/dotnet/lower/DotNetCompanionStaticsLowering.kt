@@ -40,9 +40,9 @@ internal val DOTNET_COMPANION_STATIC_HOLDER: IrDeclarationOrigin =
  * their symbols, metadata, default arguments, and callable-reference identity while giving every
  * later lowering one authoritative physical parent.
  *
- * Stateful holders are structurally created here as well, but codegen rejects their `.cctor`
- * until the companion-initialization graph can make owner construction and inherited obligations
- * enter the holder exactly once. Const and computed members need no such graph edge.
+ * Stateful holders are structurally created here as well. Object lowering places a generic or
+ * mixed companion singleton on the same owner, and companion-initialization lowering then gives
+ * that one ordered `.cctor` stream its stable classifier entry.
  */
 internal class DotNetCompanionStaticsLowering(
     private val context: DotNetBackendContext,
@@ -54,18 +54,25 @@ internal class DotNetCompanionStaticsLowering(
     private fun lowerClass(irClass: IrClass) {
         irClass.declarations.filterIsInstance<IrClass>().forEach(::lowerClass)
         val companionDeclarations = irClass.declarations.filter { it.isCompanionBlockDeclaration() }
+        val companionObject = irClass.declarations.filterIsInstance<IrClass>().singleOrNull(IrClass::isCompanion)
         for (declaration in companionDeclarations) {
             if (declaration is IrProperty) declaration.backingField?.isStatic = true
         }
-        if (companionDeclarations.isEmpty()) return
-        if (irClass.typeParameters.isEmpty() && irClass.kind != ClassKind.INTERFACE) {
+        val requiresHolder = irClass.typeParameters.isNotEmpty() ||
+                irClass.kind == ClassKind.INTERFACE && companionDeclarations.isNotEmpty()
+        if (!requiresHolder) {
+            if (companionDeclarations.isEmpty()) return
             context.companionStaticOwners[irClass] = irClass
             return
         }
+        if (companionDeclarations.isEmpty() && companionObject == null) return
 
-        val holder = createHolder(irClass, companionDeclarations)
+        val sourceDeclarations = irClass.declarations.filter { declaration ->
+            declaration in companionDeclarations || declaration == companionObject
+        }
+        val holder = createHolder(irClass, sourceDeclarations)
         context.companionStaticOwners[irClass] = holder
-        val firstIndex = irClass.declarations.indexOf(companionDeclarations.first())
+        val firstIndex = irClass.declarations.indexOf(sourceDeclarations.first())
         irClass.declarations.removeAll(companionDeclarations.toSet())
         irClass.declarations.add(firstIndex, holder)
         for (declaration in companionDeclarations) {

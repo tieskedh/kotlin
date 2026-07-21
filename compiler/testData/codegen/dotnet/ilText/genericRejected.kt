@@ -1,6 +1,6 @@
 // Shapes that stay rejected loudly after generic-interfaces stage 4 (each declaration is skipped
-// with a specific warning and absent from the emitted IL; `Gen`, `Marked`, and `main` are the
-// supported remainder):
+// with a specific warning and absent from the emitted IL; `Gen`, `WithCompanion`, `Marked`, and
+// `main` are the supported remainder):
 // - declaration-site variance (`out`/`in`) on classes: ECMA-335 (II.10.1.7) allows variance only
 //   on interfaces and delegates — emitting the parameter as invariant would silently change
 //   assignability;
@@ -15,9 +15,6 @@
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
 // - inline generic functions (and with them `reified`): no inlining model;
 // - varargs of `T`: the parameter type is the unsupported projected `Array<out T>` ABI;
-// - generic classes containing direct companions: the companion field would live on the generic
-//   CLR owner and be duplicated per constructed type. Direct named objects are supported because
-//   their INSTANCE field lives on the independently non-generic object type;
 // - generic (extension) properties: the property metadata/accessor model does not cover generic
 //   accessors;
 // Widening an unconstrained `T` to `Any?`, structural `==`/`== null`, templates, and `toString`

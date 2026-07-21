@@ -601,13 +601,6 @@
         call instance int32 'AccessOwner'/'Nested'::'get_seed'()
         ret
       }
-      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
-      {
-        .maxstack 1
-        ldarg.0
-        call instance void 'AccessOwner'/'Nested'/'Companion'::.ctor()
-        ret
-      }
       .method assembly hidebysig static int32 'access$double'(class 'AccessOwner'/'Nested'/'Companion' '$this', int32 'value') cil managed
       {
         .maxstack 2
@@ -616,9 +609,16 @@
         call instance int32 'AccessOwner'/'Nested'/'Companion'::'double'(int32)
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'AccessOwner'/'Nested'/'Companion'::.ctor()
+        ret
+      }
     }
-    .field public static initonly class 'AccessOwner'/'Nested'/'Companion' 'Companion'
     .field private int32 'seed'
+    .field public static initonly class 'AccessOwner'/'Nested'/'Companion' 'Companion'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1

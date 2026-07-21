@@ -87,13 +87,6 @@
       call instance int32 'test.C'/'Companion'::'get_offset'()
       ret
     }
-    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
-    {
-      .maxstack 1
-      ldarg.0
-      call instance void 'test.C'/'Companion'::.ctor()
-      ret
-    }
     .method assembly hidebysig static int32 'access$<get-secret>'(class 'test.C'/'Companion' '$this') cil managed
     {
       .maxstack 1
@@ -108,6 +101,13 @@
       ldarg.1
       call instance void 'test.C'/'Companion'::'set_secret'(int32)
       ret
+      ret
+    }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'test.C'/'Companion'::.ctor()
       ret
     }
     .property instance int32 'base'()

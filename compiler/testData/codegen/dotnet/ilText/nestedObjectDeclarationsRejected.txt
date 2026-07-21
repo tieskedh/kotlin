@@ -56,6 +56,63 @@
       ret
     }
   }
+  .class nested public auto ansi sealed 'GenericBroken`1'<'T'>
+         extends [mscorlib]System.Object
+  {
+    .class nested public abstract sealed auto ansi '<CompanionStatics>'
+           extends [mscorlib]System.Object
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .field public static initonly class 'BrokenObjectOwner'/'GenericBroken`1'/'Companion' 'Companion'
+      .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+      {
+        .maxstack 1
+        ldnull
+        newobj instance void 'BrokenObjectOwner'/'GenericBroken`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'BrokenObjectOwner'/'GenericBroken`1'/'Companion' 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'Companion'
+        ret
+      }
+      .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+        .maxstack 1
+        ret
+      }
+    }
+    .class nested public auto ansi sealed beforefieldinit 'Companion'
+           extends [mscorlib]System.Object
+    {
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
+        ret
+      }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'BrokenObjectOwner'/'GenericBroken`1'/'Companion'::.ctor()
+        ret
+      }
+    }
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      call void 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
+      ret
+    }
+    .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+  }
   .field public static initonly class 'BrokenObjectOwner' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
@@ -117,6 +174,63 @@
       {
         .maxstack 1
         ldc.i4 4
+        ret
+      }
+    }
+    .class nested public auto ansi sealed 'GenericBroken`1'<'T'>
+           extends [mscorlib]System.Object
+    {
+      .class nested public abstract sealed auto ansi '<CompanionStatics>'
+             extends [mscorlib]System.Object
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+        .field public static initonly class 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion' 'Companion'
+        .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+        {
+          .maxstack 1
+          ldnull
+          newobj instance void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+          stsfld class 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion' 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'Companion'
+          ret
+        }
+        .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+        {
+          .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+          .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+          .maxstack 1
+          ret
+        }
+      }
+      .class nested public auto ansi sealed beforefieldinit 'Companion'
+             extends [mscorlib]System.Object
+      {
+        .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+        {
+          .maxstack 1
+          ldarg.0
+          call instance void [mscorlib]System.Object::.ctor()
+          ret
+        }
+        .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+        {
+          .maxstack 1
+          ldarg.0
+          call instance void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion'::.ctor()
+          ret
+        }
+      }
+      .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+      {
+        .maxstack 1
+        call void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
+        ret
+      }
+      .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void [mscorlib]System.Object::.ctor()
         ret
       }
     }

@@ -160,6 +160,7 @@ object DotNetBackend {
                 defaultArgumentDispatchers = context.defaultArgumentDispatchers,
                 genericInterfaceDefaults = context.genericInterfaceDefaults,
                 companionInitializations = context.companionInitializations,
+                objectInstanceFields = context.objectInstanceFields,
             ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
             null
@@ -211,6 +212,7 @@ object DotNetBackend {
             externalInterfaceDefaultHelpers = context.externalInterfaceDefaultHelpers,
             externalDefaultArgumentDispatchers = context.externalDefaultArgumentDispatchers,
             companionInitializations = context.companionInitializations,
+            objectInstanceFields = context.objectInstanceFields,
             externalCompanionInitializations = context.externalCompanionInitializations,
             interfaceDefaultPromotions = context.interfaceDefaultPromotions,
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,

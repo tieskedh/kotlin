@@ -1,8 +1,7 @@
 // LANGUAGE: +CompanionBlocks +CompanionExtensions
 
-// This file pins the field-backed holder and inherited initialization shapes which used to be
-// rejected. Mixed companion-block and companion-object state remains rejected until their source
-// initializer streams can be merged without changing Kotlin ordering.
+// This historical rejection file now pins the field-backed holder, inherited initialization, and
+// mixed companion-block/companion-object shapes which have moved into the supported surface.
 
 open class Parent {
     companion {

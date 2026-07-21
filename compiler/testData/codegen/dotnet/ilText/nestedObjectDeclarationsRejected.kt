@@ -1,7 +1,7 @@
 // Static-style declarations inside objects and companions fail at their own metadata subtree.
 // The valid parent/siblings remain available, while real inheritance dependents of a rejected
-// nested base still disappear through the live-map fixpoint. A generic nested class with a
-// companion remains rejected because that class would own a per-instantiation singleton field.
+// nested base still disappear through the live-map fixpoint. Generic nested classes with
+// companions survive through one non-generic static holder.
 
 object BrokenObjectOwner {
     annotation class BrokenAnnotation(val value: Int)

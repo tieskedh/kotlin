@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrFactory
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
@@ -125,6 +126,8 @@ internal class DotNetBackendContext(
         MutableList<DotNetLoweredInterfaceDefaultClassForwarder> = mutableListOf()
     /** Logical classifier to the non-generic physical owner selected for companion-block statics. */
     val companionStaticOwners: MutableMap<IrClass, IrClass> = linkedMapOf()
+    /** Kotlin object declaration to the synthesized field carrying its one CLR instance. */
+    val objectInstanceFields: MutableMap<IrClass, IrField> = linkedMapOf()
     /** Logical classifier to its stable, producer-recorded companion-initialization entry. */
     val companionInitializations:
         MutableMap<IrClass, DotNetLoweredCompanionInitialization> = linkedMapOf()

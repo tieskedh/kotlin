@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -30,6 +35,78 @@
   .property instance !0 'v'()
   {
     .get instance !0 'Gen`1'::'get_v'()
+  }
+}
+.class public auto ansi sealed 'WithCompanion`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public abstract sealed auto ansi '<CompanionStatics>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .field public static initonly class 'WithCompanion`1'/'Companion' 'Companion'
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      ldnull
+      newobj instance void 'WithCompanion`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+      stsfld class 'WithCompanion`1'/'Companion' 'WithCompanion`1'/'<CompanionStatics>'::'Companion'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ret
+    }
+  }
+  .class nested public auto ansi sealed beforefieldinit 'Companion'
+         extends [mscorlib]System.Object
+  {
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'WithCompanion`1'/'Companion'::.ctor()
+      ret
+    }
+  }
+  .field private !0 'v'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    call void 'WithCompanion`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
+    ret
+  }
+  .method public hidebysig specialname rtspecialname instance void .ctor(!0 'v') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld !0 class 'WithCompanion`1'<!0>::'v'
+    ret
+  }
+  .method public hidebysig specialname instance !0 'get_v'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld !0 class 'WithCompanion`1'<!0>::'v'
+    ret
+  }
+  .property instance !0 'v'()
+  {
+    .get instance !0 'WithCompanion`1'::'get_v'()
   }
 }
 .class interface public abstract auto ansi 'Marked'
