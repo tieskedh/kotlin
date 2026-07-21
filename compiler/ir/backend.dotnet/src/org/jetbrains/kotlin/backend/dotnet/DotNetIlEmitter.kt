@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_STATIC_HOLDER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_INITIALIZATION_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
@@ -92,6 +93,10 @@ internal class DotNetIlEmitter(
             Map<IrSimpleFunction, DotNetBoundInterfaceDefaultImplementation> = emptyMap(),
     private val externalDefaultArgumentDispatchers:
             Map<IrSimpleFunction, DotNetBoundDefaultArgumentDispatcher> = emptyMap(),
+    private val companionInitializations:
+            Map<IrClass, DotNetLoweredCompanionInitialization> = emptyMap(),
+    private val externalCompanionInitializations:
+            Map<IrSimpleFunction, DotNetBoundCompanionInitialization> = emptyMap(),
     private val interfaceDefaultPromotions:
             List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     private val genericInterfaceViewBridges:
@@ -567,6 +572,13 @@ internal class DotNetIlEmitter(
         for ([dispatcher, binding] in externalDefaultArgumentDispatchers) {
             availableFunctions[dispatcher] = externalDeclarations.defaultArgumentDispatcherFunctionInfo(
                 dispatcher,
+                binding,
+                typeMapper,
+            )
+        }
+        for ([entry, binding] in externalCompanionInitializations) {
+            availableFunctions[entry] = externalDeclarations.companionInitializationFunctionInfo(
+                entry,
                 binding,
                 typeMapper,
             )
@@ -1356,6 +1368,7 @@ internal class DotNetIlEmitter(
                 interfaceDefaultPromotions,
                 genericInterfaceViewBridges,
                 interfaceDefaultClassForwarders,
+                companionInitializations,
             ),
             referencedAssemblies.toSet(),
         )
@@ -1482,11 +1495,13 @@ internal class DotNetIlEmitter(
             if (
                 companionStaticHolder.declarations.any {
                     it is IrSimpleFunction && it.origin == DOTNET_STATIC_INITIALIZER
+                } && companionStaticHolder.declarations.none {
+                    it is IrSimpleFunction && it.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY
                 }
             ) {
                 dotNetUnsupported(
                     "companion static holder of '$name' has field-backed state; " +
-                            "the companion initialization graph lowering has not run"
+                            "no stable companion-initialization entry was emitted"
                 )
             }
         }
@@ -1584,8 +1599,8 @@ internal class DotNetIlEmitter(
         // class or interface supertype. A named nested class carries only its own parameters,
         // independently of a generic outer (`nestedprobe_s1`). Companion-block declarations have
         // already moved to one compiler-owned, non-generic nested holder. A companion object's
-        // field remains outside the model until unified initialization lowering; it would live on
-        // the generic container and be duplicated per construction. A named object's `INSTANCE` field instead
+        // field on a generic owner remains outside the model; it would live on the generic
+        // container and be duplicated per construction. A named object's `INSTANCE` field instead
         // lives on the non-generic object type itself, so it remains one singleton even when the
         // immediate metadata parent is generic (`nestedprobe_s4`, `nestedifaceprobe_s2`–`_s3`).
         // Generic base links retain their full open instantiation, so
@@ -1620,10 +1635,13 @@ internal class DotNetIlEmitter(
                             "the unified companion initialization lowering has not run"
                 )
             }
-            if (irClass.superTypes.any { !it.isAny() }) {
+            if (irClass.superTypes.any { !it.isAny() } && irClass.declarations.none {
+                    it is IrSimpleFunction && it.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY
+                }
+            ) {
                 dotNetUnsupported(
                     "class '$name' inherits companion-block members or initialization obligations; " +
-                            "the companion initialization graph lowering has not run"
+                            "no stable companion-initialization entry was emitted"
                 )
             }
         }
@@ -1908,6 +1926,12 @@ internal class DotNetIlEmitter(
             dotNetUnsupported(
                 "companion-block $description of interface '$interfaceName' escaped companion static holder lowering"
             )
+        }
+        if (member.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY) {
+            if (!member.isStaticMethodOfClass || member.body == null || member.typeParameters.isNotEmpty()) {
+                dotNetUnsupported("companion-initialization $description of interface '$interfaceName' has an invalid shape")
+            }
+            return
         }
         if (member.origin.isDotNetGenericInterfaceBridge) {
             if (coreLibrary != DotNetCoreLibraryProfile.NET10_0 || member.body == null) {

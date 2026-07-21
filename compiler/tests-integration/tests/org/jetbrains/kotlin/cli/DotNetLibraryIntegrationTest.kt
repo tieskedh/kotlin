@@ -6,6 +6,7 @@
 package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
+import org.jetbrains.kotlin.backend.dotnet.DotNetCompanionInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -53,6 +54,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             "C:sample/Counter" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Counter"),
+                companionInitialization = DotNetCompanionInitialization(
+                    ownerPath = listOf("sample.Counter", "<CompanionStatics>"),
+                    methodName = "<EnsureCompanionInitialized>",
+                ),
             ),
             "F:sample/increment" to DotNetPhysicalDeclaration.Function(
                 ownerPath = listOf("sample.LibraryKt"),
@@ -103,7 +108,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("8", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("9", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -2078,6 +2083,137 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerAssembly,
             consumerDirectory,
             "Companion-holder cross-module consumer failed",
+        )
+    }
+
+    @Test
+    fun testCompanionInitializationGraphBindsAcrossModules() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ilasm is not available",
+        )
+        val producerSource = File(tmpdir, "companion-initialization-library.kt").apply {
+            writeText(
+                """
+                package companioninit
+
+                private var initializationOrder: String = ""
+
+                public fun recordInitialization(tag: String): String {
+                    initializationOrder += tag
+                    return tag
+                }
+
+                public fun currentInitializationOrder(): String = initializationOrder
+
+                public open class Parent {
+                    companion {
+                        public val state: String = recordInitialization("P")
+                    }
+                }
+
+                public interface SelectedDefault {
+                    companion {
+                        public val state: String = recordInitialization("I")
+                    }
+
+                    public fun selected(): String = "selected"
+                }
+
+                public interface AbstractOnly {
+                    companion {
+                        public val state: String = recordInitialization("A")
+                    }
+
+                    public fun abstractMember(): String
+                }
+
+                public open class ProducerChild : Parent(), AbstractOnly, SelectedDefault {
+                    companion {
+                        public val state: String = recordInitialization("C")
+                    }
+
+                    override fun abstractMember(): String = "abstract"
+                }
+                """.trimIndent()
+            )
+        }
+
+        fun compileProducer(target: String, directory: File) {
+            compileInProcess(
+                K2DotNetCompiler(),
+                producerSource.path,
+                "-Xcompanion-blocks",
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Companion.Initialization.Library",
+                K2DotNetCompilerArguments::destination.cliArgument, directory.path,
+            )
+            val il = directory.resolve("Companion.Initialization.Library.il").readText()
+            assertTrue("'<EnsureCompanionInitialized>'" in il) { il }
+            assertTrue("KotlinCompilerAbiAttribute" in il) { il }
+        }
+
+        val producerDirectory = File(tmpdir, "companion-initialization-producer")
+        compileProducer("netstandard2.0", producerDirectory)
+        compileProducer("net48", File(tmpdir, "companion-initialization-net48"))
+        compileProducer("net10.0", File(tmpdir, "companion-initialization-net10"))
+
+        val consumerDirectory = File(tmpdir, "companion-initialization-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import companioninit.AbstractOnly
+                import companioninit.ProducerChild
+                import companioninit.currentInitializationOrder
+                import companioninit.recordInitialization
+
+                class ConsumerChild : ProducerChild() {
+                    companion {
+                        val state: String = recordInitialization("D")
+                    }
+                }
+
+                fun main() {
+                    if (ConsumerChild.state != "D") throw Error("consumer state")
+                    if (currentInitializationOrder() != "PICD") {
+                        throw Error("cross-module order=" + currentInitializationOrder())
+                    }
+                    if (AbstractOnly.state != "A") throw Error("abstract-only state")
+                    if (currentInitializationOrder() != "PICDA") {
+                        throw Error("abstract-only order=" + currentInitializationOrder())
+                    }
+                    ConsumerChild()
+                    if (currentInitializationOrder() != "PICDA") throw Error("reinitialized")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("CompanionInitializationConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            "-Xcompanion-blocks",
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            producerDirectory.resolve("Companion.Initialization.Library.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CompanionInitializationConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("CompanionInitializationConsumer.il").readText()
+        assertTrue(
+            "call void [Companion.Initialization.Library]'companioninit.ProducerChild'::" +
+                    "'<EnsureCompanionInitialized>'()" in consumerIl
+        ) { consumerIl }
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            consumerDirectory,
+            "Companion-initialization cross-module consumer failed",
         )
     }
 

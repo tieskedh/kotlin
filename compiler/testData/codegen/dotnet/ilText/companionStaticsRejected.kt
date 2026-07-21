@@ -1,7 +1,8 @@
 // LANGUAGE: +CompanionBlocks +CompanionExtensions
 
-// These declarations stay rejected until initialization-graph lowering assigns explicit
-// cross-owner initialization edges. Stateless generic/interface members are covered separately.
+// This file pins the field-backed holder and inherited initialization shapes which used to be
+// rejected. Mixed companion-block and companion-object state remains rejected until their source
+// initializer streams can be merged without changing Kotlin ordering.
 
 open class Parent {
     companion {

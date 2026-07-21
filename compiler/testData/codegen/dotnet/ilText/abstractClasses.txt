@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -558,6 +563,13 @@
     stsfld class 'FactoryBase'/'Companion' 'FactoryBase'::'Companion'
     ret
   }
+  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 1
+    ret
+  }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
@@ -569,10 +581,23 @@
   {
   }
 }
-.class public auto ansi sealed beforefieldinit 'FactoryLeaf'
+.class public auto ansi sealed 'FactoryLeaf'
        extends 'FactoryBase'
 {
   .field private string 'value'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    call void 'FactoryBase'::'<EnsureCompanionInitialized>'()
+    ret
+  }
+  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 1
+    ret
+  }
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
   {
     .maxstack 2

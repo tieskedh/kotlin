@@ -112,6 +112,13 @@
     stsfld class 'MarkedCompanionInterface'/'Companion' 'MarkedCompanionInterface'::'Companion'
     ret
   }
+  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 1
+    ret
+  }
 }
 .class public auto ansi sealed beforefieldinit 'UsesNestedInterfaceSurvivors'
        extends [mscorlib]System.Object

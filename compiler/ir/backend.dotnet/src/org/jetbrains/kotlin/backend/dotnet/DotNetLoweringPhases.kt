@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionStaticsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionInitializationLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultArgumentStubGenerator
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
@@ -141,6 +142,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // instance pair runs first: a `for` or a string concatenation inside an initializer must sit
     // inside a real function body before those function-scoped rewrites run.
     ::DotNetStaticInitializersLowering,
+    // Kotlin companion initialization is a classifier graph, while CLR type initialization is
+    // physical-owner based. After every own initializer has become a real `.cctor`, prepend the
+    // selected superclass/default-bearing-interface edges and publish one stable entry per
+    // participating classifier. Generic owners enter their non-generic static holder.
+    ::DotNetCompanionInitializationLowering,
     // For-loops next: the rewrite produces plain calls/whens the later phases treat like any
     // other code (string concatenations inside loop bodies are still ahead of their lowerings).
     ::DotNetForLoopLowering,

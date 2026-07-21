@@ -45,6 +45,17 @@ data class DotNetDefaultArgumentDispatcher(
     val methodName: String,
 )
 
+/** Stable compiler-ABI entry which enters one classifier's Kotlin initialization event. */
+data class DotNetCompanionInitialization(
+    val ownerPath: List<String>,
+    val methodName: String,
+) {
+    init {
+        require(ownerPath.isNotEmpty()) { "a companion-initialization entry requires a CLR owner" }
+        require(methodName.isNotEmpty()) { "a companion-initialization entry requires a CLR method name" }
+    }
+}
+
 enum class DotNetInterfaceDefaultPromotionView {
     CANONICAL,
     DECLARED,
@@ -72,6 +83,7 @@ sealed interface DotNetPhysicalDeclaration {
         override val ownerPath: List<String>,
         val declaredOwnerPath: List<String>? = null,
         val exactOwnerPath: List<String>? = null,
+        val companionInitialization: DotNetCompanionInitialization? = null,
     ) : DotNetPhysicalDeclaration {
         init {
             require(exactOwnerPath == null || declaredOwnerPath != null) {
@@ -250,7 +262,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "8"
+    const val ABI_VERSION = "9"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -315,8 +327,7 @@ object DotNetLibraryAbiCodec {
             val logicalKey = decodeText(propertyName.removePrefix(DECLARATION_PROPERTY_PREFIX))
             val fields = decodeText(properties.getProperty(propertyName)).split('\u0000')
             val declaration = when (fields.firstOrNull()) {
-                "C" -> DotNetPhysicalDeclaration.Class(fields.drop(1).requireOwnerPath(logicalKey))
-                "GI" -> decodeGenericInterfaceClass(fields, logicalKey)
+                "C" -> decodeClass(fields, logicalKey)
                 "F" -> decodeFunction(fields, logicalKey)
                 "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
                 "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
@@ -701,22 +712,25 @@ object DotNetLibraryAbiCodec {
     }
 
     private fun DotNetPhysicalDeclaration.Class.encodeFields(): List<String> {
-        val declaredPath = declaredOwnerPath ?: return listOf("C") + ownerPath
+        val declaredPath = declaredOwnerPath.orEmpty()
         val exactPath = exactOwnerPath.orEmpty()
+        val initializationPath = companionInitialization?.ownerPath.orEmpty()
         return listOf(
-            "GI",
+            "C",
             ownerPath.size.toString(),
             declaredPath.size.toString(),
             exactPath.size.toString(),
-        ) + ownerPath + declaredPath + exactPath
+            initializationPath.size.toString(),
+            companionInitialization?.methodName.orEmpty(),
+        ) + ownerPath + declaredPath + exactPath + initializationPath
     }
 
-    private fun decodeGenericInterfaceClass(
+    private fun decodeClass(
         fields: List<String>,
         logicalKey: String,
     ): DotNetPhysicalDeclaration.Class {
-        require(fields.size >= 4) {
-            "generic-interface declaration '$logicalKey' has an incomplete CLR identity"
+        require(fields.size >= 7) {
+            "class declaration '$logicalKey' has an incomplete CLR identity"
         }
         fun pathSize(fieldIndex: Int, view: String, allowAbsent: Boolean = false): Int {
             val size = fields[fieldIndex].toIntOrNull()
@@ -727,18 +741,33 @@ object DotNetLibraryAbiCodec {
         }
 
         val canonicalSize = pathSize(1, "canonical")
-        val declaredSize = pathSize(2, "declared")
+        val declaredSize = pathSize(2, "declared", allowAbsent = true)
         val exactSize = pathSize(3, "exact", allowAbsent = true)
-        val expectedSize = 4 + canonicalSize + declaredSize + exactSize
+        val initializationSize = pathSize(4, "companion-initialization", allowAbsent = true)
+        val expectedSize = 6 + canonicalSize + declaredSize + exactSize + initializationSize
         require(fields.size == expectedSize) {
-            "generic-interface declaration '$logicalKey' has an inconsistent CLR owner-path payload"
+            "class declaration '$logicalKey' has an inconsistent CLR owner-path payload"
         }
-        var offset = 4
+        require(exactSize == 0 || declaredSize > 0) {
+            "class declaration '$logicalKey' has an exact owner without a declared owner"
+        }
+        require((initializationSize == 0) == fields[5].isEmpty()) {
+            "class declaration '$logicalKey' has an inconsistent companion-initialization identity"
+        }
+        var offset = 6
         fun takePath(size: Int): List<String> = fields.subList(offset, offset + size).also { offset += size }
         val canonicalPath = takePath(canonicalSize).requireOwnerPath(logicalKey, "canonical")
-        val declaredPath = takePath(declaredSize).requireOwnerPath(logicalKey, "declared")
+        val declaredPath = if (declaredSize == 0) null else takePath(declaredSize).requireOwnerPath(logicalKey, "declared")
         val exactPath = if (exactSize == 0) null else takePath(exactSize).requireOwnerPath(logicalKey, "exact")
-        return DotNetPhysicalDeclaration.Class(canonicalPath, declaredPath, exactPath)
+        val initialization = if (initializationSize == 0) {
+            null
+        } else {
+            DotNetCompanionInitialization(
+                ownerPath = takePath(initializationSize).requireOwnerPath(logicalKey, "companion-initialization"),
+                methodName = fields[5].requireMethodName(logicalKey, "companion-initialization"),
+            )
+        }
+        return DotNetPhysicalDeclaration.Class(canonicalPath, declaredPath, exactPath, initialization)
     }
 
     private fun List<String>.requireOwnerPath(logicalKey: String, view: String? = null): List<String> =
@@ -878,6 +907,12 @@ internal data class DotNetBoundDefaultArgumentDispatcher(
     val dispatcher: DotNetDefaultArgumentDispatcher,
 )
 
+internal data class DotNetBoundCompanionInitialization(
+    val library: DotNetExternalLibrary,
+    val declaration: DotNetPhysicalDeclaration.Class,
+    val initialization: DotNetCompanionInitialization,
+)
+
 internal data class DotNetBoundInterfaceDefaultPromotion(
     val library: DotNetExternalLibrary,
     val promotion: DotNetPhysicalDeclaration.InterfaceDefaultPromotion,
@@ -990,6 +1025,14 @@ internal class DotNetExternalDeclarations(
             exactOwnerPath,
             List(irClass.typeParameters.size) { Variance.INVARIANT },
         ).also { exactClassInfoByLogicalKey[logicalKey] = it }
+    }
+
+    fun companionInitializationOrNull(irClass: IrClass): DotNetBoundCompanionInitialization? {
+        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Class ?: return null
+        val initialization = declaration.companionInitialization ?: return null
+        return DotNetBoundCompanionInitialization(bound.library, declaration, initialization)
     }
 
     fun functionInfoOrNull(
@@ -1133,6 +1176,26 @@ internal class DotNetExternalDeclarations(
         return DotNetIlFunctionInfo(owner, signature, binding.dispatcher.methodName)
     }
 
+    fun companionInitializationFunctionInfo(
+        entry: IrSimpleFunction,
+        binding: DotNetBoundCompanionInitialization,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "companion-initialization binding belongs to an unbound external library"
+        }
+        val owner = buildClassInfo(
+            binding.library.artifact.assemblyName,
+            binding.initialization.ownerPath,
+            emptyList(),
+        )
+        val signature = entry.dotNetSignature(typeMapper)
+        require(!signature.hasThis && entry.typeParameters.isEmpty()) {
+            "a companion-initialization entry must be a non-generic static method"
+        }
+        return DotNetIlFunctionInfo(owner, signature, binding.initialization.methodName)
+    }
+
     private fun buildClassInfo(
         assemblyName: String,
         ownerPath: List<String>,
@@ -1166,11 +1229,13 @@ internal fun collectDotNetLibraryDeclarations(
     interfaceDefaultPromotions: List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     genericInterfaceViewBridges: List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
     interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
+    companionInitializations: Map<IrClass, DotNetLoweredCompanionInitialization> = emptyMap(),
 ): Map<String, DotNetPhysicalDeclaration> = buildMap {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
     val compilerAbiFunctions = buildSet {
         interfaceDefaultImplementations.values.mapTo(this) { it.helper }
         defaultArgumentDispatchers.values.toCollection(this)
+        companionInitializations.values.mapTo(this) { it.entry }
     }
     val genericInterfaceViewBridgeFunctions =
         genericInterfaceViewBridges.mapTo(hashSetOf()) { it.implementation }
@@ -1190,8 +1255,25 @@ internal fun collectDotNetLibraryDeclarations(
             ?: irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
             ?: continue
         val genericInterface = genericInterfaces[irClass]
+        val companionInitialization = companionInitializations[irClass]?.let { lowered ->
+            val entryInfo = availableFunctions[lowered.entry]
+                ?: error(
+                    "Internal .NET backend error: companion-initialization entry for " +
+                            "'${irClass.render()}' did not survive physical emission"
+                )
+            DotNetCompanionInitialization(
+                ownerPath = entryInfo.owner.physicalPathComponents(),
+                methodName = entryInfo.physicalMethodName ?: lowered.entry.dotNetIlMethodName(),
+            )
+        }
         if (genericInterface == null) {
-            put(logicalKey, DotNetPhysicalDeclaration.Class(classInfo.physicalPathComponents()))
+            put(
+                logicalKey,
+                DotNetPhysicalDeclaration.Class(
+                    ownerPath = classInfo.physicalPathComponents(),
+                    companionInitialization = companionInitialization,
+                )
+            )
         } else {
             val canonicalOwnerPath = genericInterface.canonicalClassInfo.physicalPathComponents()
             require(canonicalOwnerPath == classInfo.physicalPathComponents()) {
@@ -1203,6 +1285,7 @@ internal fun collectDotNetLibraryDeclarations(
                     ownerPath = canonicalOwnerPath,
                     declaredOwnerPath = genericInterface.declaredClassInfo.physicalPathComponents(),
                     exactOwnerPath = genericInterface.exactClassInfo?.physicalPathComponents(),
+                    companionInitialization = companionInitialization,
                 )
             )
         }
