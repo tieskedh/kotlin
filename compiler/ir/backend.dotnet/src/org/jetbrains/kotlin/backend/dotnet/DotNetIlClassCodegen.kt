@@ -71,10 +71,14 @@ internal class DotNetIlClassCodegen(
             // owns a companion `.cctor`) and, per ECMA-335, no `extends` line at all.
             isInterface && isNested -> "nested $nestedVisibility interface abstract auto ansi"
             isInterface -> "interface $visibility abstract auto ansi"
-            // A nested class is never a static holder here. Its modality uses the same flags as
-            // a top-level class after the nested accessibility prefix: abstract/sealed Kotlin
-            // classes are CLR `abstract`, open classes omit `sealed`, and final named classes
-            // plus companion objects carry CLR `sealed` (`nestedprobe_s3`).
+            // A compiler-owned holder nested in a generic class or interface is a genuine CLR
+            // static class: named nested TypeDefs do not capture enclosing generic parameters.
+            isNested && isStaticHolder ->
+                "nested $nestedVisibility abstract sealed auto ansi$beforeFieldInit"
+            // Ordinary nested-class modality uses the same flags as a top-level class after the
+            // nested accessibility prefix: abstract/sealed Kotlin classes are CLR `abstract`,
+            // open classes omit `sealed`, and final named classes plus companion objects carry
+            // CLR `sealed` (`nestedprobe_s3`).
             isNested && isAbstract -> "nested $nestedVisibility abstract auto ansi$beforeFieldInit"
             isNested -> "nested $nestedVisibility auto ansi$sealed$beforeFieldInit"
             isStaticHolder -> "$visibility abstract sealed auto ansi$beforeFieldInit"

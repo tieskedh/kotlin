@@ -68,13 +68,16 @@ internal class DotNetPrivateNestedAccessLowering(
             override fun visitFunctionAccess(expression: IrFunctionAccessExpression): IrExpression {
                 expression.transformChildrenVoid(this)
                 val target = expression.symbol.owner
-                val companion = when (val parent = target.parent) {
+                val nestedOwner = when (val parent = target.parent) {
                     is IrClass -> parent
                     is IrProperty -> parent.parent as? IrClass
                     else -> null
                 } ?: return expression
-                if (!companion.isCompanion || target.visibility != DescriptorVisibilities.PRIVATE) return expression
-                if (currentClass.isNestedWithin(companion)) return expression
+                if (
+                    nestedOwner.origin != DOTNET_COMPANION_STATIC_HOLDER && !nestedOwner.isCompanion ||
+                    target.visibility != DescriptorVisibilities.PRIVATE
+                ) return expression
+                if (currentClass.isNestedWithin(nestedOwner)) return expression
 
                 val accessor = accessorGenerator.getSyntheticFunctionAccessor(expression, null).asAssemblyBridge()
                 generatedAccessors += accessor

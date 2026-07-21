@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.common.lower.DefaultParameterInjector
 import org.jetbrains.kotlin.backend.common.lower.MaskedDefaultArgumentFunctionFactory
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
 import org.jetbrains.kotlin.ir.expressions.IrExpression
@@ -36,14 +37,30 @@ internal class DotNetDefaultArgumentFunctionFactory(context: DotNetBackendContex
 }
 
 internal class DotNetDefaultArgumentStubGenerator(
-    context: DotNetBackendContext,
-    factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(context),
+    private val dotNetContext: DotNetBackendContext,
+    factory: DotNetDefaultArgumentFunctionFactory = DotNetDefaultArgumentFunctionFactory(dotNetContext),
 ) :
     DefaultArgumentStubGenerator<DotNetBackendContext>(
-        context,
+        dotNetContext,
         factory,
         skipExternalMethods = true,
-    )
+    ) {
+    override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? {
+        val transformed = super.transformFlat(declaration)
+        if (declaration is IrSimpleFunction) {
+            transformed
+                ?.filterIsInstance<IrSimpleFunction>()
+                ?.singleOrNull { it.origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER }
+                ?.takeIf { it.dispatchReceiverParameter == null }
+                ?.let { dispatcher ->
+                    check(dotNetContext.defaultArgumentDispatchers.put(declaration, dispatcher) == null) {
+                        "Internal .NET backend error: function has multiple default-argument dispatchers"
+                    }
+                }
+        }
+        return transformed
+    }
+}
 
 internal class DotNetDefaultParameterInjector(
     context: DotNetBackendContext,

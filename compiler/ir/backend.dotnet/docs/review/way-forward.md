@@ -335,14 +335,19 @@ with `CS0535` against both portable representations, using modern Roslyn for `ne
 Framework csc for `net48`.
 
 The accepted `adr-companion-static-placement-and-initialization.md` now owns companion placement
-and initialization. The first implementation slice preserves upstream KLIB feature flags, emits
-non-generic class companion members as true CLR statics with `.cctor`-owned state, and keeps
-receiver-free companion extensions on their file facade without a false CLR property row. A
-separate-module `netstandard2.0` producer/`net10.0` consumer executes that receiver-free extension
-ABI. Generic owners, interface owners, inherited initialization obligations, and mixed companion
-block/object initialization still fail loudly until the non-generic holder and explicit
-initialization-graph lowerings land; direct placement is not allowed to become their accidental
-ABI.
+and initialization. The implementation preserves upstream KLIB feature flags, emits non-generic
+class companion members as true CLR statics with `.cctor`-owned state, and keeps receiver-free
+companion extensions on their file facade without a false CLR property row. A separate-module
+`netstandard2.0` producer/`net10.0` consumer executes that receiver-free extension ABI. Stateless
+generic-class and interface companion members now move before default/callable lowering to one
+marked, non-generic nested `<CompanionStatics>` holder; a split generic interface owns that holder
+only on its canonical erased TypeDef. Runtime and IL tests cover constants, computed properties,
+method generics, callable references, private enclosing access, and masked defaults. The physical
+KLIB record is authoritative for cross-module holder calls and for their static default
+dispatchers, and producer variants assemble on all three profiles. Field-backed holder state,
+inherited initialization obligations, and mixed companion block/object initialization still fail
+loudly until the explicit initialization graph lands; direct placement or empty-owner partial
+eviction is not allowed to become their accidental ABI.
 
 ### P0-E — Decide the unresolved semantic representations
 

@@ -7,25 +7,45 @@ package org.jetbrains.kotlin.backend.dotnet.lower
 
 import org.jetbrains.kotlin.backend.common.FileLoweringPass
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
+import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
+import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.declarations.isStaticMethodOfClass
+import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
+import org.jetbrains.kotlin.ir.util.isPublishedApi
+import org.jetbrains.kotlin.name.Name
+
+internal val DOTNET_COMPANION_STATIC_HOLDER: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_COMPANION_STATIC_HOLDER")
 
 /**
- * Normalizes companion-block property storage before common instance-initializer lowering.
+ * Assigns companion-block declarations their CLR storage owner before any synthetic declarations
+ * are derived from them.
  *
  * FIR2IR represents a companion-block property by class-parented receiver-free accessors and
  * currently marks its backing field static. Normalize that physical fact here before any shared
- * lowering classifies fields as instance state. The CLR representation has one static field on
- * the semantic owner, and [DotNetStaticInitializersLowering] later moves its initializer into
- * that owner's `.cctor`.
+ * lowering classifies fields as instance state. A non-generic class remains the physical owner.
+ * An interface or generic class instead receives one compiler-owned non-generic nested holder:
+ * named CLR nested types do not capture the enclosing type's generic parameters, so this avoids
+ * one static state per constructed generic owner. Moving the original IR declarations preserves
+ * their symbols, metadata, default arguments, and callable-reference identity while giving every
+ * later lowering one authoritative physical parent.
  *
- * This lowering deliberately does not move declarations. Generic and interface owners need
- * dedicated non-generic holders; the emitter rejects those shapes until holder lowering assigns
- * their final physical owner.
+ * Stateful holders are structurally created here as well, but codegen rejects their `.cctor`
+ * until the companion-initialization graph can make owner construction and inherited obligations
+ * enter the holder exactly once. Const and computed members need no such graph edge.
  */
 internal class DotNetCompanionStaticsLowering(
-    @Suppress("UNUSED_PARAMETER") context: DotNetBackendContext,
+    private val context: DotNetBackendContext,
 ) : FileLoweringPass {
     override fun lower(irFile: IrFile) {
         irFile.declarations.filterIsInstance<IrClass>().forEach(::lowerClass)
@@ -33,15 +53,71 @@ internal class DotNetCompanionStaticsLowering(
 
     private fun lowerClass(irClass: IrClass) {
         irClass.declarations.filterIsInstance<IrClass>().forEach(::lowerClass)
-        for (property in irClass.declarations.filterIsInstance<IrProperty>()) {
-            if (property.isCompanionBlockProperty()) {
-                property.backingField?.isStatic = true
-            }
+        val companionDeclarations = irClass.declarations.filter { it.isCompanionBlockDeclaration() }
+        for (declaration in companionDeclarations) {
+            if (declaration is IrProperty) declaration.backingField?.isStatic = true
+        }
+        if (
+            companionDeclarations.isEmpty() ||
+            irClass.typeParameters.isEmpty() && irClass.kind != ClassKind.INTERFACE
+        ) return
+
+        val holder = createHolder(irClass, companionDeclarations)
+        val firstIndex = irClass.declarations.indexOf(companionDeclarations.first())
+        irClass.declarations.removeAll(companionDeclarations.toSet())
+        irClass.declarations.add(firstIndex, holder)
+        for (declaration in companionDeclarations) {
+            declaration.moveTo(holder)
+            holder.declarations += declaration
         }
     }
 
+    private fun createHolder(owner: IrClass, declarations: List<IrDeclaration>): IrClass =
+        context.irFactory.buildClass {
+            startOffset = declarations.first().startOffset
+            endOffset = declarations.last().endOffset
+            origin = DOTNET_COMPANION_STATIC_HOLDER
+            name = Name.special("<CompanionStatics>")
+            kind = ClassKind.CLASS
+            modality = Modality.FINAL
+            visibility = declarations.holderVisibility()
+        }.apply {
+            parent = owner
+            superTypes = listOf(context.irBuiltIns.anyType)
+            createThisReceiverParameter()
+        }
+
+    private fun List<IrDeclaration>.holderVisibility() = when {
+        any { declaration ->
+            (declaration as IrDeclarationWithVisibility).visibility == DescriptorVisibilities.PUBLIC ||
+                    declaration.isPublishedApi()
+        } -> DescriptorVisibilities.PUBLIC
+        any { (it as IrDeclarationWithVisibility).visibility == DescriptorVisibilities.PROTECTED } ->
+            DescriptorVisibilities.PROTECTED
+        any { (it as IrDeclarationWithVisibility).visibility == DescriptorVisibilities.INTERNAL } ->
+            DescriptorVisibilities.INTERNAL
+        else -> DescriptorVisibilities.PRIVATE
+    }
+
+    private fun IrDeclaration.isCompanionBlockDeclaration(): Boolean = when (this) {
+        is IrSimpleFunction ->
+            origin == IrDeclarationOrigin.DEFINED && correspondingPropertySymbol == null && isStaticMethodOfClass
+        is IrProperty -> isCompanionBlockProperty()
+        else -> false
+    }
+
     private fun IrProperty.isCompanionBlockProperty(): Boolean {
+        if (origin != IrDeclarationOrigin.DEFINED) return false
         val accessors = listOfNotNull(getter, setter)
-        return accessors.isNotEmpty() && accessors.all { it.dispatchReceiverParameter == null }
+        return accessors.isNotEmpty() && accessors.all(IrSimpleFunction::isStaticMethodOfClass) ||
+                backingField?.isStatic == true
+    }
+
+    private fun IrDeclaration.moveTo(holder: IrClass) {
+        parent = holder
+        if (this !is IrProperty) return
+        backingField?.parent = holder
+        getter?.parent = holder
+        setter?.parent = holder
     }
 }

@@ -76,6 +76,14 @@ Private/protected access made illegal by relocation is repaired with synthetic a
 Ordinary `internal` remains CLR assembly-internal; a bridge is public only when cross-assembly
 compiler machinery requires it, and is then marked and hidden as compiler ABI.
 
+**Implementation status (2026-07-21):** receiver-free functions, computed properties, constants,
+method-level generics, default dispatchers, callable references, and private access bridges now
+use one nested `<CompanionStatics>` holder. For a split generic interface the holder is nested in
+the canonical erased interface, not copied into its declared or exact typed views. Static
+relocation is persisted in the physical KLIB index and consumed without reconstructing the holder
+name. Field-backed holder state remains rejected at the semantic owner until sections 5 and 6 are
+implemented; an empty owner with an evicted holder is not accepted output.
+
 ### 5. One initialization entry point represents the Kotlin graph
 
 Each classifier participating in companion initialization has one stable compiler-owned

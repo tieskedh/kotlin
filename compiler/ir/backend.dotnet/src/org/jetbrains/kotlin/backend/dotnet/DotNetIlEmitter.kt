@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_STATIC_HOLDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
@@ -27,6 +28,7 @@ import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -82,7 +84,7 @@ internal class DotNetIlEmitter(
     private val friendAssemblies: List<DotNetFriendAssemblyIdentity> = emptyList(),
     private val interfaceDefaultImplementations:
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
-    private val interfaceDefaultArgumentDispatchers:
+    private val defaultArgumentDispatchers:
             Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     private val genericInterfaceDefaults:
             List<DotNetLoweredGenericInterfaceDefault> = emptyList(),
@@ -1350,7 +1352,7 @@ internal class DotNetIlEmitter(
                 genericInterfaces,
                 preLoweringDeclarationKeys,
                 interfaceDefaultImplementations,
-                interfaceDefaultArgumentDispatchers,
+                defaultArgumentDispatchers,
                 interfaceDefaultPromotions,
                 genericInterfaceViewBridges,
                 interfaceDefaultClassForwarders,
@@ -1461,6 +1463,33 @@ internal class DotNetIlEmitter(
         externalDeclarations: DotNetExternalDeclarations,
     ) {
         val name = irClass.diagnosticName()
+        val companionStaticHolder = if (irClass.origin == DOTNET_COMPANION_STATIC_HOLDER) {
+            irClass
+        } else {
+            irClass.declarations.filterIsInstance<IrClass>()
+                .singleOrNull { it.origin == DOTNET_COMPANION_STATIC_HOLDER }
+        }
+        if (companionStaticHolder != null) {
+            val protectedMember = companionStaticHolder.declarations.filterIsInstance<IrDeclarationWithVisibility>()
+                .firstOrNull { it.visibility == DescriptorVisibilities.PROTECTED }
+            if (protectedMember != null) {
+                dotNetUnsupported(
+                    "companion-block member '${(protectedMember as IrDeclarationWithName).name.asString()}' " +
+                            "of '$name' has protected visibility; a holder-relative CLR family member would " +
+                            "not preserve owner-subclass access"
+                )
+            }
+            if (
+                companionStaticHolder.declarations.any {
+                    it is IrSimpleFunction && it.origin == DOTNET_STATIC_INITIALIZER
+                }
+            ) {
+                dotNetUnsupported(
+                    "companion static holder of '$name' has field-backed state; " +
+                            "the companion initialization graph lowering has not run"
+                )
+            }
+        }
         val enclosingClass = irClass.parent as? IrClass
         val isValidatedCompanion =
             enclosingClass != null && irClass.isCompanion && irClass.kind == ClassKind.OBJECT
@@ -1553,9 +1582,10 @@ internal class DotNetIlEmitter(
         // gate scopes the model: invariant non-reified parameters, optionally constrained by
         // supported module-local classes/interfaces, and any supported generic/non-generic
         // class or interface supertype. A named nested class carries only its own parameters,
-        // independently of a generic outer (`nestedprobe_s1`). A companion whose immediate
-        // class/interface container is generic remains outside the model: its field lives on that
-        // container and would be per constructed owner. A named object's `INSTANCE` field instead
+        // independently of a generic outer (`nestedprobe_s1`). Companion-block declarations have
+        // already moved to one compiler-owned, non-generic nested holder. A companion object's
+        // field remains outside the model until unified initialization lowering; it would live on
+        // the generic container and be duplicated per construction. A named object's `INSTANCE` field instead
         // lives on the non-generic object type itself, so it remains one singleton even when the
         // immediate metadata parent is generic (`nestedprobe_s4`, `nestedifaceprobe_s2`–`_s3`).
         // Generic base links retain their full open instantiation, so
@@ -1573,20 +1603,6 @@ internal class DotNetIlEmitter(
                 dotNetUnsupported(
                     "generic class '$name' contains companion object '${nestedCompanion.name.asString()}'; " +
                             "a companion field on a generic CLR owner would be duplicated per constructed type"
-                )
-            }
-            val staticMember = irClass.declarations.firstOrNull { declaration ->
-                when (declaration) {
-                    is IrSimpleFunction -> declaration.isDotNetCompanionBlockFunction()
-                    is IrProperty -> declaration.isDotNetStaticProperty()
-                    else -> false
-                }
-            }
-            if (staticMember != null) {
-                val memberName = (staticMember as IrDeclarationWithName).name.asString()
-                dotNetUnsupported(
-                    "generic class '$name' contains companion-block member '$memberName'; " +
-                            "a non-generic companion static holder has not been lowered"
                 )
             }
         }
@@ -1890,7 +1906,7 @@ internal class DotNetIlEmitter(
             (member.origin == IrDeclarationOrigin.DEFINED || member.correspondingPropertySymbol != null)
         ) {
             dotNetUnsupported(
-                "companion-block $description of interface '$interfaceName' requires a non-generic static holder"
+                "companion-block $description of interface '$interfaceName' escaped companion static holder lowering"
             )
         }
         if (member.origin.isDotNetGenericInterfaceBridge) {
@@ -2406,7 +2422,7 @@ internal class DotNetIlEmitter(
                 renderedFields,
                 renderedProperties,
                 renderedAttributes = irClass.dotNetCompilerAbiTypeAttributes(),
-                isStaticHolder = false,
+                isStaticHolder = irClass.origin == DOTNET_COMPANION_STATIC_HOLDER,
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
                 nestedVisibility = irClass.dotNetNestedTypeVisibility(),
@@ -2711,7 +2727,10 @@ internal class DotNetIlEmitter(
     }
 
     private fun IrClass.dotNetCompilerAbiTypeAttributes(): List<String> =
-        if (origin == DOTNET_DEFAULT_IMPLS || visibility == DescriptorVisibilities.INTERNAL && isPublishedApi()) {
+        if (
+            origin == DOTNET_DEFAULT_IMPLS || origin == DOTNET_COMPANION_STATIC_HOLDER ||
+            visibility == DescriptorVisibilities.INTERNAL && isPublishedApi()
+        ) {
             listOf(
                 DotNetCompilerAbi.markerAttributeIl(),
                 DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference),
