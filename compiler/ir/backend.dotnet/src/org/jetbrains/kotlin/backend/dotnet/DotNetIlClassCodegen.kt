@@ -43,6 +43,7 @@ internal class DotNetIlClassCodegen(
     private val renderedMethods: List<String>,
     private val renderedFields: List<String> = emptyList(),
     private val renderedProperties: List<String> = emptyList(),
+    private val renderedAttributes: List<String> = emptyList(),
     private val isStaticHolder: Boolean = true,
     private val exported: Boolean = true,
     private val hasClassInitializer: Boolean = false,
@@ -93,11 +94,16 @@ internal class DotNetIlClassCodegen(
             builder.appendLine("       implements ${interfaceRefs.joinToString(", ")}")
         }
         builder.appendLine("{")
+        for (attribute in renderedAttributes) {
+            builder.appendLine("  $attribute")
+        }
         for (nestedClass in renderedNestedClasses) {
             builder.append(nestedClass)
         }
         for (field in renderedFields) {
-            builder.appendLine("  $field")
+            for (line in field.lineSequence()) {
+                builder.appendLine("  $line")
+            }
         }
         for (method in renderedMethods) {
             builder.append(method)
