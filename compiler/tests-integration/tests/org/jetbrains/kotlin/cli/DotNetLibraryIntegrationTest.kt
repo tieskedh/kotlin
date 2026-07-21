@@ -113,7 +113,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("10", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("11", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -3638,6 +3638,179 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 verifierProcess.waitFor(),
                 "Primitive-array C# verifier failed for $target:\n$verifierOutput",
             )
+        }
+    }
+
+    @Test
+    fun testOpenNullableTypeParametersAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val libraryDirectory = File(tmpdir, "open-nullable-library")
+        val librarySource = File(tmpdir, "openNullableLibrary.kt").apply {
+            writeText(
+                """
+                package nullableabi
+
+                public class NullableHolder<T>(public var value: T?)
+
+                public interface NullableSource<T> {
+                    public fun nullableValue(): T?
+                }
+
+                public class StoredNullableSource<T>(private val stored: T?) : NullableSource<T> {
+                    override fun nullableValue(): T? = stored
+                }
+
+                public fun <T> echoNullable(value: T?): T? = value
+
+                public fun <T> requireNullable(value: T?): T = value!!
+
+                public fun <T> readNullable(source: NullableSource<T>): T? = source.nullableValue()
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "OpenNullable.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("OpenNullable.Library.klib")
+        val libraryIl = libraryDirectory.resolve("OpenNullable.Library.il").readText()
+        assertTrue(".field private object 'value'" in libraryIl) { libraryIl }
+        assertTrue("static object 'echoNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
+        assertTrue("static !!0 'requireNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
+        assertTrue("unbox.any !!0" in libraryIl) { libraryIl }
+        assertTrue(".class interface public abstract auto ansi 'nullableabi.NullableSource`1'" in libraryIl) { libraryIl }
+        assertTrue("instance object 'nullableValue'()" in libraryIl) { libraryIl }
+        assertTrue(
+            ".override method instance object class 'nullableabi.NullableSource`1'<!0>::'nullableValue'()" in libraryIl
+        ) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package nullableconsumer
+
+                    import nullableabi.*
+
+                    fun main() {
+                        val numbers = NullableHolder<Int>(null)
+                        if (numbers.value != null) throw Error("primitive null field")
+                        numbers.value = 41
+                        if (numbers.value != 41) throw Error("primitive field recovery")
+                        if (echoNullable<Int>(null) != null) throw Error("primitive null call")
+                        if (echoNullable(42) != 42) throw Error("primitive call recovery")
+                        if (requireNullable(43) != 43) throw Error("primitive non-null recovery")
+                        val numberSource: NullableSource<Int> = StoredNullableSource(44)
+                        if (numberSource.nullableValue() != 44) throw Error("primitive interface recovery")
+                        if (readNullable(numberSource) != 44) throw Error("primitive generic interface call")
+
+                        val strings = NullableHolder<String>(null)
+                        strings.value = "reference"
+                        if (strings.value != "reference") throw Error("reference field recovery")
+                        if (echoNullable<String>(null) != null) throw Error("reference null call")
+                        if (requireNullable("ok") != "ok") throw Error("reference non-null recovery")
+                        val stringSource: NullableSource<String> = StoredNullableSource(null)
+                        if (stringSource.nullableValue() != null) throw Error("reference interface recovery")
+                        if (readNullable(stringSource) != null) throw Error("reference generic interface call")
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "OpenNullableConsumer.exe" else "OpenNullableConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "OpenNullableConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Open-nullable Kotlin consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Open-nullable Kotlin consumer failed for $target:\n$output")
+            }
+
+            if (target == "net10.0") {
+                val csharpSource = consumerDirectory.resolve("consumer.cs").apply {
+                    writeText(
+                        """
+                        public static class Program
+                        {
+                            public static int Main()
+                            {
+                                var holder = new nullableabi.NullableHolder<int>(41);
+                                if ((int) holder.value != 41) return 1;
+                                holder.value = null;
+                                if (holder.value != null) return 2;
+
+                                nullableabi.NullableSource<int> source =
+                                    new nullableabi.StoredNullableSource<int>(42);
+                                if ((int) source.nullableValue() != 42) return 3;
+                                if ((int) nullableabi.openNullableLibraryKt.readNullable<int>(source) != 42) return 4;
+
+                                nullableabi.NullableSource<string> empty =
+                                    new nullableabi.StoredNullableSource<string>(null);
+                                if (empty.nullableValue() != null) return 5;
+                                if (nullableabi.openNullableLibraryKt.echoNullable<string>(null) != null) return 6;
+                                return nullableabi.openNullableLibraryKt.requireNullable<int>(43) == 43 ? 0 : 7;
+                            }
+                        }
+                        """.trimIndent()
+                    )
+                }
+                val csharpApplication = consumerDirectory.resolve("OpenNullableCSharpConsumer.dll")
+                val csharpCompile = runModernCSharpCompiler(
+                    checkNotNull(modernCSharp),
+                    csharpSource,
+                    csharpApplication,
+                    libraryDirectory.resolve("OpenNullable.Library.dll"),
+                    consumerDirectory.resolve("Kotlin.Runtime.dll"),
+                    target = "exe",
+                )
+                assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+                consumerDirectory.resolve("OpenNullableConsumer.runtimeconfig.json").copyTo(
+                    consumerDirectory.resolve("OpenNullableCSharpConsumer.runtimeconfig.json"),
+                    overwrite = true,
+                )
+                runDotNet(
+                    dotnetHost,
+                    csharpApplication,
+                    consumerDirectory,
+                    "Open-nullable C# consumer failed for $target",
+                )
+            }
         }
     }
 

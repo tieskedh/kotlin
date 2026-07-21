@@ -1,0 +1,224 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'openNullableTypeParameters' {}
+.module 'main-openNullableTypeParameters.il'
+
+.class public auto ansi sealed beforefieldinit 'NullableHolder`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .field private object 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld object class 'NullableHolder`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance object 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld object class 'NullableHolder`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance void 'set_value'(object '<set-?>') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    stfld object class 'NullableHolder`1'<!0>::'value'
+    ret
+  }
+  .property instance object 'value'()
+  {
+    .get instance object 'NullableHolder`1'::'get_value'()
+    .set instance void 'NullableHolder`1'::'set_value'(object)
+  }
+}
+.class interface public abstract auto ansi 'NullableSlot'
+{
+  .method public hidebysig newslot abstract virtual instance object 'nullable__KotlinErased__020ae010049477bc392d0718bd17be15'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'NullableSlot`1'<'T'>
+       implements 'NullableSlot'
+{
+  .method public hidebysig newslot abstract virtual instance object 'nullable'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericNullableSlot`1'<'T'>
+       extends [mscorlib]System.Object
+       implements 'NullableSlot', class 'NullableSlot`1'<!0>
+{
+  .field private object 'stored'
+  .method public hidebysig specialname rtspecialname instance void .ctor(object 'stored') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld object class 'GenericNullableSlot`1'<!0>::'stored'
+    ret
+  }
+  .method private hidebysig specialname instance object 'get_stored'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld object class 'GenericNullableSlot`1'<!0>::'stored'
+    ret
+  }
+  .method public hidebysig newslot virtual instance object 'nullable'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance object class 'GenericNullableSlot`1'<!0>::'get_stored'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-NullableSlot-nullable-020ae010049477bc392d0718bd17be15>'() cil managed
+  {
+    .override method instance object 'NullableSlot'::'nullable__KotlinErased__020ae010049477bc392d0718bd17be15'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance object class 'GenericNullableSlot`1'<!0>::'nullable'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceDeclaredBridge-NullableSlot-nullable-020ae010049477bc392d0718bd17be15>'() cil managed
+  {
+    .override method instance object class 'NullableSlot`1'<!0>::'nullable'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance object class 'GenericNullableSlot`1'<!0>::'nullable'()
+    ret
+  }
+  .property instance object 'stored'()
+  {
+    .get instance object 'GenericNullableSlot`1'::'get_stored'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'openNullableTypeParametersKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static object 'echoNullable'<'T'>(object 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static !!0 'requireNullable'<'T'>(object 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    dup
+    brtrue IL_notNull_0
+    pop
+    newobj instance void [mscorlib]System.NullReferenceException::.ctor()
+    throw
+IL_notNull_0:
+    unbox.any !!0
+    ret
+  }
+  .method public hidebysig static valuetype [mscorlib]System.Nullable`1<int32> 'primitiveNullable'(valuetype [mscorlib]System.Nullable`1<int32> 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    box valuetype [mscorlib]System.Nullable`1<int32>
+    call object 'openNullableTypeParametersKt'::'echoNullable'<int32>(object)
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    ret
+  }
+  .method public hidebysig static string 'referenceNullable'(string 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call object 'openNullableTypeParametersKt'::'echoNullable'<string>(object)
+    castclass [mscorlib]System.String
+    ret
+  }
+  .method public hidebysig static object 'readNullable'<'T'>(class 'NullableSlot' 'value') cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] class 'NullableSlot' '<genericInterfaceReceiver>',
+      [1] class 'NullableSlot`1'<!!0> '<genericInterfaceCapability>',
+      [2] object '<genericInterfaceResult>'
+    )
+    ldarg.0
+    stloc.0
+    ldloc.0
+    isinst class 'NullableSlot`1'<!!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    callvirt instance object class 'NullableSlot`1'<!!0>::'nullable'()
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
+    callvirt instance object 'NullableSlot'::'nullable__KotlinErased__020ae010049477bc392d0718bd17be15'()
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
+    ret
+  }
+  .method public hidebysig static valuetype [mscorlib]System.Nullable`1<int32> 'readNullableInt'(class 'NullableSlot' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call object 'openNullableTypeParametersKt'::'readNullable'<int32>(class 'NullableSlot')
+    unbox.any valuetype [mscorlib]System.Nullable`1<int32>
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] valuetype [mscorlib]System.Nullable`1<int32> '<str>'
+    )
+    ldc.i4 7
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    call valuetype [mscorlib]System.Nullable`1<int32> 'openNullableTypeParametersKt'::'primitiveNullable'(valuetype [mscorlib]System.Nullable`1<int32>)
+    stloc.0
+    ldloca 0
+    call instance bool valuetype [mscorlib]System.Nullable`1<int32>::get_HasValue()
+    brtrue IL_strValueNotNull_0
+    ldstr "null"
+    br IL_strValueEnd_1
+IL_strValueNotNull_0:
+    ldloca 0
+    call instance !0 valuetype [mscorlib]System.Nullable`1<int32>::GetValueOrDefault()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+IL_strValueEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "ok"
+    call string 'openNullableTypeParametersKt'::'referenceNullable'(string)
+    dup
+    brtrue IL_stringValueNotNull_2
+    pop
+    ldstr "null"
+IL_stringValueNotNull_2:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 8
+    box [mscorlib]System.Int32
+    call !!0 'openNullableTypeParametersKt'::'requireNullable'<int32>(object)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

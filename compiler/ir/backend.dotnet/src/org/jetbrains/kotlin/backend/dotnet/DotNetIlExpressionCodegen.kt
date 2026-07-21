@@ -1442,7 +1442,8 @@ internal class DotNetIlExpressionCodegen(
         if (
             producedType == DotNetIlValueType.Object &&
             (call.symbol.owner.isDotNetErasedObjectResult() ||
-                    call.symbol.owner.isSplitGenericInterfaceMember())
+                    call.symbol.owner.isSplitGenericInterfaceMember() ||
+                    call.symbol.owner.hasErasedNullableTypeParameterResult())
         ) {
             emitErasedObjectAs(expectedType, "${call.symbol.owner.name.asString()} result")
         } else if (producedType?.isDotNetAssignableTo(expectedType) != true) {
@@ -1458,6 +1459,16 @@ internal class DotNetIlExpressionCodegen(
                 allOverridden().any { overridden ->
                     (overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true
                 }
+
+    /** Whether this logical result is an open `T?` represented by the stable object carrier. */
+    private fun IrSimpleFunction.hasErasedNullableTypeParameterResult(): Boolean {
+        fun IrType.isNullableTypeParameter(): Boolean {
+            val simpleType = this as? IrSimpleType ?: return false
+            return simpleType.isMarkedNullable() && simpleType.classifier is IrTypeParameterSymbol
+        }
+        if (returnType.isNullableTypeParameter()) return true
+        return allOverridden().any { overridden -> overridden.returnType.isNullableTypeParameter() }
+    }
 
     /**
      * Probes the member's legal typed home, then falls back to the canonical erased slot.

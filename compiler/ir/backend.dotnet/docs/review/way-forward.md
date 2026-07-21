@@ -358,6 +358,17 @@ compiled `netstandard2.0` producer/`net10.0` consumer executes the graph, an ord
 generic companion through recorded physical metadata. Protected members which would acquire
 holder-relative CLR `family` access remain rejected pending a deliberate bridge/export design.
 
+The accepted `adr-hybrid-generic-nullability-and-covariant-returns.md` fixes the remaining
+nullability representation. ABI schema 11 replaces the unshipped schema-10 signature model:
+open `T?` uses one declaration-stable boxed-or-null `object` carrier, while concrete nullable
+primitives retain `System.Nullable<T>` and non-null `T` remains reified. Boundary code boxes on
+entry and uses `castclass`/`unbox.any` on recovery; `!!` performs the Kotlin null check before
+recovering an open `T`. Local execution and netstandard2.0 producers consumed on both runtime
+profiles cover primitive/reference values, null, fields, locals, equality, interface views,
+forwarding, and recovery. Closure capture remains part of the pre-stable evidence once general
+closure construction is available. Covariant-return bridge generation remains the implementation
+half of this accepted ADR.
+
 ### P0-E — Decide the unresolved semantic representations
 
 Specify and implement, in dependency order:

@@ -6,10 +6,6 @@
 //   assignability;
 // - constraints outside the supported direct module-local class/interface model
 //   (`T : CharSequence` below);
-// - `T?` ANYWHERE in a generic declaration (parameter, local): a nullable type parameter has no
-//   uniform CLR representation — `T` may instantiate to a value type needing `Nullable<T>` and
-//   to a reference type needing nothing — the deferred ABI problem of the hybrid nullability
-//   model; the declaration is rejected loudly, never given an ad-hoc representation;
 // - `===` on `T` operands: an unconstrained `T` may instantiate to a value type with no stable
 //   reference identity, and boxing would manufacture two unrelated references;
 // - `as`/`is` on generic types: the existing type-operator rejection stays authoritative;
@@ -33,13 +29,6 @@ class WithCompanion<T>(val v: T) {
 }
 
 interface Marked
-
-fun <T> nullableParam(x: T?): Int = 0
-
-fun <T> nullableLocal(x: T): Int {
-    val y: T? = x
-    return if (y == null) 0 else 1
-}
 
 fun <T> identity(a: T, b: T): Boolean = a === b
 

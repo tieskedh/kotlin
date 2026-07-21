@@ -2,18 +2,6 @@ interface RejectProducer<out T> {
     fun produce(): T
 }
 
-// Open T? does not yet have one uniform CLR slot: a value instantiation needs Nullable<T>, while
-// a reference instantiation uses the reference directly.
-interface NullableSlot<T> {
-    fun nullable(): T?
-}
-
-fun nullableSlotUse(value: NullableSlot<String>): NullableSlot<String> = value
-
-class NullableSlotImplementation : NullableSlot<String> {
-    override fun nullable(): String? = null
-}
-
 interface UnsupportedInterfaceBound<T : List<String>> {
     fun value(): T
 }

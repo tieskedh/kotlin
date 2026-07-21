@@ -423,9 +423,10 @@ internal class DotNetIlTypeMapper private constructor(
      * `System.Nullable<T>` ([DotNetIlValueType.NullableValue], Roslyn precedent). The `is*`
      * primitive predicates are NOT-NULL-only by construction, so the nullable-primitive arm is
      * separate. `kotlin.Any`/`Any?` map to CLR `object` as a storage type
-     * ([DotNetIlValueType.Object]). Generic `T?` (a nullable type-parameter type) deliberately
-     * stays unmapped: its ABI is a future generics problem and must not force concrete nullable
-     * primitives into `object` (the whole point of the hybrid split).
+     * ([DotNetIlValueType.Object]). Generic `T?` (a nullable type-parameter type) uses the
+     * declaration-stable boxed-or-null `object` carrier selected by
+     * `adr-hybrid-generic-nullability-and-covariant-returns.md`. This local erasure does not alter
+     * concrete nullable primitives or non-null reified `T` slots.
      */
     fun toDotNetIlValueType(type: IrType): DotNetIlValueType? =
         mapDotNetIlValueType(type).also { valueType ->
@@ -496,6 +497,13 @@ internal class DotNetIlTypeMapper private constructor(
             )
         }
         val elementIrType = projection.type
+        if (elementIrType.isOpenNullableTypeParameter()) {
+            dotNetUnsupported(
+                "generic array type ${type.render()} contains open nullable type parameter " +
+                        "'${elementIrType.render()}'; the boxed-or-null carrier is supported only " +
+                        "as a direct value slot until nested invariant-carrier adapters are defined"
+            )
+        }
         val elementType = toDotNetIlValueType(elementIrType) ?: return null
         if (elementType is DotNetIlValueType.NullableValue) {
             dotNetUnsupported(
@@ -590,6 +598,13 @@ internal class DotNetIlTypeMapper private constructor(
                             "variance is represented)"
                 )
             }
+            if (projection.type.isOpenNullableTypeParameter()) {
+                dotNetUnsupported(
+                    "generic type '${type.render()}' contains open nullable type parameter " +
+                            "'${projection.type.render()}'; the boxed-or-null carrier is supported " +
+                            "only as a direct value slot until nested invariant-carrier adapters are defined"
+                )
+            }
             toDotNetIlValueType(projection.type) ?: return null
         }
         return DotNetIlValueType.GenericInstance(classInfo, arguments)
@@ -599,13 +614,10 @@ internal class DotNetIlTypeMapper private constructor(
      * A reference to a type parameter of the enclosing generic declaration maps positionally to
      * the CLR `!n` (class) / `!!n` (method) token. Stage 2 additionally carries every supported
      * module-local class/interface bound on the structural token; the rendered slot remains
-     * positional and open. Two loud rejections remain deliberate design points:
-     * - `T?` (a nullable type-parameter type) has NO uniform CLR representation — `T` may
-     *   instantiate to a value type needing `Nullable<T>` and to a reference type needing
-     *   nothing — so any declaration mentioning it is rejected (the deferred ABI problem the
-     *   hybrid nullability model documents; interface-only CLR constraints can still admit a
-     *   value type, so the stage-2 constraint subset does not make this uniform);
-     * - constraints outside [dotNetConstraintTypes] are rejected instead of erased.
+     * positional and open. A nullable type-parameter occurrence uses `object`: one frozen
+     * boxed-or-null carrier is required because a CLR signature cannot alternate between
+     * `Nullable<T>` and a reference after substitution. Constraints outside
+     * [dotNetConstraintTypes] remain rejected instead of erased.
      * A `T` whose bound is `String`/`String?` never reaches this arm: the string-concat
      * lowering's receiver mapping ([isDotNetStringType]) runs earlier in the dispatch chain and
      * maps it to IL `string` (the pre-existing behavior).
@@ -613,12 +625,8 @@ internal class DotNetIlTypeMapper private constructor(
     private fun toTypeParameterTypeOrNull(type: IrType): DotNetIlValueType? {
         if (type !is IrSimpleType) return null
         val typeParameter = (type.classifier as? IrTypeParameterSymbol)?.owner ?: return null
-        val parameterName = typeParameter.name.asString()
         if (type.isMarkedNullable()) {
-            dotNetUnsupported(
-                "nullable type-parameter type '$parameterName?' has no uniform CLR representation " +
-                        "and is not supported by the current generic-constraints model"
-            )
+            return DotNetIlValueType.Object
         }
         val parentGenericInterface = (typeParameter.parent as? IrClass)
             ?.takeIf(::isSplitGenericInterface)
@@ -642,6 +650,11 @@ internal class DotNetIlTypeMapper private constructor(
                 }
             },
         )
+    }
+
+    private fun IrType.isOpenNullableTypeParameter(): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        return simpleType.isMarkedNullable() && simpleType.classifier is IrTypeParameterSymbol
     }
 
     private fun IrType.referencesErasedInterfaceParameter(): Boolean {
