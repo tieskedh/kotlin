@@ -1944,6 +1944,144 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testCompanionStaticHoldersBindAcrossModules() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ilasm is not available",
+        )
+        val producerDirectory = File(tmpdir, "companion-holder-producer")
+        val producerSource = File(tmpdir, "holder-library.kt").apply {
+            writeText(
+                """
+                package companionholder
+
+                public class GenericOwner<T> private constructor(public val value: Int) {
+                    public fun reveal(): Int = secret()
+
+                    companion {
+                        public const val marker: Int = 7
+                        public val answer: Int get() = 42
+                        private fun secret(): Int = 11
+                        public fun create(value: Int = 40): GenericOwner<String> = GenericOwner(value)
+                        public fun <R> echo(value: R): R = value
+                    }
+                }
+
+                public interface GenericInterface<T> {
+                    companion {
+                        public const val marker: Int = 9
+                        public val answer: Int get() = 43
+                        public fun <R> echo(value: R): R = value
+                    }
+                }
+
+                public class DirectOwner {
+                    public fun instanceValue(): Int = 1
+
+                    companion {
+                        public fun answer(value: Int = 45): Int = value
+                    }
+                }
+
+                public fun topLevelAnswer(value: Int = 46): Int = value
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            "-Xcompanion-blocks",
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Companion.Holder.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerIl = producerDirectory.resolve("Companion.Holder.Library.il").readText()
+        assertTrue("'companionholder.GenericOwner`1'/'<CompanionStatics>'" in producerIl) { producerIl }
+        assertTrue("'companionholder.GenericInterface'/'<CompanionStatics>'" in producerIl) { producerIl }
+        assertTrue("static !!0 'echo'<'R'>(!!0 'value')" in producerIl) { producerIl }
+        assertTrue("'create\$default'" in producerIl) { producerIl }
+        assertTrue("KotlinCompilerAbiAttribute" in producerIl) { producerIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val profileDirectory = File(tmpdir, "companion-holder-$target")
+            compileInProcess(
+                K2DotNetCompiler(),
+                producerSource.path,
+                "-Xcompanion-blocks",
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Companion.Holder.Library",
+                K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
+            )
+            val profileIl = profileDirectory.resolve("Companion.Holder.Library.il").readText()
+            assertTrue("'companionholder.GenericOwner`1'/'<CompanionStatics>'" in profileIl) { profileIl }
+            assertTrue("'companionholder.GenericInterface'/'<CompanionStatics>'" in profileIl) { profileIl }
+            assertTrue("static !!0 'echo'<'R'>(!!0 'value')" in profileIl) { profileIl }
+        }
+
+        val consumerDirectory = File(tmpdir, "companion-holder-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import companionholder.GenericInterface
+                import companionholder.GenericOwner
+                import companionholder.DirectOwner
+                import companionholder.topLevelAnswer
+
+                fun main() {
+                    val owner = GenericOwner.create()
+                    if (owner.value != 40) throw Error("default")
+                    if (owner.reveal() != 11) throw Error("private bridge")
+                    if (GenericOwner.marker != 7) throw Error("class const")
+                    if (GenericOwner.answer != 42) throw Error("class property")
+                    if (GenericOwner.echo("OK") != "OK") throw Error("class generic method")
+                    if (GenericInterface.marker != 9) throw Error("interface const")
+                    if (GenericInterface.answer != 43) throw Error("interface property")
+                    if (GenericInterface.echo(44) != 44) throw Error("interface generic method")
+                    val directOwner = DirectOwner()
+                    if (directOwner.instanceValue() != 1) throw Error("direct class record")
+                    if (DirectOwner.answer() != 45) throw Error("direct class default")
+                    if (topLevelAnswer() != 46) throw Error("top-level default")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("CompanionHolderConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            "-Xcompanion-blocks",
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            producerDirectory.resolve("Companion.Holder.Library.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CompanionHolderConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("CompanionHolderConsumer.il").readText()
+        val classHolder =
+            "[Companion.Holder.Library]'companionholder.GenericOwner`1'/'<CompanionStatics>'"
+        val interfaceHolder =
+            "[Companion.Holder.Library]'companionholder.GenericInterface'/'<CompanionStatics>'"
+        assertTrue("$classHolder::'create\$default'(int32, int32)" in consumerIl) { consumerIl }
+        assertTrue("$classHolder::'get_answer'()" in consumerIl) { consumerIl }
+        assertTrue("$classHolder::'echo'<string>(!!0)" in consumerIl) { consumerIl }
+        assertTrue("$interfaceHolder::'get_answer'()" in consumerIl) { consumerIl }
+        assertTrue("$interfaceHolder::'echo'<int32>(!!0)" in consumerIl) { consumerIl }
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            consumerDirectory,
+            "Companion-holder cross-module consumer failed",
+        )
+    }
+
+    @Test
     fun testProducesPortableUserLibraryPair() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val source = File(tmpdir, "library.kt").apply {

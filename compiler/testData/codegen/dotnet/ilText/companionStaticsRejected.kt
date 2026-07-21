@@ -1,7 +1,7 @@
 // LANGUAGE: +CompanionBlocks +CompanionExtensions
 
-// These declarations stay rejected until the companion-holder and initialization-graph
-// lowerings assign one non-generic physical owner and explicit cross-owner initialization edges.
+// These declarations stay rejected until initialization-graph lowering assigns explicit
+// cross-owner initialization edges. Stateless generic/interface members are covered separately.
 
 open class Parent {
     companion {
@@ -15,9 +15,9 @@ class Inherited : Parent() {
     }
 }
 
-class GenericOwner<T> {
+class GenericState<T> {
     companion {
-        fun create(): GenericOwner<String> = GenericOwner()
+        val genericState = 3
     }
 }
 
@@ -31,9 +31,9 @@ class MixedCompanions {
     }
 }
 
-interface InterfaceOwner {
+interface InterfaceState {
     companion {
-        fun interfaceValue(): Int = 5
+        val interfaceState = 5
     }
 }
 
