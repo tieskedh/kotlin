@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -52,6 +57,13 @@
       ldnull
       newobj instance void 'DirectOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -179,6 +191,13 @@
         stsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
         ret
       }
+      .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+        .maxstack 1
+        ret
+      }
       .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 1
@@ -249,6 +268,13 @@
       ldnull
       newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -461,6 +487,13 @@
       stsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
       ret
     }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ret
+    }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
@@ -512,6 +545,13 @@
       ldnull
       newobj instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -585,6 +625,13 @@
       ldnull
       newobj instance void 'AccessOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
@@ -664,6 +711,13 @@
       ldnull
       newobj instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -756,6 +810,13 @@
       stsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
       ret
     }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ret
+    }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
@@ -764,9 +825,22 @@
       ret
     }
   }
-  .class nested public auto ansi sealed beforefieldinit 'Derived'
+  .class nested public auto ansi sealed 'Derived'
          extends 'HierarchyOwner'/'Base'
   {
+    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+    {
+      .maxstack 1
+      call void 'HierarchyOwner'/'Base'::'<EnsureCompanionInitialized>'()
+      ret
+    }
+    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ret
+    }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1

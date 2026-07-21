@@ -77,24 +77,31 @@ Ordinary `internal` remains CLR assembly-internal; a bridge is public only when 
 compiler machinery requires it, and is then marked and hidden as compiler ABI.
 
 **Implementation status (2026-07-21):** receiver-free functions, computed properties, constants,
-method-level generics, default dispatchers, callable references, and private access bridges now
-use one nested `<CompanionStatics>` holder. For a split generic interface the holder is nested in
-the canonical erased interface, not copied into its declared or exact typed views. Static
-relocation is persisted in the physical KLIB index and consumed without reconstructing the holder
-name. Field-backed holder state remains rejected at the semantic owner until sections 5 and 6 are
-implemented; an empty owner with an evicted holder is not accepted output.
+method-level generics, default dispatchers, callable references, private access bridges, and
+field-backed companion-block state now use one nested `<CompanionStatics>` holder. For a split
+generic interface the holder is nested in the canonical erased interface, not copied into its
+declared or exact typed views. Static relocation and the initialization entry are persisted in the
+physical KLIB index and consumed without reconstructing either name.
+
+This holder rule applies to companion-block state. A non-generic interface's existing companion
+object state remains on the interface TypeDef where object lowering placed its singleton field and
+`.cctor`; the initialization entry is emitted on that same physical owner. Moving that state to an
+otherwise empty holder would split one Kotlin initialization event across two CLR type events.
 
 ### 5. One initialization entry point represents the Kotlin graph
 
 Each classifier participating in companion initialization has one stable compiler-owned
-`EnsureCompanionInitialized` entry point associated with its physical owner. Invoking the entry
+`<EnsureCompanionInitialized>` entry point associated with its physical owner. Invoking the entry
 point triggers that owner's `.cctor` exactly once under CLR type-initialization synchronization.
 The `.cctor` explicitly ensures Kotlin-required parents and selected superinterfaces before
 executing the classifier's own companion initializers in source order.
 
-The entry point is assembly-internal for wholly local graphs. When a separately compiled child
-must invoke it, the producer records a metadata-public, marked compiler-ABI entry point in the
-physical declaration index. Consumers never derive its owner or name.
+The entry point is assembly-internal for private and ordinary internal logical owners. It is
+metadata-public and marked as compiler ABI for public, protected, and `@PublishedApi` owners, whose
+initialization graph may be extended or invoked from another assembly. Friend compilations reach
+an internal entry through the producer's `InternalsVisibleTo`; visibility is not widened merely
+because a friend exists. The producer records every entry's exact owner and name in the physical
+declaration index, and consumers never derive either one.
 
 Construction, companion-block calls, companion-block property access, and companion-object
 access trigger the same semantic owner. Companion-extension calls do not.
@@ -116,11 +123,21 @@ Kotlin hierarchy observes:
 Cross-module graph edges are resolved exclusively through producer metadata. Missing or
 incompatible initialization records are link errors, not fallback name guesses.
 
+**Implementation status (2026-07-21):** ABI schema 9 records the exact physical initialization
+owner and entry method. The lowering materializes superclass-first edges, followed by direct
+superinterfaces in source order which declare a non-abstract Kotlin instance member, followed by
+the classifier's existing source-ordered initializer stream. Generic-class construction enters
+the same non-generic holder used by every closed construction. Local runtime coverage exercises
+once-only initialization, generic state, construction, private inheritance, selected interface
+ordering, and abstract-only interface independence. A `netstandard2.0` producer and `net10.0`
+consumer execute a producer-recorded graph edge without reconstructing its physical identity.
+
 ### 7. Unsupported shapes fail before emission
 
-Until holder and graph lowering cover a shape, generic owners, interface owners, inherited
-initialization obligations, and mixed companion-block/companion-object initialization are
-rejected. They must not be emitted with per-construction state, skipped silently, or accepted
+Until lowering can merge companion-block and companion-object initializer streams in exact source
+order, that mixed shape remains rejected. A companion object of a generic owner also remains
+rejected until its singleton field and initialization event move to a non-generic physical owner.
+Unsupported shapes must not be emitted with per-construction state, skipped silently, or accepted
 because one runtime test happens to pass.
 
 ## Consequences

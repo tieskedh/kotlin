@@ -338,16 +338,23 @@ The accepted `adr-companion-static-placement-and-initialization.md` now owns com
 and initialization. The implementation preserves upstream KLIB feature flags, emits non-generic
 class companion members as true CLR statics with `.cctor`-owned state, and keeps receiver-free
 companion extensions on their file facade without a false CLR property row. A separate-module
-`netstandard2.0` producer/`net10.0` consumer executes that receiver-free extension ABI. Stateless
-generic-class and interface companion members now move before default/callable lowering to one
-marked, non-generic nested `<CompanionStatics>` holder; a split generic interface owns that holder
-only on its canonical erased TypeDef. Runtime and IL tests cover constants, computed properties,
-method generics, callable references, private enclosing access, and masked defaults. The physical
-KLIB record is authoritative for cross-module holder calls and for their static default
-dispatchers, and producer variants assemble on all three profiles. Field-backed holder state,
-inherited initialization obligations, and mixed companion block/object initialization still fail
-loudly until the explicit initialization graph lands; direct placement or empty-owner partial
-eviction is not allowed to become their accidental ABI.
+`netstandard2.0` producer/`net10.0` consumer executes that receiver-free extension ABI. Generic-
+class and interface companion-block members move before default/callable lowering to one marked,
+non-generic nested `<CompanionStatics>` holder; a split generic interface owns that holder only on
+its canonical erased TypeDef. Runtime and IL tests cover constants, computed properties, field-
+backed state, method generics, callable references, private enclosing access, and masked defaults.
+The physical KLIB record is authoritative for cross-module holder calls and for their static
+default dispatchers, and producer variants assemble on all three profiles.
+
+Schema 9 additionally records one exact physical `<EnsureCompanionInitialized>` entry per logical
+classifier initialization event. Its `.cctor` calls producer-recorded superclass and selected
+interface entries before executing local state, while generic construction routes every closed
+construction through the same non-generic holder. Local runtime coverage pins source ordering,
+once-only state, private inheritance, abstract-only interface independence, and generic-global
+identity. A separately compiled `netstandard2.0` producer/`net10.0` consumer executes the same
+graph through physical metadata. Mixed companion-block/companion-object initialization and generic
+companion-object singleton placement still fail loudly until their initializer streams and
+physical state can be unified; they must not become accidental split initialization events.
 
 ### P0-E — Decide the unresolved semantic representations
 

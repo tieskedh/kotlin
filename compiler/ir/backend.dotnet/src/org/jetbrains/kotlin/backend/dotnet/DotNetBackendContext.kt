@@ -77,6 +77,11 @@ internal data class DotNetLoweredInterfaceDefaultClassForwarder(
     val physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
 )
 
+internal data class DotNetLoweredCompanionInitialization(
+    val physicalOwner: IrClass,
+    val entry: IrSimpleFunction,
+)
+
 internal class DotNetBackendContext(
     override val irBuiltIns: IrBuiltIns,
     override val configuration: CompilerConfiguration,
@@ -118,6 +123,14 @@ internal class DotNetBackendContext(
     /** Hidden class MethodImpls which later compilations must account for during DIM selection. */
     val interfaceDefaultClassForwarders:
         MutableList<DotNetLoweredInterfaceDefaultClassForwarder> = mutableListOf()
+    /** Logical classifier to the non-generic physical owner selected for companion-block statics. */
+    val companionStaticOwners: MutableMap<IrClass, IrClass> = linkedMapOf()
+    /** Logical classifier to its stable, producer-recorded companion-initialization entry. */
+    val companionInitializations:
+        MutableMap<IrClass, DotNetLoweredCompanionInitialization> = linkedMapOf()
+    /** Synthetic calls bound directly to producer-recorded companion-initialization entries. */
+    val externalCompanionInitializations:
+        MutableMap<IrSimpleFunction, DotNetBoundCompanionInitialization> = linkedMapOf()
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager(irBuiltIns, irFactory)
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
