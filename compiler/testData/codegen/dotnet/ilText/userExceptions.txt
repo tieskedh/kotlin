@@ -1,0 +1,126 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'userExceptions' {}
+.module 'main-userExceptions.il'
+
+.class public auto ansi beforefieldinit 'DomainFailure'
+       extends [Kotlin.Runtime]'Kotlin.RuntimeException'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void [Kotlin.Runtime]'Kotlin.RuntimeException'::.ctor(string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ChildFailure'
+       extends 'DomainFailure'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'DomainFailure'::.ctor(string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'MappedFailure'
+       extends [mscorlib]System.InvalidOperationException
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'FatalFailure'
+       extends [Kotlin.Runtime]'Kotlin.Error'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'message') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'userExceptionsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Nothing' 'throwChild'() cil managed
+  {
+    .maxstack 1
+    ldstr "child"
+    newobj instance void 'ChildFailure'::.ctor(string)
+    throw
+  }
+  .method public hidebysig static bool 'catchExact'() cil managed
+  {
+    .maxstack 1
+    .locals init (
+      [0] bool '<try>',
+      [1] class 'DomainFailure' 'failure'
+    )
+    .try {
+      ldstr "child"
+      newobj instance void 'ChildFailure'::.ctor(string)
+      throw
+    }
+    catch class 'DomainFailure' {
+      stloc.1
+      ldc.i4.1
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static bool 'catchMappedSubclassAsRuntime'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] bool '<try>',
+      [1] class [mscorlib]System.Exception 'failure'
+    )
+    .try {
+      ldstr "mapped"
+      newobj instance void 'MappedFailure'::.ctor(string)
+      throw
+    }
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 3
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
+      stloc.1
+      ldc.i4.1
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "user-exceptions"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

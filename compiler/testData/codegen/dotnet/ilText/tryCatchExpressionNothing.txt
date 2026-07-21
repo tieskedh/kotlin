@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'tryCatchExpressionNothing' {}
 .module 'main-tryCatchExpressionNothing.il'
 
@@ -7,7 +11,7 @@
 {
   .method public hidebysig static int32 'allBranchesThrow'(bool 'c') cil managed
   {
-    .maxstack 1
+    .maxstack 2
     .locals init (
       [0] int32 'x',
       [1] int32 '<try>',
@@ -22,7 +26,14 @@
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
       throw
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.2
       ldstr "b"
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
@@ -34,7 +45,14 @@ IL_whenNext_1:
       call void [mscorlib]System.Console::WriteLine(string)
       leave IL_tryEnd_3
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.3
       ldc.i4 -1
       stloc 4
@@ -49,7 +67,7 @@ IL_returnJoin_4:
   }
   .method public hidebysig static void 'discardedAllBranchesThrow'() cil managed
   {
-    .maxstack 1
+    .maxstack 2
     .locals init (
       [0] class [mscorlib]System.Exception 'e'
     )
@@ -58,7 +76,14 @@ IL_returnJoin_4:
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
       throw
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.0
       ldstr "discarded-b"
       newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
