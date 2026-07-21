@@ -1,0 +1,116 @@
+.assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'publishedCompilerAbi' {}
+.module 'main-publishedCompilerAbi.il'
+
+.class public auto ansi sealed beforefieldinit 'publishedabi.PublishedBox'
+       extends [mscorlib]System.Object
+{
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .field private int32 'value'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'publishedabi.PublishedBox'::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'publishedabi.PublishedBox'::'value'
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'publishedabi.PublishedBox'::'get_value'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'publishedabi.PublicBox'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance int32 'publishedMember'(int32 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.1
+    ldc.i4 1
+    add
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'publishedabi.publishedCompilerAbiKt'
+       extends [mscorlib]System.Object
+{
+  .field public static literal int32 'PUBLISHED_CONST' = int32(20)
+  .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+  .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+  .method public hidebysig specialname static int32 'get_publishedProperty'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 1
+    ldc.i4 21
+    ret
+  }
+  .method public hidebysig static int32 'publishedFunction'(int32 'value') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.0
+    ldc.i4 1
+    add
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    ldc.i4 20
+    call int32 'publishedabi.publishedCompilerAbiKt'::'get_publishedProperty'()
+    add
+    ldc.i4 0
+    call int32 'publishedabi.publishedCompilerAbiKt'::'publishedFunction'(int32)
+    add
+    ldc.i4 0
+    newobj instance void 'publishedabi.PublishedBox'::.ctor(int32)
+    call instance int32 'publishedabi.PublishedBox'::'get_value'()
+    add
+    newobj instance void 'publishedabi.PublicBox'::.ctor()
+    ldc.i4 0
+    call instance int32 'publishedabi.PublicBox'::'publishedMember'(int32)
+    add
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .property int32 'publishedProperty'()
+  {
+    .get int32 'publishedabi.publishedCompilerAbiKt'::'get_publishedProperty'()
+  }
+}
