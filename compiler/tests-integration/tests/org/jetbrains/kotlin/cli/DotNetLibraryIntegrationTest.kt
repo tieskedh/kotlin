@@ -1792,6 +1792,158 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testCompanionExtensionsUseReceiverFreeCrossModuleAbi() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(csharpToolchain != null, "Modern Roslyn and the net10 reference pack are not available")
+        val producerDirectory = File(tmpdir, "companion-extension-producer")
+        val producerSource = File(tmpdir, "library.kt").apply {
+            writeText(
+                """
+                package companionlib
+
+                private var targetInitialized = false
+
+                private fun initializeTarget(): Int {
+                    targetInitialized = true
+                    return 40
+                }
+
+                public class Target {
+                    companion {
+                        public val state: Int = initializeTarget()
+                        public fun blockAnswer(delta: Int): Int = state + delta
+                    }
+                }
+
+                public companion fun Target.answer(value: Int): Int = value + 1
+                public companion fun Target.wasInitialized(): Boolean = targetInitialized
+                public companion val Target.label: String
+                    get() = "receiver-free"
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            "-Xcompanion-blocks-and-extensions",
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Companion.Extension.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerIl = producerDirectory.resolve("Companion.Extension.Library.il").readText()
+        assertTrue("static int32 'answer'(int32 'value')" in producerIl) { producerIl }
+        assertTrue("static bool 'wasInitialized'()" in producerIl) { producerIl }
+        assertTrue("static string 'get_label'()" in producerIl) { producerIl }
+        assertTrue(".property string 'label'" !in producerIl) { producerIl }
+        assertTrue("static int32 'state'" in producerIl) { producerIl }
+        assertTrue("static int32 'blockAnswer'(int32 'delta')" in producerIl) { producerIl }
+
+        val consumerDirectory = File(tmpdir, "companion-extension-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import companionlib.Target
+                import companionlib.answer
+                import companionlib.label
+                import companionlib.wasInitialized
+
+                fun main() {
+                    if (Target.answer(41) != 42) throw Error("answer")
+                    if (Target.label != "receiver-free") throw Error("label")
+                    if (Target.wasInitialized()) throw Error("extension initialized target")
+                    if (Target.blockAnswer(2) != 42) throw Error("block")
+                    if (!Target.wasInitialized()) throw Error("block did not initialize target")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("CompanionExtensionConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            "-Xcompanion-blocks-and-extensions",
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            producerDirectory.resolve("Companion.Extension.Library.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CompanionExtensionConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("CompanionExtensionConsumer.il").readText()
+        assertTrue(
+            "call int32 [Companion.Extension.Library]'companionlib.libraryKt'::'answer'(int32)" in consumerIl
+        ) { consumerIl }
+        assertTrue(
+            "call string [Companion.Extension.Library]'companionlib.libraryKt'::'get_label'()" in consumerIl
+        ) { consumerIl }
+        assertTrue(
+            "call int32 [Companion.Extension.Library]'companionlib.Target'::'blockAnswer'(int32)" in consumerIl
+        ) { consumerIl }
+        runDotNet(
+            modernDotNetHostOrSkip(),
+            consumerAssembly,
+            consumerDirectory,
+            "Companion-extension cross-module consumer failed",
+        )
+
+        val csharpDirectory = File(tmpdir, "companion-static-csharp-consumer").apply { mkdirs() }
+        val csharpSource = csharpDirectory.resolve("Program.cs").apply {
+            writeText(
+                """
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        if (companionlib.Target.blockAnswer(2) != 42)
+                            return 1;
+                        return companionlib.Target.state == 40 ? 0 : 2;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = csharpDirectory.resolve("CompanionStaticCSharpConsumer.dll")
+        val producerAssembly = producerDirectory.resolve("Companion.Extension.Library.dll")
+        val runtimeAssembly = consumerDirectory.resolve("Kotlin.Runtime.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            csharpSource,
+            csharpAssembly,
+            producerAssembly,
+            runtimeAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        producerAssembly.copyTo(csharpDirectory.resolve(producerAssembly.name), overwrite = true)
+        runtimeAssembly.copyTo(csharpDirectory.resolve(runtimeAssembly.name), overwrite = true)
+        csharpDirectory.resolve("CompanionStaticCSharpConsumer.runtimeconfig.json").writeText(
+            """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                },
+                "rollForward": "LatestMinor"
+              }
+            }
+            """.trimIndent()
+        )
+        runDotNet(
+            checkNotNull(csharpToolchain).dotNetHost,
+            csharpAssembly,
+            csharpDirectory,
+            "C# companion-static consumer failed",
+        )
+    }
+
+    @Test
     fun testProducesPortableUserLibraryPair() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val source = File(tmpdir, "library.kt").apply {

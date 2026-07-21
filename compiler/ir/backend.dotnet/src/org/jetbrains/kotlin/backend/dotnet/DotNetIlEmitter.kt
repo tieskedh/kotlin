@@ -35,6 +35,7 @@ import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
 import org.jetbrains.kotlin.ir.declarations.IrValueParameter
+import org.jetbrains.kotlin.ir.declarations.isStaticMethodOfClass
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
@@ -1574,6 +1575,41 @@ internal class DotNetIlEmitter(
                             "a companion field on a generic CLR owner would be duplicated per constructed type"
                 )
             }
+            val staticMember = irClass.declarations.firstOrNull { declaration ->
+                when (declaration) {
+                    is IrSimpleFunction -> declaration.isDotNetCompanionBlockFunction()
+                    is IrProperty -> declaration.isDotNetStaticProperty()
+                    else -> false
+                }
+            }
+            if (staticMember != null) {
+                val memberName = (staticMember as IrDeclarationWithName).name.asString()
+                dotNetUnsupported(
+                    "generic class '$name' contains companion-block member '$memberName'; " +
+                            "a non-generic companion static holder has not been lowered"
+                )
+            }
+        }
+        val companionBlockMember = irClass.declarations.firstOrNull { declaration ->
+            when (declaration) {
+                is IrSimpleFunction -> declaration.isDotNetCompanionBlockFunction()
+                is IrProperty -> declaration.isDotNetStaticProperty()
+                else -> false
+            }
+        }
+        if (companionBlockMember != null) {
+            if (irClass.declarations.any { declaration -> declaration is IrClass && declaration.isCompanion }) {
+                dotNetUnsupported(
+                    "class '$name' mixes companion-block members with a companion object; " +
+                            "the unified companion initialization lowering has not run"
+                )
+            }
+            if (irClass.superTypes.any { !it.isAny() }) {
+                dotNetUnsupported(
+                    "class '$name' inherits companion-block members or initialization obligations; " +
+                            "the companion initialization graph lowering has not run"
+                )
+            }
         }
         val superTypesExceptAny = irClass.superTypes.filterNot { it.isAny() }
         if (superTypesExceptAny.isNotEmpty()) {
@@ -1849,6 +1885,14 @@ internal class DotNetIlEmitter(
      */
     private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
         if (member.isFakeOverride) return
+        if (
+            member.isStaticMethodOfClass &&
+            (member.origin == IrDeclarationOrigin.DEFINED || member.correspondingPropertySymbol != null)
+        ) {
+            dotNetUnsupported(
+                "companion-block $description of interface '$interfaceName' requires a non-generic static holder"
+            )
+        }
         if (member.origin.isDotNetGenericInterfaceBridge) {
             if (coreLibrary != DotNetCoreLibraryProfile.NET10_0 || member.body == null) {
                 dotNetUnsupported("generic interface-view adapter '$description' has an invalid profile or no body")
@@ -2334,13 +2378,21 @@ internal class DotNetIlEmitter(
                         // the availableFunctions miss.
                         renderedFields += renderConstField(declaration, typeMapper)
                     } else {
-                        declaration.backingField?.let { renderedFields += renderField(it, typeMapper) }
+                        declaration.backingField?.let { field ->
+                            renderedFields += renderField(field, typeMapper)
+                        }
                         val getter = declaration.getter?.takeUnless { it.isFakeOverride }
                         val setter = declaration.setter?.takeUnless { it.isFakeOverride }
                         getter?.let(::renderMemberFunction)
                         setter?.let(::renderMemberFunction)
                         if (getter != null || setter != null) {
-                            renderedProperties += renderPropertyBlock(declaration, getter, setter, availableFunctions)
+                            renderedProperties += renderPropertyBlock(
+                                declaration,
+                                getter,
+                                setter,
+                                availableFunctions,
+                                isStatic = declaration.isDotNetStaticProperty(),
+                            )
                         }
                     }
                 }
@@ -2671,8 +2723,8 @@ internal class DotNetIlEmitter(
     /**
      * One `.field` line: the instance backing field of a member property, FIR's loose private
      * interface-delegate field, the common inner-class lowering's private outer-instance field,
-     * a local class's immutable captured-value field, or, with [isStatic], the static backing
-     * field of a top-level property on its file facade.
+     * a local class's immutable captured-value field, or a static backing field of a top-level
+     * property on its file facade or a companion-block property on its class.
      * These fields are always `private` (the JVM `final` analogue `initonly` is deliberately
      * omitted — a pure metadata nicety with no semantic need, and a `var`'s `stsfld` from the
      * static setter must stay legal); the delegation shape is ilasm-probe-verified by
@@ -2680,7 +2732,11 @@ internal class DotNetIlEmitter(
      * shape by `localprobe_s1`–`_s2`, and both backing-field spellings by `statprobe_s1`/`_s2`
      * (including a user-class-typed static field).
      */
-    private fun renderField(field: IrField, typeMapper: DotNetIlTypeMapper, isStatic: Boolean = false): String {
+    private fun renderField(
+        field: IrField,
+        typeMapper: DotNetIlTypeMapper,
+        isStatic: Boolean = field.isStatic,
+    ): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
         val static = if (isStatic) "static " else ""
@@ -2784,14 +2840,27 @@ internal class DotNetIlEmitter(
         }
 
     /**
-     * Whether [this] is an extension property: its accessors carry the extension receiver as a
-     * regular IL parameter, and a CLR `.property` block with parameters is an indexer — out of
-     * scope — so extension properties get plain static accessor methods and no `.property` block.
+     * Whether [this] is a regular or companion extension property. A regular extension accessor
+     * carries its receiver as an IL parameter and would become an indexer row. A companion
+     * extension deliberately has no physical receiver, but its file-facade method is still not a
+     * property of that facade. Both shapes therefore expose plain static accessors without a CLR
+     * `.property` block; deliberate C# exports own any idiomatic property facade.
      */
     private fun IrProperty.isDotNetExtensionProperty(): Boolean =
         listOfNotNull(getter, setter).any { accessor ->
-            accessor.parameters.any { it.kind == IrParameterKind.ExtensionReceiver }
+            accessor.companionExtensionClass != null ||
+                    accessor.parameters.any { it.kind == IrParameterKind.ExtensionReceiver }
         }
+
+    /** Whether both physical accessors are receiver-free companion-block members of a class. */
+    private fun IrProperty.isDotNetStaticProperty(): Boolean {
+        val accessors = listOfNotNull(getter, setter)
+        return accessors.isNotEmpty() && accessors.all(IrSimpleFunction::isStaticMethodOfClass)
+    }
+
+    /** A source function from a companion block, excluding backend-created static dispatchers. */
+    private fun IrSimpleFunction.isDotNetCompanionBlockFunction(): Boolean =
+        origin == IrDeclarationOrigin.DEFINED && correspondingPropertySymbol == null && isStaticMethodOfClass
 
     /**
      * The member functions of a user class that codegen renders and call sites resolve through

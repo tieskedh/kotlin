@@ -7,6 +7,7 @@ import org.jetbrains.kotlin.backend.common.phaser.PhaseEngine
 import org.jetbrains.kotlin.backend.common.phaser.createModulePhases
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConstructorLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionStaticsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultArgumentStubGenerator
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
@@ -46,6 +47,10 @@ private class DotNetKotlinNothingValueExceptionLowering(context: DotNetBackendCo
     KotlinNothingValueExceptionLowering(context)
 
 internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrModuleFragment, IrModuleFragment>> = createModulePhases(
+    // Normalize companion-block backing fields before any shared lowering can classify state.
+    // The receiver-free accessor pair is the FIR2IR semantic marker; later phases may synthesize
+    // additional static functions which are not companion declarations.
+    ::DotNetCompanionStaticsLowering,
     // Common/JVM local-class closure conversion: invent collision-resistant CLR names, move
     // anonymous-super arguments to the call site, make immutable value/type captures explicit,
     // then move only transformed declarations to the nearest metadata container. This precedes
