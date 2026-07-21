@@ -29,21 +29,21 @@
     stfld int32 'CountingIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_limit'() cil managed
+  .method private hidebysig specialname instance int32 'get_limit'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'CountingIterator'::'limit'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  .method private hidebysig specialname instance int32 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'CountingIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance void 'set_value'(int32 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_value'(int32 '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -136,7 +136,7 @@
     stfld int32 'CountingIterable'::'limit'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_limit'() cil managed
+  .method private hidebysig specialname instance int32 'get_limit'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -187,7 +187,7 @@
     stfld string 'StringIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance string 'get_value'() cil managed
+  .method private hidebysig specialname instance string 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -273,7 +273,7 @@
     stfld string 'ViewedIterable'::'value'
     ret
   }
-  .method public hidebysig specialname instance string 'get_value'() cil managed
+  .method private hidebysig specialname instance string 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -486,7 +486,7 @@ IL_whileEnd_3:
       [5] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string> '<genericInterfaceCapability>@5',
       [6] string '<genericInterfaceResult>@6',
       [7] string[] 'words',
-      [8] string[] '<arrayOf>',
+      [8] string[] '<arrayOfStorage>',
       [9] string '<arrayElement>',
       [10] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' 'wordView',
       [11] string[] '<arraySet>',
@@ -498,9 +498,9 @@ IL_whileEnd_3:
       [17] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@17',
       [18] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string> '<genericInterfaceCapability>@18',
       [19] string '<genericInterfaceResult>@19',
-      [20] int32[] '<arrayOf>@20',
+      [20] int32[] '<arrayOfStorage>@20',
       [21] int32 '<arrayElement>@21',
-      [22] string[] '<arrayOf>@22',
+      [22] string[] '<arrayOfStorage>@22',
       [23] string '<arrayElement>@23',
       [24] class [Kotlin.Runtime]'Kotlin.Collections.Iterable' '<genericInterfaceReceiver>@24',
       [25] class [Kotlin.Runtime]'Kotlin.Collections.Iterable`1'<string> '<genericInterfaceCapability>@25',
@@ -514,9 +514,9 @@ IL_whileEnd_3:
       [33] class [Kotlin.Runtime]'Kotlin.Collections.Iterator' '<genericInterfaceReceiver>@33',
       [34] class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<string> '<genericInterfaceCapability>@34',
       [35] bool '<genericInterfaceResult>@35',
-      [36] string[] '<arrayOf>@36',
+      [36] string[] '<arrayOfStorage>@36',
       [37] string '<arrayElement>@37',
-      [38] string[] '<arrayOf>@38',
+      [38] string[] '<arrayOfStorage>@38',
       [39] string '<arrayElement>@39'
     )
     ldc.i4 3
@@ -641,20 +641,22 @@ IL_genericInterfaceJoin_7:
     ldloc 20
     ldc.i4 0
     ldloc 21
-    stelem.i4
+    stelem int32
     ldc.i4 2
     stloc 21
     ldloc 20
     ldc.i4 1
     ldloc 21
-    stelem.i4
+    stelem int32
     ldc.i4 3
     stloc 21
     ldloc 20
     ldc.i4 2
     ldloc 21
-    stelem.i4
+    stelem int32
     ldloc 20
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     call class [Kotlin.Runtime]'Kotlin.Collections.Iterable' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterable'<int32>(!!0[])
     call int32 'iterablesKt'::'sum'(class [Kotlin.Runtime]'Kotlin.Collections.Iterable')
     box [mscorlib]System.Int32
