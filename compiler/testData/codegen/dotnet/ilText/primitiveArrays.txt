@@ -9,51 +9,51 @@
 .class public auto ansi sealed beforefieldinit 'test.arrays.Holder'
        extends [mscorlib]System.Object
 {
-  .field private int32[] 'ints'
-  .field private char[] 'chars'
-  .method public hidebysig specialname rtspecialname instance void .ctor(int32[] 'ints', char[] 'chars') cil managed
+  .field private class [Kotlin.Runtime]'Kotlin.IntArray' 'ints'
+  .field private class [Kotlin.Runtime]'Kotlin.CharArray' 'chars'
+  .method public hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.IntArray' 'ints', class [Kotlin.Runtime]'Kotlin.CharArray' 'chars') cil managed
   {
     .maxstack 2
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldarg.1
-    stfld int32[] 'test.arrays.Holder'::'ints'
+    stfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.Holder'::'ints'
     ldarg.0
     ldarg.2
-    stfld char[] 'test.arrays.Holder'::'chars'
+    stfld class [Kotlin.Runtime]'Kotlin.CharArray' 'test.arrays.Holder'::'chars'
     ret
   }
-  .method public hidebysig specialname instance int32[] 'get_ints'() cil managed
+  .method public hidebysig specialname instance class [Kotlin.Runtime]'Kotlin.IntArray' 'get_ints'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld int32[] 'test.arrays.Holder'::'ints'
+    ldfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.Holder'::'ints'
     ret
   }
-  .method public hidebysig specialname instance char[] 'get_chars'() cil managed
+  .method public hidebysig specialname instance class [Kotlin.Runtime]'Kotlin.CharArray' 'get_chars'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld char[] 'test.arrays.Holder'::'chars'
+    ldfld class [Kotlin.Runtime]'Kotlin.CharArray' 'test.arrays.Holder'::'chars'
     ret
   }
-  .method public hidebysig specialname instance void 'set_chars'(char[] '<set-?>') cil managed
+  .method public hidebysig specialname instance void 'set_chars'(class [Kotlin.Runtime]'Kotlin.CharArray' '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
     ldarg.1
-    stfld char[] 'test.arrays.Holder'::'chars'
+    stfld class [Kotlin.Runtime]'Kotlin.CharArray' 'test.arrays.Holder'::'chars'
     ret
   }
-  .property instance int32[] 'ints'()
+  .property instance class [Kotlin.Runtime]'Kotlin.IntArray' 'ints'()
   {
-    .get instance int32[] 'test.arrays.Holder'::'get_ints'()
+    .get instance class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.Holder'::'get_ints'()
   }
-  .property instance char[] 'chars'()
+  .property instance class [Kotlin.Runtime]'Kotlin.CharArray' 'chars'()
   {
-    .get instance char[] 'test.arrays.Holder'::'get_chars'()
-    .set instance void 'test.arrays.Holder'::'set_chars'(char[])
+    .get instance class [Kotlin.Runtime]'Kotlin.CharArray' 'test.arrays.Holder'::'get_chars'()
+    .set instance void 'test.arrays.Holder'::'set_chars'(class [Kotlin.Runtime]'Kotlin.CharArray')
   }
 }
 .class public auto ansi sealed beforefieldinit 'test.arrays.Crate`1'<'T'>
@@ -86,12 +86,12 @@
        extends [mscorlib]System.Object
 {
   .field private static int32 'sequence'
-  .field private static int32[] 'seeded'
+  .field private static class [Kotlin.Runtime]'Kotlin.IntArray' 'seeded'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int32[] '<arrayOf>',
+      [0] int32[] '<arrayOfStorage>',
       [1] int32 '<arrayElement>'
     )
     ldc.i4 0
@@ -105,32 +105,33 @@
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i4
+    stelem int32
     ldc.i4 2
     call int32 'test.arrays.primitiveArraysKt'::'marked'(int32)
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i4
+    stelem int32
     ldloc.0
-    stsfld int32[] 'test.arrays.primitiveArraysKt'::'seeded'
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.primitiveArraysKt'::'seeded'
     ret
   }
-  .method public hidebysig specialname static int32 'get_sequence'() cil managed
+  .method assembly hidebysig specialname static int32 'get_sequence'() cil managed
   {
     .maxstack 1
     ldsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
     ret
   }
-  .method public hidebysig specialname static void 'set_sequence'(int32 '<set-?>') cil managed
+  .method assembly hidebysig specialname static void 'set_sequence'(int32 '<set-?>') cil managed
   {
     .maxstack 1
     ldarg.0
     stsfld int32 'test.arrays.primitiveArraysKt'::'sequence'
     ret
   }
-  .method public hidebysig static int32 'marked'(int32 'value') cil managed
+  .method assembly hidebysig static int32 'marked'(int32 'value') cil managed
   {
     .maxstack 2
     call int32 'test.arrays.primitiveArraysKt'::'get_sequence'()
@@ -142,13 +143,13 @@
     ldarg.0
     ret
   }
-  .method public hidebysig specialname static int32[] 'get_seeded'() cil managed
+  .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.IntArray' 'get_seeded'() cil managed
   {
     .maxstack 1
-    ldsfld int32[] 'test.arrays.primitiveArraysKt'::'seeded'
+    ldsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.primitiveArraysKt'::'seeded'
     ret
   }
-  .method public hidebysig static int32[] 'allocate'(int32 'size') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'allocate'(int32 'size') cil managed
   {
     .maxstack 3
     ldarg.0
@@ -161,13 +162,14 @@
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     ret
   }
-  .method public hidebysig static int32[] 'ints'() cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'ints'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int32[] '<arrayOf>',
+      [0] int32[] '<arrayOfStorage>',
       [1] int32 '<arrayElement>'
     )
     ldc.i4 3
@@ -178,39 +180,41 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i4
+    stelem int32
     ldc.i4 2
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i4
+    stelem int32
     ldc.i4 3
     stloc.1
     ldloc.0
     ldc.i4 2
     ldloc.1
-    stelem.i4
+    stelem int32
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     ret
   }
-  .method public hidebysig static int32[] 'emptyInts'() cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'emptyInts'() cil managed
   {
     .maxstack 1
     .locals init (
-      [0] int32[] '<arrayOf>'
+      [0] int32[] '<arrayOfStorage>'
     )
     ldc.i4 0
     newarr int32
     stloc.0
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     ret
   }
-  .method public hidebysig static int64[] 'longs'() cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.LongArray' 'longs'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int64[] '<arrayOf>',
+      [0] int64[] '<arrayOfStorage>',
       [1] int64 '<arrayElement>'
     )
     ldc.i4 2
@@ -221,22 +225,23 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i8
+    stelem int64
     ldc.i8 5
     neg
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i8
+    stelem int64
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.LongArray'::.ctor(int64[])
     ret
   }
-  .method public hidebysig static float64[] 'doubles'() cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.DoubleArray' 'doubles'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] float64[] '<arrayOf>',
+      [0] float64[] '<arrayOfStorage>',
       [1] float64 '<arrayElement>'
     )
     ldc.i4 2
@@ -247,22 +252,23 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.r8
+    stelem float64
     ldc.r8 0.0
     neg
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.r8
+    stelem float64
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.DoubleArray'::.ctor(float64[])
     ret
   }
-  .method public hidebysig static bool[] 'booleans'() cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.BooleanArray' 'booleans'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] bool[] '<arrayOf>',
+      [0] bool[] '<arrayOfStorage>',
       [1] bool '<arrayElement>'
     )
     ldc.i4 2
@@ -273,21 +279,22 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i1
+    stelem bool
     ldc.i4.0
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i1
+    stelem bool
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.BooleanArray'::.ctor(bool[])
     ret
   }
-  .method public hidebysig static char[] 'chars'() cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.CharArray' 'chars'() cil managed
   {
     .maxstack 3
     .locals init (
-      [0] char[] '<arrayOf>',
+      [0] char[] '<arrayOfStorage>',
       [1] char '<arrayElement>'
     )
     ldc.i4 2
@@ -298,24 +305,25 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i2
+    stelem char
     ldc.i4 8364
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i2
+    stelem char
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.CharArray'::.ctor(char[])
     ret
   }
-  .method public hidebysig static int32 'intAccess'(int32[] 'values', int32 'index', int32 'value') cil managed
+  .method public hidebysig static int32 'intAccess'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values', int32 'index', int32 'value') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int32[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
       [1] int32 '<arrayIndex>',
       [2] int32 '<arrayValue>',
-      [3] int32[] '<arrayGet>',
+      [3] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
     ldarg.0
@@ -327,24 +335,24 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldloc.1
     ldloc.2
-    stelem.i4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
     ldarg.0
     stloc.3
     ldarg.1
     stloc 4
     ldloc.3
     ldloc 4
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     ret
   }
-  .method public hidebysig static int64 'longAccess'(int64[] 'values', int32 'index', int64 'value') cil managed
+  .method public hidebysig static int64 'longAccess'(class [Kotlin.Runtime]'Kotlin.LongArray' 'values', int32 'index', int64 'value') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] int64[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.LongArray' '<arraySet>',
       [1] int32 '<arrayIndex>',
       [2] int64 '<arrayValue>',
-      [3] int64[] '<arrayGet>',
+      [3] class [Kotlin.Runtime]'Kotlin.LongArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
     ldarg.0
@@ -356,24 +364,24 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldloc.1
     ldloc.2
-    stelem.i8
+    call instance void [Kotlin.Runtime]'Kotlin.LongArray'::'Set'(int32, int64)
     ldarg.0
     stloc.3
     ldarg.1
     stloc 4
     ldloc.3
     ldloc 4
-    ldelem.i8
+    call instance int64 [Kotlin.Runtime]'Kotlin.LongArray'::'Get'(int32)
     ret
   }
-  .method public hidebysig static float64 'doubleAccess'(float64[] 'values', int32 'index', float64 'value') cil managed
+  .method public hidebysig static float64 'doubleAccess'(class [Kotlin.Runtime]'Kotlin.DoubleArray' 'values', int32 'index', float64 'value') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] float64[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.DoubleArray' '<arraySet>',
       [1] int32 '<arrayIndex>',
       [2] float64 '<arrayValue>',
-      [3] float64[] '<arrayGet>',
+      [3] class [Kotlin.Runtime]'Kotlin.DoubleArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
     ldarg.0
@@ -385,24 +393,24 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldloc.1
     ldloc.2
-    stelem.r8
+    call instance void [Kotlin.Runtime]'Kotlin.DoubleArray'::'Set'(int32, float64)
     ldarg.0
     stloc.3
     ldarg.1
     stloc 4
     ldloc.3
     ldloc 4
-    ldelem.r8
+    call instance float64 [Kotlin.Runtime]'Kotlin.DoubleArray'::'Get'(int32)
     ret
   }
-  .method public hidebysig static bool 'booleanAccess'(bool[] 'values', int32 'index', bool 'value') cil managed
+  .method public hidebysig static bool 'booleanAccess'(class [Kotlin.Runtime]'Kotlin.BooleanArray' 'values', int32 'index', bool 'value') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] bool[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.BooleanArray' '<arraySet>',
       [1] int32 '<arrayIndex>',
       [2] bool '<arrayValue>',
-      [3] bool[] '<arrayGet>',
+      [3] class [Kotlin.Runtime]'Kotlin.BooleanArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
     ldarg.0
@@ -414,24 +422,24 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldloc.1
     ldloc.2
-    stelem.i1
+    call instance void [Kotlin.Runtime]'Kotlin.BooleanArray'::'Set'(int32, bool)
     ldarg.0
     stloc.3
     ldarg.1
     stloc 4
     ldloc.3
     ldloc 4
-    ldelem.u1
+    call instance bool [Kotlin.Runtime]'Kotlin.BooleanArray'::'Get'(int32)
     ret
   }
-  .method public hidebysig static char 'charAccess'(char[] 'values', int32 'index', char 'value') cil managed
+  .method public hidebysig static char 'charAccess'(class [Kotlin.Runtime]'Kotlin.CharArray' 'values', int32 'index', char 'value') cil managed
   {
     .maxstack 3
     .locals init (
-      [0] char[] '<arraySet>',
+      [0] class [Kotlin.Runtime]'Kotlin.CharArray' '<arraySet>',
       [1] int32 '<arrayIndex>',
       [2] char '<arrayValue>',
-      [3] char[] '<arrayGet>',
+      [3] class [Kotlin.Runtime]'Kotlin.CharArray' '<arrayGet>',
       [4] int32 '<arrayIndex>@4'
     )
     ldarg.0
@@ -443,50 +451,45 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldloc.1
     ldloc.2
-    stelem.i2
+    call instance void [Kotlin.Runtime]'Kotlin.CharArray'::'Set'(int32, char)
     ldarg.0
     stloc.3
     ldarg.1
     stloc 4
     ldloc.3
     ldloc 4
-    ldelem.u2
+    call instance char [Kotlin.Runtime]'Kotlin.CharArray'::'Get'(int32)
     ret
   }
-  .method public hidebysig static int32 'totalSize'(int32[] 'ints', int64[] 'longs', float64[] 'doubles', bool[] 'booleans', char[] 'chars') cil managed
+  .method public hidebysig static int32 'totalSize'(class [Kotlin.Runtime]'Kotlin.IntArray' 'ints', class [Kotlin.Runtime]'Kotlin.LongArray' 'longs', class [Kotlin.Runtime]'Kotlin.DoubleArray' 'doubles', class [Kotlin.Runtime]'Kotlin.BooleanArray' 'booleans', class [Kotlin.Runtime]'Kotlin.CharArray' 'chars') cil managed
   {
     .maxstack 2
     ldarg.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     ldarg.1
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.LongArray'::'GetSize'()
     add
     ldarg.2
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.DoubleArray'::'GetSize'()
     add
     ldarg.3
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.BooleanArray'::'GetSize'()
     add
     ldarg 4
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.CharArray'::'GetSize'()
     add
     ret
   }
-  .method public hidebysig static int32 'sum'(int32[] 'values') cil managed
+  .method public hidebysig static int32 'sum'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 2
     .locals init (
       [0] int32 'result',
-      [1] int32[] 'indexedObject',
+      [1] class [Kotlin.Runtime]'Kotlin.IntArray' 'indexedObject',
       [2] int32 'inductionVariable',
       [3] int32 'last',
       [4] int32 'value',
-      [5] int32[] '<arrayGet>',
+      [5] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [6] int32 '<arrayIndex>'
     )
     ldc.i4 0
@@ -496,8 +499,7 @@ IL_arraySizeNonNegative_0:
     ldc.i4 0
     stloc.2
     ldloc.1
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.3
 IL_whileCond_0:
     ldloc.2
@@ -510,7 +512,7 @@ IL_whileCond_0:
     stloc 6
     ldloc 5
     ldloc 6
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     stloc 4
     ldloc.2
     ldc.i4 1
@@ -537,7 +539,7 @@ IL_whileEnd_1:
     ldloc.0
     ret
   }
-  .method public hidebysig static bool 'isNull'(int32[] 'values') cil managed
+  .method public hidebysig static bool 'isNull'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -545,7 +547,7 @@ IL_whileEnd_1:
     ceq
     ret
   }
-  .method public hidebysig static bool 'sameArray'(int32[] 'left', int32[] 'right') cil managed
+  .method public hidebysig static bool 'sameArray'(class [Kotlin.Runtime]'Kotlin.IntArray' 'left', class [Kotlin.Runtime]'Kotlin.IntArray' 'right') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -553,11 +555,11 @@ IL_whileEnd_1:
     ceq
     ret
   }
-  .method public hidebysig static class 'test.arrays.Crate`1'<int32[]> 'wrap'(int32[] 'values') cil managed
+  .method public hidebysig static class 'test.arrays.Crate`1'<class [Kotlin.Runtime]'Kotlin.IntArray'> 'wrap'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 1
     ldarg.0
-    newobj instance void class 'test.arrays.Crate`1'<int32[]>::.ctor(!0)
+    newobj instance void class 'test.arrays.Crate`1'<class [Kotlin.Runtime]'Kotlin.IntArray'>::.ctor(!0)
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -571,8 +573,8 @@ IL_whileEnd_1:
     .get int32 'test.arrays.primitiveArraysKt'::'get_sequence'()
     .set void 'test.arrays.primitiveArraysKt'::'set_sequence'(int32)
   }
-  .property int32[] 'seeded'()
+  .property class [Kotlin.Runtime]'Kotlin.IntArray' 'seeded'()
   {
-    .get int32[] 'test.arrays.primitiveArraysKt'::'get_seeded'()
+    .get class [Kotlin.Runtime]'Kotlin.IntArray' 'test.arrays.primitiveArraysKt'::'get_seeded'()
   }
 }

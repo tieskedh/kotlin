@@ -1,0 +1,88 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'primitiveArrayNominalIdentity' {}
+.module 'main-primitiveArrayNominalIdentity.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'primitiveArrayNominalIdentityKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static int32 'kind'(class [Kotlin.Runtime]'Kotlin.IntArray' 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
+    ret
+  }
+  .method public hidebysig static int32 'kind'(int32[] 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldlen
+    conv.i4
+    ldc.i4 10
+    add
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'specialized'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOfStorage>',
+      [1] int32 '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr int32
+    stloc.0
+    ldc.i4 1
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem int32
+    ldc.i4 2
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem int32
+    ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    ret
+  }
+  .method public hidebysig static int32[] 'generic'() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOfStorage>',
+      [1] int32 '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr int32
+    stloc.0
+    ldc.i4 1
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem int32
+    ldc.i4 2
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem int32
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "primitive-array-nominal-identity"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

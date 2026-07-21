@@ -1,0 +1,228 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'primitiveArrayExports' {}
+.module 'main-primitiveArrayExports.il'
+
+.namespace System.Runtime.CompilerServices
+{
+  .class private auto ansi sealed beforefieldinit NullableAttribute
+         extends [mscorlib]System.Attribute
+  {
+    .field public initonly uint8[] NullableFlags
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8) cil managed
+    {
+      .maxstack 4
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldc.i4.1
+      newarr [mscorlib]System.Byte
+      dup
+      ldc.i4.0
+      ldarg.1
+      stelem.i1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+
+    .method public hidebysig specialname rtspecialname instance void .ctor(uint8[]) cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      call instance void [mscorlib]System.Attribute::.ctor()
+      ldarg.0
+      ldarg.1
+      stfld uint8[] System.Runtime.CompilerServices.NullableAttribute::NullableFlags
+      ret
+    }
+  }
+}
+.class public abstract sealed auto ansi 'demo.primitiveArrayExportsKt'
+       extends [mscorlib]System.Object
+{
+  .field private static class [Kotlin.Runtime]'Kotlin.IntArray' 'buffer'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] int32[] '<arrayOfStorage>',
+      [1] int32 '<arrayElement>'
+    )
+    ldc.i4 2
+    newarr int32
+    stloc.0
+    ldc.i4 1
+    stloc.1
+    ldloc.0
+    ldc.i4 0
+    ldloc.1
+    stelem int32
+    ldc.i4 2
+    stloc.1
+    ldloc.0
+    ldc.i4 1
+    ldloc.1
+    stelem int32
+    ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
+    ret
+  }
+  .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.IntArray' 'get_buffer'() cil managed
+  {
+    .maxstack 1
+    ldsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
+    ret
+  }
+  .method public hidebysig specialname static void 'set_buffer'(class [Kotlin.Runtime]'Kotlin.IntArray' '<set-?>') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
+    ret
+  }
+  .method public hidebysig specialname static int32[] 'get_Buffer'() cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    call class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'get_buffer'()
+    call int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorageOrNull'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    ret
+  }
+  .method public hidebysig specialname static void 'set_Buffer'(int32[] '<set-?>') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.IntArray' [Kotlin.Runtime]'Kotlin.IntArray'::'WrapStorageOrNull'(int32[])
+    call void 'demo.primitiveArrayExportsKt'::'set_buffer'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'mutate'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
+  {
+    .maxstack 3
+    .locals init (
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<arraySet>',
+      [1] int32 '<arrayIndex>',
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
+      [3] int32 '<arrayIndex>@3',
+      [4] int32 '<arrayValue>'
+    )
+    ldarg.0
+    stloc.0
+    ldc.i4 0
+    stloc.1
+    ldarg.0
+    stloc.2
+    ldc.i4 0
+    stloc.3
+    ldloc.2
+    ldloc.3
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
+    ldc.i4 1
+    add
+    stloc 4
+    ldloc.0
+    ldloc.1
+    ldloc 4
+    call instance void [Kotlin.Runtime]'Kotlin.IntArray'::'Set'(int32, int32)
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static int32[] 'Mutate'(int32[] 'values') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.IntArray' [Kotlin.Runtime]'Kotlin.IntArray'::'WrapStorageOrNull'(int32[])
+    call class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'mutate'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    call int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorageOrNull'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    ret
+  }
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'maybe'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static int32[] 'Maybe'(int32[] 'values') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 02 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 02 00 00)
+    .maxstack 1
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.IntArray' [Kotlin.Runtime]'Kotlin.IntArray'::'WrapStorageOrNull'(int32[])
+    call class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'maybe'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    call int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorageOrNull'(class [Kotlin.Runtime]'Kotlin.IntArray')
+    ret
+  }
+  .method public hidebysig static bool 'same'(class [Kotlin.Runtime]'Kotlin.IntArray' 'first', class [Kotlin.Runtime]'Kotlin.IntArray' 'second') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    ceq
+    ret
+  }
+  .method public hidebysig static bool 'Same'(int32[] 'first', int32[] 'second') cil managed
+  {
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [2]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 2
+    ldarg 0
+    call class [Kotlin.Runtime]'Kotlin.IntArray' [Kotlin.Runtime]'Kotlin.IntArray'::'WrapStorageOrNull'(int32[])
+    ldarg 1
+    call class [Kotlin.Runtime]'Kotlin.IntArray' [Kotlin.Runtime]'Kotlin.IntArray'::'WrapStorageOrNull'(int32[])
+    call bool 'demo.primitiveArrayExportsKt'::'same'(class [Kotlin.Runtime]'Kotlin.IntArray', class [Kotlin.Runtime]'Kotlin.IntArray')
+    ret
+  }
+  .method public hidebysig static int32[] 'generic'(int32[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig static int32[] 'Generic'(int32[] 'values') cil managed
+  {
+    .param [0]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .param [1]
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .maxstack 1
+    ldarg 0
+    call int32[] 'demo.primitiveArrayExportsKt'::'generic'(int32[])
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "primitive-array-exports"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .property class [Kotlin.Runtime]'Kotlin.IntArray' 'buffer'()
+  {
+    .get class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'get_buffer'()
+    .set void 'demo.primitiveArrayExportsKt'::'set_buffer'(class [Kotlin.Runtime]'Kotlin.IntArray')
+  }
+  .property int32[] 'Buffer'()
+  {
+    .custom instance void System.Runtime.CompilerServices.NullableAttribute::.ctor(uint8) = (01 00 01 00 00)
+    .get int32[] 'demo.primitiveArrayExportsKt'::'get_Buffer'()
+    .set void 'demo.primitiveArrayExportsKt'::'set_Buffer'(int32[])
+  }
+}

@@ -29,21 +29,21 @@
     stfld bool 'StringValueIterator'::'available'
     ret
   }
-  .method public hidebysig specialname instance string 'get_value'() cil managed
+  .method private hidebysig specialname instance string 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld string 'StringValueIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  .method private hidebysig specialname instance bool 'get_available'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld bool 'StringValueIterator'::'available'
     ret
   }
-  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -129,21 +129,21 @@
     stfld bool 'IntValueIterator'::'available'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  .method private hidebysig specialname instance int32 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'IntValueIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  .method private hidebysig specialname instance bool 'get_available'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld bool 'IntValueIterator'::'available'
     ret
   }
-  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -230,21 +230,21 @@
     stfld bool class 'GenericValueIterator`1'<!0>::'available'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance !0 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'GenericValueIterator`1'<!0>::'value'
     ret
   }
-  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  .method private hidebysig specialname instance bool 'get_available'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld bool class 'GenericValueIterator`1'<!0>::'available'
     ret
   }
-  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -338,7 +338,7 @@
     stfld string 'DeferredStringValueIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance string 'get_value'() cil managed
+  .method private hidebysig specialname instance string 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -424,7 +424,7 @@
     stfld string 'ViewedStringIterator'::'value'
     ret
   }
-  .method public hidebysig specialname instance string 'get_value'() cil managed
+  .method private hidebysig specialname instance string 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -506,10 +506,11 @@
 .class public abstract sealed auto ansi beforefieldinit 'arrayIteratorsKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'intIterator'(int32[] 'values') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' 'intIterator'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 1
     ldarg.0
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<int32>(!!0[])
     ret
   }
@@ -647,10 +648,11 @@ IL_genericInterfaceJoin_1:
     ldloc.2
     ret
   }
-  .method public hidebysig static object 'iteratorAsAny'(int32[] 'values') cil managed
+  .method public hidebysig static object 'iteratorAsAny'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 1
     ldarg.0
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<int32>(!!0[])
     ret
   }
@@ -807,9 +809,9 @@ IL_genericInterfaceJoin_1:
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] int32[] '<arrayOf>',
+      [0] int32[] '<arrayOfStorage>',
       [1] int32 '<arrayElement>',
-      [2] string[] '<arrayOf>@2',
+      [2] string[] '<arrayOfStorage>@2',
       [3] string '<arrayElement>@3',
       [4] class 'ViewedStringIterator' 'viewed'
     )
@@ -821,8 +823,10 @@ IL_genericInterfaceJoin_1:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i4
+    stelem int32
     ldloc.0
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     call class [Kotlin.Runtime]'Kotlin.Collections.Iterator' [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'dotNetArrayIterator'<int32>(!!0[])
     call int32 'arrayIteratorsKt'::'nextInt'(class [Kotlin.Runtime]'Kotlin.Collections.Iterator')
     box [mscorlib]System.Int32
