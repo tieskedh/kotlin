@@ -134,7 +134,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - Landed feature slices, in order: executing box gate, final classes, exceptions/try-catch-finally,
   top-level properties/objects/companions, class inheritance, interfaces, hybrid nullability
   (`Nullable<T>` in exact positions, box-collapse at `Any?` boundaries), reified generics stage 1,
-  exhaustive Boolean/Boolean? `when` without source `else`, primitive-array CLR vectors and
+  exhaustive Boolean/Boolean? `when` without source `else`, primitive-array operations and
   indexed loops, constrained generics stage 2, invariant generic arrays stage 3, generic
   interfaces and declaration-site variance stage 4, generic member functions stage 5, generic
   class inheritance stage 6, abstract and sealed classes, abstract interface redeclarations,
@@ -169,7 +169,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   explicit smoke filter preserves their selection after the nested-to-top-level move (Smoke-mode
   dry-run discovers all 10). The fresh backend suite remains 270/0/0/0.
 - Interim continuation landed `85e7df603`: `IntArray`, `LongArray`, `DoubleArray`,
-  `BooleanArray`, and `CharArray` map to native CLR vectors. JVM-shaped registry intrinsics cover
+  `BooleanArray`, and `CharArray` initially mapped to native CLR vectors. JVM-shaped registry intrinsics cover
   unary construction, literal factories, `size`, `get`, and `set`; direct `for` loops use the
   backend.common indexed-get shape. `arrprobe_s1` verified exact signatures/opcodes and runtime
   faults on modern CoreCLR and .NET Framework. A negative-size guard prevents CLR
@@ -179,7 +179,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   scalar arrays, initializer constructors, spreads, escaping iterators, and copy operations reject.
   Data-class content hash/string support now consumes these vectors through fir2ir's dedicated
   builtins. Contrary to the old task-menu guess, no fake-stdlib declarations were needed: fir2ir
-  already supplies the primitive-array builtins and `*ArrayOf` calls.
+  already supplies the primitive-array builtins and `*ArrayOf` calls. The later nominal-wrapper
+  work deliberately supersedes only that raw-vector representation, not these lowering lessons.
 - Interim continuation landed `1767fe982`: supported direct, non-null, non-generic module-local
   class and all-abstract interface bounds now remain on CLR generic method/class metadata and on
   the backend's structural `!n`/`!!n` type. Bound virtual/interface calls spill receiver and
@@ -197,9 +198,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `emptyArray`, reference-element `arrayOfNulls`, `size`, `get`, and `set`; direct `for` loops
   reuse the indexed lowering. Literal/get/set operands spill for protected-region safety. The
   structural kind stays distinct from `PrimitiveArray`, so backend assignability never admits CLR
-  covariance. Concrete primitive elements reject because CLR would collapse `Array<Int>` and
-  `IntArray` to the same `int32[]` ABI; projections, nullable value elements/`Array<T?>`, nested
-  arrays, initializer lambdas, spreads, iterator escape, casts, and copy operations also stay out.
+  covariance. At that revision concrete primitive elements rejected because the then-current raw
+  vector representation collapsed `Array<Int>` and `IntArray`; the later nominal wrapper permits
+  `Array<Int>` as `int32[]` without collision. Projections and nullable value elements/`Array<T?>`
+  still stay out; several nested, initializer, iterator, and copy slices have since been added.
   Data-class content hash/string support consumes the supported concrete reference-element vectors.
   `genarrayprobe_s1` verified `T[]` metadata, typed element opcodes for reference and value
   instantiations, bounded dispatch, and the CLR covariant-store check on CoreCLR 10.0.9 and
@@ -1076,6 +1078,146 @@ session state, process, and a curated task menu. Keep both files updated as you 
   380/0/0/0 across eight XML files.
 - The user requested continued autonomous feature work until explicitly stopped. The next repair
   and feature audits below have not yet landed.
+- The current uncommitted architectural repair replaces the raw-vector specialized-array ABI with
+  Kotlin-owned sealed wrappers while retaining natural `T[]` substitution for generic arrays. It
+  also establishes the classified CLR exception model and the three-tier visibility/friend/compiler
+  ABI model in their draft ADRs and implementation slices. Canonical Kotlin array signatures,
+  content operations, cross-module calls, explicit C# vector facades, foreign exception identity,
+  user exception ancestry, producer IVT, and marked compiler ABI have focused PSI/LightTree and
+  netstandard2.0 -> net48/net10 integration coverage. Repeated inbound C# vector conversion now
+  uses a runtime-owned `ConditionalWeakTable<vector, wrapper>` per specialized type: same-call,
+  cross-call, and Kotlin-wrapper -> vector -> wrapper identity are stable while distinct vectors
+  remain distinct. Outbound projection registers the canonical wrapper; ordinary Kotlin
+  construction pays no table cost. `arrayinternprobe_s1` assembled and ran the exact lock/table IL
+  on Framework and CoreCLR, and the cross-language integration test executes the sequential and
+  concurrent identity matrix on both profiles. The fresh complete DotNet FIR2IR matrix is
+  530/0/0/0 across eight XML files; the full `DotNetLibraryIntegrationTest` is 28/0/0/0 with no
+  toolchain skips. `op_Implicit` remains a separate API-surface decision, not an identity blocker.
+- P0-D now has a structured physical declaration-index superset comparator. Generated `net48` and
+  `net10.0` stdlib pairs must contain every `netstandard2.0` logical declaration with the same
+  assembly-independent CLR owner/member binding, identity scheme, name grammar, and no lower
+  runtime-surface floor; profile-only additions are allowed. Synthetic negative coverage pins both
+  missing and changed entries. Raw runtime-assembly metadata superset checking remains for the
+  future structured metadata model rather than an IL-substring parser.
+- `docs/decisions/adr-profile-aware-interface-default-implementations.md` is accepted,
+  and the non-generic implementation is now present. Portable profiles move each Kotlin interface
+  body to a marked public `<DefaultImpls>` compiler-ABI helper, keep the CLR slot abstract, and
+  give Kotlin classes hidden explicit MethodImpl forwarders. `net10.0` keeps the body as a real
+  DIM and the same exact-call helper, with no class forwarder when the selected DIM is physically
+  available.
+- CoreCLR rejects a non-final interface method carrying a MethodImpl row. The backend therefore
+  keeps a Kotlin-visible DIM overridable and emits a separate private `newslot virtual final`
+  interface bridge to map inherited slots. A net10 interface inheriting an external portable
+  helper-only default emits the corresponding final promotion DIM, maps it to the original slot,
+  and calls the producer-recorded helper.
+- Physical ABI schema 8 stores default body placement/helper owner/helper method on function
+  records, independently stores the physical owner/method of the masked default-argument dispatcher,
+  stores derived-interface promotions as structured `P` records, final generic-interface view
+  adapters as structured `B` records, and hidden class MethodImpl forwarders as structured `W`
+  records. Downstream lowering and whole-class shape validation
+  traverse those records through arbitrary base-class depth before deciding whether a selected DIM
+  is physically effective or is masked by an inherited class implementation; they never derive
+  `<DefaultImpls>` or `$default` names from Kotlin declarations or infer producer lowering from its
+  target profile. A `W` record is emitted in any profile whose class physically needs a helper-backed
+  MethodImpl, including net10 consumers of portable interfaces. It is a dispatch fact rather than a
+  callable portable-superset requirement. User-library helper bindings are scoped out of the
+  separately emitted stdlib assembly, and surviving helper calls record their producer AssemblyRef
+  through the normal codegen fixpoint.
+- Provider selection is now based on the set of most-specific DIM providers, rather than a
+  boolean “some promotion exists” test. Zero providers requires promotion/forwarding, one selected
+  provider suppresses redundant emission even through an intermediate interface, and multiple
+  incomparable providers require a resolving DIM or class forwarder so valid Kotlin does not reach
+  CLR `AmbiguousImplementationException`.
+- `DotNetLibraryIntegrationTest.testNet10PromotesPortableInterfaceDefaultAndSuppressesOnlyCoveredForwarders`
+  passes with a netstandard producer, net10 promotion library, downstream consumer, portable
+  producer forwarder executing on CoreCLR, an indirect single-provider inheritance chain, competing
+  promotions resolved by a required class forwarder, a derived-interface diamond resolved by one
+  new DIM, the required unpromoted consumer forwarder, and no redundant promoted consumer
+  forwarders. It also proves the CLR-specific masking edge through an intermediate producer class:
+  a class inheriting a portable compatibility MethodImpl and a more-specific net10 interface
+  default receives one resolver bridge, so both interface views observe the net10 body. The test
+  covers the inherited MethodImpl when its producer is portable and when a net10 intermediate
+  assembly emitted it against the portable slot. A separately compiled subclass also inherits an
+  implementation of the same selected default without redeclaring an identical MethodImpl. A real
+  user-authored class override remains a Kotlin source-level conflict and follows the explicit
+  Kotlin resolution. Both generated DotNet box variants for `interfaceDefaultImplementations.kt`
+  also pass.
+- The same cross-module test now executes qualified interface-super calls in a portable producer,
+  in a net10 library against a portable producer, and between two net10 DIMs. Portable calls target
+  the producer-recorded helper. A net10 DIM-qualified call also targets the helper, whose body uses
+  plain nonvirtual `call` to the owning DIM; an IL assertion forbids `callvirt` for that exact
+  helper edge. Ordinary calls on the same receiver still dispatch to the more-derived DIM, proving
+  that exact and virtual paths have not been collapsed.
+- The interface-default integration coverage now additionally proves that a separately compiled
+  class override wins through both the portable base and promoted interface views, and that an
+  explicit net10 reabstraction is not promoted. Both generated DotNet box variants execute local
+  reabstraction through the original and redeclared interface views.
+- Local interface-default box coverage also executes property getter/setter bodies, nested
+  interfaces, ordinary default-argument calls, and omitted arguments dispatching virtually to a
+  class override after helper-owned mask decoding.
+- Common Kotlin rejects omitted arguments in any super call with
+  `SUPER_CALL_WITH_DEFAULT_PARAMETERS`. Qualified-super coverage therefore supplies every argument;
+  the .NET lowering does not define a target-specific masked-dispatcher extension for invalid IR.
+  `DotNetExpressionCheckers` now registers the existing FIR checker through the metadata session
+  factory's DotNet platform branch. The integration regression proves the standard diagnostic and
+  compilation failure in both PSI and LightTree modes before FIR2IR.
+- Cross-module coverage promotes portable property getter/setter bodies, records and binds the
+  producer's masked dispatcher, and executes omitted/named arguments through inherited defaults and
+  consumer overrides. A separate abstract interface method with default parameters proves that the
+  dispatcher ABI is independent of default-body/DIM metadata. The focused integration test executes
+  on CoreCLR and asserts three promotions and only the three physically required portable class
+  forwarders.
+  The same test asserts that no `<DefaultImpls>` class or helper function is published as an
+  invented logical declaration key. Compiler helpers exist only as physical identities attached
+  to real KLIB members; this corrected the earlier manifest leak while leaving their marked public
+  compiler-ABI IL callable.
+- The obsolete `interfaceDefaultBodyRejected` IL fixture has been replaced by
+  `interfaceDefaultBodiesPortable`. Its exact portable abstract-slot/helper/`$default`/hidden-
+  forwarder IL passes both PSI and LightTree variants and assembles successfully; do not restore
+  the former whole-interface rejection expectation.
+- Modern C# DIM consumption is now an executed integration lane. The provisioner installs a pinned
+  10.0.100 SDK beside the 10.0.9 runtime and ILAsm; discovery binds its `csc.dll` and net10
+  reference pack without making Kotlin assembly production depend on Roslyn.
+  `testModernCSharpConsumesProfileAwareGenericInterfaceDefault` compiles invariant and covariant
+  generic Kotlin interfaces for all three profiles. C# classes that declare no methods inherit
+  both the ordinary typed DIM and the distinct `__KotlinExact<int>` operation-view DIM, executing
+  `echo(int): int` without an erased-result cast. The same sources fail with `CS0535` against
+  `netstandard2.0` under Roslyn and against `net48` under Framework csc.
+- Generic interface and generic-method defaults now follow the coordinated split-view ABI. Every
+  declaration has one canonical semantic body and one stable helper identity. Portable helpers own
+  the moved body; on `net10.0` one strongly typed DIM owns it. The exact view is the normal
+  strongly typed C# surface, and erased or declared-variance slots use final MethodImpl adapters
+  which dispatch virtually to that body. The net10 helper selects the same DIM nonvirtually.
+  Neither secondary views, promotions, class bridges, nor class forwarders copy the body.
+- A netstandard generic producer, net10 generic and closed non-generic promotion interfaces, a
+  separately compiled closed implementor, and a separately compiled net10 consumer execute narrow
+  typed, method-generic, exact, widened-erased, direct-portable, producer, and closed-promotion
+  paths in
+  `DotNetLibraryIntegrationTest.testGenericInterfaceDefaultsAcrossPortableAndNet10Assemblies`.
+  The closed promotion puts all canonical/declared/exact MethodImpl adapters on its single CLR
+  interface owner, and the implementor proves those DIMs suppress helper-backed class forwarders.
+  The same producer now declares a closed non-generic interface override with one DIM body and a
+  complete final view-adapter bundle. Schema-8 `B` records let the separately compiled implementor
+  inherit that bundle without duplicate `value` bridges; the consumer executes the overriding body
+  through the derived, typed producer, and widened producer views. Portable IL goldens cover
+  helper-owned generic bodies plus canonical/declared/exact class bridges. Local net10 boxes cover
+  direct, inherited, reabstracted, variant, invariant, value, widened, and closed-interface-
+  override views.
+- Generic capability calls now obtain the canonical erased-fallback method name from the bound
+  physical function record before considering a Kotlin-owned hash. This fixed runtime collection
+  interfaces whose stable CLR members are `HasNext`, `Next`, or other mapped names: the old
+  synthesized `__KotlinErased__` token assembled but failed lazily with `MissingMethodException`.
+  Exact typed capability dispatch still runs first and reaches the strongly typed virtual slot;
+  only the fallback binding changed. `iterables` and the complete collection box matrix pass in
+  both PSI and LightTree.
+- An owner-relative method bound such as `<R : T>` remains part of the logical Kotlin/KLIB
+  signature but is deliberately omitted from executable CLR views of a split generic interface.
+  Direct runtime probes established both failure modes: a variant CLR interface containing that
+  GenericParamConstraint fails type loading, while retaining it only on the invariant exact DIM
+  makes a valid widened Kotlin call fail verification. Portable closed value-type bridges cannot
+  preserve the substituted constraint either. The exact ABI still keeps typed arguments/results,
+  all other representable constraints remain physical, and a future C# convenience facade may
+  restate the bound only as an export adapter.
 - The full-suite audit after general library linking exposed two earlier regressions. The new
   core-library profile had split the established empty `mscorlib` AssemblyRef over two lines,
   invalidating every IL golden; the shared renderer now preserves the canonical one-line form.
@@ -1100,9 +1242,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    RUNNING an ilasm probe before it lands in codegen. Probe series naming: one series per feature
    (`statprobe`, `excprobe`, `objprobe`, `fieldprobe`, `inheritprobe`, `ifaceprobe`, `boxprobe`,
    `genprobe`, `genconstraintprobe`, `genarrayprobe`, `genifaceprobe`, `genmemberprobe`,
-   `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
-   `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `localprobe`, `whenprobe`,
-   `arrprobe`, `arraycopyprobe` are taken). Keep
+    `geninheritprobe`, `abstractprobe`, `dimprobe`, `ifaceredeclareprobe`, `delegationprobe`,
+    `nestedprobe`, `nestedifaceprobe`, `nestedownerprobe`, `innerprobe`, `localprobe`, `whenprobe`,
+    `arrprobe`, `arraycopyprobe`, `arrayinternprobe` are taken). Keep
    probe files OUT of the repo (use a temp dir).
 2. **Diagnostics, not crashes.** Unsupported IR fails via `dotNetUnsupported()` with a specific
    message; rejection granularity is the class metadata subtree, the companion's immediate owner
