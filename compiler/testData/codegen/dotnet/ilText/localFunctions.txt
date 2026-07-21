@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'localFunctions' {}
 .module 'main-localFunctions.il'
 
@@ -22,7 +26,7 @@
     stfld !0 class 'GenericLocalFunctionOwner`1'<!0>::'seed'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_seed'() cil managed
+  .method private hidebysig specialname instance !0 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0

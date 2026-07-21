@@ -6,7 +6,7 @@
 .assembly 'collections' {}
 .module 'main-collections.il'
 
-.class public auto ansi sealed beforefieldinit 'OneIterator`1'<'T'>
+.class private auto ansi sealed beforefieldinit 'OneIterator`1'<'T'>
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>
 {
@@ -25,21 +25,21 @@
     stfld bool class 'OneIterator`1'<!0>::'available'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance !0 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'OneIterator`1'<!0>::'value'
     ret
   }
-  .method public hidebysig specialname instance bool 'get_available'() cil managed
+  .method private hidebysig specialname instance bool 'get_available'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld bool class 'OneIterator`1'<!0>::'available'
     ret
   }
-  .method public hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_available'(bool '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -134,14 +134,14 @@ IL_whenNext_1:
     stfld bool class 'OneCollection`1'<!0>::'present'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance !0 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'OneCollection`1'<!0>::'value'
     ret
   }
-  .method public hidebysig specialname instance bool 'get_present'() cil managed
+  .method private hidebysig specialname instance bool 'get_present'() cil managed
   {
     .maxstack 1
     ldarg.0

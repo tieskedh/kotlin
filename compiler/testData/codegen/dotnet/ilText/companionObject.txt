@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'companionObject' {}
 .module 'main-companionObject.il'
 
@@ -12,7 +16,7 @@
     .field private int32 'offset'
     .field private int32 'secret'
     .field public static literal string 'TAG' = "c"
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 2
       ldarg.0
@@ -50,14 +54,14 @@
       stfld int32 'test.C'/'Companion'::'offset'
       ret
     }
-    .method assembly hidebysig specialname instance int32 'get_secret'() cil managed
+    .method private hidebysig specialname instance int32 'get_secret'() cil managed
     {
       .maxstack 1
       ldarg.0
       ldfld int32 'test.C'/'Companion'::'secret'
       ret
     }
-    .method assembly hidebysig specialname instance void 'set_secret'(int32 '<set-?>') cil managed
+    .method private hidebysig specialname instance void 'set_secret'(int32 '<set-?>') cil managed
     {
       .maxstack 2
       ldarg.0
@@ -76,6 +80,29 @@
       call instance void 'test.C'/'Companion'::'set_offset'(int32)
       ldarg.0
       call instance int32 'test.C'/'Companion'::'get_offset'()
+      ret
+    }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'test.C'/'Companion'::.ctor()
+      ret
+    }
+    .method assembly hidebysig static int32 'access$<get-secret>'(class 'test.C'/'Companion' '$this') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance int32 'test.C'/'Companion'::'get_secret'()
+      ret
+    }
+    .method assembly hidebysig static void 'access$<set-secret>'(class 'test.C'/'Companion' '$this', int32 '<set-?>') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldarg.1
+      call instance void 'test.C'/'Companion'::'set_secret'(int32)
+      ret
       ret
     }
     .property instance int32 'base'()
@@ -97,7 +124,8 @@
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'test.C'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'test.C'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'test.C'/'Companion' 'test.C'::'Companion'
     ret
   }
@@ -117,7 +145,7 @@
     call instance int32 'test.C'/'Companion'::'get_offset'()
     add
     ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
-    call instance int32 'test.C'/'Companion'::'get_secret'()
+    call int32 'test.C'/'Companion'::'access$<get-secret>'(class 'test.C'/'Companion')
     add
     ret
   }
@@ -126,7 +154,7 @@
     .maxstack 2
     ldsfld class 'test.C'/'Companion' 'test.C'::'Companion'
     ldarg.1
-    call instance void 'test.C'/'Companion'::'set_secret'(int32)
+    call void 'test.C'/'Companion'::'access$<set-secret>'(class 'test.C'/'Companion', int32)
     ret
   }
 }
@@ -136,7 +164,7 @@
   .class nested public auto ansi sealed beforefieldinit 'Factory'
          extends [mscorlib]System.Object
   {
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -149,12 +177,20 @@
       ldc.i4 7
       ret
     }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'test.Named'/'Factory'::.ctor()
+      ret
+    }
   }
   .field public static initonly class 'test.Named'/'Factory' 'Factory'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'test.Named'/'Factory'::.ctor()
+    ldnull
+    newobj instance void 'test.Named'/'Factory'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'test.Named'/'Factory' 'test.Named'::'Factory'
     ret
   }

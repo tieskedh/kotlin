@@ -69,10 +69,11 @@ internal object DotNetStdlibLibrary {
             ?.takeIf { source -> source.packageFqName == file.packageFqName.asString() }
             ?.facadeIlName
 
-    /** Writes deterministic netstandard2.0 IL and assembles its PE with modern ILAsm. */
+    /** Writes IL for the selected profile and assembles the corresponding library PE. */
     fun assembleIn(
         outputDirectory: File,
         ilText: String,
+        target: DotNetTarget,
         messageCollector: MessageCollector,
     ): File? {
         outputDirectory.mkdirs()
@@ -80,15 +81,16 @@ internal object DotNetStdlibLibrary {
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
         output.delete()
         ilFile.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
-        return output.takeIf { DotNetIlAssembler.assemblePortableLibrary(ilFile, output, messageCollector) }
+        return output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
     }
 
     /** Bootstrap compatibility path while ordinary executable builds still rebuild the stdlib. */
     fun assembleNextTo(
         executableOutput: File,
         ilText: String,
+        target: DotNetTarget,
         messageCollector: MessageCollector,
-    ): File? = assembleIn(executableOutput.parentFile ?: File("."), ilText, messageCollector)
+    ): File? = assembleIn(executableOutput.parentFile ?: File("."), ilText, target, messageCollector)
 
     /** Calls the stdlib-owned iterator factory for a vector already on the IL stack. */
     fun arrayIteratorFactoryCallInstruction(elementType: DotNetIlValueType): String =

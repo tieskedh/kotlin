@@ -30,23 +30,47 @@ object DotNetBackend {
         val producesLibrary = configuration.dotNetProducesLibrary
         val producedLibraryArtifact = configuration.dotNetProducedLibraryArtifact
         val externalLibraries = configuration.dotNetExternalLibraries
+        val publishedEmissionScope = if (producesStdlib) DotNetIlEmissionScope.STDLIB else DotNetIlEmissionScope.USER
+        val preLoweringDeclarationKeys = if (producesStdlib || producesLibrary) {
+            val preLoweringIntrinsics = DotNetIlIntrinsicMethods(irBuiltIns, publishedEmissionScope)
+            collectDotNetMetadataLinkageKeys(
+                irModuleFragment,
+                publishedEmissionScope,
+            ) { function ->
+                preLoweringIntrinsics.getIntrinsic(function.symbol)?.excludesDeclarationFromCodegen == true
+            }
+        } else {
+            emptyMap()
+        }
+        val expectedMetadataLinkageKeys = preLoweringDeclarationKeys.values.toSet()
         fun result(file: File, declarations: Map<String, DotNetPhysicalDeclaration> = emptyMap()) =
             DotNetBackendOutput(file, declarations)
+        fun validateMetadataLinkage(declarations: Map<String, DotNetPhysicalDeclaration>): Boolean {
+            val missing = expectedMetadataLinkageKeys - declarations.keys
+            if (missing.isEmpty()) return true
+            messageCollector.report(
+                CompilerMessageSeverity.ERROR,
+                "The .NET physical declaration index does not cover the pre-lowering Kotlin metadata ABI: " +
+                        missing.sorted().joinToString(),
+            )
+            return false
+        }
         val emitsExecutable = producedLibraryArtifact == null && !output.isDirectory && when (target) {
-            DotNetTarget.NET_FRAMEWORK -> output.extension.equals("exe", ignoreCase = true)
+            DotNetTarget.NET48 -> output.extension.equals("exe", ignoreCase = true)
+            DotNetTarget.NETSTANDARD_2_0 -> false
             // Modern .NET has no directly runnable ilasm .exe story on this pipeline: the runnable
             // artifact is a .dll launched by the signed `dotnet` host, so both spellings of an
             // executable request produce one.
-            DotNetTarget.NET -> output.extension.equals("exe", ignoreCase = true) || output.extension.equals("dll", ignoreCase = true)
+            DotNetTarget.NET10_0 -> output.extension.equals("exe", ignoreCase = true) || output.extension.equals("dll", ignoreCase = true)
         }
-        val binaryOutput = if (emitsExecutable && target == DotNetTarget.NET && output.extension.equals("exe", ignoreCase = true)) {
-            // An .exe was requested but the 'net' target only produces host-launched .dll files.
+        val binaryOutput = if (emitsExecutable && target == DotNetTarget.NET10_0 && output.extension.equals("exe", ignoreCase = true)) {
+            // An .exe was requested but the net10.0 profile produces host-launched .dll files.
             // Renaming silently would leave the user looking for a file that never appears, so the
             // actual artifact is reported explicitly.
             output.siblingWithExtension("dll").also {
                 messageCollector.report(
                     CompilerMessageSeverity.INFO,
-                    "The 'net' target produces a .dll started via 'dotnet exec' instead of a standalone .exe; writing '${it.path}'."
+                    "The 'net10.0' target produces a .dll started via 'dotnet exec' instead of a standalone .exe; writing '${it.path}'."
                 )
             }
         } else {
@@ -96,7 +120,7 @@ object DotNetBackend {
             // runtime is intentionally not removed: another valid program in the directory may
             // still depend on it.
             binaryOutput.delete()
-            if (target == DotNetTarget.NET) binaryOutput.runtimeConfigFile().delete()
+            if (target == DotNetTarget.NET10_0) binaryOutput.runtimeConfigFile().delete()
         } else if (producedLibraryArtifact != null) {
             output.resolve(producedLibraryArtifact.assemblyFileName).delete()
             ilTarget.delete()
@@ -129,7 +153,12 @@ object DotNetBackend {
                 irBuiltIns = irBuiltIns,
                 propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
                 emissionScope = DotNetIlEmissionScope.STDLIB,
-                coreLibrary = DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY,
+                coreLibrary = target.coreLibrary,
+                failOnDeclarationEviction = true,
+                preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                interfaceDefaultImplementations = context.interfaceDefaultImplementations,
+                interfaceDefaultArgumentDispatchers = context.interfaceDefaultArgumentDispatchers,
+                genericInterfaceDefaults = context.genericInterfaceDefaults,
             ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
             null
@@ -144,8 +173,11 @@ object DotNetBackend {
                 )
                 return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
             }
+            if (!validateMetadataLinkage(stdlibEmission.declarations)) {
+                return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
+            }
             return result(
-                DotNetStdlibLibrary.assembleIn(output, stdlibIlText, messageCollector)
+                DotNetStdlibLibrary.assembleIn(output, stdlibIlText, target, messageCollector)
                     ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
                 stdlibEmission.declarations,
             )
@@ -164,9 +196,22 @@ object DotNetBackend {
             propertyReferenceFactoryFunctions = context.propertyReferenceSymbols.implementedFactories(),
             exports = configuration.dotNetExports,
             propertyExports = configuration.dotNetPropertyExports,
-            coreLibrary = if (producesLibrary) DOTNET_PLATFORM_LIBRARY_CORE_LIBRARY else DEFAULT_EXECUTABLE_CORE_LIBRARY,
+            coreLibrary = target.coreLibrary,
             assemblyVersionIl = if (producesLibrary) checkNotNull(producedLibraryArtifact).assemblyVersionIl else null,
             externalLibraries = externalLibraries,
+            failOnDeclarationEviction = producesLibrary,
+            compilesAgainstStdlib = (producesLibrary || emitsExecutable) &&
+                    (stdlibEmission != null || configuration.dotNetExternalStdlib != null),
+            preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+            friendAssemblies = configuration.dotNetFriendAssemblies,
+            interfaceDefaultImplementations = context.interfaceDefaultImplementations,
+            interfaceDefaultArgumentDispatchers = context.interfaceDefaultArgumentDispatchers,
+            genericInterfaceDefaults = context.genericInterfaceDefaults,
+            externalInterfaceDefaultHelpers = context.externalInterfaceDefaultHelpers,
+            externalDefaultArgumentDispatchers = context.externalDefaultArgumentDispatchers,
+            interfaceDefaultPromotions = context.interfaceDefaultPromotions,
+            genericInterfaceViewBridges = context.genericInterfaceViewBridges,
+            interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
         )
         val emission = emitter.emit(irModuleFragment)
         if (emission == null) {
@@ -175,8 +220,15 @@ object DotNetBackend {
             ilTarget.delete()
             return result(ilTarget)
         }
+        if (producesLibrary && !validateMetadataLinkage(emission.declarations)) {
+            ilTarget.delete()
+            return result(ilTarget)
+        }
         val ilText = emission.ilText
-        if ("[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in ilText && stdlibIlText == null) {
+        fun referencesAssembly(name: String): Boolean =
+            emission.referencedAssemblies.any { referenced -> referenced.equals(name, ignoreCase = true) }
+
+        if (referencesAssembly(DotNetStdlibLibrary.ASSEMBLY_NAME) && stdlibIlText == null) {
             val externalStdlib = configuration.dotNetExternalStdlib
             if (externalStdlib == null) {
                 messageCollector.report(
@@ -210,7 +262,7 @@ object DotNetBackend {
             // to externalLibraries for ordinary declaration binding, but must not be copied or
             // validated a second time as an arbitrary user library here.
             if (DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)) continue
-            if ("[${library.artifact.assemblyName}]" !in ilText) continue
+            if (!referencesAssembly(library.artifact.assemblyName)) continue
             if (!library.implementationFile.isFile) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -234,14 +286,14 @@ object DotNetBackend {
 
         if (producesLibrary) {
             val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
-            DotNetIlAssembler.assemblePortableLibrary(ilTarget, assemblyOutput, messageCollector)
+            DotNetIlAssembler.assembleLibrary(ilTarget, assemblyOutput, target, messageCollector)
             return result(assemblyOutput, emission.declarations)
         }
 
         if (emitsExecutable) {
-            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, messageCollector) == null) return result(binaryOutput)
+            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, target, messageCollector) == null) return result(binaryOutput)
             if (stdlibIlText != null &&
-                DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, messageCollector) == null
+                DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, target, messageCollector) == null
             ) {
                 return result(binaryOutput)
             }

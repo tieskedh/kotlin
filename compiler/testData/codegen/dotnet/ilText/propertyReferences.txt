@@ -6,7 +6,7 @@
 .assembly 'propertyReferences' {}
 .module 'main-propertyReferences.il'
 
-.class public auto ansi sealed beforefieldinit 'Cell'
+.class private auto ansi sealed beforefieldinit 'Cell'
        extends [mscorlib]System.Object
 {
   .field private int32 'value'
@@ -41,7 +41,7 @@
     .set instance void 'Cell'::'set_value'(int32)
   }
 }
-.class public auto ansi sealed beforefieldinit 'ExtensionDelegate'
+.class private auto ansi sealed beforefieldinit 'ExtensionDelegate'
        extends [mscorlib]System.Object
 {
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -67,14 +67,14 @@
     ret
   }
 }
-.class public auto ansi sealed beforefieldinit 'ExtensionHost'
+.class private auto ansi sealed beforefieldinit 'ExtensionHost'
        extends [mscorlib]System.Object
 {
   .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$2'
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<class 'ExtensionHost', class 'Cell', int32>
   {
-    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'INSTANCE'
+    .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'INSTANCE'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
@@ -114,12 +114,18 @@
       box [mscorlib]System.Int32
       ret
     }
+    .method assembly hidebysig static class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'access$<get-INSTANCE>$p'() cil managed
+    {
+      .maxstack 1
+      ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::'INSTANCE'
+      ret
+    }
   }
   .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$3'
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function3'
   {
-    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'INSTANCE'
+    .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'INSTANCE'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
@@ -152,12 +158,18 @@
       ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
       ret
     }
+    .method assembly hidebysig static class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'access$<get-INSTANCE>$p'() cil managed
+    {
+      .maxstack 1
+      ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'ExtensionHost'/'ExtensionHost$delegatedValue$3'::'INSTANCE'
+      ret
+    }
   }
   .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$4'
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<class 'ExtensionHost', class 'Cell', int32>
   {
-    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'INSTANCE'
+    .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'INSTANCE'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
@@ -197,12 +209,18 @@
       box [mscorlib]System.Int32
       ret
     }
+    .method assembly hidebysig static class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'access$<get-INSTANCE>$p'() cil managed
+    {
+      .maxstack 1
+      ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::'INSTANCE'
+      ret
+    }
   }
   .class nested private auto ansi sealed 'ExtensionHost$delegatedValue$5'
          extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
          implements [Kotlin.Runtime]'Kotlin.Function3'
   {
-    .field public static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'INSTANCE'
+    .field private static initonly class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'INSTANCE'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
@@ -235,6 +253,12 @@
       ldsfld class [Kotlin.Runtime]'Kotlin.Unit' [Kotlin.Runtime]'Kotlin.Unit'::INSTANCE
       ret
     }
+    .method assembly hidebysig static class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'access$<get-INSTANCE>$p'() cil managed
+    {
+      .maxstack 1
+      ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'ExtensionHost'/'ExtensionHost$delegatedValue$5'::'INSTANCE'
+      ret
+    }
   }
   .field private class 'ExtensionDelegate' 'delegatedValue$delegate'
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
@@ -254,8 +278,8 @@
     ldfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
     ldarg.1
     ldstr "delegatedValue"
-    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::'INSTANCE'
-    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'ExtensionHost'/'ExtensionHost$delegatedValue$3'::'INSTANCE'
+    call class 'ExtensionHost'/'ExtensionHost$delegatedValue$2' 'ExtensionHost'/'ExtensionHost$delegatedValue$2'::'access$<get-INSTANCE>$p'()
+    call class 'ExtensionHost'/'ExtensionHost$delegatedValue$3' 'ExtensionHost'/'ExtensionHost$delegatedValue$3'::'access$<get-INSTANCE>$p'()
     call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3')
     call instance int32 'ExtensionDelegate'::'getValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty')
     ret
@@ -267,8 +291,8 @@
     ldfld class 'ExtensionDelegate' 'ExtensionHost'::'delegatedValue$delegate'
     ldarg.1
     ldstr "delegatedValue"
-    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::'INSTANCE'
-    ldsfld class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'ExtensionHost'/'ExtensionHost$delegatedValue$5'::'INSTANCE'
+    call class 'ExtensionHost'/'ExtensionHost$delegatedValue$4' 'ExtensionHost'/'ExtensionHost$delegatedValue$4'::'access$<get-INSTANCE>$p'()
+    call class 'ExtensionHost'/'ExtensionHost$delegatedValue$5' 'ExtensionHost'/'ExtensionHost$delegatedValue$5'::'access$<get-INSTANCE>$p'()
     call class [Kotlin.Runtime]'Kotlin.KMutableProperty2' [Kotlin.Runtime]'Kotlin.Runtime.Internal.PropertyReferenceFactory'::'CreateMutableProperty2'<class 'ExtensionHost', class 'Cell', int32>(string, class [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Function3')
     ldarg.2
     call instance void 'ExtensionDelegate'::'setValue'(class 'Cell', class [Kotlin.Runtime]'Kotlin.KProperty', int32)
@@ -298,7 +322,7 @@
     .set instance void 'ExtensionHost'::'set_delegatedValue'(class 'Cell', int32)
   }
 }
-.class public auto ansi sealed beforefieldinit 'LocalDelegate'
+.class private auto ansi sealed beforefieldinit 'LocalDelegate'
        extends [mscorlib]System.Object
 {
   .field private int32 'value'
@@ -312,14 +336,14 @@
     stfld int32 'LocalDelegate'::'value'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  .method private hidebysig specialname instance int32 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'LocalDelegate'::'value'
     ret
   }
-  .method public hidebysig specialname instance void 'set_value'(int32 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_value'(int32 '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -358,7 +382,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
-  .field public static initonly class 'propertyReferencesKt$main$read$1' 'INSTANCE'
+  .field assembly static initonly class 'propertyReferencesKt$main$read$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -397,7 +421,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
-  .field public static initonly class 'propertyReferencesKt$main$mutable$1' 'INSTANCE'
+  .field assembly static initonly class 'propertyReferencesKt$main$mutable$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -436,7 +460,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
-  .field public static initonly class 'propertyReferencesKt$main$mutable$2' 'INSTANCE'
+  .field assembly static initonly class 'propertyReferencesKt$main$mutable$2' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -470,7 +494,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<class 'Cell', int32>
 {
-  .field public static initonly class 'propertyReferencesKt$main$unbound$1' 'INSTANCE'
+  .field assembly static initonly class 'propertyReferencesKt$main$unbound$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -512,7 +536,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.Function2'
 {
-  .field public static initonly class 'propertyReferencesKt$main$unbound$2' 'INSTANCE'
+  .field assembly static initonly class 'propertyReferencesKt$main$unbound$2' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -648,20 +672,20 @@
     stsfld int32 'propertyReferencesKt'::'topValue'
     ret
   }
-  .method public hidebysig specialname static int32 'get_topValue'() cil managed
+  .method assembly hidebysig specialname static int32 'get_topValue'() cil managed
   {
     .maxstack 1
     ldsfld int32 'propertyReferencesKt'::'topValue'
     ret
   }
-  .method public hidebysig specialname static void 'set_topValue'(int32 '<set-?>') cil managed
+  .method assembly hidebysig specialname static void 'set_topValue'(int32 '<set-?>') cil managed
   {
     .maxstack 1
     ldarg.0
     stsfld int32 'propertyReferencesKt'::'topValue'
     ret
   }
-  .method public hidebysig specialname static int32 'get_topRead'() cil managed
+  .method assembly hidebysig specialname static int32 'get_topRead'() cil managed
   {
     .maxstack 2
     call int32 'propertyReferencesKt'::'get_topValue'()
@@ -669,7 +693,7 @@
     add
     ret
   }
-  .method public hidebysig static void 'localDelegates'() cil managed
+  .method assembly hidebysig static void 'localDelegates'() cil managed
   {
     .maxstack 3
     .locals init (

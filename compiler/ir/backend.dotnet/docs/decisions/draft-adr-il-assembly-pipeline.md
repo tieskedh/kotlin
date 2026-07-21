@@ -8,8 +8,9 @@
 
 The current backend runs inside the JVM-hosted Kotlin compiler. `DotNetIlEmitter` renders textual
 IL directly, and `DotNetIlAssembler` invokes an external assembler when a binary is requested.
-The `net` target uses a pinned modern CoreCLR ILAsm; the `netframework` target uses the installed
-.NET Framework ILAsm. Exact-IL tests retain the text, while runtime tests assemble it and execute
+The `net10.0` target uses a pinned modern CoreCLR ILAsm; `netstandard2.0` libraries use that writer
+as well. The `net48` target uses the installed .NET Framework ILAsm. Exact-IL tests retain the text,
+while runtime tests assemble it and execute
 the result.
 
 Modern ILAsm is not abandoned software. Microsoft still publishes matching packages for current
@@ -28,7 +29,8 @@ ECMA-335 metadata and PE writer (whether owned here or adopted after a separate 
 
 Keep textual IL plus ILAsm as the assembly path for the POC.
 
-- Modern ILAsm is the primary assembler for the `net` target.
+- Modern ILAsm is the primary assembler for `net10.0` and the portable `netstandard2.0` library
+  profile.
 - Framework ILAsm remains the assembler for the Framework target and an independent compatibility
   oracle while .NET Framework 4.8 is part of the supported prototype boundary.
 - Textual IL is an implementation and validation artifact, not Kotlin runtime ABI. Exact goldens

@@ -103,7 +103,7 @@ abstract class AbstractDotNetBoxTestBase(
         configureDotNetBase(
             parser,
             outputExtension = "dll",
-            target = DotNetTarget.NET,
+            target = DotNetTarget.NET10_0,
             additionalSourceProvider = ::DotNetBoxMainSourceProvider,
         )
 
@@ -113,12 +113,15 @@ abstract class AbstractDotNetBoxTestBase(
     }
 
     override fun runTest(filePath: String) {
-        // Skip (don't fail) before compilation when the modern toolchain is not provisioned.
-        Assumptions.assumeTrue(
-            DotNetIlAssembler.findModernIlasm() != null && DotNetIlAssembler.findModernDotNetHost() != null,
-            "Modern .NET toolchain (ilasm + dotnet host) not found; " +
-                    "provision with compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
-        )
+        val toolchainAvailable =
+            DotNetIlAssembler.findModernIlasm() != null && DotNetIlAssembler.findModernDotNetHost() != null
+        val message = "Modern .NET toolchain (ilasm + dotnet host) not found; " +
+                "provision with compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
+        if (dotNetToolchainIsRequired()) {
+            check(toolchainAvailable) { "$message (KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled)" }
+        } else {
+            Assumptions.assumeTrue(toolchainAvailable, message)
+        }
         super.runTest(filePath)
     }
 }
@@ -131,9 +134,9 @@ open class AbstractFirPsiDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.Psi
 private fun TestConfigurationBuilder.configureDotNetBase(
     parser: FirParser,
     outputExtension: String,
-    // NET_FRAMEWORK by default: the ilText goldens embed the `.module` directive naming the
+    // NET48 by default: the ilText goldens embed the `.module` directive naming the
     // artifact file, so the ilText suite must keep its historical target/extension untouched.
-    target: DotNetTarget = DotNetTarget.NET_FRAMEWORK,
+    target: DotNetTarget = DotNetTarget.NET48,
     additionalSourceProvider: Constructor<AdditionalSourceProvider>? = null,
 ) {
     with(this) {
@@ -276,7 +279,11 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
 
     override fun processAfterAllModules(someAssertionWasFailed: Boolean) {
         val expectedFile = testServices.moduleStructure.originalTestDataFiles.first().withExtension(".txt")
-        assertions.assertEqualsToFile(expectedFile, multiModuleInfoDumper.generateResultingDump())
+        val actual = multiModuleInfoDumper.generateResultingDump()
+        if (System.getProperty("kotlin.test.update.test.data") == "true") {
+            expectedFile.writeText(actual)
+        }
+        assertions.assertEqualsToFile(expectedFile, actual)
     }
 }
 
@@ -347,7 +354,7 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         val stdlibIlFile = outputDirectory.resolve("Kotlin.Stdlib.il")
         val stdlibIlText = stdlibIlFile.takeIf(File::isFile)?.readText().orEmpty().replace("\r\n", "\n")
         val requiredStdlibIl = listOf(
-            ".assembly extern netstandard\n{\n  .ver 2:0:0:0\n  .publickeytoken = (CC 7B 13 FF CD 2D DD 51)\n}",
+            ".assembly extern mscorlib {}",
             ".assembly 'Kotlin.Stdlib'\n{\n  .ver 1:0:0:0",
             "System.Runtime.Versioning.TargetFrameworkAttribute",
             ".class private auto ansi sealed beforefieldinit 'Kotlin.Collections.ArrayIterator`1'<'T'>",
@@ -365,16 +372,17 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         if (".assembly extern Kotlin.Stdlib" in stdlibIlText) {
             assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }
         }
-        if ("[mscorlib]" in stdlibIlText) {
-            assertions.fail { "Kotlin.Stdlib must stay inside the netstandard2.0 API profile: ${stdlibIlFile.path}" }
+        if ("[netstandard]" in stdlibIlText) {
+            assertions.fail { "The box stdlib must use the selected net10.0 API profile: ${stdlibIlFile.path}" }
         }
         val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")
         val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()
+
         if (".assembly extern Kotlin.Runtime" !in ilText || ".ver 1:0:0:0" !in ilText) {
             assertions.fail { "Expected .NET assembly to reference Kotlin.Runtime: ${ilFile.path}" }
         }
 
-        // The box artifact is a dll (target `net`), launched via the signed `dotnet` host —
+        // The box artifact is a dll (target `net10.0`), launched via the signed `dotnet` host —
         // see 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.
         val dotnetHost = DotNetIlAssembler.findModernDotNetHost() ?: assertions.fail {
             "No modern 'dotnet' host found even though the toolchain assumption passed; " +
@@ -406,7 +414,7 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             lastBlockedMessage = output
             Thread.sleep(SAC_RETRY_DELAY_MS)
         }
-        throw TestAbortedException(
+        val blockedMessage =
             "Windows Smart App Control blocked loading the assembled test dll on all $SAC_MAX_ATTEMPTS " +
                     "attempts: ${file.path}\n" +
                     "The SmartScreen verdict is content-derived and can be deterministically negative for a " +
@@ -415,7 +423,10 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
                     "to run it here, sign the test assemblies with a reputable certificate or turn SAC off " +
                     "(SAC has no per-file/per-directory exclusions).\n" +
                     "Last output: $lastBlockedMessage"
-        )
+        if (dotNetToolchainIsRequired()) {
+            assertions.fail { "$blockedMessage\nKOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled, so execution may not be skipped." }
+        }
+        throw TestAbortedException(blockedMessage)
     }
 
     private fun execViaDotnetHost(dotnetHost: File, artifact: File): Pair<Int, String> {
@@ -445,3 +456,8 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         const val SAC_RETRY_DELAY_MS = 1_000L
     }
 }
+
+private fun dotNetToolchainIsRequired(): Boolean =
+    System.getenv("KOTLIN_DOTNET_REQUIRE_TOOLCHAIN")?.let { value ->
+        value == "1" || value.equals("true", ignoreCase = true)
+    } == true
