@@ -1,0 +1,440 @@
+.assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'interfaceDefaultBodiesPortable' {}
+.module 'main-interfaceDefaultBodiesPortable.il'
+
+.class interface public abstract auto ansi 'WithBody'
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig static int32 'f'(class 'WithBody' '$this') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ldc.i4 1
+      ret
+    }
+    .method public hidebysig static int32 'withDefault'(class 'WithBody' '$this', int32 'value') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ldarg.1
+      ret
+    }
+    .method public hidebysig static int32 'withDefault$default'(class 'WithBody' '$this', int32 'value', int32 '$mask0') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 2
+      ldarg.2
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldc.i4 2
+      starg 1
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      ldarg.1
+      callvirt instance int32 'WithBody'::'withDefault'(int32)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'f'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance int32 'withDefault'(int32 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'SubOfBody'
+       implements 'WithBody'
+{
+}
+.class public auto ansi sealed beforefieldinit 'ImplOfBody'
+       extends [mscorlib]System.Object
+       implements 'WithBody'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'f'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 2
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<InterfaceDefaultForwarder-WithBody-withDefault-02b90a4bd775785d713712868afc790f>'(int32 'value') cil managed
+  {
+    .override method instance int32 'WithBody'::'withDefault'(int32)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call int32 'WithBody'/'<DefaultImpls>'::'withDefault'(class 'WithBody', int32)
+    ret
+  }
+}
+.class interface public abstract auto ansi 'WithAccessorBody'
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig static bool '<get-ok>'(class 'WithAccessorBody' '$this') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ldc.i4.1
+      ret
+    }
+  }
+  .method public hidebysig specialname newslot abstract virtual instance bool 'get_ok'() cil managed
+  {
+  }
+  .property instance bool 'ok'()
+  {
+    .get instance bool 'WithAccessorBody'::'get_ok'()
+  }
+}
+.class interface public abstract auto ansi 'GenericBody'
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig static !!0 'value'<'T'>(class 'GenericBody' '$this') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      .locals init (
+        [0] class 'GenericBody' '<genericInterfaceReceiver>',
+        [1] class 'GenericBody`1'<!!0> '<genericInterfaceCapability>',
+        [2] !!0 '<genericInterfaceResult>'
+      )
+      ldarg.0
+      stloc.0
+      ldloc.0
+      isinst class 'GenericBody`1'<!!0>
+      stloc.1
+      ldloc.1
+      brfalse IL_genericInterfaceErasedFallback_0
+      ldloc.1
+      callvirt instance !0 class 'GenericBody`1'<!!0>::'seed'()
+      stloc.2
+      br IL_genericInterfaceJoin_1
+  IL_genericInterfaceErasedFallback_0:
+      ldloc.0
+      callvirt instance object 'GenericBody'::'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'()
+      unbox.any !!0
+      stloc.2
+  IL_genericInterfaceJoin_1:
+      ldloc.2
+      ret
+    }
+    .method public hidebysig static !!1 'echo'<'T', 'R'>(class 'GenericBody' '$this', !!1 'value') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ldarg.1
+      ret
+    }
+    .method public hidebysig static bool 'same'<'T'>(class 'GenericBody' '$this', !!0 'value') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 2
+      .locals init (
+        [0] class 'GenericBody' '<genericInterfaceReceiver>',
+        [1] class 'GenericBody`1'<!!0> '<genericInterfaceCapability>',
+        [2] !!0 '<genericInterfaceResult>'
+      )
+      ldarg.0
+      stloc.0
+      ldloc.0
+      isinst class 'GenericBody`1'<!!0>
+      stloc.1
+      ldloc.1
+      brfalse IL_genericInterfaceErasedFallback_0
+      ldloc.1
+      callvirt instance !0 class 'GenericBody`1'<!!0>::'seed'()
+      stloc.2
+      br IL_genericInterfaceJoin_1
+  IL_genericInterfaceErasedFallback_0:
+      ldloc.0
+      callvirt instance object 'GenericBody'::'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'()
+      unbox.any !!0
+      stloc.2
+  IL_genericInterfaceJoin_1:
+      ldloc.2
+      box !!0
+      ldarg.1
+      box !!0
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'AreEqual'(object, object)
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance object 'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance object 'value__KotlinErased__6f13fa675e812ad2e30fd8035b2caa96'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__15187c83a0ad8f557afa2cfd5f24eb99'<'R'>(!!0 'value') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'same__KotlinErased__4e9f162987f57afd95ce144c7840ec06'(object 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'GenericBody`1'<+ 'T'>
+       implements 'GenericBody'
+{
+  .method public hidebysig newslot abstract virtual instance !0 'seed'() cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance !0 'value'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'GenericBody__KotlinExact`1'<'T'>
+       implements class 'GenericBody`1'<!0>
+{
+  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'R'>(!!0 'value') cil managed
+  {
+  }
+  .method public hidebysig newslot abstract virtual instance bool 'same'(!0 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'GenericBodyImpl'
+       extends [mscorlib]System.Object
+       implements 'GenericBody', class 'GenericBody__KotlinExact`1'<int32>
+{
+  .field private int32 'current'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'current') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'GenericBodyImpl'::'current'
+    ret
+  }
+  .method private hidebysig specialname instance int32 'get_current'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'GenericBodyImpl'::'current'
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'seed'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance int32 'GenericBodyImpl'::'get_current'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDefaultForwarderTarget-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call !!0 'GenericBody'/'<DefaultImpls>'::'value'<int32>(class 'GenericBody')
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDefaultForwarderTarget-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<'R'>(!!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call !!1 'GenericBody'/'<DefaultImpls>'::'echo'<int32, !!0>(class 'GenericBody', !!1)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDefaultForwarderTarget-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call bool 'GenericBody'/'<DefaultImpls>'::'same'<int32>(class 'GenericBody', !!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericBody-seed-516885e6a7a8f6bb5e78212d9923bbda>'() cil managed
+  {
+    .override method instance object 'GenericBody'::'seed__KotlinErased__516885e6a7a8f6bb5e78212d9923bbda'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'GenericBodyImpl'::'seed'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-GenericBody-seed-516885e6a7a8f6bb5e78212d9923bbda>'() cil managed
+  {
+    .override method instance !0 class 'GenericBody`1'<int32>::'seed'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'GenericBodyImpl'::'seed'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'() cil managed
+  {
+    .override method instance object 'GenericBody'::'value__KotlinErased__6f13fa675e812ad2e30fd8035b2caa96'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'()
+    box [mscorlib]System.Int32
+    ret
+  }
+  .method private hidebysig newslot virtual final instance int32 '<GenericInterfaceDeclaredBridge-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'() cil managed
+  {
+    .override method instance !0 class 'GenericBody`1'<int32>::'value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-value-6f13fa675e812ad2e30fd8035b2caa96>'()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<'R'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 'GenericBody'::'echo__KotlinErased__15187c83a0ad8f557afa2cfd5f24eb99'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceExactBridge-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<'R'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 class 'GenericBody__KotlinExact`1'<int32>::'echo'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceCanonicalBridge-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(object 'value') cil managed
+  {
+    .override method instance bool 'GenericBody'::'same__KotlinErased__4e9f162987f57afd95ce144c7840ec06'(object)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    unbox.any [mscorlib]System.Int32
+    callvirt instance bool 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance bool '<GenericInterfaceExactBridge-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32 'value') cil managed
+  {
+    .override method instance bool class 'GenericBody__KotlinExact`1'<int32>::'same'(!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance bool 'GenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32)
+    ret
+  }
+  .property instance int32 'current'()
+  {
+    .get instance int32 'GenericBodyImpl'::'get_current'()
+  }
+}
+.class interface public abstract auto ansi 'InvariantGenericBody'
+{
+  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .method public hidebysig static !!1 'echo'<'T', 'R'>(class 'InvariantGenericBody' '$this', !!1 'value') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 1
+      ldarg.1
+      ret
+    }
+  }
+  .method public hidebysig newslot abstract virtual instance !!0 'echo__KotlinErased__d5f3d5de759468f228c143b033b83c29'<'R'>(!!0 'value') cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'InvariantGenericBody`1'<'T'>
+       implements 'InvariantGenericBody'
+{
+  .method public hidebysig newslot abstract virtual instance !!0 'echo'<'R'>(!!0 'value') cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'InvariantGenericBodyImpl'
+       extends [mscorlib]System.Object
+       implements 'InvariantGenericBody', class 'InvariantGenericBody`1'<int32>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDefaultForwarderTarget-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<'R'>(!!0 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call !!1 'InvariantGenericBody'/'<DefaultImpls>'::'echo'<int32, !!0>(class 'InvariantGenericBody', !!1)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<'R'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 'InvariantGenericBody'::'echo__KotlinErased__d5f3d5de759468f228c143b033b83c29'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'InvariantGenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<!!0>(!!0)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDeclaredBridge-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<'R'>(!!0 'value') cil managed
+  {
+    .override method instance !!0 class 'InvariantGenericBody`1'<int32>::'echo'<[1]>(!!0)
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    callvirt instance !!0 'InvariantGenericBodyImpl'::'<GenericInterfaceDefaultForwarderTarget-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<!!0>(!!0)
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'interfaceDefaultBodiesPortableKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "rejected"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

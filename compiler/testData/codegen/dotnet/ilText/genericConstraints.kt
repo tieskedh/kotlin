@@ -77,6 +77,8 @@ fun <T : Left> widenBound(value: T): Left = value
 
 fun <T : Left> widenAny(value: T): Any = value
 
+fun <T, U> typeParameterBound(value: T): T where T : U = value
+
 class BoundBox<T>(val value: T) where T : Left, T : Right {
     fun total(): Int = value.left(value.right)
 }
@@ -95,5 +97,6 @@ fun main() {
     protectedCall(value)
     widenBound(value)
     widenAny(value)
+    typeParameterBound<Impl, Left>(value)
     BoundBox(value).total()
 }

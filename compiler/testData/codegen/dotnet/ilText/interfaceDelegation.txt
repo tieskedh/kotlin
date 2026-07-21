@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'interfaceDelegation' {}
 .module 'main-interfaceDelegation.il'
 
@@ -182,7 +186,7 @@
     stfld class 'Counter' 'PropertyCounter'::'delegate'
     ret
   }
-  .method public hidebysig specialname instance class 'Counter' 'get_delegate'() cil managed
+  .method private hidebysig specialname instance class 'Counter' 'get_delegate'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -417,7 +421,7 @@
     stfld string 'StringSource'::'item'
     ret
   }
-  .method public hidebysig specialname instance string 'get_item'() cil managed
+  .method private hidebysig specialname instance string 'get_item'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -523,10 +527,31 @@ IL_genericInterfaceJoin_1:
   .method public hidebysig newslot virtual instance !!0 'choose'<'M'>(!!0 'item') cil managed
   {
     .maxstack 2
+    .locals init (
+      [0] class 'Source' '<genericInterfaceReceiver>',
+      [1] class 'Source`1'<!0> '<genericInterfaceCapability>',
+      [2] !!0 '<genericInterfaceResult>'
+    )
     ldarg.0
     ldfld class 'Source' class 'GenericSource`1'<!0>::'$$delegate_0'
+    stloc.0
+    ldloc.0
+    isinst class 'Source`1'<!0>
+    stloc.1
+    ldloc.1
+    brfalse IL_genericInterfaceErasedFallback_0
+    ldloc.1
+    ldarg.1
+    callvirt instance !!0 class 'Source`1'<!0>::'choose'<!!0>(!!0)
+    stloc.2
+    br IL_genericInterfaceJoin_1
+IL_genericInterfaceErasedFallback_0:
+    ldloc.0
     ldarg.1
     callvirt instance !!0 'Source'::'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<!!0>(!!0)
+    stloc.2
+IL_genericInterfaceJoin_1:
+    ldloc.2
     ret
   }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-Source-current-7a7797ee98b2da08c38da2400bb279fe>'() cil managed
@@ -739,9 +764,12 @@ IL_genericInterfaceJoin_1:
       [4] class 'Source' '<genericInterfaceReceiver>',
       [5] class 'Source`1'<string> '<genericInterfaceCapability>',
       [6] string '<genericInterfaceResult>',
-      [7] class 'RedeclaredForwarder' 'redeclared',
-      [8] class 'RootId' 'root',
-      [9] class 'MultiForwarder' 'multi'
+      [7] class 'Source' '<genericInterfaceReceiver>@7',
+      [8] class 'Source`1'<string> '<genericInterfaceCapability>@8',
+      [9] int32 '<genericInterfaceResult>@9',
+      [10] class 'RedeclaredForwarder' 'redeclared',
+      [11] class 'RootId' 'root',
+      [12] class 'MultiForwarder' 'multi'
     )
     ldc.i4 1
     ldstr "shared"
@@ -820,8 +848,24 @@ IL_genericInterfaceJoin_1:
     ldloc 6
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.3
+    stloc 7
+    ldloc 7
+    isinst class 'Source`1'<string>
+    stloc 8
+    ldloc 8
+    brfalse IL_genericInterfaceErasedFallback_2
+    ldloc 8
+    ldc.i4 12
+    callvirt instance !!0 class 'Source`1'<string>::'choose'<int32>(!!0)
+    stloc 9
+    br IL_genericInterfaceJoin_3
+IL_genericInterfaceErasedFallback_2:
+    ldloc 7
     ldc.i4 12
     callvirt instance !!0 'Source'::'choose__KotlinErased__96378802b130e1645ac22dff355ebaa2'<int32>(!!0)
+    stloc 9
+IL_genericInterfaceJoin_3:
+    ldloc 9
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -829,13 +873,13 @@ IL_genericInterfaceJoin_1:
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'LeafIdImpl'::.ctor()
     newobj instance void 'RedeclaredForwarder'::.ctor(class 'LeafId')
-    stloc 7
-    ldloc 7
-    stloc 8
-    ldloc 8
+    stloc 10
+    ldloc 10
+    stloc 11
+    ldloc 11
     callvirt instance string 'RootId'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 7
+    ldloc 10
     callvirt instance string 'RedeclaredForwarder'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldc.i4 20
@@ -843,8 +887,8 @@ IL_genericInterfaceJoin_1:
     newobj instance void 'CounterImpl'::.ctor(int32, string)
     newobj instance void 'NamedImpl'::.ctor()
     newobj instance void 'MultiForwarder'::.ctor(class 'Counter', class 'Named')
-    stloc 9
-    ldloc 9
+    stloc 12
+    ldloc 12
     ldc.i4 2
     callvirt instance int32 'MultiForwarder'::'add'(int32)
     box [mscorlib]System.Int32
@@ -852,7 +896,7 @@ IL_genericInterfaceJoin_1:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 9
+    ldloc 12
     callvirt instance string 'MultiForwarder'::'name'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret

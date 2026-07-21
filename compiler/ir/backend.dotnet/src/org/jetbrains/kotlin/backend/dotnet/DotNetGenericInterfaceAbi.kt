@@ -6,6 +6,8 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.ir.declarations.IrClass
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -73,10 +75,39 @@ internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfa
 internal val IrClass.isDotNetGenericInterfaceDeclaration: Boolean
     get() = isInterface && typeParameters.isNotEmpty()
 
+
+/**
+ * Marks a copied method parameter whose Kotlin bound depends on an interface owner parameter.
+ * The CLR constraint is erased from executable metadata because Kotlin projections can widen its
+ * call set independently of the runtime CLR instantiation; the IR bound remains available while
+ * compiling the single semantic body.
+ */
+internal val DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER: IrDeclarationOrigin =
+    IrDeclarationOriginImpl("DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER")
+
+internal fun IrType.isDotNetOwnerDependentConstraint(interfaceClass: IrClass): Boolean {
+    val simpleType = this as? IrSimpleType ?: return false
+    val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+    if (parameter?.parent == interfaceClass) return true
+    return simpleType.arguments.any { argument ->
+        (argument as? IrTypeProjection)?.type?.isDotNetOwnerDependentConstraint(interfaceClass) == true
+    }
+}
+
+internal fun IrType.isDotNetVariantOwnerDependentConstraint(interfaceClass: IrClass): Boolean {
+    val simpleType = this as? IrSimpleType ?: return false
+    val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner
+    if (parameter?.parent == interfaceClass && parameter.variance != Variance.INVARIANT) return true
+    return simpleType.arguments.any { argument ->
+        (argument as? IrTypeProjection)?.type?.isDotNetVariantOwnerDependentConstraint(interfaceClass) == true
+    }
+}
 /**
  * Chooses the member's single typed home. A declaration-variance-safe signature belongs to the
  * public same-name generic view; a signature made legal only by `@UnsafeVariance` (or by an
- * invariant nested occurrence) belongs to the invariant exact capability.
+ * invariant nested occurrence) belongs to the invariant exact capability. A method type
+ * parameter constrained by a variant owner parameter is exact-only as well: CoreCLR rejects
+ * that GenericParamConstraint on a variant interface at type-load time.
  */
 internal fun IrSimpleFunction.dotNetGenericInterfaceMemberView(
     interfaceClass: IrClass,
@@ -94,7 +125,10 @@ internal fun IrSimpleFunction.dotNetGenericInterfaceMemberView(
         .asSequence()
         .filter { it.kind != IrParameterKind.DispatchReceiver }
         .all { parameter -> parameter.type.isLegalAt(TypePolarity.IN) }
-    return if (safeReturn && safeParameters) {
+    val safeConstraints = typeParameters.all { typeParameter ->
+        typeParameter.superTypes.none { it.isDotNetVariantOwnerDependentConstraint(interfaceClass) }
+    }
+    return if (safeReturn && safeParameters && safeConstraints) {
         DotNetGenericInterfaceMemberView.DECLARED
     } else {
         DotNetGenericInterfaceMemberView.EXACT

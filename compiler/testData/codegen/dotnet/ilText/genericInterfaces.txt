@@ -170,14 +170,14 @@
     stfld !0 class 'GenericChannel`1'<!0>::'current'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_current'() cil managed
+  .method private hidebysig specialname instance !0 'get_current'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'GenericChannel`1'<!0>::'current'
     ret
   }
-  .method public hidebysig specialname instance void 'set_current'(!0 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_current'(!0 '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -287,7 +287,7 @@
     stfld !0 class 'GenericProducer`1'<!0>::'current'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_current'() cil managed
+  .method private hidebysig specialname instance !0 'get_current'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -366,7 +366,7 @@
     stfld class 'Special' 'SpecialProducer'::'current'
     ret
   }
-  .method public hidebysig specialname instance class 'Special' 'get_current'() cil managed
+  .method private hidebysig specialname instance class 'Special' 'get_current'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -488,14 +488,14 @@
     stfld !1 class 'SwappedPair`2'<!0, !1>::'b'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_a'() cil managed
+  .method private hidebysig specialname instance !0 'get_a'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'SwappedPair`2'<!0, !1>::'a'
     ret
   }
-  .method public hidebysig specialname instance !1 'get_b'() cil managed
+  .method private hidebysig specialname instance !1 'get_b'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -641,7 +641,7 @@
     stfld class 'Special' 'BoundedSpecial'::'current'
     ret
   }
-  .method public hidebysig specialname instance class 'Special' 'get_current'() cil managed
+  .method private hidebysig specialname instance class 'Special' 'get_current'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -691,7 +691,7 @@
     stfld int32 'IntProducer'::'current'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_current'() cil managed
+  .method private hidebysig specialname instance int32 'get_current'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -883,7 +883,7 @@
     stfld class 'Producer' 'IntFactory'::'producer'
     ret
   }
-  .method public hidebysig specialname instance class 'Producer' 'get_producer'() cil managed
+  .method private hidebysig specialname instance class 'Producer' 'get_producer'() cil managed
   {
     .maxstack 1
     ldarg.0
