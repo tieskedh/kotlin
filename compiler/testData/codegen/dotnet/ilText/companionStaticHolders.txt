@@ -1,0 +1,204 @@
+.assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'companionStaticHolders' {}
+.module 'main-companionStaticHolders.il'
+
+.class public auto ansi sealed beforefieldinit 'GenericHolderOwner`1'<'T'>
+       extends [mscorlib]System.Object
+{
+  .class nested public abstract sealed auto ansi beforefieldinit '<CompanionStatics>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .field public static literal int32 'marker' = int32(7)
+    .method public hidebysig specialname static int32 'get_answer'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 42
+      ret
+    }
+    .method private hidebysig static int32 'secret'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 11
+      ret
+    }
+    .method public hidebysig static class 'GenericHolderOwner`1'<string> 'create'(int32 'value') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      newobj instance void class 'GenericHolderOwner`1'<string>::.ctor(int32)
+      ret
+    }
+    .method public hidebysig static class 'GenericHolderOwner`1'<string> 'create$default'(int32 'value', int32 '$mask0') cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 2
+      ldarg.1
+      ldc.i4 1
+      and
+      ldc.i4 0
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldc.i4 40
+      starg 0
+      br IL_whenEnd_0
+  IL_whenNext_1:
+  IL_whenEnd_0:
+      ldarg.0
+      call class 'GenericHolderOwner`1'<string> 'GenericHolderOwner`1'/'<CompanionStatics>'::'create'(int32)
+      ret
+    }
+    .method public hidebysig static !!0 'echo'<'R'>(!!0 'value') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ret
+    }
+    .method public hidebysig static int32 'increment'(int32 'value') cil managed
+    {
+      .maxstack 2
+      ldarg.0
+      ldc.i4 1
+      add
+      ret
+    }
+    .method assembly hidebysig static int32 'access$secret'() cil managed
+    {
+      .maxstack 1
+      call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'secret'()
+      ret
+    }
+    .property int32 'answer'()
+    {
+      .get int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'get_answer'()
+    }
+  }
+  .field private int32 'value'
+  .method private hidebysig specialname rtspecialname instance void .ctor(int32 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 class 'GenericHolderOwner`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 class 'GenericHolderOwner`1'<!0>::'value'
+    ret
+  }
+  .method public hidebysig instance int32 'reveal'() cil managed
+  {
+    .maxstack 1
+    call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'access$secret'()
+    ret
+  }
+  .property instance int32 'value'()
+  {
+    .get instance int32 'GenericHolderOwner`1'::'get_value'()
+  }
+}
+.class interface public abstract auto ansi 'GenericHolderInterface'
+{
+  .class nested public abstract sealed auto ansi beforefieldinit '<CompanionStatics>'
+         extends [mscorlib]System.Object
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .field public static literal int32 'marker' = int32(9)
+    .method public hidebysig specialname static int32 'get_answer'() cil managed
+    {
+      .maxstack 1
+      ldc.i4 43
+      ret
+    }
+    .method public hidebysig static !!0 'echo'<'R'>(!!0 'value') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      ret
+    }
+    .property int32 'answer'()
+    {
+      .get int32 'GenericHolderInterface'/'<CompanionStatics>'::'get_answer'()
+    }
+  }
+}
+.class interface public abstract auto ansi 'GenericHolderInterface`1'<'T'>
+       implements 'GenericHolderInterface'
+{
+}
+.class public abstract sealed auto ansi beforefieldinit 'companionStaticHoldersKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'GenericHolderOwner`1'<string> 'owner'
+    )
+    ldc.i4 0
+    ldc.i4 1
+    call class 'GenericHolderOwner`1'<string> 'GenericHolderOwner`1'/'<CompanionStatics>'::'create$default'(int32, int32)
+    stloc.0
+    ldloc.0
+    call instance int32 class 'GenericHolderOwner`1'<string>::'get_value'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.0
+    call instance int32 class 'GenericHolderOwner`1'<string>::'reveal'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "7"
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'GenericHolderOwner`1'/'<CompanionStatics>'::'get_answer'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "OK"
+    call !!0 'GenericHolderOwner`1'/'<CompanionStatics>'::'echo'<string>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldstr "9"
+    call void [mscorlib]System.Console::WriteLine(string)
+    call int32 'GenericHolderInterface'/'<CompanionStatics>'::'get_answer'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 44
+    call !!0 'GenericHolderInterface'/'<CompanionStatics>'::'echo'<int32>(!!0)
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

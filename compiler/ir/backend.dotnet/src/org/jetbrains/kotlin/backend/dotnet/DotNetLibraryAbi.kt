@@ -6,6 +6,8 @@
 package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSignatureComputer
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_STATIC_HOLDER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -997,14 +999,18 @@ internal class DotNetExternalDeclarations(
         val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
         val bound = declarations[logicalKey] ?: return null
         val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
-        val owner = (function.parent as? IrClass)?.let { classInfoOrNull(it, typeMapper) }
-            ?: facadeInfoByPhysicalIdentity.getOrPut(
+        val containingClass = (function.parent as? IrClass)?.let { classInfoOrNull(it, typeMapper) }
+        val owner = if (containingClass?.physicalPathComponents() == declaration.ownerPath) {
+            containingClass
+        } else {
+            require(!declaration.isInstance) {
+                "external instance function '$logicalKey' is bound outside its containing CLR class"
+            }
+            facadeInfoByPhysicalIdentity.getOrPut(
                 bound.library.artifact.assemblyName to declaration.ownerPath
             ) {
                 buildClassInfo(bound.library.artifact.assemblyName, declaration.ownerPath, emptyList())
             }
-        require(owner.physicalPathComponents() == declaration.ownerPath) {
-            "external function '$logicalKey' is bound to a CLR owner inconsistent with its containing class"
         }
         val signature = function.dotNetSignature(typeMapper)
         require(signature.hasThis == declaration.isInstance) {
@@ -1156,27 +1162,29 @@ internal fun collectDotNetLibraryDeclarations(
     genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
     preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
     interfaceDefaultImplementations: Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
-    interfaceDefaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    defaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     interfaceDefaultPromotions: List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     genericInterfaceViewBridges: List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
     interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
 ): Map<String, DotNetPhysicalDeclaration> = buildMap {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
-    val interfaceCompilerAbiFunctions = buildSet {
+    val compilerAbiFunctions = buildSet {
         interfaceDefaultImplementations.values.mapTo(this) { it.helper }
-        interfaceDefaultArgumentDispatchers.values.toCollection(this)
+        defaultArgumentDispatchers.values.toCollection(this)
     }
     val genericInterfaceViewBridgeFunctions =
         genericInterfaceViewBridges.mapTo(hashSetOf()) { it.implementation }
     val interfaceDefaultClassForwarderFunctions =
         interfaceDefaultClassForwarders.mapTo(hashSetOf()) { it.implementation }
-    val interfaceCompilerAbiClasses = interfaceCompilerAbiFunctions.mapNotNullTo(hashSetOf()) { function ->
-        function.parent as? IrClass
-    }
+    val compilerAbiClasses = compilerAbiFunctions
+        .mapNotNullTo(hashSetOf()) { function -> function.parent as? IrClass }
+        .filterTo(hashSetOf()) { irClass ->
+            irClass.origin == DOTNET_DEFAULT_IMPLS || irClass.origin == DOTNET_COMPANION_STATIC_HOLDER
+        }
     for (entry in availableClasses) {
         val irClass = entry.key
         val classInfo = entry.value
-        if (irClass in interfaceCompilerAbiClasses) continue
+        if (irClass in compilerAbiClasses) continue
         if (irClass.fileOrNull !in files || irClass.isOriginallyLocalDeclaration) continue
         val logicalKey = preLoweringDeclarationKeys[irClass]
             ?: irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
@@ -1202,7 +1210,7 @@ internal fun collectDotNetLibraryDeclarations(
     for (entry in availableFunctions) {
         val function = entry.key
         val functionInfo = entry.value
-        if (function in interfaceCompilerAbiFunctions || function in genericInterfaceViewBridgeFunctions ||
+        if (function in compilerAbiFunctions || function in genericInterfaceViewBridgeFunctions ||
             function in interfaceDefaultClassForwarderFunctions
         ) {
             continue
@@ -1223,7 +1231,7 @@ internal fun collectDotNetLibraryDeclarations(
                 helperMethodName = helperInfo.physicalMethodName ?: lowered.helper.dotNetIlMethodName(),
             )
         }
-        val defaultArgumentDispatcher = interfaceDefaultArgumentDispatchers[function]?.let { dispatcher ->
+        val defaultArgumentDispatcher = defaultArgumentDispatchers[function]?.let { dispatcher ->
             val dispatcherInfo = availableFunctions[dispatcher]
                 ?: error(
                     "Internal .NET backend error: default-argument dispatcher for '${function.render()}' " +

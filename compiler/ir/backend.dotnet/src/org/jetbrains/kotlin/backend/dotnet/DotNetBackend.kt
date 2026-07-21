@@ -157,7 +157,7 @@ object DotNetBackend {
                 failOnDeclarationEviction = true,
                 preLoweringDeclarationKeys = preLoweringDeclarationKeys,
                 interfaceDefaultImplementations = context.interfaceDefaultImplementations,
-                interfaceDefaultArgumentDispatchers = context.interfaceDefaultArgumentDispatchers,
+                defaultArgumentDispatchers = context.defaultArgumentDispatchers,
                 genericInterfaceDefaults = context.genericInterfaceDefaults,
             ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
@@ -205,7 +205,7 @@ object DotNetBackend {
             preLoweringDeclarationKeys = preLoweringDeclarationKeys,
             friendAssemblies = configuration.dotNetFriendAssemblies,
             interfaceDefaultImplementations = context.interfaceDefaultImplementations,
-            interfaceDefaultArgumentDispatchers = context.interfaceDefaultArgumentDispatchers,
+            defaultArgumentDispatchers = context.defaultArgumentDispatchers,
             genericInterfaceDefaults = context.genericInterfaceDefaults,
             externalInterfaceDefaultHelpers = context.externalInterfaceDefaultHelpers,
             externalDefaultArgumentDispatchers = context.externalDefaultArgumentDispatchers,
