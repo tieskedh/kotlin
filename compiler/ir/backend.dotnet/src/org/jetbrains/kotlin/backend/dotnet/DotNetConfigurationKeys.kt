@@ -11,7 +11,7 @@ object DotNetConfigurationKeys {
         CompilerConfigurationKey.create("produce the bootstrap Kotlin/.NET stdlib pair")
     val PRODUCE_LIBRARY: CompilerConfigurationKey<Boolean> =
         CompilerConfigurationKey.create("produce a Kotlin/.NET library pair")
-    val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET runtime flavor")
+    val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET API/runtime profile")
     val EXPORTS: CompilerConfigurationKey<List<DotNetExport>> =
         CompilerConfigurationKey.create("explicit .NET exports")
     val PROPERTY_EXPORTS: CompilerConfigurationKey<List<DotNetPropertyExport>> =
@@ -20,6 +20,10 @@ object DotNetConfigurationKeys {
         CompilerConfigurationKey.create("external Kotlin/.NET stdlib artifact pair")
     val EXTERNAL_LIBRARIES: CompilerConfigurationKey<List<DotNetExternalLibrary>> =
         CompilerConfigurationKey.create("external Kotlin/.NET library artifact pairs")
+    val FRIEND_PATHS: CompilerConfigurationKey<List<String>> =
+        CompilerConfigurationKey.create("Kotlin/.NET friend metadata paths")
+    val FRIEND_ASSEMBLIES: CompilerConfigurationKey<List<DotNetFriendAssemblyIdentity>> =
+        CompilerConfigurationKey.create("producer-authorized CLR friend assembly identities")
 }
 
 /** Canonical names of compiler-owned CLR assemblies; CLR assembly-name matching is case-insensitive. */
@@ -50,13 +54,14 @@ object DotNetStdlibArtifact {
     const val ASSEMBLY_CULTURE = "neutral"
     const val ASSEMBLY_PUBLIC_KEY_TOKEN = "null"
     const val METADATA_UNIQUE_NAME = ASSEMBLY_NAME
-    fun distributionDirectory(kotlinLibDirectory: File): File =
-        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK)
+    fun distributionDirectory(kotlinLibDirectory: File, targetFramework: String): File =
+        kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(targetFramework)
 }
 
 /** The two-file product and CLR identity of one Kotlin/.NET library. */
 data class DotNetLibraryArtifact(
     val assemblyName: String,
+    val targetFramework: String,
     val assemblyVersion: String = DEFAULT_ASSEMBLY_VERSION,
     val assemblyCulture: String = DEFAULT_ASSEMBLY_CULTURE,
     val assemblyPublicKeyToken: String = DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN,
@@ -67,7 +72,6 @@ data class DotNetLibraryArtifact(
     val assemblyVersionIl: String = assemblyVersion.replace('.', ':')
 
     companion object {
-        const val LIBRARY_TARGET_FRAMEWORK = "netstandard2.0"
         const val METADATA_ASSEMBLY_NAME_PROPERTY = "dotnet_assembly_name"
         const val METADATA_ASSEMBLY_VERSION_PROPERTY = "dotnet_assembly_version"
         const val METADATA_ASSEMBLY_CULTURE_PROPERTY = "dotnet_assembly_culture"
@@ -84,6 +88,7 @@ data class DotNetLibraryArtifact(
 data class DotNetExternalStdlib(
     val metadataFile: File,
     val implementationFile: File,
+    val targetFramework: String,
 )
 
 /**
@@ -198,13 +203,27 @@ data class DotNetExport(
     }
 }
 
-/** The .NET runtime flavor of a produced executable, selected via `-Xdotnet-target`. */
+/** Target-framework/API profile, independent of executable versus library product kind. */
 enum class DotNetTarget(val flagValue: String) {
-    /** Legacy .NET Framework: an `.exe` assembled by the Framework ilasm, runnable directly. */
-    NET_FRAMEWORK("netframework"),
+    NET48("net48"),
+    NETSTANDARD_2_0("netstandard2.0"),
+    NET10_0("net10.0");
 
-    /** Modern .NET (CoreCLR): a `.dll` assembled by the modern ilasm plus a `runtimeconfig.json`, run via `dotnet exec`. */
-    NET("net");
+    val supportsExecutables: Boolean
+        get() = this != NETSTANDARD_2_0
+
+    internal val coreLibrary: DotNetCoreLibraryProfile
+        get() = when (this) {
+            NET48 -> DotNetCoreLibraryProfile.NET48
+            NETSTANDARD_2_0 -> DotNetCoreLibraryProfile.NETSTANDARD_2_0
+            NET10_0 -> DotNetCoreLibraryProfile.NET10_0
+        }
+
+    fun canConsumeLibrary(targetFramework: String): Boolean = when (this) {
+        NET48 -> targetFramework == NET48.flagValue || targetFramework == NETSTANDARD_2_0.flagValue
+        NETSTANDARD_2_0 -> targetFramework == NETSTANDARD_2_0.flagValue
+        NET10_0 -> targetFramework == NET10_0.flagValue || targetFramework == NETSTANDARD_2_0.flagValue
+    }
 
     companion object {
         fun fromFlagValue(value: String): DotNetTarget? = entries.firstOrNull { it.flagValue == value }
@@ -243,16 +262,19 @@ val CompilerConfiguration.dotNetProducedLibraryArtifact: DotNetLibraryArtifact?
     get() = when {
         dotNetProducesStdlib -> DotNetLibraryArtifact(
             assemblyName = DotNetStdlibArtifact.ASSEMBLY_NAME,
+            targetFramework = dotNetTarget.flagValue,
             assemblyVersion = DotNetStdlibArtifact.ASSEMBLY_VERSION,
             assemblyCulture = DotNetStdlibArtifact.ASSEMBLY_CULTURE,
             assemblyPublicKeyToken = DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
         )
-        dotNetProducesLibrary -> dotNetAssemblyName?.let(::DotNetLibraryArtifact)
+        dotNetProducesLibrary -> dotNetAssemblyName?.let { assemblyName ->
+            DotNetLibraryArtifact(assemblyName, dotNetTarget.flagValue)
+        }
         else -> null
     }
 
 var CompilerConfiguration.dotNetTarget: DotNetTarget
-    get() = get(DotNetConfigurationKeys.TARGET, DotNetTarget.NET_FRAMEWORK)
+    get() = get(DotNetConfigurationKeys.TARGET, DotNetTarget.NET48)
     set(value) {
         put(DotNetConfigurationKeys.TARGET, value)
     }
@@ -281,4 +303,16 @@ var CompilerConfiguration.dotNetExternalLibraries: List<DotNetExternalLibrary>
     get() = get(DotNetConfigurationKeys.EXTERNAL_LIBRARIES, emptyList())
     set(value) {
         put(DotNetConfigurationKeys.EXTERNAL_LIBRARIES, value)
+    }
+
+var CompilerConfiguration.dotNetFriendPaths: List<String>
+    get() = get(DotNetConfigurationKeys.FRIEND_PATHS, emptyList())
+    set(value) {
+        put(DotNetConfigurationKeys.FRIEND_PATHS, value)
+    }
+
+var CompilerConfiguration.dotNetFriendAssemblies: List<DotNetFriendAssemblyIdentity>
+    get() = get(DotNetConfigurationKeys.FRIEND_ASSEMBLIES, emptyList())
+    set(value) {
+        put(DotNetConfigurationKeys.FRIEND_ASSEMBLIES, value)
     }

@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericConstraints' {}
 .module 'main-genericConstraints.il'
 
@@ -42,7 +46,7 @@
     stfld int32 'test.constraints.Base'::'seed'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  .method private hidebysig specialname instance int32 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -128,7 +132,7 @@
     stfld !0 class 'test.constraints.GenericParent`1'<!0>::'item'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_item'() cil managed
+  .method private hidebysig specialname instance !0 'get_item'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -397,7 +401,14 @@
       stloc.1
       leave IL_tryEnd_0
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.2
       ldc.i4 -1
       stloc.1
@@ -424,6 +435,12 @@ IL_tryEnd_0:
     .maxstack 1
     ldarg.0
     box !!0
+    ret
+  }
+  .method public hidebysig static !!0 'typeParameterBound'<(!!1) 'T', 'U'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.0
     ret
   }
   .method public hidebysig static void 'main'() cil managed
@@ -474,6 +491,9 @@ IL_tryEnd_0:
     pop
     ldloc.0
     call object 'test.constraints.genericConstraintsKt'::'widenAny'<class 'test.constraints.Impl'>(!!0)
+    pop
+    ldloc.0
+    call !!0 'test.constraints.genericConstraintsKt'::'typeParameterBound'<class 'test.constraints.Impl', class 'test.constraints.Left'>(!!0)
     pop
     ldloc.0
     newobj instance void class 'test.constraints.BoundBox`1'<class 'test.constraints.Impl'>::.ctor(!0)

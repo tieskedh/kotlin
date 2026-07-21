@@ -20,8 +20,6 @@ fun <T : LocalBase?> nullableBound(value: T): T = value
 
 fun <T : GenericBase<String>> genericBound(value: T): T = value
 
-fun <T, U> typeParameterBound(value: T): T where T : U = value
-
 fun <T : CharSequence> builtinBound(value: T): T = value
 
 fun <T : Exception> mappedBound(value: T): T = value

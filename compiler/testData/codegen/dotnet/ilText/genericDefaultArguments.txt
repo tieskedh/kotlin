@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -26,6 +31,8 @@
   }
   .method public hidebysig specialname rtspecialname instance void .ctor(!0 'value', !0 'selected', int32 '$mask0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.DefaultConstructorMarker' '$marker') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 3
     ldarg.3
     ldc.i4 2
@@ -68,6 +75,8 @@ IL_whenEnd_0:
   }
   .method public hidebysig instance !0 'member$default'(!0 'selected', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 2
     ldarg.2
     ldc.i4 1
@@ -110,6 +119,8 @@ IL_whenEnd_0:
   }
   .method public hidebysig instance !!0 'method$default'<'R'>(!!0 'value', !!0 'selected', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 3
     ldarg.3
     ldc.i4 2
@@ -183,6 +194,8 @@ IL_whenEnd_0:
   }
   .method public hidebysig instance class 'GenericDefaultData`1'<!0> 'copy$default'(!0 'value', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 2
     ldarg.2
     ldc.i4 1
@@ -299,6 +312,8 @@ IL_whenNext_5:
   }
   .method public hidebysig static !!0 'topDefault$default'<'T'>(!!0 'value', !!0 'selected', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 2
     ldarg.2
     ldc.i4 2

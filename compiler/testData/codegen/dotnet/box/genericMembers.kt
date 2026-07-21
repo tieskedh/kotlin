@@ -20,6 +20,10 @@ class MemberHost<C>(val captured: C) {
     fun <M : Marked> labelOf(value: M): String = value.label()
 }
 
+class TypeParameterBoundMember<C> {
+    fun <T : C> use(value: T): T = value
+}
+
 interface GenericPicker<C> {
     fun <M> pick(context: C, value: M): M
 }
@@ -86,6 +90,9 @@ fun box(): String {
     if (host.wrap(11).captured != 11) return "fail 4: generic return owner"
     if (host.read(MemberHost("read")) != "read") return "fail 5: generic argument owner"
     if (host.labelOf(MarkedValue("marked")) != "marked") return "fail 6: constrained member"
+    if (TypeParameterBoundMember<Marked>().use(MarkedValue("owner-bound")).label() != "owner-bound") {
+        return "fail 6b: owner-relative method constraint"
+    }
 
     val some: Int? = host.choose<Int?>("nullable", 8)
     if (some != 8) return "fail 7: nullable value method argument"

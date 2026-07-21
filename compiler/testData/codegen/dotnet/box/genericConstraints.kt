@@ -84,6 +84,8 @@ private fun <T : Left> widenBound(value: T): Left = value
 
 private fun <T : Left> widenAny(value: T): Any = value
 
+private fun <T, U> typeParameterBound(value: T): T where T : U = value
+
 private class BoundBox<T>(val value: T) where T : Left, T : Right {
     fun total(): Int = value.left(value.right)
 }
@@ -105,6 +107,9 @@ fun box(): String {
     if (asLeft !== value) return "fail: bound widening"
     val asAny: Any = widenAny(value)
     if (asAny !== value) return "fail: Any widening"
+    if (typeParameterBound<Impl, Left>(value) !== value) {
+        return "fail: type-parameter bound"
+    }
 
     if (BoundBox(value).total() != 10) return "fail: class constraint"
     if (BoundBox(Other()).total() != 12) return "fail: second instantiation"

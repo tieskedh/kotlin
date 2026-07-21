@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.fir.FirModuleData
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.SessionConfiguration
+import org.jetbrains.kotlin.fir.checkers.registerDotNetCheckers
 import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
 import org.jetbrains.kotlin.fir.deserialization.ModuleDataProvider
 import org.jetbrains.kotlin.fir.deserialization.SingleModuleDataProvider
@@ -236,6 +237,7 @@ abstract class AbstractFirMetadataSessionFactory(
                 onWasmWasiPlatform = { registerPlatformCheckers() },
                 onNativePlatform = { registerPlatformCheckers() },
             )
+            if (targetPlatform.has<DotNetPlatform>()) registerDotNetCheckers()
         }
     }
 
@@ -260,6 +262,13 @@ abstract class AbstractFirMetadataSessionFactory(
             onWasmWasiPlatform = { registerSourceSessionComponents(c = null) },
             onNativePlatform = { registerSourceSessionComponents(c = null) },
         )
+        // DotNetPlatform is intentionally not impersonated as JVM/JS/Native merely to inherit
+        // frontend services. Metadata source sessions still need the common enum-entry service
+        // used while resolving annotation targets; every established platform factory registers
+        // the same service in its platform component bundle.
+        if (targetPlatform.has<DotNetPlatform>()) {
+            register(FirEnumEntriesSupport(this))
+        }
         registerDotNetMetadataComponentsIfNeeded()
     }
 

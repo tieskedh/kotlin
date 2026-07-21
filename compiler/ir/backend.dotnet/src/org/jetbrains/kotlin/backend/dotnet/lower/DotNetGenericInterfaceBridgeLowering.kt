@@ -13,12 +13,18 @@ import org.jetbrains.kotlin.backend.common.lower.irNot
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceMemberView
+import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
+import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredGenericInterfaceViewBridge
+import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassForwarder
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
+import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
+import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
+import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.IrElement
@@ -112,7 +118,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     )
 
     override fun lower(irModule: IrModuleFragment) {
-        val classes = mutableListOf<IrClass>()
+        val bridgeOwners = mutableListOf<IrClass>()
         val genericInterfaces = hashSetOf<IrClass>()
         val externalDeclarations = DotNetExternalDeclarations(context.configuration.dotNetExternalLibraries)
         irModule.acceptVoid(object : IrVisitorVoid() {
@@ -122,9 +128,13 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
 
             override fun visitClass(declaration: IrClass) {
                 if (declaration.isInterface) {
-                    if (declaration.isDotNetGenericInterfaceDeclaration) genericInterfaces += declaration
+                    if (declaration.isDotNetGenericInterfaceDeclaration) {
+                        genericInterfaces += declaration
+                    } else if (context.configuration.dotNetTarget == DotNetTarget.NET10_0) {
+                        bridgeOwners += declaration
+                    }
                 } else {
-                    classes += declaration
+                    bridgeOwners += declaration
                 }
                 declaration.acceptChildrenVoid(this)
             }
@@ -133,8 +143,8 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             irClass in genericInterfaces ||
                     DotNetRuntimeTypes.genericInterfaceInfoFor(irClass) != null ||
                     externalDeclarations.declaredClassInfoOrNull(irClass) != null
-        for (irClass in classes.sortedBy { it.classInheritanceDepth() }) {
-            addBridges(irClass, ::isKotlinOwnedGenericInterface)
+        for (irClass in bridgeOwners.sortedBy { it.classInheritanceDepth() }) {
+            addBridges(irClass, ::isKotlinOwnedGenericInterface, externalDeclarations)
         }
     }
 
@@ -152,6 +162,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun addBridges(
         irClass: IrClass,
         isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
+        externalDeclarations: DotNetExternalDeclarations,
     ) {
         val implementationFunctions = irClass.declarations.flatMap { declaration ->
             when (declaration) {
@@ -174,7 +185,6 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             .distinctBy { it.symbol }
             .toList()
         for (slot in slots) {
-            if (irClass.inheritsGenericInterfaceBridge(slot)) continue
             if (implementationFunctions.any { bridge ->
                     bridge.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE &&
                             bridge.overriddenSymbols.singleOrNull() == slot.symbol
@@ -184,7 +194,12 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             }
             val candidates = implementationFunctions
                 .filter { candidate -> candidate.allOverridden().any { it.symbol == slot.symbol } }
-            val target = candidates.firstOrNull { !it.isFakeOverride }
+            val declaredCandidate = candidates.firstOrNull { !it.isFakeOverride }
+            // A concrete member declared by a non-generic net10 interface is a DIM and must
+            // explicitly implement every inherited physical view. Fake-only inheritance already
+            // has its selected DIM provider, while reabstraction must remain abstract.
+            if (irClass.isInterface && declaredCandidate?.body == null) continue
+            val target = declaredCandidate
                 ?: candidates.firstOrNull()
                 ?: continue
             val implementation = if (target.isFakeOverride) {
@@ -216,26 +231,107 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     isKotlinOwnedGenericInterface,
                 ),
             )
-            createCanonicalBridge(plan, isKotlinOwnedGenericInterface)
-            for (view in plan.typedViews) {
+            if (irClass.inheritsGenericInterfaceBridge(plan, externalDeclarations)) continue
+            val canonicalBridge = createCanonicalBridge(plan, isKotlinOwnedGenericInterface)
+            val typedBridges = plan.typedViews.associateWith { view ->
                 createTypedBridge(plan, view)
+            }
+            if (plan.implementingClass.isInterface) {
+                context.genericInterfaceViewBridges += DotNetLoweredGenericInterfaceViewBridge(
+                    owner = plan.implementingClass,
+                    inheritedMember = plan.slot,
+                    implementation = canonicalBridge,
+                    physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+                )
+                for (entry in typedBridges.entries) {
+                    context.genericInterfaceViewBridges += DotNetLoweredGenericInterfaceViewBridge(
+                        owner = plan.implementingClass,
+                        inheritedMember = plan.slot,
+                        implementation = entry.value,
+                        physicalView = when (entry.key) {
+                            DotNetGenericInterfaceMemberView.DECLARED ->
+                                DotNetInterfaceDefaultPromotionView.DECLARED
+                            DotNetGenericInterfaceMemberView.EXACT ->
+                                DotNetInterfaceDefaultPromotionView.EXACT
+                        },
+                    )
+                }
+            }
+            if (plan.target.origin == DOTNET_GENERIC_INTERFACE_DEFAULT_FORWARDER_TARGET) {
+                context.interfaceDefaultClassForwarders.removeAll { forwarder ->
+                    forwarder.owner == plan.implementingClass &&
+                            forwarder.inheritedMember == plan.slot &&
+                            forwarder.implementation == plan.target
+                }
+                context.interfaceDefaultClassForwarders += DotNetLoweredInterfaceDefaultClassForwarder(
+                    owner = plan.implementingClass,
+                    inheritedMember = plan.slot,
+                    implementation = canonicalBridge,
+                    physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+                )
+                for (entry in typedBridges.entries) {
+                    val view = entry.key
+                    val bridge = entry.value
+                    context.interfaceDefaultClassForwarders += DotNetLoweredInterfaceDefaultClassForwarder(
+                        owner = plan.implementingClass,
+                        inheritedMember = plan.slot,
+                        implementation = bridge,
+                        physicalView = when (view) {
+                            DotNetGenericInterfaceMemberView.DECLARED ->
+                                DotNetInterfaceDefaultPromotionView.DECLARED
+                            DotNetGenericInterfaceMemberView.EXACT ->
+                                DotNetInterfaceDefaultPromotionView.EXACT
+                        },
+                    )
+                }
             }
         }
     }
 
-    /** A base bridge remains valid because it forwards through the target's virtual class slot. */
-    private fun IrClass.inheritsGenericInterfaceBridge(slot: IrSimpleFunction): Boolean {
+    /** An inherited complete bridge bundle remains valid because every adapter dispatches virtually. */
+    private fun IrClass.inheritsGenericInterfaceBridge(
+        plan: BridgePlan,
+        externalDeclarations: DotNetExternalDeclarations,
+    ): Boolean {
+        val requiredViews = listOf(DotNetInterfaceDefaultPromotionView.CANONICAL) +
+                plan.typedViews.map { view ->
+                    when (view) {
+                        DotNetGenericInterfaceMemberView.DECLARED -> DotNetInterfaceDefaultPromotionView.DECLARED
+                        DotNetGenericInterfaceMemberView.EXACT -> DotNetInterfaceDefaultPromotionView.EXACT
+                    }
+                }
+        fun IrSimpleFunction.implements(view: DotNetInterfaceDefaultPromotionView): Boolean {
+            if (overriddenSymbols.singleOrNull() != plan.slot.symbol) return false
+            return when (view) {
+                DotNetInterfaceDefaultPromotionView.CANONICAL ->
+                    origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
+                DotNetInterfaceDefaultPromotionView.DECLARED ->
+                    origin.dotNetGenericInterfaceBridgeMemberViewOrNull == DotNetGenericInterfaceMemberView.DECLARED
+                DotNetInterfaceDefaultPromotionView.EXACT ->
+                    origin.dotNetGenericInterfaceBridgeMemberViewOrNull == DotNetGenericInterfaceMemberView.EXACT
+            }
+        }
+
         val visited = hashSetOf<IrClass>()
-        var current = dotNetBaseClassOrNull()
-        while (current != null && visited.add(current)) {
-            if (current.declarations.filterIsInstance<IrSimpleFunction>().any { bridge ->
-                    bridge.origin == DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE &&
-                            bridge.overriddenSymbols.singleOrNull() == slot.symbol
+        val pending = mutableListOf<IrClass>()
+        fun enqueueSupertypes(owner: IrClass) {
+            owner.superTypes.mapNotNullTo(pending) { superType ->
+                ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+            }
+        }
+        enqueueSupertypes(this)
+        while (pending.isNotEmpty()) {
+            val current = pending.removeAt(pending.lastIndex)
+            if (!visited.add(current)) continue
+            val localBridges = current.declarations.filterIsInstance<IrSimpleFunction>()
+            if (requiredViews.all { view ->
+                    localBridges.any { bridge -> bridge.implements(view) } ||
+                            externalDeclarations.genericInterfaceViewBridgeOrNull(current, plan.slot, view) != null
                 }
             ) {
                 return true
             }
-            current = current.dotNetBaseClassOrNull()
+            enqueueSupertypes(current)
         }
         return false
     }
@@ -243,7 +339,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun createCanonicalBridge(
         plan: BridgePlan,
         isKotlinOwnedGenericInterface: (IrClass) -> Boolean,
-    ) {
+    ): IrSimpleFunction {
         val canonicalSubstitution = plan.interfaceClass.typeParameters.associate { typeParameter ->
             typeParameter.symbol to context.irBuiltIns.anyNType
         }
@@ -264,7 +360,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             }
         }
 
-        createForwardingBridge(
+        return createForwardingBridge(
             irClass = plan.implementingClass,
             slot = plan.slot,
             target = plan.target,
@@ -289,10 +385,10 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
     private fun createTypedBridge(
         plan: BridgePlan,
         memberView: DotNetGenericInterfaceMemberView,
-    ) {
+    ): IrSimpleFunction {
         val viewName = memberView.name.lowercase()
             .replaceFirstChar(Char::uppercaseChar)
-        createForwardingBridge(
+        return createForwardingBridge(
             irClass = plan.implementingClass,
             slot = plan.slot,
             target = plan.target,
@@ -314,13 +410,13 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         bridgeName: String,
         bridgeTypeTransform: (IrType) -> IrType,
         specialMethodInfo: SpecialMethodWithDefaultInfo? = null,
-    ) {
+    ): IrSimpleFunction {
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         val slotParameters = slot.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
         if (slotParameters.size != targetParameters.size) {
             error("Internal .NET backend error: generic interface bridge parameter count mismatch")
         }
-        irClass.addFunction {
+        return irClass.addFunction {
             startOffset = target.startOffset
             endOffset = target.endOffset
             this.origin = origin
@@ -332,8 +428,13 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             overriddenSymbols = listOf(slot.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
             val bridgeTypeParameters = copyTypeParametersFrom(slot)
-            bridgeTypeParameters.forEach { parameter ->
-                parameter.superTypes = parameter.superTypes.map(bridgeTypeTransform)
+            val slotOwner = slot.parent as? IrClass
+                ?: error("Internal .NET backend error: generic interface bridge slot has no class owner")
+            bridgeTypeParameters.forEachIndexed { index, parameter ->
+                parameter.superTypes = slot.typeParameters[index].superTypes
+                    .filterNot { it.isDotNetOwnerDependentConstraint(slotOwner) }
+                    .map(bridgeTypeTransform)
+                    .ifEmpty { listOf(context.irBuiltIns.anyNType) }
             }
             val methodSubstitution = slot.typeParameters.zip(bridgeTypeParameters).associate { pair ->
                 pair.first.symbol to pair.second.symbol.defaultType

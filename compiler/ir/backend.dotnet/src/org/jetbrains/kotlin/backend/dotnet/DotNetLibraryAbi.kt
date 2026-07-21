@@ -9,6 +9,8 @@ import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSigna
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrFile
+import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.IdSignatureRenderer
 import org.jetbrains.kotlin.ir.util.fileOrNull
@@ -21,6 +23,31 @@ import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.Properties
+
+/** Physical placement of one Kotlin-owned interface member's default implementation. */
+enum class DotNetInterfaceDefaultBodyPlacement {
+    HELPER_ONLY,
+    DIM_WITH_HELPER,
+}
+
+/** Compiler-ABI helper binding associated with one logical Kotlin interface member. */
+data class DotNetInterfaceDefaultImplementation(
+    val bodyPlacement: DotNetInterfaceDefaultBodyPlacement,
+    val helperOwnerPath: List<String>,
+    val helperMethodName: String,
+)
+
+/** Physical compiler-ABI binding for a Kotlin default-argument mask dispatcher. */
+data class DotNetDefaultArgumentDispatcher(
+    val ownerPath: List<String>,
+    val methodName: String,
+)
+
+enum class DotNetInterfaceDefaultPromotionView {
+    CANONICAL,
+    DECLARED,
+    EXACT,
+}
 
 /**
  * Physical CLR information paired with Kotlin's existing public [org.jetbrains.kotlin.ir.util.IdSignature].
@@ -55,8 +82,117 @@ sealed interface DotNetPhysicalDeclaration {
         override val ownerPath: List<String>,
         val methodName: String,
         val isInstance: Boolean,
-    ) : DotNetPhysicalDeclaration
+        val interfaceDefaultImplementation: DotNetInterfaceDefaultImplementation? = null,
+        val defaultArgumentDispatcher: DotNetDefaultArgumentDispatcher? = null,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            interfaceDefaultImplementation?.let { implementation ->
+                require(implementation.helperOwnerPath.isNotEmpty()) {
+                    "an interface-default helper requires a CLR owner"
+                }
+                require(implementation.helperMethodName.isNotEmpty()) {
+                    "an interface-default helper requires a CLR method name"
+                }
+            }
+            defaultArgumentDispatcher?.let { dispatcher ->
+                require(dispatcher.ownerPath.isNotEmpty()) {
+                    "a default-argument dispatcher requires a CLR owner"
+                }
+                require(dispatcher.methodName.isNotEmpty()) {
+                    "a default-argument dispatcher requires a CLR method name"
+                }
+            }
+        }
+    }
+
+    /** A DIM supplied by a derived net10 interface for an inherited helper-only default. */
+    data class InterfaceDefaultPromotion(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val inheritedLogicalMemberKey: String,
+        val physicalView: DotNetInterfaceDefaultPromotionView,
+        val inheritedAssemblyName: String,
+        val inheritedOwnerPath: List<String>,
+        val inheritedMethodName: String,
+        val implementationMethodName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "an interface-default promotion requires an owning CLR interface" }
+            require(ownerLogicalKey.isNotEmpty()) { "an interface-default promotion requires an owning logical interface" }
+            require(inheritedLogicalMemberKey.isNotEmpty()) {
+                "an interface-default promotion requires an inherited logical member"
+            }
+            require(inheritedAssemblyName.isNotEmpty()) {
+                "an interface-default promotion requires an inherited CLR assembly"
+            }
+            require(inheritedOwnerPath.isNotEmpty()) {
+                "an interface-default promotion requires an inherited CLR slot owner"
+            }
+            require(inheritedMethodName.isNotEmpty() && implementationMethodName.isNotEmpty()) {
+                "an interface-default promotion requires inherited and implementing CLR method names"
+            }
+        }
+    }
+
+    /** A final interface MethodImpl adapting one inherited split-generic physical view. */
+    data class GenericInterfaceViewBridge(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val inheritedLogicalMemberKey: String,
+        val physicalView: DotNetInterfaceDefaultPromotionView,
+        val implementationMethodName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "a generic-interface view bridge requires an owning CLR interface" }
+            require(ownerLogicalKey.isNotEmpty()) {
+                "a generic-interface view bridge requires an owning logical interface"
+            }
+            require(inheritedLogicalMemberKey.isNotEmpty()) {
+                "a generic-interface view bridge requires an inherited logical member"
+            }
+            require(implementationMethodName.isNotEmpty()) {
+                "a generic-interface view bridge requires a CLR implementation method name"
+            }
+        }
+    }
+    /** A hidden class MethodImpl emitted to make one helper-backed Kotlin default effective. */
+    data class InterfaceDefaultClassForwarder(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val inheritedLogicalMemberKey: String,
+        val physicalView: DotNetInterfaceDefaultPromotionView,
+        val implementationMethodName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "an interface-default class forwarder requires an owning CLR class" }
+            require(ownerLogicalKey.isNotEmpty()) {
+                "an interface-default class forwarder requires an owning logical class"
+            }
+            require(inheritedLogicalMemberKey.isNotEmpty()) {
+                "an interface-default class forwarder requires an inherited logical member"
+            }
+            require(implementationMethodName.isNotEmpty()) {
+                "an interface-default class forwarder requires a CLR implementation method name"
+            }
+        }
+    }
 }
+
+internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): String =
+    "P:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+internal fun DotNetPhysicalDeclaration.GenericInterfaceViewBridge.indexKey(): String =
+    "B:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+internal fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.indexKey(): String =
+    "W:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+/** One portable Kotlin/CLR binding that is absent or physically different in a platform variant. */
+data class DotNetPortablePhysicalAbiDifference(
+    val logicalKey: String,
+    val portableDeclaration: DotNetPhysicalDeclaration,
+    val platformDeclaration: DotNetPhysicalDeclaration?,
+)
 
 /** One metadata KLIB bound to its sibling CLR implementation and declaration index. */
 data class DotNetExternalLibrary(
@@ -64,16 +200,97 @@ data class DotNetExternalLibrary(
     val metadataFile: File,
     val implementationFile: File,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
+    val friendAssemblies: Set<DotNetFriendAssemblyIdentity>,
 )
+
+/** One producer-authorized CLR friend identity used by InternalsVisibleTo. */
+data class DotNetFriendAssemblyIdentity(
+    val assemblyName: String,
+    val publicKey: String? = null,
+) {
+    init {
+        require(ASSEMBLY_NAME.matches(assemblyName)) {
+            "'$assemblyName' is not a supported CLR friend assembly name"
+        }
+        require(publicKey == null || publicKey.length > PUBLIC_KEY_TOKEN_HEX_LENGTH && publicKey.matches(PUBLIC_KEY)) {
+            "friend assembly '$assemblyName' has an invalid full public key"
+        }
+    }
+
+    val displayName: String
+        get() = if (publicKey == null) assemblyName else "$assemblyName, PublicKey=$publicKey"
+
+    fun authorizes(assemblyName: String, publicKey: String? = null): Boolean =
+        this.assemblyName.equals(assemblyName, ignoreCase = true) &&
+                this.publicKey.equals(publicKey, ignoreCase = true)
+
+    companion object {
+        private val ASSEMBLY_NAME = Regex("[A-Za-z_][A-Za-z0-9_.-]*")
+        private val PUBLIC_KEY = Regex("(?:[0-9A-F]{2})+")
+        private const val PUBLIC_KEY_TOKEN_HEX_LENGTH = 16
+
+        fun parse(value: String): DotNetFriendAssemblyIdentity {
+            val components = value.split(',').map(String::trim)
+            require(components.size in 1..2 && components[0].isNotEmpty()) {
+                "expected '<assembly-name>' or '<assembly-name>, PublicKey=<full-hex-public-key>'"
+            }
+            val publicKey = components.getOrNull(1)?.let { component ->
+                val separator = component.indexOf('=')
+                require(separator > 0 && component.substring(0, separator).trim().equals("PublicKey", ignoreCase = true)) {
+                    "expected the strong-name component 'PublicKey=<full-hex-public-key>'"
+                }
+                component.substring(separator + 1).filterNot(Char::isWhitespace).uppercase()
+            }
+            return DotNetFriendAssemblyIdentity(components[0], publicKey)
+        }
+    }
+}
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "2"
+    const val ABI_VERSION = "8"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
+    const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
+    const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
+    const val PHYSICAL_NAME_GRAMMAR_VERSION = "1"
+    const val PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY = "dotnet_physical_name_grammar_version"
+    const val CURRENT_RUNTIME_SURFACE_LEVEL = 6
+    const val RUNTIME_SURFACE_LEVEL_PROPERTY = "dotnet_runtime_surface_level"
+    const val RUNTIME_SURFACE_METADATA_KEY = "Kotlin.RuntimeSurfaceLevel"
+    const val IMPLEMENTATION_SHA256_PROPERTY = "dotnet_implementation_sha256"
+    const val FRIEND_ASSEMBLIES_PROPERTY = "dotnet_friend_assembly_identities"
     const val DECLARATION_PROPERTY_PREFIX = "dotnet_decl_"
 
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
+
+    fun implementationSha256(file: File): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(file.readBytes())
+            .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+
+    /** Version-1 digest used when a physical helper name must be derived from a logical key. */
+    fun logicalIdentityDigest(logicalIdentity: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(logicalIdentity.toByteArray(Charsets.UTF_8))
+            .take(16)
+            .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+
+    fun encodeFriendAssemblies(identities: Collection<DotNetFriendAssemblyIdentity>): String =
+        identities.sortedBy { it.displayName.lowercase() }
+            .joinToString(",") { encodeText(it.displayName) }
+
+    fun decodeFriendAssemblies(value: String): Set<DotNetFriendAssemblyIdentity> = buildSet {
+        if (value.isEmpty()) return@buildSet
+        for (encodedIdentity in value.split(',')) {
+            require(encodedIdentity.isNotEmpty()) { "friend-assembly identity list contains an empty entry" }
+            val identity = DotNetFriendAssemblyIdentity.parse(decodeText(encodedIdentity))
+            require(none { existing -> existing.displayName.equals(identity.displayName, ignoreCase = true) }) {
+                "duplicate friend-assembly identity '${identity.displayName}'"
+            }
+            add(identity)
+        }
+    }
 
     fun encode(declarations: Map<String, DotNetPhysicalDeclaration>): Map<String, String> =
         declarations.toSortedMap().mapKeys { entry ->
@@ -82,9 +299,10 @@ object DotNetLibraryAbiCodec {
             val declaration = entry.value
             val fields = when (declaration) {
                 is DotNetPhysicalDeclaration.Class -> declaration.encodeFields()
-                is DotNetPhysicalDeclaration.Function ->
-                    listOf("F", if (declaration.isInstance) "1" else "0", declaration.methodName) +
-                            declaration.ownerPath
+                is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.InterfaceDefaultPromotion -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericInterfaceViewBridge -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
         }
@@ -97,25 +315,386 @@ object DotNetLibraryAbiCodec {
             val declaration = when (fields.firstOrNull()) {
                 "C" -> DotNetPhysicalDeclaration.Class(fields.drop(1).requireOwnerPath(logicalKey))
                 "GI" -> decodeGenericInterfaceClass(fields, logicalKey)
-                "F" -> {
-                    require(fields.size >= 4) { "function declaration '$logicalKey' has an incomplete CLR identity" }
-                    val isInstance = when (fields[1]) {
-                        "0" -> false
-                        "1" -> true
-                        else -> throw IllegalArgumentException(
-                            "function declaration '$logicalKey' has invalid dispatch flag '${fields[1]}'"
-                        )
-                    }
-                    require(fields[2].isNotEmpty()) { "function declaration '$logicalKey' has an empty CLR method name" }
-                    DotNetPhysicalDeclaration.Function(
-                        ownerPath = fields.drop(3).requireOwnerPath(logicalKey),
-                        methodName = fields[2],
-                        isInstance = isInstance,
-                    )
-                }
+                "F" -> decodeFunction(fields, logicalKey)
+                "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
+                "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
+                "B" -> decodeGenericInterfaceViewBridge(fields, logicalKey)
+                "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
+                "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
+                "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
                 else -> throw IllegalArgumentException("declaration '$logicalKey' has an unknown CLR identity kind")
             }
             require(put(logicalKey, declaration) == null) { "duplicate CLR declaration identity '$logicalKey'" }
+        }
+    }
+
+    /**
+     * Compares the assembly-independent physical declaration indexes of a portable library and a
+     * runtime-profile variant. A platform variant may add declarations, but every portable source
+     * declaration key must retain the same CLR owner/member binding. Hidden class-forwarder records
+     * are profile-specific dispatch facts: they may disappear when a platform DIM replaces the
+     * forwarder and are therefore not portable callable-superset requirements. The sorted result is
+     * suitable for build diagnostics and deterministic tests.
+     */
+    fun portablePhysicalAbiDifferences(
+        portableDeclarations: Map<String, DotNetPhysicalDeclaration>,
+        platformDeclarations: Map<String, DotNetPhysicalDeclaration>,
+    ): List<DotNetPortablePhysicalAbiDifference> = portableDeclarations.toSortedMap().mapNotNull { entry ->
+        if (entry.value is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder) return@mapNotNull null
+        val platformDeclaration = platformDeclarations[entry.key]
+        if (platformDeclaration != null && entry.value.isPortablePhysicalAbiCompatibleWith(platformDeclaration)) {
+            null
+        } else {
+            DotNetPortablePhysicalAbiDifference(entry.key, entry.value, platformDeclaration)
+        }
+    }
+
+    private fun DotNetPhysicalDeclaration.isPortablePhysicalAbiCompatibleWith(
+        platformDeclaration: DotNetPhysicalDeclaration,
+    ): Boolean {
+        if (this !is DotNetPhysicalDeclaration.Function || platformDeclaration !is DotNetPhysicalDeclaration.Function) {
+            return this == platformDeclaration
+        }
+        if (
+            ownerPath != platformDeclaration.ownerPath ||
+            methodName != platformDeclaration.methodName ||
+            isInstance != platformDeclaration.isInstance
+        ) {
+            return false
+        }
+        val portableDefault = interfaceDefaultImplementation
+        val platformDefault = platformDeclaration.interfaceDefaultImplementation
+        if (defaultArgumentDispatcher != platformDeclaration.defaultArgumentDispatcher) {
+            return false
+        }
+        if (portableDefault == null || platformDefault == null) return portableDefault == platformDefault
+        if (
+            portableDefault.helperOwnerPath != platformDefault.helperOwnerPath ||
+            portableDefault.helperMethodName != platformDefault.helperMethodName
+        ) {
+            return false
+        }
+        return portableDefault.bodyPlacement == DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY ||
+                platformDefault.bodyPlacement == DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER
+    }
+
+    private fun DotNetPhysicalDeclaration.Function.encodeFields(): List<String> {
+        val dispatch = if (isInstance) "1" else "0"
+        val implementation = interfaceDefaultImplementation
+        val dispatcher = defaultArgumentDispatcher
+        if (implementation == null && dispatcher == null) {
+            return listOf("F", dispatch, methodName) + ownerPath
+        }
+        if (implementation == null) {
+            checkNotNull(dispatcher)
+            return listOf(
+                "FA",
+                dispatch,
+                methodName,
+                ownerPath.size.toString(),
+                dispatcher.methodName,
+            ) + ownerPath + dispatcher.ownerPath
+        }
+        val placement = when (implementation.bodyPlacement) {
+            DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY -> "H"
+            DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER -> "D"
+        }
+        if (dispatcher == null) return listOf(
+            "FD",
+            dispatch,
+            methodName,
+            placement,
+            ownerPath.size.toString(),
+            implementation.helperMethodName,
+        ) + ownerPath + implementation.helperOwnerPath
+        return listOf(
+            "FDA",
+            dispatch,
+            methodName,
+            placement,
+            ownerPath.size.toString(),
+            implementation.helperOwnerPath.size.toString(),
+            implementation.helperMethodName,
+            dispatcher.methodName,
+        ) + ownerPath + implementation.helperOwnerPath + dispatcher.ownerPath
+    }
+
+    private fun decodeFunction(fields: List<String>, logicalKey: String): DotNetPhysicalDeclaration.Function {
+        require(fields.size >= 4) { "function declaration '$logicalKey' has an incomplete CLR identity" }
+        return DotNetPhysicalDeclaration.Function(
+            ownerPath = fields.drop(3).requireOwnerPath(logicalKey),
+            methodName = fields[2].requireMethodName(logicalKey),
+            isInstance = fields[1].decodeDispatch(logicalKey),
+        )
+    }
+
+    private fun decodeInterfaceDefaultFunction(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.Function {
+        require(fields.size >= 8) {
+            "interface-default function declaration '$logicalKey' has an incomplete CLR identity"
+        }
+        val bodyPlacement = when (fields[3]) {
+            "H" -> DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY
+            "D" -> DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER
+            else -> throw IllegalArgumentException(
+                "interface-default function declaration '$logicalKey' has invalid body placement '${fields[3]}'"
+            )
+        }
+        val ownerSize = fields[4].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && 6 + ownerSize < fields.size) {
+            "interface-default function declaration '$logicalKey' has an invalid CLR owner-path size '${fields[4]}'"
+        }
+        val ownerPath = fields.subList(6, 6 + ownerSize).requireOwnerPath(logicalKey)
+        val helperOwnerPath = fields.drop(6 + ownerSize).requireOwnerPath(logicalKey, "helper")
+        return DotNetPhysicalDeclaration.Function(
+            ownerPath = ownerPath,
+            methodName = fields[2].requireMethodName(logicalKey),
+            isInstance = fields[1].decodeDispatch(logicalKey),
+            interfaceDefaultImplementation = DotNetInterfaceDefaultImplementation(
+                bodyPlacement = bodyPlacement,
+                helperOwnerPath = helperOwnerPath,
+                helperMethodName = fields[5].requireMethodName(logicalKey, "helper"),
+            ),
+        )
+    }
+
+    private fun decodeDefaultArgumentFunction(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.Function {
+        require(fields.size >= 7) {
+            "default-argument function declaration '$logicalKey' has an incomplete CLR identity"
+        }
+        val ownerSize = fields[3].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && 5 + ownerSize < fields.size) {
+            "default-argument function declaration '$logicalKey' has an invalid CLR owner-path size '${fields[3]}'"
+        }
+        val ownerPath = fields.subList(5, 5 + ownerSize).requireOwnerPath(logicalKey)
+        val dispatcherOwnerPath = fields.drop(5 + ownerSize).requireOwnerPath(logicalKey, "default-argument dispatcher")
+        return DotNetPhysicalDeclaration.Function(
+            ownerPath = ownerPath,
+            methodName = fields[2].requireMethodName(logicalKey),
+            isInstance = fields[1].decodeDispatch(logicalKey),
+            defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
+                ownerPath = dispatcherOwnerPath,
+                methodName = fields[4].requireMethodName(logicalKey, "default-argument dispatcher"),
+            ),
+        )
+    }
+
+    private fun decodeInterfaceDefaultArgumentFunction(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.Function {
+        require(fields.size >= 11) {
+            "interface-default/default-argument function declaration '$logicalKey' has an incomplete CLR identity"
+        }
+        val bodyPlacement = when (fields[3]) {
+            "H" -> DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY
+            "D" -> DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER
+            else -> throw IllegalArgumentException(
+                "interface-default/default-argument function declaration '$logicalKey' has invalid body placement '${fields[3]}'"
+            )
+        }
+        val ownerSize = fields[4].toIntOrNull()
+        val helperOwnerSize = fields[5].toIntOrNull()
+        require(
+            ownerSize != null && ownerSize > 0 &&
+                    helperOwnerSize != null && helperOwnerSize > 0 &&
+                    8 + ownerSize + helperOwnerSize < fields.size
+        ) {
+            "interface-default/default-argument function declaration '$logicalKey' has invalid CLR owner-path sizes"
+        }
+        val ownerEnd = 8 + ownerSize
+        val helperOwnerEnd = ownerEnd + helperOwnerSize
+        val ownerPath = fields.subList(8, ownerEnd).requireOwnerPath(logicalKey)
+        val helperOwnerPath = fields.subList(ownerEnd, helperOwnerEnd).requireOwnerPath(logicalKey, "helper")
+        val dispatcherOwnerPath = fields.drop(helperOwnerEnd).requireOwnerPath(logicalKey, "default-argument dispatcher")
+        return DotNetPhysicalDeclaration.Function(
+            ownerPath = ownerPath,
+            methodName = fields[2].requireMethodName(logicalKey),
+            isInstance = fields[1].decodeDispatch(logicalKey),
+            interfaceDefaultImplementation = DotNetInterfaceDefaultImplementation(
+                bodyPlacement = bodyPlacement,
+                helperOwnerPath = helperOwnerPath,
+                helperMethodName = fields[6].requireMethodName(logicalKey, "helper"),
+            ),
+            defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
+                ownerPath = dispatcherOwnerPath,
+                methodName = fields[7].requireMethodName(logicalKey, "default-argument dispatcher"),
+            ),
+        )
+    }
+
+    private fun String.decodeDispatch(logicalKey: String): Boolean = when (this) {
+        "0" -> false
+        "1" -> true
+        else -> throw IllegalArgumentException(
+            "function declaration '$logicalKey' has invalid dispatch flag '$this'"
+        )
+    }
+
+    private fun String.requireMethodName(logicalKey: String, role: String = "CLR"): String = also {
+        require(isNotEmpty()) { "function declaration '$logicalKey' has an empty $role method name" }
+    }
+
+    private fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.encodeFields(): List<String> =
+        listOf(
+            "P",
+            when (physicalView) {
+                DotNetInterfaceDefaultPromotionView.CANONICAL -> "C"
+                DotNetInterfaceDefaultPromotionView.DECLARED -> "D"
+                DotNetInterfaceDefaultPromotionView.EXACT -> "E"
+            },
+            ownerLogicalKey,
+            inheritedLogicalMemberKey,
+            inheritedAssemblyName,
+            inheritedMethodName,
+            implementationMethodName,
+            ownerPath.size.toString(),
+            inheritedOwnerPath.size.toString(),
+        ) + ownerPath + inheritedOwnerPath
+
+    private fun decodeInterfaceDefaultPromotion(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.InterfaceDefaultPromotion {
+        require(fields.size >= 11) {
+            "interface-default promotion '$logicalKey' has an incomplete CLR identity"
+        }
+        val physicalView = when (fields[1]) {
+            "C" -> DotNetInterfaceDefaultPromotionView.CANONICAL
+            "D" -> DotNetInterfaceDefaultPromotionView.DECLARED
+            "E" -> DotNetInterfaceDefaultPromotionView.EXACT
+            else -> throw IllegalArgumentException(
+                "interface-default promotion '$logicalKey' has invalid physical view '${fields[1]}'"
+            )
+        }
+        val ownerSize = fields[7].toIntOrNull()
+        val inheritedOwnerSize = fields[8].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && inheritedOwnerSize != null && inheritedOwnerSize > 0) {
+            "interface-default promotion '$logicalKey' has invalid CLR owner-path sizes"
+        }
+        require(fields.size == 9 + ownerSize + inheritedOwnerSize) {
+            "interface-default promotion '$logicalKey' has an inconsistent CLR owner-path payload"
+        }
+        val ownerPath = fields.subList(9, 9 + ownerSize).requireOwnerPath(logicalKey, "promotion")
+        val inheritedOwnerPath = fields.drop(9 + ownerSize).requireOwnerPath(logicalKey, "inherited")
+        require(fields[2].isNotEmpty() && fields[3].isNotEmpty() && fields[4].isNotEmpty()) {
+            "interface-default promotion '$logicalKey' has an empty logical or assembly identity"
+        }
+        return DotNetPhysicalDeclaration.InterfaceDefaultPromotion(
+            ownerPath = ownerPath,
+            ownerLogicalKey = fields[2],
+            inheritedLogicalMemberKey = fields[3],
+            physicalView = physicalView,
+            inheritedAssemblyName = fields[4],
+            inheritedOwnerPath = inheritedOwnerPath,
+            inheritedMethodName = fields[5].requireMethodName(logicalKey, "inherited"),
+            implementationMethodName = fields[6].requireMethodName(logicalKey, "implementation"),
+        ).also { promotion ->
+            require(promotion.indexKey() == logicalKey) {
+                "interface-default promotion '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
+    private fun DotNetPhysicalDeclaration.GenericInterfaceViewBridge.encodeFields(): List<String> =
+        listOf(
+            "B",
+            when (physicalView) {
+                DotNetInterfaceDefaultPromotionView.CANONICAL -> "C"
+                DotNetInterfaceDefaultPromotionView.DECLARED -> "D"
+                DotNetInterfaceDefaultPromotionView.EXACT -> "E"
+            },
+            ownerLogicalKey,
+            inheritedLogicalMemberKey,
+            implementationMethodName,
+            ownerPath.size.toString(),
+        ) + ownerPath
+
+    private fun decodeGenericInterfaceViewBridge(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericInterfaceViewBridge {
+        require(fields.size >= 7) {
+            "generic-interface view bridge '$logicalKey' has an incomplete CLR identity"
+        }
+        val physicalView = when (fields[1]) {
+            "C" -> DotNetInterfaceDefaultPromotionView.CANONICAL
+            "D" -> DotNetInterfaceDefaultPromotionView.DECLARED
+            "E" -> DotNetInterfaceDefaultPromotionView.EXACT
+            else -> throw IllegalArgumentException(
+                "generic-interface view bridge '$logicalKey' has invalid physical view '${fields[1]}'"
+            )
+        }
+        val ownerSize = fields[5].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 6 + ownerSize) {
+            "generic-interface view bridge '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        require(fields[2].isNotEmpty() && fields[3].isNotEmpty()) {
+            "generic-interface view bridge '$logicalKey' has an empty logical identity"
+        }
+        return DotNetPhysicalDeclaration.GenericInterfaceViewBridge(
+            ownerPath = fields.drop(6).requireOwnerPath(logicalKey, "generic-interface view bridge"),
+            ownerLogicalKey = fields[2],
+            inheritedLogicalMemberKey = fields[3],
+            physicalView = physicalView,
+            implementationMethodName = fields[4].requireMethodName(logicalKey, "implementation"),
+        ).also { bridge ->
+            require(bridge.indexKey() == logicalKey) {
+                "generic-interface view bridge '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+    private fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.encodeFields(): List<String> =
+        listOf(
+            "W",
+            when (physicalView) {
+                DotNetInterfaceDefaultPromotionView.CANONICAL -> "C"
+                DotNetInterfaceDefaultPromotionView.DECLARED -> "D"
+                DotNetInterfaceDefaultPromotionView.EXACT -> "E"
+            },
+            ownerLogicalKey,
+            inheritedLogicalMemberKey,
+            implementationMethodName,
+            ownerPath.size.toString(),
+        ) + ownerPath
+
+    private fun decodeInterfaceDefaultClassForwarder(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder {
+        require(fields.size >= 7) {
+            "interface-default class forwarder '$logicalKey' has an incomplete CLR identity"
+        }
+        val physicalView = when (fields[1]) {
+            "C" -> DotNetInterfaceDefaultPromotionView.CANONICAL
+            "D" -> DotNetInterfaceDefaultPromotionView.DECLARED
+            "E" -> DotNetInterfaceDefaultPromotionView.EXACT
+            else -> throw IllegalArgumentException(
+                "interface-default class forwarder '$logicalKey' has invalid physical view '${fields[1]}'"
+            )
+        }
+        val ownerSize = fields[5].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 6 + ownerSize) {
+            "interface-default class forwarder '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        require(fields[2].isNotEmpty() && fields[3].isNotEmpty()) {
+            "interface-default class forwarder '$logicalKey' has an empty logical identity"
+        }
+        return DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder(
+            ownerPath = fields.drop(6).requireOwnerPath(logicalKey, "class forwarder"),
+            ownerLogicalKey = fields[2],
+            inheritedLogicalMemberKey = fields[3],
+            physicalView = physicalView,
+            implementationMethodName = fields[4].requireMethodName(logicalKey, "implementation"),
+        ).also { forwarder ->
+            require(forwarder.indexKey() == logicalKey) {
+                "interface-default class forwarder '$logicalKey' is inconsistent with its structured identity"
+            }
         }
     }
 
@@ -191,6 +770,67 @@ private fun IrDeclaration.computeDotNetLibraryAbiKeyOrNull(
 }
 
 /**
+ * Captures the public logical declarations which need a CLR binding before backend lowerings can
+ * mutate signatures or introduce synthetic declarations. KLIB remains the authority for which
+ * declarations are visible; this set is only the linkage domain that must be covered by the
+ * companion physical index.
+ *
+ * Type aliases and const accessors intentionally have no physical entry. Compiler-intrinsic
+ * declarations and mapped exception stubs are likewise resolved by target-owned mappings rather
+ * than by a member in the produced assembly.
+ */
+internal fun collectDotNetMetadataLinkageKeys(
+    moduleFragment: IrModuleFragment,
+    emissionScope: DotNetIlEmissionScope,
+    isIntrinsicDeclaration: (IrSimpleFunction) -> Boolean,
+): Map<IrDeclaration, String> = buildMap {
+    val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+
+    fun addFunction(function: IrSimpleFunction) {
+        if (function.isFakeOverride || isIntrinsicDeclaration(function)) return
+        if (!with(DotNetIrMangler) { function.isExported(compatibleMode = false) }) return
+        function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)?.let { key -> put(function, key) }
+    }
+
+    fun addProperty(property: IrProperty) {
+        if (property.isConst) return
+        val accessors = listOfNotNull(property.getter, property.setter)
+        if (accessors.any(isIntrinsicDeclaration)) return
+        accessors.forEach(::addFunction)
+    }
+
+    fun addClass(irClass: IrClass) {
+        if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) return
+        if (with(DotNetIrMangler) { irClass.isExported(compatibleMode = false) }) {
+            irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)?.let { key -> put(irClass, key) }
+        }
+        for (declaration in irClass.declarations) {
+            when (declaration) {
+                is IrClass -> addClass(declaration)
+                is IrSimpleFunction -> addFunction(declaration)
+                is IrProperty -> addProperty(declaration)
+                else -> {}
+            }
+        }
+    }
+
+    val files = when (emissionScope) {
+        DotNetIlEmissionScope.USER -> moduleFragment.files
+        DotNetIlEmissionScope.STDLIB -> moduleFragment.files.filter(IrFile::isDotNetStdlibImplementationSource)
+    }
+    for (file in files) {
+        for (declaration in file.declarations) {
+            when (declaration) {
+                is IrClass -> if (emissionScope.owns(declaration)) addClass(declaration)
+                is IrSimpleFunction -> if (emissionScope.owns(declaration)) addFunction(declaration)
+                is IrProperty -> if (emissionScope.owns(declaration)) addProperty(declaration)
+                else -> {}
+            }
+        }
+    }
+}
+
+/**
  * Stable identity suffix for one logical generic-interface slot.
  *
  * Public declarations use the same Kotlin [org.jetbrains.kotlin.ir.util.IdSignature] that keys
@@ -216,16 +856,40 @@ internal fun IrSimpleFunction.dotNetGenericInterfaceCanonicalSlotId(): String {
         append("->")
         append(returnType.render())
     }
-    val digest = MessageDigest.getInstance("SHA-256")
-        .digest(logicalIdentity.toByteArray(Charsets.UTF_8))
-        .take(16)
-        .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+    val digest = DotNetLibraryAbiCodec.logicalIdentityDigest(logicalIdentity)
     return digest
 }
 
 /** Reserved physical name of a canonical erased slot; typed capabilities keep the source name. */
 internal fun IrSimpleFunction.dotNetGenericInterfaceCanonicalMethodName(): String =
     "${dotNetIlMethodName()}__KotlinErased__${dotNetGenericInterfaceCanonicalSlotId()}"
+
+internal data class DotNetBoundInterfaceDefaultImplementation(
+    val library: DotNetExternalLibrary,
+    val function: DotNetPhysicalDeclaration.Function,
+    val implementation: DotNetInterfaceDefaultImplementation,
+)
+
+internal data class DotNetBoundDefaultArgumentDispatcher(
+    val library: DotNetExternalLibrary,
+    val function: DotNetPhysicalDeclaration.Function,
+    val dispatcher: DotNetDefaultArgumentDispatcher,
+)
+
+internal data class DotNetBoundInterfaceDefaultPromotion(
+    val library: DotNetExternalLibrary,
+    val promotion: DotNetPhysicalDeclaration.InterfaceDefaultPromotion,
+)
+
+internal data class DotNetBoundGenericInterfaceViewBridge(
+    val library: DotNetExternalLibrary,
+    val bridge: DotNetPhysicalDeclaration.GenericInterfaceViewBridge,
+)
+
+internal data class DotNetBoundInterfaceDefaultClassForwarder(
+    val library: DotNetExternalLibrary,
+    val forwarder: DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder,
+)
 
 /**
  * Resolves metadata-deserialized declarations through the bound physical identities of their
@@ -256,6 +920,19 @@ internal class DotNetExternalDeclarations(
     private val classLinksInProgress = hashSetOf<String>()
     private val facadeInfoByPhysicalIdentity = hashMapOf<Pair<String, List<String>>, DotNetIlClassInfo>()
     private val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+
+    /**
+     * Whether [irClass] has a producer-recorded physical CLR class in a bound library.
+     *
+     * This is intentionally distinct from [declaredClassInfoOrNull]: an ordinary non-generic
+     * class has only its canonical physical view, while a split generic interface can also have
+     * a declared typed capability. Shape gates that merely authorize an external base or
+     * interface must test declaration membership, not the presence of that optional capability.
+     */
+    fun hasClass(irClass: IrClass): Boolean {
+        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return false
+        return declarations[logicalKey]?.declaration is DotNetPhysicalDeclaration.Class
+    }
 
     fun classInfoOrNull(irClass: IrClass, typeMapper: DotNetIlTypeMapper): DotNetIlClassInfo? {
         val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
@@ -336,6 +1013,120 @@ internal class DotNetExternalDeclarations(
         return DotNetIlFunctionInfo(owner, signature, declaration.methodName)
     }
 
+    fun interfaceDefaultImplementationOrNull(
+        function: IrSimpleFunction,
+    ): DotNetBoundInterfaceDefaultImplementation? {
+        val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
+        val implementation = declaration.interfaceDefaultImplementation ?: return null
+        return DotNetBoundInterfaceDefaultImplementation(bound.library, declaration, implementation)
+    }
+
+    fun defaultArgumentDispatcherOrNull(
+        function: IrSimpleFunction,
+    ): DotNetBoundDefaultArgumentDispatcher? {
+        val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val bound = declarations[logicalKey] ?: return null
+        val declaration = bound.declaration as? DotNetPhysicalDeclaration.Function ?: return null
+        val dispatcher = declaration.defaultArgumentDispatcher ?: return null
+        return DotNetBoundDefaultArgumentDispatcher(bound.library, declaration, dispatcher)
+    }
+
+    fun interfaceDefaultPromotionOrNull(
+        owner: IrClass,
+        inheritedMember: IrSimpleFunction,
+        physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+    ): DotNetBoundInterfaceDefaultPromotion? {
+        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val indexKey = "P:$ownerLogicalKey:$memberLogicalKey:${physicalView.name}"
+        val bound = declarations[indexKey] ?: return null
+        val promotion = bound.declaration as? DotNetPhysicalDeclaration.InterfaceDefaultPromotion ?: return null
+        require(promotion.ownerLogicalKey == ownerLogicalKey &&
+                promotion.inheritedLogicalMemberKey == memberLogicalKey &&
+                promotion.physicalView == physicalView) {
+            "external interface-default promotion '$indexKey' is internally inconsistent"
+        }
+        return DotNetBoundInterfaceDefaultPromotion(bound.library, promotion)
+    }
+
+    fun genericInterfaceViewBridgeOrNull(
+        owner: IrClass,
+        inheritedMember: IrSimpleFunction,
+        physicalView: DotNetInterfaceDefaultPromotionView,
+    ): DotNetBoundGenericInterfaceViewBridge? {
+        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val indexKey = "B:$ownerLogicalKey:$memberLogicalKey:${physicalView.name}"
+        val bound = declarations[indexKey] ?: return null
+        val bridge = bound.declaration as? DotNetPhysicalDeclaration.GenericInterfaceViewBridge ?: return null
+        require(
+            bridge.ownerLogicalKey == ownerLogicalKey &&
+                    bridge.inheritedLogicalMemberKey == memberLogicalKey &&
+                    bridge.physicalView == physicalView
+        ) {
+            "external generic-interface view bridge '$indexKey' is internally inconsistent"
+        }
+        return DotNetBoundGenericInterfaceViewBridge(bound.library, bridge)
+    }
+
+    fun interfaceDefaultClassForwarderOrNull(
+        owner: IrClass,
+        inheritedMember: IrSimpleFunction,
+        physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+    ): DotNetBoundInterfaceDefaultClassForwarder? {
+        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val indexKey = "W:$ownerLogicalKey:$memberLogicalKey:${physicalView.name}"
+        val bound = declarations[indexKey] ?: return null
+        val forwarder = bound.declaration as? DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder ?: return null
+        require(
+            forwarder.ownerLogicalKey == ownerLogicalKey &&
+                    forwarder.inheritedLogicalMemberKey == memberLogicalKey &&
+                    forwarder.physicalView == physicalView
+        ) {
+            "external interface-default class forwarder '$indexKey' is internally inconsistent"
+        }
+        return DotNetBoundInterfaceDefaultClassForwarder(bound.library, forwarder)
+    }
+
+    fun interfaceDefaultHelperFunctionInfo(
+        helper: IrSimpleFunction,
+        binding: DotNetBoundInterfaceDefaultImplementation,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "interface-default helper binding belongs to an unbound external library"
+        }
+        val owner = buildClassInfo(
+            binding.library.artifact.assemblyName,
+            binding.implementation.helperOwnerPath,
+            emptyList(),
+        )
+        val signature = helper.dotNetSignature(typeMapper)
+        require(!signature.hasThis) { "an interface-default compatibility helper must be static" }
+        return DotNetIlFunctionInfo(owner, signature, binding.implementation.helperMethodName)
+    }
+
+    fun defaultArgumentDispatcherFunctionInfo(
+        helper: IrSimpleFunction,
+        binding: DotNetBoundDefaultArgumentDispatcher,
+        typeMapper: DotNetIlTypeMapper,
+    ): DotNetIlFunctionInfo {
+        require(binding.library in libraries) {
+            "default-argument dispatcher binding belongs to an unbound external library"
+        }
+        val owner = buildClassInfo(
+            binding.library.artifact.assemblyName,
+            binding.dispatcher.ownerPath,
+            emptyList(),
+        )
+        val signature = helper.dotNetSignature(typeMapper)
+        require(!signature.hasThis) { "a default-argument dispatcher must be static" }
+        return DotNetIlFunctionInfo(owner, signature, binding.dispatcher.methodName)
+    }
+
     private fun buildClassInfo(
         assemblyName: String,
         ownerPath: List<String>,
@@ -363,13 +1154,33 @@ internal fun collectDotNetLibraryDeclarations(
     availableClasses: Map<IrClass, DotNetIlClassInfo>,
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
+    preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
+    interfaceDefaultImplementations: Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
+    interfaceDefaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    interfaceDefaultPromotions: List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
+    genericInterfaceViewBridges: List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
+    interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
 ): Map<String, DotNetPhysicalDeclaration> = buildMap {
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
+    val interfaceCompilerAbiFunctions = buildSet {
+        interfaceDefaultImplementations.values.mapTo(this) { it.helper }
+        interfaceDefaultArgumentDispatchers.values.toCollection(this)
+    }
+    val genericInterfaceViewBridgeFunctions =
+        genericInterfaceViewBridges.mapTo(hashSetOf()) { it.implementation }
+    val interfaceDefaultClassForwarderFunctions =
+        interfaceDefaultClassForwarders.mapTo(hashSetOf()) { it.implementation }
+    val interfaceCompilerAbiClasses = interfaceCompilerAbiFunctions.mapNotNullTo(hashSetOf()) { function ->
+        function.parent as? IrClass
+    }
     for (entry in availableClasses) {
         val irClass = entry.key
         val classInfo = entry.value
+        if (irClass in interfaceCompilerAbiClasses) continue
         if (irClass.fileOrNull !in files || irClass.isOriginallyLocalDeclaration) continue
-        val logicalKey = irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: continue
+        val logicalKey = preLoweringDeclarationKeys[irClass]
+            ?: irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
+            ?: continue
         val genericInterface = genericInterfaces[irClass]
         if (genericInterface == null) {
             put(logicalKey, DotNetPhysicalDeclaration.Class(classInfo.physicalPathComponents()))
@@ -391,15 +1202,117 @@ internal fun collectDotNetLibraryDeclarations(
     for (entry in availableFunctions) {
         val function = entry.key
         val functionInfo = entry.value
+        if (function in interfaceCompilerAbiFunctions || function in genericInterfaceViewBridgeFunctions ||
+            function in interfaceDefaultClassForwarderFunctions
+        ) {
+            continue
+        }
         if (function.fileOrNull !in files || function.isOriginallyLocalDeclaration || function.isFakeOverride) continue
-        val logicalKey = function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: continue
+        val logicalKey = preLoweringDeclarationKeys[function]
+            ?: function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+            ?: continue
+        val interfaceDefaultImplementation = interfaceDefaultImplementations[function]?.let { lowered ->
+            val helperInfo = availableFunctions[lowered.helper]
+                ?: error(
+                    "Internal .NET backend error: interface-default helper for '${function.render()}' " +
+                            "did not survive physical emission"
+                )
+            DotNetInterfaceDefaultImplementation(
+                bodyPlacement = lowered.bodyPlacement,
+                helperOwnerPath = helperInfo.owner.physicalPathComponents(),
+                helperMethodName = helperInfo.physicalMethodName ?: lowered.helper.dotNetIlMethodName(),
+            )
+        }
+        val defaultArgumentDispatcher = interfaceDefaultArgumentDispatchers[function]?.let { dispatcher ->
+            val dispatcherInfo = availableFunctions[dispatcher]
+                ?: error(
+                    "Internal .NET backend error: default-argument dispatcher for '${function.render()}' " +
+                            "did not survive physical emission"
+                )
+            DotNetDefaultArgumentDispatcher(
+                ownerPath = dispatcherInfo.owner.physicalPathComponents(),
+                methodName = dispatcherInfo.physicalMethodName ?: dispatcher.dotNetIlMethodName(),
+            )
+        }
         put(
             logicalKey,
             DotNetPhysicalDeclaration.Function(
                 ownerPath = functionInfo.owner.physicalPathComponents(),
                 methodName = functionInfo.physicalMethodName ?: function.dotNetIlMethodName(),
                 isInstance = functionInfo.isInstance,
+                interfaceDefaultImplementation = interfaceDefaultImplementation,
+                defaultArgumentDispatcher = defaultArgumentDispatcher,
             )
         )
+    }
+    for (promotion in interfaceDefaultPromotions) {
+        val ownerInfo = availableClasses[promotion.owner] ?: continue
+        val implementationInfo = availableFunctions[promotion.implementation]
+            ?: error(
+                "Internal .NET backend error: interface-default promotion implementation for " +
+                        "'${promotion.inheritedMember.render()}' did not survive physical emission"
+            )
+        val ownerLogicalKey = preLoweringDeclarationKeys[promotion.owner]
+            ?: promotion.owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
+            ?: error("Internal .NET backend error: interface-default promotion owner has no logical identity")
+        val inheritedLogicalKey = promotion.inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+            ?: error("Internal .NET backend error: promoted interface member has no logical identity")
+        val inheritedFunction = promotion.inheritedDefault.function
+        val declaration = DotNetPhysicalDeclaration.InterfaceDefaultPromotion(
+            ownerPath = ownerInfo.physicalPathComponents(),
+            ownerLogicalKey = ownerLogicalKey,
+            inheritedLogicalMemberKey = inheritedLogicalKey,
+            physicalView = promotion.physicalView,
+            inheritedAssemblyName = promotion.inheritedDefault.library.artifact.assemblyName,
+            inheritedOwnerPath = inheritedFunction.ownerPath,
+            inheritedMethodName = inheritedFunction.methodName,
+            implementationMethodName = implementationInfo.physicalMethodName
+                ?: promotion.implementation.dotNetIlMethodName(),
+        )
+        put(declaration.indexKey(), declaration)
+    }
+    for (bridge in genericInterfaceViewBridges) {
+        val ownerInfo = availableClasses[bridge.owner] ?: continue
+        val implementationInfo = availableFunctions[bridge.implementation]
+            ?: error(
+                "Internal .NET backend error: generic-interface view bridge for " +
+                        "'${bridge.inheritedMember.render()}' did not survive physical emission"
+            )
+        val ownerLogicalKey = preLoweringDeclarationKeys[bridge.owner]
+            ?: bridge.owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
+            ?: error("Internal .NET backend error: generic-interface view bridge owner has no logical identity")
+        val inheritedLogicalKey = bridge.inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+            ?: error("Internal .NET backend error: bridged generic-interface member has no logical identity")
+        val declaration = DotNetPhysicalDeclaration.GenericInterfaceViewBridge(
+            ownerPath = ownerInfo.physicalPathComponents(),
+            ownerLogicalKey = ownerLogicalKey,
+            inheritedLogicalMemberKey = inheritedLogicalKey,
+            physicalView = bridge.physicalView,
+            implementationMethodName = implementationInfo.physicalMethodName
+                ?: bridge.implementation.dotNetIlMethodName(),
+        )
+        put(declaration.indexKey(), declaration)
+    }
+    for (forwarder in interfaceDefaultClassForwarders) {
+        val ownerInfo = availableClasses[forwarder.owner] ?: continue
+        val implementationInfo = availableFunctions[forwarder.implementation]
+            ?: error(
+                "Internal .NET backend error: interface-default class forwarder for " +
+                        "'${forwarder.inheritedMember.render()}' did not survive physical emission"
+            )
+        val ownerLogicalKey = preLoweringDeclarationKeys[forwarder.owner]
+            ?: forwarder.owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
+            ?: continue
+        val inheritedLogicalKey = forwarder.inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+            ?: continue
+        val declaration = DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder(
+            ownerPath = ownerInfo.physicalPathComponents(),
+            ownerLogicalKey = ownerLogicalKey,
+            inheritedLogicalMemberKey = inheritedLogicalKey,
+            physicalView = forwarder.physicalView,
+            implementationMethodName = implementationInfo.physicalMethodName
+                ?: forwarder.implementation.dotNetIlMethodName(),
+        )
+        put(declaration.indexKey(), declaration)
     }
 }

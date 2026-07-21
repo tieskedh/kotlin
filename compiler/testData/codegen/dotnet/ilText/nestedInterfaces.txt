@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'nestedInterfaces' {}
 .module 'main-nestedInterfaces.il'
 
@@ -30,7 +34,7 @@
       stfld int32 'ClassInterfaceHost'/'Implementation'::'stored'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_stored'() cil managed
+    .method private hidebysig specialname instance int32 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -121,11 +125,18 @@
     .class nested public interface abstract auto ansi 'NestedContract'
     {
     }
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'CompanionInterfaceHost'/'Companion'::.ctor()
       ret
     }
   }
@@ -133,7 +144,8 @@
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'CompanionInterfaceHost'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'CompanionInterfaceHost'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'CompanionInterfaceHost'/'Companion' 'CompanionInterfaceHost'::'Companion'
     ret
   }
@@ -162,7 +174,7 @@
       stfld int32 'InterfaceDeclarationHost'/'Implementation'::'stored'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_stored'() cil managed
+    .method private hidebysig specialname instance int32 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -215,7 +227,7 @@
       stfld !0 class 'InterfaceDeclarationHost'/'ProducerImplementation`1'<!0>::'stored'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_stored'() cil managed
+    .method private hidebysig specialname instance !0 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -300,7 +312,7 @@
          extends [mscorlib]System.Object
   {
     .field private int32 'initialized'
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 2
       ldarg.0
@@ -324,6 +336,13 @@
       newobj instance void 'InterfaceDeclarationHost'/'Implementation'::.ctor(int32)
       ret
     }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'InterfaceDeclarationHost'/'Companion'::.ctor()
+      ret
+    }
     .property instance int32 'initialized'()
     {
       .get instance int32 'InterfaceDeclarationHost'/'Companion'::'get_initialized'()
@@ -333,7 +352,8 @@
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'InterfaceDeclarationHost'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'InterfaceDeclarationHost'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'InterfaceDeclarationHost'/'Companion' 'InterfaceDeclarationHost'::'Companion'
     ret
   }
@@ -368,7 +388,7 @@
       stfld !0 class 'GenericInterfaceDeclarationHost'/'IndependentImplementation`1'<!0>::'stored'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_stored'() cil managed
+    .method private hidebysig specialname instance !0 'get_stored'() cil managed
     {
       .maxstack 1
       ldarg.0

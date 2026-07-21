@@ -443,45 +443,66 @@ val distKotlinc = distTask<Sync>("distKotlinc") {
     }
 }
 
-// The .NET target stdlib remains opt-in while its portable PE writer is an external modern
-// ILAsm. Run the compiler from the assembled distribution: cli-dotnet's project runtime
+// The .NET target stdlib variants remain opt-in while their PE writers are external ILAsm tools.
+// Run the compiler from the assembled distribution: cli-dotnet's project runtime
 // classpath intentionally leaves several host dependencies compile-only, while the distribution
 // owns the complete executable compiler classpath.
-val dotNetStdlibOutputDirectory = layout.buildDirectory.dir("dotnet-stdlib/netstandard2.0")
-val dotNetStdlibKlib = dotNetStdlibOutputDirectory.map { it.file("Kotlin.Stdlib.klib") }
-val dotNetStdlibDll = dotNetStdlibOutputDirectory.map { it.file("Kotlin.Stdlib.dll") }
-val dotNetStdlibIl = dotNetStdlibOutputDirectory.map { it.file("Kotlin.Stdlib.il") }
+val dotNetStdlibProfiles = linkedMapOf(
+    "net48" to "Net48",
+    "netstandard2.0" to "NetStandard20",
+    "net10.0" to "Net100",
+)
+val dotNetStdlibOutputDirectories = dotNetStdlibProfiles.keys.associateWith { targetFramework ->
+    layout.buildDirectory.dir("dotnet-stdlib/$targetFramework")
+}
+val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, taskSuffix) ->
+    val outputDirectory = dotNetStdlibOutputDirectories.getValue(targetFramework)
+    tasks.register<JavaExec>("produceDotNetStdlib$taskSuffix") {
+        group = "distribution"
+        description = "Produces the experimental $targetFramework Kotlin/.NET stdlib KLIB/DLL pair."
+        dependsOn(distKotlinc)
 
-val produceDotNetStdlib = tasks.register<JavaExec>("produceDotNetStdlib") {
-    group = "distribution"
-    description = "Produces the experimental bound Kotlin/.NET stdlib KLIB/DLL pair."
-    dependsOn(distKotlinc)
+        classpath = fileTree(File("$distDir/kotlinc/lib")) {
+            include("*.jar")
+        }
+        mainClass.set("org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler")
+        workingDir = rootDir
+        maxHeapSize = "2g"
+        args(
+            "-Xdotnet-produce-stdlib",
+            "-Xdotnet-target=$targetFramework",
+            "-d", outputDirectory.get().asFile.absolutePath,
+        )
 
-    classpath = fileTree(File("$distDir/kotlinc/lib")) {
-        include("*.jar")
+        outputs.files(
+            outputDirectory.map { it.file("Kotlin.Stdlib.klib") },
+            outputDirectory.map { it.file("Kotlin.Stdlib.dll") },
+            outputDirectory.map { it.file("Kotlin.Stdlib.il") },
+        )
     }
-    mainClass.set("org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler")
-    workingDir = rootDir
-    maxHeapSize = "2g"
-    args(
-        "-Xdotnet-produce-stdlib",
-        "-d", dotNetStdlibOutputDirectory.get().asFile.absolutePath,
-    )
-
-    outputs.files(dotNetStdlibKlib, dotNetStdlibDll, dotNetStdlibIl)
 }
 
-// `distKotlinc` is a Sync over the complete Kotlin home and therefore intentionally removes an
-// optional pair installed by an earlier invocation. This task always runs after that Sync and can
-// be invoked again to restore the opt-in product; ordinary distribution builds never depend on it.
+val produceDotNetStdlib = tasks.register("produceDotNetStdlib") {
+    group = "distribution"
+    description = "Produces all experimental Kotlin/.NET stdlib profile variants."
+    dependsOn(produceDotNetStdlibVariants)
+}
+
+// `distKotlinc` is a Sync over the complete Kotlin home and therefore intentionally removes
+// optional variants installed by an earlier invocation. This task always runs after that Sync and
+// can be invoked again to restore the opt-in products; ordinary distribution builds never depend
+// on it.
 val installDotNetStdlib = tasks.register<Sync>("installDotNetStdlib") {
     group = "distribution"
-    description = "Installs the experimental Kotlin/.NET stdlib pair into the Kotlin distribution."
+    description = "Installs all experimental Kotlin/.NET stdlib variants into the Kotlin distribution."
     dependsOn(produceDotNetStdlib)
-    from(dotNetStdlibOutputDirectory) {
-        include("Kotlin.Stdlib.klib", "Kotlin.Stdlib.dll")
+    dotNetStdlibOutputDirectories.forEach { (targetFramework, outputDirectory) ->
+        from(outputDirectory) {
+            include("Kotlin.Stdlib.klib", "Kotlin.Stdlib.dll")
+            into(targetFramework)
+        }
     }
-    into(File("$distDir/kotlinc/lib/dotnet/netstandard2.0"))
+    into(File("$distDir/kotlinc/lib/dotnet"))
     duplicatesStrategy = DuplicatesStrategy.FAIL
 }
 

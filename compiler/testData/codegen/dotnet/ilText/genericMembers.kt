@@ -25,6 +25,10 @@ class MemberHost<C>(val captured: C) {
     fun <M : Marked> labelOf(value: M): String = value.label()
 }
 
+class TypeParameterBoundMember<C> {
+    fun <T : C> use(value: T): T = value
+}
+
 interface GenericPicker<C> {
     fun <M> pick(context: C, value: M): M
 }
@@ -95,6 +99,7 @@ fun main() {
     println(host.wrap(11).captured)
     println(host.read(MemberHost("read")))
     println(host.labelOf(MarkedValue("marked")))
+    println(TypeParameterBoundMember<Marked>().use(MarkedValue("owner-bound")).label())
     println(childPick(Picker()))
     val intPicker: ChildPicker<Int> = Picker()
     println(intPicker.pick(1, "value-owner"))

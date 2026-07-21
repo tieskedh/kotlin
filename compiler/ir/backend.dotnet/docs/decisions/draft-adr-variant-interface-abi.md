@@ -554,11 +554,26 @@ to one source body. C# tooling should eventually offer a generated base/adapter 
 make the rule easy to satisfy; until then, inconsistent results are a foreign contract breach in
 the same sense as an ordinary C# implementation violating any Kotlin interface invariant.
 
-This ABI does not depend on CLR default interface methods. Until a compiler-owned static-helper
-plus class-forwarder lowering is implemented for Kotlin interface bodies, a body-bearing shape is
-rejected before IL emission. Once implemented, the canonical, declared, and operation slots remain
-ordinary abstract interface contracts; the helper body and generated concrete-class forwarder
-supply Kotlin's default behavior on the .NET Framework 4.8 floor.
+Default-body placement is owned by the accepted
+[`adr-profile-aware-interface-default-implementations.md`](adr-profile-aware-interface-default-implementations.md).
+Every generic default has one canonical semantic body and one stable helper ABI identity. On
+`net48` and `netstandard2.0`, the helper owns the moved body while canonical, declared, and
+operation slots remain abstract; class and view methods are forwarding or representation adapters
+only. On `net10.0`, one strongly typed DIM owns the body. The complete exact view is the normal
+strongly typed C# surface and reaches that DIM without an erased-result cast. Declared-variance
+and erased views virtually adapt to the canonical typed slot, with explicit `MethodImpl` mappings
+where their physical slots differ. The retained helper selects the canonical DIM nonvirtually for
+qualified-super calls, compatibility, and portable-default promotion. No view, promotion, class
+bridge, or implementing-class forwarder contains another lowered copy of the Kotlin body.
+
+Logical method bounds remain in Kotlin metadata. A method constraint which depends on an owner
+parameter of a split Kotlin generic interface is omitted from executable CLR method metadata:
+placing it on a variant declared view load-poisons that CLR interface, while placing it only on an
+invariant exact DIM rejects valid Kotlin calls through widened variance views. Arguments and
+results remain exact; this narrowly weakens only the unrepresentable physical constraint. A future
+C# export facade may restate such a constraint for ergonomics, but cannot become the Kotlin
+dispatch slot. All other representable constraints remain physical. Kotlin override resolution
+remains authoritative in every profile.
 
 ## Cross-module ABI metadata
 
@@ -572,6 +587,8 @@ interface record includes:
 - declared generic view and variance vector;
 - complete and minimal operation capability identities;
 - logical-member ABI key to canonical/typed physical slot mappings;
+- inherited final view-adapter bundles on derived non-generic interfaces, keyed by owning logical
+  interface, inherited logical member, and physical view;
 - capability type-parameter index mappings;
 - logical override-group identities and emitted declared-superview edges;
 - erased bridge behavior, including any special type-safe barrier policy; and

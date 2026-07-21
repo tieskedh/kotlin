@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'interfaceRedeclarations' {}
 .module 'main-interfaceRedeclarations.il'
 
@@ -146,7 +150,7 @@
     stfld int32 'ViewImpl'::'count'
     ret
   }
-  .method public hidebysig specialname instance string 'get_item'() cil managed
+  .method private hidebysig specialname instance string 'get_item'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -638,32 +642,38 @@
       [18] string '<genericInterfaceResult>@18',
       [19] class 'BaseView' '<genericInterfaceReceiver>@19',
       [20] class 'BaseView`1'<string> '<genericInterfaceCapability>@20',
-      [21] class 'RedeclaredView' '<genericInterfaceReceiver>@21',
-      [22] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@22',
-      [23] int32 '<genericInterfaceResult>@23',
-      [24] class 'RedeclaredView' '<genericInterfaceReceiver>@24',
-      [25] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@25',
-      [26] class 'PairImpl' 'pair',
-      [27] class 'PairView' 'pairBase',
-      [28] class 'Swapped' 'swapped',
-      [29] class 'PairView' '<genericInterfaceReceiver>@29',
-      [30] class 'PairView`2'<string, int32> '<genericInterfaceCapability>@30',
-      [31] string '<genericInterfaceResult>@31',
-      [32] class 'PairView' '<genericInterfaceReceiver>@32',
-      [33] class 'PairView`2'<string, int32> '<genericInterfaceCapability>@33',
-      [34] int32 '<genericInterfaceResult>@34',
-      [35] class 'Swapped' '<genericInterfaceReceiver>@35',
-      [36] class 'Swapped`2'<int32, string> '<genericInterfaceCapability>@36',
+      [21] string '<genericInterfaceResult>@21',
+      [22] class 'RedeclaredView' '<genericInterfaceReceiver>@22',
+      [23] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@23',
+      [24] int32 '<genericInterfaceResult>@24',
+      [25] class 'BaseView' '<genericInterfaceReceiver>@25',
+      [26] class 'BaseView`1'<string> '<genericInterfaceCapability>@26',
+      [27] class 'RedeclaredView' '<genericInterfaceReceiver>@27',
+      [28] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@28',
+      [29] int32 '<genericInterfaceResult>@29',
+      [30] class 'RedeclaredView' '<genericInterfaceReceiver>@30',
+      [31] class 'RedeclaredView`1'<string> '<genericInterfaceCapability>@31',
+      [32] class 'PairImpl' 'pair',
+      [33] class 'PairView' 'pairBase',
+      [34] class 'Swapped' 'swapped',
+      [35] class 'PairView' '<genericInterfaceReceiver>@35',
+      [36] class 'PairView`2'<string, int32> '<genericInterfaceCapability>@36',
       [37] string '<genericInterfaceResult>@37',
-      [38] class 'Swapped' '<genericInterfaceReceiver>@38',
-      [39] class 'Swapped`2'<int32, string> '<genericInterfaceCapability>@39',
+      [38] class 'PairView' '<genericInterfaceReceiver>@38',
+      [39] class 'PairView`2'<string, int32> '<genericInterfaceCapability>@39',
       [40] int32 '<genericInterfaceResult>@40',
-      [41] class 'Node' 'node',
-      [42] class 'Root' 'root',
-      [43] class 'Left' 'left',
-      [44] class 'Right' 'right',
-      [45] class 'Diamond' 'diamond',
-      [46] class 'RedeclaredAction' 'action'
+      [41] class 'Swapped' '<genericInterfaceReceiver>@41',
+      [42] class 'Swapped`2'<int32, string> '<genericInterfaceCapability>@42',
+      [43] string '<genericInterfaceResult>@43',
+      [44] class 'Swapped' '<genericInterfaceReceiver>@44',
+      [45] class 'Swapped`2'<int32, string> '<genericInterfaceCapability>@45',
+      [46] int32 '<genericInterfaceResult>@46',
+      [47] class 'Node' 'node',
+      [48] class 'Root' 'root',
+      [49] class 'Left' 'left',
+      [50] class 'Right' 'right',
+      [51] class 'Diamond' 'diamond',
+      [52] class 'RedeclaredAction' 'action'
     )
     ldstr "item"
     ldc.i4 1
@@ -772,12 +782,44 @@ IL_genericInterfaceJoin_9:
     callvirt instance string 'RedeclaredView'::'get_label__KotlinErased__653f1b6b82573dfbe082de580ddc4b5f'()
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
+    stloc 19
+    ldloc 19
+    isinst class 'BaseView`1'<string>
+    stloc 20
+    ldloc 20
+    brfalse IL_genericInterfaceErasedFallback_10
+    ldloc 20
+    ldstr "base-echo"
+    callvirt instance !!0 class 'BaseView`1'<string>::'echo'<string>(!!0)
+    stloc 21
+    br IL_genericInterfaceJoin_11
+IL_genericInterfaceErasedFallback_10:
+    ldloc 19
     ldstr "base-echo"
     callvirt instance !!0 'BaseView'::'echo__KotlinErased__59e18f1f0aa7b5e92ba76edd87bbf3b6'<string>(!!0)
+    stloc 21
+IL_genericInterfaceJoin_11:
+    ldloc 21
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
+    stloc 22
+    ldloc 22
+    isinst class 'RedeclaredView`1'<string>
+    stloc 23
+    ldloc 23
+    brfalse IL_genericInterfaceErasedFallback_12
+    ldloc 23
+    ldc.i4 7
+    callvirt instance !!0 class 'RedeclaredView`1'<string>::'echo'<int32>(!!0)
+    stloc 24
+    br IL_genericInterfaceJoin_13
+IL_genericInterfaceErasedFallback_12:
+    ldloc 22
     ldc.i4 7
     callvirt instance !!0 'RedeclaredView'::'echo__KotlinErased__69432d31b8db3ea5d11f43deda8b0994'<int32>(!!0)
+    stloc 24
+IL_genericInterfaceJoin_13:
+    ldloc 24
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
@@ -788,59 +830,59 @@ IL_genericInterfaceJoin_9:
     callvirt instance !!0 'RedeclaredView'::'echo__KotlinErased__69432d31b8db3ea5d11f43deda8b0994'<string>(!!0)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.1
-    stloc 19
-    ldloc 19
+    stloc 25
+    ldloc 25
     isinst class 'BaseView`1'<string>
-    stloc 20
-    ldloc 20
-    brfalse IL_genericInterfaceErasedFallback_10
-    ldloc 20
+    stloc 26
+    ldloc 26
+    brfalse IL_genericInterfaceErasedFallback_14
+    ldloc 26
     ldc.i4 2
     callvirt instance void class 'BaseView`1'<string>::'set_count'(int32)
-    br IL_genericInterfaceJoin_11
-IL_genericInterfaceErasedFallback_10:
-    ldloc 19
+    br IL_genericInterfaceJoin_15
+IL_genericInterfaceErasedFallback_14:
+    ldloc 25
     ldc.i4 2
     callvirt instance void 'BaseView'::'set_count__KotlinErased__f28a1320b5c0269309a1efb67d0e51f6'(int32)
-IL_genericInterfaceJoin_11:
+IL_genericInterfaceJoin_15:
     ldloc.2
-    stloc 21
-    ldloc 21
+    stloc 27
+    ldloc 27
     isinst class 'RedeclaredView`1'<string>
-    stloc 22
-    ldloc 22
-    brfalse IL_genericInterfaceErasedFallback_12
-    ldloc 22
+    stloc 28
+    ldloc 28
+    brfalse IL_genericInterfaceErasedFallback_16
+    ldloc 28
     callvirt instance int32 class 'RedeclaredView`1'<string>::'get_count'()
-    stloc 23
-    br IL_genericInterfaceJoin_13
-IL_genericInterfaceErasedFallback_12:
-    ldloc 21
+    stloc 29
+    br IL_genericInterfaceJoin_17
+IL_genericInterfaceErasedFallback_16:
+    ldloc 27
     callvirt instance int32 'RedeclaredView'::'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
-    stloc 23
-IL_genericInterfaceJoin_13:
-    ldloc 23
+    stloc 29
+IL_genericInterfaceJoin_17:
+    ldloc 29
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     ldloc.2
-    stloc 24
-    ldloc 24
+    stloc 30
+    ldloc 30
     isinst class 'RedeclaredView`1'<string>
-    stloc 25
-    ldloc 25
-    brfalse IL_genericInterfaceErasedFallback_14
-    ldloc 25
+    stloc 31
+    ldloc 31
+    brfalse IL_genericInterfaceErasedFallback_18
+    ldloc 31
     ldc.i4 3
     callvirt instance void class 'RedeclaredView`1'<string>::'set_count'(int32)
-    br IL_genericInterfaceJoin_15
-IL_genericInterfaceErasedFallback_14:
-    ldloc 24
+    br IL_genericInterfaceJoin_19
+IL_genericInterfaceErasedFallback_18:
+    ldloc 30
     ldc.i4 3
     callvirt instance void 'RedeclaredView'::'set_count__KotlinErased__7b4511345d2a0a02253840af86efcc01'(int32)
-IL_genericInterfaceJoin_15:
+IL_genericInterfaceJoin_19:
     ldloc.3
     callvirt instance int32 'RedeclaredView'::'get_count__KotlinErased__813e0e3ac696635eb04e96d57901288f'()
     box [mscorlib]System.Int32
@@ -849,86 +891,44 @@ IL_genericInterfaceJoin_15:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'PairImpl'::.ctor()
-    stloc 26
-    ldloc 26
-    stloc 27
-    ldloc 26
-    stloc 28
-    ldloc 27
-    stloc 29
-    ldloc 29
-    isinst class 'PairView`2'<string, int32>
-    stloc 30
-    ldloc 30
-    brfalse IL_genericInterfaceErasedFallback_16
-    ldloc 30
-    callvirt instance !0 class 'PairView`2'<string, int32>::'first'()
-    stloc 31
-    br IL_genericInterfaceJoin_17
-IL_genericInterfaceErasedFallback_16:
-    ldloc 29
-    callvirt instance object 'PairView'::'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'()
-    castclass [mscorlib]System.String
-    stloc 31
-IL_genericInterfaceJoin_17:
-    ldloc 31
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 27
     stloc 32
     ldloc 32
-    isinst class 'PairView`2'<string, int32>
     stloc 33
-    ldloc 33
-    brfalse IL_genericInterfaceErasedFallback_18
-    ldloc 33
-    callvirt instance !1 class 'PairView`2'<string, int32>::'second'()
-    stloc 34
-    br IL_genericInterfaceJoin_19
-IL_genericInterfaceErasedFallback_18:
     ldloc 32
-    callvirt instance object 'PairView'::'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'()
-    unbox.any [mscorlib]System.Int32
     stloc 34
-IL_genericInterfaceJoin_19:
-    ldloc 34
-    box [mscorlib]System.Int32
-    ldnull
-    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
-    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
-    call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 28
+    ldloc 33
     stloc 35
     ldloc 35
-    isinst class 'Swapped`2'<int32, string>
+    isinst class 'PairView`2'<string, int32>
     stloc 36
     ldloc 36
     brfalse IL_genericInterfaceErasedFallback_20
     ldloc 36
-    callvirt instance !1 class 'Swapped`2'<int32, string>::'first'()
+    callvirt instance !0 class 'PairView`2'<string, int32>::'first'()
     stloc 37
     br IL_genericInterfaceJoin_21
 IL_genericInterfaceErasedFallback_20:
     ldloc 35
-    callvirt instance object 'Swapped'::'first__KotlinErased__4ae76b180c999fa8a4086a535dc149a6'()
+    callvirt instance object 'PairView'::'first__KotlinErased__0176ea3e592ec134a49b32eea211a9ce'()
     castclass [mscorlib]System.String
     stloc 37
 IL_genericInterfaceJoin_21:
     ldloc 37
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 28
+    ldloc 33
     stloc 38
     ldloc 38
-    isinst class 'Swapped`2'<int32, string>
+    isinst class 'PairView`2'<string, int32>
     stloc 39
     ldloc 39
     brfalse IL_genericInterfaceErasedFallback_22
     ldloc 39
-    callvirt instance !0 class 'Swapped`2'<int32, string>::'second'()
+    callvirt instance !1 class 'PairView`2'<string, int32>::'second'()
     stloc 40
     br IL_genericInterfaceJoin_23
 IL_genericInterfaceErasedFallback_22:
     ldloc 38
-    callvirt instance object 'Swapped'::'second__KotlinErased__42dcf4c1734264228da8f3670ac9f7fa'()
+    callvirt instance object 'PairView'::'second__KotlinErased__c65582e5b30a609225382a6fff86b1c5'()
     unbox.any [mscorlib]System.Int32
     stloc 40
 IL_genericInterfaceJoin_23:
@@ -938,31 +938,73 @@ IL_genericInterfaceJoin_23:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
-    newobj instance void 'Node'::.ctor()
+    ldloc 34
     stloc 41
     ldloc 41
+    isinst class 'Swapped`2'<int32, string>
     stloc 42
-    ldloc 41
-    stloc 43
-    ldloc 41
-    stloc 44
-    ldloc 41
-    stloc 45
     ldloc 42
+    brfalse IL_genericInterfaceErasedFallback_24
+    ldloc 42
+    callvirt instance !1 class 'Swapped`2'<int32, string>::'first'()
+    stloc 43
+    br IL_genericInterfaceJoin_25
+IL_genericInterfaceErasedFallback_24:
+    ldloc 41
+    callvirt instance object 'Swapped'::'first__KotlinErased__4ae76b180c999fa8a4086a535dc149a6'()
+    castclass [mscorlib]System.String
+    stloc 43
+IL_genericInterfaceJoin_25:
+    ldloc 43
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc 34
+    stloc 44
+    ldloc 44
+    isinst class 'Swapped`2'<int32, string>
+    stloc 45
+    ldloc 45
+    brfalse IL_genericInterfaceErasedFallback_26
+    ldloc 45
+    callvirt instance !0 class 'Swapped`2'<int32, string>::'second'()
+    stloc 46
+    br IL_genericInterfaceJoin_27
+IL_genericInterfaceErasedFallback_26:
+    ldloc 44
+    callvirt instance object 'Swapped'::'second__KotlinErased__42dcf4c1734264228da8f3670ac9f7fa'()
+    unbox.any [mscorlib]System.Int32
+    stloc 46
+IL_genericInterfaceJoin_27:
+    ldloc 46
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'Node'::.ctor()
+    stloc 47
+    ldloc 47
+    stloc 48
+    ldloc 47
+    stloc 49
+    ldloc 47
+    stloc 50
+    ldloc 47
+    stloc 51
+    ldloc 48
     callvirt instance string 'Root'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 43
+    ldloc 49
     callvirt instance string 'Left'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 44
+    ldloc 50
     callvirt instance string 'Right'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
-    ldloc 45
+    ldloc 51
     callvirt instance string 'Diamond'::'id'()
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void 'ActionDerived'::.ctor()
-    stloc 46
-    ldloc 46
+    stloc 52
+    ldloc 52
     callvirt instance string 'RedeclaredAction'::'act'()
     call void [mscorlib]System.Console::WriteLine(string)
     ret
