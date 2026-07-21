@@ -25,6 +25,9 @@ import org.jetbrains.kotlin.cli.common.arguments.cliArgument
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler
 import org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler
+import org.jetbrains.kotlin.library.KLIB_PROPERTY_MANUALLY_ALTERED_LANGUAGE_FEATURES
+import org.jetbrains.kotlin.library.KLIB_PROPERTY_METADATA_FLAGS
+import org.jetbrains.kotlin.library.KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -1753,6 +1756,39 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
             assertTrue("super-calls with default arguments are prohibited" in diagnostics) { diagnostics }
         }
+    }
+
+    @Test
+    fun testProducesCompanionLanguageMetadataContract() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "library.kt").apply {
+            writeText(
+                """
+                package sample
+
+                public fun marker(): Unit = Unit
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "companion-metadata-library")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            "-Xcompanion-blocks",
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Companion.Metadata.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+        )
+
+        val manifest = outputDirectory.resolve("Companion.Metadata.Library.klib").readKlibManifest()
+        assertTrue(manifest.getProperty(KLIB_PROPERTY_METADATA_FLAGS)?.toIntOrNull() != null)
+        assertEquals("true", manifest.getProperty(KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION))
+        assertTrue(
+            manifest.getProperty(KLIB_PROPERTY_MANUALLY_ALTERED_LANGUAGE_FEATURES)
+                .split(' ')
+                .contains("+CompanionBlocks")
+        )
     }
 
     @Test

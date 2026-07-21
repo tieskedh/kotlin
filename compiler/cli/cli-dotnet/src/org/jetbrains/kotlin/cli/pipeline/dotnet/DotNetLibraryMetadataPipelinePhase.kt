@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
+import org.jetbrains.kotlin.backend.common.serialization.addLanguageFeaturesToManifest
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
@@ -31,8 +32,9 @@ import org.jetbrains.kotlin.library.SerializedFirFile
 import org.jetbrains.kotlin.library.SerializedMetadata
 import org.jetbrains.kotlin.library.impl.BuiltInsPlatform
 import org.jetbrains.kotlin.library.loadSizeInfo
-import org.jetbrains.kotlin.library.metadata.KlibMetadataHeaderFlags
 import org.jetbrains.kotlin.library.metadata.KlibMetadataProtoBuf
+import org.jetbrains.kotlin.library.metadata.addMetadataFlagsToHeader
+import org.jetbrains.kotlin.library.metadata.metadataFlags
 import org.jetbrains.kotlin.library.writer.KlibWriter
 import org.jetbrains.kotlin.library.writer.includeMetadata
 import org.jetbrains.kotlin.util.metadataVersion
@@ -97,9 +99,7 @@ object DotNetLibraryMetadataSerializationPipelinePhase :
 
         val header = KlibMetadataProtoBuf.Header.newBuilder().apply {
             moduleName = artifact.assemblyName
-            if (configuration.languageVersionSettings.isPreRelease()) {
-                flags = KlibMetadataHeaderFlags.PRE_RELEASE
-            }
+            addMetadataFlagsToHeader(this, configuration.languageVersionSettings)
         }
         val fragmentNames = mutableListOf<String>()
         val fragmentParts = mutableListOf<List<SerializedFirFile>>()
@@ -150,7 +150,9 @@ object DotNetLibraryMetadataPackagingPipelinePhase :
                 // There is no durable .NET KLIB platform kind yet. The custom target binding
                 // below prevents this provisional common encoding from claiming portability.
                 platformAndTargets(BuiltInsPlatform.COMMON)
+                metadataFlags(configuration.languageVersionSettings)
                 customProperties {
+                    addLanguageFeaturesToManifest(this, configuration.languageVersionSettings)
                     setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY, artifact.assemblyName)
                     setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY, artifact.assemblyVersion)
                     setProperty(DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY, artifact.assemblyCulture)
