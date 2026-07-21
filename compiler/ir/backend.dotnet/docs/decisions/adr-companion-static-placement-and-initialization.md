@@ -83,10 +83,15 @@ generic interface the holder is nested in the canonical erased interface, not co
 declared or exact typed views. Static relocation and the initialization entry are persisted in the
 physical KLIB index and consumed without reconstructing either name.
 
-This holder rule applies to companion-block state. A non-generic interface's existing companion
-object state remains on the interface TypeDef where object lowering placed its singleton field and
-`.cctor`; the initialization entry is emitted on that same physical owner. Moving that state to an
-otherwise empty holder would split one Kotlin initialization event across two CLR type events.
+The singleton field of a companion object on a generic owner is placed on the same non-generic
+holder, so all closed constructions observe one Kotlin object. A non-generic interface's
+companion object remains on the interface TypeDef when it is the only static state. If the
+interface mixes a companion object with companion blocks, all of that state instead shares the
+holder and one ordered `.cctor`; it is never split across CLR type events.
+
+ABI schema 10 records the exact owner and field name of every Kotlin object instance, including
+ordinary objects and companions. Cross-module object reads bind that record rather than deriving
+`INSTANCE`, a companion name, or `<CompanionStatics>`.
 
 ### 5. One initialization entry point represents the Kotlin graph
 
@@ -123,22 +128,25 @@ Kotlin hierarchy observes:
 Cross-module graph edges are resolved exclusively through producer metadata. Missing or
 incompatible initialization records are link errors, not fallback name guesses.
 
-**Implementation status (2026-07-21):** ABI schema 9 records the exact physical initialization
-owner and entry method. The lowering materializes superclass-first edges, followed by direct
+**Implementation status (2026-07-21):** ABI schema 10 records the exact physical initialization
+owner and entry method as well as every object-instance field. The lowering materializes
+superclass-first edges, followed by direct
 superinterfaces in source order which declare a non-abstract Kotlin instance member, followed by
 the classifier's existing source-ordered initializer stream. Generic-class construction enters
 the same non-generic holder used by every closed construction. Local runtime coverage exercises
 once-only initialization, generic state, construction, private inheritance, selected interface
 ordering, and abstract-only interface independence. A `netstandard2.0` producer and `net10.0`
-consumer execute a producer-recorded graph edge without reconstructing its physical identity.
+consumer execute producer-recorded graph and object-field edges without reconstructing their
+physical identities. Mixed block/object initializers retain source order in one `.cctor`, and a
+generic companion object remains one instance across different closed owner constructions.
 
 ### 7. Unsupported shapes fail before emission
 
-Until lowering can merge companion-block and companion-object initializer streams in exact source
-order, that mixed shape remains rejected. A companion object of a generic owner also remains
-rejected until its singleton field and initialization event move to a non-generic physical owner.
-Unsupported shapes must not be emitted with per-construction state, skipped silently, or accepted
-because one runtime test happens to pass.
+Protected companion-block members which would move to a holder remain rejected: CLR `family`
+access would be relative to the holder rather than to the Kotlin classifier. Enums and other
+globally unsupported classifiers retain their existing whole-declaration diagnostics. Unsupported
+shapes must not be emitted with changed access, per-construction state, or partial initializer
+streams merely because one runtime test happens to pass.
 
 ## Consequences
 

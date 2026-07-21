@@ -3,6 +3,8 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
@@ -15,6 +17,7 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.classOrNull
 import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isAny
@@ -325,6 +328,13 @@ internal class DotNetIlTypeMapper private constructor(
                     ?: return null
                 DotNetGenericInterfaceInfo(canonical, declared, externalDeclarations.exactClassInfoOrNull(irClass))
             }).also(::recordAssemblyReferences)
+
+    fun externalObjectInstanceOwnerInfoOrNull(field: IrField): DotNetIlClassInfo? {
+        if (field.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) return null
+        val singleton = field.type.classOrNull?.owner ?: return null
+        val binding = externalDeclarations.objectInstanceOrNull(singleton) ?: return null
+        return externalDeclarations.objectInstanceOwnerInfo(binding).also(::recordAssemblyReference)
+    }
 
     fun genericInterfaceTypedMethodName(member: IrSimpleFunction): String =
         DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName()

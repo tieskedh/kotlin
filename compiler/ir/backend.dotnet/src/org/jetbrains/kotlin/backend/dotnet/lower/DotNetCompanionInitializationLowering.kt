@@ -92,11 +92,6 @@ internal class DotNetCompanionInitializationLowering(
 
         val companionObject = irClass.declarations.filterIsInstance<IrClass>().firstOrNull(IrClass::isCompanion)
         val staticOwner = context.companionStaticOwners[irClass]
-        // Source-order merging of companion blocks and a companion object is a separate lowering;
-        // leave the existing whole-class diagnostic authoritative until that stream is unified.
-        if (staticOwner != null && companionObject != null) return null
-        // Moving the companion singleton field of a generic owner is likewise a separate ABI step.
-        if (companionObject != null && irClass.typeParameters.isNotEmpty()) return null
 
         val dependencies = dependencyClasses(irClass).mapNotNull(::entryFor)
         val hasOwnInitializer = staticOwner?.staticInitializerOrNull() != null ||
@@ -116,6 +111,7 @@ internal class DotNetCompanionInitializationLowering(
         prependCalls(physicalInitializer, dependencies)
 
         val entry = createEntry(irClass, physicalOwner)
+        physicalOwner.ensureInitializationEntryIsAccessible(entry)
         physicalOwner.declarations.add(0, entry)
         context.companionInitializations[irClass] =
             DotNetLoweredCompanionInitialization(physicalOwner, entry)
@@ -213,6 +209,16 @@ internal class DotNetCompanionInitializationLowering(
             parent = physicalOwner
             body = context.createIrBuilder(symbol).irBlockBody { }
         }
+
+    private fun IrClass.ensureInitializationEntryIsAccessible(entry: IrSimpleFunction) {
+        if (origin != DOTNET_COMPANION_STATIC_HOLDER) return
+        visibility = when {
+            entry.visibility == DescriptorVisibilities.PUBLIC -> DescriptorVisibilities.PUBLIC
+            visibility == DescriptorVisibilities.PRIVATE || visibility == DescriptorVisibilities.PROTECTED ->
+                DescriptorVisibilities.INTERNAL
+            else -> visibility
+        }
+    }
 
     private fun prependCalls(initializer: IrSimpleFunction, entries: List<IrSimpleFunction>) {
         if (entries.isEmpty()) return

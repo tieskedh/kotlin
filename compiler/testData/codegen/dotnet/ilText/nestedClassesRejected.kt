@@ -5,9 +5,8 @@
 // BrokenNestedBaseFamily pins the inheritance cascade: its nested base fails the member pre-pass,
 // then actual derived classes disappear in the render fixpoint, while their independent enclosing
 // metadata parents survive.
-// Generic companion containers stay rejected because the companion field would live on the
-// constructed generic owner. Named objects own their own non-generic INSTANCE field and are
-// covered positively by nestedSingletons.
+// Generic companion containers now survive through a non-generic static holder. Named objects
+// own their own non-generic INSTANCE field and are covered positively by nestedSingletons.
 // BrokenNestedSingletonFamily pins owner-sensitive recursive-static-initializer eviction after
 // its callee disappears: Nested owns the companion field/.cctor and is removed, but its parent
 // survives.
