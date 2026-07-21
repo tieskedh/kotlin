@@ -44,6 +44,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.builders.irImplicitCast
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOriginImpl
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
@@ -208,8 +209,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 ?: original.resolveFakeOverrideMaybeAbstract()
                 ?: original
             val bound = externalDeclarations.defaultArgumentDispatcherOrNull(selected) ?: return null
-            val owner = selected.parent as? IrClass ?: return null
-            return createExternalDefaultArgumentDispatcherBinding(owner, stub, bound).also { replacement ->
+            return createExternalDefaultArgumentDispatcherBinding(selected.parent, stub, bound).also { replacement ->
                 externalDefaultDispatcherReplacements[stub] = replacement
             }
         }
@@ -276,7 +276,8 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
                 helper.declarations += ordinaryHelper
                 val original = stub.defaultArgumentsOriginalFunction as? IrSimpleFunction
                     ?: error("Internal .NET backend error: interface default dispatcher has no original function")
-                check(context.interfaceDefaultArgumentDispatchers.put(original, ordinaryHelper) == null) {
+                val previousDispatcher = context.defaultArgumentDispatchers.put(original, ordinaryHelper)
+                check(previousDispatcher == null || previousDispatcher === stub) {
                     "Internal .NET backend error: interface member has multiple default-argument dispatchers"
                 }
                 defaultStubReplacements[stub.symbol] = Replacement(irInterface, ordinaryHelper)
@@ -693,7 +694,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
     }
 
     private fun createExternalDefaultArgumentDispatcherBinding(
-        owner: IrClass,
+        semanticParent: IrDeclarationParent,
         stub: IrSimpleFunction,
         bound: DotNetBoundDefaultArgumentDispatcher,
     ): Replacement {
@@ -706,17 +707,21 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             modality = Modality.FINAL
             visibility = DescriptorVisibilities.PUBLIC
         }.apply {
-            parent = owner
+            parent = semanticParent
             createThisReceiverParameter()
         }
-        val helper = createHelperFunction(
-            owner = owner,
-            helper = helperOwner,
-            source = stub,
+        val helper = context.irFactory.createStaticFunctionWithReceivers(
+            irParent = helperOwner,
+            name = stub.name,
+            oldFunction = stub,
+            dispatchReceiverType = null,
             origin = stub.origin,
+            modality = Modality.FINAL,
+            visibility = DescriptorVisibilities.PUBLIC,
+            isFakeOverride = false,
         )
         context.externalDefaultArgumentDispatchers[helper] = bound
-        return Replacement(owner, helper)
+        return Replacement(typeContextOwner = null, function = helper)
     }
 
     private fun addExternalInterfacePromotions(
@@ -1443,17 +1448,18 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         }
     }
     private fun redirectCall(expression: IrCall, replacement: Replacement): IrCall {
-        val interfaceArguments = if (replacement.owner.typeParameters.isEmpty()) {
+        val contextOwner = replacement.typeContextOwner
+        val interfaceArguments = if (contextOwner == null || contextOwner.typeParameters.isEmpty()) {
             emptyList()
         } else {
             val receiverType = expression.dispatchReceiver?.type as? IrSimpleType
                 ?: error("Internal .NET backend error: interface default call has no simple receiver type")
-            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(replacement.owner.symbol, receiverType)
+            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(contextOwner.symbol, receiverType)
                 ?: error(
                     "Internal .NET backend error: default-call receiver is not a subtype of " +
-                            "'${replacement.owner.name.asString()}'"
+                            "'${contextOwner.name.asString()}'"
                 )
-            replacement.owner.typeParameters.map { typeParameter ->
+            contextOwner.typeParameters.map { typeParameter ->
                 substitutor.substitute(typeParameter.defaultType)
             }
         }
@@ -1610,7 +1616,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
     )
 
     private data class Replacement(
-        val owner: IrClass,
+        val typeContextOwner: IrClass?,
         val function: IrSimpleFunction,
     )
 

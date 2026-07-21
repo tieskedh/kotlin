@@ -97,8 +97,8 @@ internal class DotNetBackendContext(
     /** Source interface member to its profile-selected compiler-ABI helper and body placement. */
     val interfaceDefaultImplementations:
         MutableMap<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = linkedMapOf()
-    /** Source interface member to its helper-owned masked default-argument dispatcher. */
-    val interfaceDefaultArgumentDispatchers:
+    /** Source function to its final physical masked default-argument dispatcher. */
+    val defaultArgumentDispatchers:
         MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
     /** One typed semantic DIM plus its erased and less-precise physical adapters. */
     val genericInterfaceDefaults:
