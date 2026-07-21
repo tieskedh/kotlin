@@ -1,6 +1,6 @@
 # Kotlin/.NET backend way forward
 
-> **Baseline:** branch `dotnet` at `8dd89907d`, reviewed 2026-07-17
+> **Baseline:** branch `dotnet`, rebased on `origin/master` at `0349ed5cd`, reviewed 2026-07-21
 >
 > **Status:** living pre-ABI execution plan
 >
@@ -333,6 +333,16 @@ a covariant interface's distinct invariant exact-operation view without declarin
 inherit and execute typed net10 DIMs with `int` results and no erased cast. The same sources fail
 with `CS0535` against both portable representations, using modern Roslyn for `netstandard2.0` and
 Framework csc for `net48`.
+
+The accepted `adr-companion-static-placement-and-initialization.md` now owns companion placement
+and initialization. The first implementation slice preserves upstream KLIB feature flags, emits
+non-generic class companion members as true CLR statics with `.cctor`-owned state, and keeps
+receiver-free companion extensions on their file facade without a false CLR property row. A
+separate-module `netstandard2.0` producer/`net10.0` consumer executes that receiver-free extension
+ABI. Generic owners, interface owners, inherited initialization obligations, and mixed companion
+block/object initialization still fail loudly until the non-generic holder and explicit
+initialization-graph lowerings land; direct placement is not allowed to become their accidental
+ABI.
 
 ### P0-E — Decide the unresolved semantic representations
 
