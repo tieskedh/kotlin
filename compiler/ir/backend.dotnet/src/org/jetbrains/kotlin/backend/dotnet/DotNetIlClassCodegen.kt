@@ -32,11 +32,10 @@ package org.jetbrains.kotlin.backend.dotnet
  * it the CLR runs the `.cctor` before the first active use of the class (probe-verified,
  * `statprobe_s1`) — Kotlin/JVM first-active-use class-initialization parity. It is omitted
  * exactly on classes that receive a `.cctor` and kept everywhere else, so classes without static
- * state keep the relaxed (cheaper) semantics and their goldens. A companion never has one — its
- * singleton field and the `newobj`/`stsfld` live on the ENCLOSING class (which therefore drops
- * `beforefieldinit`), while the companion itself has no statics and keeps the flag. An interface
- * with a companion may likewise own the singleton field and `.cctor`; interfaces never carry
- * `beforefieldinit`, which preserves the required first-active-use behavior.
+ * state keep the relaxed (cheaper) semantics and their goldens. A companion never has one: its
+ * singleton field and the `newobj`/`stsfld` live on the classifier's selected static owner, while
+ * the companion type itself has no statics and keeps the flag. An interface may own this event
+ * directly or through a non-generic holder; interfaces never carry `beforefieldinit`.
  */
 internal class DotNetIlClassCodegen(
     private val className: String,

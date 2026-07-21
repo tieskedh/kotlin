@@ -95,6 +95,8 @@ internal class DotNetIlEmitter(
             Map<IrSimpleFunction, DotNetBoundDefaultArgumentDispatcher> = emptyMap(),
     private val companionInitializations:
             Map<IrClass, DotNetLoweredCompanionInitialization> = emptyMap(),
+    private val objectInstanceFields:
+            Map<IrClass, IrField> = emptyMap(),
     private val externalCompanionInitializations:
             Map<IrSimpleFunction, DotNetBoundCompanionInitialization> = emptyMap(),
     private val interfaceDefaultPromotions:
@@ -290,10 +292,10 @@ internal class DotNetIlEmitter(
             try {
                 checkClassShapeSupported(irClass, moduleClasses, moduleInterfaces, externalDeclarations)
             } catch (e: DotNetIlUnsupportedException) {
-                // A gate failure OF a companion invalidates its immediate owner: that owner
-                // already contains the singleton field and `.cctor`. A separate declaration
-                // nested below an otherwise valid companion remains an independent metadata
-                // subtree and is omitted on its own.
+                // A gate failure OF a companion invalidates its logical owner: the singleton
+                // field and `.cctor` belong to that owner's physical static subtree. A separate
+                // declaration nested below an otherwise valid companion remains an independent
+                // metadata subtree and is omitted on its own.
                 val companion = irClass.takeIf { it.isCompanion }
                 val unavailableRoot = companion?.parent as? IrClass ?: irClass
                 val rootReason = if (companion == null) {
@@ -643,10 +645,11 @@ internal class DotNetIlEmitter(
 
         // A class failure removes the smallest metadata subtree that cannot exist without it.
         // An ordinary nested class owns its own block, so its enclosing class and siblings are
-        // independent. A companion is the exception: its singleton field and `.cctor` live on
-        // its immediate owner, so a failed companion takes that owner (and therefore the owner's
-        // descendants) with it. The live type/function maps then remove real users through the
-        // normal render fixpoint instead of assuming every metadata relative is a dependency.
+        // independent. A companion is the exception: its singleton field and `.cctor` belong to
+        // its logical owner's physical static subtree, so a failed companion takes that owner
+        // (and therefore the owner's descendants) with it. The live type/function maps then
+        // remove real users through the normal render fixpoint instead of assuming every
+        // metadata relative is a dependency.
         fun evictClassSubtree(failedClass: IrClass, reason: String) {
             val evictionRoot =
                 if (failedClass.isCompanion) failedClass.parent as? IrClass ?: failedClass else failedClass
@@ -702,10 +705,9 @@ internal class DotNetIlEmitter(
         // supported, so the identity key is name plus mapped IL type. Stated deviation from the
         // JVM backend, which RENAMES the clashing private backing field (`RenameFieldsLowering`
         // yields `INSTANCE$1`): this backend has no field-renaming machinery, so the clash is
-        // rejected whole-class like the method-identity clash above. The companion's singleton
-        // field participates in the ENCLOSING class's gate the same way (the lowering parents
-        // it there): a user field named after the companion whose type maps to the companion
-        // clashes, evicting the whole owner subtree.
+        // rejected whole-class like the method-identity clash above. A companion singleton
+        // participates in its selected static owner's gate: a field on that same owner with the
+        // companion's name and type clashes and evicts the whole owner subtree.
         for ([irClass, classInfo] in availableClasses.entries.toList()) {
             // Already evicted with the subtree of an earlier failure in this snapshot.
             if (irClass !in availableClasses) continue
@@ -1369,6 +1371,7 @@ internal class DotNetIlEmitter(
                 genericInterfaceViewBridges,
                 interfaceDefaultClassForwarders,
                 companionInitializations,
+                objectInstanceFields,
             ),
             referencedAssemblies.toSet(),
         )
@@ -1408,13 +1411,12 @@ internal class DotNetIlEmitter(
      * (`nested public/private/assembly/family`).
      * A top-level or nested class may derive from a module-local nested class, including a
      * sibling, enclosing metadata parent, forward declaration, generic instantiation, or class
-     * in another top-level family (`nestedprobe_s3`). Companion objects of non-generic ordinary
-     * nested classes/interfaces and named objects in any supported metadata owner are supported
-     * by the recursive static-initializer sweep (`nestedprobe_s4`, `nestedifaceprobe_s2`,
-     * `nestedownerprobe_s1`). A
-     * companion's singleton field lives on its immediate owner, so that owner must be non-generic;
-     * a named object's `INSTANCE` lives on the non-generic object type itself and is safe below a
-     * generic metadata parent. All-abstract interfaces may nest inside any supported named class,
+     * in another top-level family (`nestedprobe_s3`). Companion objects and named objects in any
+     * supported metadata owner are handled by the recursive static-initializer sweep
+     * (`nestedprobe_s4`, `nestedifaceprobe_s2`, `nestedownerprobe_s1`). A generic classifier's
+     * companion singleton lives on its non-generic static holder; a named object's `INSTANCE`
+     * lives on the non-generic object type itself. All-abstract interfaces may nest inside any
+     * supported named class,
      * interface, object, or companion, with the same independent generic parameter and visibility
      * model. Named classes and objects may likewise nest recursively in any supported class,
      * interface, object, or companion; all use the JVM static-nested model and the same recursive
@@ -1597,11 +1599,10 @@ internal class DotNetIlEmitter(
         // gate scopes the model: invariant non-reified parameters, optionally constrained by
         // supported module-local classes/interfaces, and any supported generic/non-generic
         // class or interface supertype. A named nested class carries only its own parameters,
-        // independently of a generic outer (`nestedprobe_s1`). Companion-block declarations have
-        // already moved to one compiler-owned, non-generic nested holder. A companion object's
-        // field on a generic owner remains outside the model; it would live on the generic
-        // container and be duplicated per construction. A named object's `INSTANCE` field instead
-        // lives on the non-generic object type itself, so it remains one singleton even when the
+        // independently of a generic outer (`nestedprobe_s1`). Companion-block declarations and
+        // a companion singleton use one compiler-owned, non-generic nested holder. A named
+        // object's `INSTANCE` field lives on the non-generic object type itself, so it remains one
+        // singleton even when the
         // immediate metadata parent is generic (`nestedprobe_s4`, `nestedifaceprobe_s2`–`_s3`).
         // Generic base links retain their full open instantiation, so
         // constructor calls, owner lookup, and override substitution compose through arbitrary
@@ -1612,14 +1613,6 @@ internal class DotNetIlEmitter(
                 dotNetUnsupported("generic object '$name' is not supported")
             }
             checkDotNetTypeParametersSupported(irClass.typeParameters, "class '$name'")
-            val nestedCompanion = irClass.declarations.filterIsInstance<IrClass>()
-                .firstOrNull { it.kind == ClassKind.OBJECT && it.isCompanion }
-            if (nestedCompanion != null) {
-                dotNetUnsupported(
-                    "generic class '$name' contains companion object '${nestedCompanion.name.asString()}'; " +
-                            "a companion field on a generic CLR owner would be duplicated per constructed type"
-                )
-            }
         }
         val companionBlockMember = irClass.declarations.firstOrNull { declaration ->
             when (declaration) {
@@ -1629,12 +1622,6 @@ internal class DotNetIlEmitter(
             }
         }
         if (companionBlockMember != null) {
-            if (irClass.declarations.any { declaration -> declaration is IrClass && declaration.isCompanion }) {
-                dotNetUnsupported(
-                    "class '$name' mixes companion-block members with a companion object; " +
-                            "the unified companion initialization lowering has not run"
-                )
-            }
             if (irClass.superTypes.any { !it.isAny() } && irClass.declarations.none {
                     it is IrSimpleFunction && it.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY
                 }
@@ -1812,7 +1799,7 @@ internal class DotNetIlEmitter(
      * companions, and own only their own generic parameters. Remaining whole-interface rejection
      * edges include `fun interface` until SAM conversion exists, local/anonymous interfaces,
      * unsupported metadata parents, private callable members, overrides of `kotlin.Any` members,
-     * and companions on generic interfaces because CLR statics are per constructed owner.
+     * and unsupported nested/member shapes unrelated to companion storage.
      */
     private fun checkInterfaceShapeSupported(
         irClass: IrClass,
@@ -1845,16 +1832,6 @@ internal class DotNetIlEmitter(
             "interface '$name'",
             allowDeclarationSiteVariance = true,
         )
-        if (irClass.typeParameters.isNotEmpty()) {
-            val nestedCompanion = irClass.declarations.filterIsInstance<IrClass>()
-                .firstOrNull { it.kind == ClassKind.OBJECT && it.isCompanion }
-            if (nestedCompanion != null) {
-                dotNetUnsupported(
-                    "generic interface '$name' contains companion object '${nestedCompanion.name.asString()}'; " +
-                            "a companion field on a generic CLR owner would be duplicated per constructed type"
-                )
-            }
-        }
         for (superType in irClass.superTypes) {
             if (superType.isAny()) continue
             val superInterface = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
@@ -2177,14 +2154,11 @@ internal class DotNetIlEmitter(
      * same first-active-use parity argument as the facades), and a member `const val` renders
      * as a `literal` field on the class with no accessors, exactly like the facade const shape.
      *
-     * A class WITH A COMPANION renders its companion recursively through this same function as
-     * a real CLR nested `.class` block inside its own body (spelling probe-verified,
-     * objprobe_s6), while carrying the companion's pieces of the object machinery itself: the
-     * singleton field [DotNetObjectClassLowering][org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering]
-     * parented HERE (named after the companion, typed as the companion) and the class-parented
-     * `<clinit>` doing the `newobj`/`stsfld` — so the ENCLOSING class drops `beforefieldinit`
-     * and touching the companion initializes the enclosing class (Kotlin/JVM parity,
-     * objprobe_s8), while the companion itself has no `.cctor` and keeps `beforefieldinit`.
+     * A class WITH A COMPANION renders its companion recursively through this same function as a
+     * real CLR nested `.class` block. [DotNetObjectClassLowering] places the singleton field and
+     * its `newobj`/`stsfld` `.cctor` on the selected static owner: this class for an ordinary
+     * non-generic owner, or a non-generic nested holder when CLR generic/interface storage would
+     * split the Kotlin event. The companion type itself has no `.cctor`.
      */
     private fun renderUserClass(
         classInfo: DotNetIlClassInfo,

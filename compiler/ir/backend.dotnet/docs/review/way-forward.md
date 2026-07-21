@@ -346,15 +346,17 @@ backed state, method generics, callable references, private enclosing access, an
 The physical KLIB record is authoritative for cross-module holder calls and for their static
 default dispatchers, and producer variants assemble on all three profiles.
 
-Schema 9 additionally records one exact physical `<EnsureCompanionInitialized>` entry per logical
-classifier initialization event. Its `.cctor` calls producer-recorded superclass and selected
+Schema 10 additionally records one exact physical `<EnsureCompanionInitialized>` entry per logical
+classifier initialization event and the exact singleton-field owner/name for every Kotlin object.
+Its `.cctor` calls producer-recorded superclass and selected
 interface entries before executing local state, while generic construction routes every closed
 construction through the same non-generic holder. Local runtime coverage pins source ordering,
 once-only state, private inheritance, abstract-only interface independence, and generic-global
-identity. A separately compiled `netstandard2.0` producer/`net10.0` consumer executes the same
-graph through physical metadata. Mixed companion-block/companion-object initialization and generic
-companion-object singleton placement still fail loudly until their initializer streams and
-physical state can be unified; they must not become accidental split initialization events.
+identity. Mixed companion-block/companion-object initializers now share one source-ordered stream,
+and generic-owner companions place their singleton on the same non-generic holder. A separately
+compiled `netstandard2.0` producer/`net10.0` consumer executes the graph, an ordinary object, and a
+generic companion through recorded physical metadata. Protected members which would acquire
+holder-relative CLR `family` access remain rejected pending a deliberate bridge/export design.
 
 ### P0-E — Decide the unresolved semantic representations
 
