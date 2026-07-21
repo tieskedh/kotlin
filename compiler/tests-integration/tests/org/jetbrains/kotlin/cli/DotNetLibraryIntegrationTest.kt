@@ -5,9 +5,17 @@
 
 package org.jetbrains.kotlin.cli
 
+import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
+import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
+import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
+import org.jetbrains.kotlin.backend.dotnet.DotNetFriendAssemblyIdentity
+import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultImplementation
+import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
+import org.jetbrains.kotlin.backend.dotnet.DotNetPortablePhysicalAbiDifference
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.cli.common.CLICompiler
 import org.jetbrains.kotlin.cli.common.ExitCode
@@ -48,21 +56,158 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodName = "Increment",
                 isInstance = false,
             ),
+            "F:sample/abstractWithDefaults" to DotNetPhysicalDeclaration.Function(
+                ownerPath = listOf("sample.Contract"),
+                methodName = "abstractWithDefaults",
+                isInstance = true,
+                defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
+                    ownerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    methodName = "abstractWithDefaults\$default",
+                ),
+            ),
+            "F:sample/defaultWithDefaults" to DotNetPhysicalDeclaration.Function(
+                ownerPath = listOf("sample.Contract"),
+                methodName = "defaultWithDefaults",
+                isInstance = true,
+                interfaceDefaultImplementation = DotNetInterfaceDefaultImplementation(
+                    bodyPlacement = DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY,
+                    helperOwnerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    helperMethodName = "defaultWithDefaults",
+                ),
+                defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
+                    ownerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    methodName = "defaultWithDefaults\$default",
+                ),
+            ),
+            "B:C:sample/Contract:F:sample/defaultWithDefaults:CANONICAL" to
+                    DotNetPhysicalDeclaration.GenericInterfaceViewBridge(
+                        ownerPath = listOf("sample.Contract"),
+                        ownerLogicalKey = "C:sample/Contract",
+                        inheritedLogicalMemberKey = "F:sample/defaultWithDefaults",
+                        physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+                        implementationMethodName = "<GenericInterfaceCanonicalBridge-defaultWithDefaults>",
+                    ),            "W:C:sample/Consumer:F:sample/defaultWithDefaults:CANONICAL" to
+                    DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder(
+                        ownerPath = listOf("sample.Consumer"),
+                        ownerLogicalKey = "C:sample/Consumer",
+                        inheritedLogicalMemberKey = "F:sample/defaultWithDefaults",
+                        physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+                        implementationMethodName = "<InterfaceDefaultForwarder-defaultWithDefaults>",
+                    ),
         )
         val properties = Properties().apply {
             setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("2", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("8", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
+        assertEquals(
+            "be089ff358019a018b5e1ce2af85aedd",
+            DotNetLibraryAbiCodec.logicalIdentityDigest("F:sample/foo|-123456789[0]"),
+        )
+        assertEquals(
+            "faa734fbe159d9bc030a0dd498584bc5",
+            DotNetLibraryAbiCodec.logicalIdentityDigest("C:kotlin.collections/List"),
+        )
+        val friendIdentities = setOf(
+            DotNetFriendAssemblyIdentity("Unsigned.Consumer"),
+            DotNetFriendAssemblyIdentity("Signed.Consumer", "00112233445566778899AABBCCDDEEFF"),
+        )
+        assertEquals(
+            friendIdentities,
+            DotNetLibraryAbiCodec.decodeFriendAssemblies(
+                DotNetLibraryAbiCodec.encodeFriendAssemblies(friendIdentities)
+            ),
+        )
+    }
+
+    @Test
+    fun testPortablePhysicalAbiComparisonRejectsMissingAndChangedBindings() {
+        val portable = linkedMapOf(
+            "C:sample/Box" to DotNetPhysicalDeclaration.Class(listOf("sample.Box")),
+            "F:sample/read" to DotNetPhysicalDeclaration.Function(
+                ownerPath = listOf("sample.LibraryKt"),
+                methodName = "read",
+                isInstance = false,
+            ),
+            "F:sample/withDefaults" to DotNetPhysicalDeclaration.Function(
+                ownerPath = listOf("sample.Contract"),
+                methodName = "withDefaults",
+                isInstance = true,
+                defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
+                    ownerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    methodName = "withDefaults\$default",
+                ),
+            ),
+            "W:C:sample/Box:F:sample/withDefaults:CANONICAL" to
+                    DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder(
+                        ownerPath = listOf("sample.Box"),
+                        ownerLogicalKey = "C:sample/Box",
+                        inheritedLogicalMemberKey = "F:sample/withDefaults",
+                        physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+                        implementationMethodName = "<InterfaceDefaultForwarder-withDefaults>",
+                    ),
+        )
+        val compatiblePlatform = portable.filterValues {
+            it !is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder
+        } + (
+                "F:sample/runtimeOnly" to DotNetPhysicalDeclaration.Function(
+                    ownerPath = listOf("sample.PlatformKt"),
+                    methodName = "runtimeOnly",
+                    isInstance = false,
+                )
+                )
+        assertTrue(DotNetLibraryAbiCodec.portablePhysicalAbiDifferences(portable, compatiblePlatform).isEmpty())
+
+
+        val changedFunction = DotNetPhysicalDeclaration.Function(
+            ownerPath = listOf("sample.ChangedKt"),
+            methodName = "read",
+            isInstance = false,
+        )
+        val changedDispatcher = DotNetPhysicalDeclaration.Function(
+            ownerPath = listOf("sample.Contract"),
+            methodName = "withDefaults",
+            isInstance = true,
+            defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
+                ownerPath = listOf("sample.Contract", "<ChangedDefaultImpls>"),
+                methodName = "withDefaults\$default",
+            ),
+        )
+        val differences = DotNetLibraryAbiCodec.portablePhysicalAbiDifferences(
+            portable,
+            mapOf(
+                "F:sample/read" to changedFunction,
+                "F:sample/withDefaults" to changedDispatcher,
+            ),
+        )
+        assertEquals(
+            listOf(
+                DotNetPortablePhysicalAbiDifference(
+                    logicalKey = "C:sample/Box",
+                    portableDeclaration = portable.getValue("C:sample/Box"),
+                    platformDeclaration = null,
+                ),
+                DotNetPortablePhysicalAbiDifference(
+                    logicalKey = "F:sample/read",
+                    portableDeclaration = portable.getValue("F:sample/read"),
+                    platformDeclaration = changedFunction,
+                ),
+                DotNetPortablePhysicalAbiDifference(
+                    logicalKey = "F:sample/withDefaults",
+                    portableDeclaration = portable.getValue("F:sample/withDefaults"),
+                    platformDeclaration = changedDispatcher,
+                ),
+            ),
+            differences,
+        )
     }
 
     @Test
     fun testGenericInterfacesAcrossLibraryBoundary() {
-        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
-        val dotnetHost = DotNetIlAssembler.findModernDotNetHost()
-            ?: return
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
         val librarySource = File(tmpdir, "generic-interface-library.kt").apply {
             writeText(
                 """
@@ -233,6 +378,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             librarySource.path,
             K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "Cross.Library",
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
@@ -441,7 +587,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             consumerSource.path,
             K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
-            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net",
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "CrossConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
         )
@@ -661,7 +807,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetIlAssembler.assembleExecutable(
                 rawConsumerIl,
                 rawConsumerAssembly,
-                DotNetTarget.NET,
+                DotNetTarget.NET10_0,
                 MessageCollector.NONE,
             )
         )
@@ -676,8 +822,942 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testGenericInterfaceDefaultsAcrossPortableAndNet10Assemblies() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        val portableDirectory = File(tmpdir, "portable-generic-interface-default").apply { mkdirs() }
+        val portableSource = portableDirectory.resolve("portable.kt").apply {
+            writeText(
+                """
+                package genericdefaults
+
+                public interface PortableGeneric<out T> {
+                    public fun seed(): T
+                    public fun value(): T = seed()
+                    public fun <R : @UnsafeVariance T> echo(value: R): R = value
+                    public fun same(value: @UnsafeVariance T): Boolean = seed() == value
+                }
+
+                public class PortableInt(private val current: Int) : PortableGeneric<Int> {
+                    public override fun seed(): Int = current
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            portableSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.GenericDefaults",
+            K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
+        )
+        val portableMetadata = portableDirectory.resolve("Portable.GenericDefaults.klib")
+        val portableIl = portableDirectory.resolve("Portable.GenericDefaults.il").readText()
+        assertTrue("abstract virtual instance object 'value__KotlinErased__" in portableIl) { portableIl }
+        assertTrue("/'<DefaultImpls>'::'value'" in portableIl) { portableIl }
+        assertTrue("<GenericInterfaceCanonicalBridge-" in portableIl) { portableIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-" in portableIl) { portableIl }
+        assertTrue("<GenericInterfaceExactBridge-" in portableIl) { portableIl }
+
+        val promotedDirectory = File(tmpdir, "promoted-generic-interface-default").apply { mkdirs() }
+        val promotedSource = promotedDirectory.resolve("promoted.kt").apply {
+            writeText(
+                """
+                package genericdefaults
+
+                public interface PromotedGeneric<out T> : PortableGeneric<T>
+                public interface PromotedInt : PortableGeneric<Int>
+                public interface OverriddenInt : PortableGeneric<Int> {
+                    public override fun value(): Int = 91
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            promotedSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, portableMetadata.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Promoted.GenericDefaults",
+            K2DotNetCompilerArguments::destination.cliArgument, promotedDirectory.path,
+        )
+        val promotedMetadata = promotedDirectory.resolve("Promoted.GenericDefaults.klib")
+        val promotedDeclarations = DotNetLibraryAbiCodec.decode(promotedMetadata.readKlibManifest())
+        val promotions = promotedDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
+        assertEquals(16, promotions.size, promotions.joinToString("\n"))
+        val viewBridges = promotedDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceViewBridge>()
+        assertEquals(12, viewBridges.size, viewBridges.joinToString("\n"))
+        val overriddenValueBridges = viewBridges.filter { bridge ->
+            bridge.ownerPath == listOf("genericdefaults.OverriddenInt") &&
+                    "/PortableGeneric.value" in bridge.inheritedLogicalMemberKey
+        }
+        assertEquals(2, overriddenValueBridges.size, overriddenValueBridges.joinToString("\n"))
+        assertEquals(
+            setOf(
+                DotNetInterfaceDefaultPromotionView.CANONICAL,
+                DotNetInterfaceDefaultPromotionView.DECLARED,
+            ),
+            overriddenValueBridges.mapTo(hashSetOf()) { it.physicalView },
+        )
+        assertEquals(
+            setOf(
+                DotNetInterfaceDefaultPromotionView.CANONICAL,
+                DotNetInterfaceDefaultPromotionView.DECLARED,
+                DotNetInterfaceDefaultPromotionView.EXACT,
+            ),
+            promotions.mapTo(hashSetOf()) { it.physicalView },
+        )
+        val promotedIl = promotedDirectory.resolve("Promoted.GenericDefaults.il").readText()
+        assertTrue("<GenericInterfaceDefaultPromotionCanonical-" in promotedIl) { promotedIl }
+        assertTrue("<GenericInterfaceDefaultPromotionDeclared-" in promotedIl) { promotedIl }
+        assertTrue("<GenericInterfaceDefaultPromotionExact-" in promotedIl) { promotedIl }
+        assertTrue("[Portable.GenericDefaults]" in promotedIl) { promotedIl }
+        assertTrue("/'<DefaultImpls>'::'value'" in promotedIl) { promotedIl }
+        assertTrue("<GenericInterfaceCanonicalBridge-genericdefaults.PortableGeneric-value-" in promotedIl) {
+            "The closed override must explicitly map the inherited canonical slot:\n$promotedIl"
+        }
+        assertTrue("<InterfaceDefaultSlotBridge-genericdefaults.OverriddenInt-value-" !in promotedIl) {
+            "An ordinary int32 bridge cannot implement the erased object slot:\n$promotedIl"
+        }
+        assertEquals(1, promotedIl.lineSequence().count { "ldc.i4 91" in it }) {
+            "The Kotlin body must occur only in OverriddenInt.value; helpers and view adapters only forward:\n$promotedIl"
+        }
+
+        val closedImplementationDirectory =
+            File(tmpdir, "closed-generic-interface-default-implementation").apply { mkdirs() }
+        val closedImplementationSource = closedImplementationDirectory.resolve("closed.kt").apply {
+            writeText(
+                """
+                package genericdefaults
+
+                public class ClosedImplementation(private val current: Int) : PromotedInt {
+                    public override fun seed(): Int = current
+                }
+
+                public class OverriddenImplementation(private val current: Int) : OverriddenInt {
+                    public override fun seed(): Int = current
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            closedImplementationSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            listOf(portableMetadata, promotedMetadata).joinToString(File.pathSeparator) { it.path },
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Closed.GenericDefaults",
+            K2DotNetCompilerArguments::destination.cliArgument, closedImplementationDirectory.path,
+        )
+        val closedImplementationMetadata =
+            closedImplementationDirectory.resolve("Closed.GenericDefaults.klib")
+        val consumerDirectory = File(tmpdir, "generic-interface-default-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                package genericdefaults
+
+                private class ThroughPromotion(private val current: Int) : PromotedGeneric<Int> {
+                    override fun seed(): Int = current
+                }
+
+                private class ThroughPortable(private val current: Int) : PortableGeneric<Int> {
+                    override fun seed(): Int = current
+                }
+
+                fun main() {
+                    val promoted: PortableGeneric<Int> = ThroughPromotion(41)
+                    if (promoted.value() != 41) throw Error("promoted typed result")
+                    if (promoted.echo(41) != 41) throw Error("promoted method generic")
+                    if (!promoted.same(41)) throw Error("promoted exact argument")
+                    val widened: PortableGeneric<Any> = promoted
+                    if (widened.value() != 41) throw Error("promoted erased result")
+                    if (!widened.same(41)) throw Error("promoted erased exact fallback")
+                    if (widened.echo("widened echo") != "widened echo") throw Error("promoted widened method constraint")
+
+                    val closedView: PromotedInt = ClosedImplementation(42)
+                    val closed: PortableGeneric<Int> = closedView
+                    if (closed.value() != 42) throw Error("closed promoted typed result")
+                    if (closed.echo(42) != 42) throw Error("closed promoted method generic")
+                    if (!closed.same(42)) throw Error("closed promoted exact argument")
+                    if (closedView.value() != 42) throw Error("closed promoted derived view")
+
+                    val overriddenView: OverriddenInt = OverriddenImplementation(45)
+                    if (overriddenView.value() != 91) throw Error("closed interface override derived view")
+                    val overridden: PortableGeneric<Int> = overriddenView
+                    if (overridden.value() != 91) throw Error("closed interface override typed view")
+                    if (!overridden.same(45)) throw Error("closed interface inherited exact view")
+                    val widenedOverride: PortableGeneric<Any> = overriddenView
+                    if (widenedOverride.value() != 91) throw Error("closed interface override widened view")
+
+                    val portable: PortableGeneric<Int> = ThroughPortable(43)
+                    if (portable.value() != 43) throw Error("portable class forwarder result")
+                    if (portable.echo(43) != 43) throw Error("portable class method generic")
+                    if (!portable.same(43)) throw Error("portable class exact argument")
+
+                    val producer: PortableGeneric<Int> = PortableInt(44)
+                    if (producer.value() != 44) throw Error("portable producer result")
+                    if (!producer.same(44)) throw Error("portable producer exact argument")
+                    val widenedProducer: PortableGeneric<Any> = producer
+                    if (widenedProducer.echo("producer echo") != "producer echo") throw Error("producer widened method constraint")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("GenericDefaultConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            listOf(portableMetadata, promotedMetadata, closedImplementationMetadata)
+                .joinToString(File.pathSeparator) { it.path },
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "GenericDefaultConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+        val consumerIl = consumerDirectory.resolve("GenericDefaultConsumer.il").readText()
+        assertTrue("[Promoted.GenericDefaults]" in consumerIl) { consumerIl }
+        assertTrue("<GenericInterfaceDefaultForwarderTarget-" in consumerIl) {
+            "The direct portable implementation still requires helper-backed bridges:\n$consumerIl"
+        }
+        val closedImplementationIl =
+            closedImplementationDirectory.resolve("Closed.GenericDefaults.il").readText()
+        assertTrue("<GenericInterfaceDefaultForwarderTarget-genericdefaults.ClosedImplementation-" !in closedImplementationIl) {
+            "A closed non-generic promotion supplies DIMs and must suppress class forwarders:\n$closedImplementationIl"
+        }
+        assertTrue("<GenericInterfaceDefaultForwarderTarget-genericdefaults.OverriddenImplementation-" !in closedImplementationIl) {
+            "The selected closed override DIM must suppress helper-backed class forwarders:\n$closedImplementationIl"
+        }
+        assertTrue("<GenericInterfaceCanonicalBridge-genericdefaults.PortableGeneric-value-" !in closedImplementationIl) {
+            "The implementor must inherit OverriddenInt's value adapters instead of duplicating them:\n$closedImplementationIl"
+        }
+        runDotNet(
+            dotnetHost,
+            consumerAssembly,
+            consumerDirectory,
+            "Generic interface defaults failed across portable and net10 assemblies",
+        )
+    }
+
+    @Test
+    fun testModernCSharpConsumesProfileAwareGenericInterfaceDefault() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(csharpToolchain != null, "Modern Roslyn and the net10 reference pack are not available")
+        val modernCSharp = checkNotNull(csharpToolchain)
+
+        val kotlinSourceText = """
+            package genericdefaults
+
+            public interface CSharpEcho<T> {
+                public fun echo(value: T): T = value
+            }
+
+            public interface CSharpVariantEcho<out T> {
+                public fun echo(value: @UnsafeVariance T): T = value
+            }
+        """.trimIndent()
+        val portableDirectory = File(tmpdir, "csharp-portable-interface-default").apply { mkdirs() }
+        val portableSource = portableDirectory.resolve("default.kt").apply { writeText(kotlinSourceText) }
+        compileInProcess(
+            K2DotNetCompiler(),
+            portableSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CSharp.PortableDefaults",
+            K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
+        )
+
+        val modernDirectory = File(tmpdir, "csharp-modern-interface-default").apply { mkdirs() }
+        val modernSource = modernDirectory.resolve("default.kt").apply { writeText(kotlinSourceText) }
+        compileInProcess(
+            K2DotNetCompiler(),
+            modernSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CSharp.ModernDefaults",
+            K2DotNetCompilerArguments::destination.cliArgument, modernDirectory.path,
+        )
+        val runtimeBootstrap = modernDirectory.resolve("runtime-bootstrap.kt").apply {
+            writeText("fun main() {}")
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            runtimeBootstrap.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CSharpRuntimeBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            modernDirectory.resolve("CSharpRuntimeBootstrap.dll").path,
+        )
+        val runtimeAssembly = modernDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(runtimeAssembly.isFile) { "Runtime bootstrap did not install Kotlin.Runtime.dll" }
+
+        val consumerText = """
+            public sealed class EchoImplementation : genericdefaults.CSharpEcho<int>
+            {
+            }
+
+            public sealed class VariantEchoImplementation
+                : genericdefaults.CSharpVariantEcho__KotlinExact<int>
+            {
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    genericdefaults.CSharpEcho<int> value = new EchoImplementation();
+                    if (value.echo(73) != 73)
+                        return 1;
+                    genericdefaults.CSharpVariantEcho__KotlinExact<int> exact =
+                        new VariantEchoImplementation();
+                    return exact.echo(74) == 74 ? 0 : 2;
+                }
+            }
+        """.trimIndent()
+        val modernConsumerSource = modernDirectory.resolve("consumer.cs").apply { writeText(consumerText) }
+        val modernConsumer = modernDirectory.resolve("ModernCSharpConsumer.dll")
+        val modernCompile = runModernCSharpCompiler(
+            modernCSharp,
+            modernConsumerSource,
+            modernConsumer,
+            modernDirectory.resolve("CSharp.ModernDefaults.dll"),
+            runtimeAssembly,
+            target = "exe",
+        )
+        assertEquals(0, modernCompile.exitCode, modernCompile.output)
+        modernDirectory.resolve("ModernCSharpConsumer.runtimeconfig.json").writeText(
+            """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                },
+                "rollForward": "LatestMinor"
+              }
+            }
+            """.trimIndent()
+        )
+        runDotNet(
+            modernCSharp.dotNetHost,
+            modernConsumer,
+            modernDirectory,
+            "Modern C# failed to inherit the generic Kotlin DIM",
+        )
+
+        val portableConsumerSource = portableDirectory.resolve("consumer.cs").apply { writeText(consumerText) }
+        val portableCompile = runModernCSharpCompiler(
+            modernCSharp,
+            portableConsumerSource,
+            portableDirectory.resolve("PortableCSharpConsumer.dll"),
+            portableDirectory.resolve("CSharp.PortableDefaults.dll"),
+            runtimeAssembly,
+            target = "exe",
+        )
+        assertTrue(portableCompile.exitCode != 0) {
+            "A portable abstract interface slot must require a C# implementation:\n${portableCompile.output}"
+        }
+        assertTrue("CS0535" in portableCompile.output) {
+            "Expected Roslyn's missing-interface-member diagnostic for the portable profile:\n${portableCompile.output}"
+        }
+
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val frameworkDirectory = File(tmpdir, "csharp-framework-interface-default").apply { mkdirs() }
+        val frameworkSource = frameworkDirectory.resolve("default.kt").apply { writeText(kotlinSourceText) }
+        compileInProcess(
+            K2DotNetCompiler(),
+            frameworkSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CSharp.FrameworkDefaults",
+            K2DotNetCompilerArguments::destination.cliArgument, frameworkDirectory.path,
+        )
+        val frameworkBootstrap = frameworkDirectory.resolve("runtime-bootstrap.kt").apply {
+            writeText("fun main() {}")
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            frameworkBootstrap.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CSharpFrameworkRuntimeBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            frameworkDirectory.resolve("CSharpFrameworkRuntimeBootstrap.exe").path,
+        )
+        val frameworkConsumerSource = frameworkDirectory.resolve("consumer.cs").apply { writeText(consumerText) }
+        val frameworkCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            frameworkConsumerSource,
+            frameworkDirectory.resolve("FrameworkCSharpConsumer.exe"),
+            frameworkDirectory.resolve("CSharp.FrameworkDefaults.dll"),
+            frameworkDirectory.resolve("Kotlin.Runtime.dll"),
+            target = "exe",
+        )
+        assertTrue(frameworkCompile.exitCode != 0) {
+            "A net48 abstract interface slot must require a C# implementation:\n${frameworkCompile.output}"
+        }
+        assertTrue("CS0535" in frameworkCompile.output) {
+            "Expected the Framework compiler's missing-interface-member diagnostic:\n${frameworkCompile.output}"
+        }
+    }
+
+    @Test
+    fun testNet10PromotesPortableInterfaceDefaultAndSuppressesOnlyCoveredForwarders() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        val portableDirectory = File(tmpdir, "portable-interface-default").apply { mkdirs() }
+        val portableSource = portableDirectory.resolve("portable.kt").apply {
+            writeText(
+                """
+                package defaults
+
+                public interface PortableBase {
+                    public fun value(): String = "portable"
+                }
+
+                public interface PortableChild : PortableBase
+
+                public class PortableOwned : PortableChild
+                public open class PortableOpen : PortableBase
+                public open class PortableOpenChild : PortableOpen()
+                public open class PortableExplicit : PortableBase {
+                    public override fun value(): String = "class"
+                }
+                public class PortableQualified : PortableBase {
+                    public override fun value(): String =
+                        "portable-qualified:" + super<PortableBase>.value()
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            portableSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.Defaults",
+            K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
+        )
+
+        val portableMetadata = portableDirectory.resolve("Portable.Defaults.klib")
+        val portableManifest = portableMetadata.readKlibManifest()
+        val portableDeclarations = DotNetLibraryAbiCodec.decode(portableManifest)
+        val portableDefault = portableDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration -> declaration.interfaceDefaultImplementation != null }
+            .interfaceDefaultImplementation
+        assertEquals(DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY, portableDefault?.bodyPlacement)
+        assertEquals(
+            2,
+            portableDeclarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder>()
+                .size,
+            portableDeclarations.values.joinToString(),
+        )
+        val portableIl = portableDirectory.resolve("Portable.Defaults.il").readText()
+        assertEquals(
+            2,
+            Regex("<InterfaceDefaultForwarder-").findAll(portableIl).count(),
+            portableIl,
+        )
+        assertTrue("abstract virtual instance string 'value'()" in portableIl) { portableIl }
+        assertTrue("'PortableBase'/'<DefaultImpls>'::'value'" !in portableIl) {
+            "The portable helper owns the body; it must not call an unavailable DIM:\n$portableIl"
+        }
+
+        val derivedDirectory = File(tmpdir, "promoted-interface-default").apply { mkdirs() }
+        val derivedSource = derivedDirectory.resolve("promoted.kt").apply {
+            writeText(
+                """
+                package defaults
+
+                public interface PromotedDefault : PortableChild
+                public interface PromotedInherited : PromotedDefault
+                public interface PromotedLeft : PortableChild
+                public interface PromotedRight : PortableChild
+                public interface PromotedDiamond : PromotedLeft, PromotedRight
+
+                public interface ReabstractedDefault : PortableChild {
+                    public override fun value(): String
+                }
+
+                public interface Net10Override : PortableBase {
+                    public override fun value(): String = "net10"
+                }
+
+                public class Net10QualifiedPortable : PortableBase {
+                    public override fun value(): String = super<PortableBase>.value()
+                }
+
+                public interface Net10Base {
+                    public fun value(): String = "net10-base"
+                }
+
+                public interface Net10Child : Net10Base {
+                    public override fun value(): String = "net10-child"
+                    public fun exactBase(): String = super<Net10Base>.value()
+                }
+
+                public open class Net10PortableOpen : PortableBase
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            derivedSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, portableMetadata.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Promoted.Defaults",
+            K2DotNetCompilerArguments::destination.cliArgument, derivedDirectory.path,
+        )
+
+        val derivedMetadata = derivedDirectory.resolve("Promoted.Defaults.klib")
+        val derivedManifest = derivedMetadata.readKlibManifest()
+        val derivedDeclarations = DotNetLibraryAbiCodec.decode(derivedManifest)
+        val promotion = derivedDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
+            .filter { declaration -> declaration.implementationMethodName.contains("PromotedDefault") }
+            .single()
+        assertEquals(
+            4,
+            derivedDeclarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
+                .count(),
+        )
+        assertEquals(
+            1,
+            derivedDeclarations.values
+                .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder>()
+                .size,
+            derivedDeclarations.values.joinToString(),
+        )
+        assertEquals("Portable.Defaults", promotion.inheritedAssemblyName)
+        assertEquals("value", promotion.inheritedMethodName)
+        assertTrue(promotion.implementationMethodName.startsWith("<InterfaceDefaultPromotion-"))
+
+        val derivedIl = derivedDirectory.resolve("Promoted.Defaults.il").readText()
+        assertTrue("<InterfaceDefaultPromotion-" in derivedIl) { derivedIl }
+        assertTrue(
+            Regex("""\.override method instance string \[Portable\.Defaults].*::'value'\(\)""")
+                .containsMatchIn(derivedIl)
+        ) { derivedIl }
+        assertTrue(
+            Regex("""call string \[Portable\.Defaults].*/'<DefaultImpls>'::'value'""")
+                .containsMatchIn(derivedIl)
+        ) { derivedIl }
+        assertTrue("call instance string 'defaults.Net10Base'::'value'()" in derivedIl) {
+            "The net10 helper must invoke its owning DIM nonvirtually:\n$derivedIl"
+        }
+        assertTrue("callvirt instance string 'defaults.Net10Base'::'value'()" !in derivedIl) {
+            "The exact helper must not redispatch virtually:\n$derivedIl"
+        }
+        assertTrue("call string 'defaults.Net10Base'/'<DefaultImpls>'::'value'" in derivedIl) {
+            "Qualified super must route through the exact-call helper:\n$derivedIl"
+        }
+        assertEquals(
+            1,
+            Regex("<InterfaceDefaultForwarder-").findAll(derivedIl).count(),
+            derivedIl,
+        )
+
+        val consumerDirectory = File(tmpdir, "promoted-interface-default-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                package defaults
+
+                private class ThroughPromotion : PromotedDefault
+                private class ThroughInheritedPromotion : PromotedInherited
+                private class ThroughPortableChild : PortableChild
+                private class ThroughCompetingPromotions : PromotedLeft, PromotedRight
+                private class ThroughResolvedDiamond : PromotedDiamond
+                private class ThroughOverride : PromotedDefault {
+                    override fun value(): String = "override"
+                }
+
+                private class ThroughReabstraction : ReabstractedDefault {
+                    override fun value(): String = "reabstracted"
+                }
+                private class ThroughPortableBaseAndNet10Override : PortableOpenChild(), Net10Override
+                private class ThroughExternalPortableBase : PortableOpenChild()
+                private class ThroughExplicitBaseAndNet10Override : PortableExplicit(), Net10Override {
+                    override fun value(): String = super<PortableExplicit>.value()
+                }
+                private class ThroughNet10PortableBaseAndNet10Override : Net10PortableOpen(), Net10Override
+                private class ThroughNet10QualifiedSuper : Net10Child
+
+                fun main() {
+                    val portableOwnedAsBase: PortableBase = PortableOwned()
+                    if (portableOwnedAsBase.value() != "portable") {
+                        throw Error("portable producer forwarder dispatch")
+                    }
+                    if (PortableQualified().value() != "portable-qualified:portable") {
+                        throw Error("portable qualified interface-super call")
+                    }
+
+                    if (Net10QualifiedPortable().value() != "portable") {
+                        throw Error("net10 consumer qualified portable interface-super call")
+                    }
+
+                    val net10Qualified = ThroughNet10QualifiedSuper()
+                    if (net10Qualified.value() != "net10-child") {
+                        throw Error("ordinary net10 DIM dispatch")
+                    }
+                    if (net10Qualified.exactBase() != "net10-base") {
+                        throw Error("exact net10 DIM super dispatch")
+                    }
+
+                    val promotedAsBase: PortableBase = ThroughPromotion()
+                    if (promotedAsBase.value() != "portable") {
+                        throw Error("promoted default dispatch")
+                    }
+
+                    val inheritedPromotionAsBase: PortableBase = ThroughInheritedPromotion()
+                    if (inheritedPromotionAsBase.value() != "portable") {
+                        throw Error("indirect promoted default through portable base")
+                    }
+
+                    val inheritedPromotionAsInterface: PromotedInherited = ThroughInheritedPromotion()
+                    if (inheritedPromotionAsInterface.value() != "portable") {
+                        throw Error("indirect promoted default through derived interface")
+                    }
+
+                    val overrideAsBase: PortableBase = ThroughOverride()
+                    if (overrideAsBase.value() != "override") {
+                        throw Error("base-typed class override dispatch")
+                    }
+
+                    val overrideAsPromoted: PromotedDefault = ThroughOverride()
+                    if (overrideAsPromoted.value() != "override") {
+                        throw Error("promoted-interface-typed class override dispatch")
+                    }
+
+                    val reabstractedAsBase: PortableBase = ThroughReabstraction()
+                    if (reabstractedAsBase.value() != "reabstracted") {
+                        throw Error("base-typed reabstracted dispatch")
+                    }
+
+                    val reabstractedAsInterface: ReabstractedDefault = ThroughReabstraction()
+                    if (reabstractedAsInterface.value() != "reabstracted") {
+                        throw Error("reabstracted-interface-typed dispatch")
+                    }
+
+                    val competingAsBase: PortableBase = ThroughCompetingPromotions()
+                    if (competingAsBase.value() != "portable") {
+                        throw Error("competing promotions through portable base")
+                    }
+
+                    val competingAsLeft: PromotedLeft = ThroughCompetingPromotions()
+                    if (competingAsLeft.value() != "portable") {
+                        throw Error("competing promotions through left interface")
+                    }
+
+                    val competingAsRight: PromotedRight = ThroughCompetingPromotions()
+                    if (competingAsRight.value() != "portable") {
+                        throw Error("competing promotions through right interface")
+                    }
+
+                    val diamondAsBase: PortableBase = ThroughResolvedDiamond()
+                    if (diamondAsBase.value() != "portable") {
+                        throw Error("resolved diamond promotion through portable base")
+                    }
+
+                    val diamondAsInterface: PromotedDiamond = ThroughResolvedDiamond()
+                    if (diamondAsInterface.value() != "portable") {
+                        throw Error("resolved diamond promotion through derived interface")
+                    }
+
+                    val portableAsBase: PortableBase = ThroughPortableChild()
+                    if (portableAsBase.value() != "portable") {
+                        throw Error("portable helper forwarder dispatch")
+                    }
+
+                    val inheritedForwarderAsBase: PortableBase = ThroughExternalPortableBase()
+                    if (inheritedForwarderAsBase.value() != "portable") {
+                        throw Error("inherited portable forwarder dispatch")
+                    }
+
+                    val maskedOverrideAsBase: PortableBase = ThroughPortableBaseAndNet10Override()
+                    if (maskedOverrideAsBase.value() != "net10") {
+                        throw Error("net10 default masked by portable base forwarder")
+                    }
+
+                    val maskedOverrideAsDerived: Net10Override = ThroughPortableBaseAndNet10Override()
+                    if (maskedOverrideAsDerived.value() != "net10") {
+                        throw Error("net10 default through derived interface")
+                    }
+
+                    val net10MaskedOverrideAsBase: PortableBase = ThroughNet10PortableBaseAndNet10Override()
+                    if (net10MaskedOverrideAsBase.value() != "net10") {
+                        throw Error("net10 default masked by net10-produced portable forwarder")
+                    }
+
+                    val net10MaskedOverrideAsDerived: Net10Override = ThroughNet10PortableBaseAndNet10Override()
+                    if (net10MaskedOverrideAsDerived.value() != "net10") {
+                        throw Error("net10 default through net10-produced base")
+                    }
+
+                    val explicitOverrideAsBase: PortableBase = ThroughExplicitBaseAndNet10Override()
+                    if (explicitOverrideAsBase.value() != "class") {
+                        throw Error("explicit class override through portable base")
+                    }
+
+                    val explicitOverrideAsDerived: Net10Override = ThroughExplicitBaseAndNet10Override()
+                    if (explicitOverrideAsDerived.value() != "class") {
+                        throw Error("explicit class override through derived interface")
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("PromotedDefaultConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            listOf(portableMetadata, derivedMetadata).joinToString(File.pathSeparator) { it.path },
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "PromotedDefaultConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("PromotedDefaultConsumer.il").readText()
+        assertEquals(
+            4,
+            Regex("<InterfaceDefaultForwarder-").findAll(consumerIl).count(),
+            consumerIl,
+        )
+        assertTrue("[Portable.Defaults]" in consumerIl) { consumerIl }
+        assertTrue("[Promoted.Defaults]" in consumerIl) { consumerIl }
+        runDotNet(
+            dotnetHost,
+            consumerAssembly,
+            consumerDirectory,
+            "Profile-aware cross-module interface-default dispatch failed",
+        )
+    }
+
+    @Test
+    fun testNet10PromotesPortableAccessorsAndDefaultArguments() {
+        val dotnetHost = modernDotNetHostOrSkip()
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+
+        val portableDirectory = File(tmpdir, "portable-interface-features").apply { mkdirs() }
+        val portableSource = portableDirectory.resolve("portable.kt").apply {
+            writeText(
+                """
+                package defaults
+
+                public var producerState: String = ""
+
+                public interface PortableFeatures {
+                    public var observed: String
+                        get() = producerState
+                        set(value) {
+                            producerState = value
+                        }
+
+                    public fun combine(first: String = "O", second: String = "K"): String =
+                        first + second
+                }
+
+                public interface PortableAbstractDefaults {
+                    public fun abstractCombine(first: String = "O", second: String = "K"): String
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            portableSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.Features",
+            K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
+        )
+
+        val portableMetadata = portableDirectory.resolve("Portable.Features.klib")
+        val portableDeclarations = DotNetLibraryAbiCodec.decode(portableMetadata.readKlibManifest())
+        assertTrue(
+            portableDeclarations.keys.none { "<DefaultImpls>" in it || "\$default" in it },
+            portableDeclarations.keys.joinToString("\n"),
+        )
+        val portableFunctions = portableDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { it.defaultArgumentDispatcher != null }
+        assertEquals(2, portableFunctions.size, portableFunctions.joinToString())
+        assertTrue(
+            portableFunctions.any {
+                it.methodName == "abstractCombine" &&
+                        it.interfaceDefaultImplementation == null
+            }
+        )
+
+        val derivedDirectory = File(tmpdir, "promoted-interface-features").apply { mkdirs() }
+        val derivedSource = derivedDirectory.resolve("promoted.kt").apply {
+            writeText(
+                """
+                package defaults
+
+                public interface PromotedFeatures : PortableFeatures
+                public interface PromotedAbstractDefaults : PortableAbstractDefaults
+
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            derivedSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, portableMetadata.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Promoted.Features",
+            K2DotNetCompilerArguments::destination.cliArgument, derivedDirectory.path,
+        )
+
+        val derivedMetadata = derivedDirectory.resolve("Promoted.Features.klib")
+        val promotions = DotNetLibraryAbiCodec.decode(derivedMetadata.readKlibManifest()).values
+            .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
+        assertEquals(3, promotions.size, promotions.joinToString())
+        assertTrue(promotions.all { it.inheritedAssemblyName == "Portable.Features" })
+
+        val consumerDirectory = File(tmpdir, "promoted-interface-features-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                package defaults
+
+                private class ThroughPromotion : PromotedFeatures
+                private class ThroughPortableInterface : PortableFeatures
+
+                private class ThroughOverride : PromotedFeatures {
+                    private var localState: String = ""
+
+                    override var observed: String
+                        get() = "override:" + localState
+                        set(value) {
+                            localState = value
+                        }
+
+                    override fun combine(first: String, second: String): String =
+                        "override:" + first + ":" + second
+                }
+
+                private class ThroughAbstractOverride : PromotedAbstractDefaults {
+                    override fun abstractCombine(first: String, second: String): String =
+                        "abstract:" + first + ":" + second
+                }
+
+                fun main() {
+
+                    val promoted: PortableFeatures = ThroughPromotion()
+                    promoted.observed = "promoted"
+                    if (promoted.observed != "promoted") {
+                        throw Error("promoted property accessors")
+                    }
+                    if (promoted.combine() != "OK") {
+                        throw Error("promoted default arguments")
+                    }
+                    if (promoted.combine(second = "!") != "O!") {
+                        throw Error("promoted named default argument")
+                    }
+
+                    val portable: PortableFeatures = ThroughPortableInterface()
+                    portable.observed = "portable"
+                    if (portable.observed != "portable") {
+                        throw Error("portable property forwarders")
+                    }
+                    if (portable.combine() != "OK") {
+                        throw Error("portable default-argument forwarder")
+                    }
+
+                    val overridden: PortableFeatures = ThroughOverride()
+                    overridden.observed = "consumer"
+                    if (overridden.observed != "override:consumer") {
+                        throw Error("property override dispatch")
+                    }
+                    if (overridden.combine() != "override:O:K") {
+                        throw Error("default-argument helper bypassed override")
+                    }
+
+                    val abstractDefaults: PortableAbstractDefaults = ThroughAbstractOverride()
+                    if (abstractDefaults.abstractCombine() != "abstract:O:K") {
+                        throw Error("abstract interface default arguments")
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("PromotedFeaturesConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            listOf(portableMetadata, derivedMetadata).joinToString(File.pathSeparator) { it.path },
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "PromotedFeaturesConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+
+        val consumerIl = consumerDirectory.resolve("PromotedFeaturesConsumer.il").readText()
+        assertEquals(
+            3,
+            Regex("<InterfaceDefaultForwarder-").findAll(consumerIl).count(),
+            consumerIl,
+        )
+        assertTrue("combine\$default" in consumerIl) { consumerIl }
+        runDotNet(
+            dotnetHost,
+            consumerAssembly,
+            consumerDirectory,
+            "Cross-module promoted accessors/default arguments failed",
+        )
+    }
+    @Test
+    fun testRejectsInterfaceSuperCallsWithOmittedDefaultArguments() {
+        val source = File(tmpdir, "super-call-with-default-arguments.kt").apply {
+            writeText(
+                """
+                interface Base {
+                    fun value(prefix: String = "O", suffix: String = "K"): String = prefix + suffix
+                }
+
+                class Derived : Base {
+                    fun invalid(): String = super<Base>.value()
+                }
+                """.trimIndent()
+            )
+        }
+
+        for (useLightTree in listOf(false, true)) {
+            val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    "-Xuse-fir-lt=$useLightTree",
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                    K2DotNetCompilerArguments::destination.cliArgument,
+                    File(tmpdir, "super-call-with-default-arguments-$useLightTree.il").path,
+                )
+            )
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+            assertTrue("super-calls with default arguments are prohibited" in diagnostics) { diagnostics }
+        }
+    }
+
+    @Test
     fun testProducesPortableUserLibraryPair() {
-        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val source = File(tmpdir, "library.kt").apply {
             writeText(
                 """
@@ -696,6 +1776,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             source.path,
             K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "Sample.Library",
             K2DotNetCompilerArguments::dotNetExports.cliArgument, "sample.increment=Increment",
             K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
@@ -710,8 +1791,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(manifest.getProperty("dotnet_assembly_name") == "Sample.Library")
         assertTrue(manifest.getProperty("dotnet_assembly_version") == "1.0.0.0")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Sample.Library.dll")
-        assertTrue(manifest.getProperty("dotnet_library_tfm") == "netstandard2.0")
-        assertTrue(manifest.getProperty("dotnet_abi_version") == "2")
+        assertEquals("netstandard2.0", manifest.getProperty("dotnet_library_tfm"))
+        assertEquals(DotNetLibraryAbiCodec.ABI_VERSION, manifest.getProperty("dotnet_abi_version"))
+        assertEquals("", manifest.getProperty(DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY))
+        assertTrue(
+            manifest.getProperty(DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY) ==
+                    DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME
+        )
+        assertTrue(
+            manifest.getProperty(DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY) ==
+                    DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION
+        )
+        assertTrue(
+            manifest.getProperty(DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY) ==
+                    DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString()
+        )
+        assertEquals(
+            DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
+            manifest.getProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY),
+        )
         assertTrue(manifest.stringPropertyNames().any { it.startsWith("dotnet_decl_") })
 
         val il = outputDirectory.resolve("Sample.Library.il").readText()
@@ -723,7 +1821,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(".entrypoint" !in il)
         assertTrue("[mscorlib]" !in il)
 
-        val dotnetHost = DotNetIlAssembler.findModernDotNetHost() ?: return
+        val dotnetHost = modernDotNetHostOrSkip()
         val consumerIl = outputDirectory.resolve("LibraryConsumer.il").apply {
             writeText(
                 """
@@ -757,7 +1855,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetIlAssembler.assembleExecutable(
                 consumerIl,
                 consumerAssembly,
-                DotNetTarget.NET,
+                DotNetTarget.NET10_0,
                 MessageCollector.NONE,
             )
         )
@@ -784,7 +1882,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             kotlinConsumerSource.path,
             K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
-            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net",
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "KotlinConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, kotlinConsumerAssembly.path,
         )
@@ -800,18 +1898,1540 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             kotlinConsumerDirectory,
             "Kotlin cross-module library consumer failed",
         )
+
+        val unrelatedConsumerDirectory = outputDirectory.resolve("unrelated-consumer").apply { mkdirs() }
+        val unrelatedConsumerSource = unrelatedConsumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package unrelated
+
+                fun main() {
+                    if (40 + 2 != 42) throw Error("arithmetic")
+                }
+                """.trimIndent()
+            )
+        }
+        val unrelatedConsumerAssembly = unrelatedConsumerDirectory.resolve("UnrelatedConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            unrelatedConsumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "UnrelatedConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, unrelatedConsumerAssembly.path,
+        )
+        val unrelatedConsumerIl = unrelatedConsumerDirectory.resolve("UnrelatedConsumer.il").readText()
+        assertTrue(".assembly extern 'Sample.Library'" !in unrelatedConsumerIl)
+        assertTrue("[Sample.Library]" !in unrelatedConsumerIl)
+        assertTrue(!unrelatedConsumerDirectory.resolve("Sample.Library.dll").exists()) {
+            "An unused metadata classpath entry must not become a CLR runtime dependency"
+        }
+        runDotNet(
+            dotnetHost,
+            unrelatedConsumerAssembly,
+            unrelatedConsumerDirectory,
+            "Consumer with an unused Kotlin/.NET classpath library failed",
+        )
     }
 
     @Test
-    fun testProducesPortableStdlibPairForModernRuntimeSelection() {
-        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
-        produceAndConsumeBoundStdlibPair("net")
+    fun testTargetProfilesAreExplicitAndDependencyCompatible() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
+
+        fun produceLibrary(target: String, assemblyName: String): File {
+            val directory = File(tmpdir, assemblyName)
+            val source = File(tmpdir, "$assemblyName.kt").apply {
+                writeText("package profiles\n\npublic fun answer(): Int = 42")
+            }
+            compileInProcess(
+                K2DotNetCompiler(),
+                source.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, assemblyName,
+                K2DotNetCompilerArguments::destination.cliArgument, directory.path,
+            )
+            val metadata = directory.resolve("$assemblyName.klib")
+            assertEquals(target, metadata.readKlibManifest().getProperty("dotnet_library_tfm"))
+            val il = directory.resolve("$assemblyName.il").readText()
+            assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il) { il }
+            if (target == "netstandard2.0") {
+                assertTrue(".assembly extern netstandard" in il) { il }
+                assertTrue("[mscorlib]" !in il) { il }
+            } else {
+                assertTrue(".assembly extern mscorlib" in il) { il }
+            }
+            return metadata
+        }
+
+        val net48Library = produceLibrary("net48", "Profile.Net48")
+        val portableLibrary = produceLibrary("netstandard2.0", "Profile.Standard")
+        val net10Library = produceLibrary("net10.0", "Profile.Net10")
+        val consumerSource = File(tmpdir, "profile-consumer.kt").apply {
+            writeText("package consumer\n\npublic fun consume(): Int = profiles.answer()")
+        }
+
+        fun compileConsumer(target: String, dependency: File, outputName: String): Pair<String, ExitCode> =
+            AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    consumerSource.path,
+                    K2DotNetCompilerArguments::classpath.cliArgument, dependency.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, outputName,
+                    K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "$outputName.il").path,
+                )
+            )
+
+        for (target in listOf("net48", "net10.0")) {
+            val [diagnostics, exitCode] = compileConsumer(target, portableLibrary, "PortableOn-$target")
+            assertEquals(ExitCode.OK, exitCode, diagnostics)
+        }
+        for (entry in listOf("net48" to net10Library, "net10.0" to net48Library)) {
+            val target = entry.first
+            val dependency = entry.second
+            val [diagnostics, exitCode] = compileConsumer(target, dependency, "RejectedOn-$target")
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+            assertTrue("is not compatible with Kotlin/.NET target '$target'" in diagnostics) { diagnostics }
+        }
+
+        val [executableDiagnostics, executableExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                consumerSource.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "InvalidStandardApp.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, executableExitCode, executableDiagnostics)
+        assertTrue("target profile 'netstandard2.0' is library-only" in executableDiagnostics) {
+            executableDiagnostics
+        }
+
+        val [standardDiagnostics, standardExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                consumerSource.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+                K2DotNetCompilerArguments::classpath.cliArgument, net48Library.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Rejected.Standard.Consumer",
+                K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "rejected-standard-consumer").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, standardExitCode, standardDiagnostics)
+        assertTrue("is not compatible with Kotlin/.NET target 'netstandard2.0'" in standardDiagnostics) {
+            standardDiagnostics
+        }
     }
 
     @Test
-    fun testProducesPortableStdlibPairForFrameworkRuntimeSelection() {
-        assumeTrue(DotNetIlAssembler.findModernIlasm() != null, "Portable-library ilasm is not available")
-        produceAndConsumeBoundStdlibPair("netframework")
+    fun testRuntimeStdlibVariantsArePortablePhysicalAbiSupersets() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
+
+        val pairDirectories = listOf("netstandard2.0", "net48", "net10.0").associateWith { target ->
+            produceBoundStdlibPair(target, "portable-abi-superset")
+        }
+        val manifests = pairDirectories.mapValues { entry ->
+            entry.value.resolve("Kotlin.Stdlib.klib").readKlibManifest()
+        }
+        val portableManifest = manifests.getValue("netstandard2.0")
+        val portableDeclarations = DotNetLibraryAbiCodec.decode(portableManifest)
+        val portableRuntimeSurface = portableManifest
+            .getProperty(DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY)
+            .toInt()
+        assertTrue(portableDeclarations.isNotEmpty())
+
+        for (target in listOf("net48", "net10.0")) {
+            val platformManifest = manifests.getValue(target)
+            assertEquals(
+                portableManifest.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY),
+                platformManifest.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY),
+                "$target changed the physical-index schema",
+            )
+            assertEquals(
+                portableManifest.getProperty(DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY),
+                platformManifest.getProperty(DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY),
+                "$target changed the Kotlin logical-identity scheme",
+            )
+            assertEquals(
+                portableManifest.getProperty(DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY),
+                platformManifest.getProperty(DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY),
+                "$target changed the CLR physical-name grammar",
+            )
+            val platformRuntimeSurface = platformManifest
+                .getProperty(DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY)
+                .toInt()
+            assertTrue(platformRuntimeSurface >= portableRuntimeSurface) {
+                "$target requires runtime surface $platformRuntimeSurface below the portable floor $portableRuntimeSurface"
+            }
+
+            val differences = DotNetLibraryAbiCodec.portablePhysicalAbiDifferences(
+                portableDeclarations,
+                DotNetLibraryAbiCodec.decode(platformManifest),
+            )
+            assertTrue(differences.isEmpty()) {
+                buildString {
+                    appendLine("$target is not a physical ABI superset of netstandard2.0:")
+                    differences.forEach { difference ->
+                        append("  ")
+                        append(difference.logicalKey)
+                        append(": portable=")
+                        append(difference.portableDeclaration)
+                        append(", platform=")
+                        appendLine(difference.platformDeclaration ?: "<missing>")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun testVarargLogicalIdentitySurvivesLibraryLowering() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "vararg-library")
+        val librarySource = File(tmpdir, "vararg-library.kt").apply {
+            writeText(
+                """
+                package crossvararg
+
+                public fun sum(vararg values: Int): Int = values[0] + values[1]
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CrossVararg.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val consumerDirectory = File(tmpdir, "vararg-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import crossvararg.sum
+
+                fun main() {
+                    if (sum(20, 22) != 42) throw Error("cross-module vararg")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("CrossVarargConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument,
+            libraryDirectory.resolve("CrossVararg.Library.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "CrossVarargConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+        val consumerIl = consumerDirectory.resolve("CrossVarargConsumer.il").readText()
+        assertTrue("[CrossVararg.Library]" in consumerIl)
+        runDotNet(
+            dotnetHost,
+            consumerAssembly,
+            consumerDirectory,
+            "Cross-module vararg consumer failed",
+        )
+    }
+
+    @Test
+    fun testFriendAuthorizationAndPublishedCompilerAbiAcrossLibraryBoundary() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val producerDirectory = File(tmpdir, "friend-producer")
+        val producerSource = File(tmpdir, "friendProducer.kt").apply {
+            writeText(
+                """
+                package friendship
+
+                internal const val INTERNAL_CONST: Int = 19
+                @PublishedApi internal const val PUBLISHED_CONST: Int = 20
+
+                internal class InternalBox(internal val value: Int)
+
+                @PublishedApi
+                internal class PublishedBox(public val value: Int)
+
+                internal fun internalAnswer(value: Int): Int = InternalBox(value).value + INTERNAL_CONST
+                @PublishedApi internal fun publishedAnswer(value: Int): Int = value + PUBLISHED_CONST
+                public fun publicAnswer(value: Int): Int = value + 2
+                """.trimIndent()
+            )
+        }
+        val longPublicKey =
+            "0024000004800000940000000602000000240000525341310004000001000100" +
+                    "8D56C76F9E8649383049F383C44BE0EC204181822A6C31CF5EB7EF486944D032" +
+                    "188EA1D3920763712CCB12D75FB77E9811149E6148E5D32FBAAB37611C1878DD" +
+                    "C19E20EF135D0CB2CFF2BFEC3D115810C3D9069638FE4BE215DBF795861920E5" +
+                    "AB6F7DB2E2CEEF136AC23D5DD2BF031700AEC232F6C6B1C785B4305C123B37AB"
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Friend.Producer",
+            "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=Friend.Consumer",
+            "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=" +
+                    "Signed.Consumer, PublicKey=$longPublicKey",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerMetadata = producerDirectory.resolve("Friend.Producer.klib")
+        val producerIl = producerDirectory.resolve("Friend.Producer.il").readText()
+        val producerManifest = producerMetadata.readKlibManifest()
+        assertEquals(
+            setOf(
+                DotNetFriendAssemblyIdentity("Friend.Consumer"),
+                DotNetFriendAssemblyIdentity("Signed.Consumer", longPublicKey),
+            ),
+            DotNetLibraryAbiCodec.decodeFriendAssemblies(
+                producerManifest.getProperty(DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY)
+            ),
+        )
+        assertTrue("System.Runtime.CompilerServices.InternalsVisibleToAttribute" in producerIl) { producerIl }
+        assertTrue(".method assembly hidebysig static int32 'internalAnswer'" in producerIl) { producerIl }
+        assertTrue(".method public hidebysig static int32 'publishedAnswer'" in producerIl) { producerIl }
+        assertTrue(".field assembly static literal int32 'INTERNAL_CONST'" in producerIl) { producerIl }
+        assertTrue(".field public static literal int32 'PUBLISHED_CONST'" in producerIl) { producerIl }
+        assertTrue(".class private auto ansi sealed beforefieldinit 'friendship.InternalBox'" in producerIl) { producerIl }
+        assertTrue(".class public auto ansi sealed beforefieldinit 'friendship.PublishedBox'" in producerIl) { producerIl }
+        assertTrue("'friendship.friendProducerKt'" in producerIl) { producerIl }
+        assertTrue("KotlinCompilerAbiAttribute" in producerIl) { producerIl }
+        assertTrue("System.ComponentModel.EditorBrowsableAttribute" in producerIl) { producerIl }
+
+        val consumerDirectory = producerDirectory.resolve("authorized-consumer").apply { mkdirs() }
+        val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import friendship.InternalBox
+                import friendship.PublishedBox
+                import friendship.internalAnswer
+                import friendship.publishedAnswer
+                import friendship.publicAnswer
+
+                fun main() {
+                    val answer = internalAnswer(1) + InternalBox(1).value +
+                            publishedAnswer(1) + PublishedBox(1).value + publicAnswer(1)
+                    if (answer != 46) throw Error("friend result: ${'$'}answer")
+                }
+                """.trimIndent()
+            )
+        }
+        val consumerAssembly = consumerDirectory.resolve("Friend.Consumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            consumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
+            K2DotNetCompilerArguments::friendPaths.cliArgument, producerMetadata.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Friend.Consumer",
+            K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+        )
+        runDotNet(
+            dotnetHost,
+            consumerAssembly,
+            consumerDirectory,
+            "Authorized Kotlin/.NET friend consumer failed",
+        )
+
+        val csharpDirectory = File(tmpdir, "friend-cs").apply { mkdirs() }
+        val csharpSource = csharpDirectory.resolve("Program.cs").apply { writeText(
+            """
+            public static class Program
+            {
+                public static int Main()
+                {
+                    return friendship.friendProducerKt.internalAnswer(23) == 42 ? 0 : 1;
+                }
+            }
+            """.trimIndent()
+        ) }
+        val frameworkProducerIl = csharpDirectory.resolve("Friend.Producer.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Friend.Producer",
+            "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=Friend.Consumer",
+            K2DotNetCompilerArguments::destination.cliArgument, frameworkProducerIl.path,
+        )
+        val producerImplementation = csharpDirectory.resolve("Friend.Producer.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                frameworkProducerIl,
+                producerImplementation,
+                DotNetTarget.NET48,
+                MessageCollector.NONE,
+            )
+        )
+        val runtimeImplementation = consumerDirectory.resolve("Kotlin.Runtime.dll")
+        val csharpExecutable = csharpDirectory.resolve("Friend.Consumer.exe")
+        val csharpResult = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            csharpSource,
+            csharpExecutable,
+            producerImplementation,
+            runtimeImplementation,
+            target = "exe",
+        )
+        assertEquals(0, csharpResult.exitCode, csharpResult.output)
+        runtimeImplementation.copyTo(csharpDirectory.resolve(runtimeImplementation.name), overwrite = true)
+        val csharpProcess = ProcessBuilder(csharpExecutable.path)
+            .directory(csharpDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val csharpOutput = csharpProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, csharpProcess.waitFor(), "Authorized C# friend consumer failed:\n$csharpOutput")
+
+        val unauthorizedSource = File(tmpdir, "unauthorized-friend.kt").apply {
+            writeText("package intruder\n\npublic fun answer(): Int = 42")
+        }
+        val [unauthorizedDiagnostics, unauthorizedExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                unauthorizedSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
+                K2DotNetCompilerArguments::friendPaths.cliArgument, producerMetadata.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Unauthorized.Consumer",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "Unauthorized.Consumer.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, unauthorizedExitCode, unauthorizedDiagnostics)
+        assertTrue("does not authorize unsigned consumer assembly 'Unauthorized.Consumer'" in unauthorizedDiagnostics) {
+            unauthorizedDiagnostics
+        }
+
+        val nonFriendSource = File(tmpdir, "non-friend.kt").apply {
+            writeText(
+                """
+                package nonfriend
+
+                import friendship.internalAnswer
+
+                public fun forbidden(): Int = internalAnswer(23)
+                """.trimIndent()
+            )
+        }
+        val [nonFriendDiagnostics, nonFriendExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                nonFriendSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Friend.Consumer",
+                K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "NonFriend.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, nonFriendExitCode, nonFriendDiagnostics)
+        assertTrue("internal" in nonFriendDiagnostics) { nonFriendDiagnostics }
+    }
+
+    @Test
+    fun testProducesNet10StdlibPair() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        produceAndConsumeBoundStdlibPair("net10.0")
+    }
+
+    @Test
+    fun testProducesNet48StdlibPair() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
+        produceAndConsumeBoundStdlibPair("net48")
+    }
+
+    @Test
+    fun testPortableStdlibPairExecutesOnBothRuntimeProfiles() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val pairDirectory = produceBoundStdlibPair("netstandard2.0", "shared")
+        consumeBoundStdlibPair(pairDirectory, "net48")
+        consumeBoundStdlibPair(pairDirectory, "net10.0")
+        consumeInstalledStdlibPair(pairDirectory, "net48", installedProfile = "netstandard2.0")
+        consumeInstalledStdlibPair(pairDirectory, "net10.0", installedProfile = "netstandard2.0")
+        executeBoundStdlibPair(pairDirectory, "net48", dotnetHost = null)
+        executeBoundStdlibPair(pairDirectory, "net10.0", dotnetHost)
+    }
+
+    @Test
+    fun testLibraryPublicationFailsWhenADeclarationIsEvicted() {
+        val source = File(tmpdir, "unsupported-library.kt").apply {
+            writeText(
+                """
+                package sample
+
+                public fun unsupported(value: Float): Float = value
+                """.trimIndent()
+            )
+        }
+        val outputDirectory = File(tmpdir, "unsupported-library")
+        val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Unsupported.Library",
+                K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+            )
+        )
+
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, output)
+        assertTrue("is not supported by the .NET backend and was skipped" in output) { output }
+        assertTrue(!outputDirectory.resolve("Unsupported.Library.klib").exists())
+        assertTrue(!outputDirectory.resolve("Unsupported.Library.dll").exists())
+    }
+
+    @Test
+    fun testKotlinVisibilityIsPreservedInClrMetadata() {
+        val source = File(tmpdir, "visibility.kt").apply {
+            writeText(
+                """
+                package surface
+
+                private const val PRIVATE_CONST: Int = 1
+                internal const val INTERNAL_CONST: Int = 2
+                public const val PUBLIC_CONST: Int = 3
+
+                private fun privateTop(): Int = PRIVATE_CONST
+                internal fun internalTop(): Int = INTERNAL_CONST
+                public fun publicTop(): Int = PUBLIC_CONST
+
+                private class PrivateTop
+                internal class InternalTop
+                public open class PublicTop {
+                    private fun privateMember(): Int = 1
+                    internal fun internalMember(): Int = 2
+                    protected fun protectedMember(): Int = 3
+                    public fun publicMember(): Int = 4
+                }
+
+                public sealed class SealedTop
+                """.trimIndent()
+            )
+        }
+        val outputFile = File(tmpdir, "visibility.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Visibility",
+            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
+        )
+
+        val il = outputFile.readText()
+        assertTrue(".class private auto ansi sealed beforefieldinit 'surface.PrivateTop'" in il) { il }
+        assertTrue(".class private auto ansi sealed beforefieldinit 'surface.InternalTop'" in il) { il }
+        assertTrue(".class public auto ansi beforefieldinit 'surface.PublicTop'" in il) { il }
+        assertTrue(".class public abstract auto ansi beforefieldinit 'surface.SealedTop'" in il) { il }
+        assertTrue(".method famandassem hidebysig specialname rtspecialname instance void .ctor()" in il) { il }
+        assertTrue(".method assembly hidebysig static int32 'privateTop'()" in il) { il }
+        assertTrue(".method assembly hidebysig static int32 'internalTop'()" in il) { il }
+        assertTrue(".method public hidebysig static int32 'publicTop'()" in il) { il }
+        assertTrue(".method private hidebysig instance int32 'privateMember'()" in il) { il }
+        assertTrue(".method assembly hidebysig instance int32 'internalMember'()" in il) { il }
+        assertTrue(".method family hidebysig instance int32 'protectedMember'()" in il) { il }
+        assertTrue(".method public hidebysig instance int32 'publicMember'()" in il) { il }
+        assertTrue(".field private static literal int32 'PRIVATE_CONST'" in il) { il }
+        assertTrue(".field assembly static literal int32 'INTERNAL_CONST'" in il) { il }
+        assertTrue(".field public static literal int32 'PUBLIC_CONST'" in il) { il }
+    }
+
+    @Test
+    fun testCSharpCannotConsumeNonPublicKotlinSurface() {
+        val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkIlasm != null, ".NET Framework ILAsm is not available")
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Portable-library ILAsm is not available")
+
+        val source = File(tmpdir, "visibilityConsumerLibrary.kt").apply {
+            writeText(
+                """
+                package surface
+
+                private const val PRIVATE_CONST: Int = 1
+                internal const val INTERNAL_CONST: Int = 2
+                public const val PUBLIC_CONST: Int = 3
+
+                private fun privateTop(): Int = PRIVATE_CONST
+                internal fun internalTop(): Int = INTERNAL_CONST
+                public fun publicTop(): Int = PUBLIC_CONST
+                public fun publicDefault(value: Int = 4): Int = value
+
+                private class PrivateTop
+                internal class InternalTop
+
+                public open class PublicTop {
+                    private fun privateMember(): Int = 1
+                    internal fun internalMember(): Int = 2
+                    protected fun protectedMember(): Int = 3
+                    public fun publicMember(): Int = 4
+                }
+
+                public sealed class SealedTop
+                """.trimIndent()
+            )
+        }
+        val ilFile = File(tmpdir, "Visibility.Consumer.Library.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Visibility.Consumer.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, ilFile.path,
+        )
+        val implementation = File(tmpdir, "Visibility.Consumer.Library.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                ilFile,
+                implementation,
+                DotNetTarget.NET48,
+                MessageCollector.NONE,
+            )
+        )
+        val runtimeBootstrap = File(tmpdir, "runtimeBootstrap.kt").apply { writeText("fun main() {}") }
+        compileInProcess(
+            K2DotNetCompiler(),
+            runtimeBootstrap.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "RuntimeBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "RuntimeBootstrap.exe").path,
+        )
+        val runtime = File(tmpdir, "Kotlin.Runtime.dll")
+        assertTrue(runtime.isFile) { "Executable compilation did not install Kotlin.Runtime.dll" }
+
+        val publicConsumer = File(tmpdir, "PublicConsumer.cs").apply {
+            writeText(
+                """
+                public sealed class PublicConsumer : surface.PublicTop
+                {
+                    public int Read()
+                    {
+                        return surface.visibilityConsumerLibraryKt.publicTop()
+                            + surface.visibilityConsumerLibraryKt.PUBLIC_CONST
+                            + protectedMember()
+                            + publicMember();
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val publicResult = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            publicConsumer,
+            File(tmpdir, "PublicConsumer.dll"),
+            implementation,
+            runtime,
+        )
+        assertEquals(0, publicResult.exitCode, publicResult.output)
+
+        val forbiddenConsumer = File(tmpdir, "ForbiddenConsumer.cs").apply {
+            writeText(
+                """
+                public class IllegalSealedSubclass : surface.SealedTop {}
+
+                public sealed class ForbiddenConsumer
+                {
+                    public object PrivateType() { return new surface.PrivateTop(); }
+                    public object InternalType() { return new surface.InternalTop(); }
+                    public int PrivateTop() { return surface.visibilityConsumerLibraryKt.privateTop(); }
+                    public int InternalTop() { return surface.visibilityConsumerLibraryKt.internalTop(); }
+                    public int PrivateConst() { return surface.visibilityConsumerLibraryKt.PRIVATE_CONST; }
+                    public int InternalConst() { return surface.visibilityConsumerLibraryKt.INTERNAL_CONST; }
+                    public int PrivateMember(surface.PublicTop value) { return value.privateMember(); }
+                    public int InternalMember(surface.PublicTop value) { return value.internalMember(); }
+                }
+                """.trimIndent()
+            )
+        }
+        val forbiddenResult = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            forbiddenConsumer,
+            File(tmpdir, "ForbiddenConsumer.dll"),
+            implementation,
+            runtime,
+        )
+        assertTrue(forbiddenResult.exitCode != 0) { forbiddenResult.output }
+        for (name in listOf(
+            "SealedTop",
+            "PrivateTop",
+            "InternalTop",
+            "privateTop",
+            "internalTop",
+            "PRIVATE_CONST",
+            "INTERNAL_CONST",
+            "privateMember",
+            "internalMember",
+        )) {
+            assertTrue(name in forbiddenResult.output) {
+                "Expected C# accessibility diagnostic for '$name':\n${forbiddenResult.output}"
+            }
+        }
+
+        val reflectionVerifier = File(tmpdir, "VisibilityReflectionVerifier.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+
+                public static class VisibilityReflectionVerifier
+                {
+                    private const BindingFlags DeclaredInstance =
+                        BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+                    private const BindingFlags DeclaredStatic =
+                        BindingFlags.DeclaredOnly | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+
+                    private static void Require(bool condition, string message)
+                    {
+                        if (!condition) throw new Exception(message);
+                    }
+
+                    private static bool HasAttribute(MemberInfo member, string fullName)
+                    {
+                        foreach (CustomAttributeData attribute in member.GetCustomAttributesData())
+                            if (attribute.AttributeType.FullName == fullName) return true;
+                        return false;
+                    }
+
+                    public static int Main()
+                    {
+                        Assembly assembly = typeof(surface.PublicTop).Assembly;
+                        Type facade = assembly.GetType("surface.visibilityConsumerLibraryKt", true);
+                        Type privateTop = assembly.GetType("surface.PrivateTop", true);
+                        Type internalTop = assembly.GetType("surface.InternalTop", true);
+                        Type publicTop = assembly.GetType("surface.PublicTop", true);
+                        Type sealedTop = assembly.GetType("surface.SealedTop", true);
+
+                        Require(!privateTop.IsPublic, "private top-level type became CLR-public");
+                        Require(!internalTop.IsPublic, "internal top-level type became CLR-public");
+                        Require(publicTop.IsPublic, "public top-level type is not CLR-public");
+
+                        Require(facade.GetMethod("privateTop", DeclaredStatic).IsAssembly,
+                            "file-private top-level function must be facade-internal");
+                        Require(facade.GetMethod("internalTop", DeclaredStatic).IsAssembly,
+                            "internal top-level function must be assembly-visible");
+                        Require(facade.GetMethod("publicTop", DeclaredStatic).IsPublic,
+                            "public top-level function must be CLR-public");
+
+                        Require(publicTop.GetMethod("privateMember", DeclaredInstance).IsPrivate,
+                            "private member must be CLR-private");
+                        Require(publicTop.GetMethod("internalMember", DeclaredInstance).IsAssembly,
+                            "internal member must be assembly-visible");
+                        Require(publicTop.GetMethod("protectedMember", DeclaredInstance).IsFamily,
+                            "protected member must be family-visible");
+                        Require(publicTop.GetMethod("publicMember", DeclaredInstance).IsPublic,
+                            "public member must be CLR-public");
+
+                        Require(facade.GetField("PRIVATE_CONST", DeclaredStatic).IsPrivate,
+                            "private const must be CLR-private");
+                        Require(facade.GetField("INTERNAL_CONST", DeclaredStatic).IsAssembly,
+                            "internal const must be assembly-visible");
+                        Require(facade.GetField("PUBLIC_CONST", DeclaredStatic).IsPublic,
+                            "public const must be CLR-public");
+
+                        ConstructorInfo[] sealedConstructors = sealedTop.GetConstructors(DeclaredInstance);
+                        Require(sealedConstructors.Length == 1 && sealedConstructors[0].IsFamilyAndAssembly,
+                            "sealed constructor must be famandassem");
+
+                        MethodInfo defaultBridge = facade.GetMethod("publicDefault${'$'}default", DeclaredStatic);
+                        Require(defaultBridge != null && defaultBridge.IsPublic,
+                            "cross-module default bridge must be CLR-public");
+                        Require(HasAttribute(defaultBridge, "Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute"),
+                            "default bridge is missing the compiler-ABI marker");
+                        Require(HasAttribute(defaultBridge, "System.ComponentModel.EditorBrowsableAttribute"),
+                            "default bridge is missing EditorBrowsable(Never)");
+
+                        Type syntheticMarker = Assembly.LoadFrom("Kotlin.Runtime.dll")
+                            .GetType("Kotlin.Runtime.Internal.SyntheticConstructorMarker", true);
+                        Require(syntheticMarker.IsPublic, "synthetic constructor marker must be CLR-public");
+                        Require(HasAttribute(syntheticMarker, "Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute"),
+                            "synthetic constructor marker is missing the compiler-ABI marker");
+                        Require(HasAttribute(syntheticMarker, "System.ComponentModel.EditorBrowsableAttribute"),
+                            "synthetic constructor marker is missing EditorBrowsable(Never)");
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val reflectionExecutable = File(tmpdir, "VisibilityReflectionVerifier.exe")
+        val reflectionCompile = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            reflectionVerifier,
+            reflectionExecutable,
+            implementation,
+            runtime,
+            target = "exe",
+        )
+        assertEquals(0, reflectionCompile.exitCode, reflectionCompile.output)
+        val reflectionProcess = ProcessBuilder(reflectionExecutable.path)
+            .directory(tmpdir)
+            .redirectErrorStream(true)
+            .start()
+        val reflectionOutput = reflectionProcess.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, reflectionProcess.waitFor(), reflectionOutput)
+    }
+
+    @Test
+    fun testCompilerAbiMetadataResolvesOnNet10() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+
+        val directory = File(tmpdir, "net10-compiler-abi-reflection").apply { mkdirs() }
+        val source = directory.resolve("published.kt").apply {
+            writeText(
+                """
+                package profileabi
+
+                @PublishedApi
+                internal class PublishedBox
+
+                fun main() {
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        val application = directory.resolve("ProfileAbi.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ProfileAbi",
+            K2DotNetCompilerArguments::destination.cliArgument, application.path,
+        )
+        val applicationIl = directory.resolve("ProfileAbi.il").readText()
+        assertTrue(".assembly extern System.Runtime" in applicationIl) { applicationIl }
+        assertTrue(
+            ".custom instance void [System.Runtime]System.ComponentModel.EditorBrowsableAttribute" in applicationIl
+        ) { applicationIl }
+
+        val verifierSource = directory.resolve("Verifier.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+
+                public static class Verifier
+                {
+                    private static bool HasAttribute(MemberInfo member, string fullName)
+                    {
+                        foreach (CustomAttributeData attribute in member.GetCustomAttributesData())
+                            if (attribute.AttributeType.FullName == fullName)
+                                return true;
+                        return false;
+                    }
+
+                    public static int Main()
+                    {
+                        Type marker = Assembly.LoadFrom("Kotlin.Runtime.dll")
+                            .GetType("Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute", true);
+                        if (!HasAttribute(marker, "System.ComponentModel.EditorBrowsableAttribute"))
+                            return 1;
+
+                        Type published = Assembly.LoadFrom("ProfileAbi.dll")
+                            .GetType("profileabi.PublishedBox", true);
+                        if (!HasAttribute(published, "Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute"))
+                            return 2;
+                        if (!HasAttribute(published, "System.ComponentModel.EditorBrowsableAttribute"))
+                            return 3;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val verifier = directory.resolve("Verifier.exe")
+        val compileResult = runCSharpCompiler(
+            checkNotNull(csharpCompiler),
+            verifierSource,
+            verifier,
+            target = "exe",
+        )
+        assertEquals(0, compileResult.exitCode, compileResult.output)
+        directory.resolve("ProfileAbi.runtimeconfig.json")
+            .copyTo(directory.resolve("Verifier.runtimeconfig.json"), overwrite = true)
+
+        val process = ProcessBuilder(dotnetHost.path, "exec", verifier.path)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), output)
+    }
+
+    @Test
+    fun testPrimitiveArrayWrappersAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "primitive-array-wrapper-library")
+        val librarySource = File(tmpdir, "primitiveArrayLibrary.kt").apply {
+            writeText(
+                """
+                package primitivearrays
+
+                public fun measure(values: IntArray): Int = values[0] + values[1]
+
+                public fun measure(values: Array<Int>): Int = values[0] + values[1] + 10
+
+                public fun makeSpecialized(): IntArray = intArrayOf(1, 2)
+
+                public fun makeGeneric(): Array<Int> = arrayOf(1, 2)
+
+                public fun identity(values: IntArray): IntArray = values
+
+                private var remembered: IntArray? = null
+
+                public fun sameIdentity(first: IntArray, second: IntArray): Boolean = first === second
+
+                public fun rememberIdentity(values: IntArray): Boolean {
+                    remembered = values
+                    return true
+                }
+
+                public fun isRememberedIdentity(values: IntArray): Boolean = remembered === values
+
+                public fun makeAndRemember(): IntArray {
+                    val values = intArrayOf(20, 22)
+                    remembered = values
+                    return values
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "PrimitiveArray.Library",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.identity(kotlin.IntArray)=RoundTripSpecialized",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.makeSpecialized=MakeSpecialized",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.sameIdentity(kotlin.IntArray,kotlin.IntArray)=SameSpecialized",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.rememberIdentity(kotlin.IntArray)=RememberSpecialized",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.isRememberedIdentity(kotlin.IntArray)=IsRememberedSpecialized",
+            K2DotNetCompilerArguments::dotNetExports.cliArgument,
+            "primitivearrays.makeAndRemember=MakeAndRemember",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("PrimitiveArray.Library.klib")
+        val libraryIl = libraryDirectory.resolve("PrimitiveArray.Library.il").readText()
+        assertTrue(
+            "'measure'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values')" in libraryIl
+        ) { libraryIl }
+        assertTrue("'measure'(int32[] 'values')" in libraryIl) { libraryIl }
+        assertTrue(
+            "class [Kotlin.Runtime]'Kotlin.IntArray' 'makeSpecialized'()" in libraryIl
+        ) { libraryIl }
+        assertTrue("int32[] 'makeGeneric'()" in libraryIl) { libraryIl }
+        assertTrue("int32[] 'RoundTripSpecialized'(int32[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("int32[] 'MakeSpecialized'()" in libraryIl) { libraryIl }
+        assertTrue("bool 'SameSpecialized'(int32[] 'first', int32[] 'second')" in libraryIl) { libraryIl }
+        assertTrue("bool 'RememberSpecialized'(int32[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("bool 'IsRememberedSpecialized'(int32[] 'values')" in libraryIl) { libraryIl }
+        assertTrue("int32[] 'MakeAndRemember'()" in libraryIl) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package primitivearrayconsumer
+
+                    import primitivearrays.*
+
+                    fun main() {
+                        val specialized = makeSpecialized()
+                        val generic = makeGeneric()
+                        if (measure(specialized) != 3) throw Error("specialized overload")
+                        if (measure(generic) != 13) throw Error("generic primitive substitution overload")
+                        val specializedIdentity: Any = specialized
+                        val genericIdentity: Any = generic
+                        if (specializedIdentity === genericIdentity) throw Error("array identities collapsed")
+                        specialized[0] = 40
+                        generic[0] = 41
+                        if (measure(specialized) != 42 || measure(generic) != 53) {
+                            throw Error("cross-module mutation")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "PrimitiveArrayConsumer.exe" else "PrimitiveArrayConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "PrimitiveArrayConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Primitive-array Kotlin consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Primitive-array Kotlin consumer failed for $target:\n$output")
+            }
+
+            val verifierSource = consumerDirectory.resolve("PrimitiveArrayVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using System.Reflection;
+                    using System.Threading;
+
+                    public static class PrimitiveArrayVerifier
+                    {
+                        private static void Require(bool condition, string message)
+                        {
+                            if (!condition) throw new Exception(message);
+                        }
+
+                        private static bool HasAttribute(MemberInfo member, string fullName)
+                        {
+                            foreach (object attribute in member.GetCustomAttributes(false))
+                            {
+                                if (attribute.GetType().FullName == fullName) return true;
+                            }
+                            return false;
+                        }
+
+                        public static int Main()
+                        {
+                            Assembly library = Assembly.LoadFrom("PrimitiveArray.Library.dll");
+                            Type facade = library.GetType("primitivearrays.primitiveArrayLibraryKt", true);
+                            MethodInfo specializedMeasure = facade.GetMethod(
+                                "measure", new Type[] { Type.GetType("Kotlin.IntArray, Kotlin.Runtime", true) });
+                            MethodInfo genericMeasure = facade.GetMethod("measure", new Type[] { typeof(int[]) });
+                            MethodInfo makeSpecialized = facade.GetMethod("makeSpecialized", Type.EmptyTypes);
+                            MethodInfo makeGeneric = facade.GetMethod("makeGeneric", Type.EmptyTypes);
+                            MethodInfo roundTripExport = facade.GetMethod(
+                                "RoundTripSpecialized", new Type[] { typeof(int[]) });
+                            MethodInfo makeSpecializedExport = facade.GetMethod(
+                                "MakeSpecialized", Type.EmptyTypes);
+                            MethodInfo sameExport = facade.GetMethod(
+                                "SameSpecialized", new Type[] { typeof(int[]), typeof(int[]) });
+                            MethodInfo rememberExport = facade.GetMethod(
+                                "RememberSpecialized", new Type[] { typeof(int[]) });
+                            MethodInfo isRememberedExport = facade.GetMethod(
+                                "IsRememberedSpecialized", new Type[] { typeof(int[]) });
+                            MethodInfo makeAndRememberExport = facade.GetMethod(
+                                "MakeAndRemember", Type.EmptyTypes);
+                            Require(specializedMeasure != null, "specialized overload is not wrapper-shaped");
+                            Require(genericMeasure != null, "Array<Int> overload is not int[]-shaped");
+                            Require(makeSpecialized.ReturnType.FullName == "Kotlin.IntArray",
+                                "specialized result leaked its vector storage");
+                            Require(makeGeneric.ReturnType == typeof(int[]),
+                                "generic substitution did not retain the natural CLR vector");
+                            Require(roundTripExport != null && roundTripExport.ReturnType == typeof(int[]),
+                                "explicit specialized-array export is not int[]-shaped");
+                            Require(makeSpecializedExport != null &&
+                                    makeSpecializedExport.ReturnType == typeof(int[]),
+                                "explicit specialized-array result export is not int[]-shaped");
+                            Require(sameExport != null && sameExport.ReturnType == typeof(bool),
+                                "two-parameter identity export is not bool/int[]-shaped");
+                            Require(rememberExport != null && isRememberedExport != null,
+                                "cross-call identity exports are missing");
+                            Require(makeAndRememberExport != null &&
+                                    makeAndRememberExport.ReturnType == typeof(int[]),
+                                "stored specialized-array result export is not int[]-shaped");
+
+                            Type wrapperType = makeSpecialized.ReturnType;
+                            Require(wrapperType.IsSealed, "primitive-array wrapper must be sealed");
+                            FieldInfo storageField = wrapperType.GetField(
+                                "_storage", BindingFlags.Instance | BindingFlags.NonPublic);
+                            Require(storageField != null && storageField.IsPrivate && storageField.FieldType == typeof(int[]),
+                                "wrapper storage layout is not private int[]");
+                            FieldInfo internTable = wrapperType.GetField(
+                                "_internedByStorage", BindingFlags.Static | BindingFlags.NonPublic);
+                            Require(internTable != null && internTable.IsPrivate && internTable.IsInitOnly &&
+                                    internTable.FieldType.IsGenericType &&
+                                    internTable.FieldType.GetGenericTypeDefinition().FullName ==
+                                        "System.Runtime.CompilerServices.ConditionalWeakTable`2",
+                                "interop identity association is not runtime-owned weak interning");
+                            ConstructorInfo storageConstructor = wrapperType.GetConstructor(new Type[] { typeof(int[]) });
+                            MethodInfo getStorage = wrapperType.GetMethod("GetStorage", BindingFlags.Public | BindingFlags.Instance);
+                            MethodInfo wrapStorageOrNull = wrapperType.GetMethod(
+                                "WrapStorageOrNull", BindingFlags.Public | BindingFlags.Static);
+                            Require(storageConstructor != null && getStorage != null && wrapStorageOrNull != null,
+                                "cross-assembly primitive-array compiler ABI is missing");
+                            Require(HasAttribute(storageConstructor,
+                                    "Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute"),
+                                "storage constructor is not marked compiler ABI");
+
+                            object specialized = makeSpecialized.Invoke(null, null);
+                            int[] generic = (int[]) makeGeneric.Invoke(null, null);
+                            Require(!Object.ReferenceEquals(specialized, generic),
+                                "specialized and generic array identities collapsed");
+                            int[] liveStorage = (int[]) getStorage.Invoke(specialized, null);
+                            liveStorage[0] = 40;
+                            Require((int) specializedMeasure.Invoke(null, new object[] { specialized }) == 42,
+                                "wrapper-to-storage mutation alias was lost");
+                            generic[0] = 41;
+                            Require((int) genericMeasure.Invoke(null, new object[] { generic }) == 53,
+                                "natural generic vector mutation failed");
+
+                            int[] exportedInput = new int[] { 20, 22 };
+                            object exportedRoundTrip = roundTripExport.Invoke(
+                                null, new object[] { exportedInput });
+                            Require(Object.ReferenceEquals(exportedInput, exportedRoundTrip),
+                                "explicit export copied or replaced primitive-array storage");
+                            Require((bool) sameExport.Invoke(
+                                    null, new object[] { exportedInput, exportedInput }),
+                                "one CLR vector did not project to one Kotlin wrapper within a call");
+                            Require(!(bool) sameExport.Invoke(
+                                    null, new object[] { exportedInput, new int[] { 20, 22 } }),
+                                "distinct CLR vectors collapsed to one Kotlin wrapper");
+                            Require((bool) rememberExport.Invoke(
+                                    null, new object[] { exportedInput }),
+                                "identity remember export failed");
+                            Require((bool) isRememberedExport.Invoke(
+                                    null, new object[] { exportedInput }),
+                                "one CLR vector did not retain Kotlin wrapper identity across calls");
+                            int[] exportedResult = (int[]) makeSpecializedExport.Invoke(null, null);
+                            Require(exportedResult.Length == 2 && exportedResult[0] == 1 && exportedResult[1] == 2,
+                                "explicit primitive-array result export lost contents");
+                            int[] rememberedResult = (int[]) makeAndRememberExport.Invoke(null, null);
+                            Require((bool) isRememberedExport.Invoke(
+                                    null, new object[] { rememberedResult }),
+                                "outbound Kotlin wrapper was not recovered when its vector returned inbound");
+
+                            int[] inboundStorage = new int[] { 20, 22 };
+                            object inboundWrapper = storageConstructor.Invoke(new object[] { inboundStorage });
+                            Require(Object.ReferenceEquals(inboundStorage, getStorage.Invoke(inboundWrapper, null)),
+                                "compiler ABI wrapper construction copied storage silently");
+                            Require((int) specializedMeasure.Invoke(null, new object[] { inboundWrapper }) == 42,
+                                "inbound wrapper did not alias its supplied vector");
+
+                            int[] concurrentStorage = new int[] { 42 };
+                            object[] concurrentWrappers = new object[8];
+                            Exception[] concurrentErrors = new Exception[8];
+                            Thread[] threads = new Thread[8];
+                            for (int index = 0; index < threads.Length; index++)
+                            {
+                                int slot = index;
+                                threads[index] = new Thread(delegate()
+                                {
+                                    try
+                                    {
+                                        concurrentWrappers[slot] = wrapStorageOrNull.Invoke(
+                                            null, new object[] { concurrentStorage });
+                                    }
+                                    catch (Exception error)
+                                    {
+                                        concurrentErrors[slot] = error;
+                                    }
+                                });
+                                threads[index].Start();
+                            }
+                            for (int index = 0; index < threads.Length; index++) threads[index].Join();
+                            for (int index = 0; index < threads.Length; index++)
+                            {
+                                Require(concurrentErrors[index] == null,
+                                    "concurrent vector adaptation failed");
+                                Require(Object.ReferenceEquals(concurrentWrappers[0], concurrentWrappers[index]),
+                                    "concurrent first conversion created multiple Kotlin wrappers");
+                            }
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = consumerDirectory.resolve("PrimitiveArrayVerifier.exe")
+            val compileResult = runCSharpCompiler(
+                checkNotNull(csharpCompiler),
+                verifierSource,
+                verifier,
+                target = "exe",
+            )
+            assertEquals(0, compileResult.exitCode, compileResult.output)
+            val verifierProcess = if (target == "net10.0") {
+                consumerDirectory.resolve("PrimitiveArrayConsumer.runtimeconfig.json")
+                    .copyTo(consumerDirectory.resolve("PrimitiveArrayVerifier.runtimeconfig.json"), overwrite = true)
+                ProcessBuilder(dotnetHost.path, "exec", verifier.path)
+            } else {
+                ProcessBuilder(verifier.path)
+            }.directory(consumerDirectory).redirectErrorStream(true).start()
+            val verifierOutput = verifierProcess.inputStream.bufferedReader().use { it.readText() }
+            assertEquals(
+                0,
+                verifierProcess.waitFor(),
+                "Primitive-array C# verifier failed for $target:\n$verifierOutput",
+            )
+        }
+    }
+
+    @Test
+    fun testKotlinExceptionInheritanceAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "portable-exception-library")
+        val librarySource = File(tmpdir, "portable-exception-library.kt").apply {
+            writeText(
+                """
+                package crossfailure
+
+                public open class LibraryRuntimeFailure(message: String) : RuntimeException(message)
+
+                public class LibraryRuntimeChild(message: String) : LibraryRuntimeFailure(message)
+
+                public class LibraryFatalFailure(message: String) : Error(message)
+
+                public fun libraryRuntimeFailure(): Throwable = LibraryRuntimeChild("library-runtime")
+
+                public fun libraryFatalFailure(): Throwable = LibraryFatalFailure("library-fatal")
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Exception.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Exception.Library.klib")
+        val libraryIl = libraryDirectory.resolve("Exception.Library.il").readText()
+        assertTrue(
+            Regex(
+                "'crossfailure\\.LibraryRuntimeFailure'\\s+extends " +
+                        "\\[Kotlin\\.Runtime]'Kotlin\\.RuntimeException'"
+            ).containsMatchIn(libraryIl)
+        ) { libraryIl }
+        assertTrue(
+            Regex(
+                "'crossfailure\\.LibraryRuntimeChild'\\s+extends " +
+                        "'crossfailure\\.LibraryRuntimeFailure'"
+            ).containsMatchIn(libraryIl)
+        ) { libraryIl }
+        assertTrue(
+            Regex(
+                "'crossfailure\\.LibraryFatalFailure'\\s+extends \\[Kotlin\\.Runtime]'Kotlin\\.Error'"
+            ).containsMatchIn(libraryIl)
+        ) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package exceptionconsumer
+
+                    import crossfailure.*
+
+                    private class ConsumerRuntimeChild(message: String) : LibraryRuntimeFailure(message)
+
+                    private fun caughtAsLibraryType(value: Throwable): Boolean = try {
+                        throw value
+                    } catch (failure: LibraryRuntimeFailure) {
+                        failure === value
+                    } catch (failure: Throwable) {
+                        false
+                    }
+
+                    private fun caughtAsRuntime(value: Throwable): Boolean = try {
+                        throw value
+                    } catch (failure: RuntimeException) {
+                        failure === value
+                    } catch (failure: Throwable) {
+                        false
+                    }
+
+                    fun main() {
+                        val libraryRuntime = libraryRuntimeFailure()
+                        if (libraryRuntime !is LibraryRuntimeChild ||
+                            libraryRuntime !is LibraryRuntimeFailure ||
+                            libraryRuntime !is RuntimeException ||
+                            libraryRuntime !is Exception ||
+                            libraryRuntime is Error
+                        ) {
+                            throw Error("portable library runtime classification")
+                        }
+                        if (!caughtAsLibraryType(libraryRuntime) || !caughtAsRuntime(libraryRuntime)) {
+                            throw Error("portable library runtime catch/identity")
+                        }
+
+                        val consumerRuntime: Throwable = ConsumerRuntimeChild("consumer-runtime")
+                        if (consumerRuntime !is LibraryRuntimeFailure ||
+                            consumerRuntime !is RuntimeException ||
+                            !caughtAsLibraryType(consumerRuntime) ||
+                            !caughtAsRuntime(consumerRuntime)
+                        ) {
+                            throw Error("consumer subclass of portable exception")
+                        }
+
+                        val libraryFatal = libraryFatalFailure()
+                        if (libraryFatal !is LibraryFatalFailure ||
+                            libraryFatal !is Error ||
+                            libraryFatal is Exception ||
+                            caughtAsRuntime(libraryFatal)
+                        ) {
+                            throw Error("portable library error classification")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "ExceptionConsumer.exe" else "ExceptionConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ExceptionConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            assertTrue(consumerDirectory.resolve("Exception.Library.dll").isFile) {
+                "The portable exception implementation must be packaged beside its $target consumer"
+            }
+            val consumerIl = consumerDirectory.resolve("ExceptionConsumer.il").readText()
+            assertTrue("[Exception.Library]'crossfailure.LibraryRuntimeFailure'" in consumerIl) { consumerIl }
+            assertTrue("filter" in consumerIl) { consumerIl }
+
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Portable exception consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Portable exception consumer failed for $target:\n$output")
+            }
+        }
+    }
+
+    @Test
+    fun testForeignClrExceptionIdentityAndClassificationAcrossRuntimeProfiles() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        for (profile in listOf(
+            "net48" to "ExceptionBoundary.exe",
+            "net10.0" to "ExceptionBoundary.dll",
+        )) {
+            val target = profile.first
+            val applicationName = profile.second
+            val directory = File(tmpdir, "foreign-exception-${target.replace('.', '-')}").apply { mkdirs() }
+            val source = directory.resolve("exceptionBoundary.kt").apply {
+                writeText(
+                    """
+                    package exceptionboundary
+
+                    public fun classification(value: Throwable): Int =
+                        if (value is Error) 4
+                        else if (value is RuntimeException) 3
+                        else if (value is Exception) 1
+                        else 0
+
+                    public fun roundTrip(value: Throwable): Throwable = try {
+                        throw value
+                    } catch (failure: Exception) {
+                        failure
+                    } catch (failure: Error) {
+                        failure
+                    } catch (failure: Throwable) {
+                        failure
+                    }
+
+                    public open class KotlinRuntimeFailure(message: String) : RuntimeException(message)
+
+                    public class KotlinRuntimeChild(message: String) : KotlinRuntimeFailure(message)
+
+                    public class KotlinFatalFailure(message: String) : Error(message)
+
+                    fun main() {}
+                    """.trimIndent()
+                )
+            }
+            val application = directory.resolve(applicationName)
+            compileInProcess(
+                K2DotNetCompiler(),
+                source.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ExceptionBoundary",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            val applicationIl = directory.resolve("ExceptionBoundary.il").readText()
+            assertTrue("filter" in applicationIl) { applicationIl }
+            assertTrue("IsKotlinExceptionInstance" in applicationIl) { applicationIl }
+
+            val verifierSource = directory.resolve("ForeignExceptionVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using System.Reflection;
+
+                    public sealed class ForeignException : Exception
+                    {
+                        public ForeignException(string message, Exception inner) : base(message, inner) {}
+                    }
+
+                    public static class ForeignExceptionVerifier
+                    {
+                        private static void Require(bool condition, string message)
+                        {
+                            if (!condition) throw new Exception(message);
+                        }
+
+                        public static int Main()
+                        {
+                            Assembly kotlinAssembly = Assembly.LoadFrom("${application.name}");
+                            Type facade = kotlinAssembly.GetType("exceptionboundary.exceptionBoundaryKt", true);
+                            MethodInfo classification = facade.GetMethod("classification", BindingFlags.Public | BindingFlags.Static);
+                            MethodInfo roundTrip = facade.GetMethod("roundTrip", BindingFlags.Public | BindingFlags.Static);
+                            Require(classification != null, "Kotlin classification facade is not public");
+                            Require(roundTrip != null, "Kotlin round-trip facade is not public");
+
+                            Type kotlinRuntimeFailureType = kotlinAssembly.GetType(
+                                "exceptionboundary.KotlinRuntimeFailure", true);
+                            Type kotlinRuntimeChildType = kotlinAssembly.GetType(
+                                "exceptionboundary.KotlinRuntimeChild", true);
+                            Type kotlinFatalFailureType = kotlinAssembly.GetType(
+                                "exceptionboundary.KotlinFatalFailure", true);
+                            Require(kotlinRuntimeFailureType.BaseType.FullName == "Kotlin.RuntimeException",
+                                "Kotlin RuntimeException subclass has untruthful CLR ancestry");
+                            Require(kotlinRuntimeFailureType.BaseType.Assembly.GetName().Name == "Kotlin.Runtime",
+                                "Kotlin RuntimeException subclass is not rooted in the runtime ABI");
+                            Require(kotlinRuntimeChildType.BaseType == kotlinRuntimeFailureType,
+                                "ordinary Kotlin exception inheritance was flattened");
+                            Require(kotlinFatalFailureType.BaseType.FullName == "Kotlin.Error",
+                                "Kotlin Error subclass has untruthful CLR ancestry");
+                            Require(typeof(Exception).IsAssignableFrom(kotlinRuntimeChildType),
+                                "Kotlin runtime exception is not a CLR System.Exception");
+                            Require(typeof(Exception).IsAssignableFrom(kotlinFatalFailureType),
+                                "Kotlin error is not a CLR System.Exception");
+
+                            Exception kotlinRuntime = (Exception) Activator.CreateInstance(
+                                kotlinRuntimeChildType, new object[] { "kotlin-runtime" });
+                            Require((int) classification.Invoke(null, new object[] { kotlinRuntime }) == 3,
+                                "Kotlin-owned runtime subclass lost its logical categories");
+                            Require(Object.ReferenceEquals(
+                                    kotlinRuntime, roundTrip.Invoke(null, new object[] { kotlinRuntime })),
+                                "Kotlin-owned runtime subclass identity was replaced");
+
+                            Exception kotlinFatal = (Exception) Activator.CreateInstance(
+                                kotlinFatalFailureType, new object[] { "kotlin-fatal" });
+                            Require((int) classification.Invoke(null, new object[] { kotlinFatal }) == 4,
+                                "Kotlin-owned error subclass lost its logical category");
+                            Require(Object.ReferenceEquals(
+                                    kotlinFatal, roundTrip.Invoke(null, new object[] { kotlinFatal })),
+                                "Kotlin-owned error subclass identity was replaced");
+
+                            Exception inner = new Exception("inner");
+                            ForeignException foreign = new ForeignException("foreign", inner);
+                            object marker = new object();
+                            foreign.Data["marker"] = marker;
+                            int foreignClassification = (int) classification.Invoke(null, new object[] { foreign });
+                            Exception returnedForeign = (Exception) roundTrip.Invoke(null, new object[] { foreign });
+                            Require(foreignClassification == 1, "unknown CLR exception must be Kotlin Exception only");
+                            Require(Object.ReferenceEquals(foreign, returnedForeign), "foreign exception identity was replaced");
+                            Require(returnedForeign.GetType() == typeof(ForeignException), "foreign exact CLR type was lost");
+                            Require(Object.ReferenceEquals(returnedForeign.InnerException, inner), "foreign inner exception was lost");
+                            Require(Object.ReferenceEquals(returnedForeign.Data["marker"], marker), "foreign exception data was lost");
+
+                            InvalidOperationException runtime = new InvalidOperationException("runtime");
+                            int runtimeClassification = (int) classification.Invoke(null, new object[] { runtime });
+                            Require(runtimeClassification == 3, "mapped CLR program fault must be Exception and RuntimeException");
+                            Require(Object.ReferenceEquals(runtime, roundTrip.Invoke(null, new object[] { runtime })),
+                                "mapped CLR exception identity was replaced");
+
+                            OutOfMemoryException error = new OutOfMemoryException("error");
+                            int errorClassification = (int) classification.Invoke(null, new object[] { error });
+                            Require(errorClassification == 4, "CLR fatal error must be Error and not Exception");
+                            Require(Object.ReferenceEquals(error, roundTrip.Invoke(null, new object[] { error })),
+                                "CLR error identity was replaced");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = directory.resolve("ForeignExceptionVerifier.exe")
+            val compileResult = runCSharpCompiler(
+                checkNotNull(csharpCompiler),
+                verifierSource,
+                verifier,
+                target = "exe",
+            )
+            assertEquals(0, compileResult.exitCode, compileResult.output)
+
+            val process = if (target == "net10.0") {
+                directory.resolve("ExceptionBoundary.runtimeconfig.json")
+                    .copyTo(directory.resolve("ForeignExceptionVerifier.runtimeconfig.json"), overwrite = true)
+                ProcessBuilder(dotnetHost.path, "exec", verifier.path)
+            } else {
+                ProcessBuilder(verifier.path)
+            }.directory(directory).redirectErrorStream(true).start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            assertEquals(0, process.waitFor(), "Foreign exception verifier failed for $target:\n$output")
+        }
     }
 
     private fun produceAndConsumeBoundStdlibPair(target: String) {
@@ -827,9 +3447,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             secondPairDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
             "Compiler-owned stdlib IL must be reproducible for target $target",
         )
-        // ILAsm currently stamps a fresh PE identity even for identical input. Its DLL bytes are
-        // therefore outside this compiler-owned reproducibility gate; the manifest identity and
-        // a separate consumer compilation below pin the durable assembly contract instead.
+        assertArrayEquals(
+            firstPairDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            secondPairDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            "Deterministic ILAsm output must be reproducible for target $target",
+        )
         consumeBoundStdlibPair(firstPairDirectory, target)
         consumeInstalledStdlibPair(firstPairDirectory, target)
     }
@@ -850,11 +3472,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val manifest = metadataLibrary.readKlibManifest()
         assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
-        assertTrue(manifest.getProperty("dotnet_library_tfm") == "netstandard2.0")
+        assertEquals(target, manifest.getProperty("dotnet_library_tfm"))
+        assertEquals(
+            DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
+            manifest.getProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY),
+        )
         val il = pairDirectory.resolve("Kotlin.Stdlib.il").readText()
-        assertTrue(".assembly extern netstandard" in il)
+        val coreLibraryReference = if (target == "netstandard2.0") "[netstandard]" else "[mscorlib]"
+        val coreLibraryAssembly = if (target == "netstandard2.0") "netstandard" else "mscorlib"
+        assertTrue(".assembly extern $coreLibraryAssembly" in il)
         assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
-        assertTrue("[mscorlib]" !in il)
+        if (target == "netstandard2.0") assertTrue("[mscorlib]" !in il)
         assertTrue(
             "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
                     "class [Kotlin.Runtime]'Kotlin.Collections.Iterator`1'<!0>" in il
@@ -873,6 +3501,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterator' " +
                     "'dotNetArrayIterator'<'T'>(!!0[] 'array')" in il
         )
+        val compilerOnlyArrayIterator = il.substring(
+            il.indexOf("'dotNetArrayIterator'<'T'>").also { assertTrue(it >= 0) },
+            il.indexOf("  .method", il.indexOf("'dotNetArrayIterator'<'T'>") + 1)
+                .takeIf { it >= 0 } ?: il.length,
+        )
+        assertTrue("KotlinCompilerAbiAttribute" in compilerOnlyArrayIterator) { compilerOnlyArrayIterator }
+        assertTrue("EditorBrowsableAttribute" in compilerOnlyArrayIterator) { compilerOnlyArrayIterator }
         assertTrue(
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.Iterable' " +
                     "'dotNetArrayIterable'<'T'>(!!0[] 'array')" in il
@@ -887,13 +3522,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(
             ".class private auto ansi sealed 'Kotlin.Collections.EmptyIterator'\n" +
-                    "       extends [netstandard]System.Object\n" +
+                    "       extends ${coreLibraryReference}System.Object\n" +
                     "       implements [Kotlin.Runtime]'Kotlin.Collections.ListIterator', " +
                     "class [Kotlin.Runtime]'Kotlin.Collections.ListIterator`1'<class [Kotlin.Runtime]'Kotlin.Nothing'>" in il
         )
         assertTrue(
             ".class private auto ansi sealed 'Kotlin.Collections.EmptyList'\n" +
-                    "       extends [netstandard]System.Object\n" +
+                    "       extends ${coreLibraryReference}System.Object\n" +
                     "       implements [Kotlin.Runtime]'Kotlin.Collections.List', 'Kotlin.Io.Serializable', " +
                     "'Kotlin.Collections.RandomAccess', class [Kotlin.Runtime]" +
                     "'Kotlin.Collections.List__KotlinExact`1'<class [Kotlin.Runtime]'Kotlin.Nothing'>" in il
@@ -970,9 +3605,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
     }
 
-    private fun consumeInstalledStdlibPair(pairDirectory: File, target: String) {
-        val kotlinHome = File(tmpdir, "kotlin-home-$target")
-        val installedDirectory = kotlinHome.resolve("lib/dotnet/netstandard2.0").apply { mkdirs() }
+    private fun consumeInstalledStdlibPair(
+        pairDirectory: File,
+        target: String,
+        installedProfile: String = target,
+    ) {
+        val kotlinHome = File(tmpdir, "kotlin-home-$target-$installedProfile")
+        val installedDirectory = kotlinHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
         pairDirectory.resolve("Kotlin.Stdlib.klib").copyTo(installedDirectory.resolve("Kotlin.Stdlib.klib"))
         pairDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
         val consumerSource = File(tmpdir, "installed-consumer-$target.kt").apply {
@@ -1013,6 +3652,67 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("[Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'emptyList'<int32>" in il)
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
         assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il)
+
+        val forbiddenKotlinPackageSource = File(tmpdir, "installed-forbidden-kotlin-package-$target.kt").apply {
+            writeText(
+                """
+                package kotlin.user
+
+                public fun mustNotCompile(): Int = 42
+                """.trimIndent()
+            )
+        }
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                forbiddenKotlinPackageSource.path,
+                K2DotNetCompilerArguments::kotlinHome.cliArgument, kotlinHome.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "installed-forbidden-kotlin-package-$target.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        assertTrue("only the Kotlin standard library is allowed to use the 'kotlin' package" in diagnostics) { diagnostics }
+    }
+
+    private fun executeBoundStdlibPair(pairDirectory: File, target: String, dotnetHost: File?) {
+        val directory = File(tmpdir, "portable-stdlib-execution-$target").apply { mkdirs() }
+        val source = directory.resolve("main.kt").apply {
+            writeText(
+                """
+                fun main() {
+                    val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
+                    println(values.asIterable().first() + values.asIterable().last())
+                }
+                """.trimIndent()
+            )
+        }
+        val output = directory.resolve(if (target == "net48") "PortableStdlib.exe" else "PortableStdlib.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, pairDirectory.resolve("Kotlin.Stdlib.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "PortableStdlib",
+            K2DotNetCompilerArguments::destination.cliArgument, output.path,
+        )
+        assertTrue(directory.resolve("Kotlin.Stdlib.dll").isFile)
+        assertTrue(directory.resolve("Kotlin.Runtime.dll").isFile)
+
+        val command = if (target == "net48") {
+            listOf(output.path)
+        } else {
+            listOf(checkNotNull(dotnetHost).path, "exec", output.path)
+        }
+        val process = ProcessBuilder(command)
+            .directory(directory)
+            .redirectErrorStream(true)
+            .start()
+        val processOutput = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), processOutput)
+        assertEquals("OK", processOutput.trim())
     }
 
     @Test
@@ -1044,8 +3744,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
             )
         )
+        // IL-only compilation checks that the bound physical companion exists; executable tests
+        // separately validate the real generated stdlib assembly.
+        val implementationLibrary = File(pairDirectory, "Kotlin.Stdlib.dll").apply {
+            writeBytes(byteArrayOf(0))
+        }
         val dotNetManifestProperties = linkedMapOf(
             DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to DotNetLibraryAbiCodec.ABI_VERSION,
+            DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY to DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+            DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY to
+                    DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION,
+            DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to
+                    DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
+            DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to
+                    DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
+            DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
             "dotnet_assembly_name" to "Kotlin.Stdlib",
             "dotnet_assembly_version" to "1.0.0.0",
             "dotnet_assembly_culture" to "neutral",
@@ -1058,9 +3771,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "$key=$value"
             }
         )
-        // IL-only compilation checks that the bound physical companion exists; executable tests
-        // separately validate the real generated stdlib assembly.
-        File(pairDirectory, "Kotlin.Stdlib.dll").writeBytes(byteArrayOf(0))
 
         val consumerSource = File(pairDirectory, "consumer.kt").apply {
             writeText(
@@ -1090,10 +3800,209 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
     }
 
+    @Test
+    fun testRejectsStaleDotNetLibraryAbiSchema() {
+        val metadataLibrary = createBoundMetadataLibrary(
+            assemblyName = "Stale.Schema",
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "2"),
+        )
+        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
+        assertTrue("uses unsupported CLR ABI index version '2'" in diagnostics) { diagnostics }
+    }
+
+    @Test
+    fun testRejectsMismatchedDotNetLibraryProfile() {
+        val metadataLibrary = createBoundMetadataLibrary(
+            assemblyName = "Wrong.Profile",
+            propertyOverrides = mapOf(
+                DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to "net10.0"
+            ),
+        )
+        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
+        assertTrue("is not compatible with Kotlin/.NET target 'net48'" in diagnostics) {
+            diagnostics
+        }
+    }
+
+    @Test
+    fun testRejectsMismatchedDotNetImplementationAssembly() {
+        val metadataLibrary = createBoundMetadataLibrary(
+            assemblyName = "Wrong.Implementation",
+            propertyOverrides = emptyMap(),
+        )
+        metadataLibrary.parentFile.resolve("Wrong.Implementation.dll").writeBytes(byteArrayOf(1))
+        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
+        assertTrue("but its SHA-256 is" in diagnostics && "instead of" in diagnostics) { diagnostics }
+    }
+
+    @Test
+    fun testRejectsUnsupportedRuntimeSurfaceLevel() {
+        val unsupportedLevel = DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL + 1
+        val metadataLibrary = createBoundMetadataLibrary(
+            assemblyName = "Future.Runtime.Surface",
+            propertyOverrides = mapOf(
+                DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to unsupportedLevel.toString()
+            ),
+        )
+        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
+        assertTrue("requires unsupported Kotlin.Runtime surface level '$unsupportedLevel'" in diagnostics) {
+            diagnostics
+        }
+    }
+
+    private fun createBoundMetadataLibrary(
+        assemblyName: String,
+        propertyOverrides: Map<String, String>,
+    ): File {
+        val directory = File(tmpdir, assemblyName).apply { mkdirs() }
+        val source = directory.resolve("library.kt").apply {
+            writeText(
+                """
+                package fixture
+
+                public fun published(): Int = 1
+                """.trimIndent()
+            )
+        }
+        val metadataLibrary = directory.resolve("$assemblyName.klib")
+        compileInProcess(
+            KotlinMetadataCompiler(),
+            source.path,
+            K2MetadataCompilerArguments::moduleName.cliArgument, assemblyName,
+            K2MetadataCompilerArguments::destination.cliArgument, metadataLibrary.path,
+        )
+        val implementationLibrary = directory.resolve("$assemblyName.dll").apply {
+            writeBytes(byteArrayOf(0))
+        }
+        val properties = linkedMapOf(
+            DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to DotNetLibraryAbiCodec.ABI_VERSION,
+            DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY to DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+            DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY to
+                    DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION,
+            DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to
+                    DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
+            DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to
+                    DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
+            DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
+            DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to assemblyName,
+            DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to "1.0.0.0",
+            DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to "neutral",
+            DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to "null",
+            DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to "$assemblyName.dll",
+            DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to "netstandard2.0",
+        ).apply { putAll(propertyOverrides) }
+        File(metadataLibrary, "default/manifest").appendText(
+            properties.entries.joinToString(prefix = "\n", separator = "\n", postfix = "\n") { (key, value) ->
+                "$key=$value"
+            }
+        )
+        return metadataLibrary
+    }
+
+    private fun compileAgainstRejectedLibrary(metadataLibrary: File): String {
+        val source = File(tmpdir, "rejected-library-consumer-${metadataLibrary.nameWithoutExtension}.kt").apply {
+            writeText("package consumer\n\npublic fun answer(): Int = 42")
+        }
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "rejected-library-consumer-${metadataLibrary.nameWithoutExtension}.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        return diagnostics
+    }
+
+    private data class CSharpCompilerResult(val exitCode: Int, val output: String)
+
+    private fun runCSharpCompiler(
+        compiler: File,
+        source: File,
+        output: File,
+        vararg references: File,
+        target: String = "library",
+    ): CSharpCompilerResult {
+        output.delete()
+        val arguments = buildList {
+            add(compiler.path)
+            add("/nologo")
+            add("/target:$target")
+            add("/out:${output.path}")
+            references.forEach { add("/reference:${it.path}") }
+            add(source.path)
+        }
+        val process = ProcessBuilder(arguments)
+            .directory(tmpdir)
+            .redirectErrorStream(true)
+            .start()
+        val compilerOutput = process.inputStream.bufferedReader().use { it.readText() }
+        return CSharpCompilerResult(process.waitFor(), compilerOutput)
+    }
+
+    private fun runModernCSharpCompiler(
+        toolchain: DotNetModernCSharpToolchain,
+        source: File,
+        output: File,
+        vararg references: File,
+        target: String = "library",
+    ): CSharpCompilerResult {
+        output.delete()
+        val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
+            file.isFile && file.extension.equals("dll", ignoreCase = true)
+        }?.sortedBy(File::getName)
+            ?: error("Modern C# reference directory is unreadable: ${toolchain.referenceDirectory}")
+        val arguments = buildList {
+            add(toolchain.dotNetHost.path)
+            add(toolchain.compiler.path)
+            add("/nologo")
+            add("/noconfig")
+            add("/nostdlib+")
+            add("/deterministic+")
+            add("/langversion:latest")
+            add("/target:$target")
+            add("/out:${output.path}")
+            frameworkReferences.forEach { add("/reference:${it.path}") }
+            references.forEach { reference ->
+                assertTrue(reference.isFile) { "Missing C# reference: $reference" }
+                add("/reference:${reference.path}")
+            }
+            add(source.path)
+        }
+        val process = ProcessBuilder(arguments)
+            .directory(tmpdir)
+            .redirectErrorStream(true)
+            .start()
+        val compilerOutput = process.inputStream.bufferedReader().use { it.readText() }
+        return CSharpCompilerResult(process.waitFor(), compilerOutput)
+    }
+
     private fun compileInProcess(compiler: CLICompiler<*>, vararg args: String) {
         val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(compiler, args.toList())
         if (exitCode != ExitCode.OK) error("Failed to compile: ${args.joinToString(" ")}\nOutput:\n$output")
     }
+
+    private fun modernDotNetHostOrSkip(): File {
+        val host = DotNetIlAssembler.findModernDotNetHost()
+        requireOrAssumeToolchain(host != null, "Modern dotnet host is not available")
+        return checkNotNull(host)
+    }
+
+    private fun requireOrAssumeToolchain(condition: Boolean, message: String) {
+        if (dotNetToolchainIsRequired()) {
+            assertTrue(condition) { "$message (KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled)" }
+        } else {
+            assumeTrue(condition, message)
+        }
+    }
+
+    private fun dotNetToolchainIsRequired(): Boolean =
+        System.getenv("KOTLIN_DOTNET_REQUIRE_TOOLCHAIN")?.let { value ->
+            value == "1" || value.equals("true", ignoreCase = true)
+        } == true
 
     private fun File.readKlibManifest(): Properties = ZipFile(this).use { archive ->
         Properties().apply {

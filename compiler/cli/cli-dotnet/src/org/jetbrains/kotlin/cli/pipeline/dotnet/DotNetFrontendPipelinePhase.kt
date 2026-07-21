@@ -12,6 +12,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
+import org.jetbrains.kotlin.backend.dotnet.dotNetAssemblyName
+import org.jetbrains.kotlin.backend.dotnet.dotNetFriendPaths
+import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.CliDiagnostics.COMPILER_ARGUMENTS_ERROR
 import org.jetbrains.kotlin.cli.common.collectSources
 import org.jetbrains.kotlin.cli.common.contentRoots
@@ -47,6 +50,7 @@ import org.jetbrains.kotlin.library.uniqueName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.PotentiallyIncorrectPhaseTimeMeasurement
+import java.io.File
 
 object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact, DotNetFrontendPipelineArtifact>(
     name = "DotNetFrontendPipelinePhase",
@@ -72,13 +76,18 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
 
         val projectEnvironment = environment.toVfsBasedProjectEnvironment()
         val librariesScope = projectEnvironment.getSearchScopeForProjectLibraries()
-        val libraryList = DependencyListForCliModule.build(rootModuleName) {}
+        val libraryPaths = configuration.contentRoots.mapNotNull { (it as? JvmClasspathRoot)?.file?.path }
+        val libraryList = DependencyListForCliModule.build(rootModuleName) {
+            dependencies(libraryPaths)
+            friendDependencies(configuration.dotNetFriendPaths)
+        }
         val klibs: List<KotlinLibrary> = loadMetadataKlibs(
-            libraryPaths = configuration.contentRoots.mapNotNull { (it as? JvmClasspathRoot)?.file?.path },
+            libraryPaths = libraryPaths,
             configuration = configuration,
         ).all
         configuration.recordExternalDotNetStdlib(klibs)
         configuration.recordExternalDotNetLibraries(klibs)
+        configuration.validateDotNetFriendDependencies()
         val extensionRegistrars = configuration.getCompilerExtensions(FirExtensionRegistrar)
 
         val sourceFiles: List<KtSourceFile>
@@ -166,14 +175,18 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     val properties = library.manifestProperties
     val expectedProperties = mapOf(
         DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to DotNetLibraryAbiCodec.ABI_VERSION,
+        DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY to DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+        DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY to
+                DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION,
+        DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to
+                DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
+        DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
         DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_NAME,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_VERSION,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_CULTURE,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to
                 DotNetStdlibArtifact.ASSEMBLY_PUBLIC_KEY_TOKEN,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_FILE_NAME,
-        DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to
-                DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK,
     )
     val mismatch = expectedProperties.entries.firstOrNull { entry ->
         properties.getProperty(entry.key) != entry.value
@@ -186,10 +199,19 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         )
         return
     }
+    val targetFramework = properties.getProperty(DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY)
+    if (targetFramework == null || !dotNetTarget.canConsumeLibrary(targetFramework)) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Metadata library '${library.path}' targets '${targetFramework ?: "<missing>"}', which is not " +
+                    "compatible with Kotlin/.NET target '${dotNetTarget.flagValue}'.",
+        )
+        return
+    }
 
     val metadataFile = library.path.toFile()
     val implementationFile = metadataFile.parentFile.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
-    dotNetExternalStdlib = DotNetExternalStdlib(metadataFile, implementationFile)
+    dotNetExternalStdlib = DotNetExternalStdlib(metadataFile, implementationFile, targetFramework)
 }
 
 /** Loads every KLIB explicitly produced as a bound Kotlin/.NET library pair, including stdlib. */
@@ -219,6 +241,62 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                 report(COMPILER_ARGUMENTS_ERROR, "Kotlin/.NET metadata library '${library.path}' is missing '$name'.")
             }
         }
+        val logicalIdentityScheme = required(DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY) ?: return
+        if (logicalIdentityScheme != DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' uses unsupported logical identity scheme " +
+                        "'$logicalIdentityScheme'.",
+            )
+            return
+        }
+        val physicalNameGrammar = required(DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY) ?: return
+        if (physicalNameGrammar != DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' uses unsupported physical-name grammar version " +
+                        "'$physicalNameGrammar'.",
+            )
+            return
+        }
+        val runtimeSurfaceLevelText = required(DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY) ?: return
+        val runtimeSurfaceLevel = runtimeSurfaceLevelText.toIntOrNull()
+        if (runtimeSurfaceLevel == null || runtimeSurfaceLevel !in 1..DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' requires unsupported Kotlin.Runtime surface level " +
+                        "'$runtimeSurfaceLevelText' (compiler supports ${DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL}).",
+            )
+            return
+        }
+        val encodedFriendAssemblies = properties.getProperty(DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY)
+        if (encodedFriendAssemblies == null) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' is missing " +
+                        "'${DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY}'.",
+            )
+            return
+        }
+        val friendAssemblies = try {
+            DotNetLibraryAbiCodec.decodeFriendAssemblies(encodedFriendAssemblies)
+        } catch (exception: IllegalArgumentException) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' has invalid CLR friend identities: " +
+                        exception.message,
+            )
+            return
+        }
+        val expectedImplementationHash = required(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY) ?: return
+        if (!expectedImplementationHash.matches(Regex("[0-9a-f]{64}"))) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' has invalid implementation SHA-256 " +
+                        "'$expectedImplementationHash'.",
+            )
+            return
+        }
         val assemblyName = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY) ?: return
         val platformAssemblyName = DotNetPlatformAssemblyIdentity.canonicalNameOrNull(assemblyName)
         if (platformAssemblyName == DotNetPlatformAssemblyIdentity.RUNTIME_ASSEMBLY_NAME) {
@@ -246,13 +324,20 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                 java.io.File(assemblyFileName).name == assemblyFileName &&
                 assemblyVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+")) &&
                 assemblyCulture == DotNetLibraryArtifact.DEFAULT_ASSEMBLY_CULTURE &&
-                publicKeyToken == DotNetLibraryArtifact.DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN &&
-                targetFramework == DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK
+                publicKeyToken == DotNetLibraryArtifact.DEFAULT_ASSEMBLY_PUBLIC_KEY_TOKEN
         if (!identityIsSupported) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
                 "Kotlin/.NET metadata library '${library.path}' does not declare the supported unsigned " +
-                        "${DotNetLibraryArtifact.LIBRARY_TARGET_FRAMEWORK} sibling-assembly identity.",
+                        "sibling-assembly identity.",
+            )
+            return
+        }
+        if (!dotNetTarget.canConsumeLibrary(targetFramework)) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' targets '$targetFramework', which is not " +
+                        "compatible with Kotlin/.NET target '${dotNetTarget.flagValue}'.",
             )
             return
         }
@@ -288,12 +373,51 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             )
             return
         }
+        val actualImplementationHash = DotNetLibraryAbiCodec.implementationSha256(implementationFile)
+        if (actualImplementationHash != expectedImplementationHash) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata '${metadataFile.path}' is bound to '${implementationFile.path}', but its " +
+                        "SHA-256 is $actualImplementationHash instead of $expectedImplementationHash.",
+            )
+            return
+        }
         libraries += DotNetExternalLibrary(
-            DotNetLibraryArtifact(assemblyName, assemblyVersion, assemblyCulture, publicKeyToken),
+            DotNetLibraryArtifact(assemblyName, targetFramework, assemblyVersion, assemblyCulture, publicKeyToken),
             metadataFile,
             implementationFile,
             declarations,
+            friendAssemblies,
         )
     }
     dotNetExternalLibraries = libraries
+}
+
+/**
+ * Verifies both halves of a friend relationship before FIR grants internal source visibility.
+ * A path alone is never authority: the bound producer metadata must name this unsigned output
+ * assembly, mirroring the InternalsVisibleTo row in its sibling CLR implementation.
+ */
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.validateDotNetFriendDependencies() {
+    if (dotNetFriendPaths.isEmpty()) return
+    val consumerAssemblyName = checkNotNull(dotNetAssemblyName)
+    val librariesByPath = dotNetExternalLibraries.associateBy { it.metadataFile.canonicalFile }
+    for (friendPath in dotNetFriendPaths) {
+        val canonicalPath = File(friendPath).canonicalFile
+        val library = librariesByPath[canonicalPath]
+        if (library == null) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET friend path '$friendPath' is not a bound Kotlin/.NET metadata-KLIB/CLR-DLL pair.",
+            )
+            continue
+        }
+        if (library.friendAssemblies.none { it.authorizes(consumerAssemblyName) }) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET friend producer '${library.artifact.assemblyName}' does not authorize unsigned " +
+                        "consumer assembly '$consumerAssemblyName' through InternalsVisibleTo.",
+            )
+        }
+    }
 }

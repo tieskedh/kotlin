@@ -175,7 +175,15 @@ internal class DotNetIlMethodContext(
 
     fun emitLabel(label: String) {
         bodyBuilder.appendLine("$label:")
-        stackDepth = branchTargetStackDepths[label] ?: stackDepth
+        branchTargetStackDepths[label]?.let { branchDepth ->
+            if (!isTerminated && stackDepth != branchDepth) {
+                error(
+                    "Internal .NET backend error: inconsistent fall-through and branch stack depth " +
+                            "at label $label: $stackDepth vs $branchDepth"
+                )
+            }
+            stackDepth = branchDepth
+        }
         isTerminated = false
     }
 
@@ -207,6 +215,44 @@ internal class DotNetIlMethodContext(
         ehRegions.removeLast()
         appendIndentedLine("}")
         appendIndentedLine("catch $catchTypeRef {")
+        ehRegions.addLast(EhRegion.CATCH_HANDLER)
+        stackDepth = 1
+        if (maxStackDepth < 1) maxStackDepth = 1
+        isTerminated = false
+    }
+
+    /**
+     * Closes the try body or preceding handler and opens a CLR `filter` clause. The filter starts
+     * with the thrown object on its evaluation stack. Generated exception filters immediately
+     * narrow that object to `System.Exception` and call the allocation-free Kotlin.Runtime
+     * classifier; no source expression is emitted in this first-pass search region.
+     */
+    fun beginFilter() {
+        check(ehRegions.isNotEmpty()) { "Internal .NET backend error: 'filter' without an open '.try'" }
+        ehRegions.removeLast()
+        appendIndentedLine("}")
+        appendIndentedLine("filter {")
+        ehRegions.addLast(EhRegion.FILTER_BODY)
+        stackDepth = 1
+        if (maxStackDepth < 1) maxStackDepth = 1
+        isTerminated = false
+    }
+
+    /**
+     * Ends the current filter and opens its handler body. `endfilter` consumes the classifier's
+     * int32 result. The CLR then starts the selected handler with the ORIGINAL thrown object on a
+     * fresh stack; this is the identity-preserving property for which filters are used.
+     */
+    fun endFilterAndBeginHandler() {
+        check(ehRegions.lastOrNull() == EhRegion.FILTER_BODY) {
+            "Internal .NET backend error: filtered handler without a filter body"
+        }
+        check(stackDepth == 1) { "Internal .NET backend error: exception filter must produce exactly one result" }
+        appendIndentedLine("endfilter")
+        stackDepth = 0
+        ehRegions.removeLast()
+        appendIndentedLine("}")
+        appendIndentedLine("{")
         ehRegions.addLast(EhRegion.CATCH_HANDLER)
         stackDepth = 1
         if (maxStackDepth < 1) maxStackDepth = 1
@@ -353,7 +399,7 @@ internal class DotNetIlMethodContext(
 }
 
 /** The kind of exception-handling region currently being emitted; see [DotNetIlMethodContext.beginTry]. */
-private enum class EhRegion { TRY_BODY, CATCH_HANDLER, FINALLY_BODY }
+private enum class EhRegion { TRY_BODY, FILTER_BODY, CATCH_HANDLER, FINALLY_BODY }
 
 /**
  * Branch targets of a loop: `break` jumps to [breakLabel], `continue` to [continueLabel].

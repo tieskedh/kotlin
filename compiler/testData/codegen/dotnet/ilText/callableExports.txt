@@ -80,7 +80,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
-  .field public static initonly class 'demo.callableExportsKt$makeZero$1' 'INSTANCE'
+  .field assembly static initonly class 'demo.callableExportsKt$makeZero$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -207,7 +207,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<valuetype [mscorlib]System.Nullable`1<int32>, valuetype [mscorlib]System.Nullable`1<int32>>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<valuetype [mscorlib]System.Nullable`1<int32>>
 {
-  .field public static initonly class 'demo.callableExportsKt$makeNullable$1' 'INSTANCE'
+  .field assembly static initonly class 'demo.callableExportsKt$makeNullable$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1

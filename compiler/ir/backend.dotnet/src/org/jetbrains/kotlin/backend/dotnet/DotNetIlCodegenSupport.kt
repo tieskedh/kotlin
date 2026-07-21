@@ -233,22 +233,32 @@ internal class DotNetIlTypeMapper private constructor(
     private val externalDeclarations: DotNetExternalDeclarations,
     private val genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
     private val genericInterfaceMapping: DotNetGenericInterfaceMapping,
+    private val assemblyReferenceSink: (String) -> Unit,
 ) {
     constructor(
         availableClasses: Map<IrClass, DotNetIlClassInfo>,
         coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
         externalDeclarations: DotNetExternalDeclarations = DotNetExternalDeclarations(emptyList()),
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo> = emptyMap(),
+        assemblyReferenceSink: (String) -> Unit = {},
     ) : this(
         availableClasses,
         coreLibrary,
         externalDeclarations,
         genericInterfaces,
         DotNetGenericInterfaceMapping.CANONICAL,
+        assemblyReferenceSink,
     )
 
     private fun withGenericInterfaceMapping(mapping: DotNetGenericInterfaceMapping): DotNetIlTypeMapper =
-        DotNetIlTypeMapper(availableClasses, coreLibrary, externalDeclarations, genericInterfaces, mapping)
+        DotNetIlTypeMapper(
+            availableClasses,
+            coreLibrary,
+            externalDeclarations,
+            genericInterfaces,
+            mapping,
+            assemblyReferenceSink,
+        )
 
     private fun canonicalGenericInterfaceView(): DotNetIlTypeMapper =
         withGenericInterfaceMapping(DotNetGenericInterfaceMapping.CANONICAL)
@@ -258,6 +268,9 @@ internal class DotNetIlTypeMapper private constructor(
 
     fun exactGenericInterfaceView(): DotNetIlTypeMapper =
         withGenericInterfaceMapping(DotNetGenericInterfaceMapping.EXACT)
+
+    fun canonicalGenericInterfaceSignatureView(): DotNetIlTypeMapper =
+        canonicalGenericInterfaceView()
 
     /**
      * A typed capability retains the declaring interface's `!n` parameter space, but a generic
@@ -304,14 +317,14 @@ internal class DotNetIlTypeMapper private constructor(
         type.isDotNetClrLegalDeclaredSupertype(owner, ::isSplitGenericInterface)
 
     fun genericInterfaceInfoOrNull(irClass: IrClass): DotNetGenericInterfaceInfo? =
-        genericInterfaces[irClass]
+        (genericInterfaces[irClass]
             ?: DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
             ?: run {
                 val declared = externalDeclarations.declaredClassInfoOrNull(irClass) ?: return null
                 val canonical = externalDeclarations.classInfoOrNull(irClass, canonicalGenericInterfaceView())
                     ?: return null
                 DotNetGenericInterfaceInfo(canonical, declared, externalDeclarations.exactClassInfoOrNull(irClass))
-            }
+            }).also(::recordAssemblyReferences)
 
     fun genericInterfaceTypedMethodName(member: IrSimpleFunction): String =
         DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName()
@@ -352,7 +365,7 @@ internal class DotNetIlTypeMapper private constructor(
      */
     fun classInfoOrNull(irClass: IrClass): DotNetIlClassInfo? {
         val runtimeGenericInfo = DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)
-        return when (genericInterfaceMapping.physicalView) {
+        return (when (genericInterfaceMapping.physicalView) {
             DotNetGenericInterfaceView.CANONICAL ->
                 genericInterfaces[irClass]?.canonicalClassInfo
                     ?: runtimeGenericInfo?.canonicalClassInfo
@@ -371,13 +384,17 @@ internal class DotNetIlTypeMapper private constructor(
         }
             ?: DotNetRuntimeTypes.classInfoFor(irClass)
             ?: DotNetStdlibLibrary.publicImplementationClassInfoOrNull(irClass)
-            ?: externalDeclarations.classInfoOrNull(irClass, this)
+            ?: externalDeclarations.classInfoOrNull(irClass, this)).also { classInfo ->
+            classInfo?.let(::recordAssemblyReference)
+        }
     }
 
     fun referencedFunctionInfoOrNull(function: IrSimpleFunction): DotNetIlFunctionInfo? =
-        DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
+        (DotNetRuntimeTypes.genericInterfaceFunctionInfoOrNull(function, this)
             ?: DotNetStdlibLibrary.implementationFunctionInfoOrNull(function, this)
-            ?: externalDeclarations.functionInfoOrNull(function, this)
+            ?: externalDeclarations.functionInfoOrNull(function, this)).also { functionInfo ->
+            functionInfo?.owner?.let(::recordAssemblyReference)
+        }
 
     /** Maps [type] in return position; CLR `void` is the return encoding of Kotlin `Unit`. */
     fun toDotNetIlReturnType(type: IrType): DotNetIlReturnType? {
@@ -400,7 +417,12 @@ internal class DotNetIlTypeMapper private constructor(
      * stays unmapped: its ABI is a future generics problem and must not force concrete nullable
      * primitives into `object` (the whole point of the hybrid split).
      */
-    fun toDotNetIlValueType(type: IrType): DotNetIlValueType? {
+    fun toDotNetIlValueType(type: IrType): DotNetIlValueType? =
+        mapDotNetIlValueType(type).also { valueType ->
+            valueType?.let(::recordAssemblyReferences)
+        }
+
+    private fun mapDotNetIlValueType(type: IrType): DotNetIlValueType? {
         DotNetRuntimeTypes.mapCompilerRuntimeType(type)?.let { return it }
         if (
             genericInterfaceMapping.physicalView == DotNetGenericInterfaceView.CANONICAL &&
@@ -435,31 +457,20 @@ internal class DotNetIlTypeMapper private constructor(
         }
     }
 
-    /**
-     * Maps the supported Kotlin primitive-array classifiers to CLR zero-based vectors. Matching
-     * by FqName deliberately includes nullable array types: CLR vectors are reference-shaped,
-     * so `IntArray` and `IntArray?` have the same IL signature, just like `String`/`String?`.
-     */
+    /** Maps a specialized Kotlin array to its canonical Kotlin.Runtime wrapper reference. */
     private fun toPrimitiveArrayType(type: IrType): DotNetIlValueType.PrimitiveArray {
-        val elementType = when (type.classFqName?.asString()) {
-            "kotlin.BooleanArray" -> DotNetIlValueType.Boolean
-            "kotlin.IntArray" -> DotNetIlValueType.Int32
-            "kotlin.LongArray" -> DotNetIlValueType.Int64
-            "kotlin.DoubleArray" -> DotNetIlValueType.Float64
-            "kotlin.CharArray" -> DotNetIlValueType.Char
-            else -> error("Internal .NET backend error: unsupported primitive-array classifier ${type.render()}")
-        }
-        return DotNetIlValueType.PrimitiveArray(elementType)
+        val entry = DotNetPrimitiveArrays.entry(type.classFqName)
+            ?: error("Internal .NET backend error: unsupported primitive-array classifier ${type.render()}")
+        return DotNetIlValueType.PrimitiveArray(entry.elementType)
     }
 
     /**
      * Maps invariant Kotlin `Array<E>` to a CLR vector while preserving it as the distinct
-     * [DotNetIlValueType.GenericArray] structural kind. Concrete primitive elements are rejected:
-     * CLR would give `Array<Int>` and `IntArray` the same `int32[]` signature and collapse legal
-     * Kotlin overloads. An OPEN type parameter remains valid (`!n[]`/`!!n[]`) because CLR generic
-     * arity and token identity keep its declaration distinct, including value-type
-     * instantiations. Projections are never mapped to CLR covariance; nested arrays remain a
-     * separate ABI slice.
+     * [DotNetIlValueType.GenericArray] structural kind. Concrete primitive elements are legal and
+     * retain the natural CLR vector (`Array<Int>` -> `int32[]`) because specialized primitive
+     * arrays now have distinct Kotlin.Runtime wrapper types. An OPEN type parameter remains valid
+     * (`!n[]`/`!!n[]`) and substitutes reified CLR element types. Projections are never mapped to
+     * CLR covariance.
      */
     private fun toGenericArrayTypeOrNull(type: IrType): DotNetIlValueType.GenericArray? {
         val simpleType = type as? IrSimpleType
@@ -475,28 +486,11 @@ internal class DotNetIlTypeMapper private constructor(
             )
         }
         val elementIrType = projection.type
-        if (elementIrType.isDotNetGenericArray() || elementIrType.isSupportedDotNetPrimitiveArray()) {
-            dotNetUnsupported(
-                "generic array type ${type.render()} is nested or contains an array element; " +
-                        "jagged arrays are not supported yet"
-            )
-        }
         val elementType = toDotNetIlValueType(elementIrType) ?: return null
-        if (elementType.isSupportedPrimitiveArrayElement()) {
-            dotNetUnsupported(
-                "generic array type ${type.render()} has a concrete primitive element; " +
-                        "its CLR vector would collide with the corresponding primitive-array type"
-            )
-        }
         if (elementType is DotNetIlValueType.NullableValue) {
             dotNetUnsupported(
                 "generic array type ${type.render()} has a nullable primitive element; " +
                         "nullable value-type array elements are not supported yet"
-            )
-        }
-        if (elementType is DotNetIlValueType.PrimitiveArray || elementType is DotNetIlValueType.GenericArray) {
-            dotNetUnsupported(
-                "generic array type ${type.render()} contains an array element; jagged arrays are not supported yet"
             )
         }
         return DotNetIlValueType.GenericArray(elementType)
@@ -531,7 +525,7 @@ internal class DotNetIlTypeMapper private constructor(
     private fun toMappedExceptionTypeOrNull(type: IrType): DotNetIlValueType.MappedClass? =
         when (val entry = type.classFqName?.let(DotNetMappedExceptions.entries::get)) {
             is DotNetMappedExceptions.Entry.Mapped ->
-                DotNetIlValueType.MappedClass(entry.clrTypeRef(coreLibrary.reference))
+                DotNetIlValueType.MappedClass(entry.carrierTypeRef(coreLibrary.reference))
             is DotNetMappedExceptions.Entry.Rejected -> dotNetUnsupported(entry.reason)
             null -> null
         }
@@ -627,7 +621,16 @@ internal class DotNetIlTypeMapper private constructor(
         return DotNetIlValueType.TypeParameter(
             typeParameter.index,
             isMethodParameter = typeParameter.parent is IrFunction,
-            upperBounds = typeParameter.dotNetConstraintTypes(this),
+            upperBounds = typeParameter.dotNetConstraintTypes(this, forMetadata = false).flatMap { constraint ->
+                when (constraint) {
+                    is DotNetIlValueType.UserClass -> listOf(constraint)
+                    // A CLR `R : T` constraint is represented directly in metadata. For the
+                    // backend's structural member model, R also inherits T's effective concrete
+                    // class/interface bounds; the positional T token itself is not a class owner.
+                    is DotNetIlValueType.TypeParameter -> constraint.upperBounds
+                    else -> emptyList()
+                }
+            },
         )
     }
 
@@ -639,49 +642,131 @@ internal class DotNetIlTypeMapper private constructor(
             (argument as? IrTypeProjection)?.type?.referencesErasedInterfaceParameter() == true
         }
     }
+
+    private fun recordAssemblyReference(classInfo: DotNetIlClassInfo) {
+        classInfo.assemblyName?.let(assemblyReferenceSink)
+    }
+
+    fun recordAssemblyReference(assemblyName: String) {
+        assemblyReferenceSink(assemblyName)
+    }
+
+    private fun recordAssemblyReferences(info: DotNetGenericInterfaceInfo) {
+        recordAssemblyReference(info.canonicalClassInfo)
+        recordAssemblyReference(info.declaredClassInfo)
+        info.exactClassInfo?.let(::recordAssemblyReference)
+    }
+
+    private fun recordAssemblyReferences(type: DotNetIlValueType) {
+        when (type) {
+            is DotNetIlValueType.UserClass -> recordAssemblyReference(type.classInfo)
+            is DotNetIlValueType.GenericInstance -> {
+                recordAssemblyReference(type.classInfo)
+                type.arguments.forEach(::recordAssemblyReferences)
+            }
+            is DotNetIlValueType.GenericArray -> recordAssemblyReferences(type.elementType)
+            is DotNetIlValueType.PrimitiveArray -> recordAssemblyReferences(type.elementType)
+            is DotNetIlValueType.NullableValue -> recordAssemblyReferences(type.elementType)
+            is DotNetIlValueType.TypeParameter -> type.upperBounds.forEach(::recordAssemblyReferences)
+            DotNetIlValueType.Boolean,
+            DotNetIlValueType.Char,
+            DotNetIlValueType.Float64,
+            DotNetIlValueType.Int32,
+            DotNetIlValueType.Int64,
+            is DotNetIlValueType.MappedClass,
+            DotNetIlValueType.Object,
+            DotNetIlValueType.String,
+                -> {}
+        }
+    }
 }
 
 /**
- * Maps the stage-2 constraints of this parameter to live module-local class/interface types.
+ * Maps the supported constraints of this parameter to their physical CLR types.
  * `Any?` is the unconstrained Kotlin default and contributes no metadata. The historical
  * function-only `String` bound keeps its pre-stage-1 slot erosion and is likewise omitted here.
- * Every new constraint is deliberately direct, non-null, and non-generic; accepting a mapped or
- * external type without a complete member model would publish metadata the backend cannot use.
+ * A bound on another type parameter is normally retained as its positional `!n`/`!!n` TypeSpec.
+ * The exception is a method bound which depends on a type parameter of a split Kotlin generic
+ * interface. Such a relationship remains part of the logical Kotlin signature, but is omitted
+ * from every executable CLR view of that member. A CLR variant interface containing `R : T`
+ * load-fails when `T` is variant, while retaining the constraint only on an invariant exact DIM
+ * rejects valid Kotlin calls through a widened declaration-site-variance view. Portable closed
+ * value-type views cannot express the substituted relationship either. The exact view still
+ * keeps the strongly typed parameters and result; only the incompatible physical constraint is
+ * weakened. A future C# export facade may publish a convenience constraint, but that facade must
+ * not become Kotlin's virtual dispatch slot. Other constraints remain direct, non-null, and
+ * non-generic; accepting a mapped or external type without a complete member model would publish
+ * metadata the backend cannot use.
  * A class constraint is sorted before interface constraints, matching the ECMA/Roslyn canonical
- * order regardless of source `where`-clause order.
+ * order regardless of source `where`-clause order. Type-parameter constraints retain their source
+ * position after concrete constraints; GenericParamConstraint row order has no semantic effect.
+ * [forMetadata] is false only while deriving codegen's structural upper-bound model. That model
+ * retains logical Kotlin bounds needed by the canonical body. Metadata rendering passes true and
+ * applies the physical erasure above.
+ *
  */
 internal fun IrTypeParameter.dotNetConstraintTypes(
     typeMapper: DotNetIlTypeMapper,
-): List<DotNetIlValueType.UserClass> {
+    forMetadata: Boolean = true,
+): List<DotNetIlValueType> {
     val mappedBounds = superTypes
         .filterNot { it.isNullableAny() || it.isString() || it.isNullableString() }
-        .map { bound ->
+        .mapIndexedNotNull { index, bound ->
             val simpleBound = bound as? IrSimpleType
                 ?: dotNetUnsupported(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
-                            "constraints must be non-null, non-generic module-local classes or interfaces"
+                            "constraints must be non-null type parameters or non-generic module-local classes/interfaces"
                 )
             if (simpleBound.isMarkedNullable() || simpleBound.arguments.isNotEmpty()) {
                 dotNetUnsupported(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
-                            "constraints must be non-null, non-generic module-local classes or interfaces"
+                            "constraints must be non-null type parameters or non-generic module-local classes/interfaces"
                 )
             }
-            val boundClass = (simpleBound.classifier as? IrClassSymbol)?.owner
-                ?: dotNetUnsupported(
+            val boundParameter = (simpleBound.classifier as? IrTypeParameterSymbol)?.owner
+            if (
+                forMetadata && boundParameter != null &&
+                (origin == DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER ||
+                        (boundParameter.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true)
+            ) {
+                return@mapIndexedNotNull null
+            }
+            when (val classifier = simpleBound.classifier) {
+                is IrClassSymbol -> {
+                    val mappedBound = typeMapper.toDotNetIlValueType(bound) as? DotNetIlValueType.UserClass
+                        ?: dotNetUnsupported(
+                            "type parameter '${name.asString()}' of " +
+                                    when (val owner = parent) {
+                                        is IrSimpleFunction ->
+                                            "method '${owner.name.asString()}'"
+                                        is IrClass -> "class '${owner.name.asString()}'"
+                                        else -> owner.toString()
+                                    } +
+                                    " has an unsupported constraint ${bound.render()}; only classes and " +
+                                    "interfaces emitted in this module can be constraints"
+                        )
+                    Triple(if (classifier.owner.isInterface) 1 else 0, index, mappedBound)
+                }
+                is IrTypeParameterSymbol -> when (val mappedBound = typeMapper.toDotNetIlValueType(bound)) {
+                    is DotNetIlValueType.TypeParameter -> Triple(2, index, mappedBound)
+                    // The erased canonical view of a split interface has no owner-generic slot
+                    // with which to express `R : T`. Its `T` maps to object, so this physical view
+                    // widens the constraint. Metadata on the typed views and helper is handled by
+                    // the owner-dependent rule above.
+                    DotNetIlValueType.Object -> null
+                    else -> dotNetUnsupported(
+                        "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
+                                "the bound type parameter has no CLR generic-parameter representation"
+                    )
+                }
+                else -> dotNetUnsupported(
                     "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
-                            "constraints on other type parameters are not supported"
+                            "constraints must name a type parameter or a module-local class/interface"
                 )
-            val mappedBound = typeMapper.toDotNetIlValueType(bound) as? DotNetIlValueType.UserClass
-                ?: dotNetUnsupported(
-                    "type parameter '${name.asString()}' has an unsupported constraint ${bound.render()}; " +
-                            "only classes and interfaces emitted in this module can be constraints"
-                )
-            boundClass to mappedBound
+            }
         }
-    return mappedBounds.sortedBy { it.first.isInterface }.map { it.second }
+    return mappedBounds.sortedWith(compareBy({ it.first }, { it.second })).map { it.third }
 }
-
 /**
  * The formal `<...>` list shared by generic classes, interfaces, and methods.
  * Interface declaration-site variance prefixes the existing constraint/name canon with `+` or
@@ -727,7 +812,7 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
 
 /**
  * The shared generic type-parameter gate: a supported parameter is non-reified and is either
- * unconstrained (`Any?`) or has direct non-null, non-generic class/interface bounds.
+ * unconstrained (`Any?`) or has direct non-null type-parameter or non-generic class/interface bounds.
  * [allowDeclarationSiteVariance] is true only for generic interfaces, the sole Kotlin
  * declaration kind in this backend that has a direct CLR `+`/`-` metadata representation;
  * classes and functions remain invariant. [dotNetConstraintTypes] performs the live
@@ -737,8 +822,9 @@ internal fun IrClass.dotNetBaseClassOrNull(): IrClass? =
  * - declaration-site variance (`out`/`in`) is rejected outside interfaces because ECMA-335
  *   (II.10.1.7) allows variance only on interfaces and delegates; emitting a Kotlin class's
  *   variance as invariant would silently change assignability;
- * - constraints with nullable, generic-instantiation, or type-parameter bounds stay outside
- *   stage 2 — with ONE pre-existing exception, enabled by
+ * - nullable and generic-instantiation constraints stay outside this stage; direct bounds on
+ *   another owner or method type parameter are represented by CLR VAR/MVAR TypeSpecs. ONE
+ *   pre-existing exception, enabled by
  *   [allowStringBounds]: a `T` bounded by `String`/`String?` predates this slice (the
  *   string-concat lowering's receiver mapping sends every use of such a `T` to IL `string`,
  *   see [isDotNetStringType]) and stays supported on FUNCTIONS for compatibility — the
@@ -773,14 +859,17 @@ internal fun checkDotNetTypeParametersSupported(
                 else -> {
                     val simpleType = superType as? IrSimpleType
                     simpleType == null || simpleType.isMarkedNullable() ||
-                            simpleType.arguments.isNotEmpty() || simpleType.classifier !is IrClassSymbol
+                            simpleType.arguments.isNotEmpty() ||
+                            (simpleType.classifier !is IrClassSymbol &&
+                                    simpleType.classifier !is IrTypeParameterSymbol)
                 }
             }
         }
         if (unsupportedBound != null) {
             dotNetUnsupported(
                 "$ownerDescription constrains type parameter '$parameterName' with unsupported type " +
-                        "${unsupportedBound.render()}; constraints must be non-null, non-generic classes or interfaces"
+                        "${unsupportedBound.render()}; constraints must be non-null type parameters or " +
+                        "non-generic classes/interfaces"
             )
         }
     }

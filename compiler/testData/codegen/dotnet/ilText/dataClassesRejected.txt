@@ -1,7 +1,138 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'dataClassesRejected' {}
 .module 'main-dataClassesRejected.il'
 
+.class public auto ansi sealed beforefieldinit 'WithPrimitiveGenericArray'
+       extends [mscorlib]System.Object
+{
+  .field private int32[] 'values'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32[] 'values') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32[] 'WithPrimitiveGenericArray'::'values'
+    ret
+  }
+  .method public hidebysig specialname instance int32[] 'get_values'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    ret
+  }
+  .method public hidebysig instance int32[] 'component1'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    ret
+  }
+  .method public hidebysig instance class 'WithPrimitiveGenericArray' 'copy'(int32[] 'values') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    newobj instance void 'WithPrimitiveGenericArray'::.ctor(int32[])
+    ret
+  }
+  .method public hidebysig instance class 'WithPrimitiveGenericArray' 'copy$default'(int32[] 'values', int32 '$mask0') cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldarg.2
+    ldc.i4 1
+    and
+    ldc.i4 0
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    starg 1
+    br IL_whenEnd_0
+IL_whenNext_1:
+IL_whenEnd_0:
+    ldarg.0
+    ldarg.1
+    call instance class 'WithPrimitiveGenericArray' 'WithPrimitiveGenericArray'::'copy'(int32[])
+    ret
+  }
+  .method public hidebysig virtual instance string 'ToString'() cil managed
+  {
+    .maxstack 2
+    ldstr "WithPrimitiveGenericArray(values="
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayToString'(class [mscorlib]System.Array)
+    call string [mscorlib]System.String::Concat(string, string)
+    ldstr ")"
+    call string [mscorlib]System.String::Concat(string, string)
+    ret
+  }
+  .method public hidebysig virtual instance int32 'GetHashCode'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    call int32 [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'DataClassArrayHashCode'(class [mscorlib]System.Array)
+    ret
+  }
+  .method public hidebysig virtual instance bool 'Equals'(object 'other') cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] class 'WithPrimitiveGenericArray' 'tmp0_other_with_cast'
+    )
+    ldarg.0
+    ldarg.1
+    ceq
+    brfalse IL_whenNext_1
+    ldc.i4.1
+    ret
+IL_whenNext_1:
+    ldarg.1
+    isinst class 'WithPrimitiveGenericArray'
+    ldnull
+    ceq
+    brfalse IL_whenNext_3
+    ldc.i4.0
+    ret
+IL_whenNext_3:
+    ldarg.1
+    castclass class 'WithPrimitiveGenericArray'
+    stloc.0
+    ldarg.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    ldloc.0
+    ldfld int32[] 'WithPrimitiveGenericArray'::'values'
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_5
+    ldc.i4.0
+    ret
+IL_whenNext_5:
+    ldc.i4.1
+    ret
+  }
+  .property instance int32[] 'values'()
+  {
+    .get instance int32[] 'WithPrimitiveGenericArray'::'get_values'()
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'dataClassesRejectedKt'
        extends [mscorlib]System.Object
 {

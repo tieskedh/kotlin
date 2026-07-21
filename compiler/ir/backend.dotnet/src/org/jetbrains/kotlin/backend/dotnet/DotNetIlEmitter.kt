@@ -2,8 +2,15 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceBridgeMemberViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceDefaultAdapterViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceDefaultBodyViewOrNull
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceBridge
+import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceDefaultPhysicalMethod
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetDefaultParameterIndices
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetInventedLocalClassName
 import org.jetbrains.kotlin.backend.dotnet.lower.dotNetLocalCaptureRejectionReason
@@ -17,6 +24,7 @@ import org.jetbrains.kotlin.ir.IrBuiltIns
 import org.jetbrains.kotlin.ir.declarations.IrAnonymousInitializer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
+import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
 import org.jetbrains.kotlin.ir.declarations.IrField
@@ -45,6 +53,7 @@ import org.jetbrains.kotlin.ir.util.isFunction
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
+import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.ir.util.isSuspendFunction
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.render
@@ -66,6 +75,26 @@ internal class DotNetIlEmitter(
     private val coreLibrary: DotNetCoreLibraryProfile = DEFAULT_EXECUTABLE_CORE_LIBRARY,
     private val assemblyVersionIl: String? = null,
     private val externalLibraries: List<DotNetExternalLibrary> = emptyList(),
+    private val failOnDeclarationEviction: Boolean = false,
+    private val compilesAgainstStdlib: Boolean = false,
+    private val preLoweringDeclarationKeys: Map<IrDeclaration, String> = emptyMap(),
+    private val friendAssemblies: List<DotNetFriendAssemblyIdentity> = emptyList(),
+    private val interfaceDefaultImplementations:
+            Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = emptyMap(),
+    private val interfaceDefaultArgumentDispatchers:
+            Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
+    private val genericInterfaceDefaults:
+            List<DotNetLoweredGenericInterfaceDefault> = emptyList(),
+    private val externalInterfaceDefaultHelpers:
+            Map<IrSimpleFunction, DotNetBoundInterfaceDefaultImplementation> = emptyMap(),
+    private val externalDefaultArgumentDispatchers:
+            Map<IrSimpleFunction, DotNetBoundDefaultArgumentDispatcher> = emptyMap(),
+    private val interfaceDefaultPromotions:
+            List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
+    private val genericInterfaceViewBridges:
+            List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
+    private val interfaceDefaultClassForwarders:
+            List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
 ) {
     /**
      * Renders the module to IL text.
@@ -234,7 +263,7 @@ internal class DotNetIlEmitter(
             candidate.isDotNetGenericInterfaceDeclaration &&
                     (candidate in moduleInterfaces ||
                             DotNetRuntimeTypes.genericInterfaceInfoFor(candidate) != null ||
-                            externalDeclarations.declaredClassInfoOrNull(candidate) != null)
+                            externalDeclarations.hasClass(candidate))
 
         // A CLR nested type is registered independently for type/member resolution, while its
         // metadata block renders recursively inside the enclosing type. Kotlin named nested
@@ -374,11 +403,13 @@ internal class DotNetIlEmitter(
             // also guarantees a plain `Box` and a generic `Box<T>` can never collide in IL.
             registerClassTree(irClass)
         }
+        val referencedAssemblies = linkedSetOf<String>()
         val typeMapper = DotNetIlTypeMapper(
             availableClasses,
             coreLibrary,
             externalDeclarations,
             genericInterfaces,
+            referencedAssemblies::add,
         )
         val declaredGenericTypeMapper = typeMapper.declaredGenericInterfaceView()
         val exactGenericTypeMapper = typeMapper.exactGenericInterfaceView()
@@ -405,6 +436,7 @@ internal class DotNetIlEmitter(
             ) {
                 val claimed = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions()) {
+                    if (member.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) continue
                     if (!belongsToView(member, view)) continue
                     val signature = member.dotNetSignature(signatureMapper)
                     val identity =
@@ -522,6 +554,20 @@ internal class DotNetIlEmitter(
             availableFunctions,
         )
         val skipReasons = LinkedHashMap<IrSimpleFunction, String>()
+        for ([helper, binding] in externalInterfaceDefaultHelpers) {
+            availableFunctions[helper] = externalDeclarations.interfaceDefaultHelperFunctionInfo(
+                helper,
+                binding,
+                typeMapper,
+            )
+        }
+        for ([dispatcher, binding] in externalDefaultArgumentDispatchers) {
+            availableFunctions[dispatcher] = externalDeclarations.defaultArgumentDispatcherFunctionInfo(
+                dispatcher,
+                binding,
+                typeMapper,
+            )
+        }
         for ([file, functions] in topLevelFunctionsByFile) {
             val facadeClassInfo = facadeClassInfoByFile.getValue(file)
             for (function in functions) {
@@ -668,6 +714,37 @@ internal class DotNetIlEmitter(
                 }
                 val membersByIlIdentity = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions().sortedBy { it.isOriginallyLocalDeclaration }) {
+                    if (member.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) {
+                        val promotion = interfaceDefaultPromotions.singleOrNull { lowered ->
+                            lowered.implementation == member
+                        }
+                        if (promotion == null) continue
+                        val implementationView = promotion.implementationView
+                            ?: error("Internal .NET backend error: generic promotion has no implementation view")
+                        val genericInterfaceInfo = genericInterfaces[irClass]
+                        val implementationOwner = if (genericInterfaceInfo != null) {
+                            genericInterfaceInfo.classInfo(implementationView.physicalView)
+                                ?: dotNetUnsupported(
+                                    "generic promotion ${implementationView.name.lowercase()} view is unavailable"
+                                )
+                        } else {
+                            classInfo
+                        }
+                        val implementationMapper = if (genericInterfaceInfo != null) {
+                            typeMapper.genericInterfaceSignatureView(implementationView)
+                        } else {
+                            // A non-generic derived interface promoting a closed generic default
+                            // has only one CLR owner. Its several final MethodImpl adapters all live
+                            // on that owner; their IR signatures already contain the closed
+                            // substitution and their origins still select the inherited slot view.
+                            memberTypeMapper(member)
+                        }
+                        availableFunctions[member] = DotNetIlFunctionInfo(
+                            implementationOwner,
+                            member.dotNetSignature(implementationMapper),
+                        )
+                        continue
+                    }
                     val signatureMapper = memberTypeMapper(member)
                     val signature = member.dotNetSignature(signatureMapper)
                     checkOverrideKeepsIlReturnType(member, signature, signatureMapper)
@@ -810,6 +887,10 @@ internal class DotNetIlEmitter(
         }
 
         do {
+            // Type mapping and external callable resolution populate this set while rendering.
+            // A failed declaration forces another fixpoint round, so clearing here guarantees
+            // that the final set describes only IL which actually survived emission.
+            referencedAssemblies.clear()
             renderedClasses.clear()
             renderedMethods.clear()
             renderedStaticInitializers.clear()
@@ -1098,22 +1179,26 @@ internal class DotNetIlEmitter(
             return null
         }
 
+        val skipSeverity = if (failOnDeclarationEviction) CompilerMessageSeverity.ERROR else CompilerMessageSeverity.WARNING
+        var hasEvictedDeclaration = classSkipReasons.isNotEmpty() ||
+                skipReasons.any { entry -> entry.key != entryPoint } ||
+                propertySkipReasons.isNotEmpty()
         for ([irClass, reason] in classSkipReasons) {
             messageCollector.report(
-                CompilerMessageSeverity.WARNING,
+                skipSeverity,
                 "Class '${irClass.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
         }
         for ([function, reason] in skipReasons) {
             if (function == entryPoint) continue
             messageCollector.report(
-                CompilerMessageSeverity.WARNING,
+                skipSeverity,
                 "Function '${function.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
         }
         for ([property, reason] in propertySkipReasons) {
             messageCollector.report(
-                CompilerMessageSeverity.WARNING,
+                skipSeverity,
                 "Property '${property.diagnosticName()}' is not supported by the .NET backend and was skipped: $reason"
             )
         }
@@ -1128,10 +1213,11 @@ internal class DotNetIlEmitter(
                 when (declaration) {
                     is IrClass, is IrSimpleFunction, is IrProperty, is IrTypeAlias -> {}
                     else -> {
+                        hasEvictedDeclaration = true
                         val name = (declaration as? IrDeclarationWithName)?.diagnosticName()
                             ?: declaration.javaClass.simpleName
                         messageCollector.report(
-                            CompilerMessageSeverity.WARNING,
+                            skipSeverity,
                             "Declaration '$name' is not supported by the .NET backend and was skipped: " +
                                     "unsupported top-level declaration kind ${declaration.javaClass.simpleName}"
                         )
@@ -1139,12 +1225,23 @@ internal class DotNetIlEmitter(
                 }
             }
         }
+        if (failOnDeclarationEviction && hasEvictedDeclaration) return null
         if (entryPoint != null && entryPoint !in availableFunctions) {
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
                 "The main function is not supported by the .NET backend: ${skipReasons[entryPoint]}"
             )
             return null
+        }
+
+        // Kotlin.Runtime is a mandatory foundation of every Kotlin-produced CLR assembly. This
+        // is an explicit target ABI dependency, not an accident of whichever helper happened to
+        // occur in the rendered text. Likewise a USER module compiled with the Kotlin stdlib in
+        // its frontend universe records that platform dependency even if this particular source
+        // only uses primitive/corelib operations.
+        referencedAssemblies += DotNetRuntimeLibrary.ASSEMBLY_NAME
+        if (emissionScope == DotNetIlEmissionScope.USER && compilesAgainstStdlib) {
+            referencedAssemblies += DotNetStdlibLibrary.ASSEMBLY_NAME
         }
 
         val moduleBody = buildString {
@@ -1200,28 +1297,43 @@ internal class DotNetIlEmitter(
                     }
                 }
                 if (facadeMethods.isEmpty() && facadeFields.isEmpty() && facadePropertyBlocks.isEmpty()) continue
+                val facadeIsPublic = file.declarations.any { declaration ->
+                    when (declaration) {
+                        is IrSimpleFunction ->
+                            declaration in availableFunctions &&
+                                    !declaration.isOriginallyLocalDeclaration &&
+                                    (declaration.visibility == DescriptorVisibilities.PUBLIC || declaration.isPublishedApi())
+                        is IrProperty ->
+                            declaration !in propertySkipReasons &&
+                                    !declaration.isExcludedFromCodegen(intrinsicMethods) &&
+                                    (declaration.visibility == DescriptorVisibilities.PUBLIC || declaration.isPublishedApi())
+                        else -> false
+                    }
+                }
                 DotNetIlClassCodegen(
                     fileClassNames.getValue(file),
                     facadeMethods.map { it.ilText },
                     facadeFields,
                     facadePropertyBlocks,
+                    exported = facadeIsPublic,
                     hasClassInitializer = renderedStaticInitializers.containsKey(file),
                     coreLibraryReference = coreLibrary.reference,
                 ).generate(this)
             }
         }
         val ilText = buildString {
-            // Executables retain the runtime-foundation AssemblyRef unconditionally. Raw library
-            // IL acquires it once the final fixpoint output contains a physical runtime type;
-            // derive that from the rendered body so an evicted callable cannot leave a stale ref.
             appendHeader(
-                referencesRuntimeAssembly = producesExecutable ||
-                        "[${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" in moduleBody,
-                referencesStdlibAssembly = "[${DotNetStdlibLibrary.ASSEMBLY_NAME}]" in moduleBody,
+                referencesRuntimeAssembly = DotNetRuntimeLibrary.ASSEMBLY_NAME in referencedAssemblies,
+                referencesStdlibAssembly = DotNetStdlibLibrary.ASSEMBLY_NAME in referencedAssemblies,
+                referencesEditorBrowsableAssembly =
+                    "System.ComponentModel.EditorBrowsableAttribute" in moduleBody,
                 referencedExternalLibraries = externalLibraries.filter { library ->
                     !DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName) &&
-                            "[${library.artifact.assemblyName}]" in moduleBody
+                            referencedAssemblies.any { referenced ->
+                                referenced.equals(library.artifact.assemblyName, ignoreCase = true)
+                            }
                 },
+                friendAssemblies = friendAssemblies,
             )
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
@@ -1235,7 +1347,14 @@ internal class DotNetIlEmitter(
                 availableClasses,
                 availableFunctions,
                 genericInterfaces,
+                preLoweringDeclarationKeys,
+                interfaceDefaultImplementations,
+                interfaceDefaultArgumentDispatchers,
+                interfaceDefaultPromotions,
+                genericInterfaceViewBridges,
+                interfaceDefaultClassForwarders,
             ),
+            referencedAssemblies.toSet(),
         )
     }
 
@@ -1458,16 +1577,6 @@ internal class DotNetIlEmitter(
         }
         val superTypesExceptAny = irClass.superTypes.filterNot { it.isAny() }
         if (superTypesExceptAny.isNotEmpty()) {
-            // Exception supertypes get a message naming the real gap: the supertype itself is
-            // supported (type-mapped, see DotNetMappedExceptions), subclassing it is not — a
-            // mapped exception is a corelib type, not a module class the inheritance model can
-            // extend.
-            if (irClass.superTypes.any { it.classFqName in DotNetMappedExceptions.entries }) {
-                dotNetUnsupported(
-                    "class '$name' extends an exception class; " +
-                            "user-defined exception classes are not supported until the inheritance model exists"
-                )
-            }
             val superClasses = superTypesExceptAny.map { superType ->
                 ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
                     ?: dotNetUnsupported("class '$name' with a supertype other than kotlin.Any is not supported")
@@ -1491,7 +1600,7 @@ internal class DotNetIlEmitter(
             for (superInterface in superClasses.filter { it.isInterface }) {
                 if (superInterface !in moduleInterfaces &&
                     DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
-                    externalDeclarations.declaredClassInfoOrNull(superInterface) == null &&
+                    !externalDeclarations.hasClass(superInterface) &&
                     superInterface.dotNetFixedFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKFunctionArityOrNull() == null &&
                     superInterface.dotNetFixedKPropertyArityOrNull() == null &&
@@ -1510,10 +1619,16 @@ internal class DotNetIlEmitter(
                 dotNetUnsupported("internal: class '$name' has more than one class supertype")
             }
             val superClass = properSuperClasses.singleOrNull()
-            if (superClass != null && superClass !in moduleClasses && superClass.isDotNetFunctionReferenceBase != true) {
+            if (
+                superClass != null &&
+                superClass !in moduleClasses &&
+                !externalDeclarations.hasClass(superClass) &&
+                DotNetMappedExceptions.mappedEntry(superClass.fqNameWhenAvailable) == null &&
+                superClass.isDotNetFunctionReferenceBase != true
+            ) {
                 dotNetUnsupported(
                     "class '$name' extends '${superClass.diagnosticName()}', which is not a class " +
-                            "of the compiled module; only module-local base classes are supported"
+                            "of the compiled module or a bound .NET library"
                 )
             }
         }
@@ -1539,11 +1654,47 @@ internal class DotNetIlEmitter(
         // does not exist yet at gate time, so it lives in the member pre-pass
         // (checkInheritedInterfaceImplKeepsIlReturnType). Declared overrides need no virtualness
         // check: every Kotlin `override` is emitted virtual (see isDotNetVirtual). A fake
-        // override resolving into an interface (a default interface method) passes this gate and
-        // is instead evicted at render when its interface is (interface members with bodies are
-        // interface-gate-rejected).
+        // A compiler-generated portable interface-default forwarder is a hidden MethodImpl, not
+        // the fake override's resolved Kotlin declaration. It can also be inherited through an
+        // arbitrary class chain, so validate that physical dispatch fact from the lowering records
+        // and external ABI metadata before diagnosing a missing implementation.
+        fun inheritsCompilerDefaultForwarder(interfaceSlots: Set<IrSimpleFunction>): Boolean {
+            val visited = hashSetOf<IrClass>()
+            var baseClass = irClass.dotNetBaseClassOrNull()
+            while (baseClass != null && visited.add(baseClass)) {
+                val hasLocalForwarder = interfaceDefaultClassForwarders.any { forwarder ->
+                    forwarder.owner == baseClass && forwarder.inheritedMember in interfaceSlots
+                }
+                if (hasLocalForwarder) return true
+                val hasExternalForwarder = interfaceSlots.any { slot ->
+                    externalDeclarations.interfaceDefaultClassForwarderOrNull(baseClass, slot) != null
+                }
+                if (hasExternalForwarder) return true
+                baseClass = baseClass.dotNetBaseClassOrNull()
+            }
+            return false
+        }
+
         for (member in irClass.dotNetMemberFakeOverrides()) {
-            if (member.allOverridden().none { (it.parent as? IrClass)?.isInterface == true }) continue
+            val interfaceSlots = member.allOverridden()
+                .filterTo(hashSetOf()) { (it.parent as? IrClass)?.isInterface == true }
+            if (interfaceSlots.isEmpty()) continue
+            val implementedSlots = irClass.declarations.filterIsInstance<IrSimpleFunction>()
+                .filter { it.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER }
+                .flatMapTo(hashSetOf()) { it.overriddenSymbols }
+            if (interfaceSlots.any { it.symbol in implementedSlots }) continue
+            val recordedCurrentForwarders = interfaceDefaultClassForwarders
+                .asSequence()
+                .filter { forwarder -> forwarder.owner == irClass }
+                .mapTo(hashSetOf()) { forwarder -> forwarder.inheritedMember }
+            if (interfaceSlots.any { it in recordedCurrentForwarders }) continue
+            if (inheritsCompilerDefaultForwarder(interfaceSlots)) continue
+            if (genericInterfaceDefaults.any { lowered ->
+                    lowered.source in interfaceSlots
+                }
+            ) {
+                continue
+            }
             val implementation = member.resolveFakeOverride()
             if (implementation == null) {
                 // An abstract class may carry an interface obligation only as a fake override:
@@ -1576,34 +1727,22 @@ internal class DotNetIlEmitter(
     }
 
     /**
-     * The interface half of the shape gate (probe series `ifaceprobe_s1`–`_s10`; JVM precedent:
-     * the CLR has real interface types, so like classes there is no vtable/interface lowering —
-     * a Kotlin `interface` becomes a CLR `.class interface abstract`): a top-level or named
-     * nested interface whose callable members are ALL abstract (abstract functions and abstract
-     * `val`/`var` properties) is compilable, and it may extend any number of recursively declared
-     * module-local interfaces (`ifaceprobe_s6`: interface inheritance is the same `implements`
-     * list; whether
-     * each super-interface itself compiles is re-resolved live every render round, so an evicted
-     * interface cascades to its sub-interfaces). A `sealed interface` is deliberately ACCEPTED
-     * and emitted as a plain interface. Like the sealed-class model, interface sealedness is
-     * pure frontend-enforced metadata with no CLR counterpart needed (JVM precedent: the JVM
-     * backend emits an ordinary interface too),
-     * and the exhaustive `when` it enables is `is`-gated by the type-operator rejection anyway;
-     * pinned by ilText/interfaceEqualityWidening.kt. A named nested interface may appear in any
-     * supported named class, interface, object, or companion, owns only its own generic
-     * parameters, and maps its visibility to `nested public/private/assembly/family`. Interfaces
-     * may themselves contain static-style named classes, interfaces, objects, and companions.
-     * Everything else stays rejected,
-     * whole-interface: `fun interface` (no SAM-conversion model), local interfaces or interfaces
-     * that do not have a supported named metadata parent,
-     * out-of-module super-interfaces other than supported split Kotlin.Runtime identities,
-     * members WITH bodies — default methods and accessors with
-     * bodies — (modern CoreCLR supports Default Interface Methods, but Framework 4.8 ILAsm
-     * rejects their bodies, `dimprobe_s1`), private interface members, overrides of
-     * `kotlin.Any` members (the same
-     * no-Any-model gap as on classes). A generic interface cannot own a companion because the CLR
-     * static field would be duplicated per constructed owner; named objects own their own field
-     * and remain safe.
+     * Validates the physical CLR interface shape after target lowerings. A Kotlin interface is
+     * emitted as a CLR `.class interface abstract`; sealedness remains frontend-only metadata,
+     * while multiple inheritance is represented by the CLR `implements` list. Top-level and named
+     * nested interfaces may extend module-local interfaces and external interfaces backed by a
+     * Kotlin KLIB plus structured physical-ABI index.
+     *
+     * Kotlin defaults are accepted only through the profile-aware interface-default lowering:
+     * portable profiles expose an abstract slot and compiler-ABI helper, while `net10.0` exposes
+     * the canonical DIM and the same helper identity. Generated interface-view adapters are valid
+     * only on `net10.0` and must contain forwarding bodies, never copied Kotlin bodies.
+     *
+     * Named nested interfaces may appear under supported named classes, interfaces, objects, and
+     * companions, and own only their own generic parameters. Remaining whole-interface rejection
+     * edges include `fun interface` until SAM conversion exists, local/anonymous interfaces,
+     * unsupported metadata parents, private callable members, overrides of `kotlin.Any` members,
+     * and companions on generic interfaces because CLR statics are per constructed owner.
      */
     private fun checkInterfaceShapeSupported(
         irClass: IrClass,
@@ -1654,7 +1793,7 @@ internal class DotNetIlEmitter(
                 !superInterface.isInterface ||
                 superInterface !in moduleInterfaces &&
                 DotNetRuntimeTypes.genericInterfaceInfoFor(superInterface) == null &&
-                externalDeclarations.declaredClassInfoOrNull(superInterface) == null
+                !externalDeclarations.hasClass(superInterface)
             ) {
                 dotNetUnsupported(
                     "interface '$name' extends '${superInterface.diagnosticName()}', which is not an interface " +
@@ -1710,19 +1849,39 @@ internal class DotNetIlEmitter(
      */
     private fun checkInterfaceMemberSupported(member: IrSimpleFunction, interfaceName: String, description: String) {
         if (member.isFakeOverride) return
+        if (member.origin.isDotNetGenericInterfaceBridge) {
+            if (coreLibrary != DotNetCoreLibraryProfile.NET10_0 || member.body == null) {
+                dotNetUnsupported("generic interface-view adapter '$description' has an invalid profile or no body")
+            }
+            return
+        }
+        if (member.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) {
+            if (coreLibrary != DotNetCoreLibraryProfile.NET10_0 || member.body == null) {
+                dotNetUnsupported("generic interface-default adapter '$description' has an invalid profile or no body")
+            }
+            return
+        }
         // Abstract generic interface slots are ordinary CLR generic virtual methods. The same
         // gate as class/top-level methods owns reified, inline, and unsupported constraint shapes
         // (probe-verified together with a generic-class implementation, genmemberprobe_s1).
         member.checkDotNetFunctionShapeSupported()
-        if (member.visibility == DescriptorVisibilities.PRIVATE) {
+        val isDefaultSlotBridge = member.origin == DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
+        if (member.visibility == DescriptorVisibilities.PRIVATE && !isDefaultSlotBridge) {
             dotNetUnsupported("private $description of interface '$interfaceName' is not supported")
         }
         if (member.body != null || member.modality != Modality.ABSTRACT) {
-            dotNetUnsupported(
-                "$description of interface '$interfaceName' has a body; interface members with bodies are not yet " +
-                        "supported (Default Interface Methods require modern CoreCLR and are rejected by the " +
-                        ".NET Framework 4.8 ILAsm compatibility floor)"
-            )
+            val loweredDefault = interfaceDefaultImplementations[member]
+            if (
+                coreLibrary != DotNetCoreLibraryProfile.NET10_0 ||
+                member.body == null ||
+                (!isDefaultSlotBridge &&
+                        loweredDefault?.bodyPlacement != DotNetInterfaceDefaultBodyPlacement.DIM_WITH_HELPER)
+            ) {
+                dotNetUnsupported(
+                    "$description of interface '$interfaceName' has a body outside the profile-aware " +
+                            "interface-default lowering"
+                )
+            }
         }
         if (member.allOverridden().any { (it.parent as? IrClass)?.defaultType?.isAny() == true }) {
             dotNetUnsupported(
@@ -1839,16 +1998,25 @@ internal class DotNetIlEmitter(
         member: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
     ) {
+        // allOverridden also contains intermediate fake views. They own no CLR slot and may
+        // already carry closed substitutions which are illegal to map as method metadata.
         val overriddenInterfaceMembers = member.allOverridden()
-            .filter { (it.parent as? IrClass)?.isInterface == true }
+            .filter { !it.isFakeOverride && (it.parent as? IrClass)?.isInterface == true }
         if (overriddenInterfaceMembers.isEmpty()) return
+        // Split Kotlin generic interfaces never use CLR implicit interface mapping: their
+        // canonical, declared, and exact slots are bound by explicit MethodImpl bridges or are
+        // inherited as DIMs. A closed fake override may have substituted an owner constraint
+        // such as R : T into R : Int; mapping that non-emitted fake method is both unnecessary
+        // and physically impossible. Filter those slots before mapping the fake return type.
+        val implicitlyMappedInterfaceMembers = overriddenInterfaceMembers
+            .filterNot { (it.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true }
+        if (implicitlyMappedInterfaceMembers.isEmpty()) return
         // The fake override's own return type equals the inherited implementation's; when it
         // does not map, the implementation's declaring class fails its own pre-pass and this
         // class falls through the base-chain cascade with a carried reason instead.
         val memberReturnType = typeMapper.toDotNetIlReturnType(member.returnType) ?: return
         val memberClass = member.parent as? IrClass
-        for (overridden in overriddenInterfaceMembers) {
-            if ((overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true) continue
+        for (overridden in implicitlyMappedInterfaceMembers) {
             val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
             val interfaceClass = overridden.parent as? IrClass
             val substitutedReturnType =
@@ -1955,25 +2123,34 @@ internal class DotNetIlEmitter(
         // counterpart of the nested class-subtree warnings.
         val baseClassRef = irClass.dotNetBaseSuperTypeOrNull()?.let { baseSuperType ->
             val baseClass = (baseSuperType.classifier as IrClassSymbol).owner
-            val baseClassInfo = typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
-                "its base class '${baseClass.diagnosticName()}' could not be compiled: " +
-                        (classSkipReasons[baseClass] ?: "the base class is not available in this module")
-            )
-            if (baseClass.typeParameters.isEmpty()) {
-                // The established non-generic spelling: `extends 'demo.Base'`.
-                baseClassInfo.ilTypeRef
+            val mappedExceptionBase = DotNetMappedExceptions.mappedEntry(baseClass.fqNameWhenAvailable)
+            if (mappedExceptionBase != null) {
+                // Broad logical exception categories are System.Exception carriers, but a subclass
+                // must extend the exact class allocated by the corresponding source constructor.
+                // This keeps RuntimeException/Error classification in the physical CLR ancestry and
+                // makes the inheritance visible to ordinary .NET tools without wrapper metadata.
+                mappedExceptionBase.subclassBaseTypeRef(coreLibrary.reference)
             } else {
-                // An instantiated generic base: closed (`Box<int32>`, genprobe_s5) or open and
-                // composed (`Mid<!1, !0>`, geninheritprobe_s1). Re-mapped through the LIVE type
-                // mapper every render round like the base itself, so an instantiation mentioning
-                // an evicted class fails the derived class here with a carried reason (the
-                // type-argument arm of the base-eviction cascade).
-                val baseType = typeMapper.toDotNetIlValueType(baseSuperType) as? DotNetIlValueType.GenericInstance
-                    ?: dotNetUnsupported(
-                        "its base class instantiation '${baseSuperType.render()}' could not be compiled: " +
-                                "a type argument is not available in this module"
-                    )
-                baseType.nameInSignature
+                val baseClassInfo = typeMapper.classInfoOrNull(baseClass) ?: dotNetUnsupported(
+                    "its base class '${baseClass.diagnosticName()}' could not be compiled: " +
+                            (classSkipReasons[baseClass] ?: "the base class is not available in this module")
+                )
+                if (baseClass.typeParameters.isEmpty()) {
+                    // The established non-generic spelling: `extends 'demo.Base'`.
+                    baseClassInfo.ilTypeRef
+                } else {
+                    // An instantiated generic base: closed (`Box<int32>`, genprobe_s5) or open and
+                    // composed (`Mid<!1, !0>`, geninheritprobe_s1). Re-mapped through the LIVE type
+                    // mapper every render round like the base itself, so an instantiation mentioning
+                    // an evicted class fails the derived class here with a carried reason (the
+                    // type-argument arm of the base-eviction cascade).
+                    val baseType = typeMapper.toDotNetIlValueType(baseSuperType) as? DotNetIlValueType.GenericInstance
+                        ?: dotNetUnsupported(
+                            "its base class instantiation '${baseSuperType.render()}' could not be compiled: " +
+                                    "a type argument is not available in this module"
+                        )
+                    baseType.nameInSignature
+                }
             }
         }
         // The `implements` list is re-resolved through the LIVE map every render round exactly
@@ -2142,7 +2319,10 @@ internal class DotNetIlEmitter(
                         renderedMethods.add(0, rendered.ilText)
                         hasClassInitializer = true
                     }
-                    !declaration.isFakeOverride -> renderMemberFunction(declaration)
+                    !declaration.isFakeOverride &&
+                            (!declaration.origin.isDotNetGenericInterfaceDefaultPhysicalMethod ||
+                                    splitGenericInfo == null) ->
+                        renderMemberFunction(declaration)
                     else -> {}
                 }
                 is IrProperty -> if (!declaration.isFakeOverride) {
@@ -2173,13 +2353,13 @@ internal class DotNetIlEmitter(
                 renderedMethods,
                 renderedFields,
                 renderedProperties,
+                renderedAttributes = irClass.dotNetCompilerAbiTypeAttributes(),
                 isStaticHolder = false,
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
                 nestedVisibility = irClass.dotNetNestedTypeVisibility(),
                 exported = !irClass.isOriginallyLocalDeclaration &&
-                        (!irClass.isDotNetStdlibImplementation ||
-                                irClass.visibility == DescriptorVisibilities.PUBLIC),
+                        (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
                 renderedNestedClasses = renderedNestedClasses,
                 // An open class drops `sealed` (the CLR metadata form of Kotlin's modality, like
                 // the JVM's ACC_FINAL); companions and objects never reach here as open — the
@@ -2310,17 +2490,18 @@ internal class DotNetIlEmitter(
         val renderedMethods = mutableListOf<String>()
         val renderedProperties = mutableListOf<String>()
 
-        fun renderMember(member: IrSimpleFunction): IrSimpleFunction? {
-            if (memberView !in viewTypeMapper.genericInterfaceMemberViews(member, irClass)) {
-                return null
-            }
+        fun renderPhysicalMember(
+            physicalMember: IrSimpleFunction,
+            physicalMethodName: String? = null,
+        ) {
             val memberInfo = DotNetIlFunctionInfo(
                 classInfo,
-                member.dotNetSignature(signatureTypeMapper),
+                physicalMember.dotNetSignature(signatureTypeMapper),
+                physicalMethodName,
             )
-            viewFunctions[member] = memberInfo
+            viewFunctions[physicalMember] = memberInfo
             renderedMethods += DotNetIlMethodCodegen(
-                function = member,
+                function = physicalMember,
                 functionInfo = memberInfo,
                 isEntryPoint = false,
                 availableFunctions = viewFunctions,
@@ -2328,7 +2509,30 @@ internal class DotNetIlEmitter(
                 typeMapper = signatureTypeMapper,
                 facadeClassInfoByFile = facadeClassInfoByFile,
             ).render().ilText
-            return member
+        }
+
+        fun renderMember(sourceMember: IrSimpleFunction): IrSimpleFunction? {
+            if (sourceMember.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) return null
+            if (memberView !in viewTypeMapper.genericInterfaceMemberViews(sourceMember, irClass)) {
+                return null
+            }
+            val genericDefault = genericInterfaceDefaults.singleOrNull { lowered ->
+                lowered.source == sourceMember
+            }
+            val renderedMember = when {
+                genericDefault == null -> sourceMember
+                genericDefault.canonicalView == memberView -> genericDefault.canonicalBody
+                else -> genericDefault.typedAdapters[memberView]
+                    ?: error("Internal .NET backend error: generic default has no adapter for $memberView")
+            }
+            renderPhysicalMember(
+                renderedMember,
+                genericDefault?.let { viewTypeMapper.genericInterfaceTypedMethodName(sourceMember) },
+            )
+            if (genericDefault?.canonicalView == memberView) {
+                renderPhysicalMember(genericDefault.erasedAdapter)
+            }
+            return renderedMember
         }
 
         for (declaration in irClass.declarations) {
@@ -2351,16 +2555,30 @@ internal class DotNetIlEmitter(
                 else -> {}
             }
         }
+        genericInterfaceDefaults
+            .asSequence()
+            .filter { lowered -> lowered.source.parent == irClass }
+            .flatMap { lowered -> lowered.inheritedSlotAdapters.asSequence() }
+            .filter { adapter -> adapter.implementationView == memberView }
+            .forEach { adapter -> renderPhysicalMember(adapter.function) }
 
+        interfaceDefaultPromotions
+            .asSequence()
+            .filter { promotion ->
+                promotion.owner == irClass && promotion.implementationView == memberView
+            }
+            .forEach { promotion -> renderPhysicalMember(promotion.implementation) }
         return buildString {
             DotNetIlClassCodegen(
                 classInfo.ilClassName,
                 renderedMethods,
                 renderedProperties = renderedProperties,
+                renderedAttributes = irClass.dotNetCompilerAbiTypeAttributes(),
                 isStaticHolder = false,
                 isNested = classInfo.isNested,
                 nestedVisibility = irClass.dotNetNestedTypeVisibility(),
-                exported = !irClass.isOriginallyLocalDeclaration,
+                exported = !irClass.isOriginallyLocalDeclaration &&
+                        (irClass.visibility == DescriptorVisibilities.PUBLIC || irClass.isPublishedApi()),
                 isAbstract = true,
                 isInterface = true,
                 interfaceRefs = interfaceRefs.distinct(),
@@ -2433,12 +2651,22 @@ internal class DotNetIlEmitter(
     private fun IrClass.dotNetNestedTypeVisibility(): String = when {
         parent !is IrClass || isCompanion -> "public"
         isOriginallyLocalDeclaration -> "private"
-        visibility == DescriptorVisibilities.PUBLIC -> "public"
+        visibility == DescriptorVisibilities.PUBLIC || isPublishedApi() -> "public"
         visibility == DescriptorVisibilities.PRIVATE -> "private"
         visibility == DescriptorVisibilities.INTERNAL -> "assembly"
         visibility == DescriptorVisibilities.PROTECTED -> "family"
         else -> error("Internal .NET backend error: unsupported nested visibility '$visibility'")
     }
+
+    private fun IrClass.dotNetCompilerAbiTypeAttributes(): List<String> =
+        if (origin == DOTNET_DEFAULT_IMPLS || visibility == DescriptorVisibilities.INTERNAL && isPublishedApi()) {
+            listOf(
+                DotNetCompilerAbi.markerAttributeIl(),
+                DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference),
+            )
+        } else {
+            emptyList()
+        }
 
     /**
      * One `.field` line: the instance backing field of a member property, FIR's loose private
@@ -2475,7 +2703,9 @@ internal class DotNetIlEmitter(
     private fun renderObjectInstanceField(field: IrField, typeMapper: DotNetIlTypeMapper): String {
         val fieldType = typeMapper.toDotNetIlValueType(field.type)
             ?: dotNetUnsupported("field '${field.name.asString()}' has unsupported type ${field.type.render()}")
-        return ".field public static initonly ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
+        val singletonClass = ((field.type as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+        val visibility = singletonClass?.dotNetObjectInstanceFieldAccessibility()?.keyword ?: "private"
+        return ".field $visibility static initonly ${fieldType.nameInSignature} ${field.name.asString().toIlIdentifier()}"
     }
 
     /**
@@ -2495,8 +2725,24 @@ internal class DotNetIlEmitter(
             ?: dotNetUnsupported("const property '$name' has unsupported type ${field.type.render()}")
         val constant = field.initializer?.expression as? IrConst
             ?: dotNetUnsupported("internal: const property '$name' has no constant initializer")
-        return ".field public static literal ${fieldType.nameInSignature} " +
+        val isCompilerAbi = property.visibility == DescriptorVisibilities.INTERNAL && property.isPublishedApi()
+        val visibility = if (isCompilerAbi) "public" else property.visibility.dotNetIlVisibility(default = "private")
+        val declaration = ".field $visibility static literal ${fieldType.nameInSignature} " +
                 "${field.name.asString().toIlIdentifier()} = ${renderConstFieldInitializer(constant, fieldType, name)}"
+        if (!isCompilerAbi) return declaration
+        return buildString {
+            appendLine(declaration)
+            appendLine(DotNetCompilerAbi.markerAttributeIl())
+            append(DotNetCompilerAbi.editorBrowsableNeverAttributeIl(coreLibrary.editorBrowsableReference))
+        }
+    }
+
+    private fun org.jetbrains.kotlin.descriptors.DescriptorVisibility?.dotNetIlVisibility(default: String): String = when (this) {
+        DescriptorVisibilities.PUBLIC -> "public"
+        DescriptorVisibilities.INTERNAL -> "assembly"
+        DescriptorVisibilities.PROTECTED -> "family"
+        DescriptorVisibilities.PRIVATE -> "private"
+        else -> default
     }
 
     /** The field-initializer literal of a [const field][renderConstField]; spellings probe-verified. */
@@ -2808,11 +3054,11 @@ internal class DotNetIlEmitter(
         }
         if (target.isSuspend) dotNetUnsupported("suspend functions are outside this CLR export slice")
         val parameterBoundaries = target.parameters.map { parameter ->
-            parameter.type.delegateBoundaryOrNull(typeMapper, "parameter '${parameter.name.asString()}'")
+            parameter.type.exportBoundaryOrNull(typeMapper, "parameter '${parameter.name.asString()}'")
         }
-        val returnBoundary = target.returnType.delegateBoundaryOrNull(typeMapper, "return type")
+        val returnBoundary = target.returnType.exportBoundaryOrNull(typeMapper, "return type")
         val exportedParameterTypes = targetInfo.signature.parameterTypes.mapIndexed { index, type ->
-            parameterBoundaries[index]?.delegateBoundary?.closedDelegateType ?: type.nameInSignature
+            parameterBoundaries[index]?.exportedType ?: type.nameInSignature
         }
         val parameterNullabilityFlags = target.parameters.indices.map { index ->
             parameterBoundaries[index]?.nullabilityFlags
@@ -2824,7 +3070,7 @@ internal class DotNetIlEmitter(
         val parameters = target.parameters.indices.joinToString(", ") { index ->
             "${exportedParameterTypes[index]} ${target.parameters[index].name.asString().toIlIdentifier()}"
         }
-        val exportedReturnType = returnBoundary?.delegateBoundary?.closedDelegateType
+        val exportedReturnType = returnBoundary?.exportedType
             ?: targetInfo.signature.returnType.nameInSignature
         val returnNullabilityFlags = returnBoundary?.nullabilityFlags
             ?: when (val returnType = targetInfo.signature.returnType) {
@@ -2850,12 +3096,12 @@ internal class DotNetIlEmitter(
                 target.parameters.indices.forEach { index ->
                     appendLine("    ldarg $index")
                     parameterBoundaries[index]?.let { boundary ->
-                        appendLine("    ${boundary.delegateBoundary.adaptationCallInstruction}")
+                        appendLine("    ${boundary.adaptationCallInstruction}")
                     }
                 }
                 appendLine("    ${targetInfo.renderCallInstruction(target.dotNetIlMethodName())}")
                 returnBoundary?.let { boundary ->
-                    appendLine("    ${boundary.delegateBoundary.projectionCallInstruction}")
+                    appendLine("    ${boundary.projectionCallInstruction}")
                 }
                 appendLine("    ret")
                 appendLine("  }")
@@ -2938,7 +3184,7 @@ internal class DotNetIlEmitter(
                     repeat(firstOmitted) { index ->
                         appendLine("    ldarg $index")
                         parameterBoundaries[index]?.let { boundary ->
-                            appendLine("    ${boundary.delegateBoundary.adaptationCallInstruction}")
+                            appendLine("    ${boundary.adaptationCallInstruction}")
                         }
                     }
                     for (parameterIndex in firstOmitted until target.parameters.size) {
@@ -2950,7 +3196,7 @@ internal class DotNetIlEmitter(
                     defaultMasks.forEach { mask -> appendLine("    ldc.i4 $mask") }
                     appendLine("    ${defaultStubInfo.renderCallInstruction(defaultStub.dotNetIlMethodName())}")
                     returnBoundary?.let { boundary ->
-                        appendLine("    ${boundary.delegateBoundary.projectionCallInstruction}")
+                        appendLine("    ${boundary.projectionCallInstruction}")
                     }
                     appendLine("    ret")
                     appendLine("  }")
@@ -2961,6 +3207,33 @@ internal class DotNetIlEmitter(
             )
         }
         return DotNetRenderedExport(renderedMethods, usesNullableMetadata, returnNullabilityFlags)
+    }
+
+    /**
+     * A deliberate CLR-export projection. Canonical Kotlin signatures remain untouched.
+     * Specialized arrays project to their natural vectors and alias the wrapper's live storage;
+     * callable values retain the existing Func/Action adapter boundary.
+     */
+    private fun IrType.exportBoundaryOrNull(
+        typeMapper: DotNetIlTypeMapper,
+        position: String,
+    ): DotNetExportedBoundary? {
+        val primitiveArray = typeMapper.toDotNetIlValueType(this) as? DotNetIlValueType.PrimitiveArray
+        if (primitiveArray != null) {
+            return DotNetExportedBoundary(
+                exportedType = primitiveArray.storageType.nameInSignature,
+                adaptationCallInstruction = primitiveArray.abi.wrapStorageOrNullCallInstruction,
+                projectionCallInstruction = primitiveArray.abi.projectStorageOrNullCallInstruction,
+                nullabilityFlags = DotNetNullableMetadata.flags(this, primitiveArray),
+            )
+        }
+        val callable = delegateBoundaryOrNull(typeMapper, position) ?: return null
+        return DotNetExportedBoundary(
+            exportedType = callable.delegateBoundary.closedDelegateType,
+            adaptationCallInstruction = callable.delegateBoundary.adaptationCallInstruction,
+            projectionCallInstruction = callable.delegateBoundary.projectionCallInstruction,
+            nullabilityFlags = callable.nullabilityFlags,
+        )
     }
 
     private fun IrType.delegateBoundaryOrNull(
@@ -3093,12 +3366,24 @@ internal class DotNetIlEmitter(
         val nullabilityFlags: List<Int>,
     )
 
+    private data class DotNetExportedBoundary(
+        val exportedType: String,
+        val adaptationCallInstruction: String,
+        val projectionCallInstruction: String,
+        val nullabilityFlags: List<Int>,
+    )
+
     private fun StringBuilder.appendHeader(
         referencesRuntimeAssembly: Boolean,
         referencesStdlibAssembly: Boolean,
+        referencesEditorBrowsableAssembly: Boolean,
         referencedExternalLibraries: List<DotNetExternalLibrary>,
+        friendAssemblies: List<DotNetFriendAssemblyIdentity>,
     ) {
         coreLibrary.appendAssemblyReferenceTo(this)
+        if (referencesEditorBrowsableAssembly) {
+            coreLibrary.appendEditorBrowsableAssemblyReferenceTo(this)
+        }
         if (referencesRuntimeAssembly) {
             appendLine(".assembly extern ${DotNetRuntimeLibrary.ASSEMBLY_NAME}")
             appendLine("{")
@@ -3121,11 +3406,14 @@ internal class DotNetIlEmitter(
             emissionScope == DotNetIlEmissionScope.STDLIB -> DotNetStdlibLibrary.ASSEMBLY_VERSION_IL
             else -> assemblyVersionIl
         }
-        if (emittedAssemblyVersion != null) {
+        if (emittedAssemblyVersion != null || friendAssemblies.isNotEmpty()) {
             appendLine(".assembly ${assemblyName.toIlIdentifier()}")
             appendLine("{")
-            appendLine("  .ver $emittedAssemblyVersion")
+            emittedAssemblyVersion?.let { appendLine("  .ver $it") }
             coreLibrary.appendTargetFrameworkAttributeTo(this)
+            friendAssemblies.sortedBy { it.displayName.lowercase() }.forEach { identity ->
+                coreLibrary.appendInternalsVisibleToAttributeTo(this, identity)
+            }
             appendLine("}")
         } else {
             appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
@@ -3138,4 +3426,5 @@ internal class DotNetIlEmitter(
 internal data class DotNetIlEmissionResult(
     val ilText: String,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
+    val referencedAssemblies: Set<String>,
 )

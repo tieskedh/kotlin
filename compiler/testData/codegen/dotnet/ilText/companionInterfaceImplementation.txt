@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'companionInterfaceImplementation' {}
 .module 'main-companionInterfaceImplementation.il'
 
@@ -12,11 +16,18 @@
          extends [mscorlib]System.Object
          implements 'Marker'
   {
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
+      ret
+    }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'WithMarkedCompanion'/'Companion'::.ctor()
       ret
     }
   }
@@ -24,7 +35,8 @@
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'WithMarkedCompanion'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'WithMarkedCompanion'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'WithMarkedCompanion'/'Companion' 'WithMarkedCompanion'::'Companion'
     ret
   }

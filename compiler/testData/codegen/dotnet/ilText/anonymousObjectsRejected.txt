@@ -53,6 +53,18 @@
     ret
   }
 }
+.class private auto ansi sealed beforefieldinit 'anonymousObjectsRejectedKt$exceptionAnonymousRejected$failure$1'
+       extends [mscorlib]System.InvalidOperationException
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldstr "bad"
+    call instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'anonymousObjectsRejectedKt'
        extends [mscorlib]System.Object
 {

@@ -56,6 +56,18 @@
     ret
   }
 }
+.class public auto ansi sealed beforefieldinit 'UnsupportedArrayArgument`1'<'T'>
+       extends class 'RejectBase`1'<int32[]>
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32[] 'value') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void class 'RejectBase`1'<int32[]>::.ctor(!0)
+    ret
+  }
+}
 .class public abstract sealed auto ansi beforefieldinit 'genericInheritanceChainsRejectedKt'
        extends [mscorlib]System.Object
 {

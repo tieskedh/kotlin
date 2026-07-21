@@ -38,6 +38,29 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
             field = if (value.isNullOrEmpty()) null else value
         }
 
+    @Argument(
+        value = "-Xfriend-paths",
+        valueDescription = "<path>",
+        description = "Paths to producer-authorized Kotlin/.NET friend metadata libraries."
+    )
+    var friendPaths: Array<String> = emptyArray()
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
+    @Argument(
+        value = "-Xdotnet-friend-assembly",
+        delimiter = Argument.Delimiters.none,
+        valueDescription = "<assembly-name>[, PublicKey=<full-public-key>]",
+        description = "Authorize a CLR friend assembly through producer-emitted InternalsVisibleTo. May be repeated."
+    )
+    var dotNetFriendAssemblies: Array<String>? = null
+        set(value) {
+            checkFrozen()
+            field = value
+        }
+
     @Argument(value = "-no-stdlib", description = "Don't automatically add the bundled Kotlin stdlib metadata to the classpath.")
     var noStdlib: Boolean = false
         set(value) {
@@ -48,7 +71,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
     @Argument(
         value = "-Xdotnet-produce-stdlib",
         description = "Produce the experimental Kotlin.Stdlib.klib/Kotlin.Stdlib.dll pair in the -d directory. " +
-                "The library targets netstandard2.0 and uses the portable-library assembler independently of the executable target. " +
+                "The library uses the selected net48, netstandard2.0, or net10.0 target profile. " +
                 "This build mode accepts no user source files."
     )
     var dotNetProduceStdlib: Boolean = false
@@ -60,8 +83,7 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
     @Argument(
         value = "-Xdotnet-produce-library",
         description = "Produce an experimental <module>.klib/<module>.dll library pair in the -d directory. " +
-                "The library targets netstandard2.0, has no entry point, and is assembled with the " +
-                "portable-library toolchain."
+                "The library uses the selected target profile and has no entry point."
     )
     var dotNetProduceLibrary: Boolean = false
         set(value) {
@@ -71,11 +93,9 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
 
     @Argument(
         value = "-Xdotnet-target",
-        valueDescription = "{netframework|net}",
-        description = "The .NET runtime flavor of an executable request: " +
-                "'netframework' assembles a .NET Framework .exe (default), " +
-                "'net' assembles a modern .NET .dll and adds a runtimeconfig.json. " +
-                "Portable library production targets netstandard2.0 independently of this option."
+        valueDescription = "{net48|netstandard2.0|net10.0}",
+        description = "Select the target-framework/API profile independently of product kind. " +
+                "net48 and net10.0 support applications and libraries; netstandard2.0 supports libraries only."
     )
     var dotNetTarget: String? = null
         set(value) {
@@ -116,6 +136,8 @@ class K2DotNetCompilerArguments : CommonCompilerArguments() {
         copy.destination = destination
         copy.moduleName = moduleName
         copy.classpath = classpath
+        copy.friendPaths = friendPaths.copyOf()
+        copy.dotNetFriendAssemblies = dotNetFriendAssemblies?.copyOf()
         copy.noStdlib = noStdlib
         copy.dotNetProduceStdlib = dotNetProduceStdlib
         copy.dotNetProduceLibrary = dotNetProduceLibrary

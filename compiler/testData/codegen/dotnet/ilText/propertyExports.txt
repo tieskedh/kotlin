@@ -45,7 +45,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
-  .field public static initonly class 'demo.propertyExportsKt$transform$1' 'INSTANCE'
+  .field assembly static initonly class 'demo.propertyExportsKt$transform$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -92,7 +92,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function1'
 {
-  .field public static initonly class 'demo.propertyExportsKt$consume$1' 'INSTANCE'
+  .field assembly static initonly class 'demo.propertyExportsKt$consume$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -293,7 +293,7 @@ IL_whenEnd_0:
     ldsfld int32 'demo.propertyExportsKt'::'restricted'
     ret
   }
-  .method public hidebysig specialname static void 'set_restricted'(int32 '<set-?>') cil managed
+  .method assembly hidebysig specialname static void 'set_restricted'(int32 '<set-?>') cil managed
   {
     .maxstack 1
     ldarg.0

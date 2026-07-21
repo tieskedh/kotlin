@@ -27,7 +27,7 @@
        extends [mscorlib]System.Object
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
-  .field public static initonly class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'INSTANCE'
+  .field assembly static initonly class 'localFunctionCallablesKt$lambdaMixtureSupported$lambda$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -61,7 +61,7 @@
        extends [Kotlin.Runtime]'Kotlin.Runtime.Internal.FunctionReferenceBase'
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
-  .field public static initonly class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'INSTANCE'
+  .field assembly static initonly class 'localFunctionCallablesKt$functionReferenceMixtureSupported$reference$1' 'INSTANCE'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
