@@ -11,70 +11,46 @@ import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.types.Variance
 
 /**
- * The curated map of Kotlin exception classes onto the CLR exception hierarchy (JVM precedent:
- * `JavaToKotlinClassMap` — built-in throwables are TYPE-MAPPED onto either a faithful platform
- * type or an exact type in `Kotlin.Runtime`; the injected frontend declarations are never emitted
- * into the consumer module). `kotlin.Throwable` maps to `System.Exception`, the root of everything
- * the CLR throws.
+ * Stable runtime ids for Kotlin's logical exception classes. These integers are embedded in
+ * generated assemblies and consumed by Kotlin.Runtime, so changing an assigned value is an ABI
+ * break even though the enum itself is compiler-internal. New ids are append-only once the target
+ * reaches its first ABI gate.
+ */
+internal enum class DotNetKotlinExceptionTypeId(val abiValue: Int) {
+    THROWABLE(1),
+    EXCEPTION(2),
+    RUNTIME_EXCEPTION(3),
+    ERROR(4),
+    ILLEGAL_ARGUMENT_EXCEPTION(5),
+    ILLEGAL_STATE_EXCEPTION(6),
+    UNSUPPORTED_OPERATION_EXCEPTION(7),
+    NO_SUCH_ELEMENT_EXCEPTION(8),
+    INDEX_OUT_OF_BOUNDS_EXCEPTION(9),
+    ARITHMETIC_EXCEPTION(10),
+    NUMBER_FORMAT_EXCEPTION(11),
+    NULL_POINTER_EXCEPTION(12),
+    CLASS_CAST_EXCEPTION(13),
+}
+
+/**
+ * The compiler side of the classified CLR exception model selected by
+ * `draft-adr-classified-clr-exception-model.md`.
  *
- * Decisions and consciously accepted platform deltas (each verified by ilasm probe):
- * - `kotlin.Exception` also maps to `System.Exception` — the CLR has no Throwable/Exception
- *   split, so `catch (e: Exception)` is equivalent to `catch (e: Throwable)`; the only pure-Kotlin
- *   drift is a literal `throw Throwable(...)` being caught by `catch (e: Exception)`. Interop is
- *   decisive: C# throws `new Exception()` directly, which must stay catchable.
- * - `kotlin.RuntimeException` is REJECTED, not mapped: Kotlin.Runtime now owns its durable physical
- *   root for exact Kotlin-only identities, but enabling source use before migrating or translating
- *   its BCL-mapped logical children would make a parent catch miss those children. The CLR itself
- *   has no honest mapping: `System.SystemException` is deprecated and would catch
- *   OOM/StackOverflow while missing plain Exceptions, while `System.Exception` is too broad.
- * - `kotlin.Error` maps to exact runtime-owned `Kotlin.Error : System.Exception`. The CLR has no
- *   faithful fatal-error root: deprecated `System.SystemException` contains non-fatal failures and
- *   misses plain exceptions, so Kotlin-created Error values get exact identity while foreign
- *   OutOfMemoryException/StackOverflowException values remain distinct. Because Throwable and
- *   Exception already collapse to System.Exception, the existing accepted delta means a Kotlin
- *   Error is also caught by `catch (Exception)` on this target.
- * - `kotlin.NumberFormatException` is the first source-visible exact runtime-owned mapping. It
- *   extends `System.ArgumentException`, not `System.FormatException`: the latter IS-NOT-A
- *   `System.ArgumentException` (probe-verified), while the selected physical parent preserves
- *   Kotlin's `NumberFormatException IS-A IllegalArgumentException` catch and value-conversion
- *   edge. A foreign `System.FormatException` deliberately remains a distinct type until an
- *   interop or parsing intrinsic explicitly translates it.
- * - `kotlin.NoSuchElementException` is runtime-owned because no CLR exception has its Kotlin
- *   meaning. In particular `System.InvalidOperationException`, commonly thrown by an enumerator's
- *   `Current` outside its valid state, maps to Kotlin IllegalStateException and would create a
- *   false subtype edge. The exact identity lets an escaping Kotlin iterator preserve its specified
- *   exhaustion contract without changing the broader exception mapping.
- * - Negative array allocation uses compiler-owned `Kotlin.NegativeArraySizeException` below the
- *   dormant exact RuntimeException root. Common Kotlin promises only RuntimeException here, and
- *   exposes no portable source class, so the child is deliberately absent from [entries]. This
- *   prevents CLR `OverflowException` from introducing a false ArithmeticException edge without
- *   bypassing the RuntimeException source-migration gate.
- * - `kotlin.ArithmeticException` -> `System.ArithmeticException` closes the divide-by-zero debt:
- *   the CLR's `DivideByZeroException` IS-A `System.ArithmeticException` (probe-verified), so
- *   `catch (e: ArithmeticException)` catches a CLR division fault. The message stays the CLR's
- *   verbatim (`"Attempted to divide by zero."`) — JVM precedent: the platform message is used
- *   as-is (JVM's `"/ by zero"` IS its platform message).
- * - `message` keeps its Kotlin type `String?` but is never null at runtime for BCL-mapped
- *   exceptions: a no-arg `Exception()` yields the CLR default message
- *   `"Exception of type 'System.Exception' was thrown."` (probe-verified verbatim). Accepted
- *   platform delta, same class as the `-0.0` rendering note in AGENTS.md.
- * - Broadened catches (accepted): `catch (IllegalArgumentException)` also catches
- *   `ArgumentNullException`/`ArgumentOutOfRangeException`; `catch (IllegalStateException)` also
- *   catches `ObjectDisposedException`; a BCL `ArgumentOutOfRangeException` lands in
- *   `IllegalArgumentException`, not `IndexOutOfBoundsException`.
- * - Constructor whitelist: `()` and `(String?)` map on every entry; `(String?, Throwable?)` maps
- *   where [Entry.Mapped.hasMessageCauseCtor] is set. Cause-only `(Throwable?)` maps only where
- *   [Entry.Mapped.hasCauseCtor] is set. Those flags mirror the Kotlin stdlib's
- *   declared constructor surface, NOT CLR availability — the CLR `(string, Exception)` overload
- *   exists on every BCL-mapped type (probe-verified); runtime-owned mappings provide exactly the
- *   constructor surface declared by Kotlin. Both flags are `false` for Kotlin classes that
- *   declare only `()`/`(String?)`; the exact Kotlin.Error mapping enables both.
+ * One Kotlin exception type can have three deliberately different CLR representations:
  *
- * The injected stdlib declarations of these classes (see [DOTNET_STDLIB_SOURCES]) exist only so
- * the frontend resolves them; [DotNetIlEmitter] excludes them from codegen entirely — the
- * class-level parallel of an intrinsic's `excludesDeclarationFromCodegen`. Rejected entries are
- * still declared so uses RESOLVE and then fail loudly here with a specific reason ("register the
- * entry now, fail explicitly" design rule).
+ * - [Entry.Mapped.carrierTypeRef] is used in fields, locals, parameters, and returns. Broad
+ *   logical categories use `System.Exception`, preserving every foreign exception object.
+ * - [Entry.Mapped.constructorTypeRef] is the exact class allocated by a Kotlin constructor call.
+ *   `RuntimeException()` and `Error()` therefore retain Kotlin-owned exact identities even though
+ *   values typed as those broad categories are carried as `System.Exception`. The same exact type
+ *   is the physical base of a user-defined Kotlin subclass: CLR metadata must expose the real
+ *   inheritance chain used by construction and ordinary .NET tooling.
+ * - [Entry.Mapped.typedCatchTypeRefOrNull] is present only when one CLR typed handler is proven
+ *   equivalent to the runtime classifier. Other catches use a filter over `System.Exception`.
+ *
+ * Keeping these roles separate is fundamental. Reusing one mapped CLR type for all four jobs
+ * either wraps foreign exceptions, collapses Kotlin's Exception/Error distinction, or makes a
+ * RuntimeException catch miss mapped BCL children.
  */
 internal object DotNetMappedExceptions {
     /** The IL reference of `System.Exception` in one emission's selected core-library profile. */
@@ -94,23 +70,63 @@ internal object DotNetMappedExceptions {
 
     internal sealed class Entry {
         /**
-         * A Kotlin exception class mapped onto the physical CLR type [clrTypeRef], either in
-         * corelib or `Kotlin.Runtime`. [hasMessageCauseCtor] and [hasCauseCtor] mirror the Kotlin
-         * stdlib's declared constructor surface. [physicalSupertypeRefs] lists the additional
-         * mapped CLR types to which values widen without an instruction; every mapping includes
-         * `System.Exception`, and a runtime-owned child of a mapped parent includes that parent's
-         * physical type too.
+         * A Kotlin exception class with separate carrier, construction/base, and optional typed-
+         * catch CLR roles, either in corelib or `Kotlin.Runtime`. [hasMessageCauseCtor] and
+         * [hasCauseCtor] mirror the Kotlin stdlib's declared constructor surface.
+         * [physicalSupertypeRefs] lists the additional mapped CLR types to which values widen
+         * without an instruction; every mapping includes `System.Exception`, and a runtime-owned
+         * child of a mapped parent includes that parent's physical type too.
          */
         class Mapped(
-            private val physicalTypeRef: PhysicalTypeRef,
+            private val carrierPhysicalTypeRef: PhysicalTypeRef,
+            private val constructorPhysicalTypeRef: PhysicalTypeRef,
+            private val typedCatchPhysicalTypeRef: PhysicalTypeRef?,
+            val classifierTypeId: DotNetKotlinExceptionTypeId,
             val hasMessageCauseCtor: Boolean,
             val hasCauseCtor: Boolean,
             private val physicalSupertypeRefs: Set<PhysicalTypeRef>,
         ) : Entry() {
-            fun clrTypeRef(coreLibraryReference: String): String = physicalTypeRef.render(coreLibraryReference)
+            fun carrierTypeRef(coreLibraryReference: String): String =
+                carrierPhysicalTypeRef.render(coreLibraryReference)
+
+            fun constructorTypeRef(coreLibraryReference: String): String =
+                constructorPhysicalTypeRef.render(coreLibraryReference)
+
+            fun subclassBaseTypeRef(coreLibraryReference: String): String =
+                constructorPhysicalTypeRef.render(coreLibraryReference)
+
+            fun typedCatchTypeRefOrNull(coreLibraryReference: String): String? =
+                typedCatchPhysicalTypeRef?.render(coreLibraryReference)
 
             fun physicalSupertypeRefs(coreLibraryReference: String): Set<String> =
                 physicalSupertypeRefs.mapTo(linkedSetOf()) { it.render(coreLibraryReference) }
+
+            /**
+             * Checks one source constructor/delegating-constructor signature against the exact CLR
+             * constructor surface selected by this entry. Keeping this in the mapping registry prevents
+             * `newobj` and subclass base chaining from drifting into two different ABIs.
+             */
+            fun checkConstructorShape(
+                className: String,
+                parameterTypes: List<DotNetIlValueType>,
+                coreLibraryReference: String,
+            ) {
+                val causeType = DotNetIlValueType.MappedClass(exceptionTypeRef(coreLibraryReference))
+                when {
+                    parameterTypes.isEmpty() -> {}
+                    parameterTypes == listOf(DotNetIlValueType.String) -> {}
+                    parameterTypes == listOf(DotNetIlValueType.String, causeType) && hasMessageCauseCtor -> {}
+                    parameterTypes == listOf(causeType) && hasCauseCtor -> {}
+                    parameterTypes == listOf(causeType) -> dotNetUnsupported(
+                        "constructor '$className(cause)' has no mapped CLR overload; " +
+                                "construct with (message) or (message, cause)"
+                    )
+                    else -> dotNetUnsupported(
+                        "constructor of '$className' has no matching overload on the mapped CLR type " +
+                                "'${constructorTypeRef(coreLibraryReference)}'"
+                    )
+                }
+            }
         }
 
         /** A Kotlin exception class that resolves but has no honest CLR mapping; any codegen use fails with [reason]. */
@@ -120,30 +136,123 @@ internal object DotNetMappedExceptions {
     val entries: Map<FqName, Entry> = buildMap {
         val exceptionType = PhysicalTypeRef.CoreLibrary("System.Exception")
 
-        fun mapped(kotlinName: String, clrName: String, hasMessageCauseCtor: Boolean) {
+        fun exactlyMapped(
+            kotlinName: String,
+            clrName: String,
+            classifierTypeId: DotNetKotlinExceptionTypeId,
+            hasMessageCauseCtor: Boolean,
+        ) {
+            val physicalType = PhysicalTypeRef.CoreLibrary("System.$clrName")
             put(
                 FqName("kotlin.$kotlinName"),
                 Entry.Mapped(
-                    physicalTypeRef = PhysicalTypeRef.CoreLibrary("System.$clrName"),
+                    carrierPhysicalTypeRef = physicalType,
+                    constructorPhysicalTypeRef = physicalType,
+                    typedCatchPhysicalTypeRef = physicalType,
+                    classifierTypeId = classifierTypeId,
                     hasMessageCauseCtor = hasMessageCauseCtor,
                     hasCauseCtor = false,
                     physicalSupertypeRefs = setOf(exceptionType),
                 )
             )
         }
-        mapped("Throwable", "Exception", hasMessageCauseCtor = true)
-        mapped("Exception", "Exception", hasMessageCauseCtor = true)
-        mapped("IllegalArgumentException", "ArgumentException", hasMessageCauseCtor = true)
-        mapped("IllegalStateException", "InvalidOperationException", hasMessageCauseCtor = true)
-        mapped("UnsupportedOperationException", "NotSupportedException", hasMessageCauseCtor = true)
-        mapped("ArithmeticException", "ArithmeticException", hasMessageCauseCtor = false)
-        mapped("IndexOutOfBoundsException", "IndexOutOfRangeException", hasMessageCauseCtor = false)
-        mapped("NullPointerException", "NullReferenceException", hasMessageCauseCtor = false)
-        mapped("ClassCastException", "InvalidCastException", hasMessageCauseCtor = false)
+        fun classifiedCategory(
+            kotlinName: String,
+            constructorType: PhysicalTypeRef,
+            classifierTypeId: DotNetKotlinExceptionTypeId,
+            hasMessageCauseCtor: Boolean,
+            hasCauseCtor: Boolean,
+        ) {
+            put(
+                FqName("kotlin.$kotlinName"),
+                Entry.Mapped(
+                    carrierPhysicalTypeRef = exceptionType,
+                    constructorPhysicalTypeRef = constructorType,
+                    typedCatchPhysicalTypeRef = null,
+                    classifierTypeId = classifierTypeId,
+                    hasMessageCauseCtor = hasMessageCauseCtor,
+                    hasCauseCtor = hasCauseCtor,
+                    physicalSupertypeRefs = setOf(exceptionType),
+                )
+            )
+        }
+
+        // Throwable is the one broad category exactly expressible as a CLR typed catch.
+        put(
+            FqName("kotlin.Throwable"),
+            Entry.Mapped(
+                carrierPhysicalTypeRef = exceptionType,
+                constructorPhysicalTypeRef = exceptionType,
+                typedCatchPhysicalTypeRef = exceptionType,
+                classifierTypeId = DotNetKotlinExceptionTypeId.THROWABLE,
+                hasMessageCauseCtor = true,
+                hasCauseCtor = false,
+                physicalSupertypeRefs = setOf(exceptionType),
+            )
+        )
+        classifiedCategory(
+            "Exception",
+            exceptionType,
+            DotNetKotlinExceptionTypeId.EXCEPTION,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = false,
+        )
+        classifiedCategory(
+            "RuntimeException",
+            PhysicalTypeRef.Exact(DotNetRuntimeLibrary.runtimeExceptionTypeRef),
+            DotNetKotlinExceptionTypeId.RUNTIME_EXCEPTION,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = true,
+        )
+        classifiedCategory(
+            "Error",
+            PhysicalTypeRef.Exact(DotNetRuntimeLibrary.errorTypeRef),
+            DotNetKotlinExceptionTypeId.ERROR,
+            hasMessageCauseCtor = true,
+            hasCauseCtor = true,
+        )
+        exactlyMapped(
+            "IllegalArgumentException", "ArgumentException",
+            DotNetKotlinExceptionTypeId.ILLEGAL_ARGUMENT_EXCEPTION,
+            hasMessageCauseCtor = true,
+        )
+        exactlyMapped(
+            "IllegalStateException", "InvalidOperationException",
+            DotNetKotlinExceptionTypeId.ILLEGAL_STATE_EXCEPTION,
+            hasMessageCauseCtor = true,
+        )
+        exactlyMapped(
+            "UnsupportedOperationException", "NotSupportedException",
+            DotNetKotlinExceptionTypeId.UNSUPPORTED_OPERATION_EXCEPTION,
+            hasMessageCauseCtor = true,
+        )
+        exactlyMapped(
+            "ArithmeticException", "ArithmeticException",
+            DotNetKotlinExceptionTypeId.ARITHMETIC_EXCEPTION,
+            hasMessageCauseCtor = false,
+        )
+        exactlyMapped(
+            "IndexOutOfBoundsException", "IndexOutOfRangeException",
+            DotNetKotlinExceptionTypeId.INDEX_OUT_OF_BOUNDS_EXCEPTION,
+            hasMessageCauseCtor = false,
+        )
+        exactlyMapped(
+            "NullPointerException", "NullReferenceException",
+            DotNetKotlinExceptionTypeId.NULL_POINTER_EXCEPTION,
+            hasMessageCauseCtor = false,
+        )
+        exactlyMapped(
+            "ClassCastException", "InvalidCastException",
+            DotNetKotlinExceptionTypeId.CLASS_CAST_EXCEPTION,
+            hasMessageCauseCtor = false,
+        )
         put(
             FqName("kotlin.NumberFormatException"),
             Entry.Mapped(
-                physicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.numberFormatExceptionTypeRef),
+                carrierPhysicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.numberFormatExceptionTypeRef),
+                constructorPhysicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.numberFormatExceptionTypeRef),
+                typedCatchPhysicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.numberFormatExceptionTypeRef),
+                classifierTypeId = DotNetKotlinExceptionTypeId.NUMBER_FORMAT_EXCEPTION,
                 hasMessageCauseCtor = false,
                 hasCauseCtor = false,
                 physicalSupertypeRefs = setOf(
@@ -155,37 +264,26 @@ internal object DotNetMappedExceptions {
         put(
             FqName("kotlin.NoSuchElementException"),
             Entry.Mapped(
-                physicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noSuchElementExceptionTypeRef),
+                carrierPhysicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noSuchElementExceptionTypeRef),
+                constructorPhysicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noSuchElementExceptionTypeRef),
+                typedCatchPhysicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noSuchElementExceptionTypeRef),
+                classifierTypeId = DotNetKotlinExceptionTypeId.NO_SUCH_ELEMENT_EXCEPTION,
                 hasMessageCauseCtor = false,
                 hasCauseCtor = false,
                 physicalSupertypeRefs = setOf(exceptionType),
             )
         )
-        put(
-            FqName("kotlin.Error"),
-            Entry.Mapped(
-                physicalTypeRef = PhysicalTypeRef.Exact(DotNetRuntimeLibrary.errorTypeRef),
-                hasMessageCauseCtor = true,
-                hasCauseCtor = true,
-                physicalSupertypeRefs = setOf(exceptionType),
-            )
-        )
-        put(
-            FqName("kotlin.RuntimeException"),
-            Entry.Rejected(
-                "'kotlin.RuntimeException' has no CLR exception mapping (the CLR has no " +
-                        "Exception/RuntimeException split); its Kotlin.Runtime type is reserved for exact " +
-                        "Kotlin-owned identities, but source use stays rejected until mapped-child catches are coherent"
-            )
-        )
     }
+
+    fun mappedEntry(typeFqName: FqName?): Entry.Mapped? =
+        typeFqName?.let(entries::get) as? Entry.Mapped
 
     fun isMappedTypeAssignableTo(actualTypeRef: String, expectedTypeRef: String): Boolean =
         entries.values.asSequence()
             .filterIsInstance<Entry.Mapped>()
             .any { entry ->
                 DotNetCoreLibraryProfile.entries.any { profile ->
-                    entry.clrTypeRef(profile.reference) == actualTypeRef &&
+                    entry.carrierTypeRef(profile.reference) == actualTypeRef &&
                             expectedTypeRef in entry.physicalSupertypeRefs(profile.reference)
                 }
             }
@@ -245,9 +343,14 @@ internal fun DotNetIlValueType.isDotNetAssignableTo(expected: DotNetIlValueType)
     this is DotNetIlValueType.GenericInstance && expected is DotNetIlValueType.GenericInstance &&
             isDotNetVariantInstantiationAssignableTo(expected) -> true
     (this is DotNetIlValueType.UserClass || this is DotNetIlValueType.GenericInstance) &&
-            (expected is DotNetIlValueType.UserClass || expected is DotNetIlValueType.GenericInstance) ->
+            (expected is DotNetIlValueType.UserClass ||
+                    expected is DotNetIlValueType.GenericInstance ||
+                    expected is DotNetIlValueType.MappedClass) ->
         dotNetAllSupertypes().any { superType ->
             superType.nameInSignature == expected.nameInSignature ||
+                    superType is DotNetIlValueType.MappedClass &&
+                    expected is DotNetIlValueType.MappedClass &&
+                    superType.isDotNetAssignableTo(expected) ||
                     superType is DotNetIlValueType.GenericInstance &&
                     expected is DotNetIlValueType.GenericInstance &&
                     superType.isDotNetVariantInstantiationAssignableTo(expected)

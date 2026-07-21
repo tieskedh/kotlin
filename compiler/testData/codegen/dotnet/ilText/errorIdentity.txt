@@ -18,17 +18,24 @@
   }
   .method public hidebysig static string 'exactCatch'(string 'message') cil managed
   {
-    .maxstack 1
+    .maxstack 2
     .locals init (
       [0] string '<try>',
-      [1] class [Kotlin.Runtime]'Kotlin.Error' 'failure'
+      [1] class [mscorlib]System.Exception 'failure'
     )
     .try {
       ldarg.0
       newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
       throw
     }
-    catch [Kotlin.Runtime]'Kotlin.Error' {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 4
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.1
       ldloc.1
       callvirt instance string [mscorlib]System.Exception::get_Message()
@@ -62,7 +69,7 @@ IL_tryEnd_0:
   }
   .method public hidebysig static string 'collapsedExceptionCatch'() cil managed
   {
-    .maxstack 1
+    .maxstack 2
     .locals init (
       [0] string '<try>',
       [1] class [mscorlib]System.Exception '<unused var>'
@@ -71,7 +78,14 @@ IL_tryEnd_0:
       newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
       throw
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.1
       ldstr "exception"
       stloc.0
@@ -81,7 +95,7 @@ IL_tryEnd_0:
     ldloc.0
     ret
   }
-  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Error' 'withCause'(class [mscorlib]System.Exception 'cause') cil managed
+  .method public hidebysig static class [mscorlib]System.Exception 'withCause'(class [mscorlib]System.Exception 'cause') cil managed
   {
     .maxstack 2
     ldstr "message"
@@ -89,7 +103,7 @@ IL_tryEnd_0:
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string, class [mscorlib]System.Exception)
     ret
   }
-  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Error' 'fromCause'(class [mscorlib]System.Exception 'cause') cil managed
+  .method public hidebysig static class [mscorlib]System.Exception 'fromCause'(class [mscorlib]System.Exception 'cause') cil managed
   {
     .maxstack 1
     ldarg.0
@@ -100,7 +114,7 @@ IL_tryEnd_0:
   {
     .maxstack 2
     .locals init (
-      [0] class [Kotlin.Runtime]'Kotlin.Error' 'failure'
+      [0] class [mscorlib]System.Exception 'failure'
     )
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor()
     stloc.0

@@ -1,0 +1,99 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'classifiedExceptions' {}
+.module 'main-classifiedExceptions.il'
+
+.class public abstract sealed auto ansi beforefieldinit 'classifiedExceptionsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static class [mscorlib]System.Exception 'runtimeValue'() cil managed
+  {
+    .maxstack 1
+    ldstr "runtime"
+    newobj instance void [Kotlin.Runtime]'Kotlin.RuntimeException'::.ctor(string)
+    ret
+  }
+  .method public hidebysig static string 'catchMappedRuntime'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string '<try>',
+      [1] class [mscorlib]System.Exception 'failure'
+    )
+    .try {
+      ldstr "mapped"
+      newobj instance void [mscorlib]System.InvalidOperationException::.ctor(string)
+      throw
+    }
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 3
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
+      stloc.1
+      ldstr "runtime"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static string 'distinguishError'() cil managed
+  {
+    .maxstack 2
+    .locals init (
+      [0] string '<try>',
+      [1] class [mscorlib]System.Exception 'failure',
+      [2] class [mscorlib]System.Exception 'failure@2'
+    )
+    .try {
+      ldstr "fatal"
+      newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string)
+      throw
+    }
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
+      stloc.1
+      ldstr "exception"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 4
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
+      stloc.2
+      ldstr "error"
+      stloc.0
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ldloc.0
+    ret
+  }
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    ldstr "classified-exceptions"
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

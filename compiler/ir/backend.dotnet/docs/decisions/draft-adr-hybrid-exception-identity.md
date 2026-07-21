@@ -1,12 +1,12 @@
 # Draft ADR: Hybrid Kotlin and CLR exception identity
 
-- Status: **Draft candidate; first compiler-only and source-visible identities implemented**
+- Status: **Superseded by `draft-adr-classified-clr-exception-model.md`; retained as implementation history**
 - Date: 2026-07-15
 - Scope: Kotlin exception ownership, CLR fault interop, and runtime hierarchy
 
-This is a repository-local decision record for the experimental .NET backend. It keeps the POC
-internally coherent while evidence is collected; it is not a public KEEP or an accepted Kotlin
-project decision.
+This is a repository-local historical record for the experimental .NET backend. Its observations
+and probe results remain evidence about the current implementation, but its candidate hierarchy is
+not the selected direction. See `draft-adr-classified-clr-exception-model.md`.
 
 ## Context
 
