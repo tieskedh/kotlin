@@ -2044,14 +2044,29 @@ private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
                 codegen.emitNullableUnwrapOrThrowNpe(argumentType)
             }
             argumentType.isDotNetReferenceShaped() -> {
-                if (!argumentType.isDotNetAssignableTo(expectedType)) {
+                if (
+                    argumentType == DotNetIlValueType.Object &&
+                    expectedType is DotNetIlValueType.TypeParameter
+                ) {
+                    // Open `T?` has the declaration-stable boxed-or-null object carrier. Check
+                    // Kotlin nullability before recovering the reified non-null `T`; unbox.any
+                    // is correct for both value-type and reference-type substitutions.
+                    codegen.emitExpression(argument, argumentType)
+                    codegen.emitReferenceNotNullOrThrowNpe()
+                    codegen.emit(
+                        "unbox.any ${expectedType.nameInSignature}",
+                        pops = 1,
+                        pushes = 1,
+                    )
+                } else if (!argumentType.isDotNetAssignableTo(expectedType)) {
                     dotNetUnsupported(
                         "'!!' produces ${argumentType.nameInSignature} " +
                                 "where ${expectedType.nameInSignature} is expected"
                     )
+                } else {
+                    codegen.emitExpression(argument, argumentType)
+                    codegen.emitReferenceNotNullOrThrowNpe()
                 }
-                codegen.emitExpression(argument, argumentType)
-                codegen.emitReferenceNotNullOrThrowNpe()
             }
             else -> codegen.emitExpression(argument, expectedType)
         }
