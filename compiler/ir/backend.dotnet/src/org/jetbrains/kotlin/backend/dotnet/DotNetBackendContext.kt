@@ -23,6 +23,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrFactory
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
@@ -33,6 +34,48 @@ import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.SymbolTable
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+
+internal data class DotNetLoweredInterfaceDefaultImplementation(
+    val helper: IrSimpleFunction,
+    val bodyPlacement: DotNetInterfaceDefaultBodyPlacement,
+)
+
+internal data class DotNetLoweredGenericInterfaceDefault(
+    val source: IrSimpleFunction,
+    val canonicalBody: IrSimpleFunction,
+    val canonicalView: DotNetGenericInterfaceMemberView,
+    val erasedAdapter: IrSimpleFunction,
+    val typedAdapters: Map<DotNetGenericInterfaceMemberView, IrSimpleFunction>,
+    val inheritedSlotAdapters: MutableList<DotNetLoweredGenericInterfaceDefaultSlotAdapter> = mutableListOf(),
+)
+
+internal data class DotNetLoweredGenericInterfaceDefaultSlotAdapter(
+    val function: IrSimpleFunction,
+    val implementationView: DotNetGenericInterfaceMemberView,
+)
+
+internal data class DotNetLoweredInterfaceDefaultPromotion(
+    val owner: IrClass,
+    val inheritedMember: IrSimpleFunction,
+    val implementation: IrSimpleFunction,
+    val inheritedDefault: DotNetBoundInterfaceDefaultImplementation,
+    val physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+    val implementationView: DotNetGenericInterfaceMemberView? = null,
+)
+
+internal data class DotNetLoweredGenericInterfaceViewBridge(
+    val owner: IrClass,
+    val inheritedMember: IrSimpleFunction,
+    val implementation: IrSimpleFunction,
+    val physicalView: DotNetInterfaceDefaultPromotionView,
+)
+
+internal data class DotNetLoweredInterfaceDefaultClassForwarder(
+    val owner: IrClass,
+    val inheritedMember: IrSimpleFunction,
+    val implementation: IrSimpleFunction,
+    val physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
+)
 
 internal class DotNetBackendContext(
     override val irBuiltIns: IrBuiltIns,
@@ -51,6 +94,30 @@ internal class DotNetBackendContext(
         DotNetFunctionReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
     val propertyReferenceSymbols: DotNetPropertyReferenceSymbols =
         DotNetPropertyReferenceSymbols(irBuiltIns, irFactory, irModuleFragment)
+    /** Source interface member to its profile-selected compiler-ABI helper and body placement. */
+    val interfaceDefaultImplementations:
+        MutableMap<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation> = linkedMapOf()
+    /** Source interface member to its helper-owned masked default-argument dispatcher. */
+    val interfaceDefaultArgumentDispatchers:
+        MutableMap<IrSimpleFunction, IrSimpleFunction> = linkedMapOf()
+    /** One typed semantic DIM plus its erased and less-precise physical adapters. */
+    val genericInterfaceDefaults:
+        MutableList<DotNetLoweredGenericInterfaceDefault> = mutableListOf()
+    /** Synthetic static helper call targets bound directly to producer-recorded CLR identities. */
+    val externalInterfaceDefaultHelpers:
+        MutableMap<IrSimpleFunction, DotNetBoundInterfaceDefaultImplementation> = linkedMapOf()
+    /** Synthetic calls to producer-recorded masked default-argument dispatchers. */
+    val externalDefaultArgumentDispatchers:
+        MutableMap<IrSimpleFunction, DotNetBoundDefaultArgumentDispatcher> = linkedMapOf()
+    /** Producer-visible records for helper-only defaults promoted into DIMs by this net10 variant. */
+    val interfaceDefaultPromotions:
+        MutableList<DotNetLoweredInterfaceDefaultPromotion> = mutableListOf()
+    /** Final interface MethodImpl adapters which later compilations inherit as a complete view bundle. */
+    val genericInterfaceViewBridges:
+        MutableList<DotNetLoweredGenericInterfaceViewBridge> = mutableListOf()
+    /** Hidden class MethodImpls which later compilations must account for during DIM selection. */
+    val interfaceDefaultClassForwarders:
+        MutableList<DotNetLoweredInterfaceDefaultClassForwarder> = mutableListOf()
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager(irBuiltIns, irFactory)
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
@@ -94,8 +161,18 @@ internal class DotNetSymbols(
         }.symbol
 
     override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
-    override val syntheticConstructorMarker: IrClassSymbol
-        get() = unsupportedSymbol("syntheticConstructorMarker")
+    override val syntheticConstructorMarker: IrClassSymbol = run {
+        val fqName = DotNetRuntimeTypes.SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME
+        val markerPackage = createEmptyExternalPackageFragment(irModuleFragment, fqName.parent())
+        irFactory.buildClass {
+            name = fqName.shortName()
+            kind = ClassKind.CLASS
+            modality = Modality.FINAL
+        }.apply {
+            parent = markerPackage
+            createThisReceiverParameter()
+        }.symbol
+    }
     override val throwUninitializedPropertyAccessException: IrSimpleFunctionSymbol
         get() = unsupportedSymbol("throwUninitializedPropertyAccessException")
     override val throwUnsupportedOperationException: IrSimpleFunctionSymbol =

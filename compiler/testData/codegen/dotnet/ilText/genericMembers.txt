@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericMembers' {}
 .module 'main-genericMembers.il'
 
@@ -23,7 +27,7 @@
     stfld string 'MarkedValue'::'text'
     ret
   }
-  .method public hidebysig specialname instance string 'get_text'() cil managed
+  .method private hidebysig specialname instance string 'get_text'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -116,6 +120,23 @@
   .property instance !0 'captured'()
   {
     .get instance !0 'MemberHost`1'::'get_captured'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'TypeParameterBoundMember`1'<'C'>
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig instance !!0 'use'<(!0) 'T'>(!!0 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
   }
 }
 .class interface public abstract auto ansi 'GenericPicker'
@@ -335,7 +356,7 @@
   .class nested public auto ansi sealed beforefieldinit 'Companion'
          extends [mscorlib]System.Object
   {
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -348,12 +369,20 @@
       ldarg.1
       ret
     }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'CompanionOwner'/'Companion'::.ctor()
+      ret
+    }
   }
   .field public static initonly class 'CompanionOwner'/'Companion' 'Companion'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'CompanionOwner'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'CompanionOwner'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'CompanionOwner'/'Companion' 'CompanionOwner'::'Companion'
     ret
   }
@@ -460,6 +489,12 @@
     ldstr "marked"
     newobj instance void 'MarkedValue'::.ctor(string)
     call instance string class 'MemberHost`1'<string>::'labelOf'<class 'MarkedValue'>(!!0)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void class 'TypeParameterBoundMember`1'<class 'Marked'>::.ctor()
+    ldstr "owner-bound"
+    newobj instance void 'MarkedValue'::.ctor(string)
+    call instance !!0 class 'TypeParameterBoundMember`1'<class 'Marked'>::'use'<class 'MarkedValue'>(!!0)
+    callvirt instance string 'MarkedValue'::'label'()
     call void [mscorlib]System.Console::WriteLine(string)
     newobj instance void class 'Picker`1'<string>::.ctor()
     call int32 'genericMembersKt'::'childPick'(class 'ChildPicker')

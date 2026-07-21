@@ -46,6 +46,7 @@ import org.jetbrains.kotlin.types.Variance
  */
 internal object DotNetRuntimeTypes {
     val DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.DefaultConstructorMarker")
+    val SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME = FqName("kotlin.runtime.internal.SyntheticConstructorMarker")
 
     private val unitClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Unit",
@@ -245,6 +246,11 @@ internal object DotNetRuntimeTypes {
 
     private val defaultConstructorMarkerClass = DotNetIlClassInfo(
         ilClassName = "Kotlin.Runtime.Internal.DefaultConstructorMarker",
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+    )
+
+    private val syntheticConstructorMarkerClass = DotNetIlClassInfo(
+        ilClassName = "Kotlin.Runtime.Internal.SyntheticConstructorMarker",
         assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
     )
 
@@ -450,6 +456,9 @@ internal object DotNetRuntimeTypes {
         val irClass = simpleType.classifier.owner as? IrClass ?: return null
         if (irClass.fqNameWhenAvailable == DEFAULT_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
             return DotNetIlValueType.UserClass(defaultConstructorMarkerClass)
+        }
+        if (irClass.fqNameWhenAvailable == SYNTHETIC_CONSTRUCTOR_MARKER_FQ_NAME && simpleType.arguments.isEmpty()) {
+            return DotNetIlValueType.UserClass(syntheticConstructorMarkerClass)
         }
         if (irClass.isDotNetSupportedPrimitiveIterator && simpleType.arguments.isEmpty()) return iteratorType
         return mapCallableType(type)

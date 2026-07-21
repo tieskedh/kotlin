@@ -17,10 +17,6 @@ class GenericBoundMember {
     fun <T : List<String>> use(value: T): T = value
 }
 
-class TypeParameterBoundMember<C> {
-    fun <T : C> use(value: T): T = value
-}
-
 interface NullableMemberSlot {
     fun <T> use(value: T?): Int
 }
