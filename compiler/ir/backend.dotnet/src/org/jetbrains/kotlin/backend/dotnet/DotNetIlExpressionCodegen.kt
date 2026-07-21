@@ -1,5 +1,8 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_EXACT_CALL
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL
+import org.jetbrains.kotlin.backend.dotnet.lower.dotNetGenericInterfaceDefaultBodyViewOrNull
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
@@ -24,6 +27,7 @@ import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.classFqName
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isNullableNothing
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -68,6 +72,9 @@ internal class DotNetIlExpressionCodegen(
     private val statementScopeEmitter: DotNetIlStatementScopeEmitter,
 ) {
     internal val coreLibraryReference = typeMapper.coreLibrary.reference
+    private val canonicalGenericSignatureTypeMapper by lazy(LazyThreadSafetyMode.NONE) {
+        typeMapper.canonicalGenericInterfaceSignatureView()
+    }
     private val declaredGenericSignatureTypeMapper by lazy(LazyThreadSafetyMode.NONE) {
         typeMapper.declaredGenericInterfaceSignatureView()
     }
@@ -77,6 +84,10 @@ internal class DotNetIlExpressionCodegen(
 
     fun emit(instruction: String, pops: Int = 0, pushes: Int = 0) {
         methodContext.emit(instruction, pops, pushes)
+    }
+
+    fun recordAssemblyReference(assemblyName: String) {
+        typeMapper.recordAssemblyReference(assemblyName)
     }
 
     /**
@@ -587,6 +598,29 @@ internal class DotNetIlExpressionCodegen(
         } else {
             null
         }
+        val exceptionEntry = DotNetMappedExceptions.mappedEntry(expression.typeOperand.classFqName)
+        if (exceptionEntry != null) {
+            // Every logical exception test goes through the one runtime classifier, including
+            // exact classes. `isinst System.Exception` is only the physical admission step for
+            // an arbitrary object and preserves the original reference on success.
+            methodContext.emit(
+                "isinst ${DotNetMappedExceptions.exceptionTypeRef(coreLibraryReference)}",
+                pops = 1,
+                pushes = 1,
+            )
+            methodContext.emit("ldc.i4 ${exceptionEntry.classifierTypeId.abiValue}", pushes = 1)
+            methodContext.emit(
+                DotNetRuntimeLibrary.exceptionClassifierCallInstruction(coreLibraryReference),
+                pops = 2,
+                pushes = 1,
+            )
+            if (!positive) {
+                methodContext.emit("ldc.i4.0", pushes = 1)
+                methodContext.emit("ceq", pops = 2, pushes = 1)
+            }
+            nullableJoinLabel?.let(methodContext::emitLabel)
+            return
+        }
         val runtimeTestType = if (castType is DotNetIlValueType.NullableValue) castType.elementType else castType
         methodContext.emit("isinst ${runtimeTestType.nameInSignature}", pops = 1, pushes = 1)
         methodContext.emit("ldnull", pushes = 1)
@@ -652,7 +686,7 @@ internal class DotNetIlExpressionCodegen(
                     methodContext.emit(valueType.hasValueInstruction, pops = 1, pushes = 1)
                     methodContext.emitBranch("brtrue", notNullLabel, pops = 1)
                     methodContext.emit("ldstr ${"null".toIlStringLiteral()}", pushes = 1)
-                    methodContext.emitBranch("br", endLabel)
+                    methodContext.emitGoto(endLabel)
                     methodContext.emitLabel(notNullLabel)
                     methodContext.emit(loadLocalAddressInstruction(slot.index), pushes = 1)
                     methodContext.emit(valueType.getValueOrDefaultInstruction, pops = 1, pushes = 1)
@@ -786,9 +820,10 @@ internal class DotNetIlExpressionCodegen(
      * class — unless the call is `super`-qualified, which is exactly the JVM's
      * invokevirtual/invokespecial split; a `super` call and every final member keep the plain
      * non-virtual `call` (see [DotNetIlFunctionInfo.renderCallInstruction]). A
-     * `super<I>`-qualified call to an interface member is rejected up front: its non-virtual
-     * `call` would need a callable interface implementation — the Default Interface Methods
-     * model this backend does not have.
+     * source `super<I>` call is rewritten by profile-aware interface-default lowering to exactly
+     * `I`'s static helper. Portable helpers own the moved body; modern helpers issue the exact
+     * nonvirtual DIM call. Seeing an interface super qualifier here without the compiler-owned
+     * exact-call origin therefore means lowering failed and is rejected below.
      */
     fun emitCall(call: IrCall): DotNetIlReturnType {
         val resolved = resolveCall(call)
@@ -846,11 +881,9 @@ internal class DotNetIlExpressionCodegen(
      */
     private fun resolveCall(call: IrCall): ResolvedCall {
         call.superQualifierSymbol?.owner?.let { superQualifier ->
-            if (superQualifier.isInterface) {
+            if (superQualifier.isInterface && call.origin != DOTNET_INTERFACE_DEFAULT_EXACT_CALL) {
                 dotNetUnsupported(
-                    "'super<${superQualifier.name.asString()}>' call to an interface member is not supported " +
-                            "(requires Default Interface Methods, which are outside the .NET Framework 4.8 " +
-                            "compatibility floor)"
+                    "'super<${superQualifier.name.asString()}>' call escaped profile-aware interface-default lowering"
                 )
             }
         }
@@ -861,10 +894,12 @@ internal class DotNetIlExpressionCodegen(
         // abstract member is inherited from several unrelated super-interfaces at once, any of
         // them is a correct operand: the implementing class's single member fills every
         // same-signature interface slot (probe-verified, ifaceprobe_s9).
+        resolveGenericInterfaceDefaultBodyCallOrNull(call, call.symbol.owner)?.let { return it }
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val calleeName = callee.name.asString()
         val info = availableFunctions[callee] ?: typeMapper.referencedFunctionInfoOrNull(callee)
             ?: dotNetUnsupported("call to unsupported function '$calleeName'")
+        info.owner.assemblyName?.let(typeMapper::recordAssemblyReference)
         // A generic FUNCTION call, top-level or member, carries its instantiation on the method token —
         // `call !!0 'FileKt'::'id'<string>(!!0)`, signature slots verbatim from the declaration
         // (probe-verified, genprobe_s1; `!!0` is itself a legal instantiation argument at
@@ -959,6 +994,62 @@ internal class DotNetIlExpressionCodegen(
         )
     }
 
+    /** Resolves compiler-generated calls to the one typed semantic DIM of a generic default. */
+    private fun resolveGenericInterfaceDefaultBodyCallOrNull(
+        call: IrCall,
+        callee: IrSimpleFunction,
+    ): ResolvedCall? {
+        val bodyView = callee.origin.dotNetGenericInterfaceDefaultBodyViewOrNull ?: return null
+        val virtual = when (call.origin) {
+            DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL -> true
+            DOTNET_INTERFACE_DEFAULT_EXACT_CALL -> false
+            else -> dotNetUnsupported("generic interface-default body call has no dispatch-selection origin")
+        }
+        val source = callee.overriddenSymbols.singleOrNull()?.owner
+            ?: error("Internal .NET backend error: generic interface-default body has no logical source slot")
+        val owner = source.parent as? IrClass
+            ?: error("Internal .NET backend error: generic interface-default source has no interface owner")
+        val receiver = call.arguments.firstOrNull()
+            ?: dotNetUnsupported("generic interface-default body call has no receiver")
+        val capability = typeMapper.genericInterfaceCapabilityTypeOrNull(receiver.type, bodyView.physicalView)
+            ?: dotNetUnsupported(
+                "generic interface-default body receiver is not available through its ${bodyView.name.lowercase()} view"
+            )
+        val signatureMapper = typeMapper.genericInterfaceSignatureView(bodyView)
+        val info = DotNetIlFunctionInfo(
+            capability.classInfo,
+            callee.dotNetSignature(signatureMapper),
+            typeMapper.genericInterfaceTypedMethodName(source),
+        )
+        val methodInstantiation = if (callee.typeParameters.isEmpty()) {
+            emptyList()
+        } else {
+            if (call.typeArguments.size != callee.typeParameters.size) {
+                dotNetUnsupported("generic interface-default body call has an unsupported method instantiation")
+            }
+            call.typeArguments.map { argument ->
+                argument?.let(signatureMapper::toDotNetIlValueType)
+                    ?: dotNetUnsupported("generic interface-default body call has an unsupported type argument")
+            }
+        }
+        val parameterTypes = info.signature.parameterTypes.map { parameterType ->
+            parameterType.substituteDotNetTypeParameters(capability.arguments, methodInstantiation)
+        }
+        return ResolvedCall(
+            callee = callee,
+            calleeName = source.name.asString(),
+            info = info,
+            methodInstantiation = methodInstantiation,
+            receiverType = capability,
+            ownerToken = capability.nameInSignature,
+            parameterTypes = parameterTypes,
+            virtual = virtual,
+            returnType = info.signature.returnType.substituteDotNetTypeParameters(
+                capability.arguments,
+                methodInstantiation,
+            ),
+        )
+    }
     private data class ResolvedCall(
         val callee: IrSimpleFunction,
         val calleeName: String,
@@ -1035,21 +1126,27 @@ internal class DotNetIlExpressionCodegen(
 
     /**
      * `throw e` -> the exception reference, then IL `throw` (JVM precedent: `IrThrow` maps 1:1
-     * onto the platform throw instruction, no lowering). Only values of a
-     * [mapped exception type][DotNetIlValueType.MappedClass] can be thrown. A rethrow (`throw e`
+     * onto the platform throw instruction, no lowering). A value is throwable exactly when its
+     * physical CLR type widens to the universal `System.Exception` carrier. That includes mapped
+     * built-ins, Kotlin-owned user subclasses, and imported exception subclasses; accepting only
+     * [DotNetIlValueType.MappedClass] here would make `throw MyException()` fail even though its
+     * emitted metadata has an ordinary CLR exception base chain. A source rethrow (`throw e`
      * inside a catch handler) is the same shape — a load of the bound local followed by `throw`,
      * which preserves object identity; the IL `rethrow` instruction is never emitted (Kotlin has
-     * no bare rethrow statement; the stack-trace-restart delta is irrelevant until stack traces
-     * are surfaced).
+     * no bare rethrow statement).
      */
     fun emitThrow(expression: IrThrow) {
         val thrownType = typeMapper.toDotNetIlValueType(expression.value.type)
-        if (thrownType !is DotNetIlValueType.MappedClass) {
+        val exceptionCarrier = DotNetIlValueType.MappedClass(
+            DotNetMappedExceptions.exceptionTypeRef(typeMapper.coreLibrary.reference)
+        )
+        if (thrownType?.isDotNetAssignableTo(exceptionCarrier) != true) {
             dotNetUnsupported(
-                "throw of a non-exception-mapped type ${expression.value.type.render()} is not supported"
+                "throw of type ${expression.value.type.render()} whose CLR representation is not " +
+                        "assignable to System.Exception is not supported"
             )
         }
-        emitExpression(expression.value, thrownType)
+        emitExpression(expression.value, exceptionCarrier)
         methodContext.emitThrow()
     }
 
@@ -1154,8 +1251,9 @@ internal class DotNetIlExpressionCodegen(
     ) {
         val constructor = call.symbol.owner
         val className = constructor.constructedClass.name.asString()
-        val mappedClrTypeRef = entry.clrTypeRef(coreLibraryReference)
-        val producedType = DotNetIlValueType.MappedClass(mappedClrTypeRef)
+        val carrierClrTypeRef = entry.carrierTypeRef(coreLibraryReference)
+        val constructorClrTypeRef = entry.constructorTypeRef(coreLibraryReference)
+        val producedType = DotNetIlValueType.MappedClass(carrierClrTypeRef)
         if (!producedType.isDotNetAssignableTo(expectedType)) {
             dotNetUnsupported(
                 "constructor call of '$className' produces ${producedType.nameInSignature} " +
@@ -1168,25 +1266,10 @@ internal class DotNetIlExpressionCodegen(
                     "parameter '${parameter.name.asString()}' has unsupported type ${parameter.type.render()}"
                 )
         }
-        val causeType: DotNetIlValueType = DotNetIlValueType.MappedClass(
-            DotNetMappedExceptions.exceptionTypeRef(coreLibraryReference)
-        )
-        when {
-            parameterTypes.isEmpty() -> {}
-            parameterTypes == listOf(DotNetIlValueType.String) -> {}
-            parameterTypes == listOf(DotNetIlValueType.String, causeType) && entry.hasMessageCauseCtor -> {}
-            parameterTypes == listOf(causeType) && entry.hasCauseCtor -> {}
-            parameterTypes == listOf(causeType) -> dotNetUnsupported(
-                "constructor '$className(cause)' has no mapped CLR overload; " +
-                        "construct with (message) or (message, cause)"
-            )
-            else -> dotNetUnsupported(
-                "constructor of '$className' has no matching overload on the mapped CLR type '$mappedClrTypeRef'"
-            )
-        }
+        entry.checkConstructorShape(className, parameterTypes, coreLibraryReference)
         emitArguments(call.arguments, parameterTypes, "constructor of '$className'")
         methodContext.emit(
-            "newobj instance void $mappedClrTypeRef::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
+            "newobj instance void $constructorClrTypeRef::.ctor(${parameterTypes.joinToString(", ") { it.nameInSignature }})",
             pops = parameterTypes.size,
             pushes = 1,
         )
@@ -1385,16 +1468,53 @@ internal class DotNetIlExpressionCodegen(
         call: IrCall,
         expectedType: DotNetIlValueType?,
     ): Boolean {
+        if (call.symbol.owner.origin.dotNetGenericInterfaceDefaultBodyViewOrNull != null) return false
         val callee = call.symbol.owner.let { it.resolveFakeOverride() ?: it.resolveFakeOverrideMaybeAbstract() ?: it }
         val interfaceClass = callee.parent as? IrClass ?: return false
         if (!typeMapper.isSplitGenericInterface(interfaceClass)) return false
-        if (callee.typeParameters.isNotEmpty()) return false
         val receiver = call.arguments.firstOrNull() ?: return false
         val receiverType = receiver.type as? IrSimpleType ?: return false
         if ((receiverType.classifier as? IrClassSymbol)?.owner != interfaceClass) return false
 
-        val canonical = resolveCall(call)
-        val canonicalReceiverType = canonical.receiverType ?: return false
+        fun methodInstantiation(mapper: DotNetIlTypeMapper): List<DotNetIlValueType>? {
+            if (callee.typeParameters.isEmpty()) return emptyList()
+            if (call.typeArguments.size != callee.typeParameters.size) return null
+            return call.typeArguments.map { argument ->
+                argument?.let(mapper::toDotNetIlValueType) ?: return null
+            }
+        }
+        val canonicalClassInfo = canonicalGenericSignatureTypeMapper.classInfoOrNull(interfaceClass)
+            ?: return false
+        val canonicalReceiverType = canonicalGenericSignatureTypeMapper.toDotNetIlValueType(receiver.type)
+            ?: return false
+        val canonicalMethodInstantiation = methodInstantiation(canonicalGenericSignatureTypeMapper)
+            ?: return false
+        val canonicalSignature = callee.dotNetSignature(canonicalGenericSignatureTypeMapper)
+        val canonicalPhysicalMethodName =
+            canonicalGenericSignatureTypeMapper.referencedFunctionInfoOrNull(callee)?.physicalMethodName
+                ?: callee.dotNetGenericInterfaceCanonicalMethodName()
+        val canonicalInfo = DotNetIlFunctionInfo(
+            canonicalClassInfo,
+            canonicalSignature,
+            canonicalPhysicalMethodName,
+        )
+        val canonicalParameterTypes = canonicalSignature.parameterTypes.map { parameterType ->
+            parameterType.substituteDotNetTypeParameters(emptyList(), canonicalMethodInstantiation)
+        }
+        val canonical = ResolvedCall(
+            callee = callee,
+            calleeName = callee.name.asString(),
+            info = canonicalInfo,
+            methodInstantiation = canonicalMethodInstantiation,
+            receiverType = canonicalReceiverType,
+            ownerToken = canonicalClassInfo.ilTypeRef,
+            parameterTypes = canonicalParameterTypes,
+            virtual = true,
+            returnType = canonicalSignature.returnType.substituteDotNetTypeParameters(
+                emptyList(),
+                canonicalMethodInstantiation,
+            ),
+        )
         val memberView = typeMapper.genericInterfaceMemberView(callee, interfaceClass)
         val capabilitySignatureMapper = when (memberView) {
             DotNetGenericInterfaceMemberView.DECLARED -> declaredGenericSignatureTypeMapper
@@ -1408,15 +1528,21 @@ internal class DotNetIlExpressionCodegen(
         } catch (_: DotNetIlUnsupportedException) {
             null
         } ?: return false
+        val capabilityMethodInstantiation = methodInstantiation(capabilitySignatureMapper) ?: return false
         val capabilitySignature = callee.dotNetSignature(capabilitySignatureMapper)
         val capabilityParameterTypes = capabilitySignature.parameterTypes.map { parameterType ->
-            parameterType.substituteDotNetTypeParameters(capabilityReceiverType.arguments)
+            parameterType.substituteDotNetTypeParameters(
+                capabilityReceiverType.arguments,
+                capabilityMethodInstantiation,
+            )
         }
         if (call.arguments.size != capabilityParameterTypes.size || call.arguments.size != canonical.parameterTypes.size) {
             return false
         }
-        val capabilityReturnType = capabilitySignature.returnType
-            .substituteDotNetTypeParameters(capabilityReceiverType.arguments)
+        val capabilityReturnType = capabilitySignature.returnType.substituteDotNetTypeParameters(
+            capabilityReceiverType.arguments,
+            capabilityMethodInstantiation,
+        )
         val capabilityResultCoercion: DotNetOptionalInstruction?
         val canonicalResultInstruction: String?
         if (expectedType == null) {
@@ -1467,6 +1593,7 @@ internal class DotNetIlExpressionCodegen(
                 typeMapper.genericInterfaceTypedMethodName(callee),
                 virtual = true,
                 ownerToken = capabilityReceiverType.nameInSignature,
+                methodInstantiation = capabilityMethodInstantiation,
             ),
             pops = capabilitySignature.parameterTypes.size,
             pushes = if (capabilityReturnType is DotNetIlReturnType.Value) 1 else 0,
@@ -1489,6 +1616,7 @@ internal class DotNetIlExpressionCodegen(
                 canonical.info.physicalMethodName ?: callee.dotNetIlMethodName(),
                 virtual = true,
                 ownerToken = canonical.ownerToken,
+                methodInstantiation = canonical.methodInstantiation,
             ),
             pops = canonical.info.signature.parameterTypes.size,
             pushes = if (canonical.returnType is DotNetIlReturnType.Value) 1 else 0,
@@ -1931,7 +2059,7 @@ internal class DotNetIlExpressionCodegen(
             val nextBranchLabel = methodContext.nextLabel("whenNext")
             emitBranchIfFalse(branch.condition, nextBranchLabel)
             emitExpression(branch.result, expectedType)
-            methodContext.emitBranch("br", endLabel)
+            methodContext.emitGoto(endLabel)
             methodContext.emitLabel(nextBranchLabel)
         }
 

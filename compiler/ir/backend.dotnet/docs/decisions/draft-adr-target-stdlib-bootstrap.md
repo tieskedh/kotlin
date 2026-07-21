@@ -30,9 +30,10 @@ Kotlin.Stdlib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
 
 ABI major 1 is unsigned. AssemblyVersion stays fixed for compatible ABI-1 builds; product/package
 versions belong outside CLR AssemblyVersion. `Kotlin.Stdlib.dll` references `Kotlin.Runtime.dll`
-and uses the `netstandard2.0` platform-library profile shared by both executable targets. The
-consumer's selected runtime does not change this portable library product; see
-`draft-adr-dotnet-library-target-profile.md`.
+and is produced as `net48`, `netstandard2.0`, or `net10.0`. The variants share Kotlin declarations
+and logical identities but may use profile-specific physical implementations. A consumer selects
+an exact-profile pair first and may use the portable `netstandard2.0` pair from either executable
+profile; see `draft-adr-dotnet-library-target-profile.md`.
 
 Ownership is split as follows:
 
@@ -128,14 +129,14 @@ compilation is rejected.
 The POC adds an explicit compiler product route:
 
 ```text
--Xdotnet-produce-stdlib -d <directory> [-Xdotnet-target=netframework|net]
+-Xdotnet-produce-stdlib -Xdotnet-target={net48|netstandard2.0|net10.0} -d <directory>
 ```
 
 This provisional build control accepts no user source files, owns the `Kotlin.Stdlib` module name,
 and cannot be combined with `-no-stdlib` or CLR export selectors. It is not a source annotation or
 a proposed end-user stdlib API. From one resolved frontend session it serializes all compiler-owned
-bootstrap declarations, lowers their executable implementations, assembles the portable
-netstandard2.0 DLL with the modern library writer, and publishes the packed metadata KLIB only
+bootstrap declarations, lowers their executable implementations for the selected profile,
+assembles the corresponding DLL, and publishes the packed metadata KLIB only
 after the DLL succeeds:
 
 ```text
@@ -157,30 +158,31 @@ after the implementation assembly exists.
 For a fixed compiler and source corpus, repeated producer runs must emit an
 identical packed KLIB and identical textual IL. KLIB archive order and timestamps are normalized by
 the shared Kotlin archive writer, and metadata fragments are ordered by package and source name.
-Focused modern and Framework runtime-selection pins compare both compiler-owned files byte for
-byte; runtime selection must not change the portable library product.
-
-The current external ILAsm implementations give identical IL a fresh PE module identity, so DLL
-byte identity is not a truthful POC gate. The durable requirement at this stage is the fixed
-assembly identity recorded in the KLIB plus successful separate consumption of the assembled DLL.
-The direct PE writer described in `draft-adr-il-assembly-pipeline.md` must eventually make the PE
-itself deterministic.
+Focused pins compare the KLIB, textual IL, and DLL byte for byte across repeated builds of each
+profile. Different profiles are not expected to be byte-identical. Both assembler paths use
+`/det`, which gives identical IL a deterministic PE module identity.
+The packed KLIB records the resulting DLL's SHA-256, and consumers reject a sibling whose bytes do
+not match, so the two-file product cannot be recombined accidentally. Executable/test assembly
+remains outside this publication reproducibility contract. The direct PE writer described in
+`draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
+depending on the external assembler flag.
 
 ### Installed-pair discovery
 
 Following JVM/JS `KotlinPaths` and Native distribution ownership, an ordinary .NET compilation
-prefers the complete portable pair at:
+prefers the complete exact-profile pair at `lib/dotnet/<selected-profile>`, then the portable pair
+at:
 
 ```text
 <kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.klib
 <kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll
 ```
 
-The manifest binds the companion to the `netstandard2.0` library TFM, independently of the
-consumer's executable runtime. A complete matching pair becomes the default metadata dependency;
-a half-installed pair is an error rather than permission to rebuild a different implementation
-silently. `-no-stdlib` remains the opt-out and, together with an explicit classpath, the bootstrap
-override.
+The manifest binds each companion to its declared TFM. The loader accepts only the explicit
+compatibility matrix: an executable profile accepts itself or `netstandard2.0`; the portable
+profile accepts only itself. A half-installed candidate is an error rather than permission to
+silently rebuild a different implementation. `-no-stdlib` remains the opt-out and, together with
+an explicit classpath, the bootstrap override.
 
 Absence of both files still selects the injected-source compatibility path. Installed-pair use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
@@ -193,14 +195,16 @@ Repository production and installation are explicit opt-in tasks:
 ./gradlew :kotlin-compiler:installDotNetStdlib
 ```
 
-The producer depends on the assembled compiler distribution, runs that distribution's complete
-compiler classpath, and writes `Kotlin.Stdlib.{klib,dll,il}` under
-`prepare/compiler/build/dotnet-stdlib/netstandard2.0`. It requires modern ILAsm because Framework
-ILAsm injects an `mscorlib` AssemblyRef even when it accepts netstandard-scoped source. The install
-task copies only the bound KLIB/DLL pair into the Kotlin-home location above; the IL remains a build
-diagnostic. Neither task participates in ordinary `dist` or `distKotlinc`, so ordinary builds do
-not acquire that host-tool requirement. `distKotlinc` is a whole-home `Sync` and therefore removes
-an earlier optional installation; invoking `installDotNetStdlib` afterward restores it.
+The aggregate producer depends on the assembled compiler distribution, runs that distribution's
+complete compiler classpath, and writes `Kotlin.Stdlib.{klib,dll,il}` under one
+`prepare/compiler/build/dotnet-stdlib/<profile>` directory per profile. Its three constituent
+tasks are `produceDotNetStdlibNet48`, `produceDotNetStdlibNetStandard20`, and
+`produceDotNetStdlibNet100`. Framework ILAsm writes `net48`; modern ILAsm writes
+`netstandard2.0` and `net10.0`. The install task copies only each bound KLIB/DLL pair into its
+corresponding Kotlin-home profile directory; IL remains a build diagnostic. Neither aggregate task
+participates in ordinary `dist` or `distKotlinc`, so ordinary builds do not acquire those host-tool
+requirements. `distKotlinc` is a whole-home `Sync` and therefore removes an earlier optional
+installation; invoking `installDotNetStdlib` afterward restores all three variants.
 
 The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
 program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
@@ -283,11 +287,12 @@ additionally exercises a mutable generic local, a loop, and repeated erased
 Iterator calls inside the stdlib assembly. A focused CLI integration pin compiles a consumer with
 `-no-stdlib`, resolves both receiver overloads from a metadata KLIB, and verifies the generic external DLL call
 without a generated consumer-side CollectionsKt. A manual Framework executable exercised the same
-path against a real generated DLL and user-defined Iterable. Two focused integration pins run the
-explicit producer under modern and Framework runtime selection, check each packed KLIB manifest
-and portable DLL, then consume `first()`, `last()`, `emptyList()`, and RandomAccess from each
-produced pair in a separate
-compilation. The stdlib KLIB participates in the same physical-declaration binder as any other
+path against a real generated DLL and user-defined Iterable. Focused integration pins produce the
+`net48`, `netstandard2.0`, and `net10.0` variants, check each packed KLIB manifest and DLL, then
+consume `first()`, `last()`, `emptyList()`, and RandomAccess from each compatible profile in a
+separate compilation. The portable pin also installs the pair only under `netstandard2.0`, proves
+fallback discovery, assembles applications, and executes the same stdlib implementation on both
+Framework 4.8 and .NET 10. The stdlib KLIB participates in the same physical-declaration binder as any other
 Kotlin/.NET library; the separate stdlib record controls installation and packaging only. Each
 producer is also run twice; the packed KLIB and compiler-owned IL are
 byte-identical. Finally, each produced pair is installed into a temporary portable-profile Kotlin

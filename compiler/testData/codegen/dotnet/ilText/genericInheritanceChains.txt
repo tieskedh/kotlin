@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'genericInheritanceChains' {}
 .module 'main-genericInheritanceChains.il'
 
@@ -33,14 +37,14 @@
     stfld !1 class 'Base`2'<!0, !1>::'right'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_left'() cil managed
+  .method private hidebysig specialname instance !0 'get_left'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !0 class 'Base`2'<!0, !1>::'left'
     ret
   }
-  .method public hidebysig specialname instance void 'set_left'(!0 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_left'(!0 '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -48,14 +52,14 @@
     stfld !0 class 'Base`2'<!0, !1>::'left'
     ret
   }
-  .method public hidebysig specialname instance !1 'get_right'() cil managed
+  .method private hidebysig specialname instance !1 'get_right'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !1 class 'Base`2'<!0, !1>::'right'
     ret
   }
-  .method public hidebysig specialname instance void 'set_right'(!1 '<set-?>') cil managed
+  .method private hidebysig specialname instance void 'set_right'(!1 '<set-?>') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -308,7 +312,7 @@
     stfld string 'Token'::'text'
     ret
   }
-  .method public hidebysig specialname instance string 'get_text'() cil managed
+  .method private hidebysig specialname instance string 'get_text'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -341,7 +345,7 @@
     stfld !0 class 'ConstrainedBase`1'<!0>::'value'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_value'() cil managed
+  .method private hidebysig specialname instance !0 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -428,7 +432,7 @@
       [10] class 'Wrapped`1'<string> 'wrapped',
       [11] class 'Fixed`1'<int32> 'fixed',
       [12] class 'ArrayWrapped`1'<string> 'arrayWrapped',
-      [13] string[] '<arrayOf>',
+      [13] string[] '<arrayOfStorage>',
       [14] string '<arrayElement>',
       [15] string[] '<arrayGet>',
       [16] int32 '<arrayIndex>',

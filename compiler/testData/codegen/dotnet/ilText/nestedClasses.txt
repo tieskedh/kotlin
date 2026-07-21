@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'nestedClasses' {}
 .module 'main-nestedClasses.il'
 
@@ -22,7 +26,7 @@
     stfld int32 'NestedBase'::'seed'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  .method private hidebysig specialname instance int32 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -58,7 +62,7 @@
       stfld int32 'GenericOuter`1'/'Plain'::'number'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_number'() cil managed
+    .method private hidebysig specialname instance int32 'get_number'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -91,7 +95,7 @@
       stfld !0 class 'GenericOuter`1'/'Generic`1'<!0>::'item'
       ret
     }
-    .method public hidebysig specialname instance !0 'get_item'() cil managed
+    .method private hidebysig specialname instance !0 'get_item'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -127,7 +131,7 @@
         stfld string 'GenericOuter`1'/'Middle'/'Deep'::'text'
         ret
       }
-      .method public hidebysig specialname instance string 'get_text'() cil managed
+      .method private hidebysig specialname instance string 'get_text'() cil managed
       {
         .maxstack 1
         ldarg.0
@@ -179,14 +183,14 @@
       stfld int32 'VisibilityOuter'/'Hidden'::'number'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_number'() cil managed
+    .method private hidebysig specialname instance int32 'get_number'() cil managed
     {
       .maxstack 1
       ldarg.0
       ldfld int32 'VisibilityOuter'/'Hidden'::'number'
       ret
     }
-    .method public hidebysig instance int32 'twice'() cil managed
+    .method private hidebysig instance int32 'twice'() cil managed
     {
       .maxstack 2
       ldarg.0
@@ -304,7 +308,7 @@
     stfld int32 'VisibilityOuter'::'secret'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_secret'() cil managed
+  .method private hidebysig specialname instance int32 'get_secret'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -397,7 +401,7 @@
       stfld class 'ForwardOuter'/'Later' 'ForwardOuter'/'UsesLater'::'later'
       ret
     }
-    .method public hidebysig specialname instance class 'ForwardOuter'/'Later' 'get_later'() cil managed
+    .method private hidebysig specialname instance class 'ForwardOuter'/'Later' 'get_later'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -468,7 +472,7 @@
       stfld string 'MixedOuter'/'Nested'::'text'
       ret
     }
-    .method public hidebysig specialname instance string 'get_text'() cil managed
+    .method private hidebysig specialname instance string 'get_text'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -490,7 +494,7 @@
   .class nested public auto ansi sealed beforefieldinit 'Companion'
          extends [mscorlib]System.Object
   {
-    .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+    .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -504,12 +508,20 @@
       newobj instance void 'MixedOuter'/'Nested'::.ctor(string)
       ret
     }
+    .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+    {
+      .maxstack 1
+      ldarg.0
+      call instance void 'MixedOuter'/'Companion'::.ctor()
+      ret
+    }
   }
   .field public static initonly class 'MixedOuter'/'Companion' 'Companion'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'MixedOuter'/'Companion'::.ctor()
+    ldnull
+    newobj instance void 'MixedOuter'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
     stsfld class 'MixedOuter'/'Companion' 'MixedOuter'::'Companion'
     ret
   }

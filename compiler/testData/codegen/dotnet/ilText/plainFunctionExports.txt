@@ -1,4 +1,13 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'plainFunctionExports' {}
 .module 'main-plainFunctionExports.il'
 
@@ -144,6 +153,8 @@ IL_stringValueNotNull_0:
   }
   .method public hidebysig static string 'withDefaults$default'(string 'prefix', int32 'amount', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 2
     ldarg.2
     ldc.i4 1
@@ -203,6 +214,8 @@ IL_whenEnd_2:
   }
   .method public hidebysig static int32 'increasedBy$default'(int32 '<this>', int32 'delta', int32 '$mask0') cil managed
   {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .maxstack 2
     ldarg.2
     ldc.i4 1

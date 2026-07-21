@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'localClasses' {}
 .module 'main-localClasses.il'
 
@@ -45,7 +49,7 @@
     stfld !0 class 'GenericLocalOwner`1'<!0>::'seed'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_seed'() cil managed
+  .method private hidebysig specialname instance !0 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -152,14 +156,14 @@
     stfld int32 'localClassesKt$topLevelLocal$Local'::'initialized'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_add'() cil managed
+  .method private hidebysig specialname instance int32 'get_add'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld int32 'localClassesKt$topLevelLocal$Local'::'add'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_initialized'() cil managed
+  .method private hidebysig specialname instance int32 'get_initialized'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -249,7 +253,7 @@
     stfld int32 'localClassesKt$localInheritance$Base'::'value'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_value'() cil managed
+  .method private hidebysig specialname instance int32 'get_value'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -308,14 +312,14 @@
     stfld !0 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'own'
     ret
   }
-  .method public hidebysig specialname instance !1 'get_captured'() cil managed
+  .method private hidebysig specialname instance !1 'get_captured'() cil managed
   {
     .maxstack 1
     ldarg.0
     ldfld !1 class 'localClassesKt$genericFunctionLocal$Local`2'<!0, !1>::'captured'
     ret
   }
-  .method public hidebysig specialname instance !0 'get_own'() cil managed
+  .method private hidebysig specialname instance !0 'get_own'() cil managed
   {
     .maxstack 1
     ldarg.0

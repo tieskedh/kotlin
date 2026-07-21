@@ -4,15 +4,28 @@ import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import java.io.File
 
+data class DotNetModernCSharpToolchain(
+    val dotNetHost: File,
+    val compiler: File,
+    val referenceDirectory: File,
+)
+
 object DotNetIlAssembler {
     private const val PROVISION_SCRIPT = "compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
 
     fun assembleExecutable(ilFile: File, output: File, target: DotNetTarget, messageCollector: MessageCollector): Boolean {
         output.delete()
-        if (target == DotNetTarget.NET) runtimeConfigFile(output).delete()
+        if (target == DotNetTarget.NET10_0) runtimeConfigFile(output).delete()
         return when (target) {
-            DotNetTarget.NET_FRAMEWORK -> assembleForNetFramework(ilFile, output, dll = false, messageCollector)
-            DotNetTarget.NET -> assembleForNet(ilFile, output, writeExecutableConfig = true, messageCollector)
+            DotNetTarget.NET48 -> assembleForNetFramework(ilFile, output, dll = false, messageCollector)
+            DotNetTarget.NET10_0 -> assembleForNet(ilFile, output, writeExecutableConfig = true, messageCollector)
+            DotNetTarget.NETSTANDARD_2_0 -> {
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "Target profile 'netstandard2.0' cannot produce an executable."
+                )
+                false
+            }
         }
     }
 
@@ -21,8 +34,9 @@ object DotNetIlAssembler {
         output.delete()
         runtimeConfigFile(output).delete()
         return when (target) {
-            DotNetTarget.NET_FRAMEWORK -> assembleForNetFramework(ilFile, output, dll = true, messageCollector)
-            DotNetTarget.NET -> assembleForNet(ilFile, output, writeExecutableConfig = false, messageCollector)
+            DotNetTarget.NET48 -> assembleForNetFramework(ilFile, output, dll = true, messageCollector)
+            DotNetTarget.NETSTANDARD_2_0 -> assemblePortableLibrary(ilFile, output, messageCollector)
+            DotNetTarget.NET10_0 -> assembleForNet(ilFile, output, writeExecutableConfig = false, messageCollector)
         }
     }
 
@@ -44,7 +58,7 @@ object DotNetIlAssembler {
             )
             return false
         }
-        return runIlasm(ilasm, ilFile, output, dll = true, messageCollector)
+        return runIlasm(ilasm, ilFile, output, dll = true, deterministic = true, messageCollector)
     }
 
     private fun assembleForNetFramework(
@@ -61,7 +75,7 @@ object DotNetIlAssembler {
             )
             return false
         }
-        return runIlasm(ilasm, ilFile, output, dll, messageCollector)
+        return runIlasm(ilasm, ilFile, output, dll, deterministic = true, messageCollector)
     }
 
     private fun assembleForNet(
@@ -74,29 +88,38 @@ object DotNetIlAssembler {
         if (ilasm == null) {
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
-                "Cannot assemble ${output.path}: no modern .NET ilasm was found for -Xdotnet-target=net. " +
+                "Cannot assemble ${output.path}: no modern .NET ilasm was found for -Xdotnet-target=net10.0. " +
                         "Provision the toolchain with $PROVISION_SCRIPT, " +
                         "or set KOTLIN_DOTNET_ILASM to an ilasm.exe / KOTLIN_DOTNET_ROOT to a toolchain root."
             )
             return false
         }
-        if (!runIlasm(ilasm, ilFile, output, dll = true, messageCollector)) return false
+        if (!runIlasm(ilasm, ilFile, output, dll = true, deterministic = true, messageCollector)) return false
         if (writeExecutableConfig) writeRuntimeConfig(output)
         return true
     }
 
-    private fun runIlasm(ilasm: File, ilFile: File, output: File, dll: Boolean, messageCollector: MessageCollector): Boolean {
+    private fun runIlasm(
+        ilasm: File,
+        ilFile: File,
+        output: File,
+        dll: Boolean,
+        deterministic: Boolean,
+        messageCollector: MessageCollector,
+    ): Boolean {
         output.parentFile?.mkdirs()
         // The legacy flag spelling is understood by both the .NET Framework ilasm and the modern
         // CoreCLR ilasm (probed on 10.0.9), so a single invocation shape covers both targets.
-        val process = ProcessBuilder(
-            ilasm.absolutePath,
-            "/nologo",
-            "/quiet",
-            if (dll) "/dll" else "/exe",
-            "/output:${output.absolutePath}",
-            ilFile.absolutePath,
-        ).redirectErrorStream(true).start()
+        val arguments = buildList {
+            add(ilasm.absolutePath)
+            add("/nologo")
+            add("/quiet")
+            if (deterministic) add("/det")
+            add(if (dll) "/dll" else "/exe")
+            add("/output:${output.absolutePath}")
+            add(ilFile.absolutePath)
+        }
+        val process = ProcessBuilder(arguments).redirectErrorStream(true).start()
         val outputText = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
         if (exitCode != 0) {
@@ -177,6 +200,61 @@ object DotNetIlAssembler {
     }
 
     /**
+     * .NET Framework C# compiler discovery for cross-language ABI tests. This is intentionally
+     * separate from ILAsm discovery: producing Kotlin IL must not acquire a Roslyn dependency,
+     * while the interop test lane must compile an ordinary foreign consumer rather than infer
+     * C# accessibility from IL text alone.
+     */
+    fun findFrameworkCSharpCompiler(): File? {
+        System.getenv("CSC")?.let { path ->
+            File(path).takeIf(File::isFile)?.let { return it }
+        }
+
+        System.getenv("PATH")
+            ?.split(File.pathSeparatorChar)
+            ?.asSequence()
+            ?.map { directory -> File(directory, "csc.exe") }
+            ?.firstOrNull(File::isFile)
+            ?.let { return it }
+
+        return listOf(
+            File("C:/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe"),
+            File("C:/Windows/Microsoft.NET/Framework/v4.0.30319/csc.exe"),
+        ).firstOrNull(File::isFile)
+    }
+
+    /**
+     * Finds the Roslyn compiler and net10 reference pack installed by the developer toolchain.
+     * This remains test-only infrastructure: Kotlin IL production has no C# compiler dependency.
+     */
+    fun findModernCSharpCompiler(): DotNetModernCSharpToolchain? {
+        val dotNetRoots = buildList {
+            modernToolchainRoots().mapTo(this) { root -> root.resolve("dotnet") }
+            findModernDotNetHost()?.parentFile?.let(::add)
+        }.distinctBy { root -> root.absolutePath.lowercase() }
+
+        for (root in dotNetRoots) {
+            val dotNetHost = listOf(root.resolve("dotnet.exe"), root.resolve("dotnet"))
+                .firstOrNull(File::isFile)
+                ?: continue
+            val sdkDirectory = newestVersionedDirectory(root.resolve("sdk")) { directory ->
+                directory.resolve("Roslyn/bincore/csc.dll").isFile
+            } ?: continue
+            val referencePackDirectory = newestVersionedDirectory(
+                root.resolve("packs/Microsoft.NETCore.App.Ref")
+            ) { directory ->
+                directory.resolve("ref/net10.0").isDirectory
+            } ?: continue
+            return DotNetModernCSharpToolchain(
+                dotNetHost = dotNetHost,
+                compiler = sdkDirectory.resolve("Roslyn/bincore/csc.dll"),
+                referenceDirectory = referencePackDirectory.resolve("ref/net10.0"),
+            )
+        }
+        return null
+    }
+
+    /**
      * Modern (CoreCLR) ilasm discovery, following the contract in `compiler/ir/backend.dotnet/AGENTS.md`:
      * `KOTLIN_DOTNET_ILASM` (direct path), then `KOTLIN_DOTNET_ROOT/ilasm/`, then the durable
      * per-user toolchain provisioned by [PROVISION_SCRIPT]. A system-wide .NET SDK/runtime install
@@ -217,6 +295,17 @@ object DotNetIlAssembler {
 
         return File("C:/Program Files/dotnet/dotnet.exe").takeIf(File::isFile)
     }
+
+    private fun newestVersionedDirectory(parent: File, accepts: (File) -> Boolean): File? =
+        parent.listFiles()
+            ?.filter { directory -> directory.isDirectory && accepts(directory) }
+            ?.maxWithOrNull(
+                compareBy<File>({ it.versionComponent(0) }, { it.versionComponent(1) },
+                    { it.versionComponent(2) }, { it.versionComponent(3) })
+            )
+
+    private fun File.versionComponent(index: Int): Int =
+        name.substringBefore('-').split('.').getOrNull(index)?.toIntOrNull() ?: 0
 
     /** Candidate toolchain roots containing `ilasm/` and `dotnet/` subdirectories, best first. */
     private fun modernToolchainRoots(): List<File> = buildList {

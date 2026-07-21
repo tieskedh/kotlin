@@ -1,4 +1,8 @@
 .assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
 .assembly 'nestedSingletons' {}
 .module 'main-nestedSingletons.il'
 
@@ -12,7 +16,7 @@
            extends [mscorlib]System.Object
     {
       .field private int32 'captured'
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
         ldarg.0
@@ -29,6 +33,13 @@
         ldfld int32 'DirectOwner'/'Nested'/'Companion'::'captured'
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'DirectOwner'/'Nested'/'Companion'::.ctor()
+        ret
+      }
       .property instance int32 'captured'()
       {
         .get instance int32 'DirectOwner'/'Nested'/'Companion'::'get_captured'()
@@ -38,7 +49,8 @@
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'DirectOwner'/'Nested'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'DirectOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
       ret
     }
@@ -64,7 +76,7 @@
   .class nested private auto ansi sealed 'Hidden'
          extends [mscorlib]System.Object
   {
-    .field public static initonly class 'ObjectOwner'/'Hidden' 'INSTANCE'
+    .field private static initonly class 'ObjectOwner'/'Hidden' 'INSTANCE'
     .field private int32 'captured'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
@@ -90,6 +102,12 @@
       ldfld int32 'ObjectOwner'/'Hidden'::'captured'
       ret
     }
+    .method assembly hidebysig static class 'ObjectOwner'/'Hidden' 'access$<get-INSTANCE>$p'() cil managed
+    {
+      .maxstack 1
+      ldsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
+      ret
+    }
     .property instance int32 'captured'()
     {
       .get instance int32 'ObjectOwner'/'Hidden'::'get_captured'()
@@ -105,7 +123,7 @@
   .method public hidebysig instance int32 'hiddenValue'() cil managed
   {
     .maxstack 1
-    ldsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
+    call class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'access$<get-INSTANCE>$p'()
     call instance int32 'ObjectOwner'/'Hidden'::'get_captured'()
     ret
   }
@@ -123,7 +141,7 @@
              extends [mscorlib]System.Object
       {
         .field private int32 'captured'
-        .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+        .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
         {
           .maxstack 2
           ldarg.0
@@ -140,6 +158,13 @@
           ldfld int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'captured'
           ret
         }
+        .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+        {
+          .maxstack 1
+          ldarg.0
+          call instance void 'DeepOwner'/'Middle'/'Nested'/'Companion'::.ctor()
+          ret
+        }
         .property instance int32 'captured'()
         {
           .get instance int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'get_captured'()
@@ -149,7 +174,8 @@
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        newobj instance void 'DeepOwner'/'Middle'/'Nested'/'Companion'::.ctor()
+        ldnull
+        newobj instance void 'DeepOwner'/'Middle'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
         stsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
         ret
       }
@@ -187,7 +213,7 @@
            extends [mscorlib]System.Object
     {
       .field private int32 'captured'
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
         ldarg.0
@@ -204,6 +230,13 @@
         ldfld int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'captured'
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor()
+        ret
+      }
       .property instance int32 'captured'()
       {
         .get instance int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'get_captured'()
@@ -213,7 +246,8 @@
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
       ret
     }
@@ -389,7 +423,7 @@
            extends [mscorlib]System.Object
     {
       .field private int32 'captured'
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
         ldarg.0
@@ -406,6 +440,13 @@
         ldfld int32 'ModalOwner'/'OpenNested'/'Companion'::'captured'
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'ModalOwner'/'OpenNested'/'Companion'::.ctor()
+        ret
+      }
       .property instance int32 'captured'()
       {
         .get instance int32 'ModalOwner'/'OpenNested'/'Companion'::'get_captured'()
@@ -415,7 +456,8 @@
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'ModalOwner'/'OpenNested'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'ModalOwner'/'OpenNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
       ret
     }
@@ -434,7 +476,7 @@
            extends [mscorlib]System.Object
     {
       .field private int32 'captured'
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
         ldarg.0
@@ -451,6 +493,13 @@
         ldfld int32 'ModalOwner'/'AbstractNested'/'Companion'::'captured'
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor()
+        ret
+      }
       .property instance int32 'captured'()
       {
         .get instance int32 'ModalOwner'/'AbstractNested'/'Companion'::'get_captured'()
@@ -460,7 +509,8 @@
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
       ret
     }
@@ -489,14 +539,14 @@
     .class nested public auto ansi sealed beforefieldinit 'Companion'
            extends [mscorlib]System.Object
     {
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 1
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ret
       }
-      .method assembly hidebysig instance int32 'double'(int32 'value') cil managed
+      .method private hidebysig instance int32 'double'(int32 'value') cil managed
       {
         .maxstack 2
         ldarg.1
@@ -511,13 +561,29 @@
         call instance int32 'AccessOwner'/'Nested'::'get_seed'()
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'AccessOwner'/'Nested'/'Companion'::.ctor()
+        ret
+      }
+      .method assembly hidebysig static int32 'access$double'(class 'AccessOwner'/'Nested'/'Companion' '$this', int32 'value') cil managed
+      {
+        .maxstack 2
+        ldarg.0
+        ldarg.1
+        call instance int32 'AccessOwner'/'Nested'/'Companion'::'double'(int32)
+        ret
+      }
     }
     .field public static initonly class 'AccessOwner'/'Nested'/'Companion' 'Companion'
     .field private int32 'seed'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'AccessOwner'/'Nested'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'AccessOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
       ret
     }
@@ -531,7 +597,7 @@
       stfld int32 'AccessOwner'/'Nested'::'seed'
       ret
     }
-    .method public hidebysig specialname instance int32 'get_seed'() cil managed
+    .method private hidebysig specialname instance int32 'get_seed'() cil managed
     {
       .maxstack 1
       ldarg.0
@@ -544,7 +610,7 @@
       ldsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
       ldarg.0
       call instance int32 'AccessOwner'/'Nested'::'get_seed'()
-      call instance int32 'AccessOwner'/'Nested'/'Companion'::'double'(int32)
+      call int32 'AccessOwner'/'Nested'/'Companion'::'access$double'(class 'AccessOwner'/'Nested'/'Companion', int32)
       ret
     }
     .property instance int32 'seed'()
@@ -569,7 +635,7 @@
     .class nested public auto ansi sealed beforefieldinit 'Companion'
            extends [mscorlib]System.Object
     {
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 1
         ldarg.0
@@ -583,12 +649,20 @@
         newobj instance void 'ForwardOwner'/'Later'::.ctor(int32)
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor()
+        ret
+      }
     }
     .field public static initonly class 'ForwardOwner'/'Factory'/'Companion' 'Companion'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
       ret
     }
@@ -644,7 +718,7 @@
            extends [mscorlib]System.Object
     {
       .field private int32 'captured'
-      .method assembly hidebysig specialname rtspecialname instance void .ctor() cil managed
+      .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
         ldarg.0
@@ -661,6 +735,13 @@
         ldfld int32 'HierarchyOwner'/'Base'/'Companion'::'captured'
         ret
       }
+      .method assembly hidebysig specialname rtspecialname instance void .ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker' '$constructor_marker') cil managed
+      {
+        .maxstack 1
+        ldarg.0
+        call instance void 'HierarchyOwner'/'Base'/'Companion'::.ctor()
+        ret
+      }
       .property instance int32 'captured'()
       {
         .get instance int32 'HierarchyOwner'/'Base'/'Companion'::'get_captured'()
@@ -670,7 +751,8 @@
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'HierarchyOwner'/'Base'/'Companion'::.ctor()
+      ldnull
+      newobj instance void 'HierarchyOwner'/'Base'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
       stsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
       ret
     }
