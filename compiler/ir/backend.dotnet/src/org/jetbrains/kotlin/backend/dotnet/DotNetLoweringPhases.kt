@@ -27,6 +27,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationPopupLowe
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
@@ -120,7 +121,15 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // the static-initializer sweep moves them into their owning classes' `<clinit>` functions.
     // This matches the JVM shape: singleton caching precedes StaticInitializersLowering.
     ::DotNetObjectClassLowering,
+    // Cache non-capturing callable/reference classes before private-access repair: these caches
+    // are singleton fields too, and a callable class nested under its lexical owner is CLR-private.
     ::DotNetStaticCallableReferenceLowering,
+    // CLR nesting permits nested→enclosing private access but not the reverse. Keep companion
+    // declarations and private nested-object singleton fields private, then redirect CLR-illegal
+    // enclosing→nested calls/reads through assembly-visible common-shaped synthetic accessors.
+    // This includes the singleton constructor call and field reads introduced by both singleton
+    // lowerings immediately above.
+    ::DotNetPrivateNestedAccessLowering,
     // Top-level property initializers move into the synthetic per-file `<clinit>` (and static
     // class fields — object INSTANCE and companion fields at any supported nesting depth — into
     // the owning class's `<clinit>`) before the loop/concat rewrites for the same reason the

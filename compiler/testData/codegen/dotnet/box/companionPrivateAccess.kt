@@ -1,13 +1,11 @@
 // The companion visibility rule end-to-end: a Kotlin-private companion member used from
 // enclosing-class code must work at runtime — the CLR grants NO enclosing->nested private access
-// (objprobe_s7b), so such members are emitted with IL 'assembly' visibility (objprobe_s7c) — and
-// the reverse direction needs nothing: companion code reaching a Kotlin-private member of the
-// enclosing class (here C's private constructor, newobj'd from the companion factory) relies on
-// the nested->enclosing private access the CLR does grant (objprobe_s7a). The rule is uniform
-// over member kinds, so the enclosing class exercises every slice across the boundary: the
-// private METHOD stamp() (via stamped()), and the private PROPERTY stamps through both of its
-// 'assembly' accessors — readStamps() calls the getter, resetStamps() the setter. Emitting the
-// accessors as IL 'private' would throw MethodAccessException on those calls.
+// (objprobe_s7b). Source declarations nevertheless remain physically private; the backend routes
+// only the illegal boundary calls through assembly-scoped compiler-ABI accessors. The reverse
+// direction needs nothing: companion code reaching a Kotlin-private member of the enclosing
+// class (here C's private constructor, newobj'd from the companion factory) relies on the
+// nested->enclosing private access the CLR does grant (objprobe_s7a). Exercise every member kind:
+// the private METHOD stamp() (via stamped()), and both accessors of the private PROPERTY stamps.
 
 class C private constructor(val tag: Int) {
     fun stamped(): Int = stamp()
