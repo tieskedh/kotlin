@@ -20,7 +20,7 @@
     stfld int32 'test.genericarrays.Base'::'seed'
     ret
   }
-  .method public hidebysig specialname instance int32 'get_seed'() cil managed
+  .method private hidebysig specialname instance int32 'get_seed'() cil managed
   {
     .maxstack 1
     ldarg.0
@@ -233,7 +233,7 @@
   {
     .maxstack 3
     .locals init (
-      [0] string[] '<arrayOf>',
+      [0] string[] '<arrayOfStorage>',
       [1] string '<arrayElement>',
       [2] string '<try>',
       [3] class [mscorlib]System.Exception 'e'
@@ -252,7 +252,14 @@
       stloc.2
       leave IL_tryEnd_0
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.3
       ldstr "fallback"
       stloc.2
@@ -272,7 +279,7 @@ IL_tryEnd_0:
   {
     .maxstack 3
     .locals init (
-      [0] string[] '<arrayOf>',
+      [0] string[] '<arrayOfStorage>',
       [1] string '<arrayElement>'
     )
     ldc.i4 2
@@ -319,7 +326,7 @@ IL_arraySizeNonNegative_0:
   {
     .maxstack 3
     .locals init (
-      [0] class 'test.genericarrays.Base'[] '<arrayOf>',
+      [0] class 'test.genericarrays.Base'[] '<arrayOfStorage>',
       [1] class 'test.genericarrays.Base' '<arrayElement>'
     )
     ldc.i4 2
@@ -346,7 +353,7 @@ IL_arraySizeNonNegative_0:
   {
     .maxstack 3
     .locals init (
-      [0] class 'test.genericarrays.Box`1'<string>[] '<arrayOf>',
+      [0] class 'test.genericarrays.Box`1'<string>[] '<arrayOfStorage>',
       [1] class 'test.genericarrays.Box`1'<string> '<arrayElement>'
     )
     ldc.i4 1
@@ -366,7 +373,7 @@ IL_arraySizeNonNegative_0:
   {
     .maxstack 3
     .locals init (
-      [0] object[] '<arrayOf>',
+      [0] object[] '<arrayOfStorage>',
       [1] object '<arrayElement>'
     )
     ldc.i4 2
@@ -404,7 +411,14 @@ IL_arraySizeNonNegative_0:
       stloc.1
       leave IL_tryEnd_0
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.2
       ldc.i4 1
       stloc.1
@@ -437,7 +451,14 @@ IL_tryEnd_0:
       stloc.1
       leave IL_tryEnd_0
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.2
       ldc.i4 1
       stloc.1
@@ -451,7 +472,14 @@ IL_tryEnd_0:
       stloc 4
       leave IL_tryEnd_1
     }
-    catch [mscorlib]System.Exception {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 2
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc 5
       ldstr "fallback"
       stloc 4
@@ -542,7 +570,7 @@ IL_whileEnd_1:
     .maxstack 3
     .locals init (
       [0] string[] 'values',
-      [1] class 'test.genericarrays.Derived'[] '<arrayOf>',
+      [1] class 'test.genericarrays.Derived'[] '<arrayOfStorage>',
       [2] class 'test.genericarrays.Derived' '<arrayElement>',
       [3] class 'test.genericarrays.ArrayBox`1'<string> 'holder'
     )

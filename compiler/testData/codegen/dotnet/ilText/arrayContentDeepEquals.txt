@@ -38,12 +38,12 @@
     .entrypoint
     .maxstack 4
     .locals init (
-      [0] object[] '<arrayOf>',
-      [1] int32[] '<arrayOf>@1',
+      [0] object[] '<arrayOfStorage>',
+      [1] int32[] '<arrayOfStorage>@1',
       [2] int32 '<arrayElement>',
       [3] object '<arrayElement>@3',
-      [4] object[] '<arrayOf>@4',
-      [5] int32[] '<arrayOf>@5',
+      [4] object[] '<arrayOfStorage>@4',
+      [5] int32[] '<arrayOfStorage>@5',
       [6] int32 '<arrayElement>@6',
       [7] object '<arrayElement>@7'
     )
@@ -58,8 +58,9 @@
     ldloc.1
     ldc.i4 0
     ldloc.2
-    stelem.i4
+    stelem int32
     ldloc.1
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.3
     ldloc.0
     ldc.i4 0
@@ -77,8 +78,9 @@
     ldloc 5
     ldc.i4 0
     ldloc 6
-    stelem.i4
+    stelem int32
     ldloc 5
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc 7
     ldloc 4
     ldc.i4 0

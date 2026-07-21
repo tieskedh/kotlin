@@ -35,39 +35,41 @@
 .class public abstract sealed auto ansi beforefieldinit 'arrayCopyingKt'
        extends [mscorlib]System.Object
 {
-  .method public hidebysig static int32[] 'copyInts'(int32[] 'values') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'copyInts'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 5
     .locals init (
-      [0] int32[] '<copySource>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<copySource>',
       [1] int32 '<copySize>',
-      [2] int32[] '<copyDestination>'
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' '<copyDestination>'
     )
     ldarg.0
     stloc.0
     ldloc.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc.1
     ldloc.1
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.2
     ldloc.0
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldc.i4.0
     ldloc.2
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldc.i4.0
     ldloc.1
     call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
     ldloc.2
     ret
   }
-  .method public hidebysig static int32[] 'resizeInts'(int32[] 'values', int32 'size') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'resizeInts'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values', int32 'size') cil managed
   {
     .maxstack 6
     .locals init (
-      [0] int32[] '<copySource>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<copySource>',
       [1] int32 '<copySize>',
-      [2] int32[] '<copyDestination>'
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' '<copyDestination>'
     )
     ldarg.0
     stloc.0
@@ -83,14 +85,16 @@
     throw
 IL_arraySizeNonNegative_0:
     newarr int32
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
     stloc.2
     ldloc.0
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldc.i4.0
     ldloc.2
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldc.i4.0
     ldloc.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     ldloc.1
     call int32 [mscorlib]System.Math::Min(int32, int32)
     call void [mscorlib]System.Array::Copy(class [mscorlib]System.Array, int32, class [mscorlib]System.Array, int32, int32)
@@ -185,12 +189,12 @@ IL_arraySizeNonNegative_0:
     ldloc.2
     ret
   }
-  .method public hidebysig static int32[] 'copyIntsInto'(int32[] 'source', int32[] 'destination', int32 'destinationOffset', int32 'startIndex', int32 'endIndex') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'copyIntsInto'(class [Kotlin.Runtime]'Kotlin.IntArray' 'source', class [Kotlin.Runtime]'Kotlin.IntArray' 'destination', int32 'destinationOffset', int32 'startIndex', int32 'endIndex') cil managed
   {
     .maxstack 5
     .locals init (
-      [0] int32[] '<copySource>',
-      [1] int32[] '<copyDestination>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<copySource>',
+      [1] class [Kotlin.Runtime]'Kotlin.IntArray' '<copyDestination>',
       [2] int32 '<copyDestinationOffset>',
       [3] int32 '<copyStartIndex>',
       [4] int32 '<copyEndIndex>'
@@ -206,7 +210,9 @@ IL_arraySizeNonNegative_0:
     ldarg 4
     stloc 4
     ldloc.0
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldloc.1
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldloc.2
     ldloc.3
     ldloc 4
@@ -214,12 +220,12 @@ IL_arraySizeNonNegative_0:
     ldloc.1
     ret
   }
-  .method public hidebysig static int32[] 'copyIntsIntoDefaults'(int32[] 'source', int32[] 'destination') cil managed
+  .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'copyIntsIntoDefaults'(class [Kotlin.Runtime]'Kotlin.IntArray' 'source', class [Kotlin.Runtime]'Kotlin.IntArray' 'destination') cil managed
   {
     .maxstack 5
     .locals init (
-      [0] int32[] '<copySource>',
-      [1] int32[] '<copyDestination>',
+      [0] class [Kotlin.Runtime]'Kotlin.IntArray' '<copySource>',
+      [1] class [Kotlin.Runtime]'Kotlin.IntArray' '<copyDestination>',
       [2] int32 '<copyDestinationOffset>',
       [3] int32 '<copyStartIndex>',
       [4] int32 '<copyEndIndex>'
@@ -233,11 +239,12 @@ IL_arraySizeNonNegative_0:
     ldc.i4.0
     stloc.3
     ldloc.0
-    ldlen
-    conv.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'GetSize'()
     stloc 4
     ldloc.0
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldloc.1
+    call instance int32[] [Kotlin.Runtime]'Kotlin.IntArray'::'GetStorage'()
     ldloc.2
     ldloc.3
     ldloc 4
@@ -281,9 +288,9 @@ IL_arraySizeNonNegative_0:
     .entrypoint
     .maxstack 3
     .locals init (
-      [0] int32[] '<arrayOf>',
+      [0] int32[] '<arrayOfStorage>',
       [1] int32 '<arrayElement>',
-      [2] int32[] '<arrayGet>',
+      [2] class [Kotlin.Runtime]'Kotlin.IntArray' '<arrayGet>',
       [3] int32 '<arrayIndex>'
     )
     ldc.i4 2
@@ -294,21 +301,22 @@ IL_arraySizeNonNegative_0:
     ldloc.0
     ldc.i4 0
     ldloc.1
-    stelem.i4
+    stelem int32
     ldc.i4 2
     stloc.1
     ldloc.0
     ldc.i4 1
     ldloc.1
-    stelem.i4
+    stelem int32
     ldloc.0
-    call int32[] 'arrayCopyingKt'::'copyInts'(int32[])
+    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+    call class [Kotlin.Runtime]'Kotlin.IntArray' 'arrayCopyingKt'::'copyInts'(class [Kotlin.Runtime]'Kotlin.IntArray')
     stloc.2
     ldc.i4 1
     stloc.3
     ldloc.2
     ldloc.3
-    ldelem.i4
+    call instance int32 [Kotlin.Runtime]'Kotlin.IntArray'::'Get'(int32)
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
