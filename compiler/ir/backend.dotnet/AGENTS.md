@@ -7,6 +7,26 @@ validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners gen
 CLI tests in `compiler/testData/cli/dotnet/`. Box tests compile with target `net` to a dll and
 execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below).
 
+## Architectural review and work ordering
+
+- `docs/review/README.md` indexes the review evidence and the current way forward. Read it before
+  adding an ABI-bearing feature, runtime type, interface member/view, exception mapping, public CLR
+  name, or cross-module binding.
+- `docs/review-2026-07-17.md` is a snapshot review of commit `8dd89907d`, not normative design law.
+  Draft and accepted ADRs own decisions; `docs/review/way-forward.md` owns current sequencing and
+  release gates. When they disagree, reverify the code and amend the relevant ADR rather than
+  silently choosing a review conclusion.
+- Do not describe the current runtime or physical declaration schema as stable ABI 1. No external
+  ABI publication is allowed until the way-forward Gate B requirements are satisfied.
+- Nothing has shipped. Until an explicit freeze is recorded, break current prototype binaries,
+  names, metadata, runtime types, and artifact layouts when architecture requires it. Move all
+  producer/consumer/runtime pieces together, bump the prototype schema, and reject stale artifacts;
+  do not build compatibility shims for an unpublished ABI.
+- `net48`, `netstandard2.0`, and `net10.0` are required profiles. `netstandard2.0` is library-only;
+  the other two produce applications and libraries. Select the profile before target lowerings and
+  emit profile-specific code where CLR capabilities differ while preserving common Kotlin
+  semantics.
+
 ## Design rules
 
 - Before implementing DotNet backend behavior, inspect how the mature JVM/JS/WASM/Native targets
@@ -19,10 +39,16 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   is not a valid reason to skip the registry shape; add the registry entry now and let unsupported
   cases fail explicitly.
 - IL codegen fails on unsupported IR (`dotNetUnsupported()`) instead of emitting fallback IL such as
-  empty strings or zero values. `DotNetIlEmitter` skips uncompilable functions to a fixpoint
-  (callers of skipped functions are skipped too) and errors only when the entry point is affected.
+  empty strings or zero values. The POC emitter currently skips uncompilable functions to a
+  fixpoint (callers of skipped functions are skipped too). This is developer diagnostics, not a
+  library-publication model: any eviction must make library and stdlib production fail, and the
+  endpoint is a located FIR diagnostic before backend codegen.
 
 ## Established decisions
+
+The bullets below also record landed prototype behavior. Where an accepted ADR says that behavior
+must be replaced, the ADR is authoritative even before implementation catches up; do not treat the
+landed shape as a compatibility constraint.
 
 - IL codegen split: `DotNetIlEmitter` (module orchestration), `DotNetIlClassCodegen` (class shell,
   method dispatch), `DotNetIlMethodCodegen` (bodies/statements), `DotNetIlExpressionCodegen`
@@ -71,6 +97,33 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `Kotlin.Runtime.Internal.DefaultConstructorMarker`, whose constructor is private and whose only
   emitted value is null. This follows the JVM's collision-marker boundary while keeping the type
   out of Kotlin-facing namespaces; it is a compiler/runtime ABI type, not a source API.
+  Private-constructor synthetic accessors use the distinct public-metadata, sealed
+  `Kotlin.Runtime.Internal.SyntheticConstructorMarker`, also private-constructed and null-only.
+  Keeping the protocols physically distinct prevents a default-argument stub and a private-access
+  bridge with otherwise equal parameter lists from acquiring the same CLR signature.
+  CLR-public declarations that exist only for separately compiled Kotlin code are identified by
+  `Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute` and hidden from ordinary completion with
+  `EditorBrowsable(Never)`. The marker itself and compiler-helper types carry the same completion
+  policy. This marker was the first runtime-surface-level-2 addition; public Kotlin declarations
+  and explicit C# exports do not receive it. The attribute's physical scope is profile-owned:
+  `[netstandard]` for portable libraries, `[System]` with the Framework 4.0 identity for `net48`,
+  and `[System.Runtime]` with the .NET 10 contract identity for `net10.0`. Neither runtime profile
+  defines `System.ComponentModel.EditorBrowsableAttribute` in its selected core reference. A user
+  assembly emits the supplementary AssemblyRef only when its body carries the attribute;
+  `Kotlin.Runtime` always emits it because the marker and compiler-helper types are annotated.
+  Framework reflection pins the MemberRef as well as the visibility flags, and modern execution
+  pins resolution through the .NET contract facade.
+- Internal/friend/compiler ABI (decision:
+  `docs/decisions/draft-adr-friend-assemblies-and-compiler-abi.md`): ordinary Kotlin `internal`
+  declarations are genuine CLR assembly-internal declarations. A friend relationship is
+  producer-authorized and consumer-declared: the producer emits `InternalsVisibleTo`, schema 4
+  persists the structured unsigned/full-public-key identity, and the consumer supplies the bound
+  KLIB as a friend dependency. The frontend validates producer authority for the actual output
+  assembly before FIR grants source access. `@PublishedApi internal` declarations are instead
+  CLR-public compiler ABI with `KotlinCompilerAbiAttribute` and `EditorBrowsable(Never)` while
+  remaining internal in Kotlin metadata. Build-tool association must eventually wire both halves;
+  the provisional CLI switches are not the public model. Unsigned names are not a security
+  boundary, and signed friends require the full public key rather than a token.
   The runtime also owns `Kotlin.RuntimeException : System.Exception` as the dormant physical root
   for exact Kotlin-only exception identities and
   `Kotlin.NoWhenBranchMatchedException : Kotlin.RuntimeException` as its first child. The first
@@ -102,36 +155,42 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   STDLIB ownership scopes. A separate consumer can now resolve Kotlin declarations from a metadata
   `Kotlin.Stdlib.klib` and call implementations in its bound sibling `Kotlin.Stdlib.dll`, with no
   injected implementation source. The KLIB manifest binds the complete unsigned assembly
-  identity, file, and `netstandard2.0` library TFM; an arbitrary metadata KLIB never becomes a CLR
+  identity, file, and selected library TFM; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
   inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
-  bound portable KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
+  bound profile-specific KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
   class-file metadata is not the applicable lifecycle model because .NET currently has two
   physical companion artifacts. Every assembled executable still receives both platform dlls;
   same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
-  must produce byte-identical packed KLIB and compiler-owned IL for each assembler path; ILAsm-produced PE
-  bytes are not part of that gate because the external assembler gives identical IL a fresh module
-  identity. Once a distribution-owned default pair is populated in Kotlin home, same-run production
+  must produce byte-identical packed KLIB, compiler-owned IL, and deterministic PE for each profile;
+  variants are not required to be byte-identical to one another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
-  Ordinary compilation prefers the single complete pair at
-  `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}` and rejects a half-installed
-  pair; absence still falls back to injected sources. Repository production is deliberately
+  Ordinary compilation prefers the complete selected-profile pair, then
+  `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}` for either executable profile,
+  and rejects a half-installed candidate; absence still falls back to injected sources. Repository production is deliberately
   opt-in: `:kotlin-compiler:produceDotNetStdlib` runs the compiler from the assembled distribution
-  and writes the bound pair plus diagnostic IL under `prepare/compiler/build/dotnet-stdlib`, while
-  `:kotlin-compiler:installDotNetStdlib` installs only the KLIB/DLL pair into that Kotlin-home
-  location. Neither task is a dependency of ordinary `dist`/`distKotlinc`, so a normal build does
-  not acquire a modern-ILAsm requirement. Because `distKotlinc` is a whole-home `Sync`, a later
-  standalone invocation intentionally removes the optional pair; run the install task afterward
-  to restore it.
-  `Kotlin.Runtime` and `Kotlin.Stdlib` use an explicit netstandard2.0 core-library profile, exact
-  AssemblyRef and TargetFrameworkAttribute metadata, and no `mscorlib` MemberRefs. The complete
+  and writes all three bound variants plus diagnostic IL under `prepare/compiler/build/dotnet-stdlib/<profile>`, while
+  `:kotlin-compiler:installDotNetStdlib` installs each KLIB/DLL pair into its Kotlin-home profile
+  directory. Neither task is a dependency of ordinary `dist`/`distKotlinc`, so a normal build does
+  not acquire either ILAsm requirement. Because `distKotlinc` is a whole-home `Sync`, a later
+  standalone invocation intentionally removes the optional variants; run the install task afterward
+  to restore them.
+  The netstandard physical declaration index is an executable ABI floor for both runtime stdlib
+  variants. `DotNetLibraryAbiCodec.portablePhysicalAbiDifferences` permits additional profile-owned
+  entries but reports every missing portable logical key or changed CLR owner/member binding in
+  deterministic key order. Integration production compares all three generated variants together
+  with the logical-identity scheme, physical-name grammar, and runtime-surface floor. This is the
+  structured KLIB/DLL binding audit; do not approximate it by diffing rendered IL text.
+  `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
+  TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
+  and no `mscorlib` MemberRefs. The complete
   profile was audited against the 2.0 reference assembly: 27 BCL types and 55 members, zero
   misses. Applications retain their executable profile. The POC
   `-Xdotnet-produce-library -d <directory>` mode now emits an ordinary source module as a bound
-  `<module>.klib`/`<module>.dll` pair under the same netstandard2.0 profile, with no entry point or
-  runtimeconfig. Its fixed library TFM is independent of `-Xdotnet-target` and modern ILAsm remains
-  only the portable PE writer. Explicit CLR exports are callable across the resulting assembly
+  `<module>.klib`/`<module>.dll` pair under the selected profile, with no entry point or
+  runtimeconfig. `netstandard2.0` uses the portable modern PE writer; the runtime profiles use
+  their corresponding assembler. Explicit CLR exports are callable across the resulting assembly
   edge. Kotlin cross-module calls now follow JS/Native's public `IdSignature` as their logical key;
   a versioned POC KLIB index adds only the CLR owner path, method name, and dispatch shape needed
   to bind that declaration to its sibling assembly. Signatures remain metadata-derived, arbitrary
@@ -517,33 +576,41 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   (`ldloc`/`stloc`).
 - `if`/`when` follows JVM/WASM `IrWhen` handling: evaluate conditions, `brfalse` to next branch,
   `br` to the end label after a matched branch.
-- Primitive-array model (probe series `arrprobe_s1`; JVM intrinsic-registry precedent and
-  backend.common `IndexedGetLoopHeader` loop precedent): the five element types already supported
-  as scalar values (`Int`, `Long`, `Double`, `Boolean`, `Char`) map their Kotlin primitive-array
-  classes to CLR zero-based vectors (`int32[]`, `int64[]`, `float64[]`, `bool[]`, `char[]`). Arrays
-  are reference-shaped: nullable and non-null array types share one IL representation, `ldnull`
-  is valid, `===`/null checks use `ceq`, and array `==` is the same identity `ceq` because
-  primitive arrays inherit identity-based `Any.equals` on JVM and `System.Array` does likewise
-  on CLR (`contentEquals` remains the separate structural operation). Widening to `Any`/`Any?`
-  is instruction-free. Vectors compose unchanged in parameters, returns, locals, fields, and
-  generic type arguments. The registry owns the builtin surface: unary size constructors emit a
-  guarded `newarr`; literal `intArrayOf`/`longArrayOf`/`doubleArrayOf`/`booleanArrayOf`/
-  `charArrayOf` allocate once, spill the vector, and initialize in source order through one
-  reused element temporary plus typed `stelem`; `size` is `ldlen; conv.i4`; `get`/`set` use the
-  exact typed instructions (`ldelem.i4`/`stelem.i4`,
-  `ldelem.i8`/`stelem.i8`, `ldelem.r8`/`stelem.r8`, `ldelem.u1`/`stelem.i1`,
-  `ldelem.u2`/`stelem.i2`). Both the modern and .NET Framework assemblers accept those exact
-  signature, field, local, and instruction spellings; CoreCLR and Framework both throw
-  `System.IndexOutOfRangeException` for a vector bounds failure, which is already the mapped
-  `IndexOutOfBoundsException`. Both instead throw `System.OverflowException` for a negative
-  `newarr` length; exposing that raw fault would wrongly make `catch (ArithmeticException)` catch
-  a Kotlin negative-array-size failure. Constructors therefore branch on a negative size and
-  throw compiler-owned `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException`. Common
-  Kotlin promises the RuntimeException parent but exposes no portable source class; JVM's exact
-  child is a Java platform type. The CLR child is consequently metadata-public for generated
-  consumers but absent from the fake stdlib and source mapping. It preserves Exception/Throwable,
-  the future exact RuntimeException edge, a null default message, and no arithmetic/argument/state
-  edge. `negativearray_s1` validates both ILAsm implementations and all four runtime pairings.
+- Primitive-array model (`docs/decisions/draft-adr-kotlin-primitive-array-wrappers.md`; original
+  probe series `arrprobe_s1`; JVM intrinsic-registry precedent and backend.common
+  `IndexedGetLoopHeader` loop precedent): the five element types already supported as scalar
+  values (`Int`, `Long`, `Double`, `Boolean`, `Char`) use Kotlin-owned sealed reference wrappers
+  (`Kotlin.IntArray`, and peers) around private CLR zero-based vector storage. Canonical Kotlin ABI
+  always names the wrapper, preserving the nominal, overload, reflection, and identity distinction
+  from `Array<Int>`, which naturally specializes to `int32[]` (and likewise for the other scalar
+  types). Nullable and non-null primitive arrays share the wrapper representation; `===`, null
+  checks, and identity-based `==` use `ceq`, while `contentEquals` and related content operations
+  explicitly consume the backing vector. Widening to `Any`/`Any?` preserves wrapper identity.
+  Explicit C# export facades alone project a primitive-array boundary to its natural CLR vector,
+  without copying; the canonical Kotlin declaration remains wrapper-typed. Each wrapper type owns
+  a `ConditionalWeakTable<vector, wrapper>` used only at exported boundaries. Inbound projection
+  retrieves or creates the stable live wrapper for a vector, and outbound projection registers the
+  canonical wrapper before returning storage. Thus duplicate arguments, later calls, and
+  wrapper-vector-wrapper round trips preserve `===` without permanently retaining dead arrays.
+  A monitor protects compound lookup/create/register operations on Framework and CoreCLR; ordinary
+  Kotlin construction bypasses the table. `arrayinternprobe_s1` assembles and executes the exact
+  generic CWT/monitor IL with Framework and modern ILAsm/runtimes. The runtime wrapper
+  constructor/access/storage methods are marked public compiler ABI rather than source API.
+  The registry owns the builtin surface: unary size constructors allocate a guarded vector and
+  wrap it; literal `intArrayOf`/`longArrayOf`/`doubleArrayOf`/`booleanArrayOf`/`charArrayOf`
+  initialize vector storage in source order and wrap once; `size`, `get`, and `set` call the typed
+  wrapper ABI. Both modern and .NET Framework assemblers accept the wrapper/vector signatures and
+  exact element instructions. CoreCLR and Framework both throw `System.IndexOutOfRangeException`
+  for a vector bounds failure, which is already the mapped `IndexOutOfBoundsException`. Both
+  instead throw `System.OverflowException` for a negative `newarr` length; exposing that raw fault
+  would wrongly make `catch (ArithmeticException)` catch a Kotlin negative-array-size failure.
+  Constructors therefore branch on a negative size and throw compiler-owned
+  `Kotlin.NegativeArraySizeException : Kotlin.RuntimeException`. Common Kotlin promises the
+  RuntimeException parent but exposes no portable source class; JVM's exact child is a Java
+  platform type. The CLR child is consequently metadata-public for generated consumers but absent
+  from the fake stdlib and source mapping. It preserves Exception/Throwable, the future exact
+  RuntimeException edge, a null default message, and no arithmetic/argument/state edge.
+  `negativearray_s1` validates both ILAsm implementations and all four runtime pairings.
   Direct `for (x in array)` iteration is lowered without iterator allocation: evaluate the array
   expression once into `indexedObject`, initialize `inductionVariable = 0`, cache immutable
   `last = indexedObject.size`, then `while (inductionVariable < last)` load
@@ -551,13 +618,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   before the body preserves `continue`, and the lowering retargets every `break`/`continue` from
   the removed iterator loop. Explicit escaping iterator values use the erased runtime iterator
   ABI described above. STAYS REJECTED, loudly: `ByteArray`/`ShortArray`/`FloatArray` (scalar
-  elements are unsupported), content APIs other than the shallow `contentEquals` slice below,
-  and unsigned arrays.
+  elements are unsupported), and unsigned arrays.
   The literal/get/set temporaries are mandatory for general expressions: CLR protected
   regions require an empty stack at entry, so an element/index/value containing `try` cannot be
   evaluated with vector/index operands left underneath it. Pins: `ilText/primitiveArrays.kt`,
   `ilText/primitiveArraysRejected.kt`; runtime: `box/primitiveArrays.kt`.
-- Generic-array model (probe series `genarrayprobe_s1`; JVM `IrIntrinsicMethods.arrayMethods`
+- Generic-array model (current POC; the primitive-substitution restriction is superseded by
+  `docs/decisions/draft-adr-kotlin-primitive-array-wrappers.md`; probe series `genarrayprobe_s1`;
+  JVM `IrIntrinsicMethods.arrayMethods`
   registry precedent plus the same backend.common indexed-loop shape as primitive arrays): an
   invariant Kotlin `Array<E>` maps structurally to a CLR zero-based vector when `E` is a supported
   reference-shaped type or an open `!n`/`!!n` parameter. Outer nullability is erased because the
@@ -565,9 +633,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   arrays are covariant; this follows the JVM precedent (Kotlin's type checker prevents source
   widening, while an invalid store supplied through an external covariant view fails with the
   runtime's store check). Both CoreCLR and Framework throw `ArrayTypeMismatchException` for that
-  probe shape. A concrete primitive or `Nullable<T>` element stays rejected: CLR would give
-  `Array<Int>` and `IntArray` the same `int32[]` ABI and make legal Kotlin overloads collide. An
-  OPEN `Array<T>` remains supported because its declaration is `!0[]`/`!!0[]`; CLR generic arity
+  probe shape. Concrete supported primitive elements are permitted: `Array<Int>` is `int32[]`
+  while `IntArray` is the nominal `Kotlin.IntArray` wrapper. Concrete nullable value elements such
+  as `Array<Int?>` remain rejected until their representation and boxing semantics are implemented.
+  An OPEN `Array<T>` remains supported because its declaration is `!0[]`/`!!0[]`; CLR generic arity
   and token identity keep the ABI distinct and reify a value-type instantiation safely.
   `genarrayprobe_s1` reflection confirms the open element in metadata, and both runtimes execute
   `newarr`, `ldelem`, and `stelem` with `!n`/`!!n` tokens for reference and value instantiations.
@@ -776,10 +845,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   masks. CLR constructor identity is still only the mapped parameter list, so the member pre-pass
   rejects a class whole when two original or generated constructors erase to one identity (for
   example `String` versus `String?`) instead of letting map insertion or ILAsm choose a survivor.
-  Interface-owned argument defaults use the JVM `DefaultImpls` ownership model described in the
-  interface section below. Their masked bodies live in a nested helper rather than on the
-  interface, so the source slot stays abstract and the Framework-compatible interface shape does
-  not change.
+  Interface-owned argument defaults use the profile-aware `DefaultImpls` ownership model described
+  in the interface section below. Mask decoding lives in a nested helper on every profile,
+  independently of whether the source slot is a portable abstract slot or a net10 DIM.
   A named nested data class follows the established JVM-static-nested CLR model unchanged. It
   captures no outer instance and owns only its own type parameters, so a non-generic data class
   inside `Outer<T>` remains the independently non-generic metadata type
@@ -1142,8 +1210,11 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   inheritance, no vtable lowering — the same argument as the class-model bullet): a top-level,
   named nested, or lifted local plain class may be `open` (drops `sealed` from the `.class` flags), `abstract`, or
   `sealed` (both emit ordinary CLR
-  `abstract`, never CLR `sealed`; Kotlin sealing remains frontend-enforced like the JVM's
-  historical sealed-class model), and may extend EXACTLY ONE base class when the supertype
+  `abstract`, never CLR `sealed`). A sealed class's source-protected constructor is emitted
+  `famandassem`: same-assembly Kotlin subclasses remain legal, while foreign C# subclasses cannot
+  construct the base. A source-private sealed constructor remains CLR private. This enforces the
+  class hierarchy at its only construction boundary without misusing CLR `sealed`, and is pinned
+  by Framework C# positive/negative compilation. Such a class may extend EXACTLY ONE base class when the supertype
   resolves to another recursively declared class of the compiled module. The gate checks only the
   structural shape; whether the base itself compiles is
   re-resolved from the live class map at the top of every render round, so a failing base
@@ -1228,12 +1299,14 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   `.class interface public abstract auto ansi` — no `extends` line, no `sealed`, no
   `beforefieldinit` (s1), or with the corresponding `nested public/private/assembly/family`
   accessibility prefix (`nestedifaceprobe_s1`–`_s3`). A `sealed interface` is deliberately
-  ACCEPTED and emitted as the
-  same plain interface. Like the sealed-class model, interface sealedness is pure
-  frontend-enforced metadata with no CLR counterpart needed (JVM precedent: the JVM backend
-  emits an ordinary interface too), and the exhaustive
-  `when` it enables is `is`-gated by the type-operator rejection anyway (pinned by
-  `ilText/interfaceEqualityWidening.kt`). Abstract members are
+  ACCEPTED and emitted as the same plain interface. Unlike a class, an interface has no
+  constructor boundary at which `famandassem` can enforce Kotlin sealing, and CLR metadata has no
+  permitted-implementor table. Kotlin compilation still enforces the sealed hierarchy, but C# or
+  other foreign CLR code can implement the interface; exhaustive Kotlin code must retain its
+  ordinary no-branch failure behavior for such a foreign value. This is a deliberate CLR
+  interoperability limitation, not a claim that the metadata is sealed (pinned initially by
+  `ilText/interfaceEqualityWidening.kt`; a foreign-implementor runtime test remains required).
+  Abstract members are
   `.method public hidebysig [specialname ]newslot abstract virtual instance ... cil managed`
   with an EMPTY `{ }` block (s1/s2; the emitter keeps its established specialname-first flag
   order — ilasm treats the flags as an unordered keyword set); abstract accessors are bound by
@@ -1333,14 +1406,17 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   runtime capture/order/dispatch, and an evicted-interface cascade are pinned by
   `ilText/interfaceDelegation.kt`, `box/interfaceDelegation.kt`, and
   `ilText/interfaceDelegationRejected.kt`.
-  INTERFACE ARGUMENT DEFAULTS follow the JVM's pre-DIM `DefaultImpls` split. Common lowering first
-  creates the ordinary masked dispatcher; `DotNetInterfaceDefaultArgumentsLowering` then moves
-  each real interface dispatcher into one public, compiler-reserved nested `<DefaultImpls>` class.
-  Its static `$default` method takes the interface receiver as its first ordinary parameter,
-  evaluates defaults and masks in source order, and calls the unchanged abstract interface slot
-  through `callvirt`, so the implementing override still owns dispatch. The helper is public CLR
-  metadata because separately compiled callers must eventually be able to reference it, but its
-  angle-bracket name is not a Kotlin source declaration or callable identity. A generic
+  INTERFACE ARGUMENT DEFAULTS use a producer-owned masked dispatcher in the compiler-reserved
+  nested `<DefaultImpls>` class. The static `$default` dispatcher takes the interface receiver as
+  its first ordinary parameter, evaluates defaults and masks in source order, and calls the
+  interface slot through `callvirt`, so the implementing override still owns dispatch on every
+  profile. Common Kotlin forbids omitted arguments in a super call
+  (`SUPER_CALL_WITH_DEFAULT_PARAMETERS`); .NET does not publish a second dispatcher for that
+  invalid construct, and lowering must not reinterpret escaped malformed IR as an ordinary virtual
+  call. `DotNetExpressionCheckers` registers the existing FIR checker through the metadata session
+  factory's real DotNet platform branch; the target must not impersonate JVM merely to inherit the
+  diagnostic. The helper is not a Kotlin source declaration or independent callable identity;
+  separately compiled consumers bind its physical name from structured ABI metadata. A generic
   interface's owner parameters become invariant generic METHOD parameters on every helper method
   (including copied constraints); the non-generic nested helper therefore captures no enclosing
   CLR construction. Calls derive those arguments from the receiver's instantiated interface view,
@@ -1349,24 +1425,48 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   share that path. `interfacedefaultprobe_s1` assembled and ran the generic nested-helper shape
   under modern 10.0.9 and Framework 4.8 ILAsm. Pins: `ilText/interfaceDefaultArguments.kt`,
   `box/interfaceDefaultArguments.kt`, `ilText/defaultArgumentsRejected.kt`, and
-  `ilText/interfaceDefaultBodyRejected.kt`.
+  `ilText/interfaceDefaultBodiesPortable.kt`.
   EVICTION: an evicted interface cascades whole-class to every
   implementing class and every sub-interface — the `implements` list is re-resolved from the
   LIVE class map at the top of every render round with chained reasons, the interface arm of
-  the base-class cascade (pinned by `ilText/interfaceEvicted.kt` and
-  `ilText/interfaceDefaultBodyRejected.kt`); evicting an implementer never affects the
-  interface. A rejected nested declaration removes only its metadata subtree and real dependents;
-  the interface parent and independent siblings survive. STAYS REJECTED, loudly,
-  whole-interface/whole-class: SOURCE interface members WITH executable bodies —
-  default methods and accessors with bodies (distinct from compiler-owned argument dispatchers;
-  modern CoreCLR supports DIM, s8/`dimprobe_s1`, but
-  Framework 4.8 ILAsm rejects the same body; lifting this would raise the backend's runtime
-  floor), private callable interface members, companions on generic interfaces,
-  `fun interface` (no SAM-conversion model),
+  the base-class cascade (pinned by `ilText/interfaceEvicted.kt`); evicting an implementer never
+  affects the interface. A rejected nested declaration removes only its metadata subtree and real
+  dependents; the interface parent and independent siblings survive.
+  PROFILE-AWARE INTERFACE DEFAULTS follow
+  `docs/decisions/adr-profile-aware-interface-default-implementations.md`. `net48` and
+  `netstandard2.0` emit abstract CLR slots, one marked public compiler-ABI
+  `<DefaultImpls>` body, and physically required hidden class MethodImpl forwarders.
+  `net10.0` emits one canonical DIM body and retains the same helper identity for portable
+  compatibility and exact calls. Qualified `super<I>.f()` always lowers to exactly `I`'s helper:
+  portable helpers own the moved body, while modern helpers use a plain nonvirtual `call` to
+  their owning DIM. Ordinary calls remain virtual. External helper identities, derived-interface
+  promotions, and hidden class MethodImpls are consumed from the structured physical ABI; never
+  infer them from target profile or generated names. A class inherits an existing MethodImpl for
+  the same selected default, but receives a resolver bridge when an ancestor-default MethodImpl
+  would mask a more-specific Kotlin choice.
+  GENERIC INTERFACE DEFAULTS preserve one logical member, one canonical semantic body, and one
+  stable helper ABI identity across erased, declared-variance, and exact CLR views. On portable
+  profiles the helper owns the body. On `net10.0` one strongly typed DIM owns it; the exact view
+  is the normal strongly typed C# surface, and less-precise views virtually adapt to that DIM.
+  Helpers select it nonvirtually. No view adapter, promotion, class bridge, or class forwarder owns
+  an independently lowered body. A concrete non-generic net10 interface override owns one complete
+  final canonical/declared/exact adapter bundle whose bodies dispatch virtually to its DIM.
+  Implementors inherit that bundle, including across assemblies: unpublished physical ABI schema 8
+  records each adapter as a structured `B` entry keyed by owner, inherited logical member, and
+  physical view. Never rediscover it from generated declarations, method names, or IL text.
+  A generic capability call resolves its canonical fallback name from the bound physical function
+  record before deriving a Kotlin-owned hash. Runtime and external split interfaces may retain
+  established CLR names such as `MoveNext`, `Current`, or `Next`; inventing a hashed fallback for
+  such a member produces valid-looking IL that fails lazily with `MissingMethodException`.
+  Owner-relative method constraints remain logical KLIB constraints
+  but are omitted from executable CLR views: CLR variant types reject them at load time and an
+  invariant exact-DIM constraint rejects valid widened Kotlin calls. Exact arguments/results remain
+  typed, all other representable constraints remain physical, and any future constrained C# facade
+  is an export adapter rather than a Kotlin dispatch slot.
+  STAYS REJECTED, loudly, whole-interface/whole-class: private callable interface members,
+  companions on generic interfaces, `fun interface` (no SAM-conversion model),
   interfaces imported from arbitrary CLR metadata without a bound Kotlin KLIB/physical-ABI index,
   and local/anonymous interfaces,
-  `super<I>.f()` (needs DIM and therefore exceeds the Framework 4.8 floor; rejected up front in
-  `emitCall`),
   explicit `as`/`as?` on non-generic interfaces and on foreign/reified CLR generic interface
   constructions (Kotlin-owned split generic interfaces instead cast only their canonical identity
   as described above), and interface members redeclaring `kotlin.Any` members (the System.Object
@@ -1529,15 +1629,18 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   companion `.ctor` `newobj`'d from the enclosing `.cctor` throws TypeInitializationException
   wrapping MethodAccessException, and a throwing `.cctor` permanently poisons the type
   (objprobe_s7b); an isolated enclosing→nested private field read throws FieldAccessException
-  (objprobe_s7c). Therefore every Kotlin-private member OF A COMPANION — the `.ctor` (private
-  from the frontend) and any private method/accessor — is emitted with IL `assembly` visibility,
-  uniformly (`.method assembly hidebysig specialname rtspecialname instance void .ctor()`
-  probe-verified working when `newobj`'d from the enclosing `.cctor`, objprobe_s7c); stated
-  deviation from the JVM backend, whose analogue is the synthetic `access$` bridges for
-  outer→companion-private access (pinned end-to-end by `box/companionPrivateAccess.kt`, both
-  directions and every member-kind slice — the private method and BOTH accessors of a private
-  property are called across the enclosing→nested boundary; the accessor
-  `.method assembly hidebysig specialname` spelling is golden-pinned by
+  (objprobe_s7c). Kotlin-private companion constructors, methods, and property accessors therefore
+  remain IL `private`; after object lowering, `DotNetPrivateNestedAccessLowering` uses the
+  common KLIB synthetic-accessor generator to redirect only calls that cross out of the
+  companion's CLR nesting subtree. The same phase redirects an enclosing read of a private nested
+  object's private `INSTANCE` field through a generated getter; this includes compiler-generated
+  callable/delegate singletons. The source field stays private. The generated `access$...` method,
+  field getter, or constructor overload is
+  narrowed from common-public to Kotlin `internal`, hence IL `assembly`. Constructor accessors
+  carry a final nullable `SyntheticConstructorMarker`, distinct from the default-argument marker.
+  This preserves source reflection and minimizes physical exposure while accommodating the CLR's
+  asymmetric nesting rule (pinned end-to-end by `box/companionPrivateAccess.kt`, both directions
+  and every member-kind slice; the exact private-source/assembly-bridge shape is pinned by
   `ilText/companionObject.kt`). `const val` in a companion is a `literal` field on the NESTED class (literal
   fields on a nested class probe-verified, objprobe_s9b), the same no-copy-to-enclosing
   deviation as objects. The enclosing type and its companion are separate `availableClasses`
@@ -1548,7 +1651,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   failure to the declaration that actually failed: a
   companion failure surfaces out of the enclosing type's render (the companion renders only
   recursively inside it), so the render fixpoint re-tags it with the companion
-  (`DotNetIlUnsupportedClassException`) before evicting. A separate invalid declaration nested
+  (`DotNetIlUnsupportedClassException`) before evicting. `box/nestedSingletons.kt` and
+  `box/propertyReferences.kt` execute the two singleton-field cases on CoreCLR; their IL goldens
+  pin the private field plus assembly bridge. A separate invalid declaration nested
   below an otherwise valid companion is not companion state and is therefore omitted as its own
   subtree while the companion and owner survive. Companion eviction is pinned in both
   phases: the member pre-pass by `ilText/companionMemberClash.kt`, the render fixpoint (a
@@ -1616,8 +1721,10 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   manifest binds the assembly name, version, neutral culture, null public-key token, file, and
   runtime target to the reserved artifact; the compiler then packages the sibling DLL for an
   executable consumer. This is not yet general physical-member metadata for arbitrary libraries.
-- Exceptions use the hybrid identity policy recorded in
-  `docs/decisions/draft-adr-hybrid-exception-identity.md` (probe series `exceptionabi_s1`).
+- Exceptions currently use the now-superseded hybrid implementation recorded in
+  `docs/decisions/draft-adr-hybrid-exception-identity.md` (probe series `exceptionabi_s1`). Replace
+  it with `docs/decisions/draft-adr-classified-clr-exception-model.md`; no compatibility bridge is
+  required.
   `IrThrow` and `IrTry` follow the JVM model and map 1:1 onto the platform's
   exception machinery with NO lowering (no WASM/JS TryCatchCanonicalization or
   MultipleCatchesLowering). Built-in exception classes are TYPE-MAPPED onto the CLR hierarchy
@@ -1948,8 +2055,9 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   Control ON, SAC makes a per-file cloud-reputation call the first time each unsigned dll is loaded
   and fails-closed on a negative verdict (`FileLoadException`, HRESULT `0x800711C7`, Code Integrity
   policy `VerifiedAndReputableDesktop`). Measured behavior (2026-07, SAC-enforced Win 11 host): the
-  SmartScreen verdict is derived from the assembly CONTENT, not just its hash. The modern ilasm's
-  output is non-deterministic (same `.il` assembles to a different hash every time), yet the exact
+  SmartScreen verdict is derived from the assembly CONTENT, not just its hash. The ordinary
+  executable/test modern-ilasm invocation is non-deterministic (same `.il` assembles to a
+  different hash every time; portable library publication separately uses `/det`), yet the exact
   IL of an affected test program reassembled under a fresh hash is blocked again, every time — the
   block is deterministic and effectively permanent per affected program on that machine, and
   re-running the suite does NOT clear it (an earlier "transient burst" theory is disproved).
@@ -1964,11 +2072,13 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   complete program is flagged, and the equally div-guard-heavy
   `intMinValueDivision` program passes.
 - `DotNetBoxRunner` retries a blocked load a few times with a short delay to absorb a genuinely
-  in-flight verdict, then aborts the test as SKIPPED (JUnit `TestAbortedException`) with a
+  in-flight verdict, then normally aborts the test as SKIPPED (JUnit `TestAbortedException`) with a
   diagnostic that names SAC (any other non-zero exit fails immediately). Rationale (user decision,
   2026-07): a host whose OS refuses to load the assembly cannot execute the test — the same
   environmental-inability contract as a missing toolchain — and the test still executes on hosts
-  without SAC. A block is never a silent pass, and never a test failure. Do NOT work around SAC by
+  without SAC. A block is never a silent pass. In a strict required-toolchain lane
+  (`KOTLIN_DOTNET_REQUIRE_TOOLCHAIN=1` or `true`) it is a test failure, so CI cannot report a green
+  semantic-execution gate which the host refused to execute. Do NOT work around SAC by
   perturbing the artifact's hash — and do NOT rewrite or restructure a test program's content to
   dodge the classifier's false positive; both are reputation bypasses and out of bounds. SAC has no
   per-file or per-directory exclusion mechanism (Defender exclusions do not apply to it) and can
@@ -1976,24 +2086,33 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   legitimate options are: run the gate on a host without Smart App Control, sign the test
   assemblies with a certificate SAC trusts, or have the user turn SAC off.
 - When the modern toolchain (ilasm + dotnet host, discovered per the contract below) is missing,
-  box tests SKIP via a JUnit 5 assumption before compiling; provision the toolchain with
+  box tests normally SKIP via a JUnit 5 assumption before compiling. With
+  `KOTLIN_DOTNET_REQUIRE_TOOLCHAIN=1` (or `true`) missing tooling fails instead; use that setting
+  for mandatory runtime-execution lanes. Provision the toolchain with
   `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1`. The ilText suite never skips
-  (it needs no toolchain) and stays on the NET_FRAMEWORK default so its goldens' `.module`
+  (it needs no toolchain) and stays on the `NET48` default so its goldens' `.module`
   directives are unchanged.
 - The dotnet-owned box corpus lives in `compiler/testData/codegen/dotnet/box/`; a few borrowed JVM
   box files are additionally registered by pattern in `TestGeneratorForFir2IrTests.kt`.
 
 ## Target selection (`-Xdotnet-target`)
 
-- `-Xdotnet-target={netframework|net}` (default `netframework`) selects the runtime flavor of the
-  produced executable, carried as the `DotNetTarget` enum in `DotNetConfigurationKeys.TARGET`.
-  Invalid values are a `COMPILER_ARGUMENTS_ERROR` from `DotNetConfigurationUpdater`.
-- The target changes ONLY output packaging and assembler discovery, never the IL text: the emitted
-  `.assembly extern mscorlib` is valid on both runtimes (verified), so ilText goldens are
-  target-independent (apart from the `.module` directive naming the actual artifact file).
-- `netframework`: `-d foo.exe` → Framework ilasm (`ILASM` env, PATH, then
+- `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API
+  profile, carried as the `DotNetTarget` enum in `DotNetConfigurationKeys.TARGET`. Product kind is
+  independent: `net48` and `net10.0` produce applications or libraries; `netstandard2.0` is
+  library-only. Invalid values and executable Standard products are a `COMPILER_ARGUMENTS_ERROR`
+  from `DotNetConfigurationUpdater` before FIR/code generation.
+- The profile is selected before IR lowerings and controls core/member references, target metadata,
+  runtime/stdlib generation and selection, dependency compatibility, assembly writing, and
+  packaging. Kotlin common semantics remain invariant; emitted code may differ when CLR
+  capabilities differ. Exact IL tests default to `net48`; profile-specific integration pins own
+  the Standard and modern headers and behavior.
+- `net48`: `-d foo.exe` → Framework ilasm (`ILASM` env, PATH, then
   `C:\Windows\Microsoft.NET\Framework*\v4.0.30319\ilasm.exe`) assembles a directly runnable `.exe`.
-- `net`: both `-d foo.exe` and `-d foo.dll` are executable requests; the artifact is always
+- `netstandard2.0`: only `-Xdotnet-produce-library`/`-Xdotnet-produce-stdlib` are valid. Modern
+  ILAsm writes the portable DLL with the exact `netstandard, Version=2.0.0.0` reference and
+  `.NETStandard,Version=v2.0` target metadata.
+- `net10.0`: both `-d foo.exe` and `-d foo.dll` are executable requests; the artifact is always
   `foo.dll` plus `foo.runtimeconfig.json` (an `.exe` request is remapped to `.dll` with an INFO
   diagnostic naming the actual artifact — modern ilasm-produced exes have no self-hosting story,
   the runnable form is `dotnet exec foo.dll`). The modern ilasm is discovered per the contract
@@ -2001,26 +2120,31 @@ execute it on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below)
   framework version is the `<major>.<minor>.0` family of the newest runtime under the discovered
   dotnet root's `shared/Microsoft.NETCore.App` with `rollForward: LatestMinor` (fallback
   `net10.0`/`10.0.0` when no host is found — the dll may be run on another machine).
-- Both ilasm flavors are invoked with the same legacy flag spelling
-  (`/nologo /quiet /exe|/dll /output:...`); the modern ilasm accepts it (probed on 10.0.9).
-- CLI tests for the flag only cover toolchain-independent behavior (invalid value error, `.il`
-  output with `target=net`); an assembled-artifact CLI golden would fail on machines without the
-  provisioned toolchain.
+- Both ilasm flavors are invoked deterministically with the same legacy flag spelling
+  (`/nologo /quiet /det /exe|/dll /output:...`); the modern ilasm accepts it (probed on 10.0.9).
+- Integration tests pin the compatibility matrix, exact manifest/header metadata, repeat-build
+  determinism, target-specific stdlib variants, and real execution of one portable stdlib pair on
+  both runtime profiles.
 
 ## Modern .NET toolchain
 
 - A durable, per-user (no admin) modern toolchain lives at `%LOCALAPPDATA%\kotlinc-dotnet\toolchain\`:
-  `dotnet\dotnet.exe` (.NET runtime, pinned 10.0.9) and `ilasm\ilasm.exe` (self-contained modern
-  CoreCLR assembler from the NuGet package `runtime.win-x64.microsoft.netcore.ilasm`, pinned 10.0.9).
-  Provision or repair it with the idempotent script
+  `dotnet\dotnet.exe` hosts the pinned 10.0.9 runtime and 10.0.100 SDK; the SDK supplies
+  `Roslyn\bincore\csc.dll` plus the net10 reference pack for C# integration tests.
+  `ilasm\ilasm.exe` is the self-contained modern CoreCLR assembler from the NuGet package
+  `runtime.win-x64.microsoft.netcore.ilasm`, pinned 10.0.9. Production Kotlin IL assembly does not
+  depend on Roslyn. Provision or repair the toolchain with the idempotent script
   `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1` (parameters: `-InstallDir`,
-  `-RuntimeVersion`, `-IlasmVersion`).
+  `-RuntimeVersion`, `-SdkVersion`, `-IlasmVersion`).
 - Discovery contract (for the assembler/test runner; implement lookups in this order):
   1. `KOTLIN_DOTNET_ILASM` — full path to an `ilasm.exe`; takes precedence for the assembler.
   2. `KOTLIN_DOTNET_ROOT` — a toolchain root containing `dotnet\` and `ilasm\` subdirs
      (i.e. `<root>\ilasm\ilasm.exe`, `<root>\dotnet\dotnet.exe`).
   3. The default durable location above.
   4. Legacy .NET Framework ilasm (`C:\Windows\Microsoft.NET\Framework64\v4.0.30319\ilasm.exe`).
+  Modern C# tests discover `csc.dll` and `packs\Microsoft.NETCore.App.Ref\...\ref\net10.0` from
+  the same toolchain root (or a system-wide SDK root). They invoke Roslyn through the discovered
+  `dotnet` host with `/nostdlib+` and the complete reference pack.
 - The modern ilasm accepts both the legacy flag spelling (`/nologo /quiet /exe /output:x.exe`) and
   the modern one (`-DLL -OUTPUT=x.dll`; quote `-OUTPUT=...` when calling from PowerShell, which
   otherwise mangles the `=`). It reads UTF-8 IL with or without BOM, so existing emitter output
