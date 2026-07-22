@@ -198,6 +198,12 @@ landed shape as a compatibility constraint.
   deterministic key order. Integration production compares all three generated variants together
   with the logical-identity scheme, physical-name grammar, and runtime-surface floor. This is the
   structured KLIB/DLL binding audit; do not approximate it by diffing rendered IL text.
+  The same integration test independently loads the assembled runtime/stdlib pairs in isolated
+  CoreCLR contexts and compares their externally consumable reflection surfaces. Both executable
+  variants must retain every portable public/protected type, base/interface edge, generic
+  constraint, method, field, property, and event with compatible access and overridability. The
+  verifier is isolated C# test data, not a compiler sidecar; raw custom-attribute payloads,
+  MethodImpl rows, resources, and friend-only internal surface remain outside this bounded audit.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
   and no `mscorlib` MemberRefs. The complete
