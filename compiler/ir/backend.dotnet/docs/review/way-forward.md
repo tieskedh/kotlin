@@ -493,7 +493,8 @@ arity, markers, and exception/cancellation design.
 - P0-A, P0-B, and P0-C complete;
 - all three profiles and their interface premises represented explicitly;
 - mandatory `net48` and `net10.0` execution lanes plus `netstandard2.0` cross-runtime consumption;
-- no document describes current prototype identities as stable ABI 1.
+- no normative document describes current prototype identities as stable ABI 1; historical review
+  snapshots remain evidence of the contradiction that this gate corrected, not ABI declarations.
 
 ### Gate B — third-party experimental binaries
 

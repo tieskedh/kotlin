@@ -93,20 +93,24 @@ landed shape as a compatibility constraint.
 - Runtime assembly foundation (probe series `runtimeprobe_s1`; follows the JVM separation between
   generated programs and a Kotlin-owned runtime, with CLR assembly identity replacing JVM jar
   identity): every assembled executable carries an AssemblyRef to, and is emitted beside,
-  `Kotlin.Runtime.dll`. The logical identity is permanently culture-neutral
-  `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null` for ABI major 1. Assembly version stays
-  fixed throughout compatible ABI-1 releases; product/package versions must be tracked outside
-  AssemblyVersion. ABI 1 is deliberately unsigned: strong naming is part of CLR identity, so a
-  future signed runtime requires a new assembly identity/ABI major rather than silently breaking
-  binding. The runtime now emits one netstandard2.0 ECMA-335 definition and uses modern ILAsm as
+  `Kotlin.Runtime.dll`. All artifacts in the current prototype matrix consistently use the
+  culture-neutral candidate identity
+  `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null`. This is a deterministic build/test
+  identity, not a published ABI major: the version and unsigned status may change before Gate B.
+  Before external publication, decide the first public assembly names, strong-name policy,
+  AssemblyVersion compatibility policy, and package-version relationship together. Once an
+  identity is published, changing its name, version binding policy, or strong-name key is an
+  explicit CLR ABI transition rather than a silent retargeting. The runtime now emits one
+  netstandard2.0 ECMA-335 definition and uses modern ILAsm as
   its portable writer; Framework ILAsm is not used for the canonical library because it injects
   an `mscorlib` AssemblyRef. The API remains within the audited netstandard2.0 surface so the same
-  ABI runs on Framework 4.8 and modern CoreCLR. `runtimeprobe_s1` originally assembled the runtime
-  and a type-resolving consumer with both
+  candidate surface runs on Framework 4.8 and modern CoreCLR. `runtimeprobe_s1` originally
+  assembled the runtime and a type-resolving consumer with both
   modern 10.0.9 and Framework 4.8 ILAsm; all four same/cross-runtime pairings ran, while both
-  runtime binaries reported the exact identity above. Namespace ownership is reserved now:
+  runtime binaries reported the exact candidate identity above. Namespace ownership is reserved
+  now:
   Kotlin language ABI types live under `Kotlin`, runtime services under `Kotlin.Runtime`, and
-  compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The initial stable
+  compiler-only cross-assembly support under `Kotlin.Runtime.Internal`. The initial
   foundational type was the deliberately memberless static marker
   `Kotlin.Runtime.RuntimeInfo`; the callable ABI candidate added afterward is described below.
   Compiler-generated default constructors use the public-metadata, sealed
@@ -153,12 +157,13 @@ landed shape as a compatibility constraint.
 - Target stdlib bootstrap (argumentation:
   `docs/decisions/draft-adr-target-stdlib-bootstrap.md`; follows the JVM split between runtime ABI
   support and ordinary stdlib implementations, with CLR assemblies as the physical boundary):
-  `Kotlin.Stdlib, Version=1.0.0.0, PublicKeyToken=null` is the second reserved unsigned ABI-1
-  platform identity. `Kotlin.Runtime` retains language identities and compiler/runtime services;
+  `Kotlin.Stdlib, Version=1.0.0.0, PublicKeyToken=null` is the second reserved prototype platform
+  identity and is governed by the same pre-publication identity rule as `Kotlin.Runtime`.
+  `Kotlin.Runtime` retains language identities and compiler/runtime services;
   `Kotlin.Stdlib` owns ordinary Kotlin library implementations. The first implementations are the
   generic `Kotlin.Collections.ArrayIterator<T>` and `ArrayIterable<T>`, compiled through the same
   class and split generic-interface bridge pipeline as user code, followed by the common
-  `Iterable<T>`/`List<T>` `first()` and `last()` overloads on the stable physical
+  `Iterable<T>`/`List<T>` `first()` and `last()` overloads on the current compiler/stdlib physical
   `Kotlin.Collections.CollectionsKt` facade. User calls cross the assembly edge; the function
   bodies run in the stdlib and use split Iterable/Iterator/List capabilities with canonical
   fallback for every implementation.
