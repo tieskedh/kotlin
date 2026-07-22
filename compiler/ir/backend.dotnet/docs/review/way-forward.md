@@ -432,6 +432,14 @@ dispatcher consumed on both runtime profiles. Consumer synthesis retains the rec
 receiver and declaring-interface type context, while static companion/top-level dispatchers retain
 no false owner context. This closes the previously crashing cross-module generic dispatcher path.
 
+The backend now owns one strict replay entry point,
+`:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 36
+library-integration tests; the current audited result is 837/0/0/0 across 16 JUnit XML suites with
+required-toolchain enforcement. The integration child task uses the private short name `dn`
+because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
+the test-entry-point omission, not the remaining evidence items above.
+
 ## 4. P1 consolidation
 
 After P0:
