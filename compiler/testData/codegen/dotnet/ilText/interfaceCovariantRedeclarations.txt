@@ -1,0 +1,253 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'interfaceCovariantRedeclarations' {}
+.module 'main-interfaceCovariantRedeclarations.il'
+
+.class public auto ansi beforefieldinit 'ReturnTop'
+       extends [mscorlib]System.Object
+{
+  .field private string 'label'
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'label') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld string 'ReturnTop'::'label'
+    ret
+  }
+  .method public hidebysig specialname instance string 'get_label'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld string 'ReturnTop'::'label'
+    ret
+  }
+  .property instance string 'label'()
+  {
+    .get instance string 'ReturnTop'::'get_label'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ReturnBottom'
+       extends 'ReturnTop'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(string 'label') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'ReturnTop'::.ctor(string)
+    ret
+  }
+}
+.class interface public abstract auto ansi 'CovariantBase'
+{
+  .method public hidebysig newslot abstract virtual instance class 'ReturnTop' 'create'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance class 'ReturnTop' 'get_item'() cil managed
+  {
+  }
+  .property instance class 'ReturnTop' 'item'()
+  {
+    .get instance class 'ReturnTop' 'CovariantBase'::'get_item'()
+  }
+}
+.class interface public abstract auto ansi 'CovariantMethod'
+       implements 'CovariantBase'
+{
+  .method public hidebysig newslot abstract virtual instance class 'ReturnBottom' 'create'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'CovariantProperty'
+       implements 'CovariantBase'
+{
+  .method public hidebysig specialname newslot abstract virtual instance class 'ReturnBottom' 'get_item'() cil managed
+  {
+  }
+  .property instance class 'ReturnBottom' 'item'()
+  {
+    .get instance class 'ReturnBottom' 'CovariantProperty'::'get_item'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CovariantMethodImpl'
+       extends [mscorlib]System.Object
+       implements 'CovariantMethod'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'ReturnBottom' 'create'() cil managed
+  {
+    .maxstack 1
+    ldstr "method"
+    newobj instance void 'ReturnBottom'::.ctor(string)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'ReturnTop' 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldstr "base-item"
+    newobj instance void 'ReturnTop'::.ctor(string)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'ReturnTop' '<CovariantReturnBridge-CovariantBase-create-26d11a2bfa86e1426db45108140e49ac>'() cil managed
+  {
+    .override method instance class 'ReturnTop' 'CovariantBase'::'create'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'ReturnBottom' 'CovariantMethodImpl'::'create'()
+    ret
+  }
+  .property instance class 'ReturnTop' 'item'()
+  {
+    .get instance class 'ReturnTop' 'CovariantMethodImpl'::'get_item'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CovariantPropertyImpl'
+       extends [mscorlib]System.Object
+       implements 'CovariantProperty'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'ReturnTop' 'create'() cil managed
+  {
+    .maxstack 1
+    ldstr "base-method"
+    newobj instance void 'ReturnTop'::.ctor(string)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'ReturnBottom' 'get_item'() cil managed
+  {
+    .maxstack 1
+    ldstr "property"
+    newobj instance void 'ReturnBottom'::.ctor(string)
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'ReturnTop' '<CovariantReturnBridge-CovariantBase-<get-item>-914cf3de038a498164f09a65a1b74962>'() cil managed
+  {
+    .override method instance class 'ReturnTop' 'CovariantBase'::'get_item'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'ReturnBottom' 'CovariantPropertyImpl'::'get_item'()
+    ret
+  }
+  .property instance class 'ReturnBottom' 'item'()
+  {
+    .get instance class 'ReturnBottom' 'CovariantPropertyImpl'::'get_item'()
+  }
+}
+.class interface public abstract auto ansi 'SameIlBase'
+{
+  .method public hidebysig newslot abstract virtual instance string 'text'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_name'() cil managed
+  {
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'SameIlBase'::'get_name'()
+  }
+}
+.class interface public abstract auto ansi 'SameIlRedeclared'
+       implements 'SameIlBase'
+{
+  .method public hidebysig newslot abstract virtual instance string 'text'() cil managed
+  {
+  }
+  .method public hidebysig specialname newslot abstract virtual instance string 'get_name'() cil managed
+  {
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'SameIlRedeclared'::'get_name'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SameIlImpl'
+       extends [mscorlib]System.Object
+       implements 'SameIlRedeclared'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'text'() cil managed
+  {
+    .maxstack 1
+    ldstr "same-il"
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance string 'get_name'() cil managed
+  {
+    .maxstack 1
+    ldstr "same-name"
+    ret
+  }
+  .property instance string 'name'()
+  {
+    .get instance string 'SameIlImpl'::'get_name'()
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'interfaceCovariantRedeclarationsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 2
+    .locals init (
+      [0] class 'CovariantBase' 'method',
+      [1] class 'CovariantBase' 'property',
+      [2] class 'SameIlBase' 'value'
+    )
+    newobj instance void 'CovariantMethodImpl'::.ctor()
+    stloc.0
+    ldloc.0
+    callvirt instance class 'ReturnTop' 'CovariantBase'::'create'()
+    call instance string 'ReturnTop'::'get_label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'CovariantPropertyImpl'::.ctor()
+    stloc.1
+    ldloc.1
+    callvirt instance class 'ReturnTop' 'CovariantBase'::'get_item'()
+    call instance string 'ReturnTop'::'get_label'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'SameIlImpl'::.ctor()
+    stloc.2
+    ldloc.2
+    callvirt instance string 'SameIlBase'::'text'()
+    dup
+    brtrue IL_stringValueNotNull_0
+    pop
+    ldstr "null"
+IL_stringValueNotNull_0:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldloc.2
+    callvirt instance string 'SameIlBase'::'get_name'()
+    dup
+    brtrue IL_stringValueNotNull_1
+    pop
+    ldstr "null"
+IL_stringValueNotNull_1:
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

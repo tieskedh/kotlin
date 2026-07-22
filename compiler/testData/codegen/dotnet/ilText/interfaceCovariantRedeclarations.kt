@@ -1,6 +1,7 @@
-// A redeclaration whose mapped return type differs from its inherited interface slot is rejected
-// whole-interface; one implicit class member cannot fill both CLR signatures. Same-IL-type
-// nullability covariance remains supported.
+// A covariant abstract interface redeclaration owns a distinct exact CLR slot. A body-owning
+// class receives a private MethodImpl adapter for each wider inherited interface slot; the
+// abstract interface itself contains no forwarding body. Same-carrier reference nullability
+// covariance remains an ordinary pair of implicit slots and needs no adapter.
 
 open class ReturnTop(val label: String)
 
@@ -51,6 +52,10 @@ class SameIlImpl : SameIlRedeclared {
 }
 
 fun main() {
+    val method: CovariantBase = CovariantMethodImpl()
+    println(method.create().label)
+    val property: CovariantBase = CovariantPropertyImpl()
+    println(property.item.label)
     val value: SameIlBase = SameIlImpl()
     println(value.text())
     println(value.name)

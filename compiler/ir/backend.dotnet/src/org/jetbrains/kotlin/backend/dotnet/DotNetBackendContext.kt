@@ -71,6 +71,15 @@ internal data class DotNetLoweredGenericInterfaceViewBridge(
     val physicalView: DotNetInterfaceDefaultPromotionView,
 )
 
+/** One exact Kotlin implementation adapted to a wider ordinary CLR class or interface slot. */
+internal data class DotNetLoweredCovariantReturnBridge(
+    val owner: IrClass,
+    val inheritedMember: IrSimpleFunction,
+    val target: IrSimpleFunction,
+    val implementation: IrSimpleFunction,
+    val requiresNewSlotOnTarget: Boolean,
+)
+
 internal data class DotNetLoweredInterfaceDefaultClassForwarder(
     val owner: IrClass,
     val inheritedMember: IrSimpleFunction,
@@ -121,6 +130,9 @@ internal class DotNetBackendContext(
     /** Final interface MethodImpl adapters which later compilations inherit as a complete view bundle. */
     val genericInterfaceViewBridges:
         MutableList<DotNetLoweredGenericInterfaceViewBridge> = mutableListOf()
+    /** Final MethodImpl adapters for ordinary slots whose Kotlin override refines the return. */
+    val covariantReturnBridges:
+        MutableList<DotNetLoweredCovariantReturnBridge> = mutableListOf()
     /** Hidden class MethodImpls which later compilations must account for during DIM selection. */
     val interfaceDefaultClassForwarders:
         MutableList<DotNetLoweredInterfaceDefaultClassForwarder> = mutableListOf()
