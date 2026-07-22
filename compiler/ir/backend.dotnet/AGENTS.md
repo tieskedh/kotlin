@@ -1381,8 +1381,10 @@ landed shape as a compatibility constraint.
   calls also work from C#. Direct C# lookup on the derived typed view is currently CS0121. The
   selected final direction is a stable producer-recorded derived intersection slot on the first
   typed capability where all competing slots coexist, with every physical slot mapped to one
-  source body. Whole-declaration rejection is temporary until that typed-slot disambiguation is
-  implemented.
+  source body. Physical ABI schema 14 gives that slot a distinct normalized record containing its
+  typed owner/view, method name, and contributing logical-member group; it is not encoded as an
+  already-implemented view bridge. Whole-declaration rejection is temporary until producer
+  emission and downstream typed-slot disambiguation are implemented.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
