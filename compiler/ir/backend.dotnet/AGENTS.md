@@ -1376,7 +1376,12 @@ landed shape as a compatibility constraint.
   produce diagnostics and no KLIB/DLL pair. The inherited gate follows the emitted physical
   capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected only
   when distinct IR names prove distinct Kotlin members; same-name intersection overrides remain
-  admitted. Whole-declaration rejection is temporary until stable typed-slot disambiguation is
+  admitted. A portable same-name intersection executes one Kotlin implementation through both
+  parent canonical/declared bundles and the derived Kotlin view on both runtimes; explicit parent
+  calls also work from C#. Direct C# lookup on the derived typed view is currently CS0121. The
+  selected final direction is a stable producer-recorded derived intersection slot on the first
+  typed capability where all competing slots coexist, with every physical slot mapped to one
+  source body. Whole-declaration rejection is temporary until that typed-slot disambiguation is
   implemented.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as

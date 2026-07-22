@@ -1397,9 +1397,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   845/0/0/0 across 16 XML suites.
 - The next collision slice also rejects a derived generic interface that inherits a method and a
   property accessor with distinct Kotlin IR names but one declared-capability CLR identity. A
-  same-name two-parent intersection remains admitted, because it may be one Kotlin override
-  obligation; executable intersection slot mapping is still required before claiming that matrix
-  complete. The owning variant-interface ADR and `AGENTS.md` state that boundary explicitly.
+  same-name two-parent intersection remains admitted because it may be one Kotlin override
+  obligation; the following slice executes its parent slots and identifies the remaining derived
+  adapter. The owning variant-interface ADR and `AGENTS.md` state that boundary explicitly.
+- The same-name intersection is now executable evidence rather than an assumed safe case. A
+  portable `Intersection<T> : IntersectionLeft<T>, IntersectionRight<T>` and one implementation
+  run through both parent slot bundles and the derived Kotlin view from Kotlin and C# consumers on
+  Framework CLR 4 and CoreCLR 10, preserving identity and one result. The implementation already
+  emits explicit canonical/declared bridges for both logical parent slots. Direct C# lookup on
+  `Intersection<int>` is demonstrably CS0121, so the ADR now selects a stable producer-recorded
+  derived typed intersection slot as the final adapter; implementing that slot and cross-module
+  metadata remains next. The strict baseline remains 845/0/0/0 across 16 XML suites.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
