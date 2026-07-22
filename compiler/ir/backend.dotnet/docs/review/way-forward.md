@@ -431,9 +431,10 @@ whichever assembler is present. The modern pass consumes the unchanged net48 IL 
 oracle and is not net10 profile evidence. This closes assemble-all accepted goldens and
 dual-assembler source acceptance. It does not close modern net10 verification, runtime execution,
 or the entire retained same-/cross-assembler runtime-pairing matrix. A committed net48 integration
-test now writes the same compiler-produced application and stdlib IL with both assemblers and
-executes all four application/stdlib writer pairings on Framework CLR 4 and CoreCLR. The remaining
-matrix is runtime-assembly writer substitution and net10-specific pairing evidence.
+test now writes the same compiler-produced application, stdlib, and runtime IL with both assemblers
+and executes all eight artifact-writer combinations on Framework CLR 4 and CoreCLR, for 16
+executions total. This closes the retained net48 writer-substitution matrix. Net10-specific pairing
+evidence remains open.
 
 The current supported Kotlin box corpus now has symmetric execution lanes: all 116 cases run for
 `net48` and `net10.0` under both FIR parsers on real Framework CLR 4 and CoreCLR hosts. This closes
