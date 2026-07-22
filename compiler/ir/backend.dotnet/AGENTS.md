@@ -584,6 +584,8 @@ landed shape as a compatibility constraint.
   their spelling; reject only a real same-owner physical collision. The publication matrix also
   rejects `String`/`String?` overload parameters that both map to CLR `string` while retaining
   different physical returns; CLR return-type-only overloads are not a supported escape hatch.
+  Two same-named inherited overloads whose Kotlin callable parameters both erase to `Function1`
+  are likewise rejected when no Kotlin-selected intersection slot covers both logical members.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
