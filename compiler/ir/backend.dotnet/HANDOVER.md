@@ -1289,7 +1289,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   unchanged entry point, avoiding direct unsigned-exe activation without altering the artifact.
   The backend exposes only `@TestOnly` explicit-writer hooks; canonical production selection
   remains profile-owned. This closes retained net48 runtime-writer substitution while keeping
-  net10-specific pairing evidence open.
+  net10-specific evidence separate. `testNet10AssemblerBoundary` proves why: Framework ILAsm 4.8
+  rejects a non-abstract interface method body, while the profile-selected modern writer executes
+  the same DIM-bearing program on CoreCLR. Requiring a net10 cross-writer matrix would therefore
+  constrain modern codegen to Framework capabilities and is explicitly rejected. The failed
+  alternate-writer attempt also exposed that ILAsm may leave a partial PE on nonzero exit;
+  `runIlasm` now deletes that PE and its runtimeconfig before reporting failure.
 - The generated semantic box matrix now runs the same 116 cases for `net48` and `net10.0` in both
   PSI and LightTree pipelines. Net48 artifacts use Framework ILAsm and execute on real CLR 4 via
   the signed Windows PowerShell host, which loads and invokes the exact managed entry point; the
@@ -1306,8 +1311,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
-  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 37 library-integration tests,
-  enables required-toolchain behavior in both owner projects, and currently records 838/0/0/0
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 38 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 839/0/0/0
   across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
   the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
@@ -1379,7 +1384,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 838 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 839 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.

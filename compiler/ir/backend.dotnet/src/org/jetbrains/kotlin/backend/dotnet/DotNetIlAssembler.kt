@@ -171,6 +171,8 @@ object DotNetIlAssembler {
         val outputText = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
         if (exitCode != 0) {
+            output.delete()
+            runtimeConfigFile(output).delete()
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
                 "ilasm failed with exit code $exitCode${outputText.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
