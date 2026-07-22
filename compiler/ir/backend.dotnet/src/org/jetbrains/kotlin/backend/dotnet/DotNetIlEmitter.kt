@@ -491,7 +491,10 @@ internal class DotNetIlEmitter(
             isInheritedDeclarationOnView(irClass, overridden, view)
         }
 
-        fun checkGenericInterfaceTypedViewClashes(irClass: IrClass) {
+        fun checkGenericInterfaceTypedViewClashes(
+            irClass: IrClass,
+            intersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
+        ) {
             fun belongsToView(
                 member: IrSimpleFunction,
                 view: DotNetGenericInterfaceMemberView,
@@ -509,6 +512,24 @@ internal class DotNetIlEmitter(
                 view: DotNetGenericInterfaceMemberView,
                 signatureMapper: DotNetIlTypeMapper,
             ) {
+                fun isCoveredBySelectedIntersection(
+                    first: IrSimpleFunction,
+                    second: IrSimpleFunction,
+                ): Boolean {
+                    val firstFamily = first.allOverridden().filterNotTo(hashSetOf()) { member ->
+                        member.isFakeOverride
+                    }
+                    val secondFamily = second.allOverridden().filterNotTo(hashSetOf()) { member ->
+                        member.isFakeOverride
+                    }
+                    return intersectionSlots.any { slot ->
+                        slot.owner == irClass &&
+                                slot.memberView == view &&
+                                slot.contributingMembers.any(firstFamily::contains) &&
+                                slot.contributingMembers.any(secondFamily::contains)
+                    }
+                }
+
                 val claimed = hashMapOf<String, IrSimpleFunction>()
                 for (member in irClass.dotNetMemberFunctions()) {
                     if (member.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) continue
@@ -551,13 +572,18 @@ internal class DotNetIlEmitter(
                         val mayBeOneKotlinIntersection =
                             isKotlinOverrideOf(inherited, clashing) ||
                                     isKotlinOverrideOf(clashing, inherited) ||
-                                    inherited.name == clashing.name
+                                    isCoveredBySelectedIntersection(inherited, clashing)
                         if (!mayBeOneKotlinIntersection) {
+                            val collisionReason = if (inherited.name != clashing.name) {
+                                "but are distinct Kotlin members"
+                            } else {
+                                "but no selected derived intersection slot covers both Kotlin members"
+                            }
                             dotNetUnsupported(
                                 "inherited members '${inherited.name.asString()}' and " +
                                         "'${clashing.name.asString()}' of generic interface " +
                                         "'${irClass.diagnosticName()}' clash on its ${view.name.lowercase()} " +
-                                        "CLR capability: both map to '$identity' but are distinct Kotlin members"
+                                        "CLR capability: both map to '$identity' $collisionReason"
                             )
                         }
                     }
@@ -659,6 +685,7 @@ internal class DotNetIlEmitter(
         // no owner-dependent method constraints/default bodies, and one identical resolved
         // signature, including ordinary methods and read-only property accessors.
         // More complex intersections stay unchanged until their adapter semantics are explicit.
+        val unselectedGenericInterfaceIntersectionSlots = mutableListOf<DotNetGenericInterfaceIntersectionSlot>()
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { type ->
                 (type.classifier as? IrClassSymbol)?.owner
@@ -776,7 +803,7 @@ internal class DotNetIlEmitter(
             // MethodImpl obligations. Keep a property only when every Kotlin accessor has a slot
             // on this same view; in particular, never expose the declared getter of a mutable
             // variant property while its exact-only setter remains inherited and ambiguous.
-            discoveredSlots.filter { slot ->
+            val selectedSlots = discoveredSlots.filter { slot ->
                 val property = slot.signatureSource.correspondingPropertySymbol?.owner
                     ?: return@filter true
                 listOfNotNull(property.getter, property.setter).all { accessor ->
@@ -785,6 +812,8 @@ internal class DotNetIlEmitter(
                     }
                 }
             }
+            unselectedGenericInterfaceIntersectionSlots += discoveredSlots.filterNot(selectedSlots::contains)
+            selectedSlots
         }.sortedWith(
             compareBy<DotNetGenericInterfaceIntersectionSlot>(
                 { slot -> slot.owner.diagnosticName() },
@@ -1021,7 +1050,17 @@ internal class DotNetIlEmitter(
             if (irClass !in availableClasses) continue
             try {
                 if (irClass in genericInterfaces) {
-                    checkGenericInterfaceTypedViewClashes(irClass)
+                    checkGenericInterfaceTypedViewClashes(irClass, localGenericInterfaceIntersectionSlots)
+                    unselectedGenericInterfaceIntersectionSlots.firstOrNull { slot -> slot.owner == irClass }
+                        ?.let { slot ->
+                            val memberName = slot.signatureSource.correspondingPropertySymbol?.owner?.name
+                                ?.asString()
+                                ?: slot.signatureSource.name.asString()
+                            dotNetUnsupported(
+                                "inherited Kotlin intersection '$memberName' has no complete derived " +
+                                        "CLR property surface on one typed capability"
+                            )
+                        }
                 }
                 // CLR constructor identity is only the mapped parameter list. In particular,
                 // reference nullability erases, so reject the class instead of letting one

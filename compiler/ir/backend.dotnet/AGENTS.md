@@ -1374,9 +1374,11 @@ landed shape as a compatibility constraint.
   accessor colliding on the declared view, a distinct inherited method and inherited property
   accessor colliding on that view, and a user TypeDef occupying a generated exact name; all five
   produce diagnostics and no KLIB/DLL pair. The inherited gate follows the emitted physical
-  capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected only
-  when distinct IR names prove distinct Kotlin members; same-name intersection overrides remain
-  admitted. A portable same-name intersection executes one Kotlin implementation through both
+  capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected when
+  it is a distinct Kotlin member or when no selected derived slot covers both same-name contributor
+  families. Merged property fake overrides are checked against atomic accessor selection, so a
+  split-view `var` fails publication rather than exposing only half a property. A portable
+  same-name intersection executes one Kotlin implementation through both
   parent canonical/declared bundles and the derived Kotlin view on both runtimes; explicit parent
   calls also work from C#. The pre-adapter derived call was CS0121. Bodyless intersections of
   generic parents with one resolved signature now emit a source-named abstract slot on the first
@@ -1395,7 +1397,8 @@ landed shape as a compatibility constraint.
   no second record because KLIB retains the accessor association; its accessors are admitted or
   removed atomically rather than exposing a derived getter without its setter. Properties whose
   accessors split across declared/exact views, defaults, owner-dependent method constraints, and
-  non-identical resolved signatures remain pending.
+  non-identical resolved signatures remain pending and are rejected as complete declarations when
+  they would otherwise leave an ambiguous same-name CLR surface.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
