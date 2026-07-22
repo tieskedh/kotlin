@@ -1,6 +1,7 @@
 # Kotlin/.NET backend way forward
 
-> **Baseline:** branch `dotnet`, rebased on `origin/master` at `0349ed5cd`, reviewed 2026-07-21
+> **Baseline:** branch `dotnet`, rebased on `origin/master` at `0349ed5cd`, implementation
+> re-audited through `d01ab02ba` on 2026-07-21
 >
 > **Status:** living pre-ABI execution plan
 >
@@ -335,6 +336,39 @@ capability and boxed canonical fallback after widening to `Any?`. Both consumers
 A raw CLR provider additionally implements only a portable Kotlin interface's canonical identity
 and producer-recorded erased slot. The separately compiled portable reader executes it without any
 declared/exact capability on both application profiles, pinning capability-absent fallback.
+
+The post-rebase collision continuation now treats a Kotlin override intersection as producer-
+recorded physical ABI rather than relying on ambiguous CLR inheritance. Schema 14 records one
+source-named declared or exact slot and its complete contributing logical-member group. Local and
+separately compiled implementations map that slot and both parent families to one Kotlin body.
+The runtime/C# matrix covers ordinary parameters, generic methods, constraints, read-only and
+mutable properties, exact-only inputs, parent-parameter permutations, indirect branches,
+covariant refinement, and direct owner-relative `<R : T>` parameters/results. Owner-relative
+constraints remain logical in KLIB and erased on executable split-interface views; a concrete
+physically constrained implementation is invoked at substituted `T` through object casts, while
+an already-erased default forwarder retains the actual `R` required by Kotlin variance widening.
+Nested uses such as `Box<R>` fail publication. Candidate discovery precedes shape filtering, so an
+unsupported real intersection cannot silently publish an ambiguous C# surface.
+
+The remaining P0-D implementation order is:
+
+1. Emit a signature-changing bodyless intersection adapter for Kotlin-resolved nonidentical
+   returns. This extends the existing schema-14/MethodImpl model and requires no new identity
+   policy.
+2. Complete selected-default intersections not already covered by profile-aware promotion. They
+   must reuse the accepted helper/DIM body and never lower another body copy.
+3. Decide and record the complete C# property surface for a Kotlin `var` whose getter and setter
+   naturally land on different declared/exact capabilities, then implement it atomically.
+4. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
+   conversion exists; whole-declaration rejection is correct in the meantime.
+5. Finish the foreign-implementor/clash matrix and generated implementor tooling, then close the
+   remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
+   structured metadata work rather than with IL substring tests.
+
+Items 1 and 2 are the next unambiguous backend work. Item 3 is the next genuine CLR-specific
+surface decision. The Gradle friend-association wiring remains the outstanding P0-C product-
+integration item and should be completed before Gate A, but it does not alter the compiler ABI
+selected above.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
