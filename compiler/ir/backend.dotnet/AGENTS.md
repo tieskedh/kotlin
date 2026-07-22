@@ -857,7 +857,10 @@ landed shape as a compatibility constraint.
   pairings run identically. STAYS REJECTED, loudly: interface redeclarations of Any members,
   unsupported data-class shapes described below, and `T : Any` generic constraints
   (CLR `class` would wrongly exclude value instantiations; erasing the constraint would admit
-  null). Kotlin-owned exceptions and foreign-object import policy remain later consumers of this
+  null). The declaration-level type-parameter gate owns this rejection before physical capability
+  mapping; an unsupported interface must produce a normal compilation error, never let the live
+  constraint mapper turn it into `INTERNAL_ERROR`. Kotlin-owned exceptions and foreign-object
+  import policy remain later consumers of this
   foundation. Pins:
   `ilText/inheritanceAnyOverride.kt`, `ilText/interfaceEqualityWidening.kt`,
   `ilText/nullableRejected.kt`, `ilText/genericRejected.kt`; runtime: `box/anyMembers.kt`.
