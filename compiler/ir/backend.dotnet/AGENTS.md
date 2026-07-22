@@ -10,6 +10,16 @@ the strict toolchain lane requires both Framework and modern ILAsm. CLI tests li
 executes on real CoreCLR and Framework CLR 4 runtimes through signed system hosts (see "Box tests"
 below).
 
+The commit gate is
+`./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 57 generated-CLI and
+library-integration tests. Audit all 16 JUnit XML files under
+`compiler/fir/fir2ir/build/test-results/dotNetTest/` and
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 837 tests with zero
+failures, errors, or skips. `dn` is an intentionally short private child-task name because the
+Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
+`MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
+
 ## Architectural review and work ordering
 
 - `docs/review/README.md` indexes the review evidence and the current way forward. Read it before
@@ -19,6 +29,9 @@ below).
   Draft and accepted ADRs own decisions; `docs/review/way-forward.md` owns current sequencing and
   release gates. When they disagree, reverify the code and amend the relevant ADR rather than
   silently choosing a review conclusion.
+- Any implementation change to a documented semantic, representation, or ABI rule must amend the
+  affected ADR in the same feature commit. Pure validation infrastructure records fresh evidence
+  in these working notes and the way forward; it must not manufacture ADR churn.
 - Do not describe the current runtime or physical declaration schema as stable ABI 1. No external
   ABI publication is allowed until the way-forward Gate B requirements are satisfied.
 - Nothing has shipped. Until an explicit freeze is recorded, break current prototype binaries,

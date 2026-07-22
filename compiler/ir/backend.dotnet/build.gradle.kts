@@ -22,3 +22,12 @@ sourceSets {
     "main" { projectDefault() }
     "test" {}
 }
+
+tasks.register("dotNetTest") {
+    group = "verification"
+    description = "Runs the strict Kotlin/.NET semantic, IL, CLI, and library-integration gates."
+    dependsOn(
+        ":compiler:fir:fir2ir:dotNetTest",
+        ":compiler:tests-integration:dn",
+    )
+}
