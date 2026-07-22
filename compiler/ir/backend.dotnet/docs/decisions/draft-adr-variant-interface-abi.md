@@ -151,6 +151,12 @@ canonical fallback, exact-capability discovery, and wrong-shape failure at the h
 operation. This adds evidence for the selected positional representation; it does not add a new
 physical view or change the ABI decision.
 
+That portable fixture also completes the one-through-four parameter matrix with
+`Quad<in I, out O, X, out N>`. It combines simultaneous contravariant/covariant widening,
+invariant state, a primitive result, a nullable result, an exact-only unsafe operation, and an
+open generic pass-through. Kotlin and C# consumers execute the same canonical fallback and
+identity rules on both profiles while reflection pins the declared and exact variance vectors.
+
 ## Physical views
 
 One logical Kotlin declaration may have up to four physical roles. Type and helper names below are
@@ -718,8 +724,8 @@ known-invalid CLR variance metadata as a temporary fallback.
 Promotion requires generated IL, Kotlin execution, C# compilation, cross-module, and both-runtime
 coverage for at least:
 
-- one through four mixed invariant/`in`/`out` parameters; a generated 65-parameter interface now
-  proves the current ABI does not depend on a fixed 32- or 64-bit machine-word mask;
+- one through four mixed invariant/`in`/`out` parameters are covered, and a generated 65-parameter
+  interface proves the current ABI does not depend on a fixed 32- or 64-bit machine-word mask;
 - simultaneous widening/narrowing of several reference, primitive, nullable, value-class, and
   open parameters;
 - exact, partially widened, fully canonical, mutable-storage, parameter, field, and return paths;
