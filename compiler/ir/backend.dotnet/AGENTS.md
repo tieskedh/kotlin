@@ -4,10 +4,10 @@ Prototype Kotlin → .NET CIL target. Code lives in `compiler/ir/backend.dotnet/
 `compiler/cli/cli-dotnet/` (CLI, K2 phased pipeline only). IL-text golden tests are the primary
 layout validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runners generated from
 `compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt` (`./gradlew generateTests`).
-When .NET Framework ILAsm is available, every emitted golden module is also assembled; the strict
-toolchain lane requires it. CLI tests live in `compiler/testData/cli/dotnet/`. Box tests compile
-with target `net10.0` to a dll and execute it on the real CoreCLR runtime via `dotnet exec` (see
-"Box tests" below).
+When either supported ILAsm is available, every emitted golden module is also assembled by it;
+the strict toolchain lane requires both Framework and modern ILAsm. CLI tests live in
+`compiler/testData/cli/dotnet/`. Box tests compile with target `net10.0` to a dll and execute it
+on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below).
 
 ## Architectural review and work ordering
 
@@ -2101,8 +2101,9 @@ landed shape as a compatibility constraint.
   for mandatory runtime-execution lanes. Provision the toolchain with
   `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1`. The ilText suite always keeps
   its text-comparison coverage and stays on the `NET48` default so its goldens' `.module`
-  directives are unchanged. It additionally assembles every emitted executable or library when
-  .NET Framework ILAsm is present; strict toolchain runs fail rather than omit that validation.
+  directives are unchanged. It additionally assembles every emitted executable or library with
+  each available Framework and modern ILAsm. The modern pass is a compatibility oracle over the
+  net48 IL, not net10 profile validation. Strict toolchain runs require both assemblers.
 - The dotnet-owned box corpus lives in `compiler/testData/codegen/dotnet/box/`; a few borrowed JVM
   box files are additionally registered by pattern in `TestGeneratorForFir2IrTests.kt`.
 
