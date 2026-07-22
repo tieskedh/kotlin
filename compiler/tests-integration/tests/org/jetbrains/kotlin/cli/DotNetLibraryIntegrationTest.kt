@@ -4560,6 +4560,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface InheritedOnlyAccessorClash<out T> :
                 InheritedOnlyMethod<T>, InheritedOnlyProperty<T>
 
+            public interface SplitMutableLeft<out T> {
+                public var split: @UnsafeVariance T
+            }
+
+            public interface SplitMutableRight<out T> {
+                public var split: @UnsafeVariance T
+            }
+
+            public interface SplitMutableIntersection<out T> :
+                SplitMutableLeft<T>, SplitMutableRight<T>
+
             public interface ReservedOwner<out T> {
                 public fun accept(value: @UnsafeVariance T)
             }
@@ -4571,6 +4582,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "and inherited member 'get_value'",
             "inherited members '<get-item>' and 'get_item'",
             "but are distinct Kotlin members",
+            "has no complete derived CLR property surface on one typed capability",
             "maps to a duplicate canonical, declared, or exact IL type",
         )
     }

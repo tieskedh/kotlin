@@ -136,16 +136,18 @@ cast failure instead of receiving the collection barrier. Kotlin catches that or
 same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
 foreign-implementor matrix remain pending.
 
-Library publication also now fails on five independently replayed physical collisions: a
+Library publication also now fails on six independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
 property accessor mapping to the same declared-view slot, an inherited method and inherited
 property accessor mapping to one declared-view slot, and a user declaration occupying the
-generated exact-view TypeDef identity. The inherited checks follow the physical capability graph
-and exempt a genuine Kotlin override of the inherited member. An inherited-only clash is rejected
-only when the IR names prove that the two declarations are distinct Kotlin members; same-name
-intersection overrides remain valid. Parent-slot execution and the conservative bodyless
-declared-view derived slot are covered below. Each failure names the affected physical view or
+generated exact-view TypeDef identity, and a mutable same-name intersection whose getter and setter
+would require different typed views. The inherited checks follow the physical capability graph and
+exempt a genuine Kotlin override of the inherited member. A same-name inherited intersection is
+admitted only when the producer selects a derived slot covering both contributing families;
+merged property fake overrides are checked against the atomic accessor-selection result rather
+than relying on pairwise IR claims. Parent-slot execution and the bodyless typed derived slot are
+covered below. Each failure names the affected physical view or
 generated-type collision and produces neither KLIB nor DLL. This pins the current
 whole-declaration rejection policy without declaring the broader overload, same-name inherited,
 and reserved-member collision matrix complete. Stable
@@ -206,7 +208,9 @@ interfaces are therefore supported when they resolve to one Kotlin signature. At
 physical branches must contribute, and no one direct parent may already contain the complete
 intersection; a descendant of an interface which already owns the selected slot inherits it without
 another slot or schema record. Owner-dependent method constraints, properties whose accessors split
-across views, default bodies, and non-identical resolved signatures remain pending.
+across views, default bodies, and non-identical resolved signatures remain pending. Until their
+adapters exist, an otherwise ambiguous same-name shape is rejected as a whole and produces neither
+KLIB nor DLL; name equality alone is never publication evidence.
 
 A property intersection is represented by recorded accessor-slot obligations plus a real
 source-named CLR property row on the derived typed capability. A `val` binds its generated getter;
