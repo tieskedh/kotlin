@@ -136,6 +136,14 @@ cast failure instead of receiving the collection barrier. Kotlin catches that or
 same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
 foreign-implementor matrix remain pending.
 
+Library publication also now fails on three independently replayed physical collisions: a
+property accessor and user method mapping to the same declared-view slot, the corresponding clash
+which exists only on the invariant exact view, and a user declaration occupying the generated
+exact-view TypeDef identity. Each failure names the affected physical view or generated-type
+collision and produces neither KLIB nor DLL. This pins the current whole-declaration rejection
+policy without declaring the broader overload, inheritance, and reserved-member collision matrix
+complete.
+
 ## Physical views
 
 One logical Kotlin declaration may have up to four physical roles. Type and helper names below are
