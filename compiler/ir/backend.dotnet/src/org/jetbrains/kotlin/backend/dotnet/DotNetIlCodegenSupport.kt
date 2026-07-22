@@ -453,6 +453,10 @@ internal class DotNetIlTypeMapper private constructor(
             type.isLong() -> DotNetIlValueType.Int64
             type.isDouble() -> DotNetIlValueType.Float64
             type.isChar() -> DotNetIlValueType.Char
+            // An outer nullable occurrence of every open parameter uses one declaration-stable
+            // boxed-or-null carrier. This must precede the String-bound shortcut: T : String
+            // narrows non-null T to string, but T? still has the uniform open-nullable ABI.
+            type.isOpenNullableTypeParameter() -> DotNetIlValueType.Object
             type.isDotNetStringType() -> DotNetIlValueType.String
             type.isAny() || type.isNullableAny() -> DotNetIlValueType.Object
             type.isSupportedDotNetPrimitiveArray() -> toPrimitiveArrayType(type)
@@ -618,9 +622,9 @@ internal class DotNetIlTypeMapper private constructor(
      * boxed-or-null carrier is required because a CLR signature cannot alternate between
      * `Nullable<T>` and a reference after substitution. Constraints outside
      * [dotNetConstraintTypes] remain rejected instead of erased.
-     * A `T` whose bound is `String`/`String?` never reaches this arm: the string-concat
-     * lowering's receiver mapping ([isDotNetStringType]) runs earlier in the dispatch chain and
-     * maps it to IL `string` (the pre-existing behavior).
+     * A non-null `T` whose bound is `String`/`String?` never reaches this arm: the string-concat
+     * lowering's receiver mapping ([isDotNetStringType]) maps it to IL `string`. Its nullable
+     * occurrence reaches the boxed-or-null branch before that shortcut.
      */
     private fun toTypeParameterTypeOrNull(type: IrType): DotNetIlValueType? {
         if (type !is IrSimpleType) return null
