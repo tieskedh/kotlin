@@ -459,7 +459,7 @@ internal class DotNetIlEmitter(
                     if (!belongsToView(member, view)) continue
                     val signature = member.dotNetSignature(signatureMapper)
                     val identity =
-                        "${member.dotNetIlMethodName()}${member.dotNetIlGenericAritySuffix()}" +
+                        "${member.dotNetAbiMethodName()}${member.dotNetIlGenericAritySuffix()}" +
                                 "(${signature.renderParameterTypes()})"
                     claimed.put(identity, member)?.let { clashing ->
                         dotNetUnsupported(
@@ -604,7 +604,11 @@ internal class DotNetIlEmitter(
                     // gate rejects the unsupported flavors (inline/reified, variance,
                     // constraints) loudly before the signature maps.
                     function.checkDotNetFunctionShapeSupported()
-                    availableFunctions[function] = DotNetIlFunctionInfo(facadeClassInfo, function.dotNetSignature(typeMapper))
+                    availableFunctions[function] = DotNetIlFunctionInfo(
+                        facadeClassInfo,
+                        function.dotNetSignature(typeMapper),
+                        function.dotNetExceptionCarrierMethodNameOrNull(),
+                    )
                 } catch (e: DotNetIlUnsupportedException) {
                     skipReasons[function] = e.reason
                 }
@@ -642,7 +646,11 @@ internal class DotNetIlEmitter(
                     }
                     else -> try {
                         for (accessor in accessors) {
-                            availableFunctions[accessor] = DotNetIlFunctionInfo(facadeClassInfo, accessor.dotNetSignature(typeMapper))
+                            availableFunctions[accessor] = DotNetIlFunctionInfo(
+                                facadeClassInfo,
+                                accessor.dotNetSignature(typeMapper),
+                                accessor.dotNetExceptionCarrierMethodNameOrNull(),
+                            )
                         }
                     } catch (e: DotNetIlUnsupportedException) {
                         accessors.forEach(availableFunctions::remove)
@@ -777,7 +785,7 @@ internal class DotNetIlEmitter(
                     val physicalMethodName = if (irClass in genericInterfaces) {
                         member.dotNetGenericInterfaceCanonicalMethodName()
                     } else {
-                        null
+                        member.dotNetExceptionCarrierMethodNameOrNull()
                     }
                     // CLR method identity includes the generic ARITY (see
                     // dotNetIlGenericAritySuffix), for member methods as well as the facade gate
@@ -885,7 +893,11 @@ internal class DotNetIlEmitter(
                 // The generic-arity marker keeps a generic `fun <T> f(x: Int)` distinct from a
                 // plain `fun f(x: Int)` — CLR method identity includes the arity (the Roslyn
                 // overload rule), so both are legal IL methods on one facade.
-                val ilIdentity = callable.reserveLocalFunctionIlIdentity(functionInfo.signature, callablesByIlIdentity)
+                val ilIdentity = callable.reserveLocalFunctionIlIdentity(
+                    functionInfo.signature,
+                    callablesByIlIdentity,
+                    functionInfo.physicalMethodName,
+                )
                 val clashing = callablesByIlIdentity.putIfAbsent(ilIdentity, callable) ?: continue
                 // A previous accessor clash may have failed the file's whole backing-property
                 // group, removing accessors that were indexed earlier in this snapshot. Such a
@@ -962,6 +974,7 @@ internal class DotNetIlEmitter(
                     val functionInfo = DotNetIlFunctionInfo(
                         availableFunctions.getValue(function).owner,
                         function.dotNetSignature(typeMapper),
+                        availableFunctions.getValue(function).physicalMethodName,
                     )
                     availableFunctions[function] = functionInfo
                     renderedMethods[function] = DotNetIlMethodCodegen(
@@ -2637,7 +2650,8 @@ internal class DotNetIlEmitter(
             }
             renderPhysicalMember(
                 renderedMember,
-                genericDefault?.let { viewTypeMapper.genericInterfaceTypedMethodName(sourceMember) },
+                genericDefault?.let { viewTypeMapper.genericInterfaceTypedMethodName(sourceMember) }
+                    ?: sourceMember.dotNetExceptionCarrierMethodNameOrNull(),
             )
             if (genericDefault?.canonicalView == memberView) {
                 renderPhysicalMember(genericDefault.erasedAdapter)
