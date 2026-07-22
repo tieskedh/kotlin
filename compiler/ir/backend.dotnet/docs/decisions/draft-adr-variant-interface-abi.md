@@ -196,10 +196,10 @@ stores the typed physical owner, declared/exact view, CLR method name, logical o
 two sorted unique contributing logical member identities. Its deterministic index is derived from
 that normalized override group. This is intentionally distinct from an interface view-bridge
 record: an intersection slot is an additional implementation obligation, not evidence that the
-producer already supplied a body or final `MethodImpl`. The bodyless, parameterless direct-parent
-declared-view slice now emits and consumes this record; exact-only intersections, methods with
-value or type parameters, default bodies, properties, and non-identical or permuted substitutions
-remain pending.
+producer already supplied a body or final `MethodImpl`. The bodyless direct-parent declared-view
+slice now emits and consumes this record for parameterless and ordinary value-parameter methods;
+exact-only intersections, generic methods, default bodies, properties, and non-identical or
+permuted substitutions remain pending.
 
 ## Physical views
 
@@ -800,7 +800,7 @@ coverage for at least:
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
-  refined return; exact-only, property, parameterized-method, default-body, permuted, and general
+  refined return; exact-only, property, generic-method, default-body, permuted, and general
   inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
