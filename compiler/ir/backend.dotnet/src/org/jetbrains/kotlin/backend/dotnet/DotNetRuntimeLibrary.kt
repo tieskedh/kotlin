@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import java.io.File
 
@@ -59,8 +60,35 @@ internal object DotNetRuntimeLibrary {
         executableOutput: File,
         target: DotNetTarget,
         messageCollector: MessageCollector,
+    ): File? = assembleRuntime(executableOutput, target) { ilFile, output ->
+        DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
+    }
+
+    @TestOnly
+    fun assembleWithExplicitIlasmForTests(
+        outputDirectory: File,
+        target: DotNetTarget,
+        ilasm: File,
+        messageCollector: MessageCollector,
+    ): File? = assembleRuntime(
+        outputDirectory.resolve("runtime-explicit-writer-placeholder"),
+        target,
+    ) { ilFile, output ->
+        DotNetIlAssembler.assembleWithExplicitIlasm(
+            ilasm,
+            ilFile,
+            output,
+            dll = true,
+            messageCollector = messageCollector,
+        )
+    }
+
+    private fun assembleRuntime(
+        outputAnchor: File,
+        target: DotNetTarget,
+        assemble: (ilFile: File, output: File) -> Boolean,
     ): File? {
-        val outputDirectory = executableOutput.parentFile ?: File(".")
+        val outputDirectory = outputAnchor.parentFile ?: File(".")
         outputDirectory.mkdirs()
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
         val ilFile = File.createTempFile("Kotlin.Runtime-", ".il", outputDirectory)
@@ -68,7 +96,7 @@ internal object DotNetRuntimeLibrary {
             // ILAsm decodes BOM-less input as ANSI; keep the runtime source on the same UTF-8+BOM
             // path as generated program IL even though its current text is ASCII-only.
             ilFile.writeBytes(UTF8_BOM + ilText(target).toByteArray(Charsets.UTF_8))
-            output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
+            output.takeIf { assemble(ilFile, output) }
         } finally {
             ilFile.delete()
         }
