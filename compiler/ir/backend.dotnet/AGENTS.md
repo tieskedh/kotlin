@@ -574,7 +574,10 @@ landed shape as a compatibility constraint.
   and `testForeignGenericInterfaceBarriers`. The latter compiles one ordinary C# exact-view
   implementor against a portable Kotlin library and executes it with both profile runtimes; it
   also proves that a user `@UnsafeVariance` interface retains normal CLR cast failure rather than
-  receiving the collection barrier.
+  receiving the collection barrier. The foreign lane additionally implements a covariant
+  property, a generic method, and an exact-only input. C# supplies source-named typed members and
+  explicit canonical property/method implementations on the same object; Kotlin executes typed
+  and widened views on Framework CLR 4 and CoreCLR 10.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and

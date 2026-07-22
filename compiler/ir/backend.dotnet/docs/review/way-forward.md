@@ -1,7 +1,7 @@
 # Kotlin/.NET backend way forward
 
 > **Baseline:** branch `dotnet`, rebased on `origin/master` at `0349ed5cd`, implementation
-> re-audited through `d01ab02ba` on 2026-07-21
+> re-audited through `8f9a4540d` on 2026-07-21
 >
 > **Status:** living pre-ABI execution plan
 >
@@ -317,14 +317,17 @@ overridden, and helper-backed paths and assert that the Kotlin body occurs once.
 generic capability fallbacks bind recorded physical method names rather than inventing Kotlin hash
 names. The `net10.0` profile temporarily retains `mscorlib` MemberRefs for the current common
 surface; that does not freeze identical Framework/modern IL. The remaining generic/BCL work is
-the broader foreign-implementor and clash matrix, generated implementor tooling, and the remaining
-raw metadata-table audit; those keep P0-D open. The first foreign barrier slice is now
+the remaining foreign-implementor and clash matrix, generated implementor tooling, and the raw
+metadata-table audit; those keep P0-D open. The first foreign barrier slice is now
 replayable: ordinary Framework and modern C# classes consume one portable Kotlin library,
 implement the canonical plus exact views on one object, preserve Collection's wrong-shape false
-barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member. Publication
+barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member. The same lane
+now covers a source-named typed property, a generic method, an exact-only input, and explicit
+canonical property/method implementations through both typed and widened Kotlin views. Publication
 also now rejects and diagnoses declared-view accessor collisions, exact-view accessor collisions,
-and user TypeDefs occupying generated exact-view identities without producing a partial pair.
-The wider overload, inherited-slot, and reserved-member collision matrix remains open.
+erased callable overload collisions, and user TypeDefs occupying generated exact-view identities
+without producing a partial pair. The return-only, wider inherited-slot, and reserved-member
+collision matrix remains open.
 A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
 and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
 complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
@@ -376,7 +379,9 @@ The remaining P0-D implementation order is:
 
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-2. Finish the foreign-implementor/clash matrix and generated implementor tooling, then close the
+2. Finish foreign nested/signature shapes and the return-only, inherited-slot, and reserved-name
+   clash matrix. Then design generated implementor tooling; do not make a generated base class the
+   only path because C# has single class inheritance. Close the
    remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
    structured metadata work rather than with IL substring tests.
 
