@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_STATIC_HOLDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_INITIALIZATION_ENTRY
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
@@ -55,6 +56,7 @@ import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isAnonymousObject
 import org.jetbrains.kotlin.ir.util.isFunction
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.isKFunction
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
@@ -103,9 +105,16 @@ internal class DotNetIlEmitter(
             List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     private val genericInterfaceViewBridges:
             List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
+    private val covariantReturnBridges:
+            List<DotNetLoweredCovariantReturnBridge> = emptyList(),
     private val interfaceDefaultClassForwarders:
             List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
 ) {
+    private val covariantReturnImplementations: Set<IrSimpleFunction> =
+        covariantReturnBridges.asSequence()
+            .filter(DotNetLoweredCovariantReturnBridge::requiresNewSlotOnTarget)
+            .mapTo(linkedSetOf(), DotNetLoweredCovariantReturnBridge::target)
+
     /**
      * Renders the module to IL text.
      *
@@ -787,7 +796,7 @@ internal class DotNetIlEmitter(
                     availableFunctions[member] = DotNetIlFunctionInfo(classInfo, signature, physicalMethodName)
                 }
                 for (member in irClass.dotNetMemberFakeOverrides()) {
-                    checkInheritedInterfaceImplKeepsIlReturnType(member, typeMapper)
+                    checkInheritedInterfaceImplKeepsIlReturnType(member, typeMapper, externalDeclarations)
                 }
                 val fieldsByIlIdentity = hashMapOf<String, IrField>()
                 for (field in irClass.dotNetMemberFields()) {
@@ -1369,6 +1378,7 @@ internal class DotNetIlEmitter(
                 defaultArgumentDispatchers,
                 interfaceDefaultPromotions,
                 genericInterfaceViewBridges,
+                covariantReturnBridges,
                 interfaceDefaultClassForwarders,
                 companionInitializations,
                 objectInstanceFields,
@@ -1916,6 +1926,12 @@ internal class DotNetIlEmitter(
             }
             return
         }
+        if (member.origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
+            if (member.body == null) {
+                dotNetUnsupported("covariant-return adapter '$description' has no body")
+            }
+            return
+        }
         if (member.origin.isDotNetGenericInterfaceDefaultPhysicalMethod) {
             if (coreLibrary != DotNetCoreLibraryProfile.NET10_0 || member.body == null) {
                 dotNetUnsupported("generic interface-default adapter '$description' has an invalid profile or no body")
@@ -1952,31 +1968,23 @@ internal class DotNetIlEmitter(
         }
     }
 
-    /**
-     * Rejects a covariant-return override, whole-class via the member pre-pass: ECMA-335
-     * implicit slot matching (II.15.4.2.3) includes the RETURN type, so an override whose
-     * mapped return differs from the overridden slot's — `virtual` without `newslot` binds by
-     * name-and-signature, not by intent — would silently land in a FRESH slot and base-typed
-     * `callvirt` would run the BASE implementation (probe-verified: the exact emitted shape
-     * assembles without any ilasm diagnostic and misdispatches on CoreCLR). Roslyn supports C#
-     * covariant returns only through explicit `.override` + `PreserveBaseOverrides` machinery
-     * this backend does not emit, so the shape is rejected loudly instead — never wrong IL.
-     * Kotlin covariance that maps to the SAME IL type (`String?` overridden by `String`, both
-     * `string`) keeps the slot and stays supported, which is why the comparison runs on MAPPED
-     * types; the whole [allOverridden] chain is compared so a leaf-vs-root mismatch is caught
-     * even when the intermediate class matches one side. An overridden declaration whose own
-     * return does not map is skipped here: its class fails its own pre-pass, and the eviction
-     * reaches this class through the render's base re-resolution with a carried reason. This
-     * check only sees DECLARED members; the interface-mapping variant of the same failure mode
-     * on INHERITED members is [checkInheritedInterfaceImplKeepsIlReturnType]'s.
-     */
+    /** Verifies that every mapped return mismatch has the lowering-owned MethodImpl adapter. */
     private fun checkOverrideKeepsIlReturnType(
         member: IrSimpleFunction,
         signature: DotNetIlMethodSignature,
         typeMapper: DotNetIlTypeMapper,
     ) {
+        if (member.origin == DOTNET_COVARIANT_RETURN_BRIDGE) return
         if (member.overriddenSymbols.isEmpty()) return
         val memberClass = member.parent as? IrClass
+        // A covariant abstract interface redeclaration intentionally introduces a second CLR
+        // slot. There is no body or dispatch decision to adapt on the interface itself; each
+        // body-owning implementation receives MethodImpl adapters for the slots it satisfies.
+        if (memberClass?.isInterface == true && member.modality == Modality.ABSTRACT) return
+        val directClassSlots = member.overriddenSymbols.mapTo(linkedSetOf()) { symbol ->
+            val overridden = symbol.owner
+            if (overridden.isFakeOverride) overridden.resolveFakeOverride() ?: overridden else overridden
+        }
         for (overridden in member.allOverridden()) {
             if ((overridden.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true) {
                 // The typed member fills the declared or exact capability. A private explicit
@@ -1985,6 +1993,11 @@ internal class DotNetIlEmitter(
             }
             val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
             val overriddenClass = overridden.parent as? IrClass
+            if (overriddenClass?.isInterface != true && overridden !in directClassSlots) {
+                // A wider transitive class slot is already mapped by the inherited bridge chain.
+                // Abstract interfaces cannot own such a chain and remain checked independently.
+                continue
+            }
             // An overridden member of a GENERIC base declares its return against the base's type
             // parameters (`fun describe(): T` maps to `!0`); CLR slot matching for the derived
             // override then runs against the SUBSTITUTED signature — the override MUST be spelled
@@ -2004,12 +2017,18 @@ internal class DotNetIlEmitter(
                     )
                 } else overriddenReturnType
             if (substitutedReturnType != signature.returnType) {
+                val hasBridge = memberClass != null && covariantReturnBridges.any { bridge ->
+                    bridge.owner == memberClass &&
+                            bridge.target == member &&
+                            bridge.inheritedMember == overridden
+                }
+                if (hasBridge) continue
                 val overriddenOwner = overriddenClass?.diagnosticName() ?: "?"
                 dotNetUnsupported(
                     "member '${member.name.asString()}' overrides '$overriddenOwner.${overridden.name.asString()}' " +
                             "with a different IL return type (${signature.returnType.nameInSignature} vs " +
-                            "${substitutedReturnType.nameInSignature}); covariant-return overrides are not supported " +
-                            "(the override would not reuse the base virtual slot)"
+                            "${substitutedReturnType.nameInSignature}) but has no covariant-return MethodImpl bridge; " +
+                            "the covariant-return lowering did not materialize the required physical adapter"
                 )
             }
         }
@@ -2032,32 +2051,11 @@ internal class DotNetIlEmitter(
         return receiverType.dotNetViewAsGenericOwner(targetInfo)?.arguments
     }
 
-    /**
-     * Rejects an interface slot filled by an INHERITED member whose mapped IL return type
-     * differs from the interface member's, whole-class via the member pre-pass — the
-     * fake-override complement of [checkOverrideKeepsIlReturnType], which only sees declared
-     * members: ECMA-335 implicit interface mapping matches candidate methods by name and FULL
-     * signature INCLUDING the return type, and this backend emits no `.override` arrows, so in
-     * the Kotlin-legal shape `class Combo : Factory(), Maker` — the inherited
-     * `Factory.make(): Bottom` meant to satisfy `Maker.make(): Top` — the `Maker::make` slot
-     * has no implementation at all. ilasm assembles the shape without any diagnostic and EVERY
-     * use of the class throws TypeLoadException at first JIT of a using method (probe-verified,
-     * `ifaceprobe_s10`, both the function and the property-accessor variants; the JVM supports
-     * the shape because its backend generates bridge methods, which this backend has no
-     * analogue of). The check is scoped to fake overrides that override at least one
-     * interface-parented member: the `kotlin.Any` fake overrides present on every class must
-     * not be signature-mapped (`equals(Any?)` has no IL mapping), and a return mismatch against
-     * a BASE-CLASS member cannot survive to a fake override (the declaring class's own pre-pass
-     * ran [checkOverrideKeepsIlReturnType] over the declared chain). Kotlin covariance mapping
-     * to the SAME IL type (`String?` implemented by an inherited `String` member) stays
-     * supported — the comparison runs on MAPPED types — and an overridden interface member
-     * whose own return does not map is skipped here: its interface fails its own pre-pass and
-     * the eviction cascades through the render's `implements` re-resolution with a carried
-     * reason.
-     */
+    /** Verifies the fake-override case where an inherited class method fills a wider interface slot. */
     private fun checkInheritedInterfaceImplKeepsIlReturnType(
         member: IrSimpleFunction,
         typeMapper: DotNetIlTypeMapper,
+        externalDeclarations: DotNetExternalDeclarations,
     ) {
         // allOverridden also contains intermediate fake views. They own no CLR slot and may
         // already carry closed substitutions which are illegal to map as method metadata.
@@ -2077,6 +2075,8 @@ internal class DotNetIlEmitter(
         // class falls through the base-chain cascade with a carried reason instead.
         val memberReturnType = typeMapper.toDotNetIlReturnType(member.returnType) ?: return
         val memberClass = member.parent as? IrClass
+        val target = member.resolveFakeOverride()
+        val logicalInterfaceMembers = member.allOverridden().toSet()
         for (overridden in implicitlyMappedInterfaceMembers) {
             val overriddenReturnType = typeMapper.toDotNetIlReturnType(overridden.returnType) ?: continue
             val interfaceClass = overridden.parent as? IrClass
@@ -2089,18 +2089,61 @@ internal class DotNetIlEmitter(
                     )
                 } else overriddenReturnType
             if (substitutedReturnType != memberReturnType) {
+                val defaultForwarder = memberClass?.declarations
+                    ?.filterIsInstance<IrSimpleFunction>()
+                    ?.firstOrNull { candidate ->
+                        candidate.origin == DOTNET_INTERFACE_DEFAULT_FORWARDER &&
+                                overridden.symbol in candidate.overriddenSymbols
+                }
+                val physicalTargets = listOfNotNull(target, defaultForwarder)
+                val hasBridge = covariantReturnBridges.any { bridge ->
+                    if (bridge.inheritedMember != overridden) return@any false
+                    val classOwnedAdapter = memberClass != null &&
+                            bridge.owner == memberClass &&
+                            bridge.target in physicalTargets
+                    val selectedDimAdapter = memberClass != null &&
+                            bridge.owner.isInterface &&
+                            memberClass.isSubclassOf(bridge.owner) &&
+                            bridge.target in logicalInterfaceMembers
+                    classOwnedAdapter || selectedDimAdapter
+                }
+                val externalSelectedDimAdapter = memberClass?.inheritsExternalInterfaceCovariantBridge(
+                    overridden,
+                    externalDeclarations,
+                ) == true
+                if (hasBridge || externalSelectedDimAdapter) continue
                 val interfaceName = interfaceClass?.diagnosticName() ?: "?"
                 dotNetUnsupported(
                     "member '${member.name.asString()}' implements interface member " +
                             "'$interfaceName.${overridden.name.asString()}' through an inherited member with a " +
                             "different IL return type (${memberReturnType.nameInSignature} vs " +
-                            "${substitutedReturnType.nameInSignature}); ECMA-335 interface mapping matches the " +
-                            "full signature including the return type, so the interface slot would have no " +
-                            "implementation and every use of the class would throw TypeLoadException " +
-                            "(probe ifaceprobe_s10)"
+                            "${substitutedReturnType.nameInSignature}) but has no covariant-return MethodImpl bridge"
                 )
             }
         }
+    }
+
+    private fun IrClass.inheritsExternalInterfaceCovariantBridge(
+        slot: IrSimpleFunction,
+        externalDeclarations: DotNetExternalDeclarations,
+    ): Boolean {
+        val visited = hashSetOf<IrClass>()
+        val pending = superTypes.mapNotNullTo(mutableListOf()) { superType ->
+            ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+        }
+        while (pending.isNotEmpty()) {
+            val candidate = pending.removeAt(pending.lastIndex)
+            if (!visited.add(candidate)) continue
+            if (candidate.isInterface &&
+                externalDeclarations.covariantReturnBridgeOrNull(candidate, slot) != null
+            ) {
+                return true
+            }
+            candidate.superTypes.mapNotNullTo(pending) { superType ->
+                ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+            }
+        }
+        return false
     }
 
     /**
@@ -2279,6 +2322,7 @@ internal class DotNetIlEmitter(
                 intrinsicMethods = intrinsicMethods,
                 typeMapper = memberTypeMapper,
                 facadeClassInfoByFile = facadeClassInfoByFile,
+                covariantReturnImplementations = covariantReturnImplementations,
             ).render()
             renderedMethods += rendered.ilText
         }

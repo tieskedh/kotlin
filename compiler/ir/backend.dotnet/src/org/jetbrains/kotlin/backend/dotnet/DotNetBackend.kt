@@ -159,6 +159,7 @@ object DotNetBackend {
                 interfaceDefaultImplementations = context.interfaceDefaultImplementations,
                 defaultArgumentDispatchers = context.defaultArgumentDispatchers,
                 genericInterfaceDefaults = context.genericInterfaceDefaults,
+                covariantReturnBridges = context.covariantReturnBridges,
                 companionInitializations = context.companionInitializations,
                 objectInstanceFields = context.objectInstanceFields,
             ).emit(irModuleFragment) ?: return result(ilTarget)
@@ -216,6 +217,7 @@ object DotNetBackend {
             externalCompanionInitializations = context.externalCompanionInitializations,
             interfaceDefaultPromotions = context.interfaceDefaultPromotions,
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,
+            covariantReturnBridges = context.covariantReturnBridges,
             interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
         )
         val emission = emitter.emit(irModuleFragment)

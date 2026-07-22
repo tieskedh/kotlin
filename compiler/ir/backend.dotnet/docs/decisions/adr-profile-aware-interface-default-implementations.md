@@ -199,6 +199,16 @@ represented by natural CLR slot mapping, including:
 A coincidentally matching base-class method does not by itself require a bridge when Kotlin and
 CLR dispatch already select that method.
 
+Covariant returns preserve the same placement rule. If a selected `net10.0` DIM has a more
+precise physical return than an inherited interface slot, the derived interface owns one private
+final covariant-return adapter explicitly mapped to the wider slot. That adapter dispatches
+virtually through the precise DIM. The ordinary default-slot adapter relinquishes the incompatible
+slot, and an implementing class inherits the interface-owned mapping without either a default
+forwarder or a duplicate covariant bridge. On portable profiles the precise default remains
+helper-owned: the implementing class therefore owns the hidden precise helper forwarder and one
+covariant-return adapter mapped to the wider slot. In neither representation is the Kotlin body
+lowered twice.
+
 A DIM being present in the interface graph is not sufficient when an inherited class MethodImpl
 would take CLR precedence over it. If a base class contains a compiler-generated forwarder for an
 ancestor default and Kotlin selects a more-specific interface default, the derived class emits a
@@ -290,6 +300,8 @@ record must additionally describe:
 - every canonical/declared/exact interface slot supplied by the logical member;
 - every final interface view adapter inherited by downstream implementors, keyed by its owning
   logical interface, inherited logical member, and physical view; and
+- every covariant-return `MethodImpl`, keyed by its logical owner and inherited logical member, so
+  downstream classes can recognize an interface-owned mapping without inspecting generated IL; and
 - every generated class `MethodImpl` mapping needed to preserve Kotlin resolution, keyed by its
   logical owner and inherited logical member.
 
@@ -320,7 +332,8 @@ Before the representation is considered implemented, tests must cover:
 - portable output running with the modern platform variants;
 - a C# implementor inheriting a DIM on `net10.0` and the expected compile-time obligation on
   both `net48` and `netstandard2.0`;
-- generic declared/canonical/exact views, boxing adapters, and covariant returns;
+- generic declared/canonical/exact views, boxing adapters, and covariant returns, including a
+  precise derived default mapped to a wider inherited slot without a redundant class bridge;
 - property accessors, generic methods, default arguments, and nested interfaces;
 - reflection evidence for abstract slots, DIM bodies, helpers, visibility, attributes, and
   `MethodImpl` rows;
