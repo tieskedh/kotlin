@@ -125,6 +125,17 @@ List views, including nested canonical results and List's exact Collection super
 C# helper facades and minimal per-operation capability types remain pending, so this checkpoint
 validates the identity/execution representation rather than finalizing the public interop surface.
 
+An ordinary C# implementation now pins the manual foreign-implementor contract against one
+`netstandard2.0` Kotlin library on both Framework CLR 4 and CoreCLR 10. The same foreign object
+implements `Collection__KotlinExact<int>` and therefore the inherited canonical identity; its
+typed `Contains(int)` and erased `ContainsErased(object)` are observationally coordinated, and the
+erased member returns `false` for wrong reference and null shapes. A second foreign object
+implements an ordinary user `@UnsafeVariance` interface and deliberately retains the normal CLR
+cast failure instead of receiving the collection barrier. Kotlin catches that original
+`InvalidCastException` as `ClassCastException`. This validates the current public view spelling,
+same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
+foreign-implementor matrix remain pending.
+
 ## Physical views
 
 One logical Kotlin declaration may have up to four physical roles. Type and helper names below are

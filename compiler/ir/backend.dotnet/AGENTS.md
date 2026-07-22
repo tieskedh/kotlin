@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 57 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 58 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 837 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 838 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -556,7 +556,11 @@ landed shape as a compatibility constraint.
   shape probed on modern CoreCLR and .NET Framework. `containsAll(Collection<E>)` carries canonical
   Collection physically because nested Kotlin-owned split interfaces never promise a typed
   capability. Imported CLR collections remain outside this mapping. Pins: `ilText/collections.kt`,
-  `box/collections.kt`, and `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary`.
+  `box/collections.kt`, `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary`,
+  and `testForeignGenericInterfaceBarriers`. The latter compiles one ordinary C# exact-view
+  implementor against a portable Kotlin library and executes it with both profile runtimes; it
+  also proves that a user `@UnsafeVariance` interface retains normal CLR cast failure rather than
+  receiving the collection barrier.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
