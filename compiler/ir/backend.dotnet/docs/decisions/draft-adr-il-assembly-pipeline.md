@@ -36,6 +36,8 @@ Keep textual IL plus ILAsm as the assembly path for the POC.
 - Textual IL is an implementation and validation artifact, not Kotlin runtime ABI. Exact goldens
   may deliberately pin compiler-owned metadata where reviewability matters, but consumers must not
   depend on formatting or incidental token/layout choices.
+- Assembly failure is atomic with respect to the requested PE and runtimeconfig. ILAsm can leave a
+  partial output on nonzero exit, so the compiler deletes both before reporting the failure.
 - Do not add a .NET sidecar merely to replace ILAsm with `System.Reflection.Metadata`; that would
   retain process and runtime provisioning costs while adding a private protocol and another
   failure boundary.

@@ -33,6 +33,7 @@ import org.jetbrains.kotlin.library.KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -3398,6 +3399,76 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
         }
+    }
+
+    @Test
+    fun testNet10AssemblerBoundary() {
+        val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
+        val modernIlasm = DotNetIlAssembler.findModernIlasm()
+        requireOrAssumeToolchain(frameworkIlasm != null, ".NET Framework ILAsm is not available")
+        requireOrAssumeToolchain(modernIlasm != null, "Modern ILAsm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        val stdlibPair = produceBoundStdlibPair("net10.0", "n10-boundary")
+        val applicationDirectory = File(tmpdir, "n10-a").apply { mkdirs() }
+        val applicationSource = applicationDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                public interface Prefix {
+                    public fun value(): String = "O"
+                }
+
+                public class DefaultPrefix : Prefix
+
+                fun main() {
+                    val prefix: Prefix = DefaultPrefix()
+                    val suffix = Array<String>(1) { "K" }.asIterable().first()
+                    println(prefix.value() + suffix)
+                }
+                """.trimIndent()
+            )
+        }
+        val modernApplication = applicationDirectory.resolve("Net10Boundary.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            applicationSource.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, stdlibPair.resolve("Kotlin.Stdlib.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Net10Boundary",
+            K2DotNetCompilerArguments::destination.cliArgument, modernApplication.path,
+        )
+        val applicationIl = applicationDirectory.resolve("Net10Boundary.il")
+        val applicationIlText = applicationIl.readText()
+        assertTrue("interface public abstract auto ansi 'Prefix'" in applicationIlText) { applicationIlText }
+        assertTrue("virtual instance string 'value'() cil managed" in applicationIlText) { applicationIlText }
+        assertFalse("abstract virtual instance string 'value'()" in applicationIlText) { applicationIlText }
+
+        val rejectedFrameworkApplication = File(tmpdir, "n10-af/Net10Boundary.dll")
+        assertFalse(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(frameworkIlasm),
+                applicationIl,
+                rejectedFrameworkApplication,
+                dll = true,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        assertFalse(rejectedFrameworkApplication.exists()) {
+            "A failed legacy assembly attempt left a partial net10 binary: $rejectedFrameworkApplication"
+        }
+
+        val modernRuntime = applicationDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(modernRuntime.isFile)
+        val modernStdlib = applicationDirectory.resolve("Kotlin.Stdlib.dll")
+        assertTrue(modernStdlib.isFile)
+        val runtimeConfig = applicationDirectory.resolve("Net10Boundary.runtimeconfig.json")
+        assertTrue(runtimeConfig.isFile)
+        runAssemblerPairing(
+            listOf(dotnetHost.path, "exec", modernApplication.path),
+            applicationDirectory,
+            "CoreCLR net10 DIM writer boundary",
+        )
     }
 
     @Test
