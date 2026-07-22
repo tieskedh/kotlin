@@ -851,6 +851,225 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testHighArityGenericInterfaceAbiHasNoFixedMask() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        val parameterNames = (0..64).map { index -> "T${index.toString().padStart(2, '0')}" }
+        val parameterDeclarations = parameterNames.joinToString { parameter -> "out $parameter" }
+        val exactArguments = parameterNames.mapIndexed { index, _ ->
+            if (index == parameterNames.lastIndex) "Int" else "String"
+        }.joinToString()
+        val widenedArguments = parameterNames.joinToString { "Any?" }
+
+        val libraryDirectory = File(tmpdir, "wide-generic-interface-library")
+        val librarySource = File(tmpdir, "wideLibrary.kt").apply {
+            writeText(
+                """
+                package wide
+
+                public interface Wide<$parameterDeclarations> {
+                    public fun first(): T00
+                    public fun last(): T64
+                    public fun acceptsLast(value: @UnsafeVariance T64): Boolean
+                }
+
+                public class WideImpl : Wide<$exactArguments> {
+                    override fun first(): String = "first"
+                    override fun last(): Int = 64
+                    override fun acceptsLast(value: Int): Boolean = value == 64
+                }
+
+                public fun newWide(): Wide<$exactArguments> = WideImpl()
+
+                public fun widen(value: Wide<$exactArguments>): Wide<$widenedArguments> = value
+
+                public fun sameAfterWiden(value: Wide<$exactArguments>): Boolean = widen(value) === value
+
+                public fun readWide(value: Wide<$widenedArguments>): String =
+                    value.first().toString() + ":" + value.last().toString()
+
+                public fun acceptWide(value: Wide<$widenedArguments>, candidate: Any?): Boolean =
+                    value.acceptsLast(candidate)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Wide.Generic",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Wide.Generic.klib")
+        val libraryAssembly = libraryDirectory.resolve("Wide.Generic.dll")
+        val libraryIl = libraryDirectory.resolve("Wide.Generic.il").readText()
+        assertTrue("'wide.Wide`65'" in libraryIl) { libraryIl }
+        assertTrue("'wide.Wide__KotlinExact`65'" in libraryIl) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package wideconsumer
+
+                    import wide.*
+
+                    fun main() {
+                        val original = newWide()
+                        val widened: Wide<$widenedArguments> = widen(original)
+                        if (!sameAfterWiden(original) || widened !== original) {
+                            throw Error("high-arity widening changed identity")
+                        }
+                        if (readWide(widened) != "first:64" || !acceptWide(widened, 64)) {
+                            throw Error("high-index canonical fallback failed")
+                        }
+                        try {
+                            acceptWide(widened, "wrong")
+                            throw Error("unsafe high-index bridge accepted the wrong shape")
+                        } catch (_: ClassCastException) {
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "WideConsumer.exe" else "WideConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "WideConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+
+            if (target == "net10.0") {
+                runDotNet(dotnetHost, application, consumerDirectory, "High-arity Kotlin consumer failed for $target")
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "High-arity Kotlin consumer failed for $target:\n$output")
+            }
+
+            libraryAssembly.copyTo(consumerDirectory.resolve(libraryAssembly.name), overwrite = true)
+            val verifierSource = consumerDirectory.resolve("WideVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using System.Reflection;
+
+                    public static class WideVerifier
+                    {
+                        private static void Require(bool condition, string message)
+                        {
+                            if (!condition) throw new Exception(message);
+                        }
+
+                        private static MethodInfo RequireMethod(Type facade, string name)
+                        {
+                            MethodInfo method = facade.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
+                            Require(method != null, name + " is unavailable");
+                            return method;
+                        }
+
+                        public static int Main()
+                        {
+                            Assembly library = Assembly.LoadFrom("Wide.Generic.dll");
+                            Type canonical = library.GetType("wide.Wide", true);
+                            Type declared = library.GetType("wide.Wide`65", true);
+                            Type exact = library.GetType("wide.Wide__KotlinExact`65", true);
+                            Type implementation = library.GetType("wide.WideImpl", true);
+                            Type facade = library.GetType("wide.wideLibraryKt", true);
+
+                            Type[] declaredParameters = declared.GetGenericArguments();
+                            Type[] exactParameters = exact.GetGenericArguments();
+                            Require(declaredParameters.Length == 65, "declared arity");
+                            Require(exactParameters.Length == 65, "exact arity");
+                            Require(
+                                (declaredParameters[0].GenericParameterAttributes &
+                                    GenericParameterAttributes.VarianceMask) == GenericParameterAttributes.Covariant,
+                                "first declared parameter variance");
+                            Require(
+                                (declaredParameters[64].GenericParameterAttributes &
+                                    GenericParameterAttributes.VarianceMask) == GenericParameterAttributes.Covariant,
+                                "last declared parameter variance");
+                            Require(
+                                (exactParameters[64].GenericParameterAttributes &
+                                    GenericParameterAttributes.VarianceMask) == GenericParameterAttributes.None,
+                                "exact parameter must be invariant");
+
+                            bool hasExact = false;
+                            foreach (Type implemented in implementation.GetInterfaces())
+                            {
+                                if (implemented.IsGenericType && implemented.GetGenericTypeDefinition() == exact)
+                                    hasExact = true;
+                            }
+                            Require(hasExact, "implementation has no 65-parameter exact capability");
+
+                            MethodInfo create = RequireMethod(facade, "newWide");
+                            MethodInfo same = RequireMethod(facade, "sameAfterWiden");
+                            MethodInfo read = RequireMethod(facade, "readWide");
+                            MethodInfo accept = RequireMethod(facade, "acceptWide");
+                            object value = create.Invoke(null, null);
+                            Require(canonical.IsInstanceOfType(value), "canonical identity");
+                            Require((bool) same.Invoke(null, new object[] { value }), "widening identity");
+                            Require((string) read.Invoke(null, new object[] { value }) == "first:64", "fallback result");
+                            Require((bool) accept.Invoke(null, new object[] { value, 64 }), "fallback argument");
+                            try
+                            {
+                                accept.Invoke(null, new object[] { value, "wrong" });
+                                throw new Exception("wrong-shaped high-index argument was accepted");
+                            }
+                            catch (TargetInvocationException failure)
+                            {
+                                Require(failure.InnerException is InvalidCastException,
+                                    "wrong-shaped high-index argument failure");
+                            }
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = consumerDirectory.resolve("WideVerifier.exe")
+            val compileResult = runCSharpCompiler(
+                checkNotNull(csharpCompiler),
+                verifierSource,
+                verifier,
+                target = "exe",
+            )
+            assertEquals(0, compileResult.exitCode, compileResult.output)
+
+            val verifierProcess = if (target == "net10.0") {
+                consumerDirectory.resolve("WideConsumer.runtimeconfig.json")
+                    .copyTo(consumerDirectory.resolve("WideVerifier.runtimeconfig.json"), overwrite = true)
+                ProcessBuilder(dotnetHost.path, "exec", verifier.path)
+            } else {
+                ProcessBuilder(verifier.path)
+            }.directory(consumerDirectory).redirectErrorStream(true).start()
+            val verifierOutput = verifierProcess.inputStream.bufferedReader().use { it.readText() }
+            assertEquals(0, verifierProcess.waitFor(), "High-arity C# verifier failed for $target:\n$verifierOutput")
+        }
+    }
+
+    @Test
     fun testForeignGenericInterfaceBarriers() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findModernIlasm() != null,

@@ -324,6 +324,10 @@ barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` membe
 also now rejects and diagnoses declared-view accessor collisions, exact-view accessor collisions,
 and user TypeDefs occupying generated exact-view identities without producing a partial pair.
 The wider overload, inherited-slot, and reserved-member collision matrix remains open.
+A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
+and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
+complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
+cast failure. This is evidence for the existing positional representation, not a new ABI rule.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
@@ -452,8 +456,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 42
-library-integration tests; the current audited result is 843/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 43
+library-integration tests; the current audited result is 844/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
