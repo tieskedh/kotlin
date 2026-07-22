@@ -1408,6 +1408,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `Intersection<int>` is demonstrably CS0121, so the ADR now selects a stable producer-recorded
   derived typed intersection slot as the final adapter; implementing that slot and cross-module
   metadata remains next. The strict baseline remains 845/0/0/0 across 16 XML suites.
+- Physical ABI schema 14 now has the dedicated producer/consumer-neutral record needed by that
+  adapter. `GenericInterfaceIntersectionSlot` records the typed owner path, declared/exact view,
+  source-facing CLR method name, logical owner, and sorted unique contributing member keys; its
+  stable index hashes the normalized group. The codec round-trip is pinned. Do not reuse the
+  existing `B` view-bridge record: `I` describes an additional slot obligation, while `B`
+  describes an implementation already supplied by an interface. No emitter writes `I` yet.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
