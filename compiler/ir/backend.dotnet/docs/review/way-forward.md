@@ -427,6 +427,11 @@ The current supported Kotlin box corpus now has symmetric execution lanes: all 1
 the full-profile semantic-lane item for the currently accepted feature set; expanding the common
 semantic corpus remains continuous target work rather than a reason to weaken the gate.
 
+The full library-integration class now also pins a portable generic interface default-argument
+dispatcher consumed on both runtime profiles. Consumer synthesis retains the recorded instance
+receiver and declaring-interface type context, while static companion/top-level dispatchers retain
+no false owner context. This closes the previously crashing cross-module generic dispatcher path.
+
 ## 4. P1 consolidation
 
 After P0:

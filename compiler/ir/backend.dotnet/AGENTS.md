@@ -1454,6 +1454,11 @@ landed shape as a compatibility constraint.
   infer them from target profile or generated names. A class inherits an existing MethodImpl for
   the same selected default, but receives a resolver bridge when an ancestor-default MethodImpl
   would mask a more-specific Kotlin choice.
+  External masked default-argument bindings follow the recorded logical dispatch shape. Instance
+  members copy the selected declaring interface receiver and declaration-level type parameters
+  before method type parameters; physically static companion and top-level declarations copy no
+  false dispatch context. A mismatch between the IR stub receiver and `isInstance` record is an
+  internal compiler error, never a guessed helper signature.
   GENERIC INTERFACE DEFAULTS preserve one logical member, one canonical semantic body, and one
   stable helper ABI identity across erased, declared-variance, and exact CLR views. On portable
   profiles the helper owns the body. On `net10.0` one strongly typed DIM owns it; the exact view
