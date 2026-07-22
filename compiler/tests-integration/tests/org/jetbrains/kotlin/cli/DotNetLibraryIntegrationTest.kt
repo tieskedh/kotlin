@@ -101,6 +101,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
                         implementationMethodName = "<GenericInterfaceCanonicalBridge-defaultWithDefaults>",
                     ),
+            "I:C:sample/Intersection:DECLARED:4b2bc8eaf1471267b878d9c25980804d" to
+                    DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot(
+                        ownerPath = listOf("sample.Intersection`1"),
+                        ownerLogicalKey = "C:sample/Intersection",
+                        contributingLogicalMemberKeys = listOf("F:sample/left", "F:sample/right"),
+                        physicalView = DotNetInterfaceDefaultPromotionView.DECLARED,
+                        methodName = "read",
+                    ),
             "R:C:sample/Contract:F:sample/baseValue" to
                     DotNetPhysicalDeclaration.CovariantReturnBridge(
                         ownerPath = listOf("sample.Contract"),
@@ -122,7 +130,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("13", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("14", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",

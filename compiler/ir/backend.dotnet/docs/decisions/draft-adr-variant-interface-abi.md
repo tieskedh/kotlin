@@ -183,6 +183,14 @@ compiler with CS0121 because that capability merely inherits two equally applica
 members. This validates the existing semantic bridge fan-out and exposes the missing derived
 interop adapter described below; it is not accepted as the final C# surface.
 
+Physical ABI schema 14 now reserves a dedicated generic-interface intersection-slot record. It
+stores the typed physical owner, declared/exact view, CLR method name, logical owner, and at least
+two sorted unique contributing logical member identities. Its deterministic index is derived from
+that normalized override group. This is intentionally distinct from an interface view-bridge
+record: an intersection slot is an additional implementation obligation, not evidence that the
+producer already supplied a body or final `MethodImpl`. Producer emission and downstream bridge
+consumption are the next implementation slices.
+
 ## Physical views
 
 One logical Kotlin declaration may have up to four physical roles. Type and helper names below are
@@ -666,6 +674,8 @@ interface record includes:
   interface, inherited logical member, and physical view;
 - capability type-parameter index mappings;
 - logical override-group identities and emitted declared-superview edges;
+- each generated intersection slot's typed owner, physical view, CLR method name, and normalized
+  contributing logical-member group (schema 14 has the record; producer/consumer use is pending);
 - erased bridge behavior, including any special type-safe barrier policy; and
 - representation version and optional-capability flags.
 
