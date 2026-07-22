@@ -200,8 +200,16 @@ producer already supplied a body or final `MethodImpl`. The bodyless direct-pare
 slice now emits and consumes this record for ordinary methods, including method type parameters
 with owner-independent constraints. Contributor signatures and constraints are normalized by
 method-parameter position before one intersection is admitted. Exact-only intersections,
-owner-dependent method constraints, default bodies, properties, and non-identical or permuted
-owner substitutions remain pending.
+owner-dependent method constraints, mutable properties, default bodies, and non-identical or
+permuted owner substitutions remain pending.
+
+A read-only property intersection is represented by the same recorded getter-slot obligation plus
+a real source-named CLR property row on the derived typed capability. The property row binds only
+that generated getter; it does not copy an implementation. A separate property record is not
+needed: KLIB preserves the getter/property association and the physical index records the getter's
+typed owner, name, and logical contributor group. Mutable properties remain deferred as a unit so
+the backend never publishes a derived read-only projection of a Kotlin `var` while leaving its
+inherited setter ambiguous.
 
 ## Physical views
 
@@ -802,8 +810,9 @@ coverage for at least:
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
-  refined return plus an owner-independent constrained generic method; exact-only, property,
-  owner-dependent generic-method, default-body, permuted, and general
+  refined return, an owner-independent constrained generic method, and a read-only property with a
+  real derived CLR property row; exact-only, mutable-property, owner-dependent generic-method,
+  default-body, permuted, and general
   inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed

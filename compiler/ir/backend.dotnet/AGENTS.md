@@ -1382,13 +1382,15 @@ landed shape as a compatibility constraint.
   bodyless method intersections of direct generic parents with one resolved signature now emit a
   source-named abstract slot on the declared typed capability. Ordinary value parameters and
   method type parameters with owner-independent constraints are normalized positionally and
-  covered. One deterministic existing
+  covered. Read-only property intersections additionally emit a real derived CLR property row
+  bound to the recorded getter slot. One deterministic existing
   bridge receives the additional `MethodImpl`, so direct C# calls and cross-module covariant
   refinement retain one Kotlin body on both profiles. Physical ABI schema 14 gives that slot a
   distinct normalized record containing its typed owner/view, method name, and contributing
-  logical-member group; it is not encoded as an already-implemented view bridge. Properties,
-  defaults, owner-dependent method constraints, and non-identical/permuted owner substitutions
-  remain pending.
+  logical-member group; it is not encoded as an already-implemented view bridge. A property needs
+  no second record because KLIB retains the accessor association; mutable properties are deferred
+  atomically rather than exposing a derived getter without its setter. Defaults, owner-dependent
+  method constraints, and non-identical/permuted owner substitutions remain pending.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
