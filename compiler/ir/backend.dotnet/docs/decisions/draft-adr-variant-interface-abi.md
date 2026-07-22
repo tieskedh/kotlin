@@ -144,6 +144,13 @@ collision and produces neither KLIB nor DLL. This pins the current whole-declara
 policy without declaring the broader overload, inheritance, and reserved-member collision matrix
 complete.
 
+A separately compiled 65-parameter interface now validates that the canonical/declared/exact
+representation has no 32- or 64-bit capability-mask limit. A portable producer and Kotlin/C#
+consumers on both application profiles execute same-object widening, high-index typed reads through
+canonical fallback, exact-capability discovery, and wrong-shape failure at the high-index unsafe
+operation. This adds evidence for the selected positional representation; it does not add a new
+physical view or change the ABI decision.
+
 ## Physical views
 
 One logical Kotlin declaration may have up to four physical roles. Type and helper names below are
@@ -711,8 +718,8 @@ known-invalid CLR variance metadata as a temporary fallback.
 Promotion requires generated IL, Kotlin execution, C# compilation, cross-module, and both-runtime
 coverage for at least:
 
-- one through four mixed invariant/`in`/`out` parameters plus generated interfaces beyond 32- and
-  64-parameter capability-mask boundaries, so the ABI cannot depend on a fixed machine-word mask;
+- one through four mixed invariant/`in`/`out` parameters; a generated 65-parameter interface now
+  proves the current ABI does not depend on a fixed 32- or 64-bit machine-word mask;
 - simultaneous widening/narrowing of several reference, primitive, nullable, value-class, and
   open parameters;
 - exact, partially widened, fully canonical, mutable-storage, parameter, field, and return paths;
