@@ -464,6 +464,11 @@ on both runtime profiles. The same CLR object retains its exact type, message, `
 without wrapping the object. Nullable import/export remains open, but raw foreign-exception state
 and identity are now replayable P0-F evidence.
 
+A separately compiled `netstandard2.0` library now also performs the catches: net48 and net10
+applications supply an exact subclass declared in the consumer, a mapped runtime fault, a broad
+Exception, and an Error, and the portable library selects the same Kotlin categories on both
+runtimes. This closes the portable-library/application-supplied direction of the exception matrix.
+
 ## 4. P1 consolidation
 
 After P0:
