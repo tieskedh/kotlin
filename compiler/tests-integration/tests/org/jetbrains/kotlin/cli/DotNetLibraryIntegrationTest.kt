@@ -3956,6 +3956,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     @Test
     fun testLibraryPublicationFailsWhenADeclarationIsEvicted() {
+        val validOverrideSource = File(tmpdir, "valid-inherited-generic-interface-override.kt").apply {
+            writeText(
+                """
+                package sample
+
+                public interface OverrideBase<out T> {
+                    public val value: T
+                }
+
+                public interface OverrideDerived<out T> : OverrideBase<T> {
+                    override val value: T
+                }
+                """.trimIndent()
+            )
+        }
+        val validOverrideOutput = File(tmpdir, "valid-inherited-generic-interface-override.il")
+        compileInProcess(
+            K2DotNetCompiler(),
+            validOverrideSource.path,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Valid.Inherited.Override",
+            K2DotNetCompilerArguments::destination.cliArgument, validOverrideOutput.path,
+        )
+        assertTrue(validOverrideOutput.isFile)
+
         fun assertPublicationFails(
             moduleName: String,
             sourceText: String,
@@ -4005,6 +4029,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun set_value(value: @UnsafeVariance T)
             }
 
+            public interface InheritedAccessorBase<out T> {
+                public fun get_value(): T
+            }
+
+            public interface InheritedAccessorClash<out T> : InheritedAccessorBase<T> {
+                public val value: T
+            }
+
             public interface ReservedOwner<out T> {
                 public fun accept(value: @UnsafeVariance T)
             }
@@ -4013,6 +4045,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             """,
             "clash on its declared CLR capability",
             "clash on its exact CLR capability",
+            "and inherited member 'get_value'",
+            "but are distinct Kotlin members",
             "maps to a duplicate canonical, declared, or exact IL type",
         )
     }
