@@ -488,7 +488,7 @@ internal class DotNetIlMethodCodegen(
         // handles covariant return adaptation that CLR implicit interface matching cannot.
         for (slot in genericInterfaceIntersectionSlots) {
             if (slot.memberView != memberView ||
-                slot.representativeMember != overridden ||
+                slot.implementationMember != overridden ||
                 !bridgeClass.isSubclassOf(slot.owner)
             ) {
                 continue

@@ -136,18 +136,17 @@ cast failure instead of receiving the collection barrier. Kotlin catches that or
 same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
 foreign-implementor matrix remain pending.
 
-Library publication also now fails on eight independently replayed physical collisions: a
+Library publication also now fails on seven independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
 property accessor mapping to the same declared-view slot, an inherited method and inherited
 property accessor mapping to one declared-view slot, and a user declaration occupying the
-generated exact-view TypeDef identity, and a mutable same-name intersection whose getter and setter
-would require different typed views. The final two cases are true same-name intersections whose
-nested owner-relative method constraints or covariant-but-nonidentical resolved return signatures
-do not yet have a complete physical adapter. The inherited checks follow the physical capability
-graph and exempt a genuine Kotlin override of the inherited member. A same-name inherited intersection is
-admitted only when the producer selects a derived slot covering both contributing families;
-merged property fake overrides are checked against the atomic accessor-selection result rather
+generated exact-view TypeDef identity, a mutable same-name intersection whose getter and setter
+would require different typed views, and a same-name intersection whose nested owner-relative
+method constraint has no complete physical adapter. The inherited checks follow the physical
+capability graph and exempt a genuine Kotlin override of the inherited member. A same-name inherited
+intersection is admitted only when the producer selects a derived slot covering both contributing
+families; merged property fake overrides are checked against the atomic accessor-selection result rather
 than relying on pairwise IR claims. Parent-slot execution and the bodyless typed derived slot are
 covered below. Each failure names the affected physical view or
 generated-type collision and produces neither KLIB nor DLL. This pins the current
@@ -210,9 +209,12 @@ intersection is admitted. Direct parameter permutations and contributors reached
 intermediate interfaces are therefore supported when they resolve to one Kotlin signature. At least
 two direct physical branches must contribute, and no one direct parent may already contain the
 complete intersection; a descendant of an interface which already owns the selected slot inherits it
-without another slot or schema record. Nested or general owner-relative constraints, properties
-whose accessors split across views, default bodies, and non-identical resolved signatures remain
-pending. Until their adapters exist, an otherwise ambiguous same-name shape is rejected as a whole and produces neither
+without another slot or schema record. Contributors may have different resolved return types when
+Kotlin selects one covariant result and at least one contributor has that exact resolved return.
+The bridge for that contributor receives the derived `MethodImpl`; wider parent bridges remain
+separate adapters to the same implementation body. Nested or general owner-relative constraints,
+properties whose accessors split across views, and default bodies remain pending. Until their
+adapters exist, an otherwise ambiguous same-name shape is rejected as a whole and produces neither
 KLIB nor DLL; name equality alone is never publication evidence. Discovery identifies the logical
 contributors and the first physical meeting of at least two parent branches before applying those
 support checks. Consequently every real multi-branch candidate is selected into schema 14, covered
@@ -668,9 +670,9 @@ The producer must discover that logical override group before deciding whether i
 is currently supported. A bodyless group with one resolved signature receives the recorded slot;
 a selected portable default may instead be covered by the profile-aware promotion mandated by the
 default-interface ADR. Any remaining group that needs a nested owner-relative constraint adapter, a
-split property surface, a default adapter, or a signature-changing adapter is rejected before the
-KLIB/DLL pair is published. Silently omitting such a group is not a temporary representation: it
-would publish a Kotlin-valid but C#-ambiguous and cross-module-incomplete ABI.
+split property surface, a default adapter, or incompatible parameter/constraint adaptation is
+rejected before the KLIB/DLL pair is published. Silently omitting such a group is not a temporary
+representation: it would publish a Kotlin-valid but C#-ambiguous and cross-module-incomplete ABI.
 
 Keeping the ambiguity, dropping a typed parent edge, or relying on an extension method are not
 alternatives: the first leaves the normal strongly typed C# surface unusable, the second destroys
@@ -851,7 +853,8 @@ coverage for at least:
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
-  refined return, an owner-independent constrained generic method, a read-only property, an
+  refined implementation return, a covariantly selected nonidentical parent return, an
+  owner-independent constrained generic method, a read-only property, an
   invariant mutable property with a real derived CLR property row, direct owner-relative `<R : T>`
   parameters/results, and direct parent-parameter permutation plus bodyless intermediate branches;
   a single-parent descendant is pinned to reuse the already selected slot without another record,
