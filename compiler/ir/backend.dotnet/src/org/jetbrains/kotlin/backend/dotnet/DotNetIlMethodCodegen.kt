@@ -61,6 +61,7 @@ import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
 import org.jetbrains.kotlin.ir.util.isPublishedApi
+import org.jetbrains.kotlin.ir.util.isSubclassOf
 import org.jetbrains.kotlin.ir.util.isTrueConst
 import org.jetbrains.kotlin.ir.util.render
 
@@ -89,6 +90,7 @@ internal class DotNetIlMethodCodegen(
     private val typeMapper: DotNetIlTypeMapper,
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
     private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
+    private val genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot> = emptyList(),
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -481,6 +483,51 @@ internal class DotNetIlMethodCodegen(
                         bridge.typeParameters.size,
                     )
         )
+        // One deterministic contributing bridge also implements the producer-recorded derived
+        // intersection slot. Reusing this forwarding method preserves the single Kotlin body and
+        // handles covariant return adaptation that CLR implicit interface matching cannot.
+        for (slot in genericInterfaceIntersectionSlots) {
+            if (slot.memberView != memberView ||
+                slot.representativeMember != overridden ||
+                !bridgeClass.isSubclassOf(slot.owner)
+            ) {
+                continue
+            }
+            val intersectionInfo = typeMapper.genericInterfaceInfoOrNull(slot.owner)
+                ?: dotNetUnsupported("generic interface intersection owner is unavailable")
+            val intersectionCapability = intersectionInfo.classInfo(memberView.physicalView)
+                ?: dotNetUnsupported("generic interface intersection capability is unavailable")
+            val intersectionSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
+                slot.owner.symbol,
+                bridgeClass.defaultType,
+            ) ?: error(
+                "Internal .NET backend error: '${bridgeClass.name}' is not a subtype of " +
+                        "intersection owner '${slot.owner.name}'"
+            )
+            val intersectionArguments = slot.owner.typeParameters.map { parameter ->
+                val argumentType = intersectionSubstitutor.substitute(parameter.typeParameterDefaultType)
+                signatureMapper.toDotNetIlValueType(argumentType)
+                    ?: dotNetUnsupported(
+                        "generic interface intersection argument '${argumentType.render()}' is unavailable"
+                    )
+            }
+            val intersectionOwnerToken = DotNetIlValueType.GenericInstance(
+                intersectionCapability,
+                intersectionArguments,
+            ).nameInSignature
+            val intersectionOverrideInfo = DotNetIlFunctionInfo(
+                intersectionCapability,
+                slot.signatureSource.dotNetSignature(signatureMapper),
+            )
+            appendLine(
+                "    .override method " +
+                        intersectionOverrideInfo.renderOverrideMethodReference(
+                            slot.physicalMethodName,
+                            intersectionOwnerToken,
+                            bridge.typeParameters.size,
+                        )
+            )
+        }
     }
 
     /** Binds one exact-return forwarding method to its wider ordinary class or interface slot. */

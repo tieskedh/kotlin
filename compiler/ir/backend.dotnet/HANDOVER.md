@@ -1405,15 +1405,24 @@ session state, process, and a curated task menu. Keep both files updated as you 
   run through both parent slot bundles and the derived Kotlin view from Kotlin and C# consumers on
   Framework CLR 4 and CoreCLR 10, preserving identity and one result. The implementation already
   emits explicit canonical/declared bridges for both logical parent slots. Direct C# lookup on
-  `Intersection<int>` is demonstrably CS0121, so the ADR now selects a stable producer-recorded
-  derived typed intersection slot as the final adapter; implementing that slot and cross-module
-  metadata remains next. The strict baseline remains 845/0/0/0 across 16 XML suites.
+  `Intersection<int>` was demonstrably CS0121 before the adapter, motivating the stable
+  producer-recorded derived typed slot implemented in the following slice. The strict baseline
+  remains 845/0/0/0 across 16 XML suites.
 - Physical ABI schema 14 now has the dedicated producer/consumer-neutral record needed by that
   adapter. `GenericInterfaceIntersectionSlot` records the typed owner path, declared/exact view,
   source-facing CLR method name, logical owner, and sorted unique contributing member keys; its
   stable index hashes the normalized group. The codec round-trip is pinned. Do not reuse the
   existing `B` view-bridge record: `I` describes an additional slot obligation, while `B`
-  describes an implementation already supplied by an interface. No emitter writes `I` yet.
+  describes an implementation already supplied by an interface.
+- The emitter now writes and consumes `I` for the conservative bodyless intersection slice:
+  direct generic parents, parameterless ordinary methods, no defaults/properties, and one resolved
+  substituted signature. The producer emits one abstract source-named method on the
+  declared typed view. One deterministic parent forwarding bridge receives an additional
+  `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
+  `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
+  derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only,
+  parameterized-method, property, default, and permuted/non-identical substitution cases remain
+  open.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
