@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 64 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 65 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 844 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 845 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2086,8 +2086,9 @@ landed shape as a compatibility constraint.
     identity-preserving widening, canonical fallback, and wrong-shape failure). The same portable
     producer completes the one-through-four matrix with a four-parameter `in`/`out`/invariant/`out`
     interface, a primitive result, a separately widened concrete `Int?` result, an exact-only
-    unsafe member, and open generic pass-through,
-    `box/genericMembers.kt` (method
+    unsafe member, and open generic pass-through. A raw canonical-only provider executes a
+    producer-recorded erased slot from one portable Kotlin reader on both Framework CLR 4 and
+    CoreCLR 10 without declared/exact capabilities. Remaining pins: `box/genericMembers.kt` (method
     pass-through, nullable method instantiations, inherited interface implementation, generic
     virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
     member extensions), `box/genericInheritanceChains.kt` (multi-hop constructor/state flow,
