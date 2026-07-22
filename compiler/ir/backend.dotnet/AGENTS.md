@@ -1372,14 +1372,14 @@ landed shape as a compatibility constraint.
   from CLR overload identity. `testLibraryPublicationFailsWhenADeclarationIsEvicted` pins a
   property/user-accessor clash on each typed view, a distinct inherited method and local property
   accessor colliding on the declared view, a distinct inherited method and inherited property
-  accessor colliding on that view, a user TypeDef occupying a generated exact name, a split-view
-  mutable intersection, and a nested owner-relative generic-method intersection; all seven produce
+  accessor colliding on that view, a user TypeDef occupying a generated exact name, and a nested
+  owner-relative generic-method intersection; all six produce
   diagnostics and no KLIB/DLL
   pair. The inherited gate follows the emitted physical
   capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected when
   it is a distinct Kotlin member or when no selected derived slot covers both same-name contributor
-  families. Merged property fake overrides are checked against atomic accessor selection, so a
-  split-view `var` fails publication rather than exposing only half a property. A portable
+  families. Merged property fake overrides are checked against atomic accessor selection on each
+  physical view. A portable
   same-name intersection executes one Kotlin implementation through both
   parent canonical/declared bundles and the derived Kotlin view on both runtimes; explicit parent
   calls also work from C#. The pre-adapter derived call was CS0121. Bodyless intersections of
@@ -1404,6 +1404,12 @@ landed shape as a compatibility constraint.
   contributor has that exact resolved return. That contributor's bridge implements the derived
   slot; wider parent bridges still adapt the same source body. Kotlin and C# producer/consumer
   calls pin the strongly typed derived result on both profiles.
+  A split mutable property follows the same surface rule as an ordinary split property: the
+  declared-variance interface owns its legal accessor subset, while the exact interface repeats
+  the safe accessor and owns the complete getter/setter property. Schema 14 records all three
+  accessor/view obligations, and existing bridges receive the corresponding `MethodImpl` rows.
+  Kotlin producer/consumer implementations and direct C# declared reads plus exact writes execute
+  on both profiles without another property body.
   Selected portable defaults shared by several branches use the profile-aware promotion ABI rather
   than a schema-14 bodyless slot. Two incomparable generic promotion providers cause the derived
   interface to emit another canonical/declared/exact resolver bundle targeting the original helper.
@@ -1413,9 +1419,8 @@ landed shape as a compatibility constraint.
   Physical ABI schema 14 gives that slot a
   distinct normalized record containing its typed owner/view, method name, and contributing
   logical-member group; it is not encoded as an already-implemented view bridge. A property needs
-  no second record because KLIB retains the accessor association; its accessors are admitted or
-  removed atomically rather than exposing a derived getter without its setter. Properties whose
-  accessors split across declared/exact views and nested/general owner-relative method constraints
+  no second record because KLIB retains the accessor association; each physical view's required
+  accessor set is admitted or removed atomically. Nested/general owner-relative method constraints
   remain pending and are rejected as complete declarations when
   they would otherwise leave an ambiguous same-name CLR surface. Logical contributors and their
   first multi-branch meeting are discovered before those support checks, so every genuine

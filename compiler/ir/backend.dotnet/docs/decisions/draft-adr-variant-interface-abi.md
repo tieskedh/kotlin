@@ -136,13 +136,12 @@ cast failure instead of receiving the collection barrier. Kotlin catches that or
 same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
 foreign-implementor matrix remain pending.
 
-Library publication also now fails on seven independently replayed physical collisions: a
+Library publication also now fails on six independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
 property accessor mapping to the same declared-view slot, an inherited method and inherited
 property accessor mapping to one declared-view slot, and a user declaration occupying the
-generated exact-view TypeDef identity, a mutable same-name intersection whose getter and setter
-would require different typed views, and a same-name intersection whose nested owner-relative
+generated exact-view TypeDef identity, and a same-name intersection whose nested owner-relative
 method constraint has no complete physical adapter. The inherited checks follow the physical
 capability graph and exempt a genuine Kotlin override of the inherited member. A same-name inherited
 intersection is admitted only when the producer selects a derived slot covering both contributing
@@ -216,10 +215,11 @@ separate adapters to the same implementation body. A selected portable default s
 branches is resolved by the profile-aware promotion bundle from the default-interface ADR,
 including competing generic canonical/declared/exact providers. It is not a schema-14 bodyless
 intersection. Unrelated default declarations require an explicit Kotlin override and therefore
-follow the ordinary declared-body path. Nested or general owner-relative constraints and properties
-whose accessors split across views remain pending. Until their adapters exist, an otherwise
-ambiguous same-name shape is rejected as a whole and produces neither KLIB nor DLL; name equality
-alone is never publication evidence. Discovery identifies the logical
+follow the ordinary declared-body path. A property accessor may receive records on more than one
+view when the established complete-exact-property rule requires it. Nested or general
+owner-relative constraints remain pending. Until their adapters exist, an otherwise ambiguous
+same-name shape is rejected as a whole and produces neither KLIB nor DLL; name equality alone is
+never publication evidence. Discovery identifies the logical
 contributors and the first physical meeting of at least two parent branches before applying those
 support checks. Consequently every real multi-branch candidate is selected into schema 14, covered
 by an already generated profile-aware default promotion, or rejected; an unsupported candidate is
@@ -240,15 +240,16 @@ the generated cast. A nested use such as `Box<R>` is not equivalent: there is no
 conversion from `Box<R>` to `Box<T>`, so it remains a publication diagnostic until a separate
 adapter representation is designed.
 
-A property intersection is represented by recorded accessor-slot obligations plus a real
-source-named CLR property row on the derived typed capability. A `val` binds its generated getter;
-a `var` is admitted only when both getter and setter obtain slots on that same physical view, and
-the property row binds both. No accessor copies an implementation. A separate property record is
-not needed: KLIB preserves the accessor/property association and the physical index records each
-accessor's typed owner, name, and logical contributor group. The producer filters the accessors as
-one atomic property, so it never publishes a derived read-only projection of a Kotlin `var` while
-leaving its inherited setter ambiguous. Mutable properties split between declared and exact views
-remain deferred.
+A property intersection is represented by recorded accessor-slot obligations plus real
+source-named CLR property rows on the derived typed capabilities. Each declared-variance view owns
+the accessor subset legal under its variance metadata. If either accessor requires the invariant
+exact view, that view repeats the other accessor as a forwarding obligation and owns the complete
+property. Thus a common covariant `var` shape exposes a getter-only property on the declared `out T`
+view and a read/write property on the exact view, matching an ordinary declared split property.
+No accessor copies an implementation. A separate property record is not needed: KLIB preserves
+the accessor/property association, while schema 14 records every accessor/view obligation and
+contributor group independently. The producer validates the required accessor set atomically per
+view, so it cannot publish a setter-only exact property or leave either inherited family ambiguous.
 
 ## Physical views
 
@@ -863,9 +864,10 @@ coverage for at least:
   invariant mutable property with a real derived CLR property row, direct owner-relative `<R : T>`
   parameters/results, and direct parent-parameter permutation plus bodyless intermediate branches;
   a single-parent descendant is pinned to reuse the already selected slot without another record,
-  and an unsafe input is selected on the exact capability. Split-view property, nested/general
-  owner-relative generic-method, default-body, and general
-  inherited overload disambiguation remain required;
+  and an unsafe input is selected on the exact capability. A split mutable property owns its legal
+  accessor on the declared view and its complete getter/setter row on the exact view.
+  Nested/general owner-relative generic methods and general inherited overload disambiguation
+  remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
   getters and setters;

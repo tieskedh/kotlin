@@ -690,7 +690,7 @@ internal class DotNetIlEmitter(
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { type ->
                 (type.classifier as? IrClassSymbol)?.owner
             }
-            val discoveredSlots = irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
+            val discoveredSlots = irClass.dotNetMemberFakeOverrides().flatMap slot@{ fakeOverride ->
                 val inheritedDeclarations = fakeOverride.allOverridden()
                     .asSequence()
                     .filter { member ->
@@ -705,7 +705,9 @@ internal class DotNetIlEmitter(
                         other != candidate && candidate in other.allOverridden()
                     }
                 }
-                if (contributors.map { member -> member.parent }.distinct().size < 2) return@slot null
+                if (contributors.map { member -> member.parent }.distinct().size < 2) {
+                    return@slot emptyList()
+                }
 
                 fun IrClass.inheritsDeclaration(member: IrSimpleFunction): Boolean {
                     val memberOwner = member.parent as? IrClass ?: return false
@@ -725,15 +727,15 @@ internal class DotNetIlEmitter(
                     // One parent already owns the complete intersection, so its source-named slot
                     // is inherited without C# ambiguity. Emit only at the first capability where
                     // separate physical branches actually meet.
-                    return@slot null
+                    return@slot emptyList()
                 }
 
                 val memberName = fakeOverride.correspondingPropertySymbol?.owner?.name?.asString()
                     ?: fakeOverride.name.asString()
-                fun reject(reason: String): DotNetGenericInterfaceIntersectionSlot? {
+                fun reject(reason: String): List<DotNetGenericInterfaceIntersectionSlot> {
                     rejectedGenericInterfaceIntersections.getOrPut(irClass, ::mutableListOf) +=
                         "inherited Kotlin intersection '$memberName' $reason"
-                    return null
+                    return emptyList()
                 }
                 if (fakeOverride.body != null) {
                     return@slot reject("has an independently lowered fake-override body")
@@ -760,7 +762,7 @@ internal class DotNetIlEmitter(
                                     promotion.inheritedMember in member.allOverridden()
                         }
                     }
-                    if (alreadyPromoted) return@slot null
+                    if (alreadyPromoted) return@slot emptyList()
                     return@slot reject("selects a default body without a profile-aware derived adapter")
                 }
 
@@ -785,49 +787,60 @@ internal class DotNetIlEmitter(
                     .minByOrNull { member -> member.dotNetGenericInterfaceCanonicalSlotId() }
                     ?: return@slot reject("has no contributor matching its resolved return signature")
 
-                // Own the first typed capability on which every physical contributor coexists.
-                // An unsafe variant-position member therefore lands on the invariant exact view,
-                // while ordinary covariant/contravariant members stay on the declared view.
-                val memberView = listOf(
-                    DotNetGenericInterfaceMemberView.DECLARED,
-                    DotNetGenericInterfaceMemberView.EXACT,
-                ).firstOrNull { view ->
-                    contributors.all { member -> isInheritedDeclarationOnView(irClass, member, view) }
-                } ?: return@slot reject("has no common declared or exact physical capability")
-                DotNetGenericInterfaceIntersectionSlot(
-                    owner = irClass,
-                    signatureSource = fakeOverride,
-                    contributingMembers = contributors,
-                    implementationMember = implementationMember,
-                    memberView = memberView,
-                    physicalMethodName = fakeOverride.dotNetAbiMethodName(),
-                )
+                // Reuse the declared/exact surface rule of an ordinary property declaration. Most
+                // members have one typed home. A split mutable property repeats its safe accessor
+                // on the exact view so that capability owns a complete CLR property, while the
+                // declared view retains only the accessor legal under its variance metadata.
+                val memberViews = typeMapper.genericInterfaceMemberViews(fakeOverride, irClass)
+                    .filter { view ->
+                        contributors.all { member ->
+                            isInheritedDeclarationOnView(irClass, member, view)
+                        }
+                    }
+                if (memberViews.isEmpty()) {
+                    return@slot reject("has no common declared or exact physical capability")
+                }
+                memberViews.map { memberView ->
+                    DotNetGenericInterfaceIntersectionSlot(
+                        owner = irClass,
+                        signatureSource = fakeOverride,
+                        contributingMembers = contributors,
+                        implementationMember = implementationMember,
+                        memberView = memberView,
+                        physicalMethodName = fakeOverride.dotNetAbiMethodName(),
+                    )
+                }
             }
-            // A CLR property row is one atomic surface even though its accessors are separate
-            // MethodImpl obligations. Keep a property only when every Kotlin accessor has a slot
-            // on this same view; in particular, never expose the declared getter of a mutable
-            // variant property while its exact-only setter remains inherited and ambiguous.
+            // Treat each CLR capability's property row atomically. The declared view contains the
+            // subset legal under its variance metadata; the exact view contains the complete
+            // property whenever either accessor requires it. Never publish only part of the
+            // accessor set required on one physical view.
             val selectedSlots = discoveredSlots.filter { slot ->
                 val property = slot.signatureSource.correspondingPropertySymbol?.owner
                     ?: return@filter true
-                listOfNotNull(property.getter, property.setter).all { accessor ->
-                    discoveredSlots.any { candidate ->
-                        candidate.signatureSource == accessor && candidate.memberView == slot.memberView
+                listOfNotNull(property.getter, property.setter)
+                    .filter { accessor ->
+                        slot.memberView in typeMapper.genericInterfaceMemberViews(accessor, irClass)
                     }
-                }
+                    .all { accessor ->
+                        discoveredSlots.any { candidate ->
+                            candidate.signatureSource == accessor && candidate.memberView == slot.memberView
+                        }
+                    }
             }
             discoveredSlots.filterNot(selectedSlots::contains).forEach { slot ->
                 val memberName = slot.signatureSource.correspondingPropertySymbol?.owner?.name?.asString()
                     ?: slot.signatureSource.name.asString()
                 rejectedGenericInterfaceIntersections.getOrPut(irClass, ::mutableListOf) +=
                     "inherited Kotlin intersection '$memberName' has no complete derived " +
-                            "CLR property surface on one typed capability"
+                            "CLR property surface on its required typed capabilities"
             }
             selectedSlots
         }.sortedWith(
             compareBy<DotNetGenericInterfaceIntersectionSlot>(
                 { slot -> slot.owner.diagnosticName() },
                 { slot -> slot.physicalMethodName },
+                { slot -> slot.memberView.ordinal },
             )
         )
         // A downstream class may refine the return of a recorded intersection slot. Recover the

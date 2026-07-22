@@ -1099,6 +1099,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         left === value && right === value
                 }
 
+                public interface SplitMutableIntersectionLeft<out T> {
+                    public var splitLabel: @UnsafeVariance T
+                }
+
+                public interface SplitMutableIntersectionRight<out T> {
+                    public var splitLabel: @UnsafeVariance T
+                }
+
+                public interface SplitMutableIntersection<out T> :
+                    SplitMutableIntersectionLeft<T>, SplitMutableIntersectionRight<T>
+
+                public class SplitMutableIntersectionImpl : SplitMutableIntersection<String> {
+                    override var splitLabel: String = "split-initial"
+                }
+
+                public fun newSplitMutableIntersection(): SplitMutableIntersection<String> =
+                    SplitMutableIntersectionImpl()
+
+                public fun exerciseSplitMutableIntersection(
+                    value: SplitMutableIntersection<String>,
+                ): Boolean {
+                    val left: SplitMutableIntersectionLeft<String> = value
+                    val right: SplitMutableIntersectionRight<String> = value
+                    value.splitLabel = "split-producer"
+                    return left.splitLabel == "split-producer" &&
+                        right.splitLabel == "split-producer" && left === value && right === value
+                }
+
                 public interface ExactIntersectionLeft<out T> {
                     public fun acceptsExact(value: @UnsafeVariance T): Boolean
                 }
@@ -1302,6 +1330,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".override method instance void class 'wide.MutableIntersection`1'<string>::" +
                     "'set_mutableLabel'(!0)" in libraryIl
         ) { libraryIl }
+        val splitMutableIntersectionSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath.single() in setOf(
+                "wide.SplitMutableIntersection`1",
+                "wide.SplitMutableIntersection__KotlinExact`1",
+            )
+        }
+        assertEquals(3, splitMutableIntersectionSlots.size, splitMutableIntersectionSlots.joinToString("\n"))
+        assertEquals(
+            setOf("get_splitLabel"),
+            splitMutableIntersectionSlots
+                .filter { slot -> slot.physicalView == DotNetInterfaceDefaultPromotionView.DECLARED }
+                .mapTo(hashSetOf()) { slot -> slot.methodName },
+        )
+        assertEquals(
+            setOf("get_splitLabel", "set_splitLabel"),
+            splitMutableIntersectionSlots
+                .filter { slot -> slot.physicalView == DotNetInterfaceDefaultPromotionView.EXACT }
+                .mapTo(hashSetOf()) { slot -> slot.methodName },
+        )
+        assertTrue(splitMutableIntersectionSlots.all { slot ->
+            slot.contributingLogicalMemberKeys.size == 2
+        })
         val exactIntersectionSlots = allIntersectionSlots.filter { slot ->
             slot.ownerPath == listOf("wide.ExactIntersection__KotlinExact`1")
         }
@@ -1369,6 +1419,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     class LocalMutableIntersection : MutableIntersection<String> {
                         override var mutableLabel: String = "local-initial"
+                    }
+
+                    class LocalSplitMutableIntersection : SplitMutableIntersection<String> {
+                        override var splitLabel: String = "local-split-initial"
                     }
 
                     class LocalExactIntersection : ExactIntersection<Any> {
@@ -1498,6 +1552,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             throw Error("external mutable intersection slots diverged")
                         }
 
+                        val splitMutable = newSplitMutableIntersection()
+                        if (!exerciseSplitMutableIntersection(splitMutable) ||
+                            splitMutable.splitLabel != "split-producer"
+                        ) {
+                            throw Error("producer split mutable intersection dispatch failed")
+                        }
+                        val localSplitMutable: SplitMutableIntersection<String> =
+                            LocalSplitMutableIntersection()
+                        val localSplitMutableLeft: SplitMutableIntersectionLeft<String> =
+                            localSplitMutable
+                        val localSplitMutableRight: SplitMutableIntersectionRight<String> =
+                            localSplitMutable
+                        localSplitMutable.splitLabel = "split-consumer"
+                        if (localSplitMutableLeft.splitLabel != "split-consumer" ||
+                            localSplitMutableRight.splitLabel != "split-consumer"
+                        ) {
+                            throw Error("external split mutable intersection slots diverged")
+                        }
+
                         val exact = newExactIntersection()
                         if (!readExactIntersection(exact)) {
                             throw Error("producer exact intersection dispatch failed")
@@ -1594,6 +1667,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 ".override method instance void class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
                         "'set_mutableLabel'(!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]" +
+                        "'wide.SplitMutableIntersection`1'<string>::'get_splitLabel'()" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]" +
+                        "'wide.SplitMutableIntersection__KotlinExact`1'<string>::'get_splitLabel'()" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance void class [Wide.Generic]" +
+                        "'wide.SplitMutableIntersection__KotlinExact`1'<string>::'set_splitLabel'(!0)" in consumerIl
             ) { consumerIl }
             assertTrue(
                 ".override method instance bool class [Wide.Generic]" +
@@ -1904,6 +1989,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 mutableRight.mutableLabel == "csharp", "mutable C# property dispatch");
                             Require((bool) exerciseMutable.Invoke(null, new object[] { mutable }) &&
                                 mutableDerived.mutableLabel == "producer", "mutable Kotlin dispatch");
+
+                            MethodInfo createSplitMutable =
+                                RequireMethod(facade, "newSplitMutableIntersection");
+                            MethodInfo exerciseSplitMutable =
+                                RequireMethod(facade, "exerciseSplitMutableIntersection");
+                            object splitMutable = createSplitMutable.Invoke(null, null);
+                            wide.SplitMutableIntersection<string> splitMutableDeclared =
+                                (wide.SplitMutableIntersection<string>) splitMutable;
+                            wide.SplitMutableIntersection__KotlinExact<string> splitMutableExact =
+                                (wide.SplitMutableIntersection__KotlinExact<string>) splitMutable;
+                            PropertyInfo splitDeclaredProperty = typeof(
+                                wide.SplitMutableIntersection<string>).GetProperty("splitLabel");
+                            PropertyInfo splitExactProperty = typeof(
+                                wide.SplitMutableIntersection__KotlinExact<string>)
+                                    .GetProperty("splitLabel");
+                            Require(splitDeclaredProperty.CanRead && !splitDeclaredProperty.CanWrite,
+                                "split mutable declared property shape");
+                            Require(splitExactProperty.CanRead && splitExactProperty.CanWrite,
+                                "split mutable exact property shape");
+                            splitMutableExact.splitLabel = "split-csharp";
+                            Require(splitMutableDeclared.splitLabel == "split-csharp",
+                                "split mutable C# property dispatch");
+                            Require((bool) exerciseSplitMutable.Invoke(
+                                    null, new object[] { splitMutable }) &&
+                                splitMutableDeclared.splitLabel == "split-producer",
+                                "split mutable Kotlin property dispatch");
 
                             MethodInfo createExact = RequireMethod(facade, "newExactIntersection");
                             MethodInfo readExact = RequireMethod(facade, "readExactIntersection");
@@ -4970,17 +5081,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface InheritedOnlyAccessorClash<out T> :
                 InheritedOnlyMethod<T>, InheritedOnlyProperty<T>
 
-            public interface SplitMutableLeft<out T> {
-                public var split: @UnsafeVariance T
-            }
-
-            public interface SplitMutableRight<out T> {
-                public var split: @UnsafeVariance T
-            }
-
-            public interface SplitMutableIntersection<out T> :
-                SplitMutableLeft<T>, SplitMutableRight<T>
-
             public class OwnerBoundBox<T>
 
             public interface NestedOwnerBoundLeft<T> {
@@ -5005,7 +5105,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "and inherited member 'get_value'",
             "inherited members '<get-item>' and 'get_item'",
             "but are distinct Kotlin members",
-            "has no complete derived CLR property surface on one typed capability",
             "requires an owner-relative generic adapter beyond direct method-parameter uses",
             "maps to a duplicate canonical, declared, or exact IL type",
         )
