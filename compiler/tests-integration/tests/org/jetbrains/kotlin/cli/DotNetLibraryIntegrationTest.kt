@@ -3968,6 +3968,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public interface OverrideDerived<out T> : OverrideBase<T> {
                     override val value: T
                 }
+
+                public interface IntersectionLeft<out T> {
+                    public fun read(): T
+                }
+
+                public interface IntersectionRight<out T> {
+                    public fun read(): T
+                }
+
+                public interface IntersectionDerived<out T> :
+                    IntersectionLeft<T>, IntersectionRight<T>
                 """.trimIndent()
             )
         }
@@ -4037,6 +4048,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public val value: T
             }
 
+            public interface InheritedOnlyMethod<out T> {
+                public fun get_item(): T
+            }
+
+            public interface InheritedOnlyProperty<out T> {
+                public val item: T
+            }
+
+            public interface InheritedOnlyAccessorClash<out T> :
+                InheritedOnlyMethod<T>, InheritedOnlyProperty<T>
+
             public interface ReservedOwner<out T> {
                 public fun accept(value: @UnsafeVariance T)
             }
@@ -4046,6 +4068,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "clash on its declared CLR capability",
             "clash on its exact CLR capability",
             "and inherited member 'get_value'",
+            "inherited members '<get-item>' and 'get_item'",
             "but are distinct Kotlin members",
             "maps to a duplicate canonical, declared, or exact IL type",
         )

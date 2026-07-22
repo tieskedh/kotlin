@@ -136,16 +136,20 @@ cast failure instead of receiving the collection barrier. Kotlin catches that or
 same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
 foreign-implementor matrix remain pending.
 
-Library publication also now fails on four independently replayed physical collisions: a
+Library publication also now fails on five independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
-property accessor mapping to the same declared-view slot, and a user declaration occupying the
-generated exact-view TypeDef identity. The inherited check follows the physical capability graph
-and exempts a genuine Kotlin override of the inherited member. Each failure names the affected
-physical view or generated-type collision and produces neither KLIB nor DLL. This pins the current
-whole-declaration rejection policy without declaring the broader overload, inherited-only, and
-reserved-member collision matrix complete. Stable disambiguation remains the final ABI direction;
-whole-declaration rejection is the safe temporary implementation while that mapping is absent.
+property accessor mapping to the same declared-view slot, an inherited method and inherited
+property accessor mapping to one declared-view slot, and a user declaration occupying the
+generated exact-view TypeDef identity. The inherited checks follow the physical capability graph
+and exempt a genuine Kotlin override of the inherited member. An inherited-only clash is rejected
+only when the IR names prove that the two declarations are distinct Kotlin members; same-name
+intersection overrides remain valid and require separate executable slot-mapping validation. Each
+failure names the affected physical view or generated-type collision and produces neither KLIB nor
+DLL. This pins the current whole-declaration rejection policy without declaring the broader
+overload, same-name inherited, and reserved-member collision matrix complete. Stable
+disambiguation remains the final ABI direction; whole-declaration rejection is the safe temporary
+implementation while that mapping is absent.
 
 A separately compiled 65-parameter interface now validates that the canonical/declared/exact
 representation has no 32- or 64-bit capability-mask limit. A portable producer and Kotlin/C#
@@ -745,8 +749,9 @@ coverage for at least:
 - collection special barriers and an ordinary user unsafe member which throws on a wrong shape;
 - `D<*>`, independent `out`/`in` use-site projections, and `is`/`as`/`as?` erasure;
 - inherited, permuted, repeated, and diamond generic superinterfaces; a local/inherited
-  declared-view accessor collision is rejected before publication, while inherited-only and
-  executable disambiguation cases remain required;
+  declared-view accessor collision and a distinct-name inherited-only accessor collision are
+  rejected before publication, while same-name intersection execution and general inherited
+  overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
   getters and setters;
