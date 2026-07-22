@@ -656,15 +656,16 @@ internal class DotNetIlEmitter(
         // C# diagnoses two equally applicable inherited source-named members as CS0121 even
         // when Kotlin has one valid intersection fake override. Materialize the conservative
         // bodyless slice here, after the physical view graph exists: direct generic parents,
-        // no owner-dependent method constraints/default/property surface, and one identical
-        // resolved signature, including ordinary value and method type parameters.
+        // no owner-dependent method constraints/default bodies, and one identical resolved
+        // signature, including ordinary methods and read-only property accessors.
         // More complex intersections stay unchanged until their adapter semantics are explicit.
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNullTo(hashSetOf()) { type ->
                 (type.classifier as? IrClassSymbol)?.owner
             }
             irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
-                if (fakeOverride.correspondingPropertySymbol != null ||
+                val intersectionProperty = fakeOverride.correspondingPropertySymbol?.owner
+                if (intersectionProperty?.setter != null ||
                     fakeOverride.typeParameters.any { parameter ->
                         parameter.superTypes.any { bound -> bound.isDotNetOwnerDependentConstraint(irClass) }
                     } ||
@@ -2940,10 +2941,29 @@ internal class DotNetIlEmitter(
                 else -> {}
             }
         }
-        intersectionSlots
-            .filter { slot -> slot.memberView == memberView }
-            .forEach { slot ->
-                renderPhysicalMember(slot.signatureSource, slot.physicalMethodName)
+        val viewIntersectionSlots = intersectionSlots.filter { slot -> slot.memberView == memberView }
+        viewIntersectionSlots.forEach { slot ->
+            renderPhysicalMember(slot.signatureSource, slot.physicalMethodName)
+        }
+        // Accessor methods alone are not an idiomatic or unambiguous C# property surface. Bind
+        // every admitted fake property to the generated accessor slot on this derived capability;
+        // the accessor remains the implementation obligation recorded in the physical ABI.
+        viewIntersectionSlots
+            .mapNotNull { slot -> slot.signatureSource.correspondingPropertySymbol?.owner }
+            .distinctBy { property -> property.symbol }
+            .forEach { property ->
+                val getter = property.getter?.takeIf { accessor ->
+                    viewIntersectionSlots.any { slot -> slot.signatureSource == accessor }
+                }
+                val setter = property.setter?.takeIf { accessor ->
+                    viewIntersectionSlots.any { slot -> slot.signatureSource == accessor }
+                }
+                renderedProperties += renderPropertyBlock(
+                    property,
+                    getter,
+                    setter,
+                    viewFunctions,
+                )
             }
         genericInterfaceDefaults
             .asSequence()
