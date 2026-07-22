@@ -95,7 +95,7 @@ IL_tryEnd_0:
     ldloc.0
     ret
   }
-  .method public hidebysig static class [mscorlib]System.Exception 'withCause'(class [mscorlib]System.Exception 'cause') cil managed
+  .method public hidebysig static class [mscorlib]System.Exception 'withCause__KotlinException__f782a3a53a6857d23f6955c5eb414ea9'(class [mscorlib]System.Exception 'cause') cil managed
   {
     .maxstack 2
     ldstr "message"
@@ -103,7 +103,7 @@ IL_tryEnd_0:
     newobj instance void [Kotlin.Runtime]'Kotlin.Error'::.ctor(string, class [mscorlib]System.Exception)
     ret
   }
-  .method public hidebysig static class [mscorlib]System.Exception 'fromCause'(class [mscorlib]System.Exception 'cause') cil managed
+  .method public hidebysig static class [mscorlib]System.Exception 'fromCause__KotlinException__6b95aaa0b6763921caee4569b27a3e3c'(class [mscorlib]System.Exception 'cause') cil managed
   {
     .maxstack 1
     ldarg.0

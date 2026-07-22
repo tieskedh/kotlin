@@ -224,6 +224,8 @@ internal class DotNetIlMethodCodegen(
                 appendGenericInterfaceTypedBridgeOverride()
             } else if (function.origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
                 appendCovariantReturnBridgeOverride()
+            } else {
+                appendRenamedExceptionInterfaceSlotOverrides()
             }
             if (!isAbstractMember) {
                 if (isEntryPoint) {
@@ -335,6 +337,44 @@ internal class DotNetIlMethodCodegen(
             }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
             appendLine("    .override method ${overrideInfo.renderMethodReference(physicalMethodName)}")
+        }
+    }
+
+    /**
+     * Maps an ordinary class method to a non-generic interface slot when exception-carrier naming
+     * makes their CLR names differ. This occurs when one Kotlin override simultaneously reuses an
+     * unmangled generic-base slot (`Base<T>.f(T)` at `T = Throwable`) and implements a directly
+     * exception-typed interface slot. The class vtable name remains authoritative; an explicit
+     * MethodImpl row preserves the additional interface decision without copying the body.
+     *
+     * Split generic interfaces own their several physical views in
+     * [appendGenericInterfaceTypedBridgeOverride] and are deliberately excluded here. A signature
+     * difference also remains bridge territory; attaching an incompatible body through MethodImpl
+     * would merely defer the error to type loading.
+     */
+    private fun StringBuilder.appendRenamedExceptionInterfaceSlotOverrides() {
+        val implementation = function as? IrSimpleFunction ?: return
+        val owner = implementation.parent as? IrClass ?: return
+        if (owner.isInterface) return
+        val implementationName = functionInfo.physicalMethodName ?: implementation.dotNetIlMethodName()
+        for (overriddenSymbol in implementation.overriddenSymbols) {
+            val overridden = overriddenSymbol.owner
+            val interfaceClass = overridden.parent as? IrClass ?: continue
+            if (!interfaceClass.isInterface || interfaceClass.isDotNetGenericInterfaceDeclaration) continue
+            if (overridden.dotNetExceptionCarrierMethodNameOrNull() == null) continue
+            val overrideInfo = availableFunctions[overridden]
+                ?: typeMapper.referencedFunctionInfoOrNull(overridden)
+                ?: dotNetUnsupported("renamed exception interface slot is unavailable")
+            val slotName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+            if (slotName == implementationName) continue
+            if ("__KotlinException__" !in slotName && "__KotlinException__" !in implementationName) continue
+            if (
+                overrideInfo.signature.returnType != signature.returnType ||
+                overrideInfo.signature.renderParameterTypes() != signature.renderParameterTypes()
+            ) {
+                continue
+            }
+            appendLine("    .override method ${overrideInfo.renderMethodReference(slotName)}")
         }
     }
 

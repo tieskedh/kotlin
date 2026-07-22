@@ -452,8 +452,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 38
-library-integration tests; the current audited result is 839/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 39
+library-integration tests; the current audited result is 840/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -473,6 +473,17 @@ The same cross-language lane invokes the runtime classifier directly for represe
 foreign, mapped, exact Kotlin, and fatal objects, covering every assigned id and hostile negative/
 overflow ids on both runtime variants. Every invocation returns `bool` without throwing. This
 closes the exception-filter totality requirement and pins unknown ids to a safe false result.
+
+The portable exception ABI lane now publishes direct and nested-generic overloads whose logical
+`Throwable`, `Exception`, `RuntimeException`, and `Error` parameters all share the physical
+`System.Exception` carrier. Physical-name grammar version 2 derives a stable suffix from the
+owner-independent Kotlin signature before a collision is observed. Separate net48 and net10
+consumers execute top-level calls, class overrides, ordinary interface dispatch, and split generic-
+interface dispatch against the recorded producer names; a substituted generic-base override also
+retains its original slot, and an explicit `MethodImpl` maps that body to a differently named
+non-generic interface slot. This closes method-overload
+disambiguation; exception returns/properties, constructor collisions, narrow export admission, and
+remaining generic boundary shapes stay open.
 
 ## 4. P1 consolidation
 

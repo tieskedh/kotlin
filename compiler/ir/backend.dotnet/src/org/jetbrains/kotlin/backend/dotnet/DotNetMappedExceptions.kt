@@ -278,6 +278,24 @@ internal object DotNetMappedExceptions {
     fun mappedEntry(typeFqName: FqName?): Entry.Mapped? =
         typeFqName?.let(entries::get) as? Entry.Mapped
 
+    /**
+     * Whether this logical Kotlin type shares the universal `System.Exception` signature
+     * carrier with another distinct Kotlin exception type.
+     *
+     * These four categories are intentionally non-injective at the CLR type level. Callable
+     * names must therefore retain their logical distinction when one occurs in a physical
+     * parameter position; exact mapped exception classes do not need that additional identity.
+     */
+    fun hasSharedSignatureCarrier(typeFqName: FqName?): Boolean =
+        when (mappedEntry(typeFqName)?.classifierTypeId) {
+            DotNetKotlinExceptionTypeId.THROWABLE,
+            DotNetKotlinExceptionTypeId.EXCEPTION,
+            DotNetKotlinExceptionTypeId.RUNTIME_EXCEPTION,
+            DotNetKotlinExceptionTypeId.ERROR,
+                -> true
+            else -> false
+        }
+
     fun isMappedTypeAssignableTo(actualTypeRef: String, expectedTypeRef: String): Boolean =
         entries.values.asSequence()
             .filterIsInstance<Entry.Mapped>()

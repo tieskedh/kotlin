@@ -118,6 +118,66 @@ internal fun IrSimpleFunction.dotNetIlMethodName(): String {
     return prefix + property.name.asString()
 }
 
+/**
+ * The stable Kotlin ABI name used when distinct logical exception types share one CLR signature
+ * carrier. The suffix is derived from Kotlin's owner-independent callable signature. An override
+ * derives it from the selected logical slot declaration, so substituting `T = Throwable` does not
+ * detach an override from an unmangled `f(T)` base slot. Unrelated overloads remain distinct. The
+ * rule is applied whenever a non-dispatch parameter contains a classified exception category,
+ * not only after a collision is observed: adding a later overload must not rename an already
+ * published method.
+ *
+ * Nested type arguments participate because `Box<Throwable>` and `Box<Exception>` can erase to
+ * the same closed CLR signature just as direct parameters do. C#-facing source names belong to
+ * explicit export facades when this non-injective representation requires distinct projections.
+ */
+internal fun IrSimpleFunction.dotNetExceptionCarrierMethodNameOrNull(
+    baseMethodName: String = dotNetIlMethodName(),
+): String? {
+    fun IrType.containsSharedExceptionCarrier(): Boolean {
+        if (DotNetMappedExceptions.hasSharedSignatureCarrier(classFqName)) return true
+        return (this as? IrSimpleType)?.arguments.orEmpty().any { argument ->
+            (argument as? IrTypeProjection)?.type?.containsSharedExceptionCarrier() == true
+        }
+    }
+
+    fun IrSimpleFunction.logicalExceptionSignatureOrNull(): String? {
+        val requiresLogicalName = parameters.any { parameter ->
+            parameter.kind != IrParameterKind.DispatchReceiver &&
+                    parameter.type.containsSharedExceptionCarrier()
+        }
+        if (!requiresLogicalName) return null
+        return with(DotNetIrMangler) {
+            this@logicalExceptionSignatureOrNull.signatureString(compatibleMode = false)
+        }
+    }
+
+    fun IrSimpleFunction.selectedSlotRoots(): List<IrSimpleFunction> {
+        val overridden = overriddenSymbols.map { it.owner }
+        if (overridden.isEmpty()) return listOf(this)
+        val classSlots = overridden.filter { overriddenMember ->
+            (overriddenMember.parent as? IrClass)?.isInterface == false
+        }
+        val selectedSlots = classSlots.ifEmpty { overridden }
+        return selectedSlots.flatMap { it.selectedSlotRoots() }
+    }
+
+    val slotSignatures = selectedSlotRoots()
+        .map { it.logicalExceptionSignatureOrNull() }
+        .distinct()
+    val logicalSignature = if (slotSignatures.size == 1) {
+        slotSignatures.single()
+    } else {
+        logicalExceptionSignatureOrNull()
+    } ?: return null
+    return "${baseMethodName}__KotlinException__${DotNetLibraryAbiCodec.logicalIdentityDigest(logicalSignature)}"
+}
+
+/** The ordinary CLR name, or the stable logical-exception ABI name when representation requires it. */
+internal fun IrSimpleFunction.dotNetAbiMethodName(
+    baseMethodName: String = dotNetIlMethodName(),
+): String = dotNetExceptionCarrierMethodNameOrNull(baseMethodName) ?: baseMethodName
+
 /** The Kotlin Any member and the CLR System.Object virtual slot that physically represents it. */
 internal enum class DotNetAnyMethod(
     val kotlinName: String,
@@ -337,7 +397,9 @@ internal class DotNetIlTypeMapper private constructor(
     }
 
     fun genericInterfaceTypedMethodName(member: IrSimpleFunction): String =
-        DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName()
+        member.dotNetAbiMethodName(
+            DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(member) ?: member.dotNetIlMethodName(),
+        )
 
     /**
      * Maps the OUTERMOST interface to one typed capability while mapping each logical type
