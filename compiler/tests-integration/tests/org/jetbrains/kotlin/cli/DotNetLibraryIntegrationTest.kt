@@ -3325,30 +3325,65 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     @Test
     fun testLibraryPublicationFailsWhenADeclarationIsEvicted() {
-        val source = File(tmpdir, "unsupported-library.kt").apply {
-            writeText(
-                """
-                package sample
-
-                public fun unsupported(value: Float): Float = value
-                """.trimIndent()
+        fun assertPublicationFails(
+            moduleName: String,
+            sourceText: String,
+            vararg expectedDiagnostics: String,
+        ) {
+            val source = File(tmpdir, "$moduleName.kt").apply { writeText(sourceText.trimIndent()) }
+            val outputDirectory = File(tmpdir, moduleName)
+            val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                K2DotNetCompiler(),
+                listOf(
+                    source.path,
+                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                    K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+                )
             )
+
+            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, output)
+            assertTrue("is not supported by the .NET backend and was skipped" in output) { output }
+            expectedDiagnostics.forEach { diagnostic ->
+                assertTrue(diagnostic in output) { "Missing '$diagnostic':\n$output" }
+            }
+            assertTrue(!outputDirectory.resolve("$moduleName.klib").exists())
+            assertTrue(!outputDirectory.resolve("$moduleName.dll").exists())
         }
-        val outputDirectory = File(tmpdir, "unsupported-library")
-        val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
-            K2DotNetCompiler(),
-            listOf(
-                source.path,
-                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                K2DotNetCompilerArguments::moduleName.cliArgument, "Unsupported.Library",
-                K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
-            )
-        )
 
-        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, output)
-        assertTrue("is not supported by the .NET backend and was skipped" in output) { output }
-        assertTrue(!outputDirectory.resolve("Unsupported.Library.klib").exists())
-        assertTrue(!outputDirectory.resolve("Unsupported.Library.dll").exists())
+        assertPublicationFails(
+            "Unsupported.Library",
+            """
+            package sample
+
+            public fun unsupported(value: Float): Float = value
+            """,
+        )
+        assertPublicationFails(
+            "Generic.Interface.Clashes",
+            """
+            package sample
+
+            public interface DeclaredAccessorClash<out T> {
+                public val value: T
+                public fun get_value(): T
+            }
+
+            public interface ExactAccessorClash<out T> {
+                public var value: @UnsafeVariance T
+                public fun set_value(value: @UnsafeVariance T)
+            }
+
+            public interface ReservedOwner<out T> {
+                public fun accept(value: @UnsafeVariance T)
+            }
+
+            public interface ReservedOwner__KotlinExact<T>
+            """,
+            "clash on its declared CLR capability",
+            "clash on its exact CLR capability",
+            "maps to a duplicate canonical, declared, or exact IL type",
+        )
     }
 
     @Test
