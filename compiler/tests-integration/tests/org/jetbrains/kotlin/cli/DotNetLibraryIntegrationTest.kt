@@ -1189,6 +1189,151 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testCanonicalOnlyGenericInterfaceProviderOnBothRuntimeProfiles() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        requireOrAssumeToolchain(
+            findFrameworkNetStandardFacade() != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+
+        val producerDirectory = File(tmpdir, "canonical-only-provider-library")
+        val producerSource = File(tmpdir, "canonicalProvider.kt").apply {
+            writeText(
+                """
+                package canonicalprovider
+
+                public interface Source<out T> {
+                    public fun value(): T
+                }
+
+                public fun readAsAny(value: Source<Any?>): Any? = value.value()
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Canonical.Provider",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val metadataLibrary = producerDirectory.resolve("Canonical.Provider.klib")
+        val declarations = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest()).values
+        val sourceSlot = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration ->
+                declaration.ownerPath.last() == "canonicalprovider.Source" &&
+                        declaration.methodName.startsWith("value__KotlinErased__")
+            }
+        val reader = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration -> declaration.methodName == "readAsAny" }
+
+        val rawProviderIl = File(tmpdir, "CanonicalOnlyProvider.il").apply {
+            writeText(
+                """
+                .assembly extern mscorlib {}
+                .assembly extern Canonical.Provider {}
+                .assembly extern Kotlin.Runtime {}
+                .assembly CanonicalOnlyProvider {}
+                .module CanonicalOnlyProvider.exe
+
+                .class private auto ansi sealed beforefieldinit 'CanonicalOnlySource'
+                       extends [mscorlib]System.Object
+                       implements [Canonical.Provider]'canonicalprovider.Source'
+                {
+                  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+                  {
+                    .maxstack 1
+                    ldarg.0
+                    call instance void [mscorlib]System.Object::.ctor()
+                    ret
+                  }
+
+                  .method private hidebysig newslot virtual final instance object '${sourceSlot.methodName}'() cil managed
+                  {
+                    .override method instance object [Canonical.Provider]'canonicalprovider.Source'::'${sourceSlot.methodName}'()
+                    .maxstack 1
+                    ldc.i4.s 73
+                    box [mscorlib]System.Int32
+                    ret
+                  }
+                }
+
+                .method public static void Main() cil managed
+                {
+                  .entrypoint
+                  .maxstack 2
+                  newobj instance void 'CanonicalOnlySource'::.ctor()
+                  call object [Canonical.Provider]'${reader.ownerPath.single()}'::'${reader.methodName}'(
+                    class [Canonical.Provider]'canonicalprovider.Source'
+                  )
+                  unbox.any [mscorlib]System.Int32
+                  ldc.i4.s 73
+                  beq IL_success
+                  ldstr "Canonical-only fallback returned an unexpected value."
+                  newobj instance void [mscorlib]System.Exception::.ctor(string)
+                  throw
+                IL_success:
+                  ldstr "OK"
+                  call void [mscorlib]System.Console::WriteLine(string)
+                  ret
+                }
+                """.trimIndent()
+            )
+        }
+
+        for (target in listOf(DotNetTarget.NET48, DotNetTarget.NET10_0)) {
+            val executionDirectory = File(tmpdir, "canonical-only-provider-${target.flagValue}").apply { mkdirs() }
+            producerDirectory.resolve("Canonical.Provider.dll")
+                .copyTo(executionDirectory.resolve("Canonical.Provider.dll"))
+            val runtime = DotNetIlAssembler.assembleRuntimeForTests(
+                executionDirectory,
+                target,
+                MessageCollector.NONE,
+            )
+            assertTrue(runtime?.isFile == true) { "Failed to produce ${target.flagValue} Kotlin.Runtime.dll" }
+
+            val application = executionDirectory.resolve(
+                if (target == DotNetTarget.NET48) "CanonicalOnlyProvider.exe" else "CanonicalOnlyProvider.dll"
+            )
+            assertTrue(
+                DotNetIlAssembler.assembleExecutable(
+                    rawProviderIl,
+                    application,
+                    target,
+                    MessageCollector.NONE,
+                )
+            ) { "Failed to assemble canonical-only provider for ${target.flagValue}" }
+
+            if (target == DotNetTarget.NET48) {
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), application),
+                    executionDirectory,
+                    "Framework canonical-only generic-interface provider",
+                )
+            } else {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    executionDirectory,
+                    "CoreCLR canonical-only generic-interface provider failed",
+                )
+            }
+        }
+    }
+
+    @Test
     fun testForeignGenericInterfaceBarriers() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findModernIlasm() != null,

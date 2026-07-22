@@ -160,6 +160,12 @@ The nullable result is concretely `Int?`: the exact construction retains `Nullab
 the logical widening to `Any?` cannot use CLR value-type variance and therefore exercises the
 boxed canonical path on the same interface object.
 
+A raw CLR provider now implements only a portable producer's non-generic canonical `Source`
+identity and recorded erased member slot. It exposes neither the declared nor exact generic
+capability. The producer's separately compiled Kotlin `readAsAny` function executes that same
+object on Framework CLR 4 and CoreCLR 10. This validates capability-absent fallback on both
+profiles; it does not claim compatibility with the pre-canonical experimental representation.
+
 ## Physical views
 
 One logical Kotlin declaration may have up to four physical roles. Type and helper names below are
@@ -742,9 +748,9 @@ coverage for at least:
 - generic methods, recursive bounds, default bodies, fun interfaces, and suspend members;
 - `Iterator`, collections/maps, `Comparable`, `Continuation`, property delegates, reflection
   interfaces, ranges, and marker-only interfaces;
-- Kotlin and C# implementations, canonical-only providers from an earlier canonical-ABI version,
-  capability-absent fallbacks, both old-producer/new-consumer and new-producer/old-consumer module
-  directions, and explicit adapters;
+- Kotlin and C# implementations; a raw canonical-only provider and capability-absent fallback now
+  execute on both profiles, while actual old/new compiler-version directions and explicit adapters
+  remain required;
 - imported CLR reference-variance successes, value-variance rejections, reference-constrained
   open successes, and unconstrained/interface-bounded open rejections;
 - C# `Producer<int>`, `Producer<string>`, canonical `Producer`, `ProduceAs<object>`, exact and
