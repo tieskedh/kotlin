@@ -88,8 +88,34 @@ Kotlin metadata records the logical type. Entry and return boundaries apply the 
 when a narrower logical category must be enforced.
 
 Erasure to `System.Exception` may make otherwise distinct Kotlin overloads collide physically.
-The Kotlin ABI name/signature scheme must disambiguate those overloads; widening one category or
-inventing a wrapper is not an acceptable fix. C# export facades choose an explicit projected name
+Every method with a non-dispatch physical parameter that directly or transitively contains one of
+the shared-carrier categories receives a stable Kotlin ABI name of the form:
+
+```text
+<ordinary-name>__KotlinException__<logical-signature-digest>
+```
+
+The digest is derived from Kotlin's owner-independent logical callable signature, including nested
+type arguments. An override derives the name from its selected logical slot declaration: an
+override of `Base<T>.f(T)` at `T = Throwable` must retain the unmangled generic base slot rather
+than deriving a new name from the substituted parameter. It is not derived from declaration
+order, the mapped CLR signature, or the set of currently present overloads. Consequently a later
+overload does not rename an existing method, distinct logical overloads remain distinct after CLR
+erasure, and an ordinary override retains exactly the physical name of its base or interface slot.
+If one Kotlin override must satisfy physical views with different names, an explicit `MethodImpl`
+mapping owns that difference; a generated adapter is added only when the signatures also differ.
+The backend does not select one slot arbitrarily. The producer records ordinary names in the
+physical declaration index; metadata
+consumers call the recorded name. Generic-interface typed views use the same logical rule, while
+their separately named canonical erased slots remain governed by the variant-interface ABI.
+
+Physical-name grammar version 2 introduces this rule. Prototype libraries carrying the earlier
+grammar are rejected rather than guessed or bridged because no artifact has shipped.
+
+This method-name mechanism cannot represent two colliding CLR constructors because `.ctor` is not
+renamable. Such constructor overloads remain unsupported until a separate compiler-ABI factory
+representation is accepted; silently dropping an overload is forbidden. Widening one category or
+inventing a wrapper is not an acceptable fix. C# export facades choose explicit projected names
 and normally expose `System.Exception` for a classified category.
 
 ### Exact Kotlin-owned types
@@ -156,11 +182,15 @@ The current foundational slice implements:
 7. portable-library exception ancestry consumed and further subclassed by both `net48` and
    `net10.0` applications; and
 8. C# reflection/runtime tests proving CLR ancestry and preservation of foreign exact type,
-   identity, `InnerException`, and `Data` on both application profiles.
+   identity, `InnerException`, and `Data` on both application profiles; and
+9. stable physical disambiguation of direct and nested-generic classified-exception method
+   overloads, including ordinary and generic-base class overrides, ordinary and split-generic
+   interface implementations, and one override satisfying differently named class/interface
+   slots, from a `netstandard2.0` producer consumed and executed on both application profiles.
 
 This is not completion of the ADR. In particular, narrow exported-parameter admission, exception
-types in every generic/property/overload position, cancellation classification, stack-trace tests,
-and any necessary hierarchy-metadata encoding remain open.
+returns and properties, constructor collisions, broader generic/boundary positions, cancellation
+classification, and any necessary hierarchy-metadata encoding remain open.
 
 ## Required validation
 
@@ -172,7 +202,8 @@ Before source exception support expands, commit tests for:
 4. `===` identity, exact CLR type, `InnerException`, `Data`, message, and stack trace before and
    after Kotlin catch/rethrow;
 5. Kotlin user exception subclasses across separately compiled modules;
-6. exception-typed parameters, returns, properties, generics, and colliding overloads;
+6. exception-typed returns, properties, constructor collisions, and remaining generic/boundary
+   positions (direct and nested-generic method overloads are now covered);
 7. classifier behavior during filters, including a guarantee that it cannot throw; and
 8. C# provider/consumer tests for broad, narrow, nullable, and exact exception surfaces.
 

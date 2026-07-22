@@ -5092,6 +5092,212 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testExceptionOverloadAbi() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "portable-exception-overload-library")
+        val librarySource = File(tmpdir, "portable-exception-overload-library.kt").apply {
+            writeText(
+                """
+                package exceptionoverload
+
+                public fun classify(value: Throwable): Int = 1
+                public fun classify(value: Exception): Int = 2
+                public fun classify(value: RuntimeException): Int = 3
+                public fun classify(value: Error): Int = 4
+
+                public open class BaseClassifier {
+                    public open fun classify(value: Throwable): Int = 11
+                    public open fun classify(value: Exception): Int = 12
+                    public open fun classify(value: RuntimeException): Int = 13
+                    public open fun classify(value: Error): Int = 14
+                }
+
+                private class DerivedClassifier : BaseClassifier() {
+                    override fun classify(value: Throwable): Int = 21
+                    override fun classify(value: Exception): Int = 22
+                    override fun classify(value: RuntimeException): Int = 23
+                    override fun classify(value: Error): Int = 24
+                }
+
+                public interface Classifier {
+                    public fun classify(value: Throwable): Int
+                    public fun classify(value: Exception): Int
+                    public fun classify(value: RuntimeException): Int
+                    public fun classify(value: Error): Int
+                }
+
+                private class InterfaceClassifier : Classifier {
+                    override fun classify(value: Throwable): Int = 31
+                    override fun classify(value: Exception): Int = 32
+                    override fun classify(value: RuntimeException): Int = 33
+                    override fun classify(value: Error): Int = 34
+                }
+
+                public interface GenericClassifier<T> {
+                    public fun classify(value: Throwable): Int
+                    public fun classify(value: Exception): Int
+                }
+
+                private class GenericClassifierImpl : GenericClassifier<String> {
+                    override fun classify(value: Throwable): Int = 51
+                    override fun classify(value: Exception): Int = 52
+                }
+
+                public open class GenericBaseClassifier<T> {
+                    public open fun select(value: T): Int = 61
+                }
+
+                private class ThrowableBaseClassifier : GenericBaseClassifier<Throwable>() {
+                    override fun select(value: Throwable): Int = 62
+                }
+
+                public interface ThrowableSelector {
+                    public fun select(value: Throwable): Int
+                }
+
+                private class CombinedClassifier : GenericBaseClassifier<Throwable>(), ThrowableSelector {
+                    override fun select(value: Throwable): Int = 71
+                }
+
+                public class ExceptionBox<T>(public val value: T)
+
+                public fun nested(value: ExceptionBox<Throwable>): Int = 41
+                public fun nested(value: ExceptionBox<Exception>): Int = 42
+
+                public fun derivedClassifier(): BaseClassifier = DerivedClassifier()
+                public fun interfaceClassifier(): Classifier = InterfaceClassifier()
+                public fun genericClassifier(): GenericClassifier<String> = GenericClassifierImpl()
+                public fun genericBaseClassifier(): GenericBaseClassifier<Throwable> = ThrowableBaseClassifier()
+                public fun combinedBaseClassifier(): GenericBaseClassifier<Throwable> = CombinedClassifier()
+                public fun combinedInterfaceClassifier(): ThrowableSelector = CombinedClassifier()
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Exception.Overloads",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Exception.Overloads.klib")
+        val libraryIl = libraryDirectory.resolve("Exception.Overloads.il").readText()
+        assertTrue(
+            Regex("\\.method [^\\n]*'classify__KotlinException__[0-9a-f]{32}'")
+                .findAll(libraryIl)
+                .count() >= 24
+        ) { libraryIl }
+        assertEquals(
+            2,
+            Regex("\\.method [^\\n]*'nested__KotlinException__[0-9a-f]{32}'").findAll(libraryIl).count(),
+            libraryIl,
+        )
+        assertTrue("'classify'(class [netstandard]System.Exception" !in libraryIl) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package exceptionoverloadconsumer
+
+                    import exceptionoverload.*
+
+                    fun main() {
+                        val throwable: Throwable = Exception("throwable")
+                        val exception: Exception = Exception("exception")
+                        val runtime: RuntimeException = RuntimeException("runtime")
+                        val error: Error = Error("error")
+
+                        if (classify(throwable) != 1 || classify(exception) != 2 ||
+                            classify(runtime) != 3 || classify(error) != 4
+                        ) {
+                            throw Error("top-level classified exception overload")
+                        }
+
+                        val member: BaseClassifier = derivedClassifier()
+                        if (member.classify(throwable) != 21 || member.classify(exception) != 22 ||
+                            member.classify(runtime) != 23 || member.classify(error) != 24
+                        ) {
+                            throw Error("virtual classified exception overload")
+                        }
+
+                        val interfaceValue: Classifier = interfaceClassifier()
+                        if (interfaceValue.classify(throwable) != 31 || interfaceValue.classify(exception) != 32 ||
+                            interfaceValue.classify(runtime) != 33 || interfaceValue.classify(error) != 34
+                        ) {
+                            throw Error("interface classified exception overload")
+                        }
+
+                        val genericValue: GenericClassifier<String> = genericClassifier()
+                        if (genericValue.classify(throwable) != 51 || genericValue.classify(exception) != 52) {
+                            throw Error("generic-interface classified exception overload")
+                        }
+
+                        val genericBase: GenericBaseClassifier<Throwable> = genericBaseClassifier()
+                        if (genericBase.select(throwable) != 62) {
+                            throw Error("generic-base classified exception override")
+                        }
+
+                        if (combinedBaseClassifier().select(throwable) != 71 ||
+                            combinedInterfaceClassifier().select(throwable) != 71
+                        ) {
+                            throw Error("multi-slot classified exception override")
+                        }
+
+                        if (nested(ExceptionBox<Throwable>(throwable)) != 41 ||
+                            nested(ExceptionBox<Exception>(exception)) != 42
+                        ) {
+                            throw Error("nested classified exception overload")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "ExceptionOverloadConsumer.exe" else "ExceptionOverloadConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ExceptionOverloadConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            assertTrue(consumerDirectory.resolve("Exception.Overloads.dll").isFile) {
+                "The portable overload implementation must be packaged beside its $target consumer"
+            }
+
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Portable exception-overload consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Portable exception-overload consumer failed for $target:\n$output")
+            }
+        }
+    }
+
+    @Test
     fun testForeignClrExceptionIdentityAndClassificationAcrossRuntimeProfiles() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
@@ -5179,6 +5385,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             if (!condition) throw new Exception(message);
                         }
 
+                        private static MethodInfo RequireUniqueKotlinMethod(Type facade, string logicalName)
+                        {
+                            MethodInfo result = null;
+                            foreach (MethodInfo candidate in facade.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                            {
+                                if (candidate.Name != logicalName &&
+                                    !candidate.Name.StartsWith(logicalName + "__KotlinException__")) continue;
+                                Require(result == null, "Kotlin " + logicalName + " facade is ambiguous");
+                                result = candidate;
+                            }
+                            Require(result != null, "Kotlin " + logicalName + " facade is not public");
+                            return result;
+                        }
+
                         private static void RequireClassifierTotal(Assembly runtimeAssembly, Exception[] values)
                         {
                             Type classifierType = runtimeAssembly.GetType(
@@ -5214,12 +5434,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             Assembly kotlinAssembly = Assembly.LoadFrom("${application.name}");
                             Type facade = kotlinAssembly.GetType("exceptionboundary.exceptionBoundaryKt", true);
-                            MethodInfo classification = facade.GetMethod("classification", BindingFlags.Public | BindingFlags.Static);
-                            MethodInfo roundTrip = facade.GetMethod("roundTrip", BindingFlags.Public | BindingFlags.Static);
-                            MethodInfo rethrow = facade.GetMethod("rethrow", BindingFlags.Public | BindingFlags.Static);
-                            Require(classification != null, "Kotlin classification facade is not public");
-                            Require(roundTrip != null, "Kotlin round-trip facade is not public");
-                            Require(rethrow != null, "Kotlin rethrow facade is not public");
+                            MethodInfo classification = RequireUniqueKotlinMethod(facade, "classification");
+                            MethodInfo roundTrip = RequireUniqueKotlinMethod(facade, "roundTrip");
+                            MethodInfo rethrow = RequireUniqueKotlinMethod(facade, "rethrow");
 
                             Type kotlinRuntimeFailureType = kotlinAssembly.GetType(
                                 "exceptionboundary.KotlinRuntimeFailure", true);

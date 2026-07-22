@@ -24,7 +24,7 @@
     throw
     ret
   }
-  .method public hidebysig static string 'describe'(class [mscorlib]System.Exception 'e') cil managed
+  .method public hidebysig static string 'describe__KotlinException__24f8aac5c406e8635989e520d20a909b'(class [mscorlib]System.Exception 'e') cil managed
   {
     .maxstack 1
     ldarg.0
@@ -44,10 +44,10 @@
     ret
 IL_whenNext_1:
     ldarg.0
-    call string 'test.dotnetThrowKt'::'describe'(class [mscorlib]System.Exception)
+    call string 'test.dotnetThrowKt'::'describe__KotlinException__24f8aac5c406e8635989e520d20a909b'(class [mscorlib]System.Exception)
     ret
   }
-  .method public hidebysig static void 'chain'(string 'm', class [mscorlib]System.Exception 'c') cil managed
+  .method public hidebysig static void 'chain__KotlinException__ce95d2d301bc98028f77cf47637bc367'(string 'm', class [mscorlib]System.Exception 'c') cil managed
   {
     .maxstack 2
     ldarg.0
@@ -62,7 +62,7 @@ IL_whenNext_1:
     .maxstack 2
     ldstr "hi"
     newobj instance void [mscorlib]System.Exception::.ctor(string)
-    call string 'test.dotnetThrowKt'::'describe'(class [mscorlib]System.Exception)
+    call string 'test.dotnetThrowKt'::'describe__KotlinException__24f8aac5c406e8635989e520d20a909b'(class [mscorlib]System.Exception)
     dup
     brtrue IL_stringValueNotNull_0
     pop

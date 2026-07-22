@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 58 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 60 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 839 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 840 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -1800,7 +1800,20 @@ landed shape as a compatibility constraint.
   `ArithmeticException`, `IndexOutOfBoundsException` -> `IndexOutOfRangeException`,
   `NullPointerException` -> `NullReferenceException`, and `ClassCastException` ->
   `InvalidCastException`. Kotlin metadata retains the logical signature type where the physical
-  carrier is broader. C# admission to a broad `Throwable`/`Exception`
+  carrier is broader. A callable with a non-dispatch parameter that directly or transitively
+  contains `Throwable`, `Exception`, `RuntimeException`, or `Error` receives the proactive stable
+  physical name `<ordinary-name>__KotlinException__<logical-signature-digest>`. The digest uses
+  the owner-independent Kotlin signature and an override's selected logical slot declaration, so
+  overloads remain distinct after CLR erasure, a `Base<T>.f(T)` override at `T = Throwable` stays
+  on the unmangled generic base slot, and adding a later overload cannot rename an existing
+  method. One override satisfying differently named physical views requires an explicit
+  `MethodImpl`, plus an adapter only when signatures differ; never choose a slot arbitrarily.
+  Producers record ordinary physical names in the KLIB index; generic-interface typed views apply
+  the same deterministic rule. Explicit export facades own C#-facing names. CLR constructors
+  cannot use this mechanism and colliding exception-category constructors remain unsupported
+  pending a recorded compiler-ABI factory design. Physical-name grammar version 2 owns this rule;
+  stale prototype libraries are rejected rather than bridged.
+  C# admission to a broad `Throwable`/`Exception`
   boundary accepts any `System.Exception`; narrower export admission remains an explicit deferred
   classifier-guard design rather than a fabricated CLR hierarchy.
   `IrThrow` evaluates and throws the original reference. Kotlin source `throw e`, including from a
@@ -1812,9 +1825,12 @@ landed shape as a compatibility constraint.
   exact Kotlin, and fatal values across every assigned numeric id plus hostile ids; every call
   returns `bool` without throwing on both runtimes. A separately compiled `netstandard2.0` library also catches exact,
   mapped-runtime, broad-Exception, and Error objects supplied by both application profiles through
-  the same classifier. Cancellation classification, narrow export admission, complete exception-
-  typed generic/property/overload coverage, and any non-physical hierarchy metadata remain open
-  before Gate B.
+  the same classifier. Portable direct and nested-generic exception overloads, ordinary and
+  generic-base class overrides, interface implementations, and a differently named class/
+  interface multi-slot override execute cross-module on both application profiles. Cancellation
+  classification, narrow export admission, exception returns/properties/constructor collisions,
+  remaining generic boundary coverage, and any non-physical hierarchy metadata remain open before
+  Gate B.
 - Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
   synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
   emits an inline parameterless exception construction + `throw`, in both value and statement
