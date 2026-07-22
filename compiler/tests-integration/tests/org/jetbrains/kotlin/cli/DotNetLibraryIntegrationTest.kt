@@ -941,14 +941,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun acceptQuad(value: Quad<Int, Any, String, Any?>, candidate: Any): Boolean =
                     value.acceptsOutput(candidate)
 
+                public interface IntersectionMarker
+
+                public class IntersectionMarkerImpl : IntersectionMarker
+
                 public interface IntersectionLeft<out T> {
                     public fun read(): T
                     public fun readAt(index: Int): T
+                    public fun <R : IntersectionMarker> readGeneric(value: R): T
                 }
 
                 public interface IntersectionRight<out T> {
                     public fun read(): T
                     public fun readAt(index: Int): T
+                    public fun <R : IntersectionMarker> readGeneric(value: R): T
                 }
 
                 public interface Intersection<out T> : IntersectionLeft<T>, IntersectionRight<T>
@@ -956,6 +962,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public class IntersectionImpl : Intersection<Int> {
                     override fun read(): Int = 73
                     override fun readAt(index: Int): Int = 73 + index
+                    override fun <R : IntersectionMarker> readGeneric(value: R): Int = 73
                 }
 
                 public fun newIntersection(): Intersection<Int> = IntersectionImpl()
@@ -969,7 +976,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun readIntersection(value: Intersection<Int>): Int {
                     val left: IntersectionLeft<Int> = value
                     val right: IntersectionRight<Int> = value
-                    return left.readAt(1) + right.readAt(2) + value.readAt(3)
+                    val marker = IntersectionMarkerImpl()
+                    return left.readAt(1) + right.readAt(2) + value.readAt(3) +
+                        left.readGeneric(marker) + right.readGeneric(marker) + value.readGeneric(marker)
                 }
                 """.trimIndent()
             )
@@ -998,16 +1007,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-read-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-readAt-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-readAt-" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-readGeneric-" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-readGeneric-" in libraryIl) { libraryIl }
         assertTrue(
             ".override method instance !0 class 'wide.Intersection`1'<int32>::'read'()" in libraryIl
         ) { libraryIl }
         assertTrue(
             ".override method instance !0 class 'wide.Intersection`1'<int32>::'readAt'(int32)" in libraryIl
         ) { libraryIl }
+        assertTrue(
+            ".override method instance !0 class 'wide.Intersection`1'<int32>::'readGeneric'<[1]>(!!0)" in libraryIl
+        ) { libraryIl }
+        assertTrue(
+            "'readGeneric'<(class 'wide.IntersectionMarker') 'R'>(!!0 'value')" in libraryIl
+        ) { libraryIl }
         val intersectionSlots = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
             .values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot>()
-        assertEquals(setOf("read", "readAt"), intersectionSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(
+            setOf("read", "readAt", "readGeneric"),
+            intersectionSlots.map { slot -> slot.methodName }.toSet(),
+        )
         intersectionSlots.forEach { intersectionSlot ->
             assertEquals(listOf("wide.Intersection`1"), intersectionSlot.ownerPath)
             assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, intersectionSlot.physicalView)
@@ -1026,6 +1046,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     class LocalRefinedIntersection : Intersection<Any> {
                         override fun read(): String = "local"
                         override fun readAt(index: Int): String = "local:${'$'}index"
+                        override fun <R : IntersectionMarker> readGeneric(value: R): String = "generic"
                     }
 
                     fun main() {
@@ -1063,16 +1084,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (!sameIntersection(intersection) || left !== intersection || right !== intersection) {
                             throw Error("intersection view changed identity")
                         }
-                        if (left.read() != 73 || right.read() != 73 || readIntersection(intersection) != 225) {
+                        if (left.read() != 73 || right.read() != 73 || readIntersection(intersection) != 444) {
                             throw Error("intersection slots did not share one implementation")
                         }
 
                         val refined: Intersection<Any> = LocalRefinedIntersection()
                         val refinedLeft: IntersectionLeft<Any> = refined
                         val refinedRight: IntersectionRight<Any> = refined
+                        val marker = IntersectionMarkerImpl()
                         if (refined.read() != "local" || refinedLeft.read() != "local" ||
                             refinedRight.read() != "local" || refined.readAt(1) != "local:1" ||
-                            refinedLeft.readAt(2) != "local:2" || refinedRight.readAt(3) != "local:3"
+                            refinedLeft.readAt(2) != "local:2" || refinedRight.readAt(3) != "local:3" ||
+                            refined.readGeneric(marker) != "generic" ||
+                            refinedLeft.readGeneric(marker) != "generic" ||
+                            refinedRight.readGeneric(marker) != "generic"
                         ) {
                             throw Error("external intersection slot lost covariant refinement")
                         }
@@ -1099,6 +1124,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'readAt'(int32)" in
                         consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::" +
+                        "'readGeneric'<[1]>(!!0)" in consumerIl
             ) { consumerIl }
 
             if (target == "net10.0") {
@@ -1275,12 +1304,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             wide.IntersectionLeft<int> left = (wide.IntersectionLeft<int>) intersection;
                             wide.IntersectionRight<int> right = (wide.IntersectionRight<int>) intersection;
                             wide.Intersection<int> derived = (wide.Intersection<int>) intersection;
+                            wide.IntersectionMarkerImpl marker = new wide.IntersectionMarkerImpl();
                             Require(Object.ReferenceEquals(left, right) && Object.ReferenceEquals(left, derived),
                                 "intersection C# identity");
                             Require(left.read() == 73 && right.read() == 73 && derived.read() == 73 &&
                                 left.readAt(1) == 74 && right.readAt(2) == 75 && derived.readAt(3) == 76,
                                 "intersection parent dispatch");
-                            Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 225,
+                            Require(left.readGeneric(marker) == 73 && right.readGeneric(marker) == 73 &&
+                                derived.readGeneric(marker) == 73, "intersection generic dispatch");
+                            Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 444,
                                 "intersection Kotlin dispatch");
                             return 0;
                         }
