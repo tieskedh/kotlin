@@ -449,6 +449,55 @@ internal class DotNetIlEmitter(
                 view: DotNetGenericInterfaceMemberView,
             ): Boolean = view in typeMapper.genericInterfaceMemberViews(member, irClass)
 
+            fun DotNetIlValueType.classInfoOrNull(): DotNetIlClassInfo? = when (this) {
+                is DotNetIlValueType.UserClass -> classInfo
+                is DotNetIlValueType.GenericInstance -> classInfo
+                else -> null
+            }
+
+            fun inheritsPhysicalInterface(
+                start: DotNetIlClassInfo,
+                inherited: DotNetIlClassInfo,
+            ): Boolean {
+                val visited = hashSetOf<String>()
+                fun visit(current: DotNetIlClassInfo): Boolean {
+                    if (!visited.add(current.ilTypeRef)) return false
+                    return current.interfaces.any { superType ->
+                        val superInfo = superType.classInfoOrNull() ?: return@any false
+                        superInfo.ilTypeRef == inherited.ilTypeRef || visit(superInfo)
+                    }
+                }
+                return visit(start)
+            }
+
+            fun isInheritedOnView(
+                member: IrSimpleFunction,
+                view: DotNetGenericInterfaceMemberView,
+            ): Boolean {
+                val startInfo = genericInterfaces.getValue(irClass).classInfo(view.physicalView)
+                    ?: return false
+                return member.allOverridden().any overridden@{ overridden ->
+                    if (overridden.isFakeOverride) return@overridden false
+                    val owner = overridden.parent as? IrClass ?: return@overridden false
+                    val ownerInfo = typeMapper.genericInterfaceInfoOrNull(owner)
+                        ?: return@overridden false
+                    typeMapper.genericInterfaceMemberViews(overridden, owner)
+                        .any inheritedView@{ inheritedView ->
+                            val inheritedInfo = ownerInfo.classInfo(inheritedView.physicalView)
+                                ?: return@inheritedView false
+                            inheritsPhysicalInterface(startInfo, inheritedInfo)
+                        }
+                }
+            }
+
+            fun isKotlinOverrideOf(
+                member: IrSimpleFunction,
+                inherited: IrSimpleFunction,
+            ): Boolean {
+                val inheritedFamily = inherited.allOverridden().toHashSet().apply { add(inherited) }
+                return member === inherited || member.allOverridden().any(inheritedFamily::contains)
+            }
+
             fun checkView(
                 view: DotNetGenericInterfaceMemberView,
                 signatureMapper: DotNetIlTypeMapper,
@@ -468,6 +517,26 @@ internal class DotNetIlEmitter(
                                     "${view.name.lowercase()} CLR capability: both map to '$identity'"
                         )
                     }
+                }
+                // A typed capability inherits ordinary CLR member names from its typed
+                // super-capabilities. Two distinct Kotlin members may therefore collide even
+                // though neither source declaration clashes locally. Until stable typed-slot
+                // disambiguation exists, reject that interface atomically; a genuine Kotlin
+                // override is one slot and remains valid.
+                for (inherited in irClass.dotNetMemberFakeOverrides()) {
+                    if (!isInheritedOnView(inherited, view)) continue
+                    val signature = inherited.dotNetSignature(signatureMapper)
+                    val identity =
+                        "${inherited.dotNetAbiMethodName()}${inherited.dotNetIlGenericAritySuffix()}" +
+                                "(${signature.renderParameterTypes()})"
+                    val local = claimed[identity] ?: continue
+                    if (isKotlinOverrideOf(local, inherited)) continue
+                    dotNetUnsupported(
+                        "member '${local.name.asString()}' and inherited member " +
+                                "'${inherited.name.asString()}' of generic interface " +
+                                "'${irClass.diagnosticName()}' clash on its ${view.name.lowercase()} " +
+                                "CLR capability: both map to '$identity' but are distinct Kotlin members"
+                    )
                 }
             }
 
