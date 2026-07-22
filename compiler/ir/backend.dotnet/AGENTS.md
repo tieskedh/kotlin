@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 62 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 63 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 842 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 843 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -1504,9 +1504,10 @@ landed shape as a compatibility constraint.
   Helpers select it nonvirtually. No view adapter, promotion, class bridge, or class forwarder owns
   an independently lowered body. A concrete non-generic net10 interface override owns one complete
   final canonical/declared/exact adapter bundle whose bodies dispatch virtually to its DIM.
-  Implementors inherit that bundle, including across assemblies: unpublished physical ABI schema 12
-  records each adapter as a structured `B` entry keyed by owner, inherited logical member, and
-  physical view. Never rediscover it from generated declarations, method names, or IL text.
+  Implementors inherit that bundle, including across assemblies: unpublished physical ABI schema
+  13 retains each adapter as a structured `B` entry keyed by owner, inherited logical member, and
+  physical view (the entry was introduced in schema 12). Never rediscover it from generated
+  declarations, method names, or IL text.
   A generic capability call resolves its canonical fallback name from the bound physical function
   record before deriving a Kotlin-owned hash. Runtime and external split interfaces may retain
   established CLR names such as `MoveNext`, `Current`, or `Next`; inventing a hashed fallback for
@@ -1793,9 +1794,10 @@ landed shape as a compatibility constraint.
   User exception inheritance, reflection ancestry, typed exact catches, and cross-module
   subclassing follow those physical chains. Exact roots supplement the foreign exception universe;
   they never replace it.
-  Curated BCL mappings keep native CLR division, null, bounds, cast, state, and argument faults
-  catchable under the corresponding Kotlin types: `IllegalArgumentException` ->
-  `ArgumentException`, `IllegalStateException` -> `InvalidOperationException`,
+  Curated BCL mappings keep native CLR division, null, bounds, cast, state, cancellation, and
+  argument faults catchable under the corresponding Kotlin types: `IllegalArgumentException` ->
+  `ArgumentException`; `IllegalStateException` uses the shared `System.Exception` carrier,
+  constructs `InvalidOperationException`, and classifies both that type and cancellation children;
   `UnsupportedOperationException` -> `NotSupportedException`, `ArithmeticException` ->
   `ArithmeticException`, `IndexOutOfBoundsException` -> `IndexOutOfRangeException`,
   `NullPointerException` -> `NullReferenceException`, and `ClassCastException` ->
@@ -1813,6 +1815,12 @@ landed shape as a compatibility constraint.
   cannot use this mechanism and colliding exception-category constructors remain unsupported
   pending a recorded compiler-ABI factory design. Physical-name grammar version 2 owns this rule;
   stale prototype libraries are rejected rather than bridged.
+  `kotlin.coroutines.cancellation.CancellationException` is exactly
+  `System.OperationCanceledException`; `TaskCanceledException` and other CLR subclasses retain
+  identity and classify under Cancellation/IllegalState/Runtime/Exception/Throwable, never Error.
+  This exact cancellation root plus the classified `IllegalStateException` carrier resolves the
+  CLR sibling-root conflict without a wrapper. Classifier id 14, runtime surface level 7, and
+  physical ABI schema 13 own the change on all three profiles.
   C# admission to a broad `Throwable`/`Exception`
   boundary accepts any `System.Exception`; narrower export admission remains an explicit deferred
   classifier-guard design rather than a fabricated CLR hierarchy.
@@ -1831,9 +1839,9 @@ landed shape as a compatibility constraint.
   exception returns and mutable properties preserve logical classification and reference identity;
   a nested generic return retains its logical runtime category. Exception arrays and function
   types preserve overload selection and callback identity across the same portable boundary.
-  Cancellation classification, narrow/foreign export admission, constructor collisions, remaining
-  foreign/generic boundary coverage, and any non-physical hierarchy metadata remain open before
-  Gate B.
+  Narrow/foreign export admission, constructor collisions, remaining foreign/generic boundary
+  coverage, the complete built-in mapping table, and any non-physical hierarchy metadata remain
+  open before Gate B.
 - Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
   synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
   emits an inline parameterless exception construction + `throw`, in both value and statement

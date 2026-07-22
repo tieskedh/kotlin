@@ -385,9 +385,9 @@ property, interface, inherited-interface, abstract, generic-method, nullable-val
 reference, and multilevel dispatch. A separate `netstandard2.0` producer is consumed and executed
 by both runtime profiles; Framework and modern C# consumers verify the precise public surface and
 private bridge visibility. Import/export projections and pre-stable compatibility-version tests
-remain, but the Kotlin-owned physical bridge direction is implemented. ABI schema 12 records each
-covariant MethodImpl as a structured `R` entry, so a downstream class inherits an external
-interface-owned bridge without rediscovering it or emitting a duplicate class adapter. The
+remain, but the Kotlin-owned physical bridge direction is implemented. ABI schema 13 retains each
+covariant MethodImpl as a structured `R` entry (introduced in schema 12), so a downstream class
+inherits an external interface-owned bridge without rediscovering it or emitting a duplicate class adapter. The
 open-nullable check now also precedes the legacy non-null string-bound shortcut: method-level
 `T : String` keeps `T` as `string`, but maps `T?` to `object` and casts back only after Kotlin's
 `!!` null check. Portable-library consumers execute that ABI on both runtime profiles, and modern
@@ -452,8 +452,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 41
-library-integration tests; the current audited result is 842/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 42
+library-integration tests; the current audited result is 843/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -497,6 +497,17 @@ and on function types accepting those categories. Grammar-v2 names remain distin
 carrier mapping, while separate net48 and net10 consumers select the correct overload and return
 the exact callback argument object. This closes Kotlin-owned array/function-type placement; it
 does not decide foreign callback admission or array projection guards.
+
+Cancellation now uses the forcing-case design implied by the selected classifier model.
+`CancellationException` is the exact CLR `OperationCanceledException` identity, including foreign
+`TaskCanceledException` children. Its Kotlin `IllegalStateException` parent uses the shared
+`System.Exception` carrier while ordinary construction remains `InvalidOperationException`, so
+both sibling CLR roots classify under one truthful Kotlin edge without wrapping. A portable
+producer plus Kotlin and C# consumers execute owned/foreign construction, exact catches, parent
+returns, classification, message/cause identity, and Kotlin subclass ancestry on net48 and net10.
+Classifier id 14, runtime surface level 7, and physical ABI schema 13 reject the incompatible
+unpublished predecessor. The common cause-only factory remains in the mapped-constructor/factory
+ABI work before Gate B.
 
 ## 4. P1 consolidation
 

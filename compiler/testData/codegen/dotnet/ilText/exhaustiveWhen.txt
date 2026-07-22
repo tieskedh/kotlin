@@ -123,7 +123,7 @@ IL_whenEnd_0:
     .locals init (
       [0] string '<try>',
       [1] bool 'tmp0_subject',
-      [2] class [mscorlib]System.InvalidOperationException 'e',
+      [2] class [mscorlib]System.Exception 'e',
       [3] class [mscorlib]System.Exception 'e@3'
     )
     .try {
@@ -149,7 +149,14 @@ IL_whenEnd_1:
       stloc.0
       leave IL_tryEnd_0
     }
-    catch [mscorlib]System.InvalidOperationException {
+    filter {
+      isinst [mscorlib]System.Exception
+      ldc.i4 6
+      call bool [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExceptionClassifier'::'IsKotlinExceptionInstance'(class [mscorlib]System.Exception, int32)
+      endfilter
+    }
+    {
+      castclass [mscorlib]System.Exception
       stloc.2
       ldstr "wrong"
       stloc.0

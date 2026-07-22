@@ -122,7 +122,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("12", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("13", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -5573,6 +5573,236 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testCancellationExceptionAbi() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "portable-cancellation-library")
+        val librarySource = File(tmpdir, "cancellationLibrary.kt").apply {
+            writeText(
+                """
+                package cancellationabi
+
+                import kotlin.coroutines.cancellation.CancellationException
+
+                public fun kind(value: Throwable): Int =
+                    if (value is CancellationException) 5
+                    else if (value is IllegalStateException) 4
+                    else if (value is RuntimeException) 3
+                    else if (value is Exception) 2
+                    else if (value is Error) 1
+                    else 0
+
+                public fun roundTrip(value: Throwable): Throwable = try {
+                    throw value
+                } catch (failure: CancellationException) {
+                    failure
+                } catch (failure: Throwable) {
+                    failure
+                }
+
+                public fun newCancellation(message: String): Throwable = CancellationException(message)
+
+                public fun newCancellation(message: String, cause: Throwable): Throwable =
+                    CancellationException(message, cause)
+
+                public fun cancellationAsIllegalState(): IllegalStateException = CancellationException("parent")
+
+                public class OwnedCancellation(message: String) : CancellationException(message)
+
+                public fun newOwnedCancellation(message: String): Throwable = OwnedCancellation(message)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Exception.Cancellation",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Exception.Cancellation.klib")
+        val libraryIl = libraryDirectory.resolve("Exception.Cancellation.il").readText()
+        assertTrue("[netstandard]System.OperationCanceledException" in libraryIl) { libraryIl }
+        assertTrue("catch [netstandard]System.OperationCanceledException" in libraryIl) { libraryIl }
+        assertTrue(
+            Regex("class \\[netstandard]System\\.Exception 'cancellationAsIllegalState'\\(\\)")
+                .containsMatchIn(libraryIl)
+        ) { libraryIl }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package cancellationconsumer
+
+                    import cancellationabi.*
+                    import kotlin.coroutines.cancellation.CancellationException
+
+                    fun main() {
+                        val cancellation = newCancellation("owned")
+                        if (kind(cancellation) != 5 || cancellation !is CancellationException ||
+                            cancellation !is IllegalStateException || cancellation !is RuntimeException ||
+                            cancellation !is Exception || cancellation is Error ||
+                            roundTrip(cancellation) !== cancellation
+                        ) {
+                            throw Error("Kotlin cancellation classification")
+                        }
+                        val parent: IllegalStateException = cancellationAsIllegalState()
+                        if (parent !is CancellationException || kind(parent) != 5) {
+                            throw Error("Kotlin cancellation parent edge")
+                        }
+                        if (kind(IllegalStateException("state")) != 4) {
+                            throw Error("ordinary IllegalStateException became cancellation")
+                        }
+                        val cause = Exception("cause")
+                        val withCause = newCancellation("wrapped", cause)
+                        if (withCause !is CancellationException || withCause.cause !== cause) {
+                            throw Error("Kotlin cancellation cause identity")
+                        }
+                        val subclass = newOwnedCancellation("subclass")
+                        if (subclass !is OwnedCancellation || subclass !is CancellationException || kind(subclass) != 5) {
+                            throw Error("Kotlin cancellation subclass identity")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "CancellationConsumer.exe" else "CancellationConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "CancellationConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+
+            if (target == "net10.0") {
+                runDotNet(dotnetHost, application, consumerDirectory, "Kotlin cancellation consumer failed for $target")
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Kotlin cancellation consumer failed for $target:\n$output")
+            }
+
+            val verifierSource = consumerDirectory.resolve("CancellationVerifier.cs").apply {
+                writeText(
+                    """
+                    using System;
+                    using System.Reflection;
+                    using System.Threading.Tasks;
+
+                    public static class CancellationVerifier
+                    {
+                        private static void Require(bool condition, string message)
+                        {
+                            if (!condition) throw new Exception(message);
+                        }
+
+                        private static MethodInfo RequireMethod(Type facade, string logicalName, int parameterCount)
+                        {
+                            MethodInfo result = null;
+                            foreach (MethodInfo candidate in facade.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                            {
+                                if (candidate.Name != logicalName &&
+                                    !candidate.Name.StartsWith(logicalName + "__KotlinException__")) continue;
+                                if (candidate.GetParameters().Length != parameterCount) continue;
+                                Require(result == null, logicalName + " is ambiguous");
+                                result = candidate;
+                            }
+                            Require(result != null, logicalName + " is unavailable");
+                            return result;
+                        }
+
+                        public static int Main()
+                        {
+                            Assembly library = Assembly.LoadFrom("Exception.Cancellation.dll");
+                            Type facade = library.GetType("cancellationabi.cancellationLibraryKt", true);
+                            Type ownedCancellationType = library.GetType("cancellationabi.OwnedCancellation", true);
+                            MethodInfo kind = RequireMethod(facade, "kind", 1);
+                            MethodInfo roundTrip = RequireMethod(facade, "roundTrip", 1);
+                            MethodInfo create = RequireMethod(facade, "newCancellation", 1);
+                            MethodInfo createWithCause = RequireMethod(facade, "newCancellation", 2);
+                            MethodInfo createOwned = RequireMethod(facade, "newOwnedCancellation", 1);
+                            MethodInfo asIllegalState = RequireMethod(facade, "cancellationAsIllegalState", 0);
+
+                            OperationCanceledException cancellation = new OperationCanceledException("foreign");
+                            TaskCanceledException taskCancellation = new TaskCanceledException("task");
+                            InvalidOperationException state = new InvalidOperationException("state");
+                            Require((int) kind.Invoke(null, new object[] { cancellation }) == 5,
+                                "foreign OperationCanceledException classification");
+                            Require((int) kind.Invoke(null, new object[] { taskCancellation }) == 5,
+                                "foreign TaskCanceledException classification");
+                            Require((int) kind.Invoke(null, new object[] { state }) == 4,
+                                "InvalidOperationException classification");
+                            Require(Object.ReferenceEquals(
+                                    cancellation, roundTrip.Invoke(null, new object[] { cancellation })),
+                                "foreign cancellation identity");
+
+                            Exception owned = (Exception) create.Invoke(null, new object[] { "owned" });
+                            Require(owned.GetType() == typeof(OperationCanceledException),
+                                "Kotlin cancellation physical type");
+                            Require(owned.Message == "owned", "Kotlin cancellation message");
+                            Exception inner = new Exception("inner");
+                            Exception withCause = (Exception) createWithCause.Invoke(
+                                null, new object[] { "wrapped", inner });
+                            Require(withCause.GetType() == typeof(OperationCanceledException),
+                                "Kotlin cancellation cause physical type");
+                            Require(Object.ReferenceEquals(withCause.InnerException, inner),
+                                "Kotlin cancellation cause identity");
+                            Require(ownedCancellationType.BaseType == typeof(OperationCanceledException),
+                                "Kotlin cancellation subclass physical base");
+                            Require(createOwned.Invoke(null, new object[] { "subclass" }).GetType() == ownedCancellationType,
+                                "Kotlin cancellation subclass physical identity");
+                            Require(asIllegalState.ReturnType == typeof(Exception),
+                                "IllegalStateException carrier must admit cancellation");
+                            Require(asIllegalState.Invoke(null, null) is OperationCanceledException,
+                                "Kotlin cancellation logical parent return");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val verifier = consumerDirectory.resolve("CancellationVerifier.exe")
+            val compileResult = runCSharpCompiler(
+                checkNotNull(csharpCompiler),
+                verifierSource,
+                verifier,
+                target = "exe",
+            )
+            assertEquals(0, compileResult.exitCode, compileResult.output)
+
+            val verifierProcess = if (target == "net10.0") {
+                consumerDirectory.resolve("CancellationConsumer.runtimeconfig.json")
+                    .copyTo(consumerDirectory.resolve("CancellationVerifier.runtimeconfig.json"), overwrite = true)
+                ProcessBuilder(dotnetHost.path, "exec", verifier.path)
+            } else {
+                ProcessBuilder(verifier.path)
+            }.directory(consumerDirectory).redirectErrorStream(true).start()
+            val verifierOutput = verifierProcess.inputStream.bufferedReader().use { it.readText() }
+            assertEquals(0, verifierProcess.waitFor(), "C# cancellation verifier failed for $target:\n$verifierOutput")
+        }
+    }
+
+    @Test
     fun testForeignClrExceptionIdentityAndClassificationAcrossRuntimeProfiles() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
@@ -5683,8 +5913,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(classifier != null, "runtime exception classifier is not public compiler ABI");
                             int[] typeIds = {
                                 Int32.MinValue, -1, 0,
-                                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
-                                14, Int32.MaxValue,
+                                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                                15, Int32.MaxValue,
                             };
                             foreach (Exception value in values)
                             {

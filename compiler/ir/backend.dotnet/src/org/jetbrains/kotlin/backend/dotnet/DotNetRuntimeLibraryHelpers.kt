@@ -1764,6 +1764,9 @@ $primitiveArrayHelperTypeIl
             |      ldarg.1
             |      ldc.i4.s 13
             |      beq EC_ClassCast
+            |      ldarg.1
+            |      ldc.i4.s 14
+            |      beq EC_Cancellation
             |      br EC_False
             |
             |    EC_Exception:
@@ -1783,6 +1786,9 @@ $primitiveArrayHelperTypeIl
             |      brtrue EC_True
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.InvalidOperationException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.OperationCanceledException
             |      brtrue EC_True
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.NotSupportedException
@@ -1814,6 +1820,9 @@ $primitiveArrayHelperTypeIl
             |    EC_IllegalState:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.InvalidOperationException
+            |      brtrue EC_True
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.OperationCanceledException
             |      br EC_MatchedObject
             |    EC_UnsupportedOperation:
             |      ldarg.0
@@ -1842,6 +1851,10 @@ $primitiveArrayHelperTypeIl
             |    EC_ClassCast:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.InvalidCastException
+            |      br EC_MatchedObject
+            |    EC_Cancellation:
+            |      ldarg.0
+            |      isinst ${coreLibraryReference}System.OperationCanceledException
             |    EC_MatchedObject:
             |      ldnull
             |      cgt.un

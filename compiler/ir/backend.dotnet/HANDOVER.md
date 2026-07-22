@@ -1311,8 +1311,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
-  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 41 library-integration tests,
-  enables required-toolchain behavior in both owner projects, and currently records 842/0/0/0
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 42 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 843/0/0/0
   across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
   the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
@@ -1332,7 +1332,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   portable library can construct exceptions for consumers.
 - The raw C# verifier now calls the runtime exception classifier directly with null, foreign,
   mapped-runtime, fatal, and exact Kotlin objects for ids `Int32.MinValue`, `-1`, `0`, every
-  assigned id 1 through 13, 14, and `Int32.MaxValue`. Both runtime variants always return a Boolean
+  assigned id 1 through 14, 15, and `Int32.MaxValue`. Both runtime variants always return a Boolean
   and never throw. Together with the helper's branch/`isinst`-only implementation, this closes the
   filter-totality validation item; no user virtual member or exception payload is consulted.
 - Physical-name grammar version 2 now disambiguates Kotlin methods whose distinct logical
@@ -1361,6 +1361,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   the exact original object back through the callback. This validates Kotlin-owned array and
   function-type positions without deciding foreign projection guards. The strict baseline becomes
   842/0/0/0 across 16 XML suites.
+- Cancellation now resolves the classifier model's sibling-root forcing case.
+  `CancellationException` maps exactly to `OperationCanceledException`, while its logical
+  `IllegalStateException` parent uses the shared `System.Exception` carrier and still constructs
+  `InvalidOperationException`. Foreign `OperationCanceledException` and `TaskCanceledException`
+  objects remain unchanged and classify under Cancellation/IllegalState/Runtime/Exception, never
+  Error. A portable producer plus Kotlin and C# consumers pin exact catches, parent returns,
+  construction, message/cause identity, Kotlin subclass ancestry, and object identity on both
+  application profiles. Classifier id 14, runtime surface level 7, and physical ABI schema 13
+  reject the incompatible unshipped mapping. The
+  resulting strict baseline is 843/0/0/0 across 16 XML suites.
 - A portable generic-interface library now has an executable ordinary-C# implementor contract on
   both Framework CLR 4 and CoreCLR 10. One C# object implements
   `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed
@@ -1427,7 +1437,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 842 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 843 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
