@@ -900,6 +900,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun acceptWide(value: Wide<$widenedArguments>, candidate: Any?): Boolean =
                     value.acceptsLast(candidate)
+
+                public interface Quad<in I, out O, X, out N> {
+                    public fun run(input: I, state: X): O
+                    public fun nullable(): N
+                    public fun acceptsOutput(value: @UnsafeVariance O): Boolean
+                }
+
+                public class QuadImpl : Quad<Any, Int, String, String?> {
+                    override fun run(input: Any, state: String): Int = 4
+                    override fun nullable(): String? = null
+                    override fun acceptsOutput(value: Int): Boolean = value == 4
+                }
+
+                public fun newQuad(): Quad<Any, Int, String, String?> = QuadImpl()
+
+                public fun widenQuad(value: Quad<Any, Int, String, String?>): Quad<Int, Any, String, Any?> = value
+
+                public fun <I, O, X, N> passQuad(value: Quad<I, O, X, N>): Quad<I, O, X, N> = value
+
+                public fun sameQuad(value: Quad<Any, Int, String, String?>): Boolean =
+                    widenQuad(value) === value && passQuad(value) === value
+
+                public fun readQuad(value: Quad<Int, Any, String, Any?>): String =
+                    value.run(12, "ab").toString() + ":" + (value.nullable()?.toString() ?: "null")
+
+                public fun acceptQuad(value: Quad<Int, Any, String, Any?>, candidate: Any): Boolean =
+                    value.acceptsOutput(candidate)
                 """.trimIndent()
             )
         }
@@ -917,6 +944,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val libraryIl = libraryDirectory.resolve("Wide.Generic.il").readText()
         assertTrue("'wide.Wide`65'" in libraryIl) { libraryIl }
         assertTrue("'wide.Wide__KotlinExact`65'" in libraryIl) { libraryIl }
+        assertTrue("'wide.Quad`4'<- 'I', + 'O', 'X', + 'N'>" in libraryIl) { libraryIl }
+        assertTrue("'wide.Quad__KotlinExact`4'<'I', 'O', 'X', 'N'>" in libraryIl) { libraryIl }
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -939,6 +968,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         try {
                             acceptWide(widened, "wrong")
                             throw Error("unsafe high-index bridge accepted the wrong shape")
+                        } catch (_: ClassCastException) {
+                        }
+
+                        val quad = newQuad()
+                        val widenedQuad: Quad<Int, Any, String, Any?> = widenQuad(quad)
+                        if (!sameQuad(quad) || widenedQuad !== quad || passQuad(quad) !== quad) {
+                            throw Error("mixed four-parameter widening changed identity")
+                        }
+                        if (readQuad(widenedQuad) != "4:null" || !acceptQuad(widenedQuad, 4)) {
+                            throw Error("mixed four-parameter fallback failed")
+                        }
+                        try {
+                            acceptQuad(widenedQuad, "wrong")
+                            throw Error("mixed exact bridge accepted the wrong shape")
                         } catch (_: ClassCastException) {
                         }
                     }
@@ -996,6 +1039,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Type declared = library.GetType("wide.Wide`65", true);
                             Type exact = library.GetType("wide.Wide__KotlinExact`65", true);
                             Type implementation = library.GetType("wide.WideImpl", true);
+                            Type quadCanonical = library.GetType("wide.Quad", true);
+                            Type quadDeclared = library.GetType("wide.Quad`4", true);
+                            Type quadExact = library.GetType("wide.Quad__KotlinExact`4", true);
+                            Type quadImplementation = library.GetType("wide.QuadImpl", true);
                             Type facade = library.GetType("wide.wideLibraryKt", true);
 
                             Type[] declaredParameters = declared.GetGenericArguments();
@@ -1023,6 +1070,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             }
                             Require(hasExact, "implementation has no 65-parameter exact capability");
 
+                            Type[] quadDeclaredParameters = quadDeclared.GetGenericArguments();
+                            Type[] quadExactParameters = quadExact.GetGenericArguments();
+                            GenericParameterAttributes varianceMask = GenericParameterAttributes.VarianceMask;
+                            Require(quadDeclaredParameters.Length == 4, "quad declared arity");
+                            Require(quadExactParameters.Length == 4, "quad exact arity");
+                            Require(
+                                (quadDeclaredParameters[0].GenericParameterAttributes & varianceMask) ==
+                                    GenericParameterAttributes.Contravariant,
+                                "quad input variance");
+                            Require(
+                                (quadDeclaredParameters[1].GenericParameterAttributes & varianceMask) ==
+                                    GenericParameterAttributes.Covariant,
+                                "quad output variance");
+                            Require(
+                                (quadDeclaredParameters[2].GenericParameterAttributes & varianceMask) ==
+                                    GenericParameterAttributes.None,
+                                "quad state variance");
+                            Require(
+                                (quadDeclaredParameters[3].GenericParameterAttributes & varianceMask) ==
+                                    GenericParameterAttributes.Covariant,
+                                "quad nullable variance");
+                            for (int index = 0; index < quadExactParameters.Length; index++)
+                            {
+                                Require(
+                                    (quadExactParameters[index].GenericParameterAttributes & varianceMask) ==
+                                        GenericParameterAttributes.None,
+                                    "quad exact parameter variance " + index);
+                            }
+                            bool hasQuadExact = false;
+                            foreach (Type implemented in quadImplementation.GetInterfaces())
+                            {
+                                if (implemented.IsGenericType && implemented.GetGenericTypeDefinition() == quadExact)
+                                    hasQuadExact = true;
+                            }
+                            Require(hasQuadExact, "quad implementation has no complete exact capability");
+
                             MethodInfo create = RequireMethod(facade, "newWide");
                             MethodInfo same = RequireMethod(facade, "sameAfterWiden");
                             MethodInfo read = RequireMethod(facade, "readWide");
@@ -1041,6 +1124,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             {
                                 Require(failure.InnerException is InvalidCastException,
                                     "wrong-shaped high-index argument failure");
+                            }
+
+                            MethodInfo createQuad = RequireMethod(facade, "newQuad");
+                            MethodInfo sameQuad = RequireMethod(facade, "sameQuad");
+                            MethodInfo passQuad = RequireMethod(facade, "passQuad");
+                            MethodInfo readQuad = RequireMethod(facade, "readQuad");
+                            MethodInfo acceptQuad = RequireMethod(facade, "acceptQuad");
+                            object quad = createQuad.Invoke(null, null);
+                            Require(quadCanonical.IsInstanceOfType(quad), "quad canonical identity");
+                            Require((bool) sameQuad.Invoke(null, new object[] { quad }), "quad widening identity");
+                            MethodInfo closedPassQuad = passQuad.MakeGenericMethod(
+                                typeof(object), typeof(int), typeof(string), typeof(string));
+                            Require(Object.ReferenceEquals(quad, closedPassQuad.Invoke(null, new object[] { quad })),
+                                "quad open pass-through identity");
+                            Require((string) readQuad.Invoke(null, new object[] { quad }) == "4:null",
+                                "quad mixed fallback result");
+                            Require((bool) acceptQuad.Invoke(null, new object[] { quad, 4 }),
+                                "quad exact fallback argument");
+                            try
+                            {
+                                acceptQuad.Invoke(null, new object[] { quad, "wrong" });
+                                throw new Exception("wrong-shaped quad argument was accepted");
+                            }
+                            catch (TargetInvocationException failure)
+                            {
+                                Require(failure.InnerException is InvalidCastException,
+                                    "wrong-shaped quad argument failure");
                             }
                             return 0;
                         }
