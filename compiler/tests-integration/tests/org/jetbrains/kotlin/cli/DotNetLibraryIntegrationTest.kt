@@ -1036,6 +1036,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val right: PermutedIntersectionRight<Int, String> = value
                     return left.permute(input) + right.permute(input) + value.permute(input)
                 }
+
+                public interface IndirectIntersectionLeftBase<out T> {
+                    public fun indirect(): T
+                }
+
+                public interface IndirectIntersectionLeft<out T> : IndirectIntersectionLeftBase<T>
+
+                public interface IndirectIntersectionRightBase<out T> {
+                    public fun indirect(): T
+                }
+
+                public interface IndirectIntersectionRight<out T> : IndirectIntersectionRightBase<T>
+
+                public interface IndirectIntersection<out T> :
+                    IndirectIntersectionLeft<T>, IndirectIntersectionRight<T>
+
+                public class IndirectIntersectionImpl : IndirectIntersection<Int> {
+                    override fun indirect(): Int = 89
+                }
+
+                public fun newIndirectIntersection(): IndirectIntersection<Int> = IndirectIntersectionImpl()
+
+                public fun readIndirectIntersection(value: IndirectIntersection<Int>): Int {
+                    val left: IndirectIntersectionLeftBase<Int> = value
+                    val right: IndirectIntersectionRightBase<Int> = value
+                    return left.indirect() + right.indirect() + value.indirect()
+                }
+
+                public interface IndirectIntersectionDescendant<out T> : IndirectIntersection<T>
+
+                public class IndirectIntersectionDescendantImpl : IndirectIntersectionDescendant<Int> {
+                    override fun indirect(): Int = 97
+                }
+
+                public fun newIndirectIntersectionDescendant(): IndirectIntersectionDescendant<Int> =
+                    IndirectIntersectionDescendantImpl()
                 """.trimIndent()
             )
         }
@@ -1127,6 +1163,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".override method instance !1 class 'wide.PermutedIntersection`2'<string, int32>::" +
                     "'permute'(!0)" in libraryIl
         ) { libraryIl }
+        val indirectIntersectionSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.IndirectIntersection`1")
+        }
+        assertEquals(setOf("indirect"), indirectIntersectionSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(2, indirectIntersectionSlots.single().contributingLogicalMemberKeys.size)
+        assertTrue(
+            ".override method instance !0 class 'wide.IndirectIntersection`1'<int32>::'indirect'()" in libraryIl
+        ) { libraryIl }
+        assertTrue(allIntersectionSlots.none { slot ->
+            slot.ownerPath == listOf("wide.IndirectIntersectionDescendant`1")
+        })
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -1150,6 +1197,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     class LocalPermutedIntersection : PermutedIntersection<Any, Any> {
                         override fun permute(value: Any): String = "permuted"
+                    }
+
+                    class LocalIndirectIntersection : IndirectIntersection<Any> {
+                        override fun indirect(): String = "indirect"
                     }
 
                     fun main() {
@@ -1234,6 +1285,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ) {
                             throw Error("external permuted intersection lost refined return")
                         }
+
+                        val indirect = newIndirectIntersection()
+                        if (readIndirectIntersection(indirect) != 267) {
+                            throw Error("producer indirect intersection dispatch failed")
+                        }
+                        val localIndirect: IndirectIntersection<Any> = LocalIndirectIntersection()
+                        val localIndirectLeft: IndirectIntersectionLeftBase<Any> = localIndirect
+                        val localIndirectRight: IndirectIntersectionRightBase<Any> = localIndirect
+                        if (localIndirect.indirect() != "indirect" ||
+                            localIndirectLeft.indirect() != "indirect" ||
+                            localIndirectRight.indirect() != "indirect"
+                        ) {
+                            throw Error("external indirect intersection lost refined return")
+                        }
+                        if (newIndirectIntersectionDescendant().indirect() != 97) {
+                            throw Error("inherited selected intersection slot was not reused")
+                        }
                     }
                     """.trimIndent()
                 )
@@ -1277,6 +1345,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 ".override method instance !1 class [Wide.Generic]" +
                         "'wide.PermutedIntersection`2'<object, object>::'permute'(!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]" +
+                        "'wide.IndirectIntersection`1'<object>::'indirect'()" in consumerIl
             ) { consumerIl }
 
             if (target == "net10.0") {
@@ -1496,6 +1568,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "permuted C# dispatch");
                             Require((int) readPermuted.Invoke(null, new object[] { permuted, "abcd" }) == 249,
                                 "permuted Kotlin dispatch");
+
+                            MethodInfo createIndirect = RequireMethod(facade, "newIndirectIntersection");
+                            MethodInfo readIndirect = RequireMethod(facade, "readIndirectIntersection");
+                            object indirect = createIndirect.Invoke(null, null);
+                            wide.IndirectIntersectionLeftBase<int> indirectLeft =
+                                (wide.IndirectIntersectionLeftBase<int>) indirect;
+                            wide.IndirectIntersectionRightBase<int> indirectRight =
+                                (wide.IndirectIntersectionRightBase<int>) indirect;
+                            wide.IndirectIntersection<int> indirectDerived =
+                                (wide.IndirectIntersection<int>) indirect;
+                            Require(indirectLeft.indirect() == 89 && indirectRight.indirect() == 89 &&
+                                indirectDerived.indirect() == 89, "indirect C# dispatch");
+                            Require((int) readIndirect.Invoke(null, new object[] { indirect }) == 267,
+                                "indirect Kotlin dispatch");
+                            MethodInfo createIndirectDescendant =
+                                RequireMethod(facade, "newIndirectIntersectionDescendant");
+                            wide.IndirectIntersectionDescendant<int> indirectDescendant =
+                                (wide.IndirectIntersectionDescendant<int>)
+                                    createIndirectDescendant.Invoke(null, null);
+                            Require(indirectDescendant.indirect() == 97,
+                                "inherited selected intersection slot");
                             return 0;
                         }
                     }

@@ -660,7 +660,7 @@ internal class DotNetIlEmitter(
         // signature, including ordinary methods and read-only property accessors.
         // More complex intersections stay unchanged until their adapter semantics are explicit.
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
-            val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNullTo(hashSetOf()) { type ->
+            val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { type ->
                 (type.classifier as? IrClassSymbol)?.owner
             }
             val discoveredSlots = irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
@@ -671,13 +671,12 @@ internal class DotNetIlEmitter(
                 ) {
                     return@slot null
                 }
-                val contributors = fakeOverride.overriddenSymbols
-                    .map { symbol -> symbol.owner }
+                val inheritedDeclarations = fakeOverride.allOverridden()
+                    .asSequence()
                     .filter { member ->
                         !member.isFakeOverride &&
                                 member.name == fakeOverride.name &&
                                 member.body == null &&
-                                (member.parent as? IrClass) in directSuperInterfaces &&
                                 (member.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true &&
                                 (member.parent as IrClass).let { memberOwner ->
                                     member.typeParameters.none { parameter ->
@@ -690,7 +689,34 @@ internal class DotNetIlEmitter(
                                 genericInterfaceDefaults.none { lowered -> lowered.source == member }
                     }
                     .distinctBy { member -> member.symbol }
+                    .toList()
+                val contributors = inheritedDeclarations.filter { candidate ->
+                    inheritedDeclarations.none { other ->
+                        other != candidate && candidate in other.allOverridden()
+                    }
+                }
                 if (contributors.map { member -> member.parent }.distinct().size < 2) return@slot null
+
+                fun IrClass.inheritsDeclaration(member: IrSimpleFunction): Boolean {
+                    val memberOwner = member.parent as? IrClass ?: return false
+                    return AbstractIrTypeSubstitutor.forSuperClass(
+                        memberOwner.symbol,
+                        defaultType,
+                    ) != null
+                }
+                val contributingBranches = directSuperInterfaces.filter { directSuper ->
+                    contributors.any(directSuper::inheritsDeclaration)
+                }
+                if (contributingBranches.size < 2 ||
+                    contributingBranches.any { directSuper ->
+                        contributors.all(directSuper::inheritsDeclaration)
+                    }
+                ) {
+                    // One parent already owns the complete intersection, so its source-named slot
+                    // is inherited without C# ambiguity. Emit only at the first capability where
+                    // separate physical branches actually meet.
+                    return@slot null
+                }
 
                 fun hasResolvedSignature(member: IrSimpleFunction): Boolean {
                     val memberOwner = member.parent as? IrClass ?: return false
