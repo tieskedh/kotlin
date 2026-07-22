@@ -581,7 +581,9 @@ landed shape as a compatibility constraint.
   method name in a probe compilation, reuses it as a different source member's name, and proves
   that the implementing class's explicit `MethodImpl` still selects the canonical Kotlin body.
   Direct class/typed calls select the lookalike source member. Do not reject such names solely for
-  their spelling; reject only a real same-owner physical collision.
+  their spelling; reject only a real same-owner physical collision. The publication matrix also
+  rejects `String`/`String?` overload parameters that both map to CLR `string` while retaining
+  different physical returns; CLR return-type-only overloads are not a supported escape hatch.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
