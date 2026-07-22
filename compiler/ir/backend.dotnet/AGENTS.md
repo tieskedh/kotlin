@@ -1379,14 +1379,16 @@ landed shape as a compatibility constraint.
   admitted. A portable same-name intersection executes one Kotlin implementation through both
   parent canonical/declared bundles and the derived Kotlin view on both runtimes; explicit parent
   calls also work from C#. The pre-adapter derived call was CS0121. Bodyless non-property,
-  non-generic-method intersections of direct generic parents with one resolved signature now emit
-  a source-named abstract slot on the declared typed capability. Parameterless and ordinary
-  value-parameter methods are covered. One deterministic existing
+  bodyless method intersections of direct generic parents with one resolved signature now emit a
+  source-named abstract slot on the declared typed capability. Ordinary value parameters and
+  method type parameters with owner-independent constraints are normalized positionally and
+  covered. One deterministic existing
   bridge receives the additional `MethodImpl`, so direct C# calls and cross-module covariant
   refinement retain one Kotlin body on both profiles. Physical ABI schema 14 gives that slot a
   distinct normalized record containing its typed owner/view, method name, and contributing
   logical-member group; it is not encoded as an already-implemented view bridge. Properties,
-  defaults, method type parameters, and non-identical/permuted substitutions remain pending.
+  defaults, owner-dependent method constraints, and non-identical/permuted owner substitutions
+  remain pending.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive

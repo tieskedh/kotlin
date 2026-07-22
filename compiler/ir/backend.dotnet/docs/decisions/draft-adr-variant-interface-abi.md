@@ -197,9 +197,11 @@ two sorted unique contributing logical member identities. Its deterministic inde
 that normalized override group. This is intentionally distinct from an interface view-bridge
 record: an intersection slot is an additional implementation obligation, not evidence that the
 producer already supplied a body or final `MethodImpl`. The bodyless direct-parent declared-view
-slice now emits and consumes this record for parameterless and ordinary value-parameter methods;
-exact-only intersections, generic methods, default bodies, properties, and non-identical or
-permuted substitutions remain pending.
+slice now emits and consumes this record for ordinary methods, including method type parameters
+with owner-independent constraints. Contributor signatures and constraints are normalized by
+method-parameter position before one intersection is admitted. Exact-only intersections,
+owner-dependent method constraints, default bodies, properties, and non-identical or permuted
+owner substitutions remain pending.
 
 ## Physical views
 
@@ -800,7 +802,8 @@ coverage for at least:
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
-  refined return; exact-only, property, generic-method, default-body, permuted, and general
+  refined return plus an owner-independent constrained generic method; exact-only, property,
+  owner-dependent generic-method, default-body, permuted, and general
   inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed

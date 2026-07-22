@@ -1415,14 +1415,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   existing `B` view-bridge record: `I` describes an additional slot obligation, while `B`
   describes an implementation already supplied by an interface.
 - The emitter now writes and consumes `I` for the conservative bodyless intersection slice:
-  direct generic parents, ordinary methods without method type parameters, no defaults/properties,
-  and one resolved substituted signature. Parameterless and value-parameter methods are covered.
-  The producer emits one abstract source-named method on the
+  direct generic parents, no defaults/properties, and one resolved substituted signature.
+  Parameterless, value-parameter, and method-generic members with owner-independent constraints are
+  covered; method parameters and bounds are normalized positionally before admission. The producer
+  emits one abstract source-named method on the
   declared typed view. One deterministic parent forwarding bridge receives an additional
   `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only,
-  generic-method, property, default, and permuted/non-identical substitution cases remain open.
+  owner-dependent generic constraints, property, default, and permuted/non-identical owner
+  substitution cases remain open.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
