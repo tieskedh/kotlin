@@ -350,22 +350,25 @@ an already-erased default forwarder retains the actual `R` required by Kotlin va
 Nested uses such as `Box<R>` fail publication. Candidate discovery precedes shape filtering, so an
 unsupported real intersection cannot silently publish an ambiguous C# surface.
 
+The signature-changing continuation now admits nonidentical covariant parent returns when Kotlin
+selects one resolved return and a contributor has that exact result. Its existing typed bridge
+receives the derived `MethodImpl`; wider parent bridges continue adapting the same source body.
+Kotlin and C# producer/consumer execution preserve one refined object through all three views on
+both runtime profiles without changing schema 14.
+
 The remaining P0-D implementation order is:
 
-1. Emit a signature-changing bodyless intersection adapter for Kotlin-resolved nonidentical
-   returns. This extends the existing schema-14/MethodImpl model and requires no new identity
-   policy.
-2. Complete selected-default intersections not already covered by profile-aware promotion. They
+1. Complete selected-default intersections not already covered by profile-aware promotion. They
    must reuse the accepted helper/DIM body and never lower another body copy.
-3. Decide and record the complete C# property surface for a Kotlin `var` whose getter and setter
+2. Decide and record the complete C# property surface for a Kotlin `var` whose getter and setter
    naturally land on different declared/exact capabilities, then implement it atomically.
-4. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
+3. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-5. Finish the foreign-implementor/clash matrix and generated implementor tooling, then close the
+4. Finish the foreign-implementor/clash matrix and generated implementor tooling, then close the
    remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
    structured metadata work rather than with IL substring tests.
 
-Items 1 and 2 are the next unambiguous backend work. Item 3 is the next genuine CLR-specific
+Item 1 is the next unambiguous backend work. Item 2 is the next genuine CLR-specific
 surface decision. The Gradle friend-association wiring remains the outstanding P0-C product-
 integration item and should be completed before Gate A, but it does not alter the compiler ABI
 selected above.
