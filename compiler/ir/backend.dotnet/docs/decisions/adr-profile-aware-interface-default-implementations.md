@@ -334,7 +334,9 @@ Before the representation is considered implemented, tests must cover:
   both `net48` and `netstandard2.0`;
 - generic declared/canonical/exact views, boxing adapters, and covariant returns, including a
   precise derived default mapped to a wider inherited slot without a redundant class bridge;
-- property accessors, generic methods, default arguments, and nested interfaces;
+- property accessors, generic methods, default arguments, and nested interfaces, including a
+  portable generic interface dispatcher consumed on both runtime profiles with its declaring
+  interface type context intact;
 - reflection evidence for abstract slots, DIM bodies, helpers, visibility, attributes, and
   `MethodImpl` rows;
 - a separately compiled direct or indirect portable base-class forwarder combined with a
