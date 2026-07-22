@@ -112,8 +112,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Framework ILAsm remains the Framework application writer and a source compatibility oracle. No
   full suite was run. The next continuation added that library product boundary:
   `-Xdotnet-produce-library` compiles ordinary sources to a bound `<module>.klib`/`<module>.dll`
-  pair using the netstandard2.0 profile, fixed unsigned 1.0.0.0 assembly identity, modern portable
-  writer, and no entry point/runtimeconfig. A focused consumer assembled separately and invoked an
+  pair using the netstandard2.0 profile, consistent unsigned 1.0.0.0 candidate assembly identity,
+  modern portable writer, and no entry point/runtimeconfig. A focused consumer assembled
+  separately and invoked an
   explicit exported primitive method from the produced DLL on CoreCLR. General Kotlin
   cross-module calls were initially deferred until the KLIB owned durable facade/member identity
   rather than asking a consumer to infer it from a source filename. The current continuation now
@@ -476,10 +477,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The fresh full DotNet suite is 374/0/0/0 across eight XML files.
 - The runtime-foundation continuation deliberately precedes callable lowering. Every assembled
   executable now carries an AssemblyRef to and is emitted beside `Kotlin.Runtime.dll`, built from
-  one TFM-neutral IL definition by the selected target's ILAsm. ABI-major-1 identity is fixed as
-  culture-neutral, unsigned `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null`; compatible
-  releases do not change AssemblyVersion, strong naming requires a new identity/major, and the API
-  floor stays inside .NET Framework 4.8 `mscorlib` while remaining CoreCLR-compatible. Namespace
+  one TFM-neutral IL definition by the selected target's ILAsm. The prototype artifact set uses the
+  consistent culture-neutral, unsigned candidate identity
+  `Kotlin.Runtime, Version=1.0.0.0, PublicKeyToken=null`; this is not a published ABI-major or an
+  AssemblyVersion compatibility promise. Names, version policy, and signing remain deliberately
+  breakable until the external-publication gate decides them together. After publication, changing
+  any CLR identity component requires an explicit ABI transition. The API floor stays inside .NET
+  Framework 4.8 `mscorlib` while remaining CoreCLR-compatible. Namespace
   ownership is `Kotlin` for language ABI, `Kotlin.Runtime` for runtime services, and
   `Kotlin.Runtime.Internal` for compiler support. The initial public type was a deliberately
   memberless `Kotlin.Runtime.RuntimeInfo` marker; the callable continuation below adds the first
@@ -520,8 +524,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   callable types without declaring the runtime AssemblyRef. Header emission now derives that ref
   from the final post-eviction IL body, so both ILAsm versions assemble callable-bearing library IL
   without autodetection; executables keep the runtime-foundation ref unconditionally.
-- The capturing-callable continuation freezes erased `Kotlin.Function0`/`Function1`/`Function2`
-  as the only Kotlin callable identity ABI. Immutable captures and bound receivers are private
+- The capturing-callable continuation selects erased `Kotlin.Function0`/`Function1`/`Function2`
+  as the only callable identity in the current pre-freeze ABI candidate. Immutable captures and
+  bound receivers are private
   fields on freshly allocated generated callable classes; there are no delegate-like wrappers or
   additional callable interfaces. `SharedVariablesLowering` now runs between callable-reference
   lowering and local-declaration closure conversion. It rewrites each captured mutable variable to
