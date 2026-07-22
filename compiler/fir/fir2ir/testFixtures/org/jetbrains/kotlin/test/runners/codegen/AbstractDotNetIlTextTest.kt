@@ -17,6 +17,9 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetPropertyExports
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
+import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
+import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation
+import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetBackendPipelinePhase
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelineArtifact
 import org.jetbrains.kotlin.cli.pipeline.dotnet.DotNetFir2IrPipelinePhase
@@ -274,7 +277,49 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
     override fun processModule(module: TestModule, info: BinaryArtifacts.DotNet) {
         // The backend writes the .il file as UTF-8 with a BOM (required by ilasm); the BOM is an
         // encoding artifact, not part of the IL text under test.
-        multiModuleInfoDumper.builderForModule(module).append(info.outputFile.readText().removePrefix("\uFEFF"))
+        val ilText = info.outputFile.readText().removePrefix("\uFEFF")
+        multiModuleInfoDumper.builderForModule(module).append(ilText)
+
+        val frameworkIlasmAvailable = DotNetIlAssembler.findFrameworkIlasm() != null
+        if (!frameworkIlasmAvailable) {
+            if (dotNetToolchainIsRequired()) {
+                assertions.fail {
+                    ".NET Framework ILAsm is required to validate accepted IL text because " +
+                            "KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled"
+                }
+            }
+            return
+        }
+
+        val hasEntryPoint = Regex("(?m)^\\s*\\.entrypoint\\s*$").containsMatchIn(ilText)
+        val validationDirectory =
+            testServices.getOrCreateTempDirectory("dotnet-ilasm-validation")
+        val outputExtension = if (hasEntryPoint) "exe" else "dll"
+        val assembly = validationDirectory.resolve(
+            "${info.outputFile.nameWithoutExtension}-${module.name}.$outputExtension"
+        )
+        val assemblyMessages = DotNetIlasmMessageCollector()
+        val assembled = if (hasEntryPoint) {
+            DotNetIlAssembler.assembleExecutable(
+                info.outputFile,
+                assembly,
+                DotNetTarget.NET48,
+                assemblyMessages,
+            )
+        } else {
+            DotNetIlAssembler.assembleLibrary(
+                info.outputFile,
+                assembly,
+                DotNetTarget.NET48,
+                assemblyMessages,
+            )
+        }
+        if (!assembled) {
+            assertions.fail {
+                "Accepted .NET IL did not assemble as a net48 $outputExtension: " +
+                        "${info.outputFile.path}\n${assemblyMessages.render()}"
+            }
+        }
     }
 
     override fun processAfterAllModules(someAssertionWasFailed: Boolean) {
@@ -285,6 +330,29 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
         }
         assertions.assertEqualsToFile(expectedFile, actual)
     }
+}
+
+private class DotNetIlasmMessageCollector : MessageCollector {
+    private val messages = mutableListOf<String>()
+    private var errorsReported = false
+
+    override fun clear() {
+        messages.clear()
+        errorsReported = false
+    }
+
+    override fun report(
+        severity: CompilerMessageSeverity,
+        message: String,
+        location: CompilerMessageSourceLocation?,
+    ) {
+        messages += "${severity.name}: $message"
+        errorsReported = errorsReported || severity.isError
+    }
+
+    override fun hasErrors(): Boolean = errorsReported
+
+    fun render(): String = messages.joinToString("\n").ifEmpty { "ILAsm reported no diagnostic text." }
 }
 
 private class DotNetBoxMainSourceProvider(testServices: TestServices) : AdditionalSourceProvider(testServices) {

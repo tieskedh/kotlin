@@ -1259,6 +1259,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   the object for Kotlin nullability before `castclass string`. The ordinary box suite and the
   `netstandard2.0` open-nullable producer consumed by net48/net10 Kotlin and modern C# pin the
   null, non-null, and recovery paths.
+- The IL-text handler now assembly-validates every emitted module, not only its textual golden.
+  On a host with .NET Framework ILAsm, all 158 cases in both FIR parser pipelines (316 tests)
+  assemble automatically as the appropriate net48 executable or library. Strict toolchain runs
+  fail when Framework ILAsm is unavailable; other cross-platform hosts retain deterministic text
+  comparison without claiming assembly validation. This closes P0-F's assemble-all accepted-
+  goldens item, but does not replace modern net10 or same-/cross-assembler integration coverage.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1316,7 +1322,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   golden once pinned duplicate IL methods that ilasm rejects).
 - **Before every commit:** fresh `--rerun` of the full suite + XML verification; `git status`
   shows only intended files (no scratch test data — a prior session leaked `zzrev*` files);
-  if you added/changed goldens, assemble at least the new ones with ilasm as a sanity check.
+  the IL-text suite automatically assembles all net48 goldens when Framework ILAsm is available.
+  Still assemble and execute profile-specific net10 output, cross-assembler cases, and integration
+  artifacts manually when the relevant feature is not represented by that suite.
 - **Toolchain** (modern, pinned 10.0.9): `%LOCALAPPDATA%\kotlinc-dotnet\toolchain\ilasm\ilasm.exe`
   and `...\toolchain\dotnet\dotnet.exe`. Run a dll: put
   `{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}`
