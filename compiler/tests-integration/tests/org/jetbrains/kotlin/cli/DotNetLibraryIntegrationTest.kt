@@ -3694,6 +3694,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <T> requireNullable(value: T?): T = value!!
 
                 public fun <T> readNullable(source: NullableSource<T>): T? = source.nullableValue()
+
+                public fun <T : String> echoStringBoundNullable(value: T?): T? = value
+
+                public fun <T : String> requireStringBoundNullable(value: T?): T = value!!
                 """.trimIndent()
             )
         }
@@ -3711,7 +3715,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(".field private object 'value'" in libraryIl) { libraryIl }
         assertTrue("static object 'echoNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
         assertTrue("static !!0 'requireNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
+        assertTrue("static object 'echoStringBoundNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
+        assertTrue("static string 'requireStringBoundNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
         assertTrue("unbox.any !!0" in libraryIl) { libraryIl }
+        assertTrue("castclass string" in libraryIl) { libraryIl }
         assertTrue(".class interface public abstract auto ansi 'nullableabi.NullableSource`1'" in libraryIl) { libraryIl }
         assertTrue("instance object 'nullableValue'()" in libraryIl) { libraryIl }
         assertTrue(
@@ -3747,6 +3754,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         val stringSource: NullableSource<String> = StoredNullableSource(null)
                         if (stringSource.nullableValue() != null) throw Error("reference interface recovery")
                         if (readNullable(stringSource) != null) throw Error("reference generic interface call")
+
+                        if (echoStringBoundNullable<String>(null) != null) {
+                            throw Error("string-bound null call")
+                        }
+                        if (echoStringBoundNullable("bounded-call") != "bounded-call") {
+                            throw Error("string-bound call recovery")
+                        }
+                        if (requireStringBoundNullable("bounded-required") != "bounded-required") {
+                            throw Error("string-bound non-null recovery")
+                        }
                     }
                     """.trimIndent()
                 )
@@ -3800,7 +3817,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     new nullableabi.StoredNullableSource<string>(null);
                                 if (empty.nullableValue() != null) return 5;
                                 if (nullableabi.openNullableLibraryKt.echoNullable<string>(null) != null) return 6;
-                                return nullableabi.openNullableLibraryKt.requireNullable<int>(43) == 43 ? 0 : 7;
+                                if (nullableabi.openNullableLibraryKt.requireNullable<int>(43) != 43) return 7;
+
+                                if (nullableabi.openNullableLibraryKt.echoStringBoundNullable<string>(null) != null)
+                                    return 8;
+                                if ((string) nullableabi.openNullableLibraryKt
+                                    .echoStringBoundNullable<string>("bounded-call") != "bounded-call") return 9;
+                                if (nullableabi.openNullableLibraryKt
+                                    .requireStringBoundNullable<string>("bounded-required") != "bounded-required")
+                                    return 10;
+                                return 0;
                             }
                         }
                         """.trimIndent()
