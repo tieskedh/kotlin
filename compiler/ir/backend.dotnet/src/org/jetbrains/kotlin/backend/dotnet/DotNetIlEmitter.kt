@@ -754,11 +754,13 @@ internal class DotNetIlEmitter(
                 }
                 if (contributors.any { member -> !hasResolvedSignature(member) }) return@slot null
 
-                // This first producer slice deliberately owns only the normal declared C#
-                // capability. Exact-only intersections can require invariant substitutions and
-                // representation adapters which are not proven by signature equality alone.
-                val memberView = DotNetGenericInterfaceMemberView.DECLARED
-                    .takeIf { view ->
+                // Own the first typed capability on which every physical contributor coexists.
+                // An unsafe variant-position member therefore lands on the invariant exact view,
+                // while ordinary covariant/contravariant members stay on the declared view.
+                val memberView = listOf(
+                    DotNetGenericInterfaceMemberView.DECLARED,
+                    DotNetGenericInterfaceMemberView.EXACT,
+                ).firstOrNull { view ->
                         contributors.all { member -> isInheritedDeclarationOnView(irClass, member, view) }
                     }
                     ?: return@slot null
