@@ -132,25 +132,29 @@ typed `Contains(int)` and erased `ContainsErased(object)` are observationally co
 erased member returns `false` for wrong reference and null shapes. A second foreign object
 implements an ordinary user `@UnsafeVariance` interface and deliberately retains the normal CLR
 cast failure instead of receiving the collection barrier. Kotlin catches that original
-`InvalidCastException` as `ClassCastException`. This validates the current public view spelling,
-same-object contract, and barrier distinction; generated C# adapters/analyzers and the broader
-foreign-implementor matrix remain pending.
+`InvalidCastException` as `ClassCastException`. A third exact-view implementation covers a
+covariant property, a method-generic operation, and an exact-only unsafe input. Its source-named
+typed members and explicitly implemented canonical property/methods execute through both typed and
+widened Kotlin views. This validates the current public view spelling, same-object contract,
+property shape, generic-method forwarding, and barrier distinction; generated C# adapters/analyzers
+and the broader foreign-implementor matrix remain pending.
 
-Library publication also now fails on six independently replayed physical collisions: a
+Library publication also now fails on seven independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
 property accessor mapping to the same declared-view slot, an inherited method and inherited
-property accessor mapping to one declared-view slot, and a user declaration occupying the
-generated exact-view TypeDef identity, and a same-name intersection whose nested owner-relative
-method constraint has no complete physical adapter. The inherited checks follow the physical
-capability graph and exempt a genuine Kotlin override of the inherited member. A same-name inherited
-intersection is admitted only when the producer selects a derived slot covering both contributing
-families; merged property fake overrides are checked against the atomic accessor-selection result rather
-than relying on pairwise IR claims. Parent-slot execution and the bodyless typed derived slot are
-covered below. Each failure names the affected physical view or
-generated-type collision and produces neither KLIB nor DLL. This pins the current
-whole-declaration rejection policy without declaring the broader overload, same-name inherited,
-and reserved-member collision matrix complete. Stable
+property accessor mapping to one declared-view slot, a user declaration occupying the generated
+exact-view TypeDef identity, a same-name intersection whose nested owner-relative method constraint
+has no complete physical adapter, and two source overloads whose distinct Kotlin function types
+erase to the same CLR `Function1` parameter. The inherited checks follow the
+physical capability graph and exempt a genuine Kotlin override of the inherited member. A
+same-name inherited intersection is admitted only when the producer selects a derived slot
+covering both contributing families; merged property fake overrides are checked against the
+atomic accessor-selection result rather than relying on pairwise IR claims. Parent-slot execution
+and the bodyless typed derived slot are covered below. Each failure names the affected physical
+view or generated-type collision and produces neither KLIB nor DLL. This pins the current
+whole-declaration rejection policy without declaring the return-only, general inherited, and
+reserved-member collision matrix complete. Stable
 disambiguation remains the final ABI direction; whole-declaration rejection is the safe temporary
 implementation while that mapping is absent.
 
@@ -675,8 +679,8 @@ The producer must discover that logical override group before deciding whether i
 is currently supported. A bodyless group with one resolved signature receives the recorded slot;
 a selected portable default is covered by the profile-aware promotion mandated by the
 default-interface ADR, including a resolver promotion for incomparable generic providers. Any
-remaining group that needs a nested owner-relative constraint adapter, a split property surface,
-or incompatible parameter/constraint adaptation is rejected before the KLIB/DLL pair is published.
+remaining group that needs a nested owner-relative constraint adapter or incompatible
+parameter/constraint adaptation is rejected before the KLIB/DLL pair is published.
 Silently omitting such a group is not a temporary representation: it would publish a Kotlin-valid
 but C#-ambiguous and cross-module-incomplete ABI.
 
@@ -868,9 +872,10 @@ coverage for at least:
   accessor on the declared view and its complete getter/setter row on the exact view.
   Nested/general owner-relative generic methods and general inherited overload disambiguation
   remain required;
-- erased overload collisions, return-type-only physical collisions, generic/non-generic source
-  name collisions, reserved generated-name collisions, and properties with independently placed
-  getters and setters;
+- erased callable overload collisions are rejected; return-type-only physical collisions,
+  generic/non-generic source name collisions, and reserved generated-name collisions remain in
+  the required matrix. Properties with independently placed getters and setters are covered by
+  the split-property lane;
 - generic methods, recursive bounds, default bodies, fun interfaces, and suspend members;
 - `Iterator`, collections/maps, `Comparable`, `Continuation`, property delegates, reflection
   interfaces, ranges, and marker-only interfaces;
