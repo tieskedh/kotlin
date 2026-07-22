@@ -1382,8 +1382,10 @@ landed shape as a compatibility constraint.
   direct generic parents with one resolved signature now emit a
   source-named abstract slot on the declared typed capability. Ordinary value parameters and
   method type parameters with owner-independent constraints are normalized positionally and
-  covered. Direct parent-parameter permutations are normalized through the derived owner and are
-  admitted when their signatures converge. Property intersections additionally emit a real
+  covered. Parent-parameter permutations and contributors reached through bodyless intermediate
+  interfaces are normalized through the derived owner and admitted when their signatures converge.
+  At least two direct branches must contribute, and a parent which already contains the complete
+  intersection suppresses a redundant descendant slot/record. Property intersections additionally emit a real
   derived CLR property row bound to the recorded getter and, only when it exists on that same view,
   setter slots. One deterministic existing bridge receives the additional `MethodImpl`, so direct
   C# calls and cross-module covariant
@@ -1392,8 +1394,8 @@ landed shape as a compatibility constraint.
   logical-member group; it is not encoded as an already-implemented view bridge. A property needs
   no second record because KLIB retains the accessor association; its accessors are admitted or
   removed atomically rather than exposing a derived getter without its setter. Mutable properties
-  split across declared/exact views, defaults, owner-dependent method constraints, indirect
-  intersections, and non-identical resolved signatures remain pending.
+  split across declared/exact views, defaults, owner-dependent method constraints, and
+  non-identical resolved signatures remain pending.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
