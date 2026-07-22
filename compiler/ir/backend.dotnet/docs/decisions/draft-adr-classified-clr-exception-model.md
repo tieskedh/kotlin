@@ -69,6 +69,30 @@ Target runtime variants may contain different built-in CLR type rules because Fr
 The `netstandard2.0` surface references only the shared predicate; deployment selects the runtime
 variant appropriate to the consuming application.
 
+### Cancellation and the `IllegalStateException` parent edge
+
+Kotlin `CancellationException` is physically `System.OperationCanceledException`. This is a
+deliberate CLR-specific identity: ordinary .NET cancellation objects, including
+`TaskCanceledException`, remain their original objects and are directly catchable by both Kotlin
+and C# cancellation handlers. Kotlin construction selects the corresponding
+`OperationCanceledException` constructor, and Kotlin subclasses use it as their truthful CLR base.
+
+The logical Kotlin parent is nevertheless `IllegalStateException`. Because
+`OperationCanceledException` and `InvalidOperationException` are sibling CLR types,
+`IllegalStateException` cannot retain `InvalidOperationException` as its universal signature
+carrier without either rejecting the valid parent assignment or wrapping cancellation. It
+therefore uses `System.Exception` as its carrier, constructs `InvalidOperationException`, and uses
+the classifier for catches and type tests. A cancellation object classifies as
+`CancellationException`, `IllegalStateException`, `RuntimeException`, `Exception`, and
+`Throwable`, but never as `Error`. An ordinary `InvalidOperationException` classifies as
+`IllegalStateException` but not as `CancellationException`.
+
+This mapping is uniform on `net48`, `netstandard2.0`, and `net10.0`; all three profiles expose the
+required BCL cancellation root. Numeric classifier id 14 is assigned to
+`CancellationException`. Runtime surface level 7 and physical ABI schema 13 introduce the rule;
+older unpublished libraries/runtimes are rejected because their `IllegalStateException`
+signatures are physically incompatible.
+
 ### Catch lowering
 
 A Kotlin catch whose logical type is not exactly expressible as one CLR type is emitted as a CLR
@@ -82,8 +106,9 @@ is proven equivalent to the classifier for that Kotlin type.
 
 ### Signatures and overloads
 
-Logical category types such as Kotlin `Throwable`, `Exception`, `RuntimeException`, and `Error` use
-`System.Exception` in physical CLR signatures when the category can contain foreign objects.
+Logical category types such as Kotlin `Throwable`, `Exception`, `RuntimeException`, `Error`, and
+`IllegalStateException` use `System.Exception` in physical CLR signatures when the category can
+contain foreign objects or truthful children with different CLR roots.
 Kotlin metadata records the logical type. Entry and return boundaries apply the same classifier
 when a narrower logical category must be enforced.
 
@@ -186,17 +211,21 @@ The current foundational slice implements:
 9. stable physical disambiguation of direct and nested-generic classified-exception method
    overloads, including ordinary and generic-base class overrides, ordinary and split-generic
    interface implementations, and one override satisfying differently named class/interface
-   slots, from a `netstandard2.0` producer consumed and executed on both application profiles.
+   slots, from a `netstandard2.0` producer consumed and executed on both application profiles; and
+10. exact `OperationCanceledException` cancellation identity plus the classified
+    `IllegalStateException` parent edge, including owned, foreign, and `TaskCanceledException`
+    values, cause preservation, and a Kotlin-owned subclass on both application profiles.
 
 This is not completion of the ADR. In particular, narrow exported-parameter admission, exception
-returns and properties, constructor collisions, broader generic/boundary positions, cancellation
-classification, and any necessary hierarchy-metadata encoding remain open.
+returns and properties at foreign/narrow boundaries, constructor collisions, broader generic
+boundary positions, and any necessary hierarchy-metadata encoding remain open.
 
 ## Required validation
 
 Before source exception support expands, commit tests for:
 
-1. `Throwable`, `Exception`, `RuntimeException`, `Error`, cancellation, and exact-class catch order;
+1. remaining mixed `Throwable`, `Exception`, `RuntimeException`, `Error`, cancellation, and
+   exact-class catch-order combinations;
 2. unknown C# exception subclasses and known BCL faults on both `net48` and `net10.0`;
 3. one `netstandard2.0` library catching exceptions supplied by applications on both runtimes;
 4. `===` identity, exact CLR type, `InnerException`, `Data`, message, and stack trace before and
@@ -212,6 +241,10 @@ Before source exception support expands, commit tests for:
 The existing numeric type-id allocation is now embedded in generated assemblies and is append-only
 from this implementation point, though it may still be deliberately replaced before the first ABI
 gate because nothing has shipped. Hierarchy-metadata encoding (if a non-physical logical edge proves
-to need it), classifier caching, boundary-failure exception type, cancellation treatment, and the
-complete built-in CLR mapping table remain implementation decisions. They must be fixed before Gate
-B and may not change the object-preservation, truthful-ancestry, or single-classifier invariants.
+to need it), classifier caching, boundary-failure exception type, and the complete built-in CLR
+mapping table remain implementation decisions. They must be fixed before Gate B and may not change
+the object-preservation, truthful-ancestry, or single-classifier invariants.
+
+The common `CancellationException(cause)` top-level factory is part of the remaining mapped-
+constructor/factory ABI work. Its eventual lowering must preserve the common message/cause contract
+without inventing a second cancellation identity or exposing a profile-dependent surface.

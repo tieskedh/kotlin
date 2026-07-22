@@ -30,6 +30,7 @@ internal enum class DotNetKotlinExceptionTypeId(val abiValue: Int) {
     NUMBER_FORMAT_EXCEPTION(11),
     NULL_POINTER_EXCEPTION(12),
     CLASS_CAST_EXCEPTION(13),
+    CANCELLATION_EXCEPTION(14),
 }
 
 /**
@@ -216,10 +217,12 @@ internal object DotNetMappedExceptions {
             DotNetKotlinExceptionTypeId.ILLEGAL_ARGUMENT_EXCEPTION,
             hasMessageCauseCtor = true,
         )
-        exactlyMapped(
-            "IllegalStateException", "InvalidOperationException",
+        classifiedCategory(
+            "IllegalStateException",
+            PhysicalTypeRef.CoreLibrary("System.InvalidOperationException"),
             DotNetKotlinExceptionTypeId.ILLEGAL_STATE_EXCEPTION,
             hasMessageCauseCtor = true,
+            hasCauseCtor = false,
         )
         exactlyMapped(
             "UnsupportedOperationException", "NotSupportedException",
@@ -273,6 +276,19 @@ internal object DotNetMappedExceptions {
                 physicalSupertypeRefs = setOf(exceptionType),
             )
         )
+        val operationCanceledType = PhysicalTypeRef.CoreLibrary("System.OperationCanceledException")
+        put(
+            FqName("kotlin.coroutines.cancellation.CancellationException"),
+            Entry.Mapped(
+                carrierPhysicalTypeRef = operationCanceledType,
+                constructorPhysicalTypeRef = operationCanceledType,
+                typedCatchPhysicalTypeRef = operationCanceledType,
+                classifierTypeId = DotNetKotlinExceptionTypeId.CANCELLATION_EXCEPTION,
+                hasMessageCauseCtor = true,
+                hasCauseCtor = false,
+                physicalSupertypeRefs = setOf(exceptionType),
+            )
+        )
     }
 
     fun mappedEntry(typeFqName: FqName?): Entry.Mapped? =
@@ -282,7 +298,7 @@ internal object DotNetMappedExceptions {
      * Whether this logical Kotlin type shares the universal `System.Exception` signature
      * carrier with another distinct Kotlin exception type.
      *
-     * These four categories are intentionally non-injective at the CLR type level. Callable
+     * These categories are intentionally non-injective at the CLR type level. Callable
      * names must therefore retain their logical distinction when one occurs in a physical
      * parameter position; exact mapped exception classes do not need that additional identity.
      */
@@ -292,6 +308,7 @@ internal object DotNetMappedExceptions {
             DotNetKotlinExceptionTypeId.EXCEPTION,
             DotNetKotlinExceptionTypeId.RUNTIME_EXCEPTION,
             DotNetKotlinExceptionTypeId.ERROR,
+            DotNetKotlinExceptionTypeId.ILLEGAL_STATE_EXCEPTION,
                 -> true
             else -> false
         }
