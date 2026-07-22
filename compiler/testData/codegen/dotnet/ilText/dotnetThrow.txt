@@ -31,7 +31,7 @@
     callvirt instance string [mscorlib]System.Exception::get_Message()
     ret
   }
-  .method public hidebysig static string 'describeIse'(class [mscorlib]System.InvalidOperationException 'e') cil managed
+  .method public hidebysig static string 'describeIse__KotlinException__f9c203904ebe9aa97f3709f6511a3d40'(class [mscorlib]System.Exception 'e') cil managed
   {
     .maxstack 2
     ldarg.0
