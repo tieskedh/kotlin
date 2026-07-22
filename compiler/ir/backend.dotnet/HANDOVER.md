@@ -1393,15 +1393,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   explicit C# interface property rather than a same-named public accessor method. Kotlin executes
   typed and widened calls on both runtimes, including ordinary wrong-shape cast failure. A
   separate publication fixture rejects two Kotlin callable overloads that both map to the same
-  typed-view `Function1` parameter. Return-only, broader inherited, and reserved-name collisions
-  remain open.
+  typed-view `Function1` parameter. A second fixture rejects overloads whose Kotlin-distinct
+  `String`/`String?` parameters erase to one CLR `string` parameter while their mapped results
+  differ, closing the return-type-only physical collision item. Broader inherited and
+  reserved-name collisions remain open.
 - The reserved-name continuation uses a probe compilation to obtain one interface member's actual
   canonical method name, then declares a second source member with exactly that spelling. On the
   implementation class both have the same apparent CLR name/signature relationship, but the
   compiler's private explicit `MethodImpl` keeps canonical dispatch bound to `read`; direct
   class/typed dispatch reaches the lookalike. Kotlin and C# execute both results on Framework CLR
   4 and CoreCLR 10. The ADR therefore rejects a blanket reserved-spelling ban: only a real
-  same-owner physical duplicate is a collision. Return-only and broader inherited cases remain.
+  same-owner physical duplicate is a collision. Broader inherited cases remain.
 - Generic-interface publication now has explicit collision regressions for both typed capability
   views and generated type names. A property accessor colliding with a user method on the
   declared view, the same shape colliding only on the invariant exact view, and a user interface
