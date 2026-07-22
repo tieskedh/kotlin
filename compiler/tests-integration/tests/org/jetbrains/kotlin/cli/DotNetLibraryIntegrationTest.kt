@@ -1010,6 +1010,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         left === value && right === value
                 }
 
+                public interface ExactIntersectionLeft<out T> {
+                    public fun acceptsExact(value: @UnsafeVariance T): Boolean
+                }
+
+                public interface ExactIntersectionRight<out T> {
+                    public fun acceptsExact(value: @UnsafeVariance T): Boolean
+                }
+
+                public interface ExactIntersection<out T> :
+                    ExactIntersectionLeft<T>, ExactIntersectionRight<T>
+
+                public class ExactIntersectionImpl : ExactIntersection<Int> {
+                    override fun acceptsExact(value: Int): Boolean = value == 101
+                }
+
+                public fun newExactIntersection(): ExactIntersection<Int> = ExactIntersectionImpl()
+
+                public fun readExactIntersection(value: ExactIntersection<Int>): Boolean {
+                    val left: ExactIntersectionLeft<Int> = value
+                    val right: ExactIntersectionRight<Int> = value
+                    return left.acceptsExact(101) && right.acceptsExact(101) && value.acceptsExact(101)
+                }
+
                 public interface PermutedIntersectionLeft<in A, out B> {
                     public fun permute(value: A): B
                 }
@@ -1154,6 +1177,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".override method instance void class 'wide.MutableIntersection`1'<string>::" +
                     "'set_mutableLabel'(!0)" in libraryIl
         ) { libraryIl }
+        val exactIntersectionSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.ExactIntersection__KotlinExact`1")
+        }
+        assertEquals(setOf("acceptsExact"), exactIntersectionSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(DotNetInterfaceDefaultPromotionView.EXACT, exactIntersectionSlots.single().physicalView)
+        assertEquals(2, exactIntersectionSlots.single().contributingLogicalMemberKeys.size)
+        assertTrue(allIntersectionSlots.none { slot ->
+            slot.ownerPath == listOf("wide.ExactIntersection`1")
+        })
+        assertTrue(
+            ".override method instance bool class 'wide.ExactIntersection__KotlinExact`1'<int32>::" +
+                    "'acceptsExact'(!0)" in libraryIl
+        ) { libraryIl }
         val permutedIntersectionSlots = allIntersectionSlots.filter { slot ->
             slot.ownerPath == listOf("wide.PermutedIntersection`2")
         }
@@ -1193,6 +1229,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     class LocalMutableIntersection : MutableIntersection<String> {
                         override var mutableLabel: String = "local-initial"
+                    }
+
+                    class LocalExactIntersection : ExactIntersection<Any> {
+                        override fun acceptsExact(value: Any): Boolean = value == "exact"
                     }
 
                     class LocalPermutedIntersection : PermutedIntersection<Any, Any> {
@@ -1272,6 +1312,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             throw Error("external mutable intersection slots diverged")
                         }
 
+                        val exact = newExactIntersection()
+                        if (!readExactIntersection(exact)) {
+                            throw Error("producer exact intersection dispatch failed")
+                        }
+                        val localExact: ExactIntersection<Any> = LocalExactIntersection()
+                        val localExactLeft: ExactIntersectionLeft<Any> = localExact
+                        val localExactRight: ExactIntersectionRight<Any> = localExact
+                        if (!localExact.acceptsExact("exact") || !localExactLeft.acceptsExact("exact") ||
+                            !localExactRight.acceptsExact("exact")
+                        ) {
+                            throw Error("external exact intersection slots diverged")
+                        }
+
                         val permuted = newPermutedIntersection()
                         if (readPermutedIntersection(permuted, "abcd") != 249) {
                             throw Error("producer permuted intersection dispatch failed")
@@ -1341,6 +1394,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 ".override method instance void class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
                         "'set_mutableLabel'(!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance bool class [Wide.Generic]" +
+                        "'wide.ExactIntersection__KotlinExact`1'<object>::'acceptsExact'(!0)" in consumerIl
             ) { consumerIl }
             assertTrue(
                 ".override method instance !1 class [Wide.Generic]" +
@@ -1552,6 +1609,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 mutableRight.mutableLabel == "csharp", "mutable C# property dispatch");
                             Require((bool) exerciseMutable.Invoke(null, new object[] { mutable }) &&
                                 mutableDerived.mutableLabel == "producer", "mutable Kotlin dispatch");
+
+                            MethodInfo createExact = RequireMethod(facade, "newExactIntersection");
+                            MethodInfo readExact = RequireMethod(facade, "readExactIntersection");
+                            object exactIntersectionObject = createExact.Invoke(null, null);
+                            wide.ExactIntersectionLeft__KotlinExact<int> exactLeft =
+                                (wide.ExactIntersectionLeft__KotlinExact<int>) exactIntersectionObject;
+                            wide.ExactIntersectionRight__KotlinExact<int> exactRight =
+                                (wide.ExactIntersectionRight__KotlinExact<int>) exactIntersectionObject;
+                            wide.ExactIntersection__KotlinExact<int> exactDerived =
+                                (wide.ExactIntersection__KotlinExact<int>) exactIntersectionObject;
+                            Require(exactLeft.acceptsExact(101) && exactRight.acceptsExact(101) &&
+                                exactDerived.acceptsExact(101), "exact C# dispatch");
+                            Require((bool) readExact.Invoke(null, new object[] { exactIntersectionObject }),
+                                "exact Kotlin dispatch");
 
                             MethodInfo createPermuted = RequireMethod(facade, "newPermutedIntersection");
                             MethodInfo readPermuted = RequireMethod(facade, "readPermutedIntersection");
