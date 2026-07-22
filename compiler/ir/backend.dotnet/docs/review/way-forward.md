@@ -469,6 +469,11 @@ applications supply an exact subclass declared in the consumer, a mapped runtime
 Exception, and an Error, and the portable library selects the same Kotlin categories on both
 runtimes. This closes the portable-library/application-supplied direction of the exception matrix.
 
+The same cross-language lane invokes the runtime classifier directly for representative null,
+foreign, mapped, exact Kotlin, and fatal objects, covering every assigned id and hostile negative/
+overflow ids on both runtime variants. Every invocation returns `bool` without throwing. This
+closes the exception-filter totality requirement and pins unknown ids to a safe false result.
+
 ## 4. P1 consolidation
 
 After P0:

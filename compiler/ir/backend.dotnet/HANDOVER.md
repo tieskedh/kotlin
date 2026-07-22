@@ -1330,6 +1330,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   broad `Exception`, and an exact `Error` identically on both runtimes. This closes the ADR's
   portable-library-catching-application-values validation item rather than merely proving that a
   portable library can construct exceptions for consumers.
+- The raw C# verifier now calls the runtime exception classifier directly with null, foreign,
+  mapped-runtime, fatal, and exact Kotlin objects for ids `Int32.MinValue`, `-1`, `0`, every
+  assigned id 1 through 13, 14, and `Int32.MaxValue`. Both runtime variants always return a Boolean
+  and never throw. Together with the helper's branch/`isinst`-only implementation, this closes the
+  filter-totality validation item; no user virtual member or exception payload is consulted.
 - A portable generic-interface library now has an executable ordinary-C# implementor contract on
   both Framework CLR 4 and CoreCLR 10. One C# object implements
   `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed
