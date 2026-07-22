@@ -1370,8 +1370,11 @@ landed shape as a compatibility constraint.
   published library treats any such eviction as fatal. Declared- and exact-view members are
   independently clash-checked after their physical signature mapping, with return types excluded
   from CLR overload identity. `testLibraryPublicationFailsWhenADeclarationIsEvicted` pins a
-  property/user-accessor clash on each typed view and a user TypeDef occupying a generated exact
-  name; all three produce diagnostics and no KLIB/DLL pair.
+  property/user-accessor clash on each typed view, a distinct inherited method and local property
+  accessor colliding on the declared view, and a user TypeDef occupying a generated exact name;
+  all four produce diagnostics and no KLIB/DLL pair. The inherited gate follows the emitted
+  physical capability graph and exempts a genuine Kotlin override. Whole-declaration rejection is
+  temporary until stable typed-slot disambiguation is implemented.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
