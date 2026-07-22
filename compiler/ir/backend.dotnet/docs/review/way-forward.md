@@ -333,7 +333,9 @@ remains open. A separate nullable-reference overload fixture closes the return-o
 Kotlin-distinct `String`/`String?` parameters both map to CLR `string`, while `T` and `Any?` leave
 different physical results, so publication rejects the pair atomically. Same-named overloads from
 two parent interfaces are now also rejected when their distinct Kotlin callable types both erase
-to CLR `Function1` and no Kotlin-selected intersection slot covers them.
+to CLR `Function1` and no Kotlin-selected intersection slot covers them. The same gate now follows
+consumer-owned intermediate interfaces into a separately compiled producer and refuses the
+consumer KLIB/DLL pair, closing the direct/transitive cross-module direction.
 A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
 and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
 complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
@@ -385,9 +387,9 @@ The remaining P0-D implementation order is:
 
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-2. Finish foreign nested/signature shapes plus transitive/cross-module inherited substitutions and
-   the real same-owner clash matrix. Do not add a blanket ban for source names that merely
-   resemble canonical names;
+2. Finish foreign nested/signature shapes plus more general substituted inherited overload
+   families and the real same-owner clash matrix. Do not add a blanket ban for source names that
+   merely resemble canonical names;
    physical-owner separation and explicit `MethodImpl` already preserve their semantics. Then
    design generated implementor tooling; do not make a generated base class the only path because
    C# has single class inheritance. Close the

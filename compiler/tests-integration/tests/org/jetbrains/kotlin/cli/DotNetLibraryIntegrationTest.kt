@@ -5304,6 +5304,66 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "constrains type parameter 'T' with kotlin.Any",
             "no CLR reference-type constraint metadata",
         )
+
+        val inheritedProducerDirectory = File(tmpdir, "inherited-callable-overload-producer")
+        val inheritedProducerSource = File(tmpdir, "inherited-callable-overload-producer.kt").apply {
+            writeText(
+                """
+                package inheritedoverloads
+
+                public interface CallableLeft<T> {
+                    public fun apply(callback: (T) -> String): Int
+                }
+
+                public interface CallableRight<T> {
+                    public fun apply(callback: (String) -> T): Int
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            inheritedProducerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Inherited.Callable.Producer",
+            K2DotNetCompilerArguments::destination.cliArgument, inheritedProducerDirectory.path,
+        )
+        val inheritedProducerMetadata =
+            inheritedProducerDirectory.resolve("Inherited.Callable.Producer.klib")
+        assertTrue(inheritedProducerMetadata.isFile)
+
+        val inheritedConsumerSource = File(tmpdir, "inherited-callable-overload-consumer.kt").apply {
+            writeText(
+                """
+                package inheritedoverloads
+
+                public interface LeftBranch<T> : CallableLeft<T>
+                public interface RightBranch<T> : CallableRight<T>
+
+                public interface TransitiveInheritedCallableOverloads<T> :
+                    LeftBranch<T>, RightBranch<T>
+                """.trimIndent()
+            )
+        }
+        val inheritedConsumerDirectory = File(tmpdir, "inherited-callable-overload-consumer")
+        val [inheritedOutput, inheritedExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                inheritedConsumerSource.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, inheritedProducerMetadata.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Inherited.Callable.Consumer",
+                K2DotNetCompilerArguments::destination.cliArgument, inheritedConsumerDirectory.path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, inheritedExitCode, inheritedOutput)
+        assertTrue("inherited members 'apply' and 'apply'" in inheritedOutput) { inheritedOutput }
+        assertTrue("clash on its declared CLR capability" in inheritedOutput) { inheritedOutput }
+        assertTrue("no selected derived intersection slot covers both Kotlin members" in inheritedOutput) {
+            inheritedOutput
+        }
+        assertFalse(inheritedConsumerDirectory.resolve("Inherited.Callable.Consumer.klib").exists())
+        assertFalse(inheritedConsumerDirectory.resolve("Inherited.Callable.Consumer.dll").exists())
     }
 
     @Test
