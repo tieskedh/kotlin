@@ -313,7 +313,10 @@ the broader foreign-implementor and clash matrix, generated implementor tooling,
 runtime-assembly surface audit; those keep P0-D open. The first foreign barrier slice is now
 replayable: ordinary Framework and modern C# classes consume one portable Kotlin library,
 implement the canonical plus exact views on one object, preserve Collection's wrong-shape false
-barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member.
+barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member. Publication
+also now rejects and diagnoses declared-view accessor collisions, exact-view accessor collisions,
+and user TypeDefs occupying generated exact-view identities without producing a partial pair.
+The wider overload, inherited-slot, and reserved-member collision matrix remains open.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers

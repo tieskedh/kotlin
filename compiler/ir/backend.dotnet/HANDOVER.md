@@ -1307,6 +1307,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   barriers are not generalized to user annotations. Structured KLIB records select the foreign
   method/owner spellings. The variant-interface ADR records this validation; generated C#
   implementor tooling and the broader foreign/clash matrix remain open.
+- Generic-interface publication now has explicit collision regressions for both typed capability
+  views and generated type names. A property accessor colliding with a user method on the
+  declared view, the same shape colliding only on the invariant exact view, and a user interface
+  occupying its neighbor's generated exact TypeDef identity each fail with a specific diagnostic
+  and produce neither KLIB nor DLL. The existing atomic canonical/declared/exact registration and
+  per-view member gates required no representation change; the variant-interface ADR records the
+  evidence while keeping overload, inheritance, and reserved-member cases open.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
