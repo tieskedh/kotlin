@@ -458,6 +458,12 @@ required-toolchain enforcement. The integration child task uses the private shor
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
 
+The raw foreign-exception lane now validates catch/return and catch/rethrow from C# through Kotlin
+on both runtime profiles. The same CLR object retains its exact type, message, `InnerException`,
+`Data`, and an observable CLR stack trace; Kotlin source `throw e` exposes the new Kotlin throw site
+without wrapping the object. Nullable import/export remains open, but raw foreign-exception state
+and identity are now replayable P0-F evidence.
+
 ## 4. P1 consolidation
 
 After P0:

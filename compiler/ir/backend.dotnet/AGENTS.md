@@ -1774,73 +1774,43 @@ landed shape as a compatibility constraint.
   manifest binds the assembly name, version, neutral culture, null public-key token, file, and
   runtime target to the reserved artifact; the compiler then packages the sibling DLL for an
   executable consumer. This is not yet general physical-member metadata for arbitrary libraries.
-- Exceptions currently use the now-superseded hybrid implementation recorded in
-  `docs/decisions/draft-adr-hybrid-exception-identity.md` (probe series `exceptionabi_s1`). Replace
-  it with `docs/decisions/draft-adr-classified-clr-exception-model.md`; no compatibility bridge is
-  required.
-  `IrThrow` and `IrTry` follow the JVM model and map 1:1 onto the platform's
-  exception machinery with NO lowering (no WASM/JS TryCatchCanonicalization or
-  MultipleCatchesLowering). Built-in exception classes are TYPE-MAPPED onto the CLR hierarchy
-  (JVM analogue: `JavaToKotlinClassMap`) via the curated `DotNetMappedExceptions` registry, so
-  exceptions thrown by other .NET code stay catchable: `kotlin.Throwable` AND `kotlin.Exception`
-  → `System.Exception` (the CLR has no Throwable/Exception split, so `catch (e: Exception)` ≡
-  `catch (e: Throwable)`); IllegalArgumentException → ArgumentException; IllegalStateException →
-  InvalidOperationException; UnsupportedOperationException → NotSupportedException;
-  ArithmeticException → ArithmeticException (closing the divide-by-zero catchability debt: the
-  CLR's DivideByZeroException IS-A System.ArithmeticException, probe-verified; its message
-  "Attempted to divide by zero." is kept verbatim — JVM precedent, "/ by zero" IS the JVM's
-  platform message); IndexOutOfBoundsException → IndexOutOfRangeException; NullPointerException
-  → NullReferenceException; ClassCastException → InvalidCastException. Those mappings remain
-  deliberate because raw CLR division, null, vector-bounds, and cast faults must stay catchable.
-  Replacing only the classes would lose those catch edges unless codegen translated the faults or
-  catch lowering supported union/filter semantics.
-  `Kotlin.Runtime` separately owns public `Kotlin.RuntimeException : System.Exception` as the
-  durable physical root for exact Kotlin-only identities. It exposes the mature four constructor
-  forms: `()`, `(String?)`, `(String?, Throwable?)`, and `(Throwable?)`. A private nullable message
-  field plus a reused virtual `System.Exception.get_Message` slot preserves a null default message;
-  the cause-only form uses `cause?.toString()` and preserves the cause in `InnerException`.
-  Source `kotlin.RuntimeException` still REJECTS: mapped logical children such as
-  `IllegalStateException -> System.InvalidOperationException` are not physical children of the
-  runtime root, so enabling the parent would make its catch miss a legal child. A catch union is
-  not sufficient: binding the union as System.Exception erases RuntimeException from signatures,
-  collides with Throwable/Exception, and admits arbitrary foreign exceptions; binding a BCL child
-  as exact Kotlin.RuntimeException emits unverifiable type-confused IL. `exceptionabi_s4` proved
-  the latter poison shape on both runtimes: a caught InvalidOperationException stored in an
-  exact-root local successfully dispatched a Kotlin.RuntimeException method. Source support must
-  therefore wait for an exact owned-child hierarchy plus comprehensive native-fault/interop
-  translation, or a different representation proven coherent at every ABI boundary.
-  `Error` is source-visible through exact runtime-owned `Kotlin.Error : System.Exception`, with the
-  mature four constructor forms and the same nullable-message/cause implementation as the dormant
-  RuntimeException root. This preserves Kotlin-created Error identity without pretending the CLR
-  has a faithful fatal-error superclass: `System.SystemException` is deprecated and structurally
-  wrong, while foreign `OutOfMemoryException`/`StackOverflowException` values remain distinct.
-  Since `Throwable` and `Exception` already collapse to System.Exception, the existing accepted
-  root delta also means `catch (Exception)` catches a Kotlin Error on this target.
-  `NumberFormatException` is instead source-visible through exact runtime-owned
-  `Kotlin.NumberFormatException : System.ArgumentException`. This CLR-specific physical parent
-  preserves Kotlin's already-supported `NumberFormatException IS-A IllegalArgumentException`
-  value and catch edges; mapping to `System.FormatException` would break them. It exposes only the
-  mature `()`/`(String?)` forms and reuses the Exception message slot with a nullable backing field,
-  preserving a null no-arg message through parent-typed calls. A foreign `System.FormatException`
-  stays distinct until a parsing/interop boundary explicitly translates it or catch lowering owns
-  a union. The registry records physical mapped-supertype edges so its stack verifier accepts the
-  exact class's instruction-free widening to ArgumentException and System.Exception.
-  Every future migration requires an explicit native-fault/catch audit; the presence of a similarly
-  named runtime class is not sufficient. Accepted BCL-mapping deltas, documented on the registry:
-  `message` keeps type `String?` but is never null on BCL-mapped exceptions (no-arg `Exception()`
-  yields the CLR default text); the constructor
-  whitelist is `()`/`(String?)` everywhere and `(String?, Throwable?)` where the registry's
-  `hasMessageCauseCtor` flag is set; cause-only `(Throwable?)` maps only where `hasCauseCtor` is set.
-  The flags mirror the Kotlin stdlib's declared constructor surface, not CLR availability (the CLR
-  `(string, Exception)` overload exists on every BCL-mapped type, probe-verified; runtime mappings
-  provide their exact flagged surface). `throw e`
-  inside a catch is a plain `ldloc`/`throw` preserving object identity; the
-  IL `rethrow` instruction is never emitted (Kotlin has no bare rethrow; stack-trace-restart
-  delta is moot until traces are surfaced). The injected exception declarations are excluded from codegen
-  entirely — the class-level parallel of an intrinsic's `excludesDeclarationFromCodegen` — and
-  user classes extending them are shape-gate-rejected until the inheritance model exists.
-  Deferred: Roslyn-parity `RuntimeCompatibilityAttribute` (wrapping raw non-Exception throws)
-  until interop with non-Exception-throwing code matters.
+- Classified CLR exception model (decision:
+  `docs/decisions/draft-adr-classified-clr-exception-model.md`; the hybrid ADR is superseded):
+  every catchable value remains its original `System.Exception` object. The mapping registry owns
+  separate physical-carrier, construction/subclass-base, exact-catch, and logical-classifier roles;
+  do not collapse those roles back into one CLR type map.
+  `Throwable`, `Exception`, and broad logical categories use `System.Exception` at physical
+  boundaries. Narrow logical catches and type tests use the single runtime-owned, side-effect-free
+  `Kotlin.Runtime.Internal.ExceptionClassifier.IsKotlinExceptionInstance` predicate. Catch filters
+  preserve Kotlin source order and classification without wrapping foreign objects. Unknown C#
+  exception subclasses classify as Kotlin `Exception`; mapped CLR program faults additionally
+  classify under their Kotlin categories, and fatal CLR faults classify as `Error` without becoming
+  Kotlin `Exception`.
+  Exact Kotlin-owned classes remain ordinary CLR exception classes where physical identity is part
+  of the contract. `Kotlin.RuntimeException : System.Exception` and `Kotlin.Error :
+  System.Exception` are truthful roots for Kotlin-owned subclasses; exact mapped children such as
+  `Kotlin.NumberFormatException : System.ArgumentException` retain the required Kotlin parent edge.
+  User exception inheritance, reflection ancestry, typed exact catches, and cross-module
+  subclassing follow those physical chains. Exact roots supplement the foreign exception universe;
+  they never replace it.
+  Curated BCL mappings keep native CLR division, null, bounds, cast, state, and argument faults
+  catchable under the corresponding Kotlin types: `IllegalArgumentException` ->
+  `ArgumentException`, `IllegalStateException` -> `InvalidOperationException`,
+  `UnsupportedOperationException` -> `NotSupportedException`, `ArithmeticException` ->
+  `ArithmeticException`, `IndexOutOfBoundsException` -> `IndexOutOfRangeException`,
+  `NullPointerException` -> `NullReferenceException`, and `ClassCastException` ->
+  `InvalidCastException`. Kotlin metadata retains the logical signature type where the physical
+  carrier is broader. C# admission to a broad `Throwable`/`Exception`
+  boundary accepts any `System.Exception`; narrower export admission remains an explicit deferred
+  classifier-guard design rather than a fabricated CLR hierarchy.
+  `IrThrow` evaluates and throws the original reference. Kotlin source `throw e`, including from a
+  catch variable, emits CLR `throw`, never bare `rethrow`; object identity, exact type, message,
+  `InnerException`, and `Data` survive, while the CLR stack trace truthfully exposes the new throw
+  site. `IrTry` uses CLR protected regions plus generated filters where logical classification is
+  required. Raw C# integration executes classification, catch/return, and catch/rethrow on both
+  application profiles. Cancellation classification, narrow export admission, complete exception-
+  typed generic/property/overload coverage, and any non-physical hierarchy metadata remain open
+  before Gate B.
 - Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
   synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
   emits an inline parameterless exception construction + `throw`, in both value and statement
