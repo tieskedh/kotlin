@@ -422,6 +422,11 @@ test now writes the same compiler-produced application and stdlib IL with both a
 executes all four application/stdlib writer pairings on Framework CLR 4 and CoreCLR. The remaining
 matrix is runtime-assembly writer substitution and net10-specific pairing evidence.
 
+The current supported Kotlin box corpus now has symmetric execution lanes: all 116 cases run for
+`net48` and `net10.0` under both FIR parsers on real Framework CLR 4 and CoreCLR hosts. This closes
+the full-profile semantic-lane item for the currently accepted feature set; expanding the common
+semantic corpus remains continuous target work rather than a reason to weaken the gate.
+
 ## 4. P1 consolidation
 
 After P0:
