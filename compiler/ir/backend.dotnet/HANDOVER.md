@@ -1576,26 +1576,25 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete build-owned friend association.** The intersection ABI now covers direct owner-bound
-   constraints, nonidentical covariant returns, split mutable properties, and selected defaults.
-   Nested/general owner-relative carriers remain deliberately rejected. Wire associated/friend
-   Gradle compilations to producer-emitted `InternalsVisibleTo` before Gate A.
-2. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
+1. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
    physical collision matrix, then add generated implementor tooling. Keep raw metadata-table
    auditing with the structured metadata work; do not substitute IL substring checks.
-3. **Wire friend associations through the build model.** Compiler/FIR producer authorization and
-   consumer declaration are implemented; Gate A still needs product-owned association rather than
-   only provisional CLI switches.
-4. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
+2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
+   producer authorization and consumer declaration are implemented. The repository has no
+   Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or
+   metadata tasks. The new model must first own profile variants, assembly identity, artifacts,
+   outputs, and task dependencies; `associateWith` can then configure both producer
+   `InternalsVisibleTo` and consumer friend KLIB paths from one relationship.
+3. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
    host-capability-aware producer/install tasks already exist and must remain outside unconditional
    cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then
    compile generated common stdlib sources plus narrow .NET actuals through the ordinary library
    producer instead of expanding the handwritten bootstrap corpus.
-5. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
+4. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
    of Kotlin-owned stdlib bootstrapping.
-6. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
+5. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
    should become emitted Kotlin code only when its implementation is supported and tested; keep
    platform operations in the intrinsic registry where the mature JVM stdlib does so.
 

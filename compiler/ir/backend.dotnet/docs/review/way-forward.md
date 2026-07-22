@@ -381,10 +381,17 @@ The remaining P0-D implementation order is:
    structured metadata work rather than with IL substring tests.
 
 There is no remaining implicit-intersection representation decision on the critical path. The next
-foundational implementation item is the outstanding P0-C Gradle friend-association wiring; it
-should be completed before Gate A and does not alter the compiler ABI selected above. After that,
-continue the foreign boundary and structured metadata audit. Nested/general owner-relative
-carriers may remain rejected until their conversion can be proved rather than guessed.
+backend implementation item is the foreign boundary and structured metadata audit.
+Nested/general owner-relative carriers may remain rejected until their conversion can be proved
+rather than guessed.
+
+The outstanding P0-C Gradle friend association cannot be wired responsibly yet: this repository
+has no Kotlin/.NET Gradle target or compilation model. The compiler already owns both required
+controls, but a build association must derive assembly names, profile variants, artifacts, output
+paths, and task dependencies from one product-owned compilation relationship. Injecting the two
+CLI switches into an existing JVM or metadata task would freeze the wrong architecture. Introduce
+an experimental .NET target/compilation model first, then make `associateWith` configure producer
+`InternalsVisibleTo` and consumer friend KLIB paths together before Gate A.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
