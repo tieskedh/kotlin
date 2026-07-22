@@ -1400,8 +1400,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - A same-name inherited overload continuation derives from two generic parent interfaces whose
   Kotlin-distinct function-type parameters both map to CLR `Function1`. Because Kotlin selected no
   common override intersection, the derived interface now has a committed publication regression
-  proving atomic rejection instead of an invented CLR slot. Transitive and cross-module inherited
-  substitutions remain open.
+  proving atomic rejection instead of an invented CLR slot. A second producer/consumer direction
+  puts both roots in a separately compiled KLIB, carries them through consumer-owned intermediate
+  interfaces, and proves the final consumer publishes neither KLIB nor DLL. More general
+  substituted overload families remain open.
 - The reserved-name continuation uses a probe compilation to obtain one interface member's actual
   canonical method name, then declares a second source member with exactly that spelling. On the
   implementation class both have the same apparent CLR name/signature relationship, but the

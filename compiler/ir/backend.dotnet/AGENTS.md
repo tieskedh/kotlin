@@ -586,6 +586,9 @@ landed shape as a compatibility constraint.
   different physical returns; CLR return-type-only overloads are not a supported escape hatch.
   Two same-named inherited overloads whose Kotlin callable parameters both erase to `Function1`
   are likewise rejected when no Kotlin-selected intersection slot covers both logical members.
+  The check is producer/consumer neutral: a separately compiled producer may own both root
+  interfaces while consumer-owned intermediate branches carry them into the rejected derived
+  declaration; failed publication emits neither consumer artifact.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
