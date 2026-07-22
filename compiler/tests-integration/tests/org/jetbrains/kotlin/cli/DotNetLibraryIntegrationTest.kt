@@ -2923,6 +2923,120 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testNet48ApplicationAndStdlibExecuteAcrossAssemblerPairings() {
+        val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
+        val modernIlasm = DotNetIlAssembler.findModernIlasm()
+        requireOrAssumeToolchain(frameworkIlasm != null, ".NET Framework ILAsm is not available")
+        requireOrAssumeToolchain(modernIlasm != null, "Modern ILAsm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkHost = findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+
+        val stdlibPair = produceBoundStdlibPair("net48", "assembler-matrix")
+        val frameworkStdlib = stdlibPair.resolve("Kotlin.Stdlib.dll")
+        val modernStdlib = File(tmpdir, "assembler-matrix-modern/Kotlin.Stdlib.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(modernIlasm),
+                stdlibPair.resolve("Kotlin.Stdlib.il"),
+                modernStdlib,
+                dll = true,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+
+        val applicationDirectory = File(tmpdir, "assembler-matrix-application").apply { mkdirs() }
+        val applicationSource = applicationDirectory.resolve("main.kt").apply {
+            writeText(
+                """
+                fun main() {
+                    val values = Array<String>(2) { index -> if (index == 0) "O" else "K" }
+                    val render = { values.asIterable().first() + values.asIterable().last() }
+                    println(render())
+                }
+                """.trimIndent()
+            )
+        }
+        val frameworkApplication = applicationDirectory.resolve("AssemblerMatrix.exe")
+        compileInProcess(
+            K2DotNetCompiler(),
+            applicationSource.path,
+            K2DotNetCompilerArguments::noStdlib.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, stdlibPair.resolve("Kotlin.Stdlib.klib").path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "AssemblerMatrix",
+            K2DotNetCompilerArguments::destination.cliArgument, frameworkApplication.path,
+        )
+        val applicationIl = applicationDirectory.resolve("AssemblerMatrix.il")
+        val modernFrameworkApplication = applicationDirectory.resolve("AssemblerMatrix-modern.exe")
+        assertTrue(
+            DotNetIlAssembler.assembleWithExplicitIlasm(
+                checkNotNull(modernIlasm),
+                applicationIl,
+                modernFrameworkApplication,
+                dll = false,
+                messageCollector = MessageCollector.NONE,
+            )
+        )
+        val modernCoreClrApplication = applicationDirectory.resolve("AssemblerMatrix-modern.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleExecutable(
+                applicationIl,
+                modernCoreClrApplication,
+                DotNetTarget.NET10_0,
+                MessageCollector.NONE,
+            )
+        )
+
+        val runtime = applicationDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(runtime.isFile)
+        val coreClrRuntimeConfig = applicationDirectory.resolve("AssemblerMatrix-modern.runtimeconfig.json")
+        assertTrue(coreClrRuntimeConfig.isFile)
+
+        val applications = listOf(
+            "framework" to (frameworkApplication to frameworkApplication),
+            "modern" to (modernFrameworkApplication to modernCoreClrApplication),
+        )
+        val stdlibs = listOf(
+            "framework" to frameworkStdlib,
+            "modern" to modernStdlib,
+        )
+        for (application in applications) {
+            val applicationAssembler = application.first
+            val applicationFiles = application.second
+            for (stdlibEntry in stdlibs) {
+                val stdlibAssembler = stdlibEntry.first
+                val stdlib = stdlibEntry.second
+                val pairing = "$applicationAssembler-application-$stdlibAssembler-stdlib"
+                val frameworkDirectory = File(tmpdir, "assembler-matrix-framework-$pairing").apply { mkdirs() }
+                val frameworkExecutable = applicationFiles.first.copyTo(
+                    frameworkDirectory.resolve("AssemblerMatrix.exe")
+                )
+                stdlib.copyTo(frameworkDirectory.resolve("Kotlin.Stdlib.dll"))
+                runtime.copyTo(frameworkDirectory.resolve("Kotlin.Runtime.dll"))
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable),
+                    frameworkDirectory,
+                    "Framework runtime, $pairing",
+                )
+
+                val coreClrDirectory = File(tmpdir, "assembler-matrix-coreclr-$pairing").apply { mkdirs() }
+                val coreClrExecutable = applicationFiles.second.copyTo(
+                    coreClrDirectory.resolve("AssemblerMatrix.${applicationFiles.second.extension}")
+                )
+                coreClrRuntimeConfig.copyTo(coreClrDirectory.resolve("AssemblerMatrix.runtimeconfig.json"))
+                stdlib.copyTo(coreClrDirectory.resolve("Kotlin.Stdlib.dll"))
+                runtime.copyTo(coreClrDirectory.resolve("Kotlin.Runtime.dll"))
+                runAssemblerPairing(
+                    listOf(dotnetHost.path, "exec", coreClrExecutable.path),
+                    coreClrDirectory,
+                    "CoreCLR runtime, $pairing",
+                )
+            }
+        }
+    }
+
+    @Test
     fun testLibraryPublicationFailsWhenADeclarationIsEvicted() {
         val source = File(tmpdir, "unsupported-library.kt").apply {
             writeText(
@@ -5230,6 +5344,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         return candidates.firstOrNull { candidate -> candidate.isFile }
     }
 
+    private fun findFrameworkPowerShellHost(): File? =
+        System.getenv("WINDIR")
+            ?.let(::File)
+            ?.resolve("System32/WindowsPowerShell/v1.0/powershell.exe")
+            ?.takeIf(File::isFile)
+
+    private fun frameworkExecutionCommand(host: File, assembly: File): List<String> {
+        val escapedAssemblyPath = assembly.absolutePath.replace("'", "''")
+        val command = """
+            ${'$'}ErrorActionPreference = 'Stop'
+            try {
+                ${'$'}assembly = [Reflection.Assembly]::LoadFrom('$escapedAssemblyPath')
+                ${'$'}entryPoint = ${'$'}assembly.EntryPoint
+                if (${'$'}null -eq ${'$'}entryPoint) { throw 'Assembly has no managed entry point.' }
+                if (${'$'}entryPoint.GetParameters().Count -eq 0) {
+                    [void] ${'$'}entryPoint.Invoke(${'$'}null, ${'$'}null)
+                } else {
+                    [void] ${'$'}entryPoint.Invoke(${'$'}null, [object[]] @(,[string[]] @()))
+                }
+            } catch {
+                [Console]::Error.WriteLine(${'$'}_.Exception.ToString())
+                exit 1
+            }
+        """.trimIndent()
+        return listOf(host.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command)
+    }
+
     private fun requireOrAssumeToolchain(condition: Boolean, message: String) {
         if (dotNetToolchainIsRequired()) {
             assertTrue(condition) { "$message (KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled)" }
@@ -5261,5 +5402,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertTrue(process.waitFor() == 0) { "$failureMessage:\n$output" }
+    }
+
+    private fun runAssemblerPairing(command: List<String>, workingDirectory: File, description: String) {
+        val process = ProcessBuilder(command)
+            .directory(workingDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), "$description failed:\n$output")
+        assertEquals("OK", output.trim(), "$description produced unexpected output")
     }
 }

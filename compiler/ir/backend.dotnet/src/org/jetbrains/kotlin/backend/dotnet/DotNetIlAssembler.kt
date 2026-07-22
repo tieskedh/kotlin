@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import java.io.File
@@ -59,6 +60,27 @@ object DotNetIlAssembler {
             return false
         }
         return runIlasm(ilasm, ilFile, output, dll = true, deterministic = true, messageCollector)
+    }
+
+    /**
+     * Runs an explicitly selected ILAsm as a compatibility oracle over already-targeted IL.
+     *
+     * Production must select an assembler through [assembleExecutable] or [assembleLibrary],
+     * because an accepting tool does not change the IL's target profile. This hook exists only
+     * for same-/cross-assembler tests that need to vary the PE writer independently of the
+     * compiler-selected profile and artifact kind.
+     */
+    @TestOnly
+    fun assembleWithExplicitIlasm(
+        ilasm: File,
+        ilFile: File,
+        output: File,
+        dll: Boolean,
+        messageCollector: MessageCollector,
+    ): Boolean {
+        output.delete()
+        runtimeConfigFile(output).delete()
+        return runIlasm(ilasm, ilFile, output, dll, deterministic = true, messageCollector)
     }
 
     private fun assembleForNetFramework(
