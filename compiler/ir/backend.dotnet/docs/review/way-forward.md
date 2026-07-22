@@ -332,6 +332,9 @@ The fixture also completes the one-through-four parameter matrix with a mixed
 `in`/`out`/invariant/`out` interface spanning reference, primitive, nullable, exact-only, and open
 generic positions. Its nullable result is concretely `Int?`, pinning `Nullable<int>` on the exact
 capability and boxed canonical fallback after widening to `Any?`. Both consumers preserve identity.
+A raw CLR provider additionally implements only a portable Kotlin interface's canonical identity
+and producer-recorded erased slot. The separately compiled portable reader executes it without any
+declared/exact capability on both application profiles, pinning capability-absent fallback.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
@@ -460,8 +463,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 43
-library-integration tests; the current audited result is 844/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 44
+library-integration tests; the current audited result is 845/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
