@@ -364,19 +364,27 @@ derived, exact, method-generic, and widened views without a class forwarder or b
 requires an explicit override for unrelated default declarations, so that source shape follows the
 ordinary declared-body path rather than requiring another implicit intersection representation.
 
+Split mutable-property intersections now reuse the surface already selected for ordinary variant
+properties. The declared-variance view emits only the accessor legal under its CLR variance; the
+invariant exact view repeats that safe accessor and emits the complete property. For the common
+`out T` shape this is a getter-only declared property plus a read/write exact property. Schema 14
+records the declared getter, exact getter, and exact setter independently, while KLIB retains their
+one logical property association. Kotlin and C# producer/consumer execution on both profiles proves
+that all adapters reach the same accessor bodies.
+
 The remaining P0-D implementation order is:
 
-1. Decide and record the complete C# property surface for a Kotlin `var` whose getter and setter
-   naturally land on different declared/exact capabilities, then implement it atomically.
-2. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
+1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-3. Finish the foreign-implementor/clash matrix and generated implementor tooling, then close the
+2. Finish the foreign-implementor/clash matrix and generated implementor tooling, then close the
    remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
    structured metadata work rather than with IL substring tests.
 
-Item 1 is now the next genuine CLR-specific surface decision. The Gradle friend-association wiring
-remains the outstanding P0-C product-integration item and should be completed before Gate A, but it
-does not alter the compiler ABI selected above.
+There is no remaining implicit-intersection representation decision on the critical path. The next
+foundational implementation item is the outstanding P0-C Gradle friend-association wiring; it
+should be completed before Gate A and does not alter the compiler ABI selected above. After that,
+continue the foreign boundary and structured metadata audit. Nested/general owner-relative
+carriers may remain rejected until their conversion can be proved rather than guessed.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers

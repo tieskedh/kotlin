@@ -1434,15 +1434,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only
   unsafe input dispatch is covered through the invariant exact capability. Nested/general
-  owner-relative constraints and split-view property cases remain open. Property accessors are
-  filtered atomically so a Kotlin `var` never acquires
-  only a derived getter while its inherited setter remains ambiguous.
+  owner-relative constraints remain open. Property accessors are filtered atomically per physical
+  view.
 - Same-name inheritance is no longer admitted merely because the IR names match. Pairwise inherited
   claims must be covered by a selected derived intersection slot, and a merged property fake
-  override is checked against the atomic accessor-selection result. A covariant `var` whose getter
-  belongs to the declared view and setter to the exact view now fails publication with neither KLIB
-  nor DLL until a coherent split-view property adapter is designed. Supported declared/exact,
-  parameterized, generic, property, permuted, and indirect intersections continue to pass.
+  override is checked against the atomic accessor-selection result on each view. A covariant `var`
+  now emits a getter-only property on the declared view and a complete getter/setter property on
+  the exact view. This reuses the ordinary split-property rule: the safe getter is a second adapter
+  obligation, not another body. Schema 14 records declared getter, exact getter, and exact setter;
+  Kotlin producer/consumer implementations and C# declared reads/exact writes execute on Framework
+  CLR 4 and CoreCLR 10. Supported declared/exact, parameterized, generic, property, permuted, and
+  indirect intersections continue to pass.
 - Intersection discovery now identifies nonfake logical contributors and the first meeting of at
   least two physical parent branches before applying the supported-shape filters. A real candidate
   is therefore selected into schema 14, covered by an existing profile-aware default promotion, or
@@ -1574,11 +1576,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Decide the split-view mutable-property surface.** Direct owner-bound and nonidentical
-   covariant-return intersections are implemented, and selected defaults are covered by the
-   accepted helper/DIM promotion model. A `var` whose accessors require different typed
-   capabilities still needs an ADR-level C# surface decision; nested/general owner-relative
-   carriers remain rejected.
+1. **Complete build-owned friend association.** The intersection ABI now covers direct owner-bound
+   constraints, nonidentical covariant returns, split mutable properties, and selected defaults.
+   Nested/general owner-relative carriers remain deliberately rejected. Wire associated/friend
+   Gradle compilations to producer-emitted `InternalsVisibleTo` before Gate A.
 2. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
    physical collision matrix, then add generated implementor tooling. Keep raw metadata-table
    auditing with the structured metadata work; do not substitute IL substring checks.
