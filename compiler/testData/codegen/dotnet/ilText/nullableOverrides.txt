@@ -28,6 +28,32 @@
     ret
   }
 }
+.class public auto ansi sealed beforefieldinit 'Narrowed'
+       extends 'Producer'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'Producer'::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance int32 'value'() cil managed
+  {
+    .maxstack 1
+    ldc.i4 1
+    ret
+  }
+  .method private hidebysig newslot virtual final instance valuetype [mscorlib]System.Nullable`1<int32> '<CovariantReturnBridge-Producer-value-fe8c29838a7a636120072fbbfa6deae6>'() cil managed
+  {
+    .override method instance valuetype [mscorlib]System.Nullable`1<int32> 'Producer'::'value'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance int32 'Narrowed'::'value'()
+    newobj instance void valuetype [mscorlib]System.Nullable`1<int32>::.ctor(!0)
+    ret
+  }
+}
 .class public auto ansi sealed beforefieldinit 'Overloads'
        extends [mscorlib]System.Object
 {

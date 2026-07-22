@@ -1,0 +1,257 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'covariantClassReturns' {}
+.module 'main-covariantClassReturns.il'
+
+.class public auto ansi beforefieldinit 'Base'
+       extends [mscorlib]System.Object
+{
+  .field private int32 'tag'
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldarg.1
+    stfld int32 'Base'::'tag'
+    ret
+  }
+  .method public hidebysig specialname instance int32 'get_tag'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld int32 'Base'::'tag'
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Base' 'self'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'Base' 'get_partner'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'text'() cil managed
+  {
+    .maxstack 1
+    ldnull
+    ret
+  }
+  .property instance int32 'tag'()
+  {
+    .get instance int32 'Base'::'get_tag'()
+  }
+  .property instance class 'Base' 'partner'()
+  {
+    .get instance class 'Base' 'Base'::'get_partner'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CovariantMethod'
+       extends 'Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'CovariantMethod' 'self'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Base' '<CovariantReturnBridge-Base-self-b160ea1458e2f5a1b53f1b99f8f2611d>'() cil managed
+  {
+    .override method instance class 'Base' 'Base'::'self'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'CovariantMethod' 'CovariantMethod'::'self'()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'CovariantAccessor'
+       extends 'Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'CovariantAccessor' 'get_partner'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Base' '<CovariantReturnBridge-Base-<get-partner>-2d0e99353606a342ce0e8ba248e65a5b>'() cil managed
+  {
+    .override method instance class 'Base' 'Base'::'get_partner'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'CovariantAccessor' 'CovariantAccessor'::'get_partner'()
+    ret
+  }
+  .property instance class 'CovariantAccessor' 'partner'()
+  {
+    .get instance class 'CovariantAccessor' 'CovariantAccessor'::'get_partner'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'SameIl'
+       extends 'Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig virtual instance string 'text'() cil managed
+  {
+    .maxstack 1
+    ldstr "leaf-text"
+    ret
+  }
+}
+.class public abstract auto ansi beforefieldinit 'AbstractCovariant'
+       extends 'Base'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'Base'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig newslot abstract virtual instance class 'AbstractCovariant' 'self'() cil managed
+  {
+  }
+  .method private hidebysig newslot virtual final instance class 'Base' '<CovariantReturnBridge-Base-self-b160ea1458e2f5a1b53f1b99f8f2611d>'() cil managed
+  {
+    .override method instance class 'Base' 'Base'::'self'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'AbstractCovariant' 'AbstractCovariant'::'self'()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'ConcreteCovariant'
+       extends 'AbstractCovariant'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor(int32 'tag') cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    ldarg.1
+    call instance void 'AbstractCovariant'::.ctor(int32)
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'ConcreteCovariant' 'self'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'AbstractCovariant' '<CovariantReturnBridge-AbstractCovariant-self-168d3a5bcfe7c2e0fa4e54238b423a89>'() cil managed
+  {
+    .override method instance class 'AbstractCovariant' 'AbstractCovariant'::'self'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'ConcreteCovariant' 'ConcreteCovariant'::'self'()
+    ret
+  }
+}
+.class public auto ansi beforefieldinit 'StringBoundBase'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance string 'bounded'<'T'>(string 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'StringBoundDerived'
+       extends 'StringBoundBase'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'StringBoundBase'::.ctor()
+    ret
+  }
+  .method public hidebysig virtual instance string 'bounded'<'T'>(string 'value') cil managed
+  {
+    .maxstack 1
+    ldarg.1
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'covariantClassReturnsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 3
+    .locals init (
+      [0] class 'Base' 'concreteAsBase',
+      [1] class 'StringBoundBase' 'stringBoundAsBase'
+    )
+    ldc.i4 1
+    newobj instance void 'Base'::.ctor(int32)
+    callvirt instance class 'Base' 'Base'::'self'()
+    call instance int32 'Base'::'get_tag'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 2
+    newobj instance void 'SameIl'::.ctor(int32)
+    callvirt instance string 'SameIl'::'text'()
+    call void [mscorlib]System.Console::WriteLine(string)
+    ldc.i4 3
+    newobj instance void 'ConcreteCovariant'::.ctor(int32)
+    stloc.0
+    ldloc.0
+    callvirt instance class 'Base' 'Base'::'self'()
+    call instance int32 'Base'::'get_tag'()
+    box [mscorlib]System.Int32
+    ldnull
+    call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
+    callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'StringBoundDerived'::.ctor()
+    stloc.1
+    ldloc.1
+    ldstr "bound"
+    callvirt instance string 'StringBoundBase'::'bounded'<string>(string)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

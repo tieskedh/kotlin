@@ -99,7 +99,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         inheritedLogicalMemberKey = "F:sample/defaultWithDefaults",
                         physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
                         implementationMethodName = "<GenericInterfaceCanonicalBridge-defaultWithDefaults>",
-                    ),            "W:C:sample/Consumer:F:sample/defaultWithDefaults:CANONICAL" to
+                    ),
+            "R:C:sample/Contract:F:sample/baseValue" to
+                    DotNetPhysicalDeclaration.CovariantReturnBridge(
+                        ownerPath = listOf("sample.Contract"),
+                        ownerLogicalKey = "C:sample/Contract",
+                        inheritedLogicalMemberKey = "F:sample/baseValue",
+                        implementationMethodName = "<CovariantReturnBridge-baseValue>",
+                    ),
+            "W:C:sample/Consumer:F:sample/defaultWithDefaults:CANONICAL" to
                     DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder(
                         ownerPath = listOf("sample.Consumer"),
                         ownerLogicalKey = "C:sample/Consumer",
@@ -113,7 +121,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("11", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("12", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -161,9 +169,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         physicalView = DotNetInterfaceDefaultPromotionView.CANONICAL,
                         implementationMethodName = "<InterfaceDefaultForwarder-withDefaults>",
                     ),
+            "R:C:sample/Box:F:sample/read" to DotNetPhysicalDeclaration.CovariantReturnBridge(
+                ownerPath = listOf("sample.Box"),
+                ownerLogicalKey = "C:sample/Box",
+                inheritedLogicalMemberKey = "F:sample/read",
+                implementationMethodName = "<CovariantReturnBridge-read>",
+            ),
         )
         val compatiblePlatform = portable.filterValues {
-            it !is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder
+            it !is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder &&
+                    it !is DotNetPhysicalDeclaration.CovariantReturnBridge
         } + (
                 "F:sample/runtimeOnly" to DotNetPhysicalDeclaration.Function(
                     ownerPath = listOf("sample.PlatformKt"),
@@ -2625,6 +2640,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
         }
+
     }
 
     @Test
@@ -3815,6 +3831,476 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testCovariantReturnsAcrossPortableLibraryBoundary() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "covariant-return-library")
+        val librarySource = File(tmpdir, "covariantReturnLibrary.kt").apply {
+            writeText(
+                """
+                package covarianceabi
+
+                public open class Animal(public val tag: String)
+
+                public open class Cat(tag: String) : Animal(tag)
+
+                public open class Source {
+                    public open fun make(): Animal = Animal("source-method")
+                    public open val item: Animal get() = Animal("source-property")
+                    public open fun <T> generic(value: T): Animal = Animal("source-generic")
+                }
+
+                public interface Maker {
+                    public fun make(): Animal
+                }
+
+                public interface HasItem {
+                    public val item: Animal
+                }
+
+                public interface DefaultMaker {
+                    public fun defaultMake(): Animal = Animal("portable-default")
+                }
+
+                public interface ValueSource<out T> {
+                    public fun value(): T
+                }
+
+                public class CatValueSource : ValueSource<Cat> {
+                    override fun value(): Cat = Cat("variant-value")
+                }
+
+                public open class VariantReturnBase {
+                    public open fun variant(): ValueSource<Animal> = CatValueSource()
+                }
+
+                public open class Factory {
+                    public open fun make(): Cat = Cat("factory-method")
+                }
+
+                public open class ItemFactory {
+                    public open val item: Cat get() = Cat("factory-property")
+                }
+
+                public abstract class AbstractCatSource : Source() {
+                    public abstract override fun make(): Cat
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Covariance.Library",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Covariance.Library.klib")
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package covarianceconsumer
+
+                    import covarianceabi.*
+
+                    public class Derived : Source() {
+                        override fun make(): Cat = Cat("derived-method")
+                        override val item: Cat get() = Cat("derived-property")
+                        override fun <T> generic(value: T): Cat = Cat("derived-generic")
+                    }
+
+                    public class Combo : Factory(), Maker
+
+                    public class ItemCombo : ItemFactory(), HasItem
+
+                    public class VariantReturnDerived : VariantReturnBase() {
+                        override fun variant(): ValueSource<Cat> = CatValueSource()
+                    }
+
+                    public interface RefinedDefaultMaker : DefaultMaker {
+                        override fun defaultMake(): Cat = Cat("refined-default")
+                    }
+
+                    public class DefaultMakerImplementation : RefinedDefaultMaker
+
+                    public class ConcreteAbstractSource : AbstractCatSource() {
+                        override fun make(): Cat = Cat("abstract-method")
+                    }
+
+                    public open class Middle : Source() {
+                        override fun make(): Cat = Cat("middle-method")
+                    }
+
+                    public class Siamese(tag: String) : Cat(tag)
+
+                    public class Leaf : Middle() {
+                        override fun make(): Siamese = Siamese("leaf-method")
+                    }
+
+                    fun main() {
+                        val exact = Derived()
+                        val exactMethod: Cat = exact.make()
+                        val exactProperty: Cat = exact.item
+                        val exactGeneric: Cat = exact.generic(42)
+                        if (exactMethod.tag != "derived-method") throw Error("exact method")
+                        if (exactProperty.tag != "derived-property") throw Error("exact property")
+                        if (exactGeneric.tag != "derived-generic") throw Error("exact generic")
+
+                        val base: Source = exact
+                        if (base.make().tag != "derived-method") throw Error("base method")
+                        if (base.item.tag != "derived-property") throw Error("base property")
+                        if (base.generic("value").tag != "derived-generic") throw Error("base generic")
+
+                        val maker: Maker = Combo()
+                        if (maker.make().tag != "factory-method") throw Error("inherited interface method")
+                        val hasItem: HasItem = ItemCombo()
+                        if (hasItem.item.tag != "factory-property") throw Error("inherited interface property")
+
+                        val variant: VariantReturnBase = VariantReturnDerived()
+                        if (variant.variant().value().tag != "variant-value") {
+                            throw Error("canonical variant return")
+                        }
+
+                        val defaultMaker: DefaultMaker = DefaultMakerImplementation()
+                        if (defaultMaker.defaultMake().tag != "refined-default") {
+                            throw Error("covariant interface default")
+                        }
+
+                        val abstractBase: Source = ConcreteAbstractSource()
+                        if (abstractBase.make().tag != "abstract-method") throw Error("abstract refinement")
+
+                        val leaf = Leaf()
+                        val leafAsRoot: Source = leaf
+                        val leafAsMiddle: Middle = leaf
+                        if (leafAsRoot.make().tag != "leaf-method") throw Error("root leaf dispatch")
+                        if (leafAsMiddle.make().tag != "leaf-method") throw Error("middle leaf dispatch")
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "Covariance.Consumer.exe" else "Covariance.Consumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "Covariance.Consumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+
+            val consumerIl = consumerDirectory.resolve("Covariance.Consumer.il").readText()
+            val bridgeBodies = Regex(
+                "(?s)\\.method private[^\\n]*'<CovariantReturnBridge-[^']+'[^\\n]*\\n  \\{(.*?)\\n  \\}"
+            ).findAll(consumerIl).map { match -> match.groupValues[1] }.toList()
+            assertEquals(8, bridgeBodies.size, consumerIl)
+            bridgeBodies.forEach { body ->
+                assertTrue(".override method" in body) { body }
+                assertTrue("callvirt instance" in body) { body }
+                assertTrue("newobj" !in body) { "Covariant-return bridge copied a constructor body:\n$body" }
+            }
+            assertTrue("class [Covariance.Library]'covarianceabi.Animal'" in consumerIl) { consumerIl }
+            assertTrue("class [Covariance.Library]'covarianceabi.Cat'" in consumerIl) { consumerIl }
+            assertTrue("[Covariance.Library]'covarianceabi.Source'::'make'()" in consumerIl) { consumerIl }
+            assertTrue("[Covariance.Library]'covarianceabi.Maker'::'make'()" in consumerIl) { consumerIl }
+            assertTrue("<CovariantReturnBridge-covarianceabi.VariantReturnBase-variant-" !in consumerIl) {
+                "A canonical split-interface return acquired an unnecessary ordinary bridge:\n$consumerIl"
+            }
+
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Covariant-return Kotlin consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Covariant-return Kotlin consumer failed for $target:\n$output")
+            }
+
+            val csharpSource = consumerDirectory.resolve("consumer.cs").apply {
+                val foreignDefaultClass = if (target == "net10.0") {
+                    """
+                    public sealed class ForeignDefaultMaker : covarianceconsumer.RefinedDefaultMaker
+                    {
+                    }
+                    """.trimIndent()
+                } else {
+                    ""
+                }
+                val foreignDefaultCall = if (target == "net10.0") {
+                    """
+                    covarianceabi.DefaultMaker foreignDefault = new ForeignDefaultMaker();
+                    Require(foreignDefault.defaultMake().tag == "refined-default", "foreign DIM");
+                    """.trimIndent()
+                } else {
+                    ""
+                }
+                writeText(
+                    """
+                    using System;
+                    using System.Linq;
+                    using System.Reflection;
+
+                    $foreignDefaultClass
+
+                    public static class Program
+                    {
+                        private static void Require(bool condition, string message)
+                        {
+                            if (!condition) throw new Exception(message);
+                        }
+
+                        public static int Main()
+                        {
+                            var exact = new covarianceconsumer.Derived();
+                            covarianceabi.Cat exactMethod = exact.make();
+                            covarianceabi.Cat exactProperty = exact.item;
+                            covarianceabi.Cat exactGeneric = exact.generic<int>(42);
+                            Require(exactMethod.tag == "derived-method", "exact method");
+                            Require(exactProperty.tag == "derived-property", "exact property");
+                            Require(exactGeneric.tag == "derived-generic", "exact generic");
+
+                            covarianceabi.Source baseView = exact;
+                            Require(baseView.make().tag == "derived-method", "base method");
+                            Require(baseView.item.tag == "derived-property", "base property");
+                            Require(baseView.generic<string>("value").tag == "derived-generic", "base generic");
+
+                            covarianceabi.Maker maker = new covarianceconsumer.Combo();
+                            Require(maker.make().tag == "factory-method", "interface method");
+                            covarianceabi.HasItem hasItem = new covarianceconsumer.ItemCombo();
+                            Require(hasItem.item.tag == "factory-property", "interface property");
+                            covarianceabi.DefaultMaker defaultMaker =
+                                new covarianceconsumer.DefaultMakerImplementation();
+                            Require(defaultMaker.defaultMake().tag == "refined-default", "Kotlin default");
+                            $foreignDefaultCall
+
+                            covarianceabi.Source abstractView = new covarianceconsumer.ConcreteAbstractSource();
+                            Require(abstractView.make().tag == "abstract-method", "abstract refinement");
+
+                            var leaf = new covarianceconsumer.Leaf();
+                            covarianceabi.Source rootView = leaf;
+                            covarianceconsumer.Middle middleView = leaf;
+                            Require(rootView.make().tag == "leaf-method", "root leaf dispatch");
+                            Require(middleView.make().tag == "leaf-method", "middle leaf dispatch");
+
+                            MethodInfo[] declared = typeof(covarianceconsumer.Derived).GetMethods(
+                                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                                BindingFlags.DeclaredOnly);
+                            MethodInfo precise = declared.Single(method =>
+                                method.Name == "make" && method.IsPublic &&
+                                method.ReturnType == typeof(covarianceabi.Cat));
+                            Require(precise != null, "precise public C# method missing");
+                            MethodInfo[] bridges = declared.Where(method =>
+                                method.Name.StartsWith("<CovariantReturnBridge-", StringComparison.Ordinal)).ToArray();
+                            Require(bridges.Length >= 3, "compiler bridges missing");
+                            Require(bridges.All(method => method.IsPrivate), "compiler bridge leaked as public API");
+                            return 0;
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val csharpApplication = consumerDirectory.resolve(
+                if (target == "net48") "Covariance.CSharpConsumer.exe" else "Covariance.CSharpConsumer.dll"
+            )
+            val csharpCompile = if (target == "net48") {
+                runCSharpCompiler(
+                    checkNotNull(frameworkCSharp),
+                    csharpSource,
+                    csharpApplication,
+                    application,
+                    libraryDirectory.resolve("Covariance.Library.dll"),
+                    consumerDirectory.resolve("Kotlin.Runtime.dll"),
+                    checkNotNull(frameworkNetStandardFacade),
+                    target = "exe",
+                )
+            } else {
+                runModernCSharpCompiler(
+                    checkNotNull(modernCSharp),
+                    csharpSource,
+                    csharpApplication,
+                    application,
+                    libraryDirectory.resolve("Covariance.Library.dll"),
+                    consumerDirectory.resolve("Kotlin.Runtime.dll"),
+                    target = "exe",
+                )
+            }
+            assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+            if (target == "net10.0") {
+                consumerDirectory.resolve("Covariance.Consumer.runtimeconfig.json").copyTo(
+                    consumerDirectory.resolve("Covariance.CSharpConsumer.runtimeconfig.json"),
+                    overwrite = true,
+                )
+                runDotNet(
+                    dotnetHost,
+                    csharpApplication,
+                    consumerDirectory,
+                    "Covariant-return C# consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(csharpApplication.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Covariant-return C# consumer failed for $target:\n$output")
+            }
+        }
+
+        val refinedDirectory = libraryDirectory.resolve("refined-net10-library").apply { mkdirs() }
+        val refinedSource = refinedDirectory.resolve("refined.kt").apply {
+            writeText(
+                """
+                package covariancerefined
+
+                import covarianceabi.*
+
+                public interface RefinedDefaultMaker : DefaultMaker {
+                    override fun defaultMake(): Cat = Cat("external-refined-default")
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            refinedSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Covariance.Refined",
+            K2DotNetCompilerArguments::destination.cliArgument, refinedDirectory.path,
+        )
+        val refinedMetadata = refinedDirectory.resolve("Covariance.Refined.klib")
+        val refinedBridgeRecords = DotNetLibraryAbiCodec.decode(refinedMetadata.readKlibManifest()).values
+            .filterIsInstance<DotNetPhysicalDeclaration.CovariantReturnBridge>()
+        assertEquals(1, refinedBridgeRecords.size, refinedBridgeRecords.joinToString("\n"))
+        assertEquals(
+            listOf("covariancerefined.RefinedDefaultMaker"),
+            refinedBridgeRecords.single().ownerPath,
+        )
+
+        val downstreamDirectory = refinedDirectory.resolve("downstream").apply { mkdirs() }
+        val downstreamSource = downstreamDirectory.resolve("downstream.kt").apply {
+            writeText(
+                """
+                package covariancedownstream
+
+                import covarianceabi.DefaultMaker
+                import covariancerefined.RefinedDefaultMaker
+
+                public class KotlinDefaultMaker : RefinedDefaultMaker
+
+                fun main() {
+                    val value: DefaultMaker = KotlinDefaultMaker()
+                    if (value.defaultMake().tag != "external-refined-default") {
+                        throw Error("external covariant DIM")
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val downstreamApplication = downstreamDirectory.resolve("Covariance.Downstream.dll")
+        val downstreamClasspath = listOf(refinedMetadata, metadataLibrary)
+            .joinToString(File.pathSeparator) { it.path }
+        compileInProcess(
+            K2DotNetCompiler(),
+            downstreamSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, downstreamClasspath,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Covariance.Downstream",
+            K2DotNetCompilerArguments::destination.cliArgument, downstreamApplication.path,
+        )
+        val downstreamIl = downstreamDirectory.resolve("Covariance.Downstream.il").readText()
+        val downstreamClass = Regex(
+            "(?s)\\.class public[^\\n]*'covariancedownstream.KotlinDefaultMaker'.*?^}",
+            setOf(RegexOption.MULTILINE),
+        ).find(downstreamIl)?.value ?: error("KotlinDefaultMaker class missing:\n$downstreamIl")
+        assertTrue("<CovariantReturnBridge-" !in downstreamClass) {
+            "A producer-recorded interface MethodImpl must suppress a downstream class bridge:\n$downstreamClass"
+        }
+        runDotNet(
+            dotnetHost,
+            downstreamApplication,
+            downstreamDirectory,
+            "Downstream Kotlin consumer of an external covariant DIM failed",
+        )
+
+        val downstreamCSharpSource = downstreamDirectory.resolve("downstream.cs").apply {
+            writeText(
+                """
+                using System;
+
+                public sealed class ForeignDefaultMaker : covariancerefined.RefinedDefaultMaker
+                {
+                }
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        covarianceabi.DefaultMaker value = new ForeignDefaultMaker();
+                        if (value.defaultMake().tag != "external-refined-default")
+                            throw new Exception("external foreign covariant DIM");
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val downstreamCSharpApplication = downstreamDirectory.resolve("Covariance.Downstream.CSharp.dll")
+        val downstreamCSharpCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            downstreamCSharpSource,
+            downstreamCSharpApplication,
+            refinedDirectory.resolve("Covariance.Refined.dll"),
+            libraryDirectory.resolve("Covariance.Library.dll"),
+            downstreamDirectory.resolve("Kotlin.Runtime.dll"),
+            target = "exe",
+        )
+        assertEquals(0, downstreamCSharpCompile.exitCode, downstreamCSharpCompile.output)
+        downstreamDirectory.resolve("Covariance.Downstream.runtimeconfig.json").copyTo(
+            downstreamDirectory.resolve("Covariance.Downstream.CSharp.runtimeconfig.json"),
+            overwrite = true,
+        )
+        runDotNet(
+            dotnetHost,
+            downstreamCSharpApplication,
+            downstreamDirectory,
+            "Downstream C# consumer of an external covariant DIM failed",
+        )
+    }
+
+    @Test
     fun testKotlinExceptionInheritanceAcrossPortableLibraryBoundary() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
@@ -4701,6 +5187,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val host = DotNetIlAssembler.findModernDotNetHost()
         requireOrAssumeToolchain(host != null, "Modern dotnet host is not available")
         return checkNotNull(host)
+    }
+
+    private fun findFrameworkNetStandardFacade(): File? {
+        val windowsDirectory = System.getenv("WINDIR")?.let(::File)
+        val programFilesX86 = System.getenv("ProgramFiles(x86)")?.let(::File)
+        val candidates = listOfNotNull(
+            programFilesX86?.resolve(
+                "Reference Assemblies/Microsoft/Framework/.NETFramework/v4.8/Facades/netstandard.dll"
+            ),
+            windowsDirectory?.resolve(
+                "Microsoft.NET/assembly/GAC_MSIL/netstandard/" +
+                        "v4.0_2.0.0.0__cc7b13ffcd2ddd51/netstandard.dll"
+            ),
+        )
+        return candidates.firstOrNull { candidate -> candidate.isFile }
     }
 
     private fun requireOrAssumeToolchain(condition: Boolean, message: String) {

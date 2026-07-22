@@ -182,6 +182,28 @@ sealed interface DotNetPhysicalDeclaration {
             }
         }
     }
+
+    /** A final MethodImpl adapting one ordinary Kotlin slot to a wider CLR return. */
+    data class CovariantReturnBridge(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val inheritedLogicalMemberKey: String,
+        val implementationMethodName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) { "a covariant-return bridge requires an owning CLR type" }
+            require(ownerLogicalKey.isNotEmpty()) {
+                "a covariant-return bridge requires an owning logical type"
+            }
+            require(inheritedLogicalMemberKey.isNotEmpty()) {
+                "a covariant-return bridge requires an inherited logical member"
+            }
+            require(implementationMethodName.isNotEmpty()) {
+                "a covariant-return bridge requires a CLR implementation method name"
+            }
+        }
+    }
+
     /** A hidden class MethodImpl emitted to make one helper-backed Kotlin default effective. */
     data class InterfaceDefaultClassForwarder(
         override val ownerPath: List<String>,
@@ -210,6 +232,9 @@ internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): Str
 
 internal fun DotNetPhysicalDeclaration.GenericInterfaceViewBridge.indexKey(): String =
     "B:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+internal fun DotNetPhysicalDeclaration.CovariantReturnBridge.indexKey(): String =
+    "R:$ownerLogicalKey:$inheritedLogicalMemberKey"
 
 internal fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.indexKey(): String =
     "W:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
@@ -275,7 +300,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "11"
+    const val ABI_VERSION = "12"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -329,6 +354,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultPromotion -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericInterfaceViewBridge -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.CovariantReturnBridge -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
             }
             encodeText(fields.joinToString("\u0000"))
@@ -345,6 +371,7 @@ object DotNetLibraryAbiCodec {
                 "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
                 "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
                 "B" -> decodeGenericInterfaceViewBridge(fields, logicalKey)
+                "R" -> decodeCovariantReturnBridge(fields, logicalKey)
                 "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
                 "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
                 "FDA" -> decodeInterfaceDefaultArgumentFunction(fields, logicalKey)
@@ -357,16 +384,21 @@ object DotNetLibraryAbiCodec {
     /**
      * Compares the assembly-independent physical declaration indexes of a portable library and a
      * runtime-profile variant. A platform variant may add declarations, but every portable source
-     * declaration key must retain the same CLR owner/member binding. Hidden class-forwarder records
-     * are profile-specific dispatch facts: they may disappear when a platform DIM replaces the
-     * forwarder and are therefore not portable callable-superset requirements. The sorted result is
-     * suitable for build diagnostics and deterministic tests.
+     * declaration key must retain the same CLR owner/member binding. Hidden class-forwarder and
+     * covariant-bridge records are profile-specific dispatch facts: they may move or disappear
+     * when a platform DIM replaces portable class machinery and are therefore not portable
+     * callable-superset requirements. The sorted result is suitable for build diagnostics and
+     * deterministic tests.
      */
     fun portablePhysicalAbiDifferences(
         portableDeclarations: Map<String, DotNetPhysicalDeclaration>,
         platformDeclarations: Map<String, DotNetPhysicalDeclaration>,
     ): List<DotNetPortablePhysicalAbiDifference> = portableDeclarations.toSortedMap().mapNotNull { entry ->
-        if (entry.value is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder) return@mapNotNull null
+        if (entry.value is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder ||
+            entry.value is DotNetPhysicalDeclaration.CovariantReturnBridge
+        ) {
+            return@mapNotNull null
+        }
         val platformDeclaration = platformDeclarations[entry.key]
         if (platformDeclaration != null && entry.value.isPortablePhysicalAbiCompatibleWith(platformDeclaration)) {
             null
@@ -675,6 +707,42 @@ object DotNetLibraryAbiCodec {
             }
         }
     }
+
+    private fun DotNetPhysicalDeclaration.CovariantReturnBridge.encodeFields(): List<String> =
+        listOf(
+            "R",
+            ownerLogicalKey,
+            inheritedLogicalMemberKey,
+            implementationMethodName,
+            ownerPath.size.toString(),
+        ) + ownerPath
+
+    private fun decodeCovariantReturnBridge(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.CovariantReturnBridge {
+        require(fields.size >= 6) {
+            "covariant-return bridge '$logicalKey' has an incomplete CLR identity"
+        }
+        val ownerSize = fields[4].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && fields.size == 5 + ownerSize) {
+            "covariant-return bridge '$logicalKey' has an invalid CLR owner-path payload"
+        }
+        require(fields[1].isNotEmpty() && fields[2].isNotEmpty()) {
+            "covariant-return bridge '$logicalKey' has an empty logical identity"
+        }
+        return DotNetPhysicalDeclaration.CovariantReturnBridge(
+            ownerPath = fields.drop(5).requireOwnerPath(logicalKey, "covariant-return bridge"),
+            ownerLogicalKey = fields[1],
+            inheritedLogicalMemberKey = fields[2],
+            implementationMethodName = fields[3].requireMethodName(logicalKey, "implementation"),
+        ).also { bridge ->
+            require(bridge.indexKey() == logicalKey) {
+                "covariant-return bridge '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
     private fun DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder.encodeFields(): List<String> =
         listOf(
             "W",
@@ -967,6 +1035,11 @@ internal data class DotNetBoundGenericInterfaceViewBridge(
     val bridge: DotNetPhysicalDeclaration.GenericInterfaceViewBridge,
 )
 
+internal data class DotNetBoundCovariantReturnBridge(
+    val library: DotNetExternalLibrary,
+    val bridge: DotNetPhysicalDeclaration.CovariantReturnBridge,
+)
+
 internal data class DotNetBoundInterfaceDefaultClassForwarder(
     val library: DotNetExternalLibrary,
     val forwarder: DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder,
@@ -1187,6 +1260,24 @@ internal class DotNetExternalDeclarations(
         return DotNetBoundGenericInterfaceViewBridge(bound.library, bridge)
     }
 
+    fun covariantReturnBridgeOrNull(
+        owner: IrClass,
+        inheritedMember: IrSimpleFunction,
+    ): DotNetBoundCovariantReturnBridge? {
+        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return null
+        val memberLogicalKey = inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer) ?: return null
+        val indexKey = "R:$ownerLogicalKey:$memberLogicalKey"
+        val bound = declarations[indexKey] ?: return null
+        val bridge = bound.declaration as? DotNetPhysicalDeclaration.CovariantReturnBridge ?: return null
+        require(
+            bridge.ownerLogicalKey == ownerLogicalKey &&
+                    bridge.inheritedLogicalMemberKey == memberLogicalKey
+        ) {
+            "external covariant-return bridge '$indexKey' is internally inconsistent"
+        }
+        return DotNetBoundCovariantReturnBridge(bound.library, bridge)
+    }
+
     fun interfaceDefaultClassForwarderOrNull(
         owner: IrClass,
         inheritedMember: IrSimpleFunction,
@@ -1295,6 +1386,7 @@ internal fun collectDotNetLibraryDeclarations(
     defaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     interfaceDefaultPromotions: List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     genericInterfaceViewBridges: List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
+    covariantReturnBridges: List<DotNetLoweredCovariantReturnBridge> = emptyList(),
     interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
     companionInitializations: Map<IrClass, DotNetLoweredCompanionInitialization> = emptyMap(),
     objectInstanceFields: Map<IrClass, IrField> = emptyMap(),
@@ -1307,6 +1399,8 @@ internal fun collectDotNetLibraryDeclarations(
     }
     val genericInterfaceViewBridgeFunctions =
         genericInterfaceViewBridges.mapTo(hashSetOf()) { it.implementation }
+    val covariantReturnBridgeFunctions =
+        covariantReturnBridges.mapTo(hashSetOf()) { it.implementation }
     val interfaceDefaultClassForwarderFunctions =
         interfaceDefaultClassForwarders.mapTo(hashSetOf()) { it.implementation }
     val compilerAbiClasses = compilerAbiFunctions
@@ -1377,6 +1471,7 @@ internal fun collectDotNetLibraryDeclarations(
         val function = entry.key
         val functionInfo = entry.value
         if (function in compilerAbiFunctions || function in genericInterfaceViewBridgeFunctions ||
+            function in covariantReturnBridgeFunctions ||
             function in interfaceDefaultClassForwarderFunctions
         ) {
             continue
@@ -1466,6 +1561,29 @@ internal fun collectDotNetLibraryDeclarations(
                 ?: bridge.implementation.dotNetIlMethodName(),
         )
         put(declaration.indexKey(), declaration)
+    }
+    for (bridge in covariantReturnBridges) {
+        val ownerInfo = availableClasses[bridge.owner] ?: continue
+        val implementationInfo = availableFunctions[bridge.implementation]
+            ?: error(
+                "Internal .NET backend error: covariant-return bridge for " +
+                        "'${bridge.inheritedMember.render()}' did not survive physical emission"
+            )
+        val ownerLogicalKey = preLoweringDeclarationKeys[bridge.owner]
+            ?: bridge.owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
+            ?: continue
+        val inheritedLogicalKey = bridge.inheritedMember.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+            ?: continue
+        val declaration = DotNetPhysicalDeclaration.CovariantReturnBridge(
+            ownerPath = ownerInfo.physicalPathComponents(),
+            ownerLogicalKey = ownerLogicalKey,
+            inheritedLogicalMemberKey = inheritedLogicalKey,
+            implementationMethodName = implementationInfo.physicalMethodName
+                ?: bridge.implementation.dotNetIlMethodName(),
+        )
+        require(put(declaration.indexKey(), declaration) == null) {
+            "multiple covariant-return bridges claim '${declaration.indexKey()}'"
+        }
     }
     for (forwarder in interfaceDefaultClassForwarders) {
         val ownerInfo = availableClasses[forwarder.owner] ?: continue

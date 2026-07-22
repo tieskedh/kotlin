@@ -76,9 +76,20 @@ metadata permits; if a cross-assembly compiler surface must be public, it is mar
 compiler ABI. Calls compiled against the base slot, the precise derived member, and every mapped
 interface view must select the same Kotlin override.
 
-A further-derived refinement emits the adapters required for every physical slot it satisfies.
-Inherited implementations satisfying a newly introduced interface slot receive the same explicit
-adapter rather than relying on CLR name-and-signature inference.
+A further-derived refinement emits the adapters not already satisfied by an inherited bridge
+chain. For class inheritance, the new bridge targets the immediate wider physical class slot;
+inherited bridges continue to route older slots virtually through that slot. This avoids
+quadratically rebinding every ancestor while preserving dispatch. Inherited implementations
+satisfying a newly introduced interface slot receive an explicit adapter because an abstract
+interface owns no inherited forwarding body and CLR name-and-signature inference includes the
+return type.
+
+An abstract class refinement may own a concrete bridge which dispatches to its precise abstract
+slot. A concrete subclass then implements that precise slot normally. An abstract interface
+refinement instead remains a separate abstract CLR slot: portable interfaces cannot contain the
+adapter body, so each body-owning class receives the adapters for all abstract slots it satisfies.
+This distinction changes bridge placement only; it does not change Kotlin override selection or
+copy a semantic body.
 
 ### 4. The bridge model is uniform across profiles
 
@@ -103,6 +114,35 @@ modern metadata, but that cannot alter Kotlin dispatch or the portable ABI.
 - Covariant overrides cost a small forwarding method but work uniformly on Framework and modern
   CLR runtimes.
 - C# sees the precise ordinary method while compiler bridges are hidden from normal completion.
+
+## Implementation status
+
+As of 2026-07-21, the core representation of both halves is implemented for Kotlin-owned
+declarations, subject to the explicitly recorded mapper-ordering exception below.
+
+- open nullable type parameters use the boxed-or-null carrier in fields, parameters, returns,
+  locals, generic forwarding, and split-interface execution views;
+- concrete class, property, interface, inherited-interface, abstract-class, abstract-interface,
+  generic-method, and multilevel covariant returns use exact slots plus private final bridges;
+- bridge names are deterministic across the PSI and LightTree pipelines, while semantic identity
+  is carried by each explicit `MethodImpl` row rather than by that private name; and
+- a `netstandard2.0` producer is executed from separately compiled `net48` and `net10.0` Kotlin
+  consumers, with direct Framework and modern C# consumers verifying precise public methods,
+  private compiler bridges, and dispatch through base and interface views;
+- a portable helper-owned default refined covariantly by a consumer interface uses a class-owned
+  forwarder and return bridge on `net48`, but a single interface-owned DIM return bridge and no
+  class forwarder on `net10.0`; a foreign modern C# implementation inherits that DIM naturally;
+  and
+- every metadata-relevant generated bridge is a structured physical KLIB record. A third Kotlin
+  assembly consumes a producer-recorded interface bridge without duplicating it on the
+  implementing class, while a third-party C# implementation inherits the same external DIM.
+
+The required-evidence list below remains the ABI-freeze checklist. Closure capture for open `T?`
+awaits general closure construction support, and importer/exporter projections remain separate
+work; neither changes this Kotlin-owned physical representation. One implementation exception is
+recorded for immediate correction: the legacy string-bound mapper currently recognizes `T?` with
+an upper bound of `String` as `string` before the open-nullable rule can select `object`. That is a
+code-ordering bug, not an accepted exception to Decision 1, and must be removed before ABI freeze.
 
 ## Required evidence
 

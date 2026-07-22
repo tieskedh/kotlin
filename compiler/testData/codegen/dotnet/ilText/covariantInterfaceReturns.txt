@@ -1,0 +1,184 @@
+.assembly extern mscorlib {}
+.assembly extern Kotlin.Runtime
+{
+  .ver 1:0:0:0
+}
+.assembly 'covariantInterfaceReturns' {}
+.module 'main-covariantInterfaceReturns.il'
+
+.class interface public abstract auto ansi 'Maker'
+{
+  .method public hidebysig newslot abstract virtual instance class 'Top' 'make'() cil managed
+  {
+  }
+}
+.class interface public abstract auto ansi 'HasThing'
+{
+  .method public hidebysig specialname newslot abstract virtual instance class 'Top' 'get_thing'() cil managed
+  {
+  }
+  .property instance class 'Top' 'thing'()
+  {
+    .get instance class 'Top' 'HasThing'::'get_thing'()
+  }
+}
+.class public auto ansi beforefieldinit 'Top'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Bottom'
+       extends 'Top'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'Top'::.ctor()
+    ret
+  }
+}
+.class public auto ansi beforefieldinit 'Factory'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Bottom' 'make'() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'Bottom'::.ctor()
+    ret
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Combo'
+       extends 'Factory'
+       implements 'Maker'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'Factory'::.ctor()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Top' '<CovariantReturnBridge-Maker-make-d402e0eb0f6d151698759a75a711c637>'() cil managed
+  {
+    .override method instance class 'Top' 'Maker'::'make'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Bottom' 'Factory'::'make'()
+    ret
+  }
+}
+.class public auto ansi beforefieldinit 'ThingHolder'
+       extends [mscorlib]System.Object
+{
+  .field private class 'Bottom' 'thing'
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    newobj instance void 'Bottom'::.ctor()
+    stfld class 'Bottom' 'ThingHolder'::'thing'
+    ret
+  }
+  .method public hidebysig specialname newslot virtual instance class 'Bottom' 'get_thing'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'Bottom' 'ThingHolder'::'thing'
+    ret
+  }
+  .property instance class 'Bottom' 'thing'()
+  {
+    .get instance class 'Bottom' 'ThingHolder'::'get_thing'()
+  }
+}
+.class public auto ansi sealed beforefieldinit 'Combo2'
+       extends 'ThingHolder'
+       implements 'HasThing'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void 'ThingHolder'::.ctor()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Top' '<CovariantReturnBridge-HasThing-<get-thing>-1333922b034625763e8d427ce141b859>'() cil managed
+  {
+    .override method instance class 'Top' 'HasThing'::'get_thing'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Bottom' 'ThingHolder'::'get_thing'()
+    ret
+  }
+}
+.class interface public abstract auto ansi 'RefinedMaker'
+       implements 'Maker'
+{
+  .method public hidebysig newslot abstract virtual instance class 'Bottom' 'make'() cil managed
+  {
+  }
+}
+.class public auto ansi sealed beforefieldinit 'RefinedMakerImplementation'
+       extends [mscorlib]System.Object
+       implements 'RefinedMaker'
+{
+  .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ret
+  }
+  .method public hidebysig newslot virtual instance class 'Bottom' 'make'() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'Bottom'::.ctor()
+    ret
+  }
+  .method private hidebysig newslot virtual final instance class 'Top' '<CovariantReturnBridge-Maker-make-d402e0eb0f6d151698759a75a711c637>'() cil managed
+  {
+    .override method instance class 'Top' 'Maker'::'make'()
+    .maxstack 1
+    ldarg.0
+    callvirt instance class 'Bottom' 'RefinedMakerImplementation'::'make'()
+    ret
+  }
+}
+.class public abstract sealed auto ansi beforefieldinit 'covariantInterfaceReturnsKt'
+       extends [mscorlib]System.Object
+{
+  .method public hidebysig static void 'main'() cil managed
+  {
+    .entrypoint
+    .maxstack 1
+    newobj instance void 'Combo'::.ctor()
+    callvirt instance class 'Bottom' 'Factory'::'make'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'Combo2'::.ctor()
+    callvirt instance class 'Bottom' 'ThingHolder'::'get_thing'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    newobj instance void 'RefinedMakerImplementation'::.ctor()
+    callvirt instance class 'Bottom' 'RefinedMakerImplementation'::'make'()
+    call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
+    call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+}

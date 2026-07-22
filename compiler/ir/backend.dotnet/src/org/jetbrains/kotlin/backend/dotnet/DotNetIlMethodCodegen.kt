@@ -3,6 +3,7 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_INITIALIZATION_ENTRY
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
@@ -87,6 +88,7 @@ internal class DotNetIlMethodCodegen(
     private val intrinsicMethods: DotNetIlIntrinsicMethods,
     private val typeMapper: DotNetIlTypeMapper,
     facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo> = emptyMap(),
+    private val covariantReturnImplementations: Set<IrSimpleFunction> = emptySet(),
 ) {
     private val signature = functionInfo.signature
     private val methodContext = DotNetIlMethodContext(
@@ -220,6 +222,8 @@ internal class DotNetIlMethodCodegen(
                 function.origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null
             ) {
                 appendGenericInterfaceTypedBridgeOverride()
+            } else if (function.origin == DOTNET_COVARIANT_RETURN_BRIDGE) {
+                appendCovariantReturnBridgeOverride()
             }
             if (!isAbstractMember) {
                 if (isEntryPoint) {
@@ -267,6 +271,7 @@ internal class DotNetIlMethodCodegen(
         if (origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null) return "private"
         if (origin == DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE) return "private"
         if (origin.isDotNetGenericInterfaceBridge) return "private"
+        if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "private"
         if (this is IrConstructor && constructedClass.isDotNetStdlibImplementation) return "assembly"
         if (this is IrSimpleFunction && isDotNetStdlibImplementation) return "public"
         if (isOriginallyLocalDeclaration) return if (parent is IrFile) "assembly" else "private"
@@ -322,6 +327,12 @@ internal class DotNetIlMethodCodegen(
             val overrideInfo = availableFunctions[overridden]
                 ?: typeMapper.referencedFunctionInfoOrNull(overridden)
                 ?: dotNetUnsupported("interface-default slot is unavailable")
+            if (overrideInfo.signature.returnType != signature.returnType) {
+                // A differently returned slot is owned by DotNetCovariantReturnBridgeLowering.
+                // Emitting it here would attach one precise body to an incompatible declaration
+                // in addition to the correctly typed forwarding MethodImpl.
+                return@forEach
+            }
             val physicalMethodName = overrideInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
             appendLine("    .override method ${overrideInfo.renderMethodReference(physicalMethodName)}")
         }
@@ -432,6 +443,47 @@ internal class DotNetIlMethodCodegen(
         )
     }
 
+    /** Binds one exact-return forwarding method to its wider ordinary class or interface slot. */
+    private fun StringBuilder.appendCovariantReturnBridgeOverride() {
+        val bridge = function as? IrSimpleFunction
+            ?: error("Internal .NET backend error: a covariant-return bridge is not a simple function")
+        val overridden = bridge.overriddenSymbols.singleOrNull()?.owner
+            ?: error("Internal .NET backend error: a covariant-return bridge has no unique slot")
+        val overriddenOwner = overridden.parent as? IrClass
+            ?: error("Internal .NET backend error: a covariant-return slot has no class owner")
+        val bridgeOwner = bridge.parent as? IrClass
+            ?: error("Internal .NET backend error: a covariant-return bridge has no class owner")
+        val referencedInfo = availableFunctions[overridden]
+            ?: typeMapper.referencedFunctionInfoOrNull(overridden)
+            ?: dotNetUnsupported("covariant-return slot is unavailable")
+        val ownerToken = if (overriddenOwner.typeParameters.isEmpty()) {
+            referencedInfo.owner.ilTypeRef
+        } else {
+            val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+                overriddenOwner.symbol,
+                bridgeOwner.defaultType,
+            ) ?: error(
+                "Internal .NET backend error: '${bridgeOwner.name}' is not a subtype of " +
+                        "covariant-return owner '${overriddenOwner.name}'"
+            )
+            val arguments = overriddenOwner.typeParameters.map { parameter ->
+                val argumentType = substitutor.substitute(parameter.typeParameterDefaultType)
+                typeMapper.toDotNetIlValueType(argumentType)
+                    ?: dotNetUnsupported("covariant-return owner argument '${argumentType.render()}' is unavailable")
+            }
+            DotNetIlValueType.GenericInstance(referencedInfo.owner, arguments).nameInSignature
+        }
+        val physicalMethodName = referencedInfo.physicalMethodName ?: overridden.dotNetIlMethodName()
+        appendLine(
+            "    .override method " +
+                    referencedInfo.renderOverrideMethodReference(
+                        physicalMethodName,
+                        ownerToken,
+                        bridge.typeParameters.size,
+                    )
+        )
+    }
+
     /**
      * The virtual-slot flags of a member method's header, agreeing by construction with the
      * call-site dispatch predicate [isDotNetVirtual] (declaring a slot virtual and calling it
@@ -467,6 +519,7 @@ internal class DotNetIlMethodCodegen(
         if (origin == DOTNET_GENERIC_INTERFACE_DEFAULT_ERASED_ADAPTER) return "newslot virtual final "
         if (origin.dotNetGenericInterfaceDefaultSlotAdapterViewOrNull != null) return "newslot virtual final "
         if (origin.isDotNetGenericInterfaceBridge) return "newslot virtual final "
+        if (origin == DOTNET_COVARIANT_RETURN_BRIDGE) return "newslot virtual final "
         if (this !is IrSimpleFunction || !signature.hasThis) return ""
         if ((parent as? IrClass)?.isInterface == true) {
             return if (modality == Modality.ABSTRACT) "newslot abstract virtual " else "newslot virtual "
@@ -480,6 +533,7 @@ internal class DotNetIlMethodCodegen(
         if (dotNetAnyMethodOrNull() != null) return "${abstractFlag}virtual $final"
         val overridesClassMember = overriddenSymbols.any { (it.owner.parent as? IrClass)?.isInterface != true }
         return when {
+            this in covariantReturnImplementations -> "newslot ${abstractFlag}virtual $final"
             overridesClassMember -> "${abstractFlag}virtual $final"
             overriddenSymbols.isNotEmpty() -> "newslot ${abstractFlag}virtual $final"
             modality == Modality.ABSTRACT -> "newslot abstract virtual "

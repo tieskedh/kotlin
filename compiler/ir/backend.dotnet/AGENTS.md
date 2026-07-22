@@ -1020,9 +1020,10 @@ landed shape as a compatibility constraint.
   `box/tryDiscardedValue.kt`) — mapped NON-`object` types imply every branch result is
   value-shaped and keep the expression form. GATE INTERACTIONS
   (pinned by `ilText/nullableOverrides.kt`): `Int?`/`Int` are now DISTINCT IL types, so the
-  Kotlin-covariant `Producer.value(): Int?` overridden by `value(): Int` flips to the
-  covariant-return whole-class rejection, and `f(Int)`/`f(Int?)` overloads become two legal IL
-  methods, while `g(String)`/`g(String?)` still clash (reference nullability erases). The
+  Kotlin-covariant `Producer.value(): Int?` overridden by `value(): Int` uses an exact `int32`
+  virtual slot plus a private MethodImpl bridge which wraps the result for the inherited
+  `Nullable<int32>` slot. `f(Int)`/`f(Int?)` overloads become two legal IL methods, while
+  `g(String)`/`g(String?)` still clash (reference nullability erases). The
   member-clash gate has a FACADE analogue (`ilText/facadeMethodClash.kt`): top-level functions
   and property accessors of one file render into one facade class, so top-level
   `g(String)`/`g(String?)` (same IL `string`), `h(Any)`/`h(Any?)` (same IL `object`) and
@@ -1033,7 +1034,11 @@ landed shape as a compatibility constraint.
   property with the file's whole property group. The System.Object Any foundation now supports
   Any member calls, Any/string-template conversion, general structural reference equality, and
   nullable-primitive-to-Any equality by boxing to the CLR boxed-underlying-or-null boundary.
-  STAYS REJECTED, loudly: generic `T?`, identity between two nullable-primitive values (the
+  Open `T?` is the declaration-stable boxed-or-null `object` carrier fixed by
+  `docs/decisions/adr-hybrid-generic-nullability-and-covariant-returns.md`; concrete nullable
+  primitives remain `Nullable<T>` and non-null `T` remains reified. STAYS REJECTED, loudly:
+  nested open-nullable arguments of invariant reified carriers without an erased view, identity
+  between two nullable-primitive values (the
   operands would box; identity of separately boxed values is unrelated to value equality — `ceq`
   on two boxed equal int32s is False, boxprobe_s6 — and Kotlin deprecates boxed identity; identity
   against null is supported as a HasValue test). Cross-primitive `Int? == Long?` needs no backend
@@ -1267,13 +1272,14 @@ landed shape as a compatibility constraint.
   slice, value-type tests, and every other non-upcast IMPLICIT_CAST stay rejected loudly. STAYS
   REJECTED, whole-class: exception supertypes (existing message; interface supertypes are
   SUPPORTED since the interface model, see its bullet), out-of-module bases,
-  objects/companions with any supertype, covariant-return overrides
-  (ECMA-335 II.15.4.2.3 slot matching includes the RETURN type, so the override would land in
-  a fresh slot and base-typed `callvirt` would silently run the BASE body — probe-verified;
-  Roslyn's fix is `.override` + `PreserveBaseOverrides` machinery this backend does not emit;
-  compared on MAPPED types in the member pre-pass, so `String?`-to-`String` covariance — same
-  IL `string` — stays supported; pinned by `ilText/inheritanceCovariantReturnRejected.kt`),
-  and data-object plus unsupported data-class generated-member shapes. Overrides of `kotlin.Any`
+  objects/companions with any supertype, and data-object plus unsupported data-class generated-
+  member shapes. Covariant-return overrides are supported by the uniform floor-compatible design
+  in `docs/decisions/adr-hybrid-generic-nullability-and-covariant-returns.md`: the precise method
+  is a distinct virtual slot when its direct class slot has a different mapped return, and a
+  private final MethodImpl bridge adapts that immediate wider class slot
+  (`ilText/covariantClassReturns.kt`, `box/covariantReturns.kt`). Inherited bridge chains route
+  transitive class slots; interface slots remain explicit. Same-carrier `String?`-to-`String`
+  covariance reuses the ordinary base slot. Overrides of `kotlin.Any`
   (`toString`/`equals`/`hashCode`) are supported by mapping to System.Object's reused virtual
   slots, pinned by `ilText/inheritanceAnyOverride.kt` and `box/anyMembers.kt`; detection walks
   `allOverridden()` against the TYPE-based `isAny`, because
@@ -1315,8 +1321,9 @@ landed shape as a compatibility constraint.
   `newslot abstract virtual` slot; one exact-signature class member implicitly fills the original
   and every redeclared slot, including diamonds and open/composed generic views
   (`ifaceredeclareprobe_s1`). Calls name the interface that owns the selected declaration.
-  Mapped covariant-return redeclarations remain rejected by the shared override pre-pass because
-  one implicit class member cannot fill slots with different CLR return signatures. KOTLIN-OWNED
+  A mapped covariant-return redeclaration introduces a distinct abstract CLR slot. Each concrete
+  implementing class receives explicit MethodImpl adapters for every wider slot it satisfies, so
+  Kotlin override resolution does not depend on CLR implicit matching. KOTLIN-OWNED
   GENERIC interfaces use the split ABI in
   `docs/decisions/draft-adr-variant-interface-abi.md`: non-generic `Producer` is the sole Kotlin
   storage/cast identity and owns deterministic erased slots; declaration-variant
@@ -1363,18 +1370,15 @@ landed shape as a compatibility constraint.
   diamond/merge shape, s9). For an ordinary non-generic interface, a base-class member satisfying
   a derived class's interface works iff the inherited member is VIRTUAL (s5a — Kotlin
   fake-override semantics for free) AND its mapped IL signature matches the interface slot
-  EXACTLY, return type included: ECMA-335 interface mapping matches the full signature and that
-  path emits no `.override`/bridge machinery, so the
-  non-virtual variant is gated whole-class at compile time with a message citing s5b and the
+  EXACTLY, return type included: ECMA-335 interface mapping matches the full signature. The
+  non-virtual variant is gated whole-class at compile time with a message citing s5b, while the
   inherited covariant-return variant (`class Combo : Factory(), Maker` where
-  `Factory.make(): Bottom` is meant to fill `Maker.make(): Top`) is gated whole-class in the
-  member pre-pass with a message citing s10 — both flavors assemble without any ilasm
-  diagnostic and throw TypeLoadException at first JIT of a using method (s5b/s10, the
-  covariant probe covering the function and the property-accessor variants; pinned by
-  `ilText/interfaceNonVirtualImplRejected.kt` and `ilText/interfaceCovariantImplRejected.kt`);
-  same-IL-type Kotlin covariance (`String?` filled by an inherited `String` member) stays
-  supported — the comparison runs on MAPPED types UNDER the implementing class's instantiated
-  interface view, like the declared-override covariant gate of the inheritance bullet. Split
+  `Factory.make(): Bottom` fills `Maker.make(): Top`) receives a private final MethodImpl adapter
+  for the wider interface slot. The non-virtual poison shape assembles without an ilasm diagnostic
+  and throws TypeLoadException at first JIT; the covariant shape is executable through both class
+  and interface views (`ilText/interfaceNonVirtualImplRejected.kt`,
+  `ilText/covariantInterfaceReturns.kt`, and `box/covariantReturns.kt`). Same-IL-type Kotlin
+  covariance (`String?` filled by an inherited `String` member) needs no adapter. Split
   generic interfaces are the exception: their lowering always emits explicit canonical and typed
   MethodImpl bridges, including the boxing/widening bridge needed for refined returns. UPCASTS:
   class→interface and
@@ -1440,7 +1444,8 @@ landed shape as a compatibility constraint.
   compatibility and exact calls. Qualified `super<I>.f()` always lowers to exactly `I`'s helper:
   portable helpers own the moved body, while modern helpers use a plain nonvirtual `call` to
   their owning DIM. Ordinary calls remain virtual. External helper identities, derived-interface
-  promotions, and hidden class MethodImpls are consumed from the structured physical ABI; never
+  promotions, covariant-return MethodImpls, and hidden class MethodImpls are consumed from the
+  structured physical ABI; never
   infer them from target profile or generated names. A class inherits an existing MethodImpl for
   the same selected default, but receives a resolver bridge when an ancestor-default MethodImpl
   would mask a more-specific Kotlin choice.
@@ -1451,7 +1456,7 @@ landed shape as a compatibility constraint.
   Helpers select it nonvirtually. No view adapter, promotion, class bridge, or class forwarder owns
   an independently lowered body. A concrete non-generic net10 interface override owns one complete
   final canonical/declared/exact adapter bundle whose bodies dispatch virtually to its DIM.
-  Implementors inherit that bundle, including across assemblies: unpublished physical ABI schema 8
+  Implementors inherit that bundle, including across assemblies: unpublished physical ABI schema 12
   records each adapter as a structured `B` entry keyed by owner, inherited logical member, and
   physical view. Never rediscover it from generated declarations, method names, or IL text.
   A generic capability call resolves its canonical fallback name from the bound physical function
@@ -1927,9 +1932,10 @@ landed shape as a compatibility constraint.
     out of mapping the derived member's own concrete Kotlin types; the OPEN `!0` spelling in a
     non-generic derived class is a POISON SHAPE (assembles warning-free, silently splits the slot,
     base-typed `callvirt` runs the BASE body — the covariant-return failure family; genprobe_s5b)
-    that this codegen can never emit, and the covariant-return member pre-pass gate compares the
-    overridden return UNDER the receiver's structural owner view (`dotNetTypeArgumentsFor`) so
-    substituted base/interface overrides pass and real covariance still rejects. Eviction rides
+    that this codegen can never emit implicitly. The covariant-return lowering compares the
+    overridden return under the receiver's structural owner view and emits an exact new slot plus
+    explicit MethodImpl adapters, so substituted base/interface overrides reuse matching slots and
+    real covariance dispatches through generated bridges. Eviction rides
     the existing fixpoint: instantiations
     map arguments through the LIVE class map, so an instantiation mentioning an evicted class fails
     its USE, and the `extends` re-resolution carries a type-argument-eviction reason down the chain

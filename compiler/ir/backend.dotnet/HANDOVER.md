@@ -1229,6 +1229,30 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Kotlin-common direction is the per-declaration erased identity plus same-object exact capability
   in `docs/decisions/draft-adr-variant-interface-abi.md`, not broader casts. Settle that model before
   committing a broad variant stdlib abstraction such as `List<out T>`.
+- Covariant returns now follow the accepted floor-compatible ABI on all profiles. The source
+  declaration owns one precise virtual slot; each physically wider ordinary class or interface
+  slot receives a private final forwarding method with an explicit `MethodImpl`. Forwarders call
+  the precise implementation virtually and contain no copy of the Kotlin body. Direct class and
+  property overrides, inherited class implementations satisfying interfaces, multilevel chains,
+  abstract class/interface refinements, generic methods, `Int?`-to-`Int`, and same-carrier
+  reference nullability execute in both generated box pipelines. An exact method is marked
+  `newslot` only for a direct physical class-return mismatch; a transitive wider ancestor must not
+  split an otherwise matching immediate abstract slot. Multilevel classes bridge only their
+  immediate wider class slot; inherited bridge chains route older class slots without quadratic
+  rebinding. Interface slots remain explicit because abstract interfaces own no forwarding body.
+- `testCovariantReturnsAcrossPortableLibraryBoundary` compiles a `netstandard2.0` producer and
+  separate `net48`/`net10.0` consumers. Both Kotlin applications execute base, interface,
+  inherited-interface, abstract, generic, and multilevel dispatch. Framework csc and modern
+  Roslyn compile and run direct consumers; reflection confirms the precise methods are public and
+  every compiler bridge is private. The cross-module case also pins that a concrete external
+  target is selected from metadata and called normally—the consumer never needs the producer's IR
+  body. Its covariant-default case pins profile-aware ownership: `net48` uses a hidden precise
+  helper forwarder plus a class-owned wider-return adapter; `net10.0` places the wider-return
+  MethodImpl on the derived DIM interface, emits no class forwarder or duplicate class adapter,
+  and lets a foreign C# implementation inherit the selected default. ABI schema 12 records every
+  covariant MethodImpl as a structured `R` entry keyed by logical owner and inherited member. A
+  third Kotlin assembly consumes that record and emits no duplicate class bridge; a foreign C#
+  implementation of the external interface inherits the same DIM.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
