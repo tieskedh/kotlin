@@ -850,6 +850,207 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testForeignGenericInterfaceBarriers() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val frameworkCSharp = DotNetIlAssembler.findFrameworkCSharpCompiler()
+        requireOrAssumeToolchain(frameworkCSharp != null, ".NET Framework C# compiler is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+
+        val producerDirectory = File(tmpdir, "foreign-barriers").apply { mkdirs() }
+        val producerSource = producerDirectory.resolve("barrier.kt").apply {
+            writeText(
+                """
+                package barriers
+
+                public interface UnsafeSink<out T> {
+                    public fun accepts(value: @UnsafeVariance T): Boolean
+                }
+
+                public fun verifyForeign(
+                    collection: Collection<Int>,
+                    unsafeSink: UnsafeSink<Int>,
+                ): Int {
+                    if (collection.size != 1 || collection.isEmpty()) return 1
+                    if (!collection.contains(42)) return 2
+                    val wideCollection: Collection<Any?> = collection
+                    if (wideCollection.contains("wrong") || wideCollection.contains(null)) return 3
+
+                    if (!unsafeSink.accepts(42)) return 4
+                    val wideUnsafeSink: UnsafeSink<Any?> = unsafeSink
+                    try {
+                        wideUnsafeSink.accepts("wrong")
+                        return 5
+                    } catch (_: ClassCastException) {
+                        // An ordinary user unsafe member retains normal cast-failure behavior.
+                    }
+                    return 0
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Foreign.Barriers",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerMetadata = producerDirectory.resolve("Foreign.Barriers.klib")
+        val declarations = DotNetLibraryAbiCodec.decode(producerMetadata.readKlibManifest()).values
+        val unsafeClass = declarations.filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .single { declaration -> declaration.ownerPath.last() == "barriers.UnsafeSink" }
+        assertEquals(listOf("barriers.UnsafeSink`1"), unsafeClass.declaredOwnerPath)
+        assertEquals(listOf("barriers.UnsafeSink__KotlinExact`1"), unsafeClass.exactOwnerPath)
+        val unsafeCanonicalSlot = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration ->
+                declaration.ownerPath.last() == "barriers.UnsafeSink" &&
+                        declaration.methodName.startsWith("accepts__KotlinErased__")
+            }
+        val verifier = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration -> declaration.methodName == "verifyForeign" }
+        assertEquals(listOf("barriers.barrierKt"), verifier.ownerPath)
+
+        val csharpSourceText = """
+            using System;
+
+            public sealed class ForeignCollection
+                : Kotlin.Collections.Collection__KotlinExact<int>
+            {
+                public int Size { get { return 1; } }
+
+                public bool IsEmpty() { return false; }
+
+                public bool Contains(int element) { return element == 42; }
+
+                public bool ContainsErased(object element)
+                {
+                    return element is int && Contains((int)element);
+                }
+
+                public Kotlin.Collections.Iterator GetIterator() { return null; }
+
+                public bool ContainsAll(Kotlin.Collections.Collection elements) { return false; }
+            }
+
+            public sealed class ForeignUnsafeSink
+                : barriers.UnsafeSink__KotlinExact<int>
+            {
+                public bool accepts(int value) { return value == 42; }
+
+                public bool ${unsafeCanonicalSlot.methodName}(object value)
+                {
+                    return accepts((int)value);
+                }
+            }
+
+            public static class Program
+            {
+                public static void Main()
+                {
+                    int result = ${verifier.ownerPath.single()}.${verifier.methodName}(
+                        new ForeignCollection(),
+                        new ForeignUnsafeSink());
+                    if (result != 0)
+                        throw new Exception("foreign generic-interface barrier " + result);
+                    Console.WriteLine("OK");
+                }
+            }
+        """.trimIndent()
+        val producerAssembly = producerDirectory.resolve("Foreign.Barriers.dll")
+        assertTrue(producerAssembly.isFile)
+        val bootstrapSource = producerDirectory.resolve("bootstrap.kt").apply { writeText("fun main() {}") }
+
+        val frameworkDirectory = producerDirectory.resolve("framework").apply { mkdirs() }
+        compileInProcess(
+            K2DotNetCompiler(),
+            bootstrapSource.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignBarriersBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            frameworkDirectory.resolve("ForeignBarriersBootstrap.exe").path,
+        )
+        val frameworkRuntime = frameworkDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(frameworkRuntime.isFile)
+        val frameworkSource = frameworkDirectory.resolve("consumer.cs").apply { writeText(csharpSourceText) }
+        val frameworkApplication = frameworkDirectory.resolve("ForeignBarriers.exe")
+        val frameworkCompile = runCSharpCompiler(
+            checkNotNull(frameworkCSharp),
+            frameworkSource,
+            frameworkApplication,
+            producerAssembly,
+            frameworkRuntime,
+            checkNotNull(frameworkNetStandardFacade),
+            target = "exe",
+        )
+        assertEquals(0, frameworkCompile.exitCode, frameworkCompile.output)
+        producerAssembly.copyTo(frameworkDirectory.resolve(producerAssembly.name), overwrite = true)
+        runAssemblerPairing(
+            frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkApplication),
+            frameworkDirectory,
+            "Framework foreign generic-interface barriers",
+        )
+
+        val modernDirectory = producerDirectory.resolve("modern").apply { mkdirs() }
+        compileInProcess(
+            K2DotNetCompiler(),
+            bootstrapSource.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ForeignBarriersBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            modernDirectory.resolve("ForeignBarriersBootstrap.dll").path,
+        )
+        val modernRuntime = modernDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(modernRuntime.isFile)
+        val modernSource = modernDirectory.resolve("consumer.cs").apply { writeText(csharpSourceText) }
+        val modernApplication = modernDirectory.resolve("ForeignBarriers.dll")
+        val modernCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            modernSource,
+            modernApplication,
+            producerAssembly,
+            modernRuntime,
+            target = "exe",
+        )
+        assertEquals(0, modernCompile.exitCode, modernCompile.output)
+        producerAssembly.copyTo(modernDirectory.resolve(producerAssembly.name), overwrite = true)
+        modernDirectory.resolve("ForeignBarriers.runtimeconfig.json").writeText(
+            """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                },
+                "rollForward": "LatestMinor"
+              }
+            }
+            """.trimIndent()
+        )
+        runAssemblerPairing(
+            listOf(checkNotNull(modernCSharp).dotNetHost.path, "exec", modernApplication.path),
+            modernDirectory,
+            "CoreCLR foreign generic-interface barriers",
+        )
+    }
+
+    @Test
     fun testGenericInterfaceDefaultsAcrossPortableAndNet10Assemblies() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
