@@ -139,7 +139,7 @@ widened Kotlin views. This validates the current public view spelling, same-obje
 property shape, generic-method forwarding, and barrier distinction; generated C# adapters/analyzers
 and the broader foreign-implementor matrix remain pending.
 
-Library publication also now fails on eight independently replayed physical collisions: a
+Library publication also now fails on nine independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
 property accessor mapping to the same declared-view slot, an inherited method and inherited
@@ -148,7 +148,10 @@ exact-view TypeDef identity, a same-name intersection whose nested owner-relativ
 has no complete physical adapter, two source overloads whose distinct Kotlin function types erase
 to the same CLR `Function1` parameter, and two overloads whose `String`/`String?` parameters erase
 to `string` while their results remain physically different. The latter would be a CLR
-return-type-only overload. The inherited checks follow the
+return-type-only overload. A derived interface also rejects two same-named inherited overloads
+whose distinct Kotlin function types both become `Function1`; without a Kotlin-selected
+intersection there is no semantic basis for inventing one derived CLR slot. The inherited checks
+follow the
 physical capability graph and exempt a genuine Kotlin override of the inherited member. A
 same-name inherited intersection is admitted only when the producer selects a derived slot
 covering both contributing families; merged property fake overrides are checked against the
@@ -889,6 +892,9 @@ coverage for at least:
   matrix. A source member that only looks like another member's canonical name is safely separated
   by physical owner and explicit `MethodImpl`. Properties with independently placed getters and
   setters are covered by the split-property lane;
+- same-name inherited overloads that collide only after callable erasure are rejected unless a
+  Kotlin-selected intersection slot covers both logical members. Transitive and cross-module
+  inherited overload substitutions remain in the required matrix;
 - generic methods, recursive bounds, default bodies, fun interfaces, and suspend members;
 - `Iterator`, collections/maps, `Comparable`, `Continuation`, property delegates, reflection
   interfaces, ranges, and marker-only interfaces;
