@@ -59,6 +59,18 @@ internal enum class DotNetGenericInterfaceMemberView {
     EXACT,
 }
 
+/** One bodyless typed slot unifying a directly inherited Kotlin intersection for CLR consumers. */
+internal data class DotNetGenericInterfaceIntersectionSlot(
+    val owner: IrClass,
+    val signatureSource: IrSimpleFunction,
+    val contributingMembers: List<IrSimpleFunction>,
+    val memberView: DotNetGenericInterfaceMemberView,
+    val physicalMethodName: String,
+) {
+    val representativeMember: IrSimpleFunction
+        get() = contributingMembers.minBy { member -> member.dotNetGenericInterfaceCanonicalSlotId() }
+}
+
 internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfaceView
     get() = when (this) {
         DotNetGenericInterfaceMemberView.DECLARED -> DotNetGenericInterfaceView.DECLARED
