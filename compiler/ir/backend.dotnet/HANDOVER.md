@@ -1562,21 +1562,27 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Prototype the variant-interface representation needed by the real stdlib.** Use
-   `docs/decisions/draft-adr-variant-interface-abi.md`: erased Kotlin identity, declaration-owned
-   exact capability, no subtype-conversion wrappers. Keep the current reified path and rejection
-   until the primitive/open/reference, identity, cross-module, and dual-runtime matrix proves the
-   replacement.
-2. **Turn the portable pair into the build-owned .NET stdlib input.** Discovery already uses
-   `lib/dotnet/netstandard2.0`; add an explicit host-capability-aware producer/install task. Do not
-   make cross-platform `distKotlinc` depend unconditionally on a host ILAsm. Then compile the
-   generated common stdlib sources plus narrow .NET actuals through the ordinary library producer
-   instead of expanding the handwritten bootstrap corpus.
-3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
+1. **Finish the ABI-required generic-interface intersection adapters.** The direct owner-bound
+   slice landed in `d01ab02ba`. Next implement nonidentical resolved signatures with the existing
+   schema-14/MethodImpl model, then selected defaults with the accepted helper/DIM model. Do not
+   copy a Kotlin body. A split-view mutable property requires an ADR-level C# surface decision;
+   nested/general owner-relative carriers remain rejected.
+2. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
+   physical collision matrix, then add generated implementor tooling. Keep raw metadata-table
+   auditing with the structured metadata work; do not substitute IL substring checks.
+3. **Wire friend associations through the build model.** Compiler/FIR producer authorization and
+   consumer declaration are implemented; Gate A still needs product-owned association rather than
+   only provisional CLI switches.
+4. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
+   host-capability-aware producer/install tasks already exist and must remain outside unconditional
+   cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then
+   compile generated common stdlib sources plus narrow .NET actuals through the ordinary library
+   producer instead of expanding the handwritten bootstrap corpus.
+5. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
    of Kotlin-owned stdlib bootstrapping.
-4. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
+6. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
    should become emitted Kotlin code only when its implementation is supported and tested; keep
    platform operations in the intrinsic registry where the mature JVM stdlib does so.
 

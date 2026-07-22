@@ -34,7 +34,8 @@ choice.
 
 ## Current status
 
-- Snapshot and current HEAD: `8dd89907d` at the time this index was created.
+- Snapshot review: `8dd89907d`. The living execution plan has been re-audited through
+  `d01ab02ba`; do not read the snapshot commit as the current implementation state.
 - Maturity: high-quality prototype; credible trajectory; not open for third-party binary ABI.
 - Immediate objective: Gate A in [`way-forward.md`](way-forward.md).
 - Required profiles: `net48` applications/libraries, `netstandard2.0` portable libraries, and
