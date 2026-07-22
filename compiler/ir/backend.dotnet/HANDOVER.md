@@ -1211,6 +1211,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `DotNetLibraryIntegrationTest.testGenericInterfaceDefaultsAcrossPortableAndNet10Assemblies`.
   The closed promotion puts all canonical/declared/exact MethodImpl adapters on its single CLR
   interface owner, and the implementor proves those DIMs suppress helper-backed class forwarders.
+  Two generic net10 interfaces now also promote the same portable defaults independently, and a
+  derived diamond receives a complete resolver promotion bundle. Kotlin and direct C# execution
+  through portable root, both branches, diamond, exact, method-generic, and widened views proves
+  one selected helper identity, no CLR ambiguity, and no implementing-class forwarder.
   The same producer now declares a closed non-generic interface override with one DIM body and a
   complete final view-adapter bundle. Schema-8 `B` records let the separately compiled implementor
   inherit that bundle without duplicate `value` bridges; the consumer executes the overriding body
@@ -1430,8 +1434,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only
   unsafe input dispatch is covered through the invariant exact capability. Nested/general
-  owner-relative constraints, split-view property, and default
-  cases remain open. Property accessors are filtered atomically so a Kotlin `var` never acquires
+  owner-relative constraints and split-view property cases remain open. Property accessors are
+  filtered atomically so a Kotlin `var` never acquires
   only a derived getter while its inherited setter remains ambiguous.
 - Same-name inheritance is no longer admitted merely because the IR names match. Pairwise inherited
   claims must be covered by a selected derived intersection slot, and a merged property fake
@@ -1570,10 +1574,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Finish the ABI-required generic-interface intersection adapters.** Direct owner-bound and
-   nonidentical covariant-return slices are implemented. Next complete selected defaults with the
-   accepted helper/DIM model and no body copy. A split-view mutable property requires an ADR-level
-   C# surface decision; nested/general owner-relative carriers remain rejected.
+1. **Decide the split-view mutable-property surface.** Direct owner-bound and nonidentical
+   covariant-return intersections are implemented, and selected defaults are covered by the
+   accepted helper/DIM promotion model. A `var` whose accessors require different typed
+   capabilities still needs an ADR-level C# surface decision; nested/general owner-relative
+   carriers remain rejected.
 2. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
    physical collision matrix, then add generated implementor tooling. Keep raw metadata-table
    auditing with the structured metadata work; do not substitute IL substring checks.

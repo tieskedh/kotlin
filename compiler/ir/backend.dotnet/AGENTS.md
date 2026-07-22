@@ -1404,13 +1404,19 @@ landed shape as a compatibility constraint.
   contributor has that exact resolved return. That contributor's bridge implements the derived
   slot; wider parent bridges still adapt the same source body. Kotlin and C# producer/consumer
   calls pin the strongly typed derived result on both profiles.
+  Selected portable defaults shared by several branches use the profile-aware promotion ABI rather
+  than a schema-14 bodyless slot. Two incomparable generic promotion providers cause the derived
+  interface to emit another canonical/declared/exact resolver bundle targeting the original helper.
+  Kotlin and C# calls through root, branch, derived, exact, method-generic, and widened views prove
+  that this never copies the body or exposes CLR ambiguity. Unrelated default declarations require
+  an explicit Kotlin override and follow the ordinary declared-body path.
   Physical ABI schema 14 gives that slot a
   distinct normalized record containing its typed owner/view, method name, and contributing
   logical-member group; it is not encoded as an already-implemented view bridge. A property needs
   no second record because KLIB retains the accessor association; its accessors are admitted or
   removed atomically rather than exposing a derived getter without its setter. Properties whose
-  accessors split across declared/exact views, defaults, and nested/general owner-relative method
-  constraints remain pending and are rejected as complete declarations when
+  accessors split across declared/exact views and nested/general owner-relative method constraints
+  remain pending and are rejected as complete declarations when
   they would otherwise leave an ambiguous same-name CLR surface. Logical contributors and their
   first multi-branch meeting are discovered before those support checks, so every genuine
   candidate is selected, covered by an existing profile-aware promotion, or rejected rather than
