@@ -142,7 +142,8 @@ The implementation now:
 9. mechanically compares the externally consumable CLR reflection surface of the assembled
    `Kotlin.Runtime` and `Kotlin.Stdlib` variants, requiring each executable profile to retain every
    portable public/protected type, base/interface edge, generic constraint, method, field,
-   property, and event with compatible accessibility and overridability.
+   property, and event with compatible accessibility and overridability, together with every
+   portable custom-attribute identity and normalized payload on the assembly or exposed surface.
 
 The repository's opt-in stdlib producer and installer create all three profile variants under
 their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
@@ -152,10 +153,13 @@ executed by both `net48` and `net10.0` applications.
 The surface comparison runs as isolated test tooling under CoreCLR, loading each profile pair in
 its own assembly-load context. It consumes assembled PEs rather than rendered-IL substrings and
 allows the deliberate portable-abstract-to-modern-DIM transition while rejecting removed or
-narrowed callable surface. A target-owned `@TestOnly` hook produces each runtime variant without
-turning runtime generation into a library side effect. This audit does not yet compare raw custom-
-attribute payloads, MethodImpl rows, resources, or internal friend-only surface; those remain part
-of the future structured metadata model and ABI-freeze audit.
+narrowed callable surface. It also compares constructor and named custom-attribute arguments on
+assemblies, types, members, parameters, returns, and generic parameters; only
+`TargetFrameworkAttribute` is excluded because its profile value must differ. A target-owned
+`@TestOnly` hook produces each runtime variant without turning runtime generation into a library
+side effect. This audit does not yet compare raw attribute-blob encoding, MethodImpl rows,
+resources, or internal friend-only surface; those remain part of the future structured metadata
+model and ABI-freeze audit.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.

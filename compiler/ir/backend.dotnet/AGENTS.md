@@ -202,8 +202,11 @@ landed shape as a compatibility constraint.
   CoreCLR contexts and compares their externally consumable reflection surfaces. Both executable
   variants must retain every portable public/protected type, base/interface edge, generic
   constraint, method, field, property, and event with compatible access and overridability. The
-  verifier is isolated C# test data, not a compiler sidecar; raw custom-attribute payloads,
-  MethodImpl rows, resources, and friend-only internal surface remain outside this bounded audit.
+  verifier also compares normalized custom-attribute identities and constructor/named payloads on
+  assemblies and the exposed surface; `TargetFrameworkAttribute` alone is excluded because its
+  value is profile-specific. It is isolated C# test data, not a compiler sidecar; raw attribute-
+  blob encoding, MethodImpl rows, resources, and friend-only internal surface remain outside this
+  bounded audit.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
   and no `mscorlib` MemberRefs. The complete
