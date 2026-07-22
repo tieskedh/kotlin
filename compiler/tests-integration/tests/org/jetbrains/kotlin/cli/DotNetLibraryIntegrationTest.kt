@@ -1751,6 +1751,92 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "Cross-module promoted accessors/default arguments failed",
         )
     }
+
+    @Test
+    fun testGenericExternalInterfaceDefaultDispatcherPreservesOwnerTypeContext() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ILAsm is not available")
+        requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, "Framework ILAsm is not available")
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+
+        val producerDirectory = File(tmpdir, "generic-default-dispatcher-producer").apply { mkdirs() }
+        val producerSource = producerDirectory.resolve("producer.kt").apply {
+            writeText(
+                """
+                package genericdefaults
+
+                public interface GenericDefaults<T> {
+                    public fun choose(value: T, fallback: T, useFallback: Boolean = false): T =
+                        if (useFallback) fallback else value
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            producerSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Generic.Defaults",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+        val producerMetadata = producerDirectory.resolve("Generic.Defaults.klib")
+        val chooseDeclaration = DotNetLibraryAbiCodec.decode(producerMetadata.readKlibManifest()).values
+            .filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { it.defaultArgumentDispatcher != null }
+        assertTrue(chooseDeclaration.isInstance)
+
+        val consumerSource = File(tmpdir, "generic-default-dispatcher-consumer.kt").apply {
+            writeText(
+                """
+                package genericdefaults
+
+                private class StringDefaults : GenericDefaults<String>
+
+                fun main() {
+                    val defaults: GenericDefaults<String> = StringDefaults()
+                    if (defaults.choose("O", "bad") != "O") throw Error("ordinary default")
+                    if (defaults.choose("bad", "K", true) != "K") throw Error("explicit argument")
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = File(tmpdir, "generic-default-dispatcher-$target").apply { mkdirs() }
+            val consumerAssembly = consumerDirectory.resolve(
+                if (target == "net48") "GenericDefaultsConsumer.exe" else "GenericDefaultsConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "GenericDefaultsConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+            )
+            val consumerIl = consumerDirectory.resolve("GenericDefaultsConsumer.il").readText()
+            assertTrue("[Generic.Defaults]" in consumerIl) { consumerIl }
+            assertTrue("choose\$default" in consumerIl) { consumerIl }
+
+            if (target == "net48") {
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                    consumerDirectory,
+                    "Framework generic external default dispatcher",
+                )
+            } else {
+                runDotNet(
+                    dotnetHost,
+                    consumerAssembly,
+                    consumerDirectory,
+                    "CoreCLR generic external default dispatcher failed",
+                )
+            }
+        }
+    }
+
     @Test
     fun testRejectsInterfaceSuperCallsWithOmittedDefaultArguments() {
         val source = File(tmpdir, "super-call-with-default-arguments.kt").apply {

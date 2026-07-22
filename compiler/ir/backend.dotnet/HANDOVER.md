@@ -1282,6 +1282,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   dependency checks, timeouts, and the strict SAC skip/fail contract. The standalone net48 run is
   232/0/0/0 across six XML suites; the expanded strict DotNet matrix is 780/0/0/0 across fourteen
   XML suites. Generated Java remains build output and is not committed.
+- A full 35-test library-integration audit exposed an NPE in external interface default-argument
+  dispatcher synthesis: the synthetic static binding forced a null dispatch type into the shared
+  IR receiver copier. The binding now follows the structured function record. Instance members
+  copy the selected owner receiver and declaration type parameters before method parameters;
+  truly static companion/top-level records copy neither, and inconsistent IR/metadata shapes fail
+  explicitly. A new portable generic-interface producer executes its recorded dispatcher from
+  separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
+  rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

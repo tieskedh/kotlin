@@ -698,6 +698,15 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         stub: IrSimpleFunction,
         bound: DotNetBoundDefaultArgumentDispatcher,
     ): Replacement {
+        val typeContextOwner = if (bound.function.isInstance) {
+            semanticParent as? IrClass
+                ?: error("Internal .NET backend error: external instance default dispatcher has no class owner")
+        } else {
+            null
+        }
+        check((stub.dispatchReceiverParameter != null) == bound.function.isInstance) {
+            "Internal .NET backend error: external default dispatcher receiver shape disagrees with its physical record"
+        }
         val helperOwner = context.irFactory.buildClass {
             startOffset = stub.startOffset
             endOffset = stub.endOffset
@@ -714,14 +723,15 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             irParent = helperOwner,
             name = stub.name,
             oldFunction = stub,
-            dispatchReceiverType = null,
+            dispatchReceiverType = typeContextOwner?.symbol?.defaultType,
             origin = stub.origin,
             modality = Modality.FINAL,
             visibility = DescriptorVisibilities.PUBLIC,
             isFakeOverride = false,
+            typeParametersFromContext = typeContextOwner?.typeParameters.orEmpty(),
         )
         context.externalDefaultArgumentDispatchers[helper] = bound
-        return Replacement(typeContextOwner = null, function = helper)
+        return Replacement(typeContextOwner, helper)
     }
 
     private fun addExternalInterfacePromotions(
