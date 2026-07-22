@@ -47,7 +47,9 @@ import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.classFqName
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -654,8 +656,8 @@ internal class DotNetIlEmitter(
         // C# diagnoses two equally applicable inherited source-named members as CS0121 even
         // when Kotlin has one valid intersection fake override. Materialize the conservative
         // bodyless slice here, after the physical view graph exists: direct generic parents,
-        // no method type parameters/default/property surface, and one identical resolved
-        // signature, including ordinary value parameters.
+        // no owner-dependent method constraints/default/property surface, and one identical
+        // resolved signature, including ordinary value and method type parameters.
         // More complex intersections stay unchanged until their adapter semantics are explicit.
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNullTo(hashSetOf()) { type ->
@@ -663,7 +665,9 @@ internal class DotNetIlEmitter(
             }
             irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
                 if (fakeOverride.correspondingPropertySymbol != null ||
-                    fakeOverride.typeParameters.isNotEmpty() ||
+                    fakeOverride.typeParameters.any { parameter ->
+                        parameter.superTypes.any { bound -> bound.isDotNetOwnerDependentConstraint(irClass) }
+                    } ||
                     fakeOverride.body != null
                 ) {
                     return@slot null
@@ -671,12 +675,18 @@ internal class DotNetIlEmitter(
                 val contributors = fakeOverride.overriddenSymbols
                     .map { symbol -> symbol.owner }
                     .filter { member ->
-                                !member.isFakeOverride &&
+                        !member.isFakeOverride &&
                                 member.name == fakeOverride.name &&
-                                member.typeParameters.isEmpty() &&
                                 member.body == null &&
                                 (member.parent as? IrClass) in directSuperInterfaces &&
                                 (member.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true &&
+                                (member.parent as IrClass).let { memberOwner ->
+                                    member.typeParameters.none { parameter ->
+                                        parameter.superTypes.any { bound ->
+                                            bound.isDotNetOwnerDependentConstraint(memberOwner)
+                                        }
+                                    }
+                                } &&
                                 member !in interfaceDefaultImplementations &&
                                 genericInterfaceDefaults.none { lowered -> lowered.source == member }
                     }
@@ -689,13 +699,33 @@ internal class DotNetIlEmitter(
                         memberOwner.symbol,
                         irClass.defaultType,
                     ) ?: return false
-                    if (substitutor.substitute(member.returnType) != fakeOverride.returnType) return false
+                    if (member.typeParameters.size != fakeOverride.typeParameters.size) return false
+                    if (member.typeParameters.zip(fakeOverride.typeParameters).any { pair ->
+                            pair.first.isReified != pair.second.isReified
+                        }
+                    ) {
+                        return false
+                    }
+                    val methodSubstitution = member.typeParameters.zip(fakeOverride.typeParameters).associate { pair ->
+                        pair.first.symbol to pair.second.typeParameterDefaultType
+                    }
+                    val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
+                    fun resolvedType(type: IrType): IrType =
+                        methodSubstitutor.substitute(substitutor.substitute(type))
+
+                    if (resolvedType(member.returnType) != fakeOverride.returnType) return false
                     val memberParameters = member.parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
                     val fakeParameters = fakeOverride.parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
-                    return memberParameters.size == fakeParameters.size &&
-                            memberParameters.zip(fakeParameters).all { pair ->
-                                substitutor.substitute(pair.first.type) == pair.second.type
-                            }
+                    if (memberParameters.size != fakeParameters.size ||
+                        memberParameters.zip(fakeParameters).any { pair ->
+                            resolvedType(pair.first.type) != pair.second.type
+                        }
+                    ) {
+                        return false
+                    }
+                    return member.typeParameters.zip(fakeOverride.typeParameters).all { pair ->
+                        pair.first.superTypes.map(::resolvedType) == pair.second.superTypes
+                    }
                 }
                 if (contributors.any { member -> !hasResolvedSignature(member) }) return@slot null
 
