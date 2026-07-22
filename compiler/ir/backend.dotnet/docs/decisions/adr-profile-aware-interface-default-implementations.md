@@ -280,6 +280,14 @@ A more-derived provider shadows an ancestor provider for this calculation. Two p
 implement the same logical Kotlin declaration are not assumed to be harmless: unless one is more
 specific, the backend must materialize Kotlin's already-resolved choice before CLR execution.
 
+This provider rule also applies independently to every canonical, declared, and exact view of a
+generic Kotlin interface. If two `net10.0` interfaces promote the same portable generic default,
+a derived diamond emits one new resolver bundle whose adapters all call the original declaring
+interface's helper identity. It does not inherit CLR ambiguity, choose one branch arbitrarily, or
+lower another copy of the body. Kotlin source cannot implicitly combine an unrelated concrete
+default with a separate abstract or concrete declaration: common override resolution requires an
+explicit derived override, which then follows the ordinary declared-body path above.
+
 ### 10. Pure no-compatibility mode is deferred
 
 A future DIM-only ABI could remove the helper and compatibility machinery, corresponding in
@@ -334,6 +342,9 @@ Before the representation is considered implemented, tests must cover:
   both `net48` and `netstandard2.0`;
 - generic declared/canonical/exact views, boxing adapters, and covariant returns, including a
   precise derived default mapped to a wider inherited slot without a redundant class bridge;
+- a portable generic default promoted through two incomparable `net10.0` branches and resolved by
+  a derived generic-interface diamond, including Kotlin and C# calls through root, branch, derived,
+  exact, method-generic, and widened views;
 - property accessors, generic methods, default arguments, and nested interfaces, including a
   portable generic interface dispatcher consumed on both runtime profiles with its declaring
   interface type context intact;
