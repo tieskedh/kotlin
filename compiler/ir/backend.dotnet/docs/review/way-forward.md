@@ -330,7 +330,8 @@ complete exact capability, same-object widening, high-index canonical fallback, 
 cast failure. This is evidence for the existing positional representation, not a new ABI rule.
 The fixture also completes the one-through-four parameter matrix with a mixed
 `in`/`out`/invariant/`out` interface spanning reference, primitive, nullable, exact-only, and open
-generic positions. Both consumers preserve identity and execute canonical fallback.
+generic positions. Its nullable result is concretely `Int?`, pinning `Nullable<int>` on the exact
+capability and boxed canonical fallback after widening to `Any?`. Both consumers preserve identity.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers

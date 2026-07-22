@@ -907,19 +907,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun acceptsOutput(value: @UnsafeVariance O): Boolean
                 }
 
-                public class QuadImpl : Quad<Any, Int, String, String?> {
+                public class QuadImpl : Quad<Any, Int, String, Int?> {
                     override fun run(input: Any, state: String): Int = 4
-                    override fun nullable(): String? = null
+                    override fun nullable(): Int? = 7
                     override fun acceptsOutput(value: Int): Boolean = value == 4
                 }
 
-                public fun newQuad(): Quad<Any, Int, String, String?> = QuadImpl()
+                public fun newQuad(): Quad<Any, Int, String, Int?> = QuadImpl()
 
-                public fun widenQuad(value: Quad<Any, Int, String, String?>): Quad<Int, Any, String, Any?> = value
+                public fun widenQuad(value: Quad<Any, Int, String, Int?>): Quad<Int, Any, String, Any?> = value
 
                 public fun <I, O, X, N> passQuad(value: Quad<I, O, X, N>): Quad<I, O, X, N> = value
 
-                public fun sameQuad(value: Quad<Any, Int, String, String?>): Boolean =
+                public fun sameQuad(value: Quad<Any, Int, String, Int?>): Boolean =
                     widenQuad(value) === value && passQuad(value) === value
 
                 public fun readQuad(value: Quad<Int, Any, String, Any?>): String =
@@ -976,7 +976,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (!sameQuad(quad) || widenedQuad !== quad || passQuad(quad) !== quad) {
                             throw Error("mixed four-parameter widening changed identity")
                         }
-                        if (readQuad(widenedQuad) != "4:null" || !acceptQuad(widenedQuad, 4)) {
+                        if (readQuad(widenedQuad) != "4:7" || !acceptQuad(widenedQuad, 4)) {
                             throw Error("mixed four-parameter fallback failed")
                         }
                         try {
@@ -1105,6 +1105,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     hasQuadExact = true;
                             }
                             Require(hasQuadExact, "quad implementation has no complete exact capability");
+                            bool hasNullablePrimitiveExact = false;
+                            foreach (Type implemented in quadImplementation.GetInterfaces())
+                            {
+                                if (!implemented.IsGenericType || implemented.GetGenericTypeDefinition() != quadExact)
+                                    continue;
+                                Type[] arguments = implemented.GetGenericArguments();
+                                if (arguments[3] == typeof(Nullable<int>)) hasNullablePrimitiveExact = true;
+                            }
+                            Require(hasNullablePrimitiveExact, "quad nullable primitive exact argument");
 
                             MethodInfo create = RequireMethod(facade, "newWide");
                             MethodInfo same = RequireMethod(facade, "sameAfterWiden");
@@ -1135,10 +1144,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(quadCanonical.IsInstanceOfType(quad), "quad canonical identity");
                             Require((bool) sameQuad.Invoke(null, new object[] { quad }), "quad widening identity");
                             MethodInfo closedPassQuad = passQuad.MakeGenericMethod(
-                                typeof(object), typeof(int), typeof(string), typeof(string));
+                                typeof(object), typeof(int), typeof(string), typeof(Nullable<int>));
                             Require(Object.ReferenceEquals(quad, closedPassQuad.Invoke(null, new object[] { quad })),
                                 "quad open pass-through identity");
-                            Require((string) readQuad.Invoke(null, new object[] { quad }) == "4:null",
+                            Require((string) readQuad.Invoke(null, new object[] { quad }) == "4:7",
                                 "quad mixed fallback result");
                             Require((bool) acceptQuad.Invoke(null, new object[] { quad, 4 }),
                                 "quad exact fallback argument");

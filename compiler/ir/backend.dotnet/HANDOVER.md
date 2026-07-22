@@ -1397,11 +1397,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   no ABI or ADR rule changed. The strict baseline becomes 844/0/0/0 across 16 XML suites.
 - The same portable variant-interface fixture now completes the required one-through-four
   parameter matrix with `Quad<in I, out O, X, out N>`. Its implementation combines a reference
-  input, primitive result, invariant reference state, nullable covariant result, and exact-only
-  unsafe primitive input. Both Kotlin and C# consumers verify the four CLR variance flags,
+  input, primitive result, invariant reference state, concrete `Int?` covariant result, and
+  exact-only unsafe primitive input. Both Kotlin and C# consumers verify the four CLR variance flags,
   invariant exact parameters, same-object simultaneous widening/narrowing, open generic
   pass-through, canonical fallback, and wrong-shape cast failure on both application profiles.
   This is additional evidence for the existing ADR and leaves the strict count at 844/0/0/0.
+- The quad forcing case now uses `Int?` for its second covariant result. Its implementation exposes
+  `Nullable<int>` on the exact capability, while widening that argument to `Any?` retains the same
+  object and deliberately takes canonical fallback because CLR value-type variance cannot perform
+  the conversion. Kotlin and C# execute the boxed result and reflect the exact nullable argument
+  on both profiles. This tightens evidence only; the 844-test baseline and ADR rule are unchanged.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
