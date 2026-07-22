@@ -199,9 +199,11 @@ record: an intersection slot is an additional implementation obligation, not evi
 producer already supplied a body or final `MethodImpl`. The bodyless direct-parent declared-view
 slice now emits and consumes this record for ordinary methods, including method type parameters
 with owner-independent constraints. Contributor signatures and constraints are normalized by
-method-parameter position before one intersection is admitted. Exact-only intersections,
-owner-dependent method constraints, split-view mutable properties, default bodies, and
-non-identical or permuted owner substitutions remain pending.
+method-parameter position and through each direct generic-parent substitution before one
+intersection is admitted. Direct parameter permutations are therefore supported when they resolve
+to one Kotlin signature. Exact-only intersections, owner-dependent method constraints, split-view
+mutable properties, default bodies, indirect intersections, and non-identical resolved signatures
+remain pending.
 
 A property intersection is represented by recorded accessor-slot obligations plus a real
 source-named CLR property row on the derived typed capability. A `val` binds its generated getter;
@@ -812,9 +814,10 @@ coverage for at least:
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
-  refined return, an owner-independent constrained generic method, a read-only property, and an
-  invariant mutable property with a real derived CLR property row; exact-only, split-view mutable
-  property, owner-dependent generic-method, default-body, permuted, and general
+  refined return, an owner-independent constrained generic method, a read-only property, an
+  invariant mutable property with a real derived CLR property row, and direct parent-parameter
+  permutation; exact-only, split-view mutable property, owner-dependent generic-method,
+  default-body, indirect-intersection, and general
   inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
