@@ -153,10 +153,20 @@ covering both contributing families; merged property fake overrides are checked 
 atomic accessor-selection result rather than relying on pairwise IR claims. Parent-slot execution
 and the bodyless typed derived slot are covered below. Each failure names the affected physical
 view or generated-type collision and produces neither KLIB nor DLL. This pins the current
-whole-declaration rejection policy without declaring the return-only, general inherited, and
-reserved-member collision matrix complete. Stable
+whole-declaration rejection policy without declaring the return-only and general inherited
+collision matrix complete. Stable
 disambiguation remains the final ABI direction; whole-declaration rejection is the safe temporary
 implementation while that mapping is absent.
+
+A source member whose name exactly equals another logical member's producer-derived canonical name
+is not rejected merely for using the reserved-looking spelling. The canonical and typed methods
+live on different interface owners. On an implementing class, the backend's private explicit
+`MethodImpl` continues to own the canonical slot even when the source member has the same CLR name
+and signature. A two-pass fixture derives the real canonical name, recompiles the interface with a
+lookalike source member, and proves from Kotlin and C# on both runtimes that canonical dispatch
+reaches the original implementation while typed/class dispatch reaches the lookalike. A real
+same-owner duplicate remains subject to the ordinary atomic collision gate; a blanket source-name
+ban is neither required nor desirable.
 
 A separately compiled 65-parameter interface now validates that the canonical/declared/exact
 representation has no 32- or 64-bit capability-mask limit. A portable producer and Kotlin/C#
@@ -873,9 +883,10 @@ coverage for at least:
   Nested/general owner-relative generic methods and general inherited overload disambiguation
   remain required;
 - erased callable overload collisions are rejected; return-type-only physical collisions,
-  generic/non-generic source name collisions, and reserved generated-name collisions remain in
-  the required matrix. Properties with independently placed getters and setters are covered by
-  the split-property lane;
+  generic/non-generic source name collisions, and real same-owner generated-name collisions remain
+  in the required matrix. A source member that only looks like another member's canonical name is
+  safely separated by physical owner and explicit `MethodImpl`. Properties with independently
+  placed getters and setters are covered by the split-property lane;
 - generic methods, recursive bounds, default bodies, fun interfaces, and suspend members;
 - `Iterator`, collections/maps, `Comparable`, `Continuation`, property delegates, reflection
   interfaces, ranges, and marker-only interfaces;

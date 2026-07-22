@@ -326,8 +326,10 @@ now covers a source-named typed property, a generic method, an exact-only input,
 canonical property/method implementations through both typed and widened Kotlin views. Publication
 also now rejects and diagnoses declared-view accessor collisions, exact-view accessor collisions,
 erased callable overload collisions, and user TypeDefs occupying generated exact-view identities
-without producing a partial pair. The return-only, wider inherited-slot, and reserved-member
-collision matrix remains open.
+without producing a partial pair. A producer-derived reserved-name lookalike is also proven safe:
+typed/class dispatch reaches the source member while canonical dispatch remains bound to its
+private explicit `MethodImpl`. The return-only, wider inherited-slot, and real same-owner collision
+matrix remains open.
 A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
 and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
 complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
@@ -379,9 +381,11 @@ The remaining P0-D implementation order is:
 
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-2. Finish foreign nested/signature shapes and the return-only, inherited-slot, and reserved-name
-   clash matrix. Then design generated implementor tooling; do not make a generated base class the
-   only path because C# has single class inheritance. Close the
+2. Finish foreign nested/signature shapes and the return-only, inherited-slot, and real same-owner
+   clash matrix. Do not add a blanket ban for source names that merely resemble canonical names;
+   physical-owner separation and explicit `MethodImpl` already preserve their semantics. Then
+   design generated implementor tooling; do not make a generated base class the only path because
+   C# has single class inheritance. Close the
    remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
    structured metadata work rather than with IL substring tests.
 

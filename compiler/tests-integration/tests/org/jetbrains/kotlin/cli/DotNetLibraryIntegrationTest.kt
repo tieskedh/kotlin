@@ -2261,6 +2261,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "Modern Roslyn and the net10 reference pack are not available",
         )
 
+        val reservedNameProbeDirectory = File(tmpdir, "foreign-reserved-name-probe").apply { mkdirs() }
+        val reservedNameProbeSource = reservedNameProbeDirectory.resolve("barrier.kt").apply {
+            writeText(
+                """
+                package barriers
+
+                public interface ReservedMember<out T> {
+                    public fun read(): T
+                }
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            reservedNameProbeSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Foreign.Barriers",
+            K2DotNetCompilerArguments::destination.cliArgument, reservedNameProbeDirectory.path,
+        )
+        val reservedCanonicalMethodName = DotNetLibraryAbiCodec.decode(
+            reservedNameProbeDirectory.resolve("Foreign.Barriers.klib").readKlibManifest()
+        ).values.filterIsInstance<DotNetPhysicalDeclaration.Function>().single { declaration ->
+            declaration.ownerPath.last() == "barriers.ReservedMember" &&
+                    declaration.methodName.startsWith("read__KotlinErased__")
+        }.methodName
+
         val producerDirectory = File(tmpdir, "foreign-barriers").apply { mkdirs() }
         val producerSource = producerDirectory.resolve("barrier.kt").apply {
             writeText(
@@ -2275,6 +2302,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public val value: T
                     public fun <R> map(input: R): T
                     public fun accepts(value: @UnsafeVariance T): Boolean
+                }
+
+                public interface ReservedMember<out T> {
+                    public fun read(): T
+                    public fun $reservedCanonicalMethodName(): Any?
+                }
+
+                public class ReservedImplementation : ReservedMember<String> {
+                    public override fun read(): String = "semantic"
+                    public override fun $reservedCanonicalMethodName(): Any? = "lookalike"
                 }
 
                 public fun verifyForeign(
@@ -2311,6 +2348,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     } catch (_: ClassCastException) {
                         // The foreign canonical adapter owns the ordinary narrowing failure.
                     }
+                    return 0
+                }
+
+                public fun verifyReservedMember(value: ReservedImplementation): Int {
+                    val wide: ReservedMember<Any?> = value
+                    if (wide.read() != "semantic") return 1
+                    if (value.$reservedCanonicalMethodName() != "lookalike") return 2
                     return 0
                 }
                 """.trimIndent()
@@ -2355,8 +2399,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .single { declaration -> declaration.methodName == "verifyForeign" }
         val shapeVerifier = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .single { declaration -> declaration.methodName == "verifyForeignShape" }
+        val reservedVerifier = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration -> declaration.methodName == "verifyReservedMember" }
+        val reservedCanonicalSlots = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration -> declaration.ownerPath.last() == "barriers.ReservedMember" }
+        assertTrue(reservedCanonicalSlots.any { declaration ->
+            declaration.methodName == reservedCanonicalMethodName
+        }) { reservedCanonicalSlots.joinToString("\n") }
+        assertTrue(reservedCanonicalSlots.any { declaration ->
+            declaration.methodName.startsWith("${reservedCanonicalMethodName}__KotlinErased__")
+        }) { reservedCanonicalSlots.joinToString("\n") }
         assertEquals(listOf("barriers.barrierKt"), verifier.ownerPath)
         assertEquals(verifier.ownerPath, shapeVerifier.ownerPath)
+        assertEquals(verifier.ownerPath, reservedVerifier.ownerPath)
 
         val csharpSourceText = """
             using System;
@@ -2429,6 +2484,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         new ForeignShape());
                     if (shapeResult != 0)
                         throw new Exception("foreign generic-interface member " + shapeResult);
+                    barriers.ReservedImplementation reserved =
+                        new barriers.ReservedImplementation();
+                    int reservedResult =
+                        ${reservedVerifier.ownerPath.single()}.${reservedVerifier.methodName}(reserved);
+                    if (reservedResult != 0)
+                        throw new Exception("reserved generic-interface member " + reservedResult);
+                    if ((string)reserved.${reservedCanonicalMethodName}() != "lookalike")
+                        throw new Exception("reserved source member");
+                    barriers.ReservedMember canonicalReserved = reserved;
+                    if ((string)canonicalReserved.${reservedCanonicalMethodName}() != "semantic")
+                        throw new Exception("reserved canonical slot");
                     Console.WriteLine("OK");
                 }
             }
