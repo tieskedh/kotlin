@@ -2085,8 +2085,8 @@ landed shape as a compatibility constraint.
     profiles (canonical/declared/exact arity, high-index variance, exact-capability metadata,
     identity-preserving widening, canonical fallback, and wrong-shape failure). The same portable
     producer completes the one-through-four matrix with a four-parameter `in`/`out`/invariant/`out`
-    interface, primitive and nullable results, an exact-only unsafe member, and open generic
-    pass-through,
+    interface, a primitive result, a separately widened concrete `Int?` result, an exact-only
+    unsafe member, and open generic pass-through,
     `box/genericMembers.kt` (method
     pass-through, nullable method instantiations, inherited interface implementation, generic
     virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
