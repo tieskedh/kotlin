@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 60 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 61 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 840 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 841 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -1827,10 +1827,11 @@ landed shape as a compatibility constraint.
   mapped-runtime, broad-Exception, and Error objects supplied by both application profiles through
   the same classifier. Portable direct and nested-generic exception overloads, ordinary and
   generic-base class overrides, interface implementations, and a differently named class/
-  interface multi-slot override execute cross-module on both application profiles. Cancellation
-  classification, narrow export admission, exception returns/properties/constructor collisions,
-  remaining generic boundary coverage, and any non-physical hierarchy metadata remain open before
-  Gate B.
+  interface multi-slot override execute cross-module on both application profiles. Portable
+  exception returns and mutable properties preserve logical classification and reference identity;
+  a nested generic return retains its logical runtime category. Cancellation classification,
+  narrow/foreign export admission, constructor collisions, remaining array/callable/generic
+  boundary coverage, and any non-physical hierarchy metadata remain open before Gate B.
 - Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
   synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
   emits an inline parameterless exception construction + `throw`, in both value and statement

@@ -5298,6 +5298,155 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testExceptionSignaturePositions() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "portable-exception-signatures")
+        val librarySource = File(tmpdir, "portable-exception-signatures.kt").apply {
+            writeText(
+                """
+                package exceptionsignatures
+
+                public class ExceptionBox<T>(public val value: T)
+
+                public class ExceptionProperties(
+                    public var throwable: Throwable,
+                    public var exception: Exception,
+                    public var runtime: RuntimeException,
+                    public var error: Error,
+                    public val boxedRuntime: ExceptionBox<RuntimeException>,
+                )
+
+                public fun throwableValue(): Throwable = Exception("throwable")
+                public fun exceptionValue(): Exception = Exception("exception")
+                public fun runtimeValue(): RuntimeException = IllegalStateException("runtime")
+                public fun errorValue(): Error = Error("error")
+
+                public fun properties(): ExceptionProperties = ExceptionProperties(
+                    throwableValue(),
+                    exceptionValue(),
+                    runtimeValue(),
+                    errorValue(),
+                    ExceptionBox(runtimeValue()),
+                )
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Exception.Signatures",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Exception.Signatures.klib")
+        val libraryIl = libraryDirectory.resolve("Exception.Signatures.il").readText()
+        assertEquals(
+            4,
+            Regex("\\.property instance class \\[netstandard]System\\.Exception '(throwable|exception|runtime|error)'\\(\\)")
+                .findAll(libraryIl)
+                .count(),
+            libraryIl,
+        )
+        assertEquals(
+            4,
+            Regex("\\.method [^\\n]*'set_(throwable|exception|runtime|error)__KotlinException__[0-9a-f]{32}'")
+                .findAll(libraryIl)
+                .count(),
+            libraryIl,
+        )
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package exceptionsignatureconsumer
+
+                    import exceptionsignatures.*
+
+                    private fun asThrowable(value: Throwable): Throwable = value
+
+                    fun main() {
+                        val throwable = throwableValue()
+                        val exception = exceptionValue()
+                        val runtime = runtimeValue()
+                        val error = errorValue()
+                        val runtimeAsThrowable = asThrowable(runtime)
+                        val errorAsThrowable = asThrowable(error)
+                        if (throwable !is Exception || throwable is RuntimeException ||
+                            exception !is Exception || exception is RuntimeException ||
+                            runtimeAsThrowable !is RuntimeException || runtimeAsThrowable is Error ||
+                            errorAsThrowable !is Error || errorAsThrowable is Exception
+                        ) {
+                            throw Error("exception return classification")
+                        }
+
+                        val values = properties()
+                        if (values.boxedRuntime.value !is RuntimeException) {
+                            throw Error("nested generic exception return")
+                        }
+
+                        val newThrowable: Throwable = Error("new-throwable")
+                        val newException: Exception = Exception("new-exception")
+                        val newRuntime: RuntimeException = IllegalStateException("new-runtime")
+                        val newError: Error = Error("new-error")
+                        values.throwable = newThrowable
+                        values.exception = newException
+                        values.runtime = newRuntime
+                        values.error = newError
+                        if (values.throwable !== newThrowable || values.exception !== newException ||
+                            values.runtime !== newRuntime || values.error !== newError
+                        ) {
+                            throw Error("exception property identity")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "ExceptionSignatureConsumer.exe" else "ExceptionSignatureConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ExceptionSignatureConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            assertTrue(consumerDirectory.resolve("Exception.Signatures.dll").isFile) {
+                "The portable exception-signature implementation must be packaged beside its $target consumer"
+            }
+
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Portable exception-signature consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Portable exception-signature consumer failed for $target:\n$output")
+            }
+        }
+    }
+
+    @Test
     fun testForeignClrExceptionIdentityAndClassificationAcrossRuntimeProfiles() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
