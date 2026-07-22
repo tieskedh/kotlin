@@ -1429,11 +1429,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   receives an additional `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only
-  unsafe input dispatch is covered through the invariant exact capability. Owner-dependent generic
-  constraints, split-view property, default, and non-identical resolved-signature cases remain
-  open. Property accessors are
-  filtered atomically so a Kotlin `var` never acquires only a derived getter while its inherited
-  setter remains ambiguous.
+  unsafe input dispatch is covered through the invariant exact capability. Nested/general
+  owner-relative constraints, split-view property, default, and non-identical resolved-signature
+  cases remain open. Property accessors are filtered atomically so a Kotlin `var` never acquires
+  only a derived getter while its inherited setter remains ambiguous.
 - Same-name inheritance is no longer admitted merely because the IR names match. Pairwise inherited
   claims must be covered by a selected derived intersection slot, and a merged property fake
   override is checked against the atomic accessor-selection result. A covariant `var` whose getter
@@ -1443,10 +1442,26 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - Intersection discovery now identifies nonfake logical contributors and the first meeting of at
   least two physical parent branches before applying the supported-shape filters. A real candidate
   is therefore selected into schema 14, covered by an existing profile-aware default promotion, or
-  rejected before publication. Owner-dependent method constraints and valid covariant
+  rejected before publication. Nested owner-relative method constraints and valid covariant
   intersections with nonidentical resolved return signatures have explicit negative regressions;
   neither can silently publish an ambiguous C# surface while its adapter remains deferred. This
   enforces the existing variant-interface ADR rather than introducing another representation.
+- Direct owner-relative intersection methods such as `<R : T> retain(R): R` now reuse the accepted
+  split-interface constraint-erasure rule. Kotlin/KLIB retains `R : T`; declared and exact CLR
+  slots omit it so their `MethodImpl` shapes remain loadable. The implementing bridge cannot pass
+  its erased `R` to a constrained source body (CLR verification fails), nor restate the stronger
+  bound only on the bridge (CLR type loading fails). For a target which retains that physical bound,
+  it instead instantiates the one source implementation at substituted `T`, adapts direct arguments
+  `R -> object -> T`, and adapts the result `T -> object -> R`. An already-erased default/helper
+  forwarder keeps the actual `R`; the full gate proved this is required for a covariantly widened
+  Kotlin call such as `PortableGeneric<Int>` viewed as `PortableGeneric<Any>`. Producer and
+  separately compiled generic consumer implementations execute through both parent and derived
+  views from Kotlin and C# on Framework CLR 4 and CoreCLR
+  10; reflection proves the physical constraint is erased, and deliberately invalid C#
+  instantiations fail with the original `InvalidCastException`. Invariant intersections own the
+  declared slot; variant intersections own the exact slot. Nested occurrences such as `Box<R>`
+  remain rejected because the direct adapter cannot preserve their representation without a
+  separate design. The fresh strict gate is 845/0/0/0 across 16 XML suites.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.

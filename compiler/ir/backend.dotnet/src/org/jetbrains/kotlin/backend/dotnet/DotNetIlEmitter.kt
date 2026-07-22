@@ -682,8 +682,9 @@ internal class DotNetIlEmitter(
         // C# diagnoses two equally applicable inherited source-named members as CS0121 even
         // when Kotlin has one valid intersection fake override. Materialize the conservative
         // bodyless slice here, after the physical view graph exists: generic parent branches,
-        // no owner-dependent method constraints/default bodies, and one identical resolved
-        // signature, including ordinary methods and read-only property accessors.
+        // no default bodies, and one identical resolved signature, including ordinary methods,
+        // method constraints, and read-only property accessors. Owner-relative constraints use
+        // the split-interface ABI's existing physical erasure while remaining in Kotlin/KLIB.
         // More complex intersections fail publication until their adapter semantics are explicit.
         val rejectedGenericInterfaceIntersections = linkedMapOf<IrClass, MutableList<String>>()
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
@@ -738,22 +739,14 @@ internal class DotNetIlEmitter(
                 if (fakeOverride.body != null) {
                     return@slot reject("has an independently lowered fake-override body")
                 }
-                if (fakeOverride.typeParameters.any { parameter ->
-                        parameter.superTypes.any { bound -> bound.isDotNetOwnerDependentConstraint(irClass) }
+                if (fakeOverride.dotNetDirectOwnerRelativeMethodBoundsOrNull(irClass) == null ||
+                    contributors.any { member ->
+                        member.dotNetDirectOwnerRelativeMethodBoundsOrNull(member.parent as IrClass) == null
                     }
                 ) {
-                    return@slot reject("has an owner-dependent method constraint")
-                }
-                if (contributors.any { member ->
-                        val memberOwner = member.parent as IrClass
-                        member.typeParameters.any { parameter ->
-                            parameter.superTypes.any { bound ->
-                                bound.isDotNetOwnerDependentConstraint(memberOwner)
-                            }
-                        }
-                    }
-                ) {
-                    return@slot reject("has an owner-dependent contributor constraint")
+                    return@slot reject(
+                        "requires an owner-relative generic adapter beyond direct method-parameter uses"
+                    )
                 }
                 val defaultContributors = contributors.filter { member ->
                     member.body != null ||
@@ -1084,6 +1077,17 @@ internal class DotNetIlEmitter(
             if (irClass !in availableClasses) continue
             try {
                 if (irClass in genericInterfaces) {
+                    irClass.declarations.filterIsInstance<IrSimpleFunction>()
+                        .firstOrNull { member ->
+                            member.dotNetDirectOwnerRelativeMethodBoundsOrNull(irClass) == null
+                        }
+                        ?.let { member ->
+                            dotNetUnsupported(
+                                "generic interface member '${member.name.asString()}' requires an " +
+                                        "owner-relative generic adapter beyond direct " +
+                                        "method-parameter uses"
+                            )
+                        }
                     checkGenericInterfaceTypedViewClashes(irClass, localGenericInterfaceIntersectionSlots)
                     rejectedGenericInterfaceIntersections[irClass]?.firstOrNull()?.let(::dotNetUnsupported)
                 }

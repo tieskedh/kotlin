@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.common.lower.SpecialMethodWithDefaultInfo
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.lower.irNot
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackendContext
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalDeclarations
 import org.jetbrains.kotlin.backend.dotnet.DotNetGenericInterfaceMemberView
@@ -19,10 +20,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLoweredInterfaceDefaultClassFor
 import org.jetbrains.kotlin.backend.dotnet.DotNetRuntimeTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.dotNetBaseClassOrNull
+import org.jetbrains.kotlin.backend.dotnet.dotNetDirectOwnerRelativeMethodBoundsOrNull
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
+import org.jetbrains.kotlin.backend.dotnet.dotNetUnsupported
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.backend.dotnet.isDotNetOwnerDependentConstraint
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
@@ -52,6 +55,7 @@ import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.defaultType
+import org.jetbrains.kotlin.ir.types.isNullableAny
 import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.createDispatchReceiverParameterWithClassParent
 import org.jetbrains.kotlin.ir.util.copyTypeParametersFrom
@@ -368,6 +372,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             bridgeName = "<GenericInterfaceCanonicalBridge-${plan.interfaceIdentity}-" +
                     "${plan.slot.name.asString()}-${plan.slotIdentity}>",
             bridgeTypeTransform = ::canonicalType,
+            ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
             specialMethodInfo = specialBridgeMethods.findSpecialWithOverride(
                 plan.slot,
                 includeSelf = true,
@@ -399,6 +404,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
             bridgeName = "<GenericInterface${viewName}Bridge-${plan.interfaceIdentity}-" +
                     "${plan.slot.name.asString()}-${plan.slotIdentity}>",
             bridgeTypeTransform = plan.typedSubstitutor::substitute,
+            ownerConstraintTypeTransform = plan.typedSubstitutor::substitute,
         )
     }
 
@@ -409,6 +415,7 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
         origin: IrDeclarationOrigin,
         bridgeName: String,
         bridgeTypeTransform: (IrType) -> IrType,
+        ownerConstraintTypeTransform: (IrType) -> IrType,
         specialMethodInfo: SpecialMethodWithDefaultInfo? = null,
     ): IrSimpleFunction {
         val targetParameters = target.parameters.dropWhile { it.kind == IrParameterKind.DispatchReceiver }
@@ -436,6 +443,13 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                     .map(bridgeTypeTransform)
                     .ifEmpty { listOf(context.irBuiltIns.anyNType) }
             }
+            val ownerBoundMethodArguments =
+                slot.dotNetDirectOwnerRelativeMethodBoundsOrNull(slotOwner)
+                    ?.map { bound -> bound?.let(ownerConstraintTypeTransform) }
+                    ?: dotNetUnsupported(
+                        "generic interface member '${slot.name.asString()}' requires an " +
+                                "owner-relative generic adapter beyond direct method-parameter uses"
+                    )
             val methodSubstitution = slot.typeParameters.zip(bridgeTypeParameters).associate { pair ->
                 pair.first.symbol to pair.second.symbol.defaultType
             }
@@ -451,8 +465,20 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 if (target.typeParameters.size != bridgeTypeParameters.size) {
                     error("Internal .NET backend error: generic interface bridge method-arity mismatch")
                 }
-                val targetMethodSubstitution = target.typeParameters.zip(bridgeTypeParameters).associate { pair ->
-                    pair.first.symbol to pair.second.symbol.defaultType
+                val targetMethodArguments = bridgeTypeParameters.mapIndexed { index, parameter ->
+                    val targetParameter = target.typeParameters[index]
+                    val targetRetainsPhysicalBound =
+                        targetParameter.origin != DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER &&
+                                targetParameter.superTypes.any { bound -> !bound.isNullableAny() }
+                    ownerBoundMethodArguments[index]
+                        ?.takeIf { targetRetainsPhysicalBound }
+                        ?: parameter.symbol.defaultType
+                }
+                val hasOwnerBoundMethodArguments = targetMethodArguments.indices.any { index ->
+                    targetMethodArguments[index] != bridgeTypeParameters[index].symbol.defaultType
+                }
+                val targetMethodSubstitution = target.typeParameters.zip(targetMethodArguments).associate { pair ->
+                    pair.first.symbol to pair.second
                 }
                 val targetMethodSubstitutor =
                     IrTypeSubstitutor(targetMethodSubstitution, allowEmptySubstitution = true)
@@ -485,13 +511,21 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 }
                 val call = irCall(target.symbol, targetReturnType).apply {
                     arguments[0] = irGet(this@bridge.parameters[0])
-                    bridgeTypeParameters.forEachIndexed { index, parameter ->
-                        typeArguments[index] = parameter.symbol.defaultType
+                    targetMethodArguments.forEachIndexed { index, argument ->
+                        typeArguments[index] = argument
                     }
                     for (index in targetParameters.indices) {
                         val bridgeArgument = irGet(this@bridge.parameters[index + 1])
                         arguments[index + 1] = if (bridgeArgument.type == targetParameterTypes[index]) {
                             bridgeArgument
+                        } else if (hasOwnerBoundMethodArguments) {
+                            // The physical slot erased R : T. Adapt through object so CLR emits
+                            // box/cast or unbox.any as appropriate instead of requiring an
+                            // unverifiable direct conversion between R and substituted T.
+                            irImplicitCast(
+                                irImplicitCast(bridgeArgument, context.irBuiltIns.anyNType),
+                                targetParameterTypes[index],
+                            )
                         } else {
                             irImplicitCast(bridgeArgument, targetParameterTypes[index])
                         }
@@ -499,6 +533,11 @@ internal class DotNetGenericInterfaceBridgeLowering(private val context: DotNetB
                 }
                 val result = if (call.type == this@bridge.returnType) {
                     call
+                } else if (hasOwnerBoundMethodArguments) {
+                    irImplicitCast(
+                        irImplicitCast(call, context.irBuiltIns.anyNType),
+                        this@bridge.returnType,
+                    )
                 } else {
                     irImplicitCast(call, this@bridge.returnType)
                 }

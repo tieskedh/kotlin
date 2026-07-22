@@ -143,9 +143,9 @@ property accessor mapping to the same declared-view slot, an inherited method an
 property accessor mapping to one declared-view slot, and a user declaration occupying the
 generated exact-view TypeDef identity, and a mutable same-name intersection whose getter and setter
 would require different typed views. The final two cases are true same-name intersections whose
-owner-dependent method constraints or covariant-but-nonidentical resolved return signatures do not
-yet have a complete physical adapter. The inherited checks follow the physical capability graph and
-exempt a genuine Kotlin override of the inherited member. A same-name inherited intersection is
+nested owner-relative method constraints or covariant-but-nonidentical resolved return signatures
+do not yet have a complete physical adapter. The inherited checks follow the physical capability
+graph and exempt a genuine Kotlin override of the inherited member. A same-name inherited intersection is
 admitted only when the producer selects a derived slot covering both contributing families;
 merged property fake overrides are checked against the atomic accessor-selection result rather
 than relying on pairwise IR claims. Parent-slot execution and the bodyless typed derived slot are
@@ -202,21 +202,37 @@ that normalized override group. This is intentionally distinct from an interface
 record: an intersection slot is an additional implementation obligation, not evidence that the
 producer already supplied a body or final `MethodImpl`. The bodyless typed-view slice now emits and
 consumes this record for ordinary methods, including method type parameters with owner-independent
-constraints. The first common capability is the declared view for variance-safe members and the
-invariant exact view for exact-only members. Contributor signatures and constraints are normalized by
-method-parameter position and through the generic-parent substitution graph before one intersection
-is admitted. Direct parameter permutations and contributors reached through bodyless intermediate
-interfaces are therefore supported when they resolve to one Kotlin signature. At least two direct
-physical branches must contribute, and no one direct parent may already contain the complete
-intersection; a descendant of an interface which already owns the selected slot inherits it without
-another slot or schema record. Owner-dependent method constraints, properties whose accessors split
-across views, default bodies, and non-identical resolved signatures remain pending. Until their
-adapters exist, an otherwise ambiguous same-name shape is rejected as a whole and produces neither
+constraints and direct owner-relative bounds such as `<R : T>` when `R` appears only as a complete
+parameter or result type. The first common capability is the declared view for variance-safe members
+and the invariant exact view for exact-only members. Contributor signatures and constraints are
+normalized by method-parameter position and through the generic-parent substitution graph before one
+intersection is admitted. Direct parameter permutations and contributors reached through bodyless
+intermediate interfaces are therefore supported when they resolve to one Kotlin signature. At least
+two direct physical branches must contribute, and no one direct parent may already contain the
+complete intersection; a descendant of an interface which already owns the selected slot inherits it
+without another slot or schema record. Nested or general owner-relative constraints, properties
+whose accessors split across views, default bodies, and non-identical resolved signatures remain
+pending. Until their adapters exist, an otherwise ambiguous same-name shape is rejected as a whole and produces neither
 KLIB nor DLL; name equality alone is never publication evidence. Discovery identifies the logical
 contributors and the first physical meeting of at least two parent branches before applying those
 support checks. Consequently every real multi-branch candidate is selected into schema 14, covered
 by an already generated profile-aware default promotion, or rejected; an unsupported candidate is
 never made invisible merely by filtering it out of slot discovery.
+
+The direct `<R : T>` case follows the split-interface ABI's existing constraint-erasure rule. The
+logical bound remains in Kotlin metadata and KLIB, but every executable interface view omits its CLR
+`GenericParamConstraint`. A class bridge cannot call a constrained implementation at erased `R`:
+the CLR rejects that call during verification. It also cannot restate `R : T` only on the bridge:
+the CLR rejects the stronger `MethodImpl` constraint shape while loading the type. When the selected
+implementation retains that physical bound, the bridge therefore instantiates it at its substituted
+owner bound `T`, adapts each direct `R` argument through `object` to `T`, and adapts the result through
+`object` back to the physical `R`. An already-erased default/helper forwarder instead receives the
+actual `R`; replacing it with the implementation's closed `T` would incorrectly reject calls made
+valid by Kotlin variance widening. This retains one semantic body, supports reference and value
+instantiations, and makes an invalid foreign instantiation of a constrained implementation fail at
+the generated cast. A nested use such as `Box<R>` is not equivalent: there is no general CLR
+conversion from `Box<R>` to `Box<T>`, so it remains a publication diagnostic until a separate
+adapter representation is designed.
 
 A property intersection is represented by recorded accessor-slot obligations plus a real
 source-named CLR property row on the derived typed capability. A `val` binds its generated getter;
@@ -651,7 +667,7 @@ ordinary inherited member.
 The producer must discover that logical override group before deciding whether its physical shape
 is currently supported. A bodyless group with one resolved signature receives the recorded slot;
 a selected portable default may instead be covered by the profile-aware promotion mandated by the
-default-interface ADR. Any remaining group that needs an owner-dependent constraint adapter, a
+default-interface ADR. Any remaining group that needs a nested owner-relative constraint adapter, a
 split property surface, a default adapter, or a signature-changing adapter is rejected before the
 KLIB/DLL pair is published. Silently omitting such a group is not a temporary representation: it
 would publish a Kotlin-valid but C#-ambiguous and cross-module-incomplete ABI.
@@ -836,10 +852,11 @@ coverage for at least:
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
   refined return, an owner-independent constrained generic method, a read-only property, an
-  invariant mutable property with a real derived CLR property row, and direct parent-parameter
-  permutation plus bodyless intermediate branches; a single-parent descendant is pinned to reuse
-  the already selected slot without another record, and an unsafe input is selected on the exact
-  capability. Split-view property, owner-dependent generic-method, default-body, and general
+  invariant mutable property with a real derived CLR property row, direct owner-relative `<R : T>`
+  parameters/results, and direct parent-parameter permutation plus bodyless intermediate branches;
+  a single-parent descendant is pinned to reuse the already selected slot without another record,
+  and an unsafe input is selected on the exact capability. Split-view property, nested/general
+  owner-relative generic-method, default-body, and general
   inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
