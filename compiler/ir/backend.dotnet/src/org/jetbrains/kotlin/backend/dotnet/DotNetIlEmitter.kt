@@ -523,20 +523,37 @@ internal class DotNetIlEmitter(
                 // though neither source declaration clashes locally. Until stable typed-slot
                 // disambiguation exists, reject that interface atomically; a genuine Kotlin
                 // override is one slot and remains valid.
+                val inheritedClaims = hashMapOf<String, IrSimpleFunction>()
                 for (inherited in irClass.dotNetMemberFakeOverrides()) {
                     if (!isInheritedOnView(inherited, view)) continue
                     val signature = inherited.dotNetSignature(signatureMapper)
                     val identity =
                         "${inherited.dotNetAbiMethodName()}${inherited.dotNetIlGenericAritySuffix()}" +
                                 "(${signature.renderParameterTypes()})"
-                    val local = claimed[identity] ?: continue
-                    if (isKotlinOverrideOf(local, inherited)) continue
-                    dotNetUnsupported(
-                        "member '${local.name.asString()}' and inherited member " +
-                                "'${inherited.name.asString()}' of generic interface " +
-                                "'${irClass.diagnosticName()}' clash on its ${view.name.lowercase()} " +
-                                "CLR capability: both map to '$identity' but are distinct Kotlin members"
-                    )
+                    claimed[identity]?.let { local ->
+                        if (!isKotlinOverrideOf(local, inherited)) {
+                            dotNetUnsupported(
+                                "member '${local.name.asString()}' and inherited member " +
+                                        "'${inherited.name.asString()}' of generic interface " +
+                                        "'${irClass.diagnosticName()}' clash on its ${view.name.lowercase()} " +
+                                        "CLR capability: both map to '$identity' but are distinct Kotlin members"
+                            )
+                        }
+                    }
+                    inheritedClaims.put(identity, inherited)?.let { clashing ->
+                        val mayBeOneKotlinIntersection =
+                            isKotlinOverrideOf(inherited, clashing) ||
+                                    isKotlinOverrideOf(clashing, inherited) ||
+                                    inherited.name == clashing.name
+                        if (!mayBeOneKotlinIntersection) {
+                            dotNetUnsupported(
+                                "inherited members '${inherited.name.asString()}' and " +
+                                        "'${clashing.name.asString()}' of generic interface " +
+                                        "'${irClass.diagnosticName()}' clash on its ${view.name.lowercase()} " +
+                                        "CLR capability: both map to '$identity' but are distinct Kotlin members"
+                            )
+                        }
+                    }
                 }
             }
 

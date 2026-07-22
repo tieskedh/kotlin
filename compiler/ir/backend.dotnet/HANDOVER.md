@@ -1395,6 +1395,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   records whole-declaration rejection as temporary; stable typed-slot disambiguation remains the
   final direction, and inherited-only collisions are still open. The strict baseline remains
   845/0/0/0 across 16 XML suites.
+- The next collision slice also rejects a derived generic interface that inherits a method and a
+  property accessor with distinct Kotlin IR names but one declared-capability CLR identity. A
+  same-name two-parent intersection remains admitted, because it may be one Kotlin override
+  obligation; executable intersection slot mapping is still required before claiming that matrix
+  complete. The owning variant-interface ADR and `AGENTS.md` state that boundary explicitly.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
