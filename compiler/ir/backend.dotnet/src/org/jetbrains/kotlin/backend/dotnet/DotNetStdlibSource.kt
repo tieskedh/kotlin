@@ -360,4 +360,15 @@ public open class ClassCastException : RuntimeException {
     public constructor(message: String?) : super(message)
 }
 """,
+    "DotNetStdlibCancellation.kt" to """package kotlin.coroutines.cancellation
+
+import kotlin.IllegalStateException
+import kotlin.Throwable
+
+public open class CancellationException : IllegalStateException {
+    public constructor() : super()
+    public constructor(message: String?) : super(message)
+    public constructor(message: String?, cause: Throwable?) : super(message, cause)
+}
+""",
 )
