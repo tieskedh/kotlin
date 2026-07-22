@@ -15,7 +15,7 @@ The commit gate is
 toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 58 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 838 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 839 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2183,8 +2183,11 @@ landed shape as a compatibility constraint.
   application, stdlib, and runtime IL with Framework and modern ILAsm, then executes all eight
   artifact-writer combinations on both runtimes. The Framework lane uses the signed Windows
   PowerShell CLR 4 host to load and invoke the exact managed entry point rather than directly
-  launching an unsigned exe. Explicit-writer hooks are test-only; production always selects its
-  writer from the profile.
+  launching an unsigned exe. A separate net10 boundary test proves that Framework ILAsm rejects a
+  real DIM body while the profile-selected modern writer executes it on CoreCLR. The modern profile
+  therefore has no artificial cross-writer requirement. Explicit-writer hooks are test-only;
+  production always selects its writer from the profile. Any failed ILAsm invocation removes its
+  partial PE and runtimeconfig before the compiler reports failure.
 
 ## Modern .NET toolchain
 

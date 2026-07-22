@@ -433,8 +433,12 @@ dual-assembler source acceptance. It does not close modern net10 verification, r
 or the entire retained same-/cross-assembler runtime-pairing matrix. A committed net48 integration
 test now writes the same compiler-produced application, stdlib, and runtime IL with both assemblers
 and executes all eight artifact-writer combinations on Framework CLR 4 and CoreCLR, for 16
-executions total. This closes the retained net48 writer-substitution matrix. Net10-specific pairing
-evidence remains open.
+executions total. This closes the retained net48 writer-substitution matrix. Net10 deliberately has
+no cross-writer matrix: a committed boundary test proves that Framework ILAsm rejects a real DIM
+body while the profile-selected modern writer executes the same program on CoreCLR. Treating the
+old assembler as a net10 requirement would erase the accepted profile capability distinction.
+Failed assembler attempts remove partial PE/runtimeconfig output. The retained pairing evidence is
+therefore closed by a complete net48 matrix and an explicit net10 capability boundary.
 
 The current supported Kotlin box corpus now has symmetric execution lanes: all 116 cases run for
 `net48` and `net10.0` under both FIR parsers on real Framework CLR 4 and CoreCLR hosts. This closes
@@ -448,8 +452,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 37
-library-integration tests; the current audited result is 838/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 38
+library-integration tests; the current audited result is 839/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
