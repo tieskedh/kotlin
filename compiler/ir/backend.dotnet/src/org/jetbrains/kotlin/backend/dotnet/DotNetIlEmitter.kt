@@ -663,10 +663,8 @@ internal class DotNetIlEmitter(
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNullTo(hashSetOf()) { type ->
                 (type.classifier as? IrClassSymbol)?.owner
             }
-            irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
-                val intersectionProperty = fakeOverride.correspondingPropertySymbol?.owner
-                if (intersectionProperty?.setter != null ||
-                    fakeOverride.typeParameters.any { parameter ->
+            val discoveredSlots = irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
+                if (fakeOverride.typeParameters.any { parameter ->
                         parameter.superTypes.any { bound -> bound.isDotNetOwnerDependentConstraint(irClass) }
                     } ||
                     fakeOverride.body != null
@@ -745,6 +743,19 @@ internal class DotNetIlEmitter(
                     memberView = memberView,
                     physicalMethodName = fakeOverride.dotNetAbiMethodName(),
                 )
+            }
+            // A CLR property row is one atomic surface even though its accessors are separate
+            // MethodImpl obligations. Keep a property only when every Kotlin accessor has a slot
+            // on this same view; in particular, never expose the declared getter of a mutable
+            // variant property while its exact-only setter remains inherited and ambiguous.
+            discoveredSlots.filter { slot ->
+                val property = slot.signatureSource.correspondingPropertySymbol?.owner
+                    ?: return@filter true
+                listOfNotNull(property.getter, property.setter).all { accessor ->
+                    discoveredSlots.any { candidate ->
+                        candidate.signatureSource == accessor && candidate.memberView == slot.memberView
+                    }
+                }
             }
         }.sortedWith(
             compareBy<DotNetGenericInterfaceIntersectionSlot>(

@@ -200,16 +200,18 @@ producer already supplied a body or final `MethodImpl`. The bodyless direct-pare
 slice now emits and consumes this record for ordinary methods, including method type parameters
 with owner-independent constraints. Contributor signatures and constraints are normalized by
 method-parameter position before one intersection is admitted. Exact-only intersections,
-owner-dependent method constraints, mutable properties, default bodies, and non-identical or
-permuted owner substitutions remain pending.
+owner-dependent method constraints, split-view mutable properties, default bodies, and
+non-identical or permuted owner substitutions remain pending.
 
-A read-only property intersection is represented by the same recorded getter-slot obligation plus
-a real source-named CLR property row on the derived typed capability. The property row binds only
-that generated getter; it does not copy an implementation. A separate property record is not
-needed: KLIB preserves the getter/property association and the physical index records the getter's
-typed owner, name, and logical contributor group. Mutable properties remain deferred as a unit so
-the backend never publishes a derived read-only projection of a Kotlin `var` while leaving its
-inherited setter ambiguous.
+A property intersection is represented by recorded accessor-slot obligations plus a real
+source-named CLR property row on the derived typed capability. A `val` binds its generated getter;
+a `var` is admitted only when both getter and setter obtain slots on that same physical view, and
+the property row binds both. No accessor copies an implementation. A separate property record is
+not needed: KLIB preserves the accessor/property association and the physical index records each
+accessor's typed owner, name, and logical contributor group. The producer filters the accessors as
+one atomic property, so it never publishes a derived read-only projection of a Kotlin `var` while
+leaving its inherited setter ambiguous. Mutable properties split between declared and exact views
+remain deferred.
 
 ## Physical views
 
@@ -810,9 +812,9 @@ coverage for at least:
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
   and a selected derived declared slot are covered on both profiles, including a cross-module
-  refined return, an owner-independent constrained generic method, and a read-only property with a
-  real derived CLR property row; exact-only, mutable-property, owner-dependent generic-method,
-  default-body, permuted, and general
+  refined return, an owner-independent constrained generic method, a read-only property, and an
+  invariant mutable property with a real derived CLR property row; exact-only, split-view mutable
+  property, owner-dependent generic-method, default-body, permuted, and general
   inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
