@@ -47,9 +47,7 @@ import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
-import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.classFqName
-import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.types.isAny
 import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.isUnit
@@ -682,10 +680,11 @@ internal class DotNetIlEmitter(
         // C# diagnoses two equally applicable inherited source-named members as CS0121 even
         // when Kotlin has one valid intersection fake override. Materialize the conservative
         // bodyless slice here, after the physical view graph exists: generic parent branches,
-        // no default bodies, and one identical resolved signature, including ordinary methods,
-        // method constraints, and read-only property accessors. Owner-relative constraints use
-        // the split-interface ABI's existing physical erasure while remaining in Kotlin/KLIB.
-        // More complex intersections fail publication until their adapter semantics are explicit.
+        // no default bodies, compatible parameters and method constraints, and a contributor
+        // matching Kotlin's selected result. A distinct wider result remains a separate adapter
+        // to the same body. Owner-relative constraints use the split-interface ABI's existing
+        // physical erasure while remaining in Kotlin/KLIB. More complex intersections fail
+        // publication until their adapter semantics are explicit.
         val rejectedGenericInterfaceIntersections = linkedMapOf<IrClass, MutableList<String>>()
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { type ->
@@ -765,43 +764,26 @@ internal class DotNetIlEmitter(
                     return@slot reject("selects a default body without a profile-aware derived adapter")
                 }
 
-                fun hasResolvedSignature(member: IrSimpleFunction): Boolean {
-                    val memberOwner = member.parent as? IrClass ?: return false
-                    val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
-                        memberOwner.symbol,
-                        irClass.defaultType,
-                    ) ?: return false
-                    if (member.typeParameters.size != fakeOverride.typeParameters.size) return false
-                    if (member.typeParameters.zip(fakeOverride.typeParameters).any { pair ->
-                            pair.first.isReified != pair.second.isReified
-                        }
-                    ) {
-                        return false
+                if (contributors.any { member ->
+                        !member.hasDotNetResolvedIntersectionSignature(
+                            irClass,
+                            fakeOverride,
+                            includeReturnType = false,
+                        )
                     }
-                    val methodSubstitution = member.typeParameters.zip(fakeOverride.typeParameters).associate { pair ->
-                        pair.first.symbol to pair.second.typeParameterDefaultType
-                    }
-                    val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
-                    fun resolvedType(type: IrType): IrType =
-                        methodSubstitutor.substitute(substitutor.substitute(type))
-
-                    if (resolvedType(member.returnType) != fakeOverride.returnType) return false
-                    val memberParameters = member.parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
-                    val fakeParameters = fakeOverride.parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
-                    if (memberParameters.size != fakeParameters.size ||
-                        memberParameters.zip(fakeParameters).any { pair ->
-                            resolvedType(pair.first.type) != pair.second.type
-                        }
-                    ) {
-                        return false
-                    }
-                    return member.typeParameters.zip(fakeOverride.typeParameters).all { pair ->
-                        pair.first.superTypes.map(::resolvedType) == pair.second.superTypes
-                    }
+                ) {
+                    return@slot reject("does not have compatible resolved parameters and constraints")
                 }
-                if (contributors.any { member -> !hasResolvedSignature(member) }) {
-                    return@slot reject("does not have one identical resolved signature")
-                }
+                val implementationMember = contributors
+                    .filter { member ->
+                        member.hasDotNetResolvedIntersectionSignature(
+                            irClass,
+                            fakeOverride,
+                            includeReturnType = true,
+                        )
+                    }
+                    .minByOrNull { member -> member.dotNetGenericInterfaceCanonicalSlotId() }
+                    ?: return@slot reject("has no contributor matching its resolved return signature")
 
                 // Own the first typed capability on which every physical contributor coexists.
                 // An unsafe variant-position member therefore lands on the invariant exact view,
@@ -816,6 +798,7 @@ internal class DotNetIlEmitter(
                     owner = irClass,
                     signatureSource = fakeOverride,
                     contributingMembers = contributors,
+                    implementationMember = implementationMember,
                     memberView = memberView,
                     physicalMethodName = fakeOverride.dotNetAbiMethodName(),
                 )
@@ -889,6 +872,18 @@ internal class DotNetIlEmitter(
                         owner = owner,
                         signatureSource = binding.signatureSource,
                         contributingMembers = binding.contributingMembers,
+                        implementationMember = binding.contributingMembers
+                            .filter { member ->
+                                member.hasDotNetResolvedIntersectionSignature(
+                                    owner,
+                                    binding.signatureSource,
+                                    includeReturnType = true,
+                                )
+                            }
+                            .minByOrNull { member -> member.dotNetGenericInterfaceCanonicalSlotId() }
+                            ?: error(
+                                "External generic-interface intersection has no implementation member"
+                            ),
                         memberView = memberView,
                         physicalMethodName = binding.slot.methodName,
                     )

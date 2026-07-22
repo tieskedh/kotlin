@@ -1002,6 +1002,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         value.retainVariant(marker) === marker && left === value && right === value
                 }
 
+                public interface CovariantWide<out T> {
+                    public fun covariantResult(): Any?
+                }
+
+                public interface CovariantNarrow<out T> {
+                    public fun covariantResult(): T
+                }
+
+                public interface CovariantIntersection<out T> :
+                    CovariantWide<T>, CovariantNarrow<T>
+
+                public class CovariantIntersectionImpl(
+                    private val marker: IntersectionMarkerImpl,
+                ) : CovariantIntersection<IntersectionMarker> {
+                    override fun covariantResult(): IntersectionMarkerImpl = marker
+                }
+
+                public fun newCovariantIntersection(
+                    marker: IntersectionMarkerImpl,
+                ): CovariantIntersection<IntersectionMarker> = CovariantIntersectionImpl(marker)
+
+                public fun exerciseCovariantIntersection(
+                    value: CovariantIntersection<IntersectionMarker>,
+                    marker: IntersectionMarkerImpl,
+                ): Boolean {
+                    val wide: CovariantWide<IntersectionMarker> = value
+                    val narrow: CovariantNarrow<IntersectionMarker> = value
+                    return wide.covariantResult() === marker &&
+                        narrow.covariantResult() === marker &&
+                        value.covariantResult() === marker
+                }
+
                 public interface IntersectionLeft<out T> {
                     public val label: T
                     public fun read(): T
@@ -1228,6 +1260,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("'retain'<(!0)" !in libraryIl && "'retainVariant'<(!0)" !in libraryIl) {
             "Owner-relative constraints must remain erased from split-interface CLR metadata:\n$libraryIl"
         }
+        val covariantSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.CovariantIntersection`1")
+        }
+        assertEquals(setOf("covariantResult"), covariantSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, covariantSlots.single().physicalView)
+        assertEquals(2, covariantSlots.single().contributingLogicalMemberKeys.size)
+        assertTrue(
+            ".override method instance !0 class 'wide.CovariantIntersection`1'<" +
+                    "class 'wide.IntersectionMarker'>::'covariantResult'()" in libraryIl
+        ) { libraryIl }
         val intersectionSlots = allIntersectionSlots.filter { slot ->
             slot.ownerPath == listOf("wide.Intersection`1")
         }
@@ -1317,6 +1359,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     class LocalVariantOwnerBound<T : IntersectionMarker> :
                         VariantOwnerBoundIntersection<T> {
                         override fun <R : T> retainVariant(value: R): R = value
+                    }
+
+                    class LocalCovariantIntersection(
+                        private val marker: IntersectionMarkerImpl,
+                    ) : CovariantIntersection<IntersectionMarker> {
+                        override fun covariantResult(): IntersectionMarkerImpl = marker
                     }
 
                     class LocalMutableIntersection : MutableIntersection<String> {
@@ -1421,6 +1469,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             throw Error("external variant owner-bound intersection slots diverged")
                         }
 
+                        val covariant = newCovariantIntersection(marker)
+                        if (!exerciseCovariantIntersection(covariant, marker)) {
+                            throw Error("producer covariant intersection dispatch failed")
+                        }
+                        val localCovariant: CovariantIntersection<IntersectionMarker> =
+                            LocalCovariantIntersection(marker)
+                        val localCovariantWide: CovariantWide<IntersectionMarker> = localCovariant
+                        val localCovariantNarrow: CovariantNarrow<IntersectionMarker> = localCovariant
+                        if (localCovariant.covariantResult() !== marker ||
+                            localCovariantWide.covariantResult() !== marker ||
+                            localCovariantNarrow.covariantResult() !== marker
+                        ) {
+                            throw Error("external covariant intersection slots diverged")
+                        }
+
                         val mutable = newMutableIntersection()
                         if (!exerciseMutableIntersection(mutable) || mutable.mutableLabel != "producer") {
                             throw Error("producer mutable intersection dispatch failed")
@@ -1518,6 +1581,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ".override method instance !!0 class [Wide.Generic]" +
                         "'wide.VariantOwnerBoundIntersection__KotlinExact`1'<!0>::" +
                         "'retainVariant'<[1]>(!!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]" +
+                        "'wide.CovariantIntersection`1'<class [Wide.Generic]" +
+                        "'wide.IntersectionMarker'>::'covariantResult'()" in consumerIl
             ) { consumerIl }
             assertTrue(
                 ".override method instance !0 class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
@@ -1801,6 +1869,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     "variant owner-bound erased slot accepted an invalid value");
                             } catch (InvalidCastException) {
                             }
+
+                            MethodInfo createCovariant =
+                                RequireMethod(facade, "newCovariantIntersection");
+                            MethodInfo exerciseCovariant =
+                                RequireMethod(facade, "exerciseCovariantIntersection");
+                            object covariantObject =
+                                createCovariant.Invoke(null, new object[] { marker });
+                            wide.CovariantWide<wide.IntersectionMarker> covariantWide =
+                                (wide.CovariantWide<wide.IntersectionMarker>) covariantObject;
+                            wide.CovariantNarrow<wide.IntersectionMarker> covariantNarrow =
+                                (wide.CovariantNarrow<wide.IntersectionMarker>) covariantObject;
+                            wide.CovariantIntersection<wide.IntersectionMarker> covariantDerived =
+                                (wide.CovariantIntersection<wide.IntersectionMarker>) covariantObject;
+                            Require(Object.ReferenceEquals(covariantWide.covariantResult(), marker) &&
+                                Object.ReferenceEquals(covariantNarrow.covariantResult(), marker) &&
+                                Object.ReferenceEquals(covariantDerived.covariantResult(), marker),
+                                "covariant C# intersection dispatch");
+                            Require((bool) exerciseCovariant.Invoke(
+                                null, new object[] { covariantObject, marker }),
+                                "covariant Kotlin intersection dispatch");
 
                             MethodInfo createMutable = RequireMethod(facade, "newMutableIntersection");
                             MethodInfo exerciseMutable = RequireMethod(facade, "exerciseMutableIntersection");
@@ -4791,17 +4879,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface NestedOwnerBoundIntersection<T> :
                 NestedOwnerBoundLeft<T>, NestedOwnerBoundRight<T>
 
-            public interface CovariantWide<out T> {
-                public fun result(): Any?
-            }
-
-            public interface CovariantNarrow<out T> {
-                public fun result(): T
-            }
-
-            public interface CovariantIntersection<out T> :
-                CovariantWide<T>, CovariantNarrow<T>
-
             public interface ReservedOwner<out T> {
                 public fun accept(value: @UnsafeVariance T)
             }
@@ -4815,7 +4892,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "but are distinct Kotlin members",
             "has no complete derived CLR property surface on one typed capability",
             "requires an owner-relative generic adapter beyond direct method-parameter uses",
-            "does not have one identical resolved signature",
             "maps to a duplicate canonical, declared, or exact IL type",
         )
     }

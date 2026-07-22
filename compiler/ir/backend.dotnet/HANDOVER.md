@@ -1430,7 +1430,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only
   unsafe input dispatch is covered through the invariant exact capability. Nested/general
-  owner-relative constraints, split-view property, default, and non-identical resolved-signature
+  owner-relative constraints, split-view property, and default
   cases remain open. Property accessors are filtered atomically so a Kotlin `var` never acquires
   only a derived getter while its inherited setter remains ambiguous.
 - Same-name inheritance is no longer admitted merely because the IR names match. Pairwise inherited
@@ -1442,10 +1442,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - Intersection discovery now identifies nonfake logical contributors and the first meeting of at
   least two physical parent branches before applying the supported-shape filters. A real candidate
   is therefore selected into schema 14, covered by an existing profile-aware default promotion, or
-  rejected before publication. Nested owner-relative method constraints and valid covariant
-  intersections with nonidentical resolved return signatures have explicit negative regressions;
-  neither can silently publish an ambiguous C# surface while its adapter remains deferred. This
-  enforces the existing variant-interface ADR rather than introducing another representation.
+  rejected before publication. Nested owner-relative method constraints remain an explicit
+  negative regression and cannot silently publish an ambiguous C# surface while their adapter is
+  deferred. This enforces the existing variant-interface ADR rather than introducing another
+  representation.
 - Direct owner-relative intersection methods such as `<R : T> retain(R): R` now reuse the accepted
   split-interface constraint-erasure rule. Kotlin/KLIB retains `R : T`; declared and exact CLR
   slots omit it so their `MethodImpl` shapes remain loadable. The implementing bridge cannot pass
@@ -1462,6 +1462,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   declared slot; variant intersections own the exact slot. Nested occurrences such as `Box<R>`
   remain rejected because the direct adapter cannot preserve their representation without a
   separate design. The fresh strict gate is 845/0/0/0 across 16 XML suites.
+- Covariantly different intersection returns now use Kotlin's resolved fake-override return as the
+  derived source-named slot. Contributor parameters, method constraints, and arity must still
+  resolve identically, and at least one contributor must have the selected return exactly. The
+  deterministic matching contributor bridge receives the derived `MethodImpl`; wider parent
+  bridges continue adapting the same source body. Producer and separately compiled implementations
+  return a refined `IntersectionMarkerImpl` through wide `Any?`, narrow `IntersectionMarker`, and
+  derived `IntersectionMarker` views. Kotlin and direct C# calls preserve the same object on
+  Framework CLR 4 and CoreCLR 10, and schema 14 remains unchanged.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
@@ -1562,11 +1570,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Finish the ABI-required generic-interface intersection adapters.** The direct owner-bound
-   slice landed in `d01ab02ba`. Next implement nonidentical resolved signatures with the existing
-   schema-14/MethodImpl model, then selected defaults with the accepted helper/DIM model. Do not
-   copy a Kotlin body. A split-view mutable property requires an ADR-level C# surface decision;
-   nested/general owner-relative carriers remain rejected.
+1. **Finish the ABI-required generic-interface intersection adapters.** Direct owner-bound and
+   nonidentical covariant-return slices are implemented. Next complete selected defaults with the
+   accepted helper/DIM model and no body copy. A split-view mutable property requires an ADR-level
+   C# surface decision; nested/general owner-relative carriers remain rejected.
 2. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
    physical collision matrix, then add generated implementor tooling. Keep raw metadata-table
    auditing with the structured metadata work; do not substitute IL substring checks.
