@@ -1291,13 +1291,22 @@ session state, process, and a curated task menu. Keep both files updated as you 
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
-  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 36 library-integration tests,
-  enables required-toolchain behavior in both owner projects, and currently records 837/0/0/0
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 37 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 838/0/0/0
   across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
   the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
   20 digits. The aggregate task is the supported entry point. This is validation infrastructure,
   not an ABI decision, so it updates evidence rather than an ADR.
+- A portable generic-interface library now has an executable ordinary-C# implementor contract on
+  both Framework CLR 4 and CoreCLR 10. One C# object implements
+  `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed
+  `Contains(int)` with the documented `ContainsErased(object)` false barrier. A second implements
+  a user `@UnsafeVariance` exact/canonical pair and lets a wrong shape throw the original CLR
+  `InvalidCastException`; Kotlin catches it as `ClassCastException`, proving that collection
+  barriers are not generalized to user annotations. Structured KLIB records select the foreign
+  method/owner spellings. The variant-interface ADR records this validation; generated C#
+  implementor tooling and the broader foreign/clash matrix remain open.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1348,7 +1357,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 837 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 838 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.

@@ -309,8 +309,11 @@ overridden, and helper-backed paths and assert that the Kotlin body occurs once.
 generic capability fallbacks bind recorded physical method names rather than inventing Kotlin hash
 names. The `net10.0` profile temporarily retains `mscorlib` MemberRefs for the current common
 surface; that does not freeze identical Framework/modern IL. The remaining generic/BCL work is
-foreign implementor and barrier/clash policy, plus a mechanical runtime-assembly surface audit;
-those keep P0-D open.
+the broader foreign-implementor and clash matrix, generated implementor tooling, and a mechanical
+runtime-assembly surface audit; those keep P0-D open. The first foreign barrier slice is now
+replayable: ordinary Framework and modern C# classes consume one portable Kotlin library,
+implement the canonical plus exact views on one object, preserve Collection's wrong-shape false
+barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
@@ -434,8 +437,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 36
-library-integration tests; the current audited result is 837/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 37
+library-integration tests; the current audited result is 838/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
