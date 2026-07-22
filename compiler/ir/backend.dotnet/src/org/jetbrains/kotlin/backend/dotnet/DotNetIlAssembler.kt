@@ -41,6 +41,18 @@ object DotNetIlAssembler {
         }
     }
 
+    /** Produces the selected runtime variant for independent metadata and loader conformance tests. */
+    @TestOnly
+    fun assembleRuntimeForTests(
+        outputDirectory: File,
+        target: DotNetTarget,
+        messageCollector: MessageCollector,
+    ): File? = DotNetRuntimeLibrary.assembleNextTo(
+        outputDirectory.resolve("runtime-conformance-placeholder"),
+        target,
+        messageCollector,
+    )
+
     /**
      * Assembles a portable library with the modern ILAsm. Framework ILAsm accepts netstandard
      * source but injects an `mscorlib` AssemblyRef into the PE, so it is a compatibility oracle,

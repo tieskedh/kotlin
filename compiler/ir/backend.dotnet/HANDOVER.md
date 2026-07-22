@@ -1097,8 +1097,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `net10.0` stdlib pairs must contain every `netstandard2.0` logical declaration with the same
   assembly-independent CLR owner/member binding, identity scheme, name grammar, and no lower
   runtime-surface floor; profile-only additions are allowed. Synthetic negative coverage pins both
-  missing and changed entries. Raw runtime-assembly metadata superset checking remains for the
-  future structured metadata model rather than an IL-substring parser.
+  missing and changed entries. The same production test now uses an isolated CoreCLR reflection
+  verifier over the assembled PEs. Each executable-profile runtime/stdlib pair must retain the
+  portable public/protected types, hierarchy edges, constraints, methods, fields, properties, and
+  events with compatible access and overridability. Portable abstract interface slots may become
+  modern DIMs. The verifier is test data, not a compiler/assembler sidecar, and a target-owned
+  `@TestOnly` hook produces standalone runtime variants for it. Raw custom-attribute payloads,
+  MethodImpl rows, resources, and friend-only internals remain for the structured metadata audit.
 - `docs/decisions/adr-profile-aware-interface-default-implementations.md` is accepted,
   and the non-generic implementation is now present. Portable profiles move each Kotlin interface
   body to a marked public `<DefaultImpls>` compiler-ABI helper, keep the CLR slot abstract, and

@@ -2871,10 +2871,52 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     fun testRuntimeStdlibVariantsArePortablePhysicalAbiSupersets() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
 
         val pairDirectories = listOf("netstandard2.0", "net48", "net10.0").associateWith { target ->
             produceBoundStdlibPair(target, "portable-abi-superset")
         }
+        val runtimeAssemblies = DotNetTarget.entries.associateWith { target ->
+            val outputDirectory = File(tmpdir, "portable-surface-runtime-${target.flagValue}")
+            val runtime = DotNetIlAssembler.assembleRuntimeForTests(
+                outputDirectory,
+                target,
+                MessageCollector.NONE,
+            )
+            assertTrue(runtime?.isFile == true) { "Failed to produce ${target.flagValue} Kotlin.Runtime.dll" }
+            checkNotNull(runtime)
+        }
+        val surfaceVerifierSource = File(
+            "compiler/testData/codegen/dotnet/portableSurfaceVerifier.cs"
+        ).absoluteFile
+        assertTrue(surfaceVerifierSource.isFile) { "Missing CLR surface verifier: $surfaceVerifierSource" }
+        val surfaceVerifierDirectory = File(tmpdir, "portable-surface-verifier").apply { mkdirs() }
+        val surfaceVerifier = surfaceVerifierDirectory.resolve("PortableSurfaceVerifier.dll")
+        val surfaceVerifierCompile = runModernCSharpCompiler(
+            checkNotNull(csharpToolchain),
+            surfaceVerifierSource,
+            surfaceVerifier,
+            target = "exe",
+        )
+        assertEquals(0, surfaceVerifierCompile.exitCode, surfaceVerifierCompile.output)
+        surfaceVerifierDirectory.resolve("PortableSurfaceVerifier.runtimeconfig.json").writeText(
+            """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                },
+                "rollForward": "LatestMinor"
+              }
+            }
+            """.trimIndent()
+        )
         val manifests = pairDirectories.mapValues { entry ->
             entry.value.resolve("Kotlin.Stdlib.klib").readKlibManifest()
         }
@@ -2926,6 +2968,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
             }
+
+            val portableDirectory = pairDirectories.getValue("netstandard2.0")
+            val platformDirectory = pairDirectories.getValue(target)
+            val comparison = ProcessBuilder(
+                checkNotNull(csharpToolchain).dotNetHost.path,
+                "exec",
+                surfaceVerifier.path,
+                runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
+                runtimeAssemblies.getValue(checkNotNull(DotNetTarget.fromFlagValue(target))).path,
+                portableDirectory.resolve("Kotlin.Stdlib.dll").path,
+                platformDirectory.resolve("Kotlin.Stdlib.dll").path,
+            ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
+            val comparisonOutput = comparison.inputStream.bufferedReader().use { it.readText() }
+            assertEquals(
+                0,
+                comparison.waitFor(),
+                "$target is not an externally consumable CLR metadata superset of netstandard2.0:\n" +
+                        comparisonOutput,
+            )
+            assertTrue(Regex("OK [1-9][0-9]*").matches(comparisonOutput.trim())) { comparisonOutput }
         }
 
     }

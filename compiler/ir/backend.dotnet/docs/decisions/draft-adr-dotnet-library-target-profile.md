@@ -138,12 +138,24 @@ The implementation now:
 7. provides `-Xdotnet-produce-library`, which emits `<module>.klib`, `<module>.il`, and
    `<module>.dll` for ordinary Kotlin sources with no entry point or runtimeconfig; and
 8. writes a versioned declaration-binding index into an ordinary produced KLIB and uses it to
-   resolve Kotlin calls and types to the paired CLR assembly.
+   resolve Kotlin calls and types to the paired CLR assembly; and
+9. mechanically compares the externally consumable CLR reflection surface of the assembled
+   `Kotlin.Runtime` and `Kotlin.Stdlib` variants, requiring each executable profile to retain every
+   portable public/protected type, base/interface edge, generic constraint, method, field,
+   property, and event with compatible accessibility and overridability.
 
 The repository's opt-in stdlib producer and installer create all three profile variants under
 their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
 single `netstandard2.0` stdlib pair is discovered as fallback, compiled against, assembled, and
 executed by both `net48` and `net10.0` applications.
+
+The surface comparison runs as isolated test tooling under CoreCLR, loading each profile pair in
+its own assembly-load context. It consumes assembled PEs rather than rendered-IL substrings and
+allows the deliberate portable-abstract-to-modern-DIM transition while rejecting removed or
+narrowed callable surface. A target-owned `@TestOnly` hook produces each runtime variant without
+turning runtime generation into a library side effect. This audit does not yet compare raw custom-
+attribute payloads, MethodImpl rows, resources, or internal friend-only surface; those remain part
+of the future structured metadata model and ABI-freeze audit.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
