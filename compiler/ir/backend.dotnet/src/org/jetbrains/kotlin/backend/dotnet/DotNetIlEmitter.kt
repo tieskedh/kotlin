@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.ir.declarations.isStaticMethodOfClass
 import org.jetbrains.kotlin.ir.expressions.IrConst
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
@@ -443,52 +444,56 @@ internal class DotNetIlEmitter(
             }
         }
 
+        fun DotNetIlValueType.classInfoOrNull(): DotNetIlClassInfo? = when (this) {
+            is DotNetIlValueType.UserClass -> classInfo
+            is DotNetIlValueType.GenericInstance -> classInfo
+            else -> null
+        }
+
+        fun inheritsPhysicalInterface(
+            start: DotNetIlClassInfo,
+            inherited: DotNetIlClassInfo,
+        ): Boolean {
+            val visited = hashSetOf<String>()
+            fun visit(current: DotNetIlClassInfo): Boolean {
+                if (!visited.add(current.ilTypeRef)) return false
+                return current.interfaces.any { superType ->
+                    val superInfo = superType.classInfoOrNull() ?: return@any false
+                    superInfo.ilTypeRef == inherited.ilTypeRef || visit(superInfo)
+                }
+            }
+            return visit(start)
+        }
+
+        fun isInheritedDeclarationOnView(
+            irClass: IrClass,
+            inherited: IrSimpleFunction,
+            view: DotNetGenericInterfaceMemberView,
+        ): Boolean {
+            if (inherited.isFakeOverride) return false
+            val startInfo = genericInterfaces.getValue(irClass).classInfo(view.physicalView)
+                ?: return false
+            val owner = inherited.parent as? IrClass ?: return false
+            val ownerInfo = typeMapper.genericInterfaceInfoOrNull(owner) ?: return false
+            return typeMapper.genericInterfaceMemberViews(inherited, owner).any { inheritedView ->
+                val inheritedInfo = ownerInfo.classInfo(inheritedView.physicalView) ?: return@any false
+                inheritsPhysicalInterface(startInfo, inheritedInfo)
+            }
+        }
+
+        fun isInheritedOnView(
+            irClass: IrClass,
+            member: IrSimpleFunction,
+            view: DotNetGenericInterfaceMemberView,
+        ): Boolean = member.allOverridden().any { overridden ->
+            isInheritedDeclarationOnView(irClass, overridden, view)
+        }
+
         fun checkGenericInterfaceTypedViewClashes(irClass: IrClass) {
             fun belongsToView(
                 member: IrSimpleFunction,
                 view: DotNetGenericInterfaceMemberView,
             ): Boolean = view in typeMapper.genericInterfaceMemberViews(member, irClass)
-
-            fun DotNetIlValueType.classInfoOrNull(): DotNetIlClassInfo? = when (this) {
-                is DotNetIlValueType.UserClass -> classInfo
-                is DotNetIlValueType.GenericInstance -> classInfo
-                else -> null
-            }
-
-            fun inheritsPhysicalInterface(
-                start: DotNetIlClassInfo,
-                inherited: DotNetIlClassInfo,
-            ): Boolean {
-                val visited = hashSetOf<String>()
-                fun visit(current: DotNetIlClassInfo): Boolean {
-                    if (!visited.add(current.ilTypeRef)) return false
-                    return current.interfaces.any { superType ->
-                        val superInfo = superType.classInfoOrNull() ?: return@any false
-                        superInfo.ilTypeRef == inherited.ilTypeRef || visit(superInfo)
-                    }
-                }
-                return visit(start)
-            }
-
-            fun isInheritedOnView(
-                member: IrSimpleFunction,
-                view: DotNetGenericInterfaceMemberView,
-            ): Boolean {
-                val startInfo = genericInterfaces.getValue(irClass).classInfo(view.physicalView)
-                    ?: return false
-                return member.allOverridden().any overridden@{ overridden ->
-                    if (overridden.isFakeOverride) return@overridden false
-                    val owner = overridden.parent as? IrClass ?: return@overridden false
-                    val ownerInfo = typeMapper.genericInterfaceInfoOrNull(owner)
-                        ?: return@overridden false
-                    typeMapper.genericInterfaceMemberViews(overridden, owner)
-                        .any inheritedView@{ inheritedView ->
-                            val inheritedInfo = ownerInfo.classInfo(inheritedView.physicalView)
-                                ?: return@inheritedView false
-                            inheritsPhysicalInterface(startInfo, inheritedInfo)
-                        }
-                }
-            }
 
             fun isKotlinOverrideOf(
                 member: IrSimpleFunction,
@@ -525,7 +530,7 @@ internal class DotNetIlEmitter(
                 // override is one slot and remains valid.
                 val inheritedClaims = hashMapOf<String, IrSimpleFunction>()
                 for (inherited in irClass.dotNetMemberFakeOverrides()) {
-                    if (!isInheritedOnView(inherited, view)) continue
+                    if (!isInheritedOnView(irClass, inherited, view)) continue
                     val signature = inherited.dotNetSignature(signatureMapper)
                     val identity =
                         "${inherited.dotNetAbiMethodName()}${inherited.dotNetIlGenericAritySuffix()}" +
@@ -646,6 +651,142 @@ internal class DotNetIlEmitter(
                 exactInfo.interfaces = (listOf(declaredSelf) + exactSupers).distinct()
             }
         }
+        // C# diagnoses two equally applicable inherited source-named members as CS0121 even
+        // when Kotlin has one valid intersection fake override. Materialize the conservative
+        // bodyless slice here, after the physical view graph exists: direct generic parents,
+        // no value or type parameters/default/property surface, and one identical resolved
+        // signature.
+        // More complex intersections stay unchanged until their adapter semantics are explicit.
+        val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
+            val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNullTo(hashSetOf()) { type ->
+                (type.classifier as? IrClassSymbol)?.owner
+            }
+            irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
+                if (fakeOverride.correspondingPropertySymbol != null ||
+                    fakeOverride.typeParameters.isNotEmpty() ||
+                    fakeOverride.parameters.any { parameter ->
+                        parameter.kind != IrParameterKind.DispatchReceiver
+                    } ||
+                    fakeOverride.body != null
+                ) {
+                    return@slot null
+                }
+                val contributors = fakeOverride.overriddenSymbols
+                    .map { symbol -> symbol.owner }
+                    .filter { member ->
+                        !member.isFakeOverride &&
+                                member.name == fakeOverride.name &&
+                                member.typeParameters.isEmpty() &&
+                                member.parameters.all { parameter ->
+                                    parameter.kind == IrParameterKind.DispatchReceiver
+                                } &&
+                                member.body == null &&
+                                (member.parent as? IrClass) in directSuperInterfaces &&
+                                (member.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true &&
+                                member !in interfaceDefaultImplementations &&
+                                genericInterfaceDefaults.none { lowered -> lowered.source == member }
+                    }
+                    .distinctBy { member -> member.symbol }
+                if (contributors.map { member -> member.parent }.distinct().size < 2) return@slot null
+
+                fun hasResolvedSignature(member: IrSimpleFunction): Boolean {
+                    val memberOwner = member.parent as? IrClass ?: return false
+                    val substitutor = AbstractIrTypeSubstitutor.forSuperClass(
+                        memberOwner.symbol,
+                        irClass.defaultType,
+                    ) ?: return false
+                    if (substitutor.substitute(member.returnType) != fakeOverride.returnType) return false
+                    val memberParameters = member.parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
+                    val fakeParameters = fakeOverride.parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
+                    return memberParameters.size == fakeParameters.size &&
+                            memberParameters.zip(fakeParameters).all { pair ->
+                                substitutor.substitute(pair.first.type) == pair.second.type
+                            }
+                }
+                if (contributors.any { member -> !hasResolvedSignature(member) }) return@slot null
+
+                // This first producer slice deliberately owns only the normal declared C#
+                // capability. Exact-only intersections can require invariant substitutions and
+                // representation adapters which are not proven by signature equality alone.
+                val memberView = DotNetGenericInterfaceMemberView.DECLARED
+                    .takeIf { view ->
+                        contributors.all { member -> isInheritedDeclarationOnView(irClass, member, view) }
+                    }
+                    ?: return@slot null
+                DotNetGenericInterfaceIntersectionSlot(
+                    owner = irClass,
+                    signatureSource = fakeOverride,
+                    contributingMembers = contributors,
+                    memberView = memberView,
+                    physicalMethodName = fakeOverride.dotNetAbiMethodName(),
+                )
+            }
+        }.sortedWith(
+            compareBy<DotNetGenericInterfaceIntersectionSlot>(
+                { slot -> slot.owner.diagnosticName() },
+                { slot -> slot.physicalMethodName },
+            )
+        )
+        // A downstream class may refine the return of a recorded intersection slot. Recover the
+        // producer's obligation from every bound generic superinterface so one existing typed
+        // forwarding bridge can own the additional MethodImpl row.
+        val relevantExternalGenericInterfaces = buildSet {
+            val visited = hashSetOf<IrClass>()
+            fun visit(owner: IrClass) {
+                if (!visited.add(owner)) return
+                for (superType in owner.superTypes) {
+                    val superClass = ((superType as? IrSimpleType)?.classifier as? IrClassSymbol)?.owner
+                        ?: continue
+                    if (superClass.isInterface &&
+                        superClass !in genericInterfaces &&
+                        typeMapper.isSplitGenericInterface(superClass)
+                    ) {
+                        add(superClass)
+                    }
+                    visit(superClass)
+                }
+            }
+            availableClasses.keys.forEach(::visit)
+        }
+        val externalGenericInterfaceIntersectionSlots = relevantExternalGenericInterfaces.flatMap { owner ->
+            owner.dotNetMemberFakeOverrides().flatMap { fakeOverride ->
+                externalDeclarations.genericInterfaceIntersectionSlots(owner, fakeOverride).map { binding ->
+                    val memberView = when (binding.slot.physicalView) {
+                        DotNetInterfaceDefaultPromotionView.DECLARED -> DotNetGenericInterfaceMemberView.DECLARED
+                        DotNetInterfaceDefaultPromotionView.EXACT -> DotNetGenericInterfaceMemberView.EXACT
+                        DotNetInterfaceDefaultPromotionView.CANONICAL -> error(
+                            "Internal .NET backend error: external intersection slot is canonical"
+                        )
+                    }
+                    val physicalOwner = typeMapper.genericInterfaceInfoOrNull(owner)
+                        ?.classInfo(memberView.physicalView)
+                        ?: error("External generic-interface intersection owner is unavailable")
+                    require(physicalOwner.physicalPathComponents() == binding.slot.ownerPath) {
+                        "external generic-interface intersection owner '${binding.slot.ownerLogicalKey}' " +
+                                "does not match its recorded CLR path"
+                    }
+                    DotNetGenericInterfaceIntersectionSlot(
+                        owner = owner,
+                        signatureSource = binding.signatureSource,
+                        contributingMembers = binding.contributingMembers,
+                        memberView = memberView,
+                        physicalMethodName = binding.slot.methodName,
+                    )
+                }
+            }
+        }
+        val genericInterfaceIntersectionSlots =
+            (localGenericInterfaceIntersectionSlots + externalGenericInterfaceIntersectionSlots)
+                .distinctBy { slot ->
+                    listOf(
+                        slot.owner.diagnosticName(),
+                        slot.memberView.name,
+                        slot.physicalMethodName,
+                        slot.contributingMembers.joinToString(",") { member ->
+                            member.dotNetGenericInterfaceCanonicalSlotId()
+                        },
+                    )
+                }
         // Static facade-field references (`ldsfld`/`stsfld` of top-level property backing
         // fields) resolve their owning IL class through this map, the facade counterpart of
         // [DotNetIlTypeMapper.classInfoOrNull].
@@ -1036,6 +1177,7 @@ internal class DotNetIlEmitter(
                         declaredGenericTypeMapper = declaredGenericTypeMapper,
                         exactGenericTypeMapper = exactGenericTypeMapper,
                         genericInterfaces = genericInterfaces,
+                        genericInterfaceIntersectionSlots = genericInterfaceIntersectionSlots,
                         facadeClassInfoByFile = facadeClassInfoByFile,
                         classSkipReasons = classSkipReasons,
                     )
@@ -1477,6 +1619,7 @@ internal class DotNetIlEmitter(
                 defaultArgumentDispatchers,
                 interfaceDefaultPromotions,
                 genericInterfaceViewBridges,
+                genericInterfaceIntersectionSlots,
                 covariantReturnBridges,
                 interfaceDefaultClassForwarders,
                 companionInitializations,
@@ -2311,6 +2454,7 @@ internal class DotNetIlEmitter(
         declaredGenericTypeMapper: DotNetIlTypeMapper,
         exactGenericTypeMapper: DotNetIlTypeMapper,
         genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
+        genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
         classSkipReasons: Map<IrClass, String>,
     ): RenderedClass {
@@ -2422,6 +2566,7 @@ internal class DotNetIlEmitter(
                 typeMapper = memberTypeMapper,
                 facadeClassInfoByFile = facadeClassInfoByFile,
                 covariantReturnImplementations = covariantReturnImplementations,
+                genericInterfaceIntersectionSlots = genericInterfaceIntersectionSlots,
             ).render()
             renderedMethods += rendered.ilText
         }
@@ -2458,6 +2603,7 @@ internal class DotNetIlEmitter(
                             declaredGenericTypeMapper = declaredGenericTypeMapper,
                             exactGenericTypeMapper = exactGenericTypeMapper,
                             genericInterfaces = genericInterfaces,
+                            genericInterfaceIntersectionSlots = genericInterfaceIntersectionSlots,
                             facadeClassInfoByFile = facadeClassInfoByFile,
                             classSkipReasons = classSkipReasons,
                         )
@@ -2603,6 +2749,7 @@ internal class DotNetIlEmitter(
                         intrinsicMethods,
                         declaredGenericTypeMapper,
                         exactGenericTypeMapper,
+                        genericInterfaceIntersectionSlots.filter { slot -> slot.owner == irClass },
                         facadeClassInfoByFile,
                     )
                 )
@@ -2619,6 +2766,7 @@ internal class DotNetIlEmitter(
         intrinsicMethods: DotNetIlIntrinsicMethods,
         declaredTypeMapper: DotNetIlTypeMapper,
         exactTypeMapper: DotNetIlTypeMapper,
+        intersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
     ): String {
         val declared = renderTypedGenericInterfaceView(
@@ -2648,6 +2796,7 @@ internal class DotNetIlEmitter(
                     add(typedSuper.nameInSignature)
                 }
             },
+            intersectionSlots = intersectionSlots,
             facadeClassInfoByFile = facadeClassInfoByFile,
         )
         val exactClassInfo = interfaceInfo.exactClassInfo ?: return declared
@@ -2679,6 +2828,7 @@ internal class DotNetIlEmitter(
                     add(typedSuper.nameInSignature)
                 }
             },
+            intersectionSlots = intersectionSlots,
             facadeClassInfoByFile = facadeClassInfoByFile,
         )
         return declared + exact
@@ -2692,6 +2842,7 @@ internal class DotNetIlEmitter(
         intrinsicMethods: DotNetIlIntrinsicMethods,
         viewTypeMapper: DotNetIlTypeMapper,
         interfaceRefs: List<String>,
+        intersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
         facadeClassInfoByFile: Map<IrFile, DotNetIlClassInfo>,
     ): String {
         val signatureTypeMapper = viewTypeMapper.genericInterfaceSignatureView(memberView)
@@ -2765,6 +2916,11 @@ internal class DotNetIlEmitter(
                 else -> {}
             }
         }
+        intersectionSlots
+            .filter { slot -> slot.memberView == memberView }
+            .forEach { slot ->
+                renderPhysicalMember(slot.signatureSource, slot.physicalMethodName)
+            }
         genericInterfaceDefaults
             .asSequence()
             .filter { lowered -> lowered.source.parent == irClass }

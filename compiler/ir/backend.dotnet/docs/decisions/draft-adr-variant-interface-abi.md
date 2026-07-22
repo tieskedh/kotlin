@@ -144,8 +144,8 @@ property accessor mapping to one declared-view slot, and a user declaration occu
 generated exact-view TypeDef identity. The inherited checks follow the physical capability graph
 and exempt a genuine Kotlin override of the inherited member. An inherited-only clash is rejected
 only when the IR names prove that the two declarations are distinct Kotlin members; same-name
-intersection overrides remain valid. Parent-slot execution is covered below; their selected
-derived C# slot is not implemented yet. Each failure names the affected physical view or
+intersection overrides remain valid. Parent-slot execution and the conservative bodyless
+declared-view derived slot are covered below. Each failure names the affected physical view or
 generated-type collision and produces neither KLIB nor DLL. This pins the current
 whole-declaration rejection policy without declaring the broader overload, same-name inherited,
 and reserved-member collision matrix complete. Stable
@@ -178,18 +178,28 @@ A portable same-name intersection now executes through two independently declare
 parent interfaces. One Kotlin class body is reached through both parent canonical/declared slot
 bundles and through the derived logical interface; Kotlin and C# consumers preserve the same
 object identity on Framework CLR 4 and CoreCLR 10. C# calls through explicit parent capabilities
-work, but a direct call through the current derived typed capability is rejected by the C#
-compiler with CS0121 because that capability merely inherits two equally applicable source-named
-members. This validates the existing semantic bridge fan-out and exposes the missing derived
-interop adapter described below; it is not accepted as the final C# surface.
+work. The pre-adapter shape rejected a direct call through the derived typed capability with C#
+CS0121 because it merely inherited two equally applicable source-named members. The producer now
+emits one abstract `read` slot on that derived declared capability, records it in schema 14, and
+maps one existing class forwarding bridge to it. Direct C# calls then compile and execute on both
+profiles without another Kotlin body.
+
+A separately compiled Kotlin consumer also implements the portable intersection at `T = Any`
+with a `String` result. Its parent typed bridges already widen the result to `object`; schema-14
+lookup attaches the derived slot to one deterministic contributing bridge through an additional
+`MethodImpl`. Calls through the derived and both parent logical views execute the one refined body
+on Framework CLR 4 and CoreCLR 10. This proves producer/consumer use of the record, not merely its
+codec shape.
 
 Physical ABI schema 14 now reserves a dedicated generic-interface intersection-slot record. It
 stores the typed physical owner, declared/exact view, CLR method name, logical owner, and at least
 two sorted unique contributing logical member identities. Its deterministic index is derived from
 that normalized override group. This is intentionally distinct from an interface view-bridge
 record: an intersection slot is an additional implementation obligation, not evidence that the
-producer already supplied a body or final `MethodImpl`. Producer emission and downstream bridge
-consumption are the next implementation slices.
+producer already supplied a body or final `MethodImpl`. The bodyless, parameterless direct-parent
+declared-view slice now emits and consumes this record; exact-only intersections, methods with
+value or type parameters, default bodies, properties, and non-identical or permuted substitutions
+remain pending.
 
 ## Physical views
 
@@ -675,7 +685,8 @@ interface record includes:
 - capability type-parameter index mappings;
 - logical override-group identities and emitted declared-superview edges;
 - each generated intersection slot's typed owner, physical view, CLR method name, and normalized
-  contributing logical-member group (schema 14 has the record; producer/consumer use is pending);
+  contributing logical-member group (schema 14 emits and consumes the bodyless direct-parent
+  slice);
 - erased bridge behavior, including any special type-safe barrier policy; and
 - representation version and optional-capability flags.
 
@@ -788,8 +799,9 @@ coverage for at least:
 - inherited, permuted, repeated, and diamond generic superinterfaces; a local/inherited
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
   rejected before publication; same-name intersection execution through both parent slot bundles
-  is covered on both profiles, while the selected derived intersection slot and general inherited
-  overload disambiguation remain required;
+  and a selected derived declared slot are covered on both profiles, including a cross-module
+  refined return; exact-only, property, parameterized-method, default-body, permuted, and general
+  inherited overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
   getters and setters;

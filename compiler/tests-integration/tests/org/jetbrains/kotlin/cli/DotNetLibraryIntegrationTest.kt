@@ -993,6 +993,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-read-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-read-" in libraryIl) { libraryIl }
+        assertTrue(
+            ".override method instance !0 class 'wide.Intersection`1'<int32>::'read'()" in libraryIl
+        ) { libraryIl }
+        val intersectionSlot = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
+            .values
+            .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot>()
+            .single()
+        assertEquals(listOf("wide.Intersection`1"), intersectionSlot.ownerPath)
+        assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, intersectionSlot.physicalView)
+        assertEquals("read", intersectionSlot.methodName)
+        assertEquals(2, intersectionSlot.contributingLogicalMemberKeys.size)
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -1002,6 +1013,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     package wideconsumer
 
                     import wide.*
+
+                    class LocalRefinedIntersection : Intersection<Any> {
+                        override fun read(): String = "local"
+                    }
 
                     fun main() {
                         val original = newWide()
@@ -1041,6 +1056,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (left.read() != 73 || right.read() != 73 || readIntersection(intersection) != 219) {
                             throw Error("intersection slots did not share one implementation")
                         }
+
+                        val refined: Intersection<Any> = LocalRefinedIntersection()
+                        val refinedLeft: IntersectionLeft<Any> = refined
+                        val refinedRight: IntersectionRight<Any> = refined
+                        if (refined.read() != "local" || refinedLeft.read() != "local" ||
+                            refinedRight.read() != "local"
+                        ) {
+                            throw Error("external intersection slot lost covariant refinement")
+                        }
                     }
                     """.trimIndent()
                 )
@@ -1056,6 +1080,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::moduleName.cliArgument, "WideConsumer",
                 K2DotNetCompilerArguments::destination.cliArgument, application.path,
             )
+            val consumerIl = consumerDirectory.resolve("WideConsumer.il").readText()
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'read'()" in
+                        consumerIl
+            ) { consumerIl }
 
             if (target == "net10.0") {
                 runDotNet(dotnetHost, application, consumerDirectory, "High-arity Kotlin consumer failed for $target")
@@ -1230,8 +1259,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 "intersection parent identity");
                             wide.IntersectionLeft<int> left = (wide.IntersectionLeft<int>) intersection;
                             wide.IntersectionRight<int> right = (wide.IntersectionRight<int>) intersection;
-                            Require(Object.ReferenceEquals(left, right), "intersection C# identity");
-                            Require(left.read() == 73 && right.read() == 73,
+                            wide.Intersection<int> derived = (wide.Intersection<int>) intersection;
+                            Require(Object.ReferenceEquals(left, right) && Object.ReferenceEquals(left, derived),
+                                "intersection C# identity");
+                            Require(left.read() == 73 && right.read() == 73 && derived.read() == 73,
                                 "intersection parent dispatch");
                             Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 219,
                                 "intersection Kotlin dispatch");
@@ -1251,33 +1282,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 target = "exe",
             )
             assertEquals(0, compileResult.exitCode, compileResult.output)
-
-            val ambiguousSource = consumerDirectory.resolve("AmbiguousIntersection.cs").apply {
-                writeText(
-                    """
-                    public static class AmbiguousIntersection
-                    {
-                        public static int Read(wide.Intersection<int> value)
-                        {
-                            return value.read();
-                        }
-                    }
-                    """.trimIndent()
-                )
-            }
-            val ambiguousOutput = consumerDirectory.resolve("AmbiguousIntersection.dll")
-            val ambiguousCompile = runCSharpCompiler(
-                checkNotNull(csharpCompiler),
-                ambiguousSource,
-                ambiguousOutput,
-                libraryAssembly,
-                checkNotNull(frameworkNetStandardFacade),
-            )
-            assertTrue(ambiguousCompile.exitCode != 0) {
-                "Direct C# intersection call unexpectedly compiled"
-            }
-            assertTrue("error CS0121" in ambiguousCompile.output) { ambiguousCompile.output }
-            assertTrue(!ambiguousOutput.exists())
 
             val verifierProcess = if (target == "net10.0") {
                 consumerDirectory.resolve("WideConsumer.runtimeconfig.json")

@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.IdSignatureRenderer
+import org.jetbrains.kotlin.ir.util.allOverridden
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.isFakeOverride
@@ -1125,6 +1126,13 @@ internal data class DotNetBoundGenericInterfaceViewBridge(
     val bridge: DotNetPhysicalDeclaration.GenericInterfaceViewBridge,
 )
 
+internal data class DotNetBoundGenericInterfaceIntersectionSlot(
+    val library: DotNetExternalLibrary,
+    val slot: DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot,
+    val signatureSource: IrSimpleFunction,
+    val contributingMembers: List<IrSimpleFunction>,
+)
+
 internal data class DotNetBoundCovariantReturnBridge(
     val library: DotNetExternalLibrary,
     val bridge: DotNetPhysicalDeclaration.CovariantReturnBridge,
@@ -1350,6 +1358,37 @@ internal class DotNetExternalDeclarations(
         return DotNetBoundGenericInterfaceViewBridge(bound.library, bridge)
     }
 
+    /** Matches producer-recorded typed intersection obligations to one deserialized fake override. */
+    fun genericInterfaceIntersectionSlots(
+        owner: IrClass,
+        signatureSource: IrSimpleFunction,
+    ): List<DotNetBoundGenericInterfaceIntersectionSlot> {
+        val ownerLogicalKey = owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer) ?: return emptyList()
+        val overriddenByLogicalKey = signatureSource.allOverridden()
+            .asSequence()
+            .filterNot { member -> member.isFakeOverride }
+            .mapNotNull { member ->
+                member.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)?.let { key -> key to member }
+            }
+            .toMap()
+        return declarations.values.mapNotNull { bound ->
+            val slot = bound.declaration as? DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot
+                ?: return@mapNotNull null
+            if (slot.ownerLogicalKey != ownerLogicalKey ||
+                slot.methodName != signatureSource.dotNetAbiMethodName() ||
+                !slot.contributingLogicalMemberKeys.all(overriddenByLogicalKey::containsKey)
+            ) {
+                return@mapNotNull null
+            }
+            DotNetBoundGenericInterfaceIntersectionSlot(
+                library = bound.library,
+                slot = slot,
+                signatureSource = signatureSource,
+                contributingMembers = slot.contributingLogicalMemberKeys.map(overriddenByLogicalKey::getValue),
+            )
+        }
+    }
+
     fun covariantReturnBridgeOrNull(
         owner: IrClass,
         inheritedMember: IrSimpleFunction,
@@ -1476,6 +1515,7 @@ internal fun collectDotNetLibraryDeclarations(
     defaultArgumentDispatchers: Map<IrSimpleFunction, IrSimpleFunction> = emptyMap(),
     interfaceDefaultPromotions: List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     genericInterfaceViewBridges: List<DotNetLoweredGenericInterfaceViewBridge> = emptyList(),
+    genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot> = emptyList(),
     covariantReturnBridges: List<DotNetLoweredCovariantReturnBridge> = emptyList(),
     interfaceDefaultClassForwarders: List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
     companionInitializations: Map<IrClass, DotNetLoweredCompanionInitialization> = emptyMap(),
@@ -1651,6 +1691,34 @@ internal fun collectDotNetLibraryDeclarations(
                 ?: bridge.implementation.dotNetIlMethodName(),
         )
         put(declaration.indexKey(), declaration)
+    }
+    for (slot in genericInterfaceIntersectionSlots) {
+        val ownerInfo = genericInterfaces[slot.owner] ?: continue
+        if (slot.owner !in availableClasses) continue
+        val physicalOwner = ownerInfo.classInfo(slot.memberView.physicalView) ?: continue
+        val ownerLogicalKey = preLoweringDeclarationKeys[slot.owner]
+            ?: slot.owner.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
+            ?: error("Internal .NET backend error: generic-interface intersection owner has no logical identity")
+        val contributingLogicalKeys = slot.contributingMembers.map { member ->
+            member.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
+                ?: error(
+                    "Internal .NET backend error: generic-interface intersection member " +
+                            "'${member.render()}' has no logical identity"
+                )
+        }.distinct().sorted()
+        val declaration = DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot(
+            ownerPath = physicalOwner.physicalPathComponents(),
+            ownerLogicalKey = ownerLogicalKey,
+            contributingLogicalMemberKeys = contributingLogicalKeys,
+            physicalView = when (slot.memberView) {
+                DotNetGenericInterfaceMemberView.DECLARED -> DotNetInterfaceDefaultPromotionView.DECLARED
+                DotNetGenericInterfaceMemberView.EXACT -> DotNetInterfaceDefaultPromotionView.EXACT
+            },
+            methodName = slot.physicalMethodName,
+        )
+        require(put(declaration.indexKey(), declaration) == null) {
+            "multiple generic-interface intersections claim '${declaration.indexKey()}'"
+        }
     }
     for (bridge in covariantReturnBridges) {
         val ownerInfo = availableClasses[bridge.owner] ?: continue
