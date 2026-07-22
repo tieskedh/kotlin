@@ -945,6 +945,63 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public class IntersectionMarkerImpl : IntersectionMarker
 
+                public interface OwnerBoundLeft<T> {
+                    public fun <R : T> retain(value: R): R
+                }
+
+                public interface OwnerBoundRight<T> {
+                    public fun <R : T> retain(value: R): R
+                }
+
+                public interface OwnerBoundIntersection<T> :
+                    OwnerBoundLeft<T>, OwnerBoundRight<T>
+
+                public class OwnerBoundImpl : OwnerBoundIntersection<IntersectionMarker> {
+                    override fun <R : IntersectionMarker> retain(value: R): R = value
+                }
+
+                public fun newOwnerBound(): OwnerBoundIntersection<IntersectionMarker> = OwnerBoundImpl()
+
+                public fun exerciseOwnerBound(
+                    value: OwnerBoundIntersection<IntersectionMarker>,
+                    marker: IntersectionMarkerImpl,
+                ): Boolean {
+                    val left: OwnerBoundLeft<IntersectionMarker> = value
+                    val right: OwnerBoundRight<IntersectionMarker> = value
+                    return left.retain(marker) === marker && right.retain(marker) === marker &&
+                        value.retain(marker) === marker && left === value && right === value
+                }
+
+                public interface VariantOwnerBoundLeft<out T> {
+                    public fun <R : @UnsafeVariance T> retainVariant(value: R): R
+                }
+
+                public interface VariantOwnerBoundRight<out T> {
+                    public fun <R : @UnsafeVariance T> retainVariant(value: R): R
+                }
+
+                public interface VariantOwnerBoundIntersection<out T> :
+                    VariantOwnerBoundLeft<T>, VariantOwnerBoundRight<T>
+
+                public class VariantOwnerBoundImpl :
+                    VariantOwnerBoundIntersection<IntersectionMarker> {
+                    override fun <R : IntersectionMarker> retainVariant(value: R): R = value
+                }
+
+                public fun newVariantOwnerBound(): VariantOwnerBoundIntersection<IntersectionMarker> =
+                    VariantOwnerBoundImpl()
+
+                public fun exerciseVariantOwnerBound(
+                    value: VariantOwnerBoundIntersection<IntersectionMarker>,
+                    marker: IntersectionMarkerImpl,
+                ): Boolean {
+                    val left: VariantOwnerBoundLeft<IntersectionMarker> = value
+                    val right: VariantOwnerBoundRight<IntersectionMarker> = value
+                    return left.retainVariant(marker) === marker &&
+                        right.retainVariant(marker) === marker &&
+                        value.retainVariant(marker) === marker && left === value && right === value
+                }
+
                 public interface IntersectionLeft<out T> {
                     public val label: T
                     public fun read(): T
@@ -1145,6 +1202,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val allIntersectionSlots = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
             .values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot>()
+        val ownerBoundSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.OwnerBoundIntersection`1")
+        }
+        assertEquals(setOf("retain"), ownerBoundSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, ownerBoundSlots.single().physicalView)
+        assertEquals(2, ownerBoundSlots.single().contributingLogicalMemberKeys.size)
+        assertTrue(
+            ".override method instance !!0 class 'wide.OwnerBoundIntersection`1'<" +
+                    "class 'wide.IntersectionMarker'>::'retain'<[1]>(!!0)" in libraryIl
+        ) { libraryIl }
+        val variantOwnerBoundSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.VariantOwnerBoundIntersection__KotlinExact`1")
+        }
+        assertEquals(setOf("retainVariant"), variantOwnerBoundSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(DotNetInterfaceDefaultPromotionView.EXACT, variantOwnerBoundSlots.single().physicalView)
+        assertEquals(2, variantOwnerBoundSlots.single().contributingLogicalMemberKeys.size)
+        assertTrue(allIntersectionSlots.none { slot ->
+            slot.ownerPath == listOf("wide.VariantOwnerBoundIntersection`1")
+        })
+        assertTrue(
+            ".override method instance !!0 class 'wide.VariantOwnerBoundIntersection__KotlinExact`1'<" +
+                    "class 'wide.IntersectionMarker'>::'retainVariant'<[1]>(!!0)" in libraryIl
+        ) { libraryIl }
+        assertTrue("'retain'<(!0)" !in libraryIl && "'retainVariant'<(!0)" !in libraryIl) {
+            "Owner-relative constraints must remain erased from split-interface CLR metadata:\n$libraryIl"
+        }
         val intersectionSlots = allIntersectionSlots.filter { slot ->
             slot.ownerPath == listOf("wide.Intersection`1")
         }
@@ -1227,6 +1310,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         override fun <R : IntersectionMarker> readGeneric(value: R): String = "generic"
                     }
 
+                    class LocalOwnerBound<T : IntersectionMarker> : OwnerBoundIntersection<T> {
+                        override fun <R : T> retain(value: R): R = value
+                    }
+
+                    class LocalVariantOwnerBound<T : IntersectionMarker> :
+                        VariantOwnerBoundIntersection<T> {
+                        override fun <R : T> retainVariant(value: R): R = value
+                    }
+
                     class LocalMutableIntersection : MutableIntersection<String> {
                         override var mutableLabel: String = "local-initial"
                     }
@@ -1296,6 +1388,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             refinedRight.readGeneric(marker) != "generic"
                         ) {
                             throw Error("external intersection slot lost covariant refinement")
+                        }
+
+                        val ownerBound = newOwnerBound()
+                        if (!exerciseOwnerBound(ownerBound, marker)) {
+                            throw Error("producer owner-bound intersection dispatch failed")
+                        }
+                        val localOwnerBound: OwnerBoundIntersection<IntersectionMarker> =
+                            LocalOwnerBound<IntersectionMarker>()
+                        val localOwnerBoundLeft: OwnerBoundLeft<IntersectionMarker> = localOwnerBound
+                        val localOwnerBoundRight: OwnerBoundRight<IntersectionMarker> = localOwnerBound
+                        if (localOwnerBound.retain(marker) !== marker ||
+                            localOwnerBoundLeft.retain(marker) !== marker ||
+                            localOwnerBoundRight.retain(marker) !== marker
+                        ) {
+                            throw Error("external owner-bound intersection slots diverged")
+                        }
+                        val variantOwnerBound = newVariantOwnerBound()
+                        if (!exerciseVariantOwnerBound(variantOwnerBound, marker)) {
+                            throw Error("producer variant owner-bound intersection dispatch failed")
+                        }
+                        val localVariantOwnerBound: VariantOwnerBoundIntersection<IntersectionMarker> =
+                            LocalVariantOwnerBound<IntersectionMarker>()
+                        val localVariantOwnerBoundLeft: VariantOwnerBoundLeft<IntersectionMarker> =
+                            localVariantOwnerBound
+                        val localVariantOwnerBoundRight: VariantOwnerBoundRight<IntersectionMarker> =
+                            localVariantOwnerBound
+                        if (localVariantOwnerBound.retainVariant(marker) !== marker ||
+                            localVariantOwnerBoundLeft.retainVariant(marker) !== marker ||
+                            localVariantOwnerBoundRight.retainVariant(marker) !== marker
+                        ) {
+                            throw Error("external variant owner-bound intersection slots diverged")
                         }
 
                         val mutable = newMutableIntersection()
@@ -1388,6 +1511,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         "'readGeneric'<[1]>(!!0)" in consumerIl
             ) { consumerIl }
             assertTrue(
+                ".override method instance !!0 class [Wide.Generic]" +
+                        "'wide.OwnerBoundIntersection`1'<!0>::'retain'<[1]>(!!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !!0 class [Wide.Generic]" +
+                        "'wide.VariantOwnerBoundIntersection__KotlinExact`1'<!0>::" +
+                        "'retainVariant'<[1]>(!!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
                 ".override method instance !0 class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
                         "'get_mutableLabel'()" in consumerIl
             ) { consumerIl }
@@ -1425,6 +1557,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """
                     using System;
                     using System.Reflection;
+
+                    public struct MarkerValue : wide.IntersectionMarker
+                    {
+                    }
 
                     public static class WideVerifier
                     {
@@ -1594,6 +1730,77 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 derived.readGeneric(marker) == 73, "intersection generic dispatch");
                             Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 681,
                                 "intersection Kotlin dispatch");
+
+                            MethodInfo createOwnerBound = RequireMethod(facade, "newOwnerBound");
+                            MethodInfo exerciseOwnerBound = RequireMethod(facade, "exerciseOwnerBound");
+                            object ownerBoundObject = createOwnerBound.Invoke(null, null);
+                            wide.OwnerBoundLeft<wide.IntersectionMarker> ownerBoundLeft =
+                                (wide.OwnerBoundLeft<wide.IntersectionMarker>) ownerBoundObject;
+                            wide.OwnerBoundRight<wide.IntersectionMarker> ownerBoundRight =
+                                (wide.OwnerBoundRight<wide.IntersectionMarker>) ownerBoundObject;
+                            wide.OwnerBoundIntersection<wide.IntersectionMarker> ownerBoundDerived =
+                                (wide.OwnerBoundIntersection<wide.IntersectionMarker>) ownerBoundObject;
+                            Require(Object.ReferenceEquals(ownerBoundLeft.retain(marker), marker) &&
+                                Object.ReferenceEquals(ownerBoundRight.retain(marker), marker) &&
+                                Object.ReferenceEquals(ownerBoundDerived.retain(marker), marker),
+                                "owner-bound C# dispatch");
+                            Require((bool) exerciseOwnerBound.Invoke(
+                                null, new object[] { ownerBoundObject, marker }),
+                                "owner-bound Kotlin dispatch");
+                            MethodInfo ownerBoundMethod =
+                                typeof(wide.OwnerBoundIntersection<wide.IntersectionMarker>).GetMethod("retain");
+                            Require(ownerBoundMethod.GetGenericArguments()[0]
+                                .GetGenericParameterConstraints().Length == 0,
+                                "owner-bound physical constraint was not erased");
+                            try {
+                                ownerBoundDerived.retain<string>("wrong");
+                                throw new Exception("owner-bound erased slot accepted an invalid value");
+                            } catch (InvalidCastException) {
+                            }
+                            MarkerValue markerValue = new MarkerValue();
+                            Require(ownerBoundDerived.retain<MarkerValue>(markerValue)
+                                    .Equals(markerValue),
+                                "value owner-bound C# dispatch");
+
+                            MethodInfo createVariantOwnerBound =
+                                RequireMethod(facade, "newVariantOwnerBound");
+                            MethodInfo exerciseVariantOwnerBound =
+                                RequireMethod(facade, "exerciseVariantOwnerBound");
+                            object variantOwnerBoundObject = createVariantOwnerBound.Invoke(null, null);
+                            wide.VariantOwnerBoundLeft__KotlinExact<wide.IntersectionMarker>
+                                variantOwnerBoundLeft =
+                                    (wide.VariantOwnerBoundLeft__KotlinExact<wide.IntersectionMarker>)
+                                        variantOwnerBoundObject;
+                            wide.VariantOwnerBoundRight__KotlinExact<wide.IntersectionMarker>
+                                variantOwnerBoundRight =
+                                    (wide.VariantOwnerBoundRight__KotlinExact<wide.IntersectionMarker>)
+                                        variantOwnerBoundObject;
+                            wide.VariantOwnerBoundIntersection__KotlinExact<wide.IntersectionMarker>
+                                variantOwnerBoundDerived =
+                                    (wide.VariantOwnerBoundIntersection__KotlinExact<wide.IntersectionMarker>)
+                                        variantOwnerBoundObject;
+                            Require(Object.ReferenceEquals(
+                                    variantOwnerBoundLeft.retainVariant(marker), marker) &&
+                                Object.ReferenceEquals(
+                                    variantOwnerBoundRight.retainVariant(marker), marker) &&
+                                Object.ReferenceEquals(
+                                    variantOwnerBoundDerived.retainVariant(marker), marker),
+                                "variant owner-bound C# dispatch");
+                            Require((bool) exerciseVariantOwnerBound.Invoke(
+                                null, new object[] { variantOwnerBoundObject, marker }),
+                                "variant owner-bound Kotlin dispatch");
+                            MethodInfo variantOwnerBoundMethod = typeof(
+                                wide.VariantOwnerBoundIntersection__KotlinExact<wide.IntersectionMarker>)
+                                    .GetMethod("retainVariant");
+                            Require(variantOwnerBoundMethod.GetGenericArguments()[0]
+                                .GetGenericParameterConstraints().Length == 0,
+                                "variant owner-bound physical constraint was not erased");
+                            try {
+                                variantOwnerBoundDerived.retainVariant<string>("wrong");
+                                throw new Exception(
+                                    "variant owner-bound erased slot accepted an invalid value");
+                            } catch (InvalidCastException) {
+                            }
 
                             MethodInfo createMutable = RequireMethod(facade, "newMutableIntersection");
                             MethodInfo exerciseMutable = RequireMethod(facade, "exerciseMutableIntersection");
@@ -4571,16 +4778,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface SplitMutableIntersection<out T> :
                 SplitMutableLeft<T>, SplitMutableRight<T>
 
-            public interface OwnerBoundLeft<T> {
-                public fun <R : T> retain(value: R): R
+            public class OwnerBoundBox<T>
+
+            public interface NestedOwnerBoundLeft<T> {
+                public fun <R : T> retainBox(value: OwnerBoundBox<R>): OwnerBoundBox<R>
             }
 
-            public interface OwnerBoundRight<T> {
-                public fun <R : T> retain(value: R): R
+            public interface NestedOwnerBoundRight<T> {
+                public fun <R : T> retainBox(value: OwnerBoundBox<R>): OwnerBoundBox<R>
             }
 
-            public interface OwnerBoundIntersection<T> :
-                OwnerBoundLeft<T>, OwnerBoundRight<T>
+            public interface NestedOwnerBoundIntersection<T> :
+                NestedOwnerBoundLeft<T>, NestedOwnerBoundRight<T>
 
             public interface CovariantWide<out T> {
                 public fun result(): Any?
@@ -4605,7 +4814,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "inherited members '<get-item>' and 'get_item'",
             "but are distinct Kotlin members",
             "has no complete derived CLR property surface on one typed capability",
-            "has an owner-dependent method constraint",
+            "requires an owner-relative generic adapter beyond direct method-parameter uses",
             "does not have one identical resolved signature",
             "maps to a duplicate canonical, declared, or exact IL type",
         )
