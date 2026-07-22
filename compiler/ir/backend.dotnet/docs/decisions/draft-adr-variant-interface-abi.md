@@ -156,6 +156,9 @@ That portable fixture also completes the one-through-four parameter matrix with
 invariant state, a primitive result, a nullable result, an exact-only unsafe operation, and an
 open generic pass-through. Kotlin and C# consumers execute the same canonical fallback and
 identity rules on both profiles while reflection pins the declared and exact variance vectors.
+The nullable result is concretely `Int?`: the exact construction retains `Nullable<int>`, while
+the logical widening to `Any?` cannot use CLR value-type variance and therefore exercises the
+boxed canonical path on the same interface object.
 
 ## Physical views
 
