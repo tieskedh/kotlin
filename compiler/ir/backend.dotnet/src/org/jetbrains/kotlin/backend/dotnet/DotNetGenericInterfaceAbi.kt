@@ -13,9 +13,13 @@ import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.AbstractIrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
+import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
+import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.types.Variance
 
@@ -59,16 +63,22 @@ internal enum class DotNetGenericInterfaceMemberView {
     EXACT,
 }
 
-/** One bodyless typed slot unifying a directly inherited Kotlin intersection for CLR consumers. */
+/**
+ * One bodyless typed slot unifying a directly inherited Kotlin intersection for CLR consumers.
+ * [implementationMember] is the deterministic contributor whose resolved signature matches the
+ * Kotlin-selected slot and whose existing bridge receives the additional `MethodImpl` mapping.
+ */
 internal data class DotNetGenericInterfaceIntersectionSlot(
     val owner: IrClass,
     val signatureSource: IrSimpleFunction,
     val contributingMembers: List<IrSimpleFunction>,
+    val implementationMember: IrSimpleFunction,
     val memberView: DotNetGenericInterfaceMemberView,
     val physicalMethodName: String,
 ) {
-    val representativeMember: IrSimpleFunction
-        get() = contributingMembers.minBy { member -> member.dotNetGenericInterfaceCanonicalSlotId() }
+    init {
+        require(implementationMember in contributingMembers)
+    }
 }
 
 internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfaceView
@@ -152,6 +162,48 @@ internal fun IrSimpleFunction.dotNetDirectOwnerRelativeMethodBoundsOrNull(
             return null
         }
         ownerBound
+    }
+}
+
+/** Whether this contributor resolves to the selected intersection signature in [intersectionOwner]. */
+internal fun IrSimpleFunction.hasDotNetResolvedIntersectionSignature(
+    intersectionOwner: IrClass,
+    signatureSource: IrSimpleFunction,
+    includeReturnType: Boolean,
+): Boolean {
+    val memberOwner = parent as? IrClass ?: return false
+    val ownerSubstitutor = AbstractIrTypeSubstitutor.forSuperClass(
+        memberOwner.symbol,
+        intersectionOwner.defaultType,
+    ) ?: return false
+    if (typeParameters.size != signatureSource.typeParameters.size) return false
+    if (typeParameters.zip(signatureSource.typeParameters).any { pair ->
+            pair.first.isReified != pair.second.isReified
+        }
+    ) {
+        return false
+    }
+    val methodSubstitution = typeParameters.zip(signatureSource.typeParameters).associate { pair ->
+        pair.first.symbol to pair.second.typeParameterDefaultType
+    }
+    val methodSubstitutor = IrTypeSubstitutor(methodSubstitution, allowEmptySubstitution = true)
+    fun resolvedType(type: IrType): IrType =
+        methodSubstitutor.substitute(ownerSubstitutor.substitute(type))
+
+    if (includeReturnType && resolvedType(returnType) != signatureSource.returnType) return false
+    val memberParameters = parameters.filter { it.kind != IrParameterKind.DispatchReceiver }
+    val signatureParameters = signatureSource.parameters.filter {
+        it.kind != IrParameterKind.DispatchReceiver
+    }
+    if (memberParameters.size != signatureParameters.size ||
+        memberParameters.zip(signatureParameters).any { pair ->
+            resolvedType(pair.first.type) != pair.second.type
+        }
+    ) {
+        return false
+    }
+    return typeParameters.zip(signatureSource.typeParameters).all { pair ->
+        pair.first.superTypes.map(::resolvedType) == pair.second.superTypes
     }
 }
 
