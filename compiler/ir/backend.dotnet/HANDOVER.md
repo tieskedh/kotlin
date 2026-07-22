@@ -1415,7 +1415,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   existing `B` view-bridge record: `I` describes an additional slot obligation, while `B`
   describes an implementation already supplied by an interface.
 - The emitter now writes and consumes `I` for the conservative bodyless intersection slice:
-  direct generic parents, no defaults/properties, and one resolved substituted signature.
+  generic parents, no default bodies, and one resolved substituted signature.
   Parameterless, value-parameter, and method-generic members with owner-independent constraints are
   covered; method parameters and bounds are normalized positionally before admission. Properties
   emit recorded accessor obligations plus a real derived CLR property row; a mutable property is
@@ -1424,13 +1424,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   permutations and contributors reached through bodyless intermediate interfaces are normalized
   through the derived owner and admitted when they resolve to one signature. At least two direct
   branches must contribute; a parent already containing the complete intersection suppresses a
-  redundant descendant slot and schema record. The producer emits one abstract source-named method on the
-  declared typed view. One deterministic parent forwarding bridge receives an additional
-  `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
+  redundant descendant slot and schema record. The producer emits one abstract source-named method
+  on the first common declared/exact typed view. One deterministic parent forwarding bridge
+  receives an additional `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
-  derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only,
-  owner-dependent generic constraints, split-view mutable property, default, and non-identical
-  resolved-signature cases remain open. Property accessors are
+  derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only
+  unsafe input dispatch is covered through the invariant exact capability. Owner-dependent generic
+  constraints, split-view property, default, and non-identical resolved-signature cases remain
+  open. Property accessors are
   filtered atomically so a Kotlin `var` never acquires only a derived getter while its inherited
   setter remains ambiguous.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
