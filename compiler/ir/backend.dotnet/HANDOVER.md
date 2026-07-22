@@ -1281,15 +1281,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Cross-platform hosts without either tool retain deterministic text comparison without claiming
   assembly validation. This closes P0-F's assemble-all accepted-goldens item and dual-assembler
   source acceptance; assembly acceptance alone is not runtime-pairing evidence.
-- `DotNetLibraryIntegrationTest.testNet48ApplicationAndStdlibExecuteAcrossAssemblerPairings`
-  turns that source oracle into runtime evidence. The exact compiler-produced net48 application
-  and stdlib IL are each written by Framework and modern ILAsm; all four application/stdlib writer
-  combinations execute on Framework CLR 4 and CoreCLR and print `OK`. Framework execution uses
-  the signed Windows PowerShell CLR 4 host to load and invoke the unchanged entry point, avoiding
-  direct unsigned-exe activation without altering the artifact. The backend exposes only a
-  `@TestOnly` explicit-writer hook; canonical production selection remains profile-owned. This
-  pins representative same-/cross-writer loader and JIT behavior, but keeps runtime-assembly
-  writer substitution and net10-specific pairing evidence open.
+- `DotNetLibraryIntegrationTest.testNet48AssemblerMatrix`
+  turns that source oracle into runtime evidence. The exact compiler-produced net48 application,
+  stdlib, and runtime IL are each written by Framework and modern ILAsm; all eight artifact-writer
+  combinations execute on Framework CLR 4 and CoreCLR and print `OK`, for 16 executions total.
+  Framework execution uses the signed Windows PowerShell CLR 4 host to load and invoke the
+  unchanged entry point, avoiding direct unsigned-exe activation without altering the artifact.
+  The backend exposes only `@TestOnly` explicit-writer hooks; canonical production selection
+  remains profile-owned. This closes retained net48 runtime-writer substitution while keeping
+  net10-specific pairing evidence open.
 - The generated semantic box matrix now runs the same 116 cases for `net48` and `net10.0` in both
   PSI and LightTree pipelines. Net48 artifacts use Framework ILAsm and execute on real CLR 4 via
   the signed Windows PowerShell host, which loads and invokes the exact managed entry point; the
