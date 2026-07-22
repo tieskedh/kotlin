@@ -412,11 +412,12 @@ Benchmarks may guide optional capabilities only when their source, environment, 
 are committed. Prose reports of a local probe do not establish ABI.
 
 **Implementation status (2026-07-22):** every accepted IL-text module is now assembled as the
-appropriate net48 executable or library in both FIR parser pipelines whenever .NET Framework
-ILAsm is available. The strict toolchain lane fails if that assembler is absent; other hosts keep
-the text comparison without claiming assembly validation. This closes the assemble-all accepted-
-goldens item. It does not close modern net10 verification, runtime execution, or the retained
-same-/cross-assembler matrix.
+appropriate executable or library in both FIR parser pipelines with each available Framework and
+modern ILAsm. Strict toolchain runs require both; other hosts keep text comparison while running
+whichever assembler is present. The modern pass consumes the unchanged net48 IL as a compatibility
+oracle and is not net10 profile evidence. This closes assemble-all accepted goldens and
+dual-assembler source acceptance. It does not close modern net10 verification, runtime execution,
+or the retained same-/cross-assembler runtime-pairing matrix.
 
 ## 4. P1 consolidation
 

@@ -280,43 +280,68 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
         val ilText = info.outputFile.readText().removePrefix("\uFEFF")
         multiModuleInfoDumper.builderForModule(module).append(ilText)
 
-        val frameworkIlasmAvailable = DotNetIlAssembler.findFrameworkIlasm() != null
-        if (!frameworkIlasmAvailable) {
-            if (dotNetToolchainIsRequired()) {
-                assertions.fail {
-                    ".NET Framework ILAsm is required to validate accepted IL text because " +
-                            "KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled"
-                }
-            }
-            return
-        }
-
         val hasEntryPoint = Regex("(?m)^\\s*\\.entrypoint\\s*$").containsMatchIn(ilText)
         val validationDirectory =
             testServices.getOrCreateTempDirectory("dotnet-ilasm-validation")
-        val outputExtension = if (hasEntryPoint) "exe" else "dll"
+        val validations = buildList {
+            if (DotNetIlAssembler.findFrameworkIlasm() != null) {
+                add(DotNetIlasmValidation("Framework", DotNetTarget.NET48))
+            }
+            if (DotNetIlAssembler.findModernIlasm() != null) {
+                add(DotNetIlasmValidation("modern", DotNetTarget.NET10_0))
+            }
+        }
+        if (dotNetToolchainIsRequired() && validations.size != 2) {
+            val available = validations.joinToString { it.name }.ifEmpty { "none" }
+            assertions.fail {
+                "Both .NET Framework and modern ILAsm are required to validate accepted IL text " +
+                        "because KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled; available: $available"
+            }
+        }
+        validations.forEach { validation ->
+            validateAssembly(
+                module,
+                info,
+                hasEntryPoint,
+                validationDirectory,
+                validation,
+            )
+        }
+    }
+
+    private fun validateAssembly(
+        module: TestModule,
+        info: BinaryArtifacts.DotNet,
+        hasEntryPoint: Boolean,
+        validationDirectory: File,
+        validation: DotNetIlasmValidation,
+    ) {
+        // Modern .NET applications are dlls with an entry point and runtime config. Framework
+        // applications remain exe files. The IL itself stays the net48 golden in both cases: the
+        // modern pass is an assembler-compatibility oracle, not a net10 profile validation.
+        val outputExtension = if (hasEntryPoint && validation.target == DotNetTarget.NET48) "exe" else "dll"
         val assembly = validationDirectory.resolve(
-            "${info.outputFile.nameWithoutExtension}-${module.name}.$outputExtension"
+            "${info.outputFile.nameWithoutExtension}-${module.name}-${validation.name.lowercase()}.$outputExtension"
         )
         val assemblyMessages = DotNetIlasmMessageCollector()
         val assembled = if (hasEntryPoint) {
             DotNetIlAssembler.assembleExecutable(
                 info.outputFile,
                 assembly,
-                DotNetTarget.NET48,
+                validation.target,
                 assemblyMessages,
             )
         } else {
             DotNetIlAssembler.assembleLibrary(
                 info.outputFile,
                 assembly,
-                DotNetTarget.NET48,
+                validation.target,
                 assemblyMessages,
             )
         }
         if (!assembled) {
             assertions.fail {
-                "Accepted .NET IL did not assemble as a net48 $outputExtension: " +
+                "Accepted net48 IL did not assemble with ${validation.name} ILAsm as a $outputExtension: " +
                         "${info.outputFile.path}\n${assemblyMessages.render()}"
             }
         }
@@ -331,6 +356,11 @@ private class DotNetIlTextHandler(testServices: TestServices) : DotNetBinaryArti
         assertions.assertEqualsToFile(expectedFile, actual)
     }
 }
+
+private data class DotNetIlasmValidation(
+    val name: String,
+    val target: DotNetTarget,
+)
 
 private class DotNetIlasmMessageCollector : MessageCollector {
     private val messages = mutableListOf<String>()
