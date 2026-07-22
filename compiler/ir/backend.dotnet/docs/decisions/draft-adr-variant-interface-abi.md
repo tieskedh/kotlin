@@ -144,10 +144,11 @@ property accessor mapping to one declared-view slot, and a user declaration occu
 generated exact-view TypeDef identity. The inherited checks follow the physical capability graph
 and exempt a genuine Kotlin override of the inherited member. An inherited-only clash is rejected
 only when the IR names prove that the two declarations are distinct Kotlin members; same-name
-intersection overrides remain valid and require separate executable slot-mapping validation. Each
-failure names the affected physical view or generated-type collision and produces neither KLIB nor
-DLL. This pins the current whole-declaration rejection policy without declaring the broader
-overload, same-name inherited, and reserved-member collision matrix complete. Stable
+intersection overrides remain valid. Parent-slot execution is covered below; their selected
+derived C# slot is not implemented yet. Each failure names the affected physical view or
+generated-type collision and produces neither KLIB nor DLL. This pins the current
+whole-declaration rejection policy without declaring the broader overload, same-name inherited,
+and reserved-member collision matrix complete. Stable
 disambiguation remains the final ABI direction; whole-declaration rejection is the safe temporary
 implementation while that mapping is absent.
 
@@ -172,6 +173,15 @@ identity and recorded erased member slot. It exposes neither the declared nor ex
 capability. The producer's separately compiled Kotlin `readAsAny` function executes that same
 object on Framework CLR 4 and CoreCLR 10. This validates capability-absent fallback on both
 profiles; it does not claim compatibility with the pre-canonical experimental representation.
+
+A portable same-name intersection now executes through two independently declared covariant
+parent interfaces. One Kotlin class body is reached through both parent canonical/declared slot
+bundles and through the derived logical interface; Kotlin and C# consumers preserve the same
+object identity on Framework CLR 4 and CoreCLR 10. C# calls through explicit parent capabilities
+work, but a direct call through the current derived typed capability is rejected by the C#
+compiler with CS0121 because that capability merely inherits two equally applicable source-named
+members. This validates the existing semantic bridge fan-out and exposes the missing derived
+interop adapter described below; it is not accepted as the final C# surface.
 
 ## Physical views
 
@@ -581,6 +591,23 @@ The physical hierarchy is built by logical member ABI identity:
    physical edges; and
 5. diamond paths deduplicate the same logical slot before generating `MethodImpl` bridges.
 
+When Kotlin override resolution forms one inherited intersection override from several typed CLR
+slots, ordinary C# member lookup must also have one unambiguous operation. The first typed
+capability in the declared/exact chain on which all competing slots coexist therefore owns one
+compiler-generated, source-named intersection slot with the resolved Kotlin signature. A
+bodyless Kotlin intersection produces an abstract slot. A selected Kotlin default follows the
+profile-aware default-interface ADR: it is a forwarding/representation adapter and never another
+copy of the body. Concrete Kotlin implementations bind that slot and every contributing parent
+slot to the same source body, using explicit `MethodImpl` rows whenever implicit matching is not
+exact. The generated slot and its logical override-group membership are stable producer-recorded
+ABI. It is emitted only to resolve a real physical member-lookup intersection, not for every
+ordinary inherited member.
+
+Keeping the ambiguity, dropping a typed parent edge, or relying on an extension method are not
+alternatives: the first leaves the normal strongly typed C# surface unusable, the second destroys
+the CLR subtype relation, and inherited instance members prevent extension-method lookup from
+repairing the third.
+
 If a Kotlin supertype instantiation is not CLR-variance-valid, the declared view inherits only its
 canonical superidentity. The logical Kotlin supertype remains in KLIB metadata. The emitter must
 detect CLR generic-interface unification conflicts rather than relying on unspecified runtime
@@ -750,7 +777,8 @@ coverage for at least:
 - `D<*>`, independent `out`/`in` use-site projections, and `is`/`as`/`as?` erasure;
 - inherited, permuted, repeated, and diamond generic superinterfaces; a local/inherited
   declared-view accessor collision and a distinct-name inherited-only accessor collision are
-  rejected before publication, while same-name intersection execution and general inherited
+  rejected before publication; same-name intersection execution through both parent slot bundles
+  is covered on both profiles, while the selected derived intersection slot and general inherited
   overload disambiguation remain required;
 - erased overload collisions, return-type-only physical collisions, generic/non-generic source
   name collisions, reserved generated-name collisions, and properties with independently placed
