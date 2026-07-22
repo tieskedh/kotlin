@@ -1311,8 +1311,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
-  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 40 library-integration tests,
-  enables required-toolchain behavior in both owner projects, and currently records 841/0/0/0
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 41 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 842/0/0/0
   across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
   the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
@@ -1355,6 +1355,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   validation of the accepted model rather than a new representation decision; foreign/narrow C#
   admission, array/callable positions, and constructor collisions remain open. The resulting
   strict baseline is 841/0/0/0 across 16 XML suites.
+- A portable array/callable lane overloads on `Array<RuntimeException>` versus `Array<Error>` and
+  on function types accepting those categories. Direct IL assertions pin distinct grammar-v2
+  names after nested carrier mapping; net48 and net10 consumers select every overload and receive
+  the exact original object back through the callback. This validates Kotlin-owned array and
+  function-type positions without deciding foreign projection guards. The strict baseline becomes
+  842/0/0/0 across 16 XML suites.
 - A portable generic-interface library now has an executable ordinary-C# implementor contract on
   both Framework CLR 4 and CoreCLR 10. One C# object implements
   `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed
@@ -1421,7 +1427,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 841 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 842 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.

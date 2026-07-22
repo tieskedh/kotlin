@@ -5447,6 +5447,132 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testExceptionArrayCallableAbi() {
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ILAsm is not available",
+        )
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findModernIlasm() != null,
+            "Modern ILAsm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val libraryDirectory = File(tmpdir, "portable-exception-array-callable")
+        val librarySource = File(tmpdir, "portable-exception-array-callable.kt").apply {
+            writeText(
+                """
+                package exceptionarraycallable
+
+                public fun arrayKind(values: Array<RuntimeException>): Int = 1
+                public fun arrayKind(values: Array<Error>): Int = 2
+
+                public fun callbackKind(callback: (RuntimeException) -> Throwable): Int = 3
+                public fun callbackKind(callback: (Error) -> Throwable): Int = 4
+
+                public fun invokeRuntime(
+                    value: RuntimeException,
+                    callback: (RuntimeException) -> Throwable,
+                ): Throwable = callback(value)
+
+                public fun invokeError(
+                    value: Error,
+                    callback: (Error) -> Throwable,
+                ): Throwable = callback(value)
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            librarySource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Exception.ArrayCallable",
+            K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
+        )
+
+        val metadataLibrary = libraryDirectory.resolve("Exception.ArrayCallable.klib")
+        val libraryIl = libraryDirectory.resolve("Exception.ArrayCallable.il").readText()
+        assertEquals(
+            2,
+            Regex("\\.method [^\\n]*'arrayKind__KotlinException__[0-9a-f]{32}'")
+                .findAll(libraryIl)
+                .count(),
+            libraryIl,
+        )
+        assertEquals(
+            2,
+            Regex("\\.method [^\\n]*'callbackKind__KotlinException__[0-9a-f]{32}'")
+                .findAll(libraryIl)
+                .count(),
+            libraryIl,
+        )
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
+            val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
+                writeText(
+                    """
+                    package exceptionarraycallableconsumer
+
+                    import exceptionarraycallable.*
+
+                    fun main() {
+                        val runtime: RuntimeException = IllegalStateException("runtime")
+                        val error: Error = Error("error")
+                        val runtimes: Array<RuntimeException> = arrayOf(runtime)
+                        val errors: Array<Error> = arrayOf(error)
+                        if (arrayKind(runtimes) != 1 || arrayKind(errors) != 2) {
+                            throw Error("exception array overload")
+                        }
+
+                        val runtimeCallback: (RuntimeException) -> Throwable = { it }
+                        val errorCallback: (Error) -> Throwable = { it }
+                        if (callbackKind(runtimeCallback) != 3 || callbackKind(errorCallback) != 4) {
+                            throw Error("exception callable overload")
+                        }
+                        if (invokeRuntime(runtime, runtimeCallback) !== runtime ||
+                            invokeError(error, errorCallback) !== error
+                        ) {
+                            throw Error("exception callable identity")
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val application = consumerDirectory.resolve(
+                if (target == "net48") "ExceptionArrayCallableConsumer.exe" else "ExceptionArrayCallableConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "ExceptionArrayCallableConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, application.path,
+            )
+            assertTrue(consumerDirectory.resolve("Exception.ArrayCallable.dll").isFile) {
+                "The portable exception array/callable implementation must be packaged beside its $target consumer"
+            }
+
+            if (target == "net10.0") {
+                runDotNet(
+                    dotnetHost,
+                    application,
+                    consumerDirectory,
+                    "Portable exception array/callable consumer failed for $target",
+                )
+            } else {
+                val process = ProcessBuilder(application.path)
+                    .directory(consumerDirectory)
+                    .redirectErrorStream(true)
+                    .start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                assertEquals(0, process.waitFor(), "Portable exception array/callable consumer failed for $target:\n$output")
+            }
+        }
+    }
+
+    @Test
     fun testForeignClrExceptionIdentityAndClassificationAcrossRuntimeProfiles() {
         requireOrAssumeToolchain(
             DotNetIlAssembler.findFrameworkIlasm() != null,
