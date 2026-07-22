@@ -96,6 +96,12 @@ internal static class Program
         var result = new Dictionary<string, SurfaceItem>(StringComparer.Ordinal);
         foreach (Assembly assembly in assemblies.OrderBy(value => value.GetName().Name, StringComparer.Ordinal))
         {
+            AddAttributes(
+                result,
+                "ASSEMBLY:" + assembly.GetName().Name,
+                assembly.CustomAttributes.Where(attribute =>
+                    attribute.AttributeType.FullName != "System.Runtime.Versioning.TargetFrameworkAttribute"),
+                access: 3);
             foreach (Type type in assembly.GetTypes().OrderBy(TypeIdentity, StringComparer.Ordinal))
             {
                 int typeAccess = TypeAccess(type);
@@ -104,12 +110,15 @@ internal static class Program
 
                 string owner = TypeIdentity(type);
                 TypeAttributes typeShape = type.Attributes & ~TypeAttributes.VisibilityMask;
+                string typeKey =
+                    "TYPE|" + owner + "|" + ((int)typeShape).ToString(CultureInfo.InvariantCulture);
                 Add(result, new SurfaceItem(
-                    "TYPE|" + owner + "|" + ((int)typeShape).ToString(CultureInfo.InvariantCulture),
+                    typeKey,
                     typeAccess,
                     isMethod: false,
                     isAbstract: false,
                     isFinal: false));
+                AddAttributes(result, typeKey, type.CustomAttributes, typeAccess);
 
                 if (type.BaseType != null)
                     AddFact(result, "BASE|" + owner + "|" + TypeIdentity(type.BaseType), typeAccess);
@@ -180,6 +189,18 @@ internal static class Program
             ((int)method.CallingConvention).ToString(CultureInfo.InvariantCulture) + "|" +
             genericShape + "|(" + parameters + ")->" + result;
         Add(surface, new SurfaceItem(key, access, isMethod: true, method.IsAbstract, method.IsFinal));
+        AddAttributes(surface, key, method.CustomAttributes, access);
+        ParameterInfo[] methodParameters = method.GetParameters();
+        for (int index = 0; index < methodParameters.Length; index++)
+            AddAttributes(surface, key + "|PARAMETER:" + index, methodParameters[index].CustomAttributes, access);
+        if (method is MethodInfo returnMethod)
+            AddAttributes(surface, key + "|RETURN", returnMethod.ReturnParameter.CustomAttributes, access);
+        if (method.IsGenericMethod)
+        {
+            Type[] genericParameters = method.GetGenericArguments();
+            for (int index = 0; index < genericParameters.Length; index++)
+                AddAttributes(surface, key + "|TYPE_PARAMETER:" + index, genericParameters[index].CustomAttributes, access);
+        }
     }
 
     private static void AddField(Dictionary<string, SurfaceItem> surface, string owner, FieldInfo field)
@@ -189,12 +210,11 @@ internal static class Program
             return;
         FieldAttributes shape = field.Attributes & ~FieldAttributes.FieldAccessMask;
         string constant = field.IsLiteral ? "|" + ConstantShape(field.GetRawConstantValue()) : "";
-        AddFact(
-            surface,
-            "FIELD|" + owner + "|" + field.Name + "|" +
+        string key = "FIELD|" + owner + "|" + field.Name + "|" +
                 ((int)shape).ToString(CultureInfo.InvariantCulture) + "|" +
-                TypeIdentity(field.FieldType) + CustomModifiers(field) + constant,
-            access);
+                TypeIdentity(field.FieldType) + CustomModifiers(field) + constant;
+        AddFact(surface, key, access);
+        AddAttributes(surface, key, field.CustomAttributes, access);
     }
 
     private static void AddProperty(Dictionary<string, SurfaceItem> surface, string owner, PropertyInfo property)
@@ -207,12 +227,11 @@ internal static class Program
         if (access == 0)
             return;
         string indices = string.Join(",", property.GetIndexParameters().Select(ParameterShape));
-        AddFact(
-            surface,
-            "PROPERTY|" + owner + "|" + property.Name + "|" +
+        string key = "PROPERTY|" + owner + "|" + property.Name + "|" +
                 ((int)property.Attributes).ToString(CultureInfo.InvariantCulture) + "|(" + indices + ")->" +
-                TypeIdentity(property.PropertyType) + CustomModifiers(property),
-            access);
+                TypeIdentity(property.PropertyType) + CustomModifiers(property);
+        AddFact(surface, key, access);
+        AddAttributes(surface, key, property.CustomAttributes, access);
     }
 
     private static void AddEvent(Dictionary<string, SurfaceItem> surface, string owner, EventInfo eventInfo)
@@ -224,12 +243,11 @@ internal static class Program
             .Max();
         if (access == 0)
             return;
-        AddFact(
-            surface,
-            "EVENT|" + owner + "|" + eventInfo.Name + "|" +
+        string key = "EVENT|" + owner + "|" + eventInfo.Name + "|" +
                 ((int)eventInfo.Attributes).ToString(CultureInfo.InvariantCulture) + "|" +
-                TypeIdentity(eventInfo.EventHandlerType),
-            access);
+                TypeIdentity(eventInfo.EventHandlerType);
+        AddFact(surface, key, access);
+        AddAttributes(surface, key, eventInfo.CustomAttributes, access);
     }
 
     private static void AddGenericParameters(
@@ -239,8 +257,12 @@ internal static class Program
         int access)
     {
         for (int index = 0; index < parameters.Length; index++)
-            AddFact(surface, owner + "|" + index.ToString(CultureInfo.InvariantCulture) + "|" +
-                GenericParameterShape(parameters[index]), access);
+        {
+            string key = owner + "|" + index.ToString(CultureInfo.InvariantCulture) + "|" +
+                GenericParameterShape(parameters[index]);
+            AddFact(surface, key, access);
+            AddAttributes(surface, key, parameters[index].CustomAttributes, access);
+        }
     }
 
     private static string GenericParameterShape(Type parameter)
@@ -283,6 +305,61 @@ internal static class Program
     private static string CustomModifiers(Type[] required, Type[] optional) =>
         "|req[" + string.Join(",", required.Select(TypeIdentity)) + "]|opt[" +
         string.Join(",", optional.Select(TypeIdentity)) + "]";
+
+    private static void AddAttributes(
+        Dictionary<string, SurfaceItem> surface,
+        string owner,
+        IEnumerable<CustomAttributeData> attributes,
+        int access)
+    {
+        foreach (IGrouping<string, string> group in attributes
+            .Select(CustomAttributeShape)
+            .GroupBy(value => value, StringComparer.Ordinal)
+            .OrderBy(value => value.Key, StringComparer.Ordinal))
+        {
+            AddFact(
+                surface,
+                "ATTRIBUTE|" + owner + "|" + group.Count().ToString(CultureInfo.InvariantCulture) +
+                    "|" + group.Key,
+                access);
+        }
+    }
+
+    private static string CustomAttributeShape(CustomAttributeData attribute)
+    {
+        string constructorArguments = string.Join(",", attribute.ConstructorArguments.Select(AttributeArgumentShape));
+        string namedArguments = string.Join(",", attribute.NamedArguments
+            .OrderBy(argument => argument.MemberName, StringComparer.Ordinal)
+            .ThenBy(argument => argument.IsField)
+            .Select(argument => (argument.IsField ? "field:" : "property:") +
+                Escape(argument.MemberName) + "=" + AttributeArgumentShape(argument.TypedValue)));
+        return TypeIdentity(attribute.AttributeType) + "(" + constructorArguments + "){" + namedArguments + "}";
+    }
+
+    private static string AttributeArgumentShape(CustomAttributeTypedArgument argument)
+    {
+        string value;
+        if (argument.Value == null)
+        {
+            value = "null";
+        }
+        else if (argument.Value is Type type)
+        {
+            value = TypeIdentity(type);
+        }
+        else if (argument.Value is IEnumerable<CustomAttributeTypedArgument> values)
+        {
+            value = "[" + string.Join(",", values.Select(AttributeArgumentShape)) + "]";
+        }
+        else
+        {
+            value = Escape(Convert.ToString(argument.Value, CultureInfo.InvariantCulture));
+        }
+        return TypeIdentity(argument.ArgumentType) + "=" + value;
+    }
+
+    private static string Escape(string value) =>
+        value.Replace("\\", "\\\\").Replace("|", "\\|").Replace(",", "\\,");
 
     private static string TypeIdentity(Type type)
     {

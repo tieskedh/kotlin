@@ -58,9 +58,10 @@ compiler's in-process implementation.
 
 The profile-superset integration test now uses exactly that isolated-conformance allowance: a
 small CoreCLR reflection verifier loads already assembled platform pairs in separate contexts and
-compares their externally consumable type/member surfaces. It is test data, has no compiler
-protocol, does not assemble or rewrite artifacts, and is never invoked by production compilation.
-It therefore strengthens PE evidence without introducing the rejected production sidecar design.
+compares their externally consumable type/member surfaces and normalized custom-attribute
+payloads. It is test data, has no compiler protocol, does not assemble or rewrite artifacts, and
+is never invoked by production compilation. It therefore strengthens PE evidence without
+introducing the rejected production sidecar design.
 
 ## Why ILAsm is the better POC boundary
 

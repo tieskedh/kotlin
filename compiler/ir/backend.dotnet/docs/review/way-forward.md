@@ -261,7 +261,9 @@ future structured metadata work; do not replace it with substring comparison ove
 independent PE audit is now mechanical: isolated CoreCLR load contexts compare externally
 consumable public/protected types, hierarchy edges, generic constraints, methods, fields,
 properties, and events for both runtime/stdlib pairs, while allowing portable abstract slots to
-become modern DIMs. Raw custom-attribute payloads, MethodImpl rows, resources, and friend-only
+become modern DIMs. It also retains normalized portable custom-attribute identities and payloads
+on assemblies and exposed declarations, excluding the deliberately profile-specific target-
+framework attribute. Raw attribute-blob encoding, MethodImpl rows, resources, and friend-only
 internal surface remain open for the structured metadata model.
 The accepted `adr-profile-aware-interface-default-implementations.md` fixes item 2's body
 placement, and its non-generic foundation is now implemented. Portable profiles emit abstract
