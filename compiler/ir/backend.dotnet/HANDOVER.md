@@ -1311,8 +1311,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
-  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 38 library-integration tests,
-  enables required-toolchain behavior in both owner projects, and currently records 839/0/0/0
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 39 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 840/0/0/0
   across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
   the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
@@ -1335,6 +1335,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   assigned id 1 through 13, 14, and `Int32.MaxValue`. Both runtime variants always return a Boolean
   and never throw. Together with the helper's branch/`isinst`-only implementation, this closes the
   filter-totality validation item; no user virtual member or exception payload is consulted.
+- Physical-name grammar version 2 now disambiguates Kotlin methods whose distinct logical
+  exception parameters share the `System.Exception` carrier. Every affected method is named from
+  its owner-independent Kotlin signature before any collision is observed, so later overloads do
+  not rename existing methods and overrides retain their slots. A portable producer executes
+  direct and nested-generic overloads through top-level, class-virtual, ordinary-interface, and
+  split-generic-interface calls from separate net48 and net10 consumers. The accepted classified-
+  exception ADR records the representation rule. A generic-base `f(T)` override at
+  `T = Throwable` also retains and executes through its unmangled base slot; when that same body
+  implements a directly exception-typed interface slot, an explicit `MethodImpl` maps the
+  differently named slot without copying the body. Non-renamable constructor collisions remain a
+  separate compiler-ABI factory decision. The strict gate is
+  840/0/0/0 across 16 XML suites (780 FIR/IL/semantic plus 60 integration/CLI).
 - A portable generic-interface library now has an executable ordinary-C# implementor contract on
   both Framework CLR 4 and CoreCLR 10. One C# object implements
   `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed
@@ -1401,7 +1413,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 839 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 840 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
