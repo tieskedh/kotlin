@@ -577,7 +577,11 @@ landed shape as a compatibility constraint.
   receiving the collection barrier. The foreign lane additionally implements a covariant
   property, a generic method, and an exact-only input. C# supplies source-named typed members and
   explicit canonical property/method implementations on the same object; Kotlin executes typed
-  and widened views on Framework CLR 4 and CoreCLR 10.
+  and widened views on Framework CLR 4 and CoreCLR 10. The same lane derives a real canonical
+  method name in a probe compilation, reuses it as a different source member's name, and proves
+  that the implementing class's explicit `MethodImpl` still selects the canonical Kotlin body.
+  Direct class/typed calls select the lookalike source member. Do not reject such names solely for
+  their spelling; reject only a real same-owner physical collision.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
