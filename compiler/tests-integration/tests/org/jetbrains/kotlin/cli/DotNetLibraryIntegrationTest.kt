@@ -984,6 +984,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         left.readAt(1) + right.readAt(2) + value.readAt(3) +
                         left.readGeneric(marker) + right.readGeneric(marker) + value.readGeneric(marker)
                 }
+
+                public interface MutableIntersectionLeft<T> {
+                    public var mutableLabel: T
+                }
+
+                public interface MutableIntersectionRight<T> {
+                    public var mutableLabel: T
+                }
+
+                public interface MutableIntersection<T> :
+                    MutableIntersectionLeft<T>, MutableIntersectionRight<T>
+
+                public class MutableIntersectionImpl : MutableIntersection<String> {
+                    override var mutableLabel: String = "initial"
+                }
+
+                public fun newMutableIntersection(): MutableIntersection<String> = MutableIntersectionImpl()
+
+                public fun exerciseMutableIntersection(value: MutableIntersection<String>): Boolean {
+                    val left: MutableIntersectionLeft<String> = value
+                    val right: MutableIntersectionRight<String> = value
+                    left.mutableLabel = "producer"
+                    return right.mutableLabel == "producer" && value.mutableLabel == "producer" &&
+                        left === value && right === value
+                }
                 """.trimIndent()
             )
         }
@@ -1031,9 +1056,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             "'readGeneric'<(class 'wide.IntersectionMarker') 'R'>(!!0 'value')" in libraryIl
         ) { libraryIl }
-        val intersectionSlots = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
+        val allIntersectionSlots = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest())
             .values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot>()
+        val intersectionSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.Intersection`1")
+        }
         assertEquals(
             setOf("get_label", "read", "readAt", "readGeneric"),
             intersectionSlots.map { slot -> slot.methodName }.toSet(),
@@ -1043,6 +1071,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, intersectionSlot.physicalView)
             assertEquals(2, intersectionSlot.contributingLogicalMemberKeys.size)
         }
+        val mutableIntersectionSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.MutableIntersection`1")
+        }
+        assertEquals(
+            setOf("get_mutableLabel", "set_mutableLabel"),
+            mutableIntersectionSlots.map { slot -> slot.methodName }.toSet(),
+        )
+        mutableIntersectionSlots.forEach { slot ->
+            assertEquals(DotNetInterfaceDefaultPromotionView.DECLARED, slot.physicalView)
+            assertEquals(2, slot.contributingLogicalMemberKeys.size)
+        }
+        assertTrue(".property instance !0 'mutableLabel'()" in libraryIl) { libraryIl }
+        assertTrue(
+            ".override method instance !0 class 'wide.MutableIntersection`1'<string>::'get_mutableLabel'()" in
+                    libraryIl
+        ) { libraryIl }
+        assertTrue(
+            ".override method instance void class 'wide.MutableIntersection`1'<string>::" +
+                    "'set_mutableLabel'(!0)" in libraryIl
+        ) { libraryIl }
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -1058,6 +1106,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         override fun read(): String = "local"
                         override fun readAt(index: Int): String = "local:${'$'}index"
                         override fun <R : IntersectionMarker> readGeneric(value: R): String = "generic"
+                    }
+
+                    class LocalMutableIntersection : MutableIntersection<String> {
+                        override var mutableLabel: String = "local-initial"
                     }
 
                     fun main() {
@@ -1114,6 +1166,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ) {
                             throw Error("external intersection slot lost covariant refinement")
                         }
+
+                        val mutable = newMutableIntersection()
+                        if (!exerciseMutableIntersection(mutable) || mutable.mutableLabel != "producer") {
+                            throw Error("producer mutable intersection dispatch failed")
+                        }
+                        val localMutable: MutableIntersection<String> = LocalMutableIntersection()
+                        val localMutableLeft: MutableIntersectionLeft<String> = localMutable
+                        val localMutableRight: MutableIntersectionRight<String> = localMutable
+                        localMutable.mutableLabel = "consumer"
+                        if (localMutableLeft.mutableLabel != "consumer" ||
+                            localMutableRight.mutableLabel != "consumer"
+                        ) {
+                            throw Error("external mutable intersection slots diverged")
+                        }
                     }
                     """.trimIndent()
                 )
@@ -1145,6 +1211,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::" +
                         "'readGeneric'<[1]>(!!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
+                        "'get_mutableLabel'()" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance void class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
+                        "'set_mutableLabel'(!0)" in consumerIl
             ) { consumerIl }
 
             if (target == "net10.0") {
@@ -1333,6 +1407,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 derived.readGeneric(marker) == 73, "intersection generic dispatch");
                             Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 681,
                                 "intersection Kotlin dispatch");
+
+                            MethodInfo createMutable = RequireMethod(facade, "newMutableIntersection");
+                            MethodInfo exerciseMutable = RequireMethod(facade, "exerciseMutableIntersection");
+                            object mutable = createMutable.Invoke(null, null);
+                            wide.MutableIntersectionLeft<string> mutableLeft =
+                                (wide.MutableIntersectionLeft<string>) mutable;
+                            wide.MutableIntersectionRight<string> mutableRight =
+                                (wide.MutableIntersectionRight<string>) mutable;
+                            wide.MutableIntersection<string> mutableDerived =
+                                (wide.MutableIntersection<string>) mutable;
+                            mutableDerived.mutableLabel = "csharp";
+                            Require(mutableLeft.mutableLabel == "csharp" &&
+                                mutableRight.mutableLabel == "csharp", "mutable C# property dispatch");
+                            Require((bool) exerciseMutable.Invoke(null, new object[] { mutable }) &&
+                                mutableDerived.mutableLabel == "producer", "mutable Kotlin dispatch");
                             return 0;
                         }
                     }

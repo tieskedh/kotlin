@@ -1417,17 +1417,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - The emitter now writes and consumes `I` for the conservative bodyless intersection slice:
   direct generic parents, no defaults/properties, and one resolved substituted signature.
   Parameterless, value-parameter, and method-generic members with owner-independent constraints are
-  covered; method parameters and bounds are normalized positionally before admission. Read-only
-  properties emit the same recorded getter obligation plus a real derived CLR property row; KLIB
-  already retains the accessor/property association, so no second physical record is needed. The
-  producer emits one abstract source-named method on the
+  covered; method parameters and bounds are normalized positionally before admission. Properties
+  emit recorded accessor obligations plus a real derived CLR property row; a mutable property is
+  admitted only when getter and setter both exist on that same view. KLIB already retains the
+  accessor/property association, so no second physical record is needed. The producer emits one
+  abstract source-named method on the
   declared typed view. One deterministic parent forwarding bridge receives an additional
   `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only,
-  owner-dependent generic constraints, mutable property, default, and permuted/non-identical owner
-  substitution cases remain open. Mutable properties are deferred atomically so a Kotlin `var`
-  never acquires only a derived getter while its inherited setter remains ambiguous.
+  owner-dependent generic constraints, split-view mutable property, default, and
+  permuted/non-identical owner substitution cases remain open. Property accessors are filtered
+  atomically so a Kotlin `var` never acquires only a derived getter while its inherited setter
+  remains ambiguous.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
