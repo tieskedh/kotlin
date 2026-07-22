@@ -1275,6 +1275,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `@TestOnly` explicit-writer hook; canonical production selection remains profile-owned. This
   pins representative same-/cross-writer loader and JIT behavior, but keeps runtime-assembly
   writer substitution and net10-specific pairing evidence open.
+- The generated semantic box matrix now runs the same 116 cases for `net48` and `net10.0` in both
+  PSI and LightTree pipelines. Net48 artifacts use Framework ILAsm and execute on real CLR 4 via
+  the signed Windows PowerShell host, which loads and invokes the exact managed entry point; the
+  existing net10 lane remains dll plus signed `dotnet exec`. Both share output checking,
+  dependency checks, timeouts, and the strict SAC skip/fail contract. The standalone net48 run is
+  232/0/0/0 across six XML suites; the expanded strict DotNet matrix is 780/0/0/0 across fourteen
+  XML suites. Generated Java remains build output and is not committed.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

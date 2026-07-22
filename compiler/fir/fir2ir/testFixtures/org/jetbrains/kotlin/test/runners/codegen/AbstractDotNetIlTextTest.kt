@@ -134,6 +134,41 @@ open class AbstractFirLightTreeDotNetBoxTest : AbstractDotNetBoxTestBase(FirPars
 @FirPsiCodegenTest
 open class AbstractFirPsiDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.Psi)
 
+abstract class AbstractDotNetFrameworkBoxTestBase(
+    private val parser: FirParser,
+) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
+    override fun configure(builder: TestConfigurationBuilder): Unit = with(builder) {
+        configureDotNetBase(
+            parser,
+            outputExtension = "exe",
+            target = DotNetTarget.NET48,
+            additionalSourceProvider = ::DotNetBoxMainSourceProvider,
+        )
+
+        dotNetArtifactsHandlersStep {
+            useHandlers(::DotNetFrameworkBoxRunner)
+        }
+    }
+
+    override fun runTest(filePath: String) {
+        val toolchainAvailable =
+            DotNetIlAssembler.findFrameworkIlasm() != null &&
+                    DotNetIlAssembler.findFrameworkPowerShellHost() != null
+        val message = ".NET Framework toolchain (ILAsm + Windows PowerShell CLR 4 host) not found"
+        if (dotNetToolchainIsRequired()) {
+            check(toolchainAvailable) { "$message (KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled)" }
+        } else {
+            Assumptions.assumeTrue(toolchainAvailable, message)
+        }
+        super.runTest(filePath)
+    }
+}
+
+open class AbstractFirLightTreeDotNetFrameworkBoxTest : AbstractDotNetFrameworkBoxTestBase(FirParser.LightTree)
+
+@FirPsiCodegenTest
+open class AbstractFirPsiDotNetFrameworkBoxTest : AbstractDotNetFrameworkBoxTestBase(FirParser.Psi)
+
 private fun TestConfigurationBuilder.configureDotNetBase(
     parser: FirParser,
     outputExtension: String,
@@ -414,7 +449,16 @@ private class DotNetBoxMainSourceProvider(testServices: TestServices) : Addition
     }
 }
 
-private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifactHandler(testServices) {
+private class DotNetBoxRunner(testServices: TestServices) :
+    AbstractDotNetBoxRunner(testServices, DotNetTarget.NET10_0)
+
+private class DotNetFrameworkBoxRunner(testServices: TestServices) :
+    AbstractDotNetBoxRunner(testServices, DotNetTarget.NET48)
+
+private abstract class AbstractDotNetBoxRunner(
+    testServices: TestServices,
+    private val target: DotNetTarget,
+) : DotNetBinaryArtifactHandler(testServices) {
     private var boxMethodFound = false
 
     override fun processModule(module: TestModule, info: BinaryArtifacts.DotNet) {
@@ -471,7 +515,7 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             assertions.fail { "Kotlin.Stdlib must not carry an AssemblyRef to itself: ${stdlibIlFile.path}" }
         }
         if ("[netstandard]" in stdlibIlText) {
-            assertions.fail { "The box stdlib must use the selected net10.0 API profile: ${stdlibIlFile.path}" }
+            assertions.fail { "The box stdlib must use the selected $target API profile: ${stdlibIlFile.path}" }
         }
         val ilFile = outputDirectory.resolve("${file.nameWithoutExtension}.il")
         val ilText = ilFile.takeIf(File::isFile)?.readText().orEmpty()
@@ -480,21 +524,35 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             assertions.fail { "Expected .NET assembly to reference Kotlin.Runtime: ${ilFile.path}" }
         }
 
-        // The box artifact is a dll (target `net10.0`), launched via the signed `dotnet` host —
-        // see 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.
-        val dotnetHost = DotNetIlAssembler.findModernDotNetHost() ?: assertions.fail {
-            "No modern 'dotnet' host found even though the toolchain assumption passed; " +
-                    "provision with compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
+        val command = when (target) {
+            DotNetTarget.NET10_0 -> {
+                // Modern boxes are dlls launched through the signed dotnet host.
+                val dotnetHost = DotNetIlAssembler.findModernDotNetHost() ?: assertions.fail {
+                    "No modern 'dotnet' host found even though the toolchain assumption passed; " +
+                            "provision with compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
+                }
+                listOf(dotnetHost.absolutePath, "exec", file.absolutePath)
+            }
+            DotNetTarget.NET48 -> {
+                // Framework boxes are loaded by the signed Windows PowerShell CLR 4 host. This
+                // invokes the exact managed entry point without directly activating an unsigned exe.
+                val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost() ?: assertions.fail {
+                    "No Windows PowerShell CLR 4 host found even though the toolchain assumption passed"
+                }
+                frameworkExecutionCommand(frameworkHost, file)
+            }
+            DotNetTarget.NETSTANDARD_2_0 -> assertions.fail {
+                "The library-only netstandard2.0 profile cannot execute box tests"
+            }
         }
 
         // Windows Smart App Control makes a per-file cloud-reputation call the first time the CLR
-        // loads a freshly assembled (unsigned) dll and fails-closed on a negative verdict
-        // (FileLoadException, HRESULT 0x800711C7); the signed `dotnet` host only avoids SAC for
-        // direct .exe *execution*, not for *loading* an unsigned dll. Measured: the verdict is a
-        // function of the assembly CONTENT, not just its hash — reassembling the identical IL to a
-        // fresh hash is blocked again, so for an affected test program the block is deterministic
-        // and permanent on that machine, and re-running never clears it. We still retry briefly to
-        // absorb a genuinely in-flight verdict, then abort the test as SKIPPED with a diagnostic
+        // loads a freshly assembled unsigned assembly and fails-closed on a negative verdict
+        // (FileLoadException, HRESULT 0x800711C7). A signed host avoids direct unsigned-executable
+        // activation, but it cannot override a block on mapping the managed assembly itself.
+        // Measured: the verdict is a function of the assembly CONTENT, not just its hash, so for an
+        // affected test program the block is deterministic and re-running never clears it. We
+        // retry to absorb a genuinely in-flight verdict, then abort the test as SKIPPED with a diagnostic
         // that names SAC: like a missing toolchain, a host that refuses to load the assembly is an
         // environment that cannot execute the test — the test still runs everywhere SAC is not
         // enforced. Skipping (visible in reports) is not a reputation bypass; rewriting the test
@@ -502,7 +560,9 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         // See 'Box tests' in compiler/ir/backend.dotnet/AGENTS.md.
         var lastBlockedMessage: String? = null
         repeat(SAC_MAX_ATTEMPTS) {
-            val [exitCode, output] = execViaDotnetHost(dotnetHost, file)
+            val execution = execManaged(command, file)
+            val exitCode = execution.first
+            val output = execution.second
             if (exitCode == 0) return output
             if (!isSmartAppControlBlock(output)) {
                 assertions.fail {
@@ -513,7 +573,7 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             Thread.sleep(SAC_RETRY_DELAY_MS)
         }
         val blockedMessage =
-            "Windows Smart App Control blocked loading the assembled test dll on all $SAC_MAX_ATTEMPTS " +
+            "Windows Smart App Control blocked loading the assembled test on all $SAC_MAX_ATTEMPTS " +
                     "attempts: ${file.path}\n" +
                     "The SmartScreen verdict is content-derived and can be deterministically negative for a " +
                     "specific test program (measured: the same IL reassembled under a fresh hash is blocked " +
@@ -527,8 +587,8 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
         throw TestAbortedException(blockedMessage)
     }
 
-    private fun execViaDotnetHost(dotnetHost: File, artifact: File): Pair<Int, String> {
-        val process = ProcessBuilder(dotnetHost.absolutePath, "exec", artifact.absolutePath)
+    private fun execManaged(command: List<String>, artifact: File): Pair<Int, String> {
+        val process = ProcessBuilder(command)
             .directory(artifact.parentFile)
             .redirectErrorStream(true)
             .start()
@@ -537,6 +597,27 @@ private class DotNetBoxRunner(testServices: TestServices) : DotNetBinaryArtifact
             assertions.fail { ".NET executable timed out: ${artifact.path}" }
         }
         return process.exitValue() to process.inputStream.bufferedReader().readText()
+    }
+
+    private fun frameworkExecutionCommand(host: File, assembly: File): List<String> {
+        val escapedAssemblyPath = assembly.absolutePath.replace("'", "''")
+        val command = """
+            ${'$'}ErrorActionPreference = 'Stop'
+            try {
+                ${'$'}assembly = [Reflection.Assembly]::LoadFrom('$escapedAssemblyPath')
+                ${'$'}entryPoint = ${'$'}assembly.EntryPoint
+                if (${'$'}null -eq ${'$'}entryPoint) { throw 'Assembly has no managed entry point.' }
+                if (${'$'}entryPoint.GetParameters().Count -eq 0) {
+                    [void] ${'$'}entryPoint.Invoke(${'$'}null, ${'$'}null)
+                } else {
+                    [void] ${'$'}entryPoint.Invoke(${'$'}null, [object[]] @(,[string[]] @()))
+                }
+            } catch {
+                [Console]::Error.WriteLine(${'$'}_.Exception.ToString())
+                exit 1
+            }
+        """.trimIndent()
+        return listOf(host.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command)
     }
 
     /**

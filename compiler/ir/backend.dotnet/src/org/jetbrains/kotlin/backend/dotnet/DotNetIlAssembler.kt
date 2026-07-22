@@ -246,6 +246,17 @@ object DotNetIlAssembler {
     }
 
     /**
+     * Finds the signed Windows PowerShell host used by tests to load net48 assemblies on CLR 4.
+     * Loading the managed entry point through this host avoids direct activation of an unsigned
+     * executable while preserving the exact assembly and Framework runtime semantics.
+     */
+    fun findFrameworkPowerShellHost(): File? =
+        System.getenv("WINDIR")
+            ?.let(::File)
+            ?.resolve("System32/WindowsPowerShell/v1.0/powershell.exe")
+            ?.takeIf(File::isFile)
+
+    /**
      * Finds the Roslyn compiler and net10 reference pack installed by the developer toolchain.
      * This remains test-only infrastructure: Kotlin IL production has no C# compiler dependency.
      */
