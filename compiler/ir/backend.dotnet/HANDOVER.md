@@ -1253,6 +1253,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   covariant MethodImpl as a structured `R` entry keyed by logical owner and inherited member. A
   third Kotlin assembly consumes that record and emits no duplicate class bridge; a foreign C#
   implementation of the external interface inherits the same DIM.
+- The accepted open-nullable ADR has no string-bound ordering exception now. In type mapping, the
+  outer-open-`T?` object rule precedes `isDotNetStringType`: a method-level `T : String` therefore
+  exposes `T?` as `object`, while non-null `T` retains its established `string` slot. `!!` checks
+  the object for Kotlin nullability before `castclass string`. The ordinary box suite and the
+  `netstandard2.0` open-nullable producer consumed by net48/net10 Kotlin and modern C# pin the
+  null, non-null, and recovery paths.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

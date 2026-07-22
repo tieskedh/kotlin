@@ -21,6 +21,10 @@ private fun <T> sameNullable(first: T?, second: T?): Boolean = first == second
 
 private fun <T> requireValue(value: T?): T = value!!
 
+private fun <T : String> echoStringBound(value: T?): T? = value
+
+private fun <T : String> requireStringBound(value: T?): T = value!!
+
 fun box(): String {
     if (echo<Int>(null) != null) return "fail 1: primitive null"
     if (echo(41) != 41) return "fail 2: primitive value"
@@ -37,6 +41,11 @@ fun box(): String {
     if (throughLocal("local") != "local") return "fail 7a: reference local"
     if (!sameNullable<String>(null, null) || sameNullable("left", "right")) {
         return "fail 7b: reference equality"
+    }
+    if (echoStringBound<String>(null) != null) return "fail 7c: string-bound null"
+    if (echoStringBound("bounded") != "bounded") return "fail 7d: string-bound value"
+    if (requireStringBound("required-bound") != "required-bound") {
+        return "fail 7e: string-bound recovery"
     }
 
     val primitiveBox = NullableBox<Int>(null)
@@ -60,6 +69,14 @@ fun box(): String {
         threw = true
     }
     if (!threw) return "fail 13: null check"
+
+    threw = false
+    try {
+        requireStringBound<String>(null)
+    } catch (_: NullPointerException) {
+        threw = true
+    }
+    if (!threw) return "fail 14: string-bound null check"
 
     return "OK"
 }

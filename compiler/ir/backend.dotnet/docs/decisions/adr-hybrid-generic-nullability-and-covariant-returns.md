@@ -117,11 +117,12 @@ modern metadata, but that cannot alter Kotlin dispatch or the portable ABI.
 
 ## Implementation status
 
-As of 2026-07-21, the core representation of both halves is implemented for Kotlin-owned
-declarations, subject to the explicitly recorded mapper-ordering exception below.
+As of 2026-07-22, the core representation of both halves is implemented for Kotlin-owned
+declarations.
 
 - open nullable type parameters use the boxed-or-null carrier in fields, parameters, returns,
-  locals, generic forwarding, and split-interface execution views;
+  locals, generic forwarding, and split-interface execution views. Method parameters bounded by
+  `String` obey the same rule for `T?`, while non-null `T` retains its established `string` slot;
 - concrete class, property, interface, inherited-interface, abstract-class, abstract-interface,
   generic-method, and multilevel covariant returns use exact slots plus private final bridges;
 - bridge names are deterministic across the PSI and LightTree pipelines, while semantic identity
@@ -139,10 +140,7 @@ declarations, subject to the explicitly recorded mapper-ordering exception below
 
 The required-evidence list below remains the ABI-freeze checklist. Closure capture for open `T?`
 awaits general closure construction support, and importer/exporter projections remain separate
-work; neither changes this Kotlin-owned physical representation. One implementation exception is
-recorded for immediate correction: the legacy string-bound mapper currently recognizes `T?` with
-an upper bound of `String` as `string` before the open-nullable rule can select `object`. That is a
-code-ordering bug, not an accepted exception to Decision 1, and must be removed before ABI freeze.
+work; neither changes this Kotlin-owned physical representation.
 
 ## Required evidence
 
