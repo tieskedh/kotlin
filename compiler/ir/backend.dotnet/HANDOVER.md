@@ -1434,6 +1434,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   open. Property accessors are
   filtered atomically so a Kotlin `var` never acquires only a derived getter while its inherited
   setter remains ambiguous.
+- Same-name inheritance is no longer admitted merely because the IR names match. Pairwise inherited
+  claims must be covered by a selected derived intersection slot, and a merged property fake
+  override is checked against the atomic accessor-selection result. A covariant `var` whose getter
+  belongs to the declared view and setter to the exact view now fails publication with neither KLIB
+  nor DLL until a coherent split-view property adapter is designed. Supported declared/exact,
+  parameterized, generic, property, permuted, and indirect intersections continue to pass.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
