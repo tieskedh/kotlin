@@ -944,6 +944,12 @@ internal fun checkDotNetTypeParametersSupported(
         val unsupportedBound = typeParameter.superTypes.firstOrNull { superType ->
             when {
                 superType.isNullableAny() -> false
+                // `T : Any` is Kotlin's non-null upper bound. Its CLR representation is the
+                // GenericParam ReferenceTypeConstraint flag rather than a TypeDef/TypeSpec row
+                // for System.Object. This backend does not emit that flag yet, so accepting the
+                // bound here only lets the later live constraint mapper throw while constructing
+                // a generic-interface capability. Reject it at the owning declaration instead.
+                superType.isAny() -> true
                 superType.isString() || superType.isNullableString() -> !allowStringBounds
                 else -> {
                     val simpleType = superType as? IrSimpleType
@@ -955,6 +961,13 @@ internal fun checkDotNetTypeParametersSupported(
             }
         }
         if (unsupportedBound != null) {
+            if (unsupportedBound.isAny()) {
+                dotNetUnsupported(
+                    "$ownerDescription constrains type parameter '$parameterName' with kotlin.Any; " +
+                            "explicit non-null type-parameter constraints are not supported " +
+                            "(no CLR reference-type constraint metadata)"
+                )
+            }
             dotNetUnsupported(
                 "$ownerDescription constrains type parameter '$parameterName' with unsupported type " +
                         "${unsupportedBound.render()}; constraints must be non-null type parameters or " +
