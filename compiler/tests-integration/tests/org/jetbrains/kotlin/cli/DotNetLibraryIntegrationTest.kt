@@ -2271,6 +2271,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public fun accepts(value: @UnsafeVariance T): Boolean
                 }
 
+                public interface ForeignShape<out T> {
+                    public val value: T
+                    public fun <R> map(input: R): T
+                    public fun accepts(value: @UnsafeVariance T): Boolean
+                }
+
                 public fun verifyForeign(
                     collection: Collection<Int>,
                     unsafeSink: UnsafeSink<Int>,
@@ -2287,6 +2293,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         return 5
                     } catch (_: ClassCastException) {
                         // An ordinary user unsafe member retains normal cast-failure behavior.
+                    }
+                    return 0
+                }
+
+                public fun verifyForeignShape(shape: ForeignShape<String>): Int {
+                    if (shape.value != "typed") return 1
+                    if (shape.map(42) != "typed") return 2
+                    if (!shape.accepts("typed")) return 3
+
+                    val wide: ForeignShape<Any?> = shape
+                    if (wide.value != "typed") return 4
+                    if (wide.map("input") != "typed") return 5
+                    try {
+                        wide.accepts(42)
+                        return 6
+                    } catch (_: ClassCastException) {
+                        // The foreign canonical adapter owns the ordinary narrowing failure.
                     }
                     return 0
                 }
@@ -2313,9 +2336,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 declaration.ownerPath.last() == "barriers.UnsafeSink" &&
                         declaration.methodName.startsWith("accepts__KotlinErased__")
             }
+        val foreignShapeClass = declarations.filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .single { declaration -> declaration.ownerPath.last() == "barriers.ForeignShape" }
+        assertEquals(listOf("barriers.ForeignShape`1"), foreignShapeClass.declaredOwnerPath)
+        assertEquals(listOf("barriers.ForeignShape__KotlinExact`1"), foreignShapeClass.exactOwnerPath)
+        val foreignShapeFunctions = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .filter { declaration -> declaration.ownerPath.last() == "barriers.ForeignShape" }
+        val foreignValueCanonicalSlot = foreignShapeFunctions.single { declaration ->
+            declaration.methodName.startsWith("get_value__KotlinErased__")
+        }
+        val foreignMapCanonicalSlot = foreignShapeFunctions.single { declaration ->
+            declaration.methodName.startsWith("map__KotlinErased__")
+        }
+        val foreignAcceptsCanonicalSlot = foreignShapeFunctions.single { declaration ->
+            declaration.methodName.startsWith("accepts__KotlinErased__")
+        }
         val verifier = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .single { declaration -> declaration.methodName == "verifyForeign" }
+        val shapeVerifier = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
+            .single { declaration -> declaration.methodName == "verifyForeignShape" }
         assertEquals(listOf("barriers.barrierKt"), verifier.ownerPath)
+        assertEquals(verifier.ownerPath, shapeVerifier.ownerPath)
 
         val csharpSourceText = """
             using System;
@@ -2350,6 +2391,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
 
+            public sealed class ForeignShape
+                : barriers.ForeignShape__KotlinExact<string>
+            {
+                public string value { get { return "typed"; } }
+
+                public string map<R>(R input) { return value; }
+
+                public bool accepts(string input) { return input == value; }
+
+                object barriers.ForeignShape.${foreignValueCanonicalSlot.methodName.removePrefix("get_")}
+                {
+                    get { return value; }
+                }
+
+                public object ${foreignMapCanonicalSlot.methodName}<R>(R input)
+                {
+                    return map(input);
+                }
+
+                public bool ${foreignAcceptsCanonicalSlot.methodName}(object input)
+                {
+                    return accepts((string)input);
+                }
+            }
+
             public static class Program
             {
                 public static void Main()
@@ -2359,6 +2425,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         new ForeignUnsafeSink());
                     if (result != 0)
                         throw new Exception("foreign generic-interface barrier " + result);
+                    int shapeResult = ${shapeVerifier.ownerPath.single()}.${shapeVerifier.methodName}(
+                        new ForeignShape());
+                    if (shapeResult != 0)
+                        throw new Exception("foreign generic-interface member " + shapeResult);
                     Console.WriteLine("OK");
                 }
             }
@@ -5107,6 +5177,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "but are distinct Kotlin members",
             "requires an owner-relative generic adapter beyond direct method-parameter uses",
             "maps to a duplicate canonical, declared, or exact IL type",
+        )
+        assertPublicationFails(
+            "Generic.Interface.ErasedCallableOverloads",
+            """
+            package sample
+
+            public interface ErasedCallableOverloads<T> {
+                public fun apply(callback: (T) -> String): Int
+                public fun apply(callback: (String) -> T): Int
+            }
+            """,
+            "members 'apply' and 'apply'",
+            "clash on its declared CLR capability",
+            "both map to 'apply(class [Kotlin.Runtime]'Kotlin.Function1')'",
         )
     }
 

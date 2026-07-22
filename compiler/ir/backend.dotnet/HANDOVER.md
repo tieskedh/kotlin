@@ -1384,6 +1384,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   barriers are not generalized to user annotations. Structured KLIB records select the foreign
   method/owner spellings. The variant-interface ADR records this validation; generated C#
   implementor tooling and the broader foreign/clash matrix remain open.
+- The foreign implementor lane now also covers a user covariant property, a method-generic
+  operation, and an exact-only unsafe input. The C# type implements the source-named typed surface
+  and the producer-recorded canonical slots on one object; the canonical property must be an
+  explicit C# interface property rather than a same-named public accessor method. Kotlin executes
+  typed and widened calls on both runtimes, including ordinary wrong-shape cast failure. A
+  separate publication fixture rejects two Kotlin callable overloads that both map to the same
+  typed-view `Function1` parameter. Return-only, broader inherited, and reserved-name collisions
+  remain open.
 - Generic-interface publication now has explicit collision regressions for both typed capability
   views and generated type names. A property accessor colliding with a user method on the
   declared view, the same shape colliding only on the invariant exact view, and a user interface
