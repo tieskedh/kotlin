@@ -946,12 +946,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public class IntersectionMarkerImpl : IntersectionMarker
 
                 public interface IntersectionLeft<out T> {
+                    public val label: T
                     public fun read(): T
                     public fun readAt(index: Int): T
                     public fun <R : IntersectionMarker> readGeneric(value: R): T
                 }
 
                 public interface IntersectionRight<out T> {
+                    public val label: T
                     public fun read(): T
                     public fun readAt(index: Int): T
                     public fun <R : IntersectionMarker> readGeneric(value: R): T
@@ -960,6 +962,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public interface Intersection<out T> : IntersectionLeft<T>, IntersectionRight<T>
 
                 public class IntersectionImpl : Intersection<Int> {
+                    override val label: Int = 79
                     override fun read(): Int = 73
                     override fun readAt(index: Int): Int = 73 + index
                     override fun <R : IntersectionMarker> readGeneric(value: R): Int = 73
@@ -977,7 +980,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val left: IntersectionLeft<Int> = value
                     val right: IntersectionRight<Int> = value
                     val marker = IntersectionMarkerImpl()
-                    return left.readAt(1) + right.readAt(2) + value.readAt(3) +
+                    return left.label + right.label + value.label +
+                        left.readAt(1) + right.readAt(2) + value.readAt(3) +
                         left.readGeneric(marker) + right.readGeneric(marker) + value.readGeneric(marker)
                 }
                 """.trimIndent()
@@ -1005,6 +1009,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-read-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-read-" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-<get-label>-" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-<get-label>-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-readAt-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-readAt-" in libraryIl) { libraryIl }
         assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-readGeneric-" in libraryIl) { libraryIl }
@@ -1012,6 +1018,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             ".override method instance !0 class 'wide.Intersection`1'<int32>::'read'()" in libraryIl
         ) { libraryIl }
+        assertTrue(
+            ".override method instance !0 class 'wide.Intersection`1'<int32>::'get_label'()" in libraryIl
+        ) { libraryIl }
+        assertTrue(".property instance !0 'label'()" in libraryIl) { libraryIl }
         assertTrue(
             ".override method instance !0 class 'wide.Intersection`1'<int32>::'readAt'(int32)" in libraryIl
         ) { libraryIl }
@@ -1025,7 +1035,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot>()
         assertEquals(
-            setOf("read", "readAt", "readGeneric"),
+            setOf("get_label", "read", "readAt", "readGeneric"),
             intersectionSlots.map { slot -> slot.methodName }.toSet(),
         )
         intersectionSlots.forEach { intersectionSlot ->
@@ -1044,6 +1054,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     import wide.*
 
                     class LocalRefinedIntersection : Intersection<Any> {
+                        override val label: String = "property"
                         override fun read(): String = "local"
                         override fun readAt(index: Int): String = "local:${'$'}index"
                         override fun <R : IntersectionMarker> readGeneric(value: R): String = "generic"
@@ -1084,7 +1095,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (!sameIntersection(intersection) || left !== intersection || right !== intersection) {
                             throw Error("intersection view changed identity")
                         }
-                        if (left.read() != 73 || right.read() != 73 || readIntersection(intersection) != 444) {
+                        if (left.read() != 73 || right.read() != 73 || readIntersection(intersection) != 681) {
                             throw Error("intersection slots did not share one implementation")
                         }
 
@@ -1092,7 +1103,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         val refinedLeft: IntersectionLeft<Any> = refined
                         val refinedRight: IntersectionRight<Any> = refined
                         val marker = IntersectionMarkerImpl()
-                        if (refined.read() != "local" || refinedLeft.read() != "local" ||
+                        if (refined.label != "property" || refinedLeft.label != "property" ||
+                            refinedRight.label != "property" || refined.read() != "local" ||
+                            refinedLeft.read() != "local" ||
                             refinedRight.read() != "local" || refined.readAt(1) != "local:1" ||
                             refinedLeft.readAt(2) != "local:2" || refinedRight.readAt(3) != "local:3" ||
                             refined.readGeneric(marker) != "generic" ||
@@ -1119,6 +1132,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val consumerIl = consumerDirectory.resolve("WideConsumer.il").readText()
             assertTrue(
                 ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'read'()" in
+                        consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !0 class [Wide.Generic]'wide.Intersection`1'<object>::'get_label'()" in
                         consumerIl
             ) { consumerIl }
             assertTrue(
@@ -1307,12 +1324,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             wide.IntersectionMarkerImpl marker = new wide.IntersectionMarkerImpl();
                             Require(Object.ReferenceEquals(left, right) && Object.ReferenceEquals(left, derived),
                                 "intersection C# identity");
+                            Require(left.label == 79 && right.label == 79 && derived.label == 79,
+                                "intersection property dispatch");
                             Require(left.read() == 73 && right.read() == 73 && derived.read() == 73 &&
                                 left.readAt(1) == 74 && right.readAt(2) == 75 && derived.readAt(3) == 76,
                                 "intersection parent dispatch");
                             Require(left.readGeneric(marker) == 73 && right.readGeneric(marker) == 73 &&
                                 derived.readGeneric(marker) == 73, "intersection generic dispatch");
-                            Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 444,
+                            Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 681,
                                 "intersection Kotlin dispatch");
                             return 0;
                         }
