@@ -1265,7 +1265,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   the unchanged net48 golden as an assembler-compatibility oracle, not as net10 profile evidence.
   Cross-platform hosts without either tool retain deterministic text comparison without claiming
   assembly validation. This closes P0-F's assemble-all accepted-goldens item and dual-assembler
-  source acceptance, but not modern net10 or same-/cross-assembler runtime pairing coverage.
+  source acceptance; assembly acceptance alone is not runtime-pairing evidence.
+- `DotNetLibraryIntegrationTest.testNet48ApplicationAndStdlibExecuteAcrossAssemblerPairings`
+  turns that source oracle into runtime evidence. The exact compiler-produced net48 application
+  and stdlib IL are each written by Framework and modern ILAsm; all four application/stdlib writer
+  combinations execute on Framework CLR 4 and CoreCLR and print `OK`. Framework execution uses
+  the signed Windows PowerShell CLR 4 host to load and invoke the unchanged entry point, avoiding
+  direct unsigned-exe activation without altering the artifact. The backend exposes only a
+  `@TestOnly` explicit-writer hook; canonical production selection remains profile-owned. This
+  pins representative same-/cross-writer loader and JIT behavior, but keeps runtime-assembly
+  writer substitution and net10-specific pairing evidence open.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
