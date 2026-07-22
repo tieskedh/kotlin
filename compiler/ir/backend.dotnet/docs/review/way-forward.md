@@ -257,7 +257,12 @@ The physical declaration-index portion of the binary-superset audit is now mecha
 the same assembly-independent CLR owner/member binding, identity scheme, physical-name grammar,
 and at least the portable runtime-surface floor. Generated variants and negative missing/changed
 fixtures execute this comparator. A raw CLR metadata-surface superset audit remains part of the
-future structured metadata work; do not replace it with substring comparison over IL.
+future structured metadata work; do not replace it with substring comparison over IL. A first
+independent PE audit is now mechanical: isolated CoreCLR load contexts compare externally
+consumable public/protected types, hierarchy edges, generic constraints, methods, fields,
+properties, and events for both runtime/stdlib pairs, while allowing portable abstract slots to
+become modern DIMs. Raw custom-attribute payloads, MethodImpl rows, resources, and friend-only
+internal surface remain open for the structured metadata model.
 The accepted `adr-profile-aware-interface-default-implementations.md` fixes item 2's body
 placement, and its non-generic foundation is now implemented. Portable profiles emit abstract
 interface slots, helper-owned bodies, and hidden explicit class forwarders. `net10.0` emits real
@@ -309,8 +314,8 @@ overridden, and helper-backed paths and assert that the Kotlin body occurs once.
 generic capability fallbacks bind recorded physical method names rather than inventing Kotlin hash
 names. The `net10.0` profile temporarily retains `mscorlib` MemberRefs for the current common
 surface; that does not freeze identical Framework/modern IL. The remaining generic/BCL work is
-the broader foreign-implementor and clash matrix, generated implementor tooling, and a mechanical
-runtime-assembly surface audit; those keep P0-D open. The first foreign barrier slice is now
+the broader foreign-implementor and clash matrix, generated implementor tooling, and the remaining
+raw metadata-table audit; those keep P0-D open. The first foreign barrier slice is now
 replayable: ordinary Framework and modern C# classes consume one portable Kotlin library,
 implement the canonical plus exact views on one object, preserve Collection's wrong-shape false
 barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member. Publication
