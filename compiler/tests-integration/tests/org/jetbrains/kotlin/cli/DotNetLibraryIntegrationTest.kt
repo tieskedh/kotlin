@@ -1009,6 +1009,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return right.mutableLabel == "producer" && value.mutableLabel == "producer" &&
                         left === value && right === value
                 }
+
+                public interface PermutedIntersectionLeft<in A, out B> {
+                    public fun permute(value: A): B
+                }
+
+                public interface PermutedIntersectionRight<out R, in P> {
+                    public fun permute(value: P): R
+                }
+
+                public interface PermutedIntersection<in A, out B> :
+                    PermutedIntersectionLeft<A, B>, PermutedIntersectionRight<B, A>
+
+                public class PermutedIntersectionImpl : PermutedIntersection<String, Int> {
+                    override fun permute(value: String): Int = 83
+                }
+
+                public fun newPermutedIntersection(): PermutedIntersection<String, Int> =
+                    PermutedIntersectionImpl()
+
+                public fun readPermutedIntersection(
+                    value: PermutedIntersection<String, Int>,
+                    input: String,
+                ): Int {
+                    val left: PermutedIntersectionLeft<String, Int> = value
+                    val right: PermutedIntersectionRight<Int, String> = value
+                    return left.permute(input) + right.permute(input) + value.permute(input)
+                }
                 """.trimIndent()
             )
         }
@@ -1091,6 +1118,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".override method instance void class 'wide.MutableIntersection`1'<string>::" +
                     "'set_mutableLabel'(!0)" in libraryIl
         ) { libraryIl }
+        val permutedIntersectionSlots = allIntersectionSlots.filter { slot ->
+            slot.ownerPath == listOf("wide.PermutedIntersection`2")
+        }
+        assertEquals(setOf("permute"), permutedIntersectionSlots.map { slot -> slot.methodName }.toSet())
+        assertEquals(2, permutedIntersectionSlots.single().contributingLogicalMemberKeys.size)
+        assertTrue(
+            ".override method instance !1 class 'wide.PermutedIntersection`2'<string, int32>::" +
+                    "'permute'(!0)" in libraryIl
+        ) { libraryIl }
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -1110,6 +1146,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     class LocalMutableIntersection : MutableIntersection<String> {
                         override var mutableLabel: String = "local-initial"
+                    }
+
+                    class LocalPermutedIntersection : PermutedIntersection<Any, Any> {
+                        override fun permute(value: Any): String = "permuted"
                     }
 
                     fun main() {
@@ -1180,6 +1220,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ) {
                             throw Error("external mutable intersection slots diverged")
                         }
+
+                        val permuted = newPermutedIntersection()
+                        if (readPermutedIntersection(permuted, "abcd") != 249) {
+                            throw Error("producer permuted intersection dispatch failed")
+                        }
+                        val localPermuted: PermutedIntersection<Any, Any> = LocalPermutedIntersection()
+                        val localPermutedLeft: PermutedIntersectionLeft<Any, Any> = localPermuted
+                        val localPermutedRight: PermutedIntersectionRight<Any, Any> = localPermuted
+                        if (localPermuted.permute(1) != "permuted" ||
+                            localPermutedLeft.permute(2) != "permuted" ||
+                            localPermutedRight.permute(3) != "permuted"
+                        ) {
+                            throw Error("external permuted intersection lost refined return")
+                        }
                     }
                     """.trimIndent()
                 )
@@ -1219,6 +1273,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(
                 ".override method instance void class [Wide.Generic]'wide.MutableIntersection`1'<string>::" +
                         "'set_mutableLabel'(!0)" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                ".override method instance !1 class [Wide.Generic]" +
+                        "'wide.PermutedIntersection`2'<object, object>::'permute'(!0)" in consumerIl
             ) { consumerIl }
 
             if (target == "net10.0") {
@@ -1422,6 +1480,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 mutableRight.mutableLabel == "csharp", "mutable C# property dispatch");
                             Require((bool) exerciseMutable.Invoke(null, new object[] { mutable }) &&
                                 mutableDerived.mutableLabel == "producer", "mutable Kotlin dispatch");
+
+                            MethodInfo createPermuted = RequireMethod(facade, "newPermutedIntersection");
+                            MethodInfo readPermuted = RequireMethod(facade, "readPermutedIntersection");
+                            object permuted = createPermuted.Invoke(null, null);
+                            wide.PermutedIntersectionLeft<string, int> permutedLeft =
+                                (wide.PermutedIntersectionLeft<string, int>) permuted;
+                            wide.PermutedIntersectionRight<int, string> permutedRight =
+                                (wide.PermutedIntersectionRight<int, string>) permuted;
+                            wide.PermutedIntersection<string, int> permutedDerived =
+                                (wide.PermutedIntersection<string, int>) permuted;
+                            Require(permutedLeft.permute("abcd") == 83 &&
+                                permutedRight.permute("abcde") == 83 &&
+                                permutedDerived.permute("abcdef") == 83,
+                                "permuted C# dispatch");
+                            Require((int) readPermuted.Invoke(null, new object[] { permuted, "abcd" }) == 249,
+                                "permuted Kotlin dispatch");
                             return 0;
                         }
                     }
