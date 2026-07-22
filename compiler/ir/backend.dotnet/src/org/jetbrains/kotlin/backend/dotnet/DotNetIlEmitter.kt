@@ -681,39 +681,22 @@ internal class DotNetIlEmitter(
         }
         // C# diagnoses two equally applicable inherited source-named members as CS0121 even
         // when Kotlin has one valid intersection fake override. Materialize the conservative
-        // bodyless slice here, after the physical view graph exists: direct generic parents,
+        // bodyless slice here, after the physical view graph exists: generic parent branches,
         // no owner-dependent method constraints/default bodies, and one identical resolved
         // signature, including ordinary methods and read-only property accessors.
-        // More complex intersections stay unchanged until their adapter semantics are explicit.
-        val unselectedGenericInterfaceIntersectionSlots = mutableListOf<DotNetGenericInterfaceIntersectionSlot>()
+        // More complex intersections fail publication until their adapter semantics are explicit.
+        val rejectedGenericInterfaceIntersections = linkedMapOf<IrClass, MutableList<String>>()
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNull { type ->
                 (type.classifier as? IrClassSymbol)?.owner
             }
             val discoveredSlots = irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
-                if (fakeOverride.typeParameters.any { parameter ->
-                        parameter.superTypes.any { bound -> bound.isDotNetOwnerDependentConstraint(irClass) }
-                    } ||
-                    fakeOverride.body != null
-                ) {
-                    return@slot null
-                }
                 val inheritedDeclarations = fakeOverride.allOverridden()
                     .asSequence()
                     .filter { member ->
                         !member.isFakeOverride &&
                                 member.name == fakeOverride.name &&
-                                member.body == null &&
-                                (member.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true &&
-                                (member.parent as IrClass).let { memberOwner ->
-                                    member.typeParameters.none { parameter ->
-                                        parameter.superTypes.any { bound ->
-                                            bound.isDotNetOwnerDependentConstraint(memberOwner)
-                                        }
-                                    }
-                                } &&
-                                member !in interfaceDefaultImplementations &&
-                                genericInterfaceDefaults.none { lowered -> lowered.source == member }
+                                (member.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true
                     }
                     .distinctBy { member -> member.symbol }
                     .toList()
@@ -743,6 +726,50 @@ internal class DotNetIlEmitter(
                     // is inherited without C# ambiguity. Emit only at the first capability where
                     // separate physical branches actually meet.
                     return@slot null
+                }
+
+                val memberName = fakeOverride.correspondingPropertySymbol?.owner?.name?.asString()
+                    ?: fakeOverride.name.asString()
+                fun reject(reason: String): DotNetGenericInterfaceIntersectionSlot? {
+                    rejectedGenericInterfaceIntersections.getOrPut(irClass, ::mutableListOf) +=
+                        "inherited Kotlin intersection '$memberName' $reason"
+                    return null
+                }
+                if (fakeOverride.body != null) {
+                    return@slot reject("has an independently lowered fake-override body")
+                }
+                if (fakeOverride.typeParameters.any { parameter ->
+                        parameter.superTypes.any { bound -> bound.isDotNetOwnerDependentConstraint(irClass) }
+                    }
+                ) {
+                    return@slot reject("has an owner-dependent method constraint")
+                }
+                if (contributors.any { member ->
+                        val memberOwner = member.parent as IrClass
+                        member.typeParameters.any { parameter ->
+                            parameter.superTypes.any { bound ->
+                                bound.isDotNetOwnerDependentConstraint(memberOwner)
+                            }
+                        }
+                    }
+                ) {
+                    return@slot reject("has an owner-dependent contributor constraint")
+                }
+                val defaultContributors = contributors.filter { member ->
+                    member.body != null ||
+                            member in interfaceDefaultImplementations ||
+                            genericInterfaceDefaults.any { lowered -> lowered.source == member } ||
+                            externalDeclarations.interfaceDefaultImplementationOrNull(member) != null
+                }
+                if (defaultContributors.isNotEmpty()) {
+                    val alreadyPromoted = interfaceDefaultPromotions.any { promotion ->
+                        promotion.owner == irClass && defaultContributors.any { member ->
+                            promotion.inheritedMember == member ||
+                                    promotion.inheritedMember in member.allOverridden()
+                        }
+                    }
+                    if (alreadyPromoted) return@slot null
+                    return@slot reject("selects a default body without a profile-aware derived adapter")
                 }
 
                 fun hasResolvedSignature(member: IrSimpleFunction): Boolean {
@@ -779,7 +806,9 @@ internal class DotNetIlEmitter(
                         pair.first.superTypes.map(::resolvedType) == pair.second.superTypes
                     }
                 }
-                if (contributors.any { member -> !hasResolvedSignature(member) }) return@slot null
+                if (contributors.any { member -> !hasResolvedSignature(member) }) {
+                    return@slot reject("does not have one identical resolved signature")
+                }
 
                 // Own the first typed capability on which every physical contributor coexists.
                 // An unsafe variant-position member therefore lands on the invariant exact view,
@@ -788,9 +817,8 @@ internal class DotNetIlEmitter(
                     DotNetGenericInterfaceMemberView.DECLARED,
                     DotNetGenericInterfaceMemberView.EXACT,
                 ).firstOrNull { view ->
-                        contributors.all { member -> isInheritedDeclarationOnView(irClass, member, view) }
-                    }
-                    ?: return@slot null
+                    contributors.all { member -> isInheritedDeclarationOnView(irClass, member, view) }
+                } ?: return@slot reject("has no common declared or exact physical capability")
                 DotNetGenericInterfaceIntersectionSlot(
                     owner = irClass,
                     signatureSource = fakeOverride,
@@ -812,7 +840,13 @@ internal class DotNetIlEmitter(
                     }
                 }
             }
-            unselectedGenericInterfaceIntersectionSlots += discoveredSlots.filterNot(selectedSlots::contains)
+            discoveredSlots.filterNot(selectedSlots::contains).forEach { slot ->
+                val memberName = slot.signatureSource.correspondingPropertySymbol?.owner?.name?.asString()
+                    ?: slot.signatureSource.name.asString()
+                rejectedGenericInterfaceIntersections.getOrPut(irClass, ::mutableListOf) +=
+                    "inherited Kotlin intersection '$memberName' has no complete derived " +
+                            "CLR property surface on one typed capability"
+            }
             selectedSlots
         }.sortedWith(
             compareBy<DotNetGenericInterfaceIntersectionSlot>(
@@ -1051,16 +1085,7 @@ internal class DotNetIlEmitter(
             try {
                 if (irClass in genericInterfaces) {
                     checkGenericInterfaceTypedViewClashes(irClass, localGenericInterfaceIntersectionSlots)
-                    unselectedGenericInterfaceIntersectionSlots.firstOrNull { slot -> slot.owner == irClass }
-                        ?.let { slot ->
-                            val memberName = slot.signatureSource.correspondingPropertySymbol?.owner?.name
-                                ?.asString()
-                                ?: slot.signatureSource.name.asString()
-                            dotNetUnsupported(
-                                "inherited Kotlin intersection '$memberName' has no complete derived " +
-                                        "CLR property surface on one typed capability"
-                            )
-                        }
+                    rejectedGenericInterfaceIntersections[irClass]?.firstOrNull()?.let(::dotNetUnsupported)
                 }
                 // CLR constructor identity is only the mapped parameter list. In particular,
                 // reference nullability erases, so reject the class instead of letting one
