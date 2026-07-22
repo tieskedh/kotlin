@@ -973,7 +973,7 @@ internal fun IrType.isDotNetNullableStringType(): Boolean {
     return typeParameter.superTypes.any { it.isNullableString() }
 }
 
-private fun IrType.isDotNetStringType(): Boolean {
+internal fun IrType.isDotNetStringType(): Boolean {
     if (isString() || isNullableString()) return true
     val typeParameter = ((this as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner ?: return false
     return typeParameter.superTypes.any { it.isString() || it.isNullableString() }

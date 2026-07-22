@@ -359,15 +359,24 @@ generic companion through recorded physical metadata. Protected members which wo
 holder-relative CLR `family` access remain rejected pending a deliberate bridge/export design.
 
 The accepted `adr-hybrid-generic-nullability-and-covariant-returns.md` fixes the remaining
-nullability representation. ABI schema 11 replaces the unshipped schema-10 signature model:
+nullability representation. ABI schema 11 replaced the unshipped schema-10 signature model:
 open `T?` uses one declaration-stable boxed-or-null `object` carrier, while concrete nullable
 primitives retain `System.Nullable<T>` and non-null `T` remains reified. Boundary code boxes on
 entry and uses `castclass`/`unbox.any` on recovery; `!!` performs the Kotlin null check before
 recovering an open `T`. Local execution and netstandard2.0 producers consumed on both runtime
 profiles cover primitive/reference values, null, fields, locals, equality, interface views,
 forwarding, and recovery. Closure capture remains part of the pre-stable evidence once general
-closure construction is available. Covariant-return bridge generation remains the implementation
-half of this accepted ADR.
+closure construction is available. Covariant-return generation now emits one exact virtual method
+plus private final `MethodImpl` adapters uniformly on every profile. Same-module boxes cover class,
+property, interface, inherited-interface, abstract, generic-method, nullable-value, erased-
+reference, and multilevel dispatch. A separate `netstandard2.0` producer is consumed and executed
+by both runtime profiles; Framework and modern C# consumers verify the precise public surface and
+private bridge visibility. Import/export projections and pre-stable compatibility-version tests
+remain, but the Kotlin-owned physical bridge direction is implemented. ABI schema 12 records each
+covariant MethodImpl as a structured `R` entry, so a downstream class inherits an external
+interface-owned bridge without rediscovering it or emitting a duplicate class adapter. The legacy string-bound
+mapping still recognizes nullable `T?` as `string` before the accepted open-nullable `object` rule;
+this ordering bug is the immediate follow-up and is not a platform-specific exception.
 
 ### P0-E — Decide the unresolved semantic representations
 

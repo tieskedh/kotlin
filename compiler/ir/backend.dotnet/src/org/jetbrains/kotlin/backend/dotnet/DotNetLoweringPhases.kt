@@ -9,6 +9,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetAnonymousObjectSuperConst
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCallableReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionStaticsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCompanionInitializationLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetCovariantReturnBridgeLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultArgumentStubGenerator
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterCleaner
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetDefaultParameterInjector
@@ -102,6 +103,11 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     // changing object identity.
     // Imported CLR interfaces never enter this lowering and retain their native variance rules.
     ::DotNetGenericInterfaceBridgeLowering,
+    // CLR method-slot identity includes the return type on every supported profile. Preserve
+    // Kotlin covariant overrides with one exact virtual implementation plus private final
+    // MethodImpl adapters for each wider ordinary class/interface slot. Split generic-interface
+    // views remain owned by the preceding specialized lowering.
+    ::DotNetCovariantReturnBridgeLowering,
     // CLR generics reify C<T>, unlike the erased class identity used by generated data-class
     // equality on the mature targets. Preserve reified storage/signatures, but give each generic
     // data class a private non-generic equality view before later lowerings inspect its members.
