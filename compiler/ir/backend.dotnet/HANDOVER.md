@@ -1324,6 +1324,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   after Kotlin source `throw e`, the trace names the Kotlin rethrow site as required by the accepted
   plain-`throw` policy. This closes the raw-state/rethrow portion of P0-F without introducing a
   wrapper or pretending Kotlin has CLR bare-rethrow syntax.
+- The portable exception library now owns a classifier-backed catch function and receives values
+  constructed by separately compiled net48 and net10 applications. It distinguishes an
+  application-defined subclass of the portable exact root, a mapped `IllegalStateException`, a
+  broad `Exception`, and an exact `Error` identically on both runtimes. This closes the ADR's
+  portable-library-catching-application-values validation item rather than merely proving that a
+  portable library can construct exceptions for consumers.
 - A portable generic-interface library now has an executable ordinary-C# implementor contract on
   both Framework CLR 4 and CoreCLR 10. One C# object implements
   `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed

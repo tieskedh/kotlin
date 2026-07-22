@@ -1808,7 +1808,9 @@ landed shape as a compatibility constraint.
   `InnerException`, and `Data` survive, while the CLR stack trace truthfully exposes the new throw
   site. `IrTry` uses CLR protected regions plus generated filters where logical classification is
   required. Raw C# integration executes classification, catch/return, and catch/rethrow on both
-  application profiles. Cancellation classification, narrow export admission, complete exception-
+  application profiles. A separately compiled `netstandard2.0` library also catches exact,
+  mapped-runtime, broad-Exception, and Error objects supplied by both application profiles through
+  the same classifier. Cancellation classification, narrow export admission, complete exception-
   typed generic/property/overload coverage, and any non-physical hierarchy metadata remain open
   before Gate B.
 - Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's

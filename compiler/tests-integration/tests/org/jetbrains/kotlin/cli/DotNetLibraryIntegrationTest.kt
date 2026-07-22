@@ -4936,6 +4936,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun libraryRuntimeFailure(): Throwable = LibraryRuntimeChild("library-runtime")
 
                 public fun libraryFatalFailure(): Throwable = LibraryFatalFailure("library-fatal")
+
+                public fun classifySupplied(value: Throwable): Int = try {
+                    throw value
+                } catch (failure: LibraryRuntimeFailure) {
+                    2
+                } catch (failure: RuntimeException) {
+                    3
+                } catch (failure: Exception) {
+                    1
+                } catch (failure: Error) {
+                    4
+                } catch (failure: Throwable) {
+                    0
+                }
                 """.trimIndent()
             )
         }
@@ -5013,9 +5027,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (consumerRuntime !is LibraryRuntimeFailure ||
                             consumerRuntime !is RuntimeException ||
                             !caughtAsLibraryType(consumerRuntime) ||
-                            !caughtAsRuntime(consumerRuntime)
+                            !caughtAsRuntime(consumerRuntime) ||
+                            classifySupplied(consumerRuntime) != 2
                         ) {
                             throw Error("consumer subclass of portable exception")
+                        }
+
+                        if (classifySupplied(IllegalStateException("mapped-runtime")) != 3) {
+                            throw Error("portable library mapped-runtime classification")
+                        }
+                        if (classifySupplied(Exception("plain")) != 1) {
+                            throw Error("portable library plain-exception classification")
+                        }
+                        if (classifySupplied(Error("application-fatal")) != 4) {
+                            throw Error("portable library application-error classification")
                         }
 
                         val libraryFatal = libraryFatalFailure()
