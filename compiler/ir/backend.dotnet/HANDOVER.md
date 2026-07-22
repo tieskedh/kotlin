@@ -1420,15 +1420,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   covered; method parameters and bounds are normalized positionally before admission. Properties
   emit recorded accessor obligations plus a real derived CLR property row; a mutable property is
   admitted only when getter and setter both exist on that same view. KLIB already retains the
-  accessor/property association, so no second physical record is needed. Direct parent-parameter
-  permutations are normalized through the derived owner and are admitted when they resolve to one
-  signature. The producer emits one abstract source-named method on the
+  accessor/property association, so no second physical record is needed. Parent-parameter
+  permutations and contributors reached through bodyless intermediate interfaces are normalized
+  through the derived owner and admitted when they resolve to one signature. At least two direct
+  branches must contribute; a parent already containing the complete intersection suppresses a
+  redundant descendant slot and schema record. The producer emits one abstract source-named method on the
   declared typed view. One deterministic parent forwarding bridge receives an additional
   `MethodImpl`; a separately compiled `Intersection<Any>` implementation refining `read()` to
   `String` proves the record is needed and consumed. Kotlin parent/derived calls and direct C#
   derived calls execute on Framework CLR 4 and CoreCLR 10 with one object and one body. Exact-only,
-  owner-dependent generic constraints, split-view mutable property, default, indirect
-  intersections, and non-identical resolved-signature cases remain open. Property accessors are
+  owner-dependent generic constraints, split-view mutable property, default, and non-identical
+  resolved-signature cases remain open. Property accessors are
   filtered atomically so a Kotlin `var` never acquires only a derived getter while its inherited
   setter remains ambiguous.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
