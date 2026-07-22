@@ -5108,6 +5108,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         failure
                     }
 
+                    public fun rethrow(value: Throwable): Nothing = try {
+                        throw value
+                    } catch (failure: Exception) {
+                        throw failure
+                    }
+
                     public open class KotlinRuntimeFailure(message: String) : RuntimeException(message)
 
                     public class KotlinRuntimeChild(message: String) : KotlinRuntimeFailure(message)
@@ -5154,8 +5160,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Type facade = kotlinAssembly.GetType("exceptionboundary.exceptionBoundaryKt", true);
                             MethodInfo classification = facade.GetMethod("classification", BindingFlags.Public | BindingFlags.Static);
                             MethodInfo roundTrip = facade.GetMethod("roundTrip", BindingFlags.Public | BindingFlags.Static);
+                            MethodInfo rethrow = facade.GetMethod("rethrow", BindingFlags.Public | BindingFlags.Static);
                             Require(classification != null, "Kotlin classification facade is not public");
                             Require(roundTrip != null, "Kotlin round-trip facade is not public");
+                            Require(rethrow != null, "Kotlin rethrow facade is not public");
 
                             Type kotlinRuntimeFailureType = kotlinAssembly.GetType(
                                 "exceptionboundary.KotlinRuntimeFailure", true);
@@ -5203,6 +5211,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(returnedForeign.GetType() == typeof(ForeignException), "foreign exact CLR type was lost");
                             Require(Object.ReferenceEquals(returnedForeign.InnerException, inner), "foreign inner exception was lost");
                             Require(Object.ReferenceEquals(returnedForeign.Data["marker"], marker), "foreign exception data was lost");
+                            Require(returnedForeign.Message == "foreign", "foreign exception message was lost");
+                            Require(!String.IsNullOrEmpty(returnedForeign.StackTrace) &&
+                                    returnedForeign.StackTrace.Contains("roundTrip"),
+                                "foreign exception did not retain its CLR stack trace after Kotlin catch/return");
+
+                            Exception rethrownForeign = null;
+                            try
+                            {
+                                rethrow.Invoke(null, new object[] { returnedForeign });
+                                throw new Exception("Kotlin rethrow unexpectedly returned");
+                            }
+                            catch (TargetInvocationException invocation)
+                            {
+                                rethrownForeign = (Exception) invocation.InnerException;
+                            }
+                            Require(Object.ReferenceEquals(foreign, rethrownForeign),
+                                "Kotlin catch/rethrow replaced the foreign exception object");
+                            Require(rethrownForeign.GetType() == typeof(ForeignException),
+                                "Kotlin catch/rethrow lost the foreign exact CLR type");
+                            Require(Object.ReferenceEquals(rethrownForeign.InnerException, inner),
+                                "Kotlin catch/rethrow lost the foreign inner exception");
+                            Require(Object.ReferenceEquals(rethrownForeign.Data["marker"], marker),
+                                "Kotlin catch/rethrow lost foreign exception data");
+                            Require(rethrownForeign.Message == "foreign",
+                                "Kotlin catch/rethrow lost the foreign exception message");
+                            Require(!String.IsNullOrEmpty(rethrownForeign.StackTrace) &&
+                                    rethrownForeign.StackTrace.Contains("rethrow"),
+                                "Kotlin catch/rethrow did not expose the CLR rethrow site");
 
                             InvalidOperationException runtime = new InvalidOperationException("runtime");
                             int runtimeClassification = (int) classification.Invoke(null, new object[] { runtime });

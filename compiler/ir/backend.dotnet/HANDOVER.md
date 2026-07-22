@@ -1318,6 +1318,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
   20 digits. The aggregate task is the supported entry point. This is validation infrastructure,
   not an ABI decision, so it updates evidence rather than an ADR.
+- The foreign-exception cross-language integration now sends one exact C# exception through Kotlin
+  classification, catch/return, and catch/rethrow on both runtime profiles. C# observes the same
+  object, exact type, message, `InnerException`, `Data`, and non-empty CLR stack trace throughout;
+  after Kotlin source `throw e`, the trace names the Kotlin rethrow site as required by the accepted
+  plain-`throw` policy. This closes the raw-state/rethrow portion of P0-F without introducing a
+  wrapper or pretending Kotlin has CLR bare-rethrow syntax.
 - A portable generic-interface library now has an executable ordinary-C# implementor contract on
   both Framework CLR 4 and CoreCLR 10. One C# object implements
   `Collection__KotlinExact<int>` plus its inherited canonical identity and coordinates typed
