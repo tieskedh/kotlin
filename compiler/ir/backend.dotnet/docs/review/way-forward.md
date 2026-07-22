@@ -452,8 +452,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 40
-library-integration tests; the current audited result is 841/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 41
+library-integration tests; the current audited result is 842/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -491,6 +491,12 @@ Separate net48 and net10 consumers preserve classifier results and exact object 
 producer KLIB/DLL boundary; the IL assertion also pins four `System.Exception` property carriers
 and four grammar-v2 setter names. This closes Kotlin-producer return/property coverage without
 claiming the still-undecided narrow or foreign C# admission policy.
+
+The portable signature matrix also overloads on `Array<RuntimeException>` versus `Array<Error>`
+and on function types accepting those categories. Grammar-v2 names remain distinct after nested
+carrier mapping, while separate net48 and net10 consumers select the correct overload and return
+the exact callback argument object. This closes Kotlin-owned array/function-type placement; it
+does not decide foreign callback admission or array projection guards.
 
 ## 4. P1 consolidation
 
