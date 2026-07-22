@@ -411,6 +411,13 @@ Commit replayable tests for:
 Benchmarks may guide optional capabilities only when their source, environment, and result parser
 are committed. Prose reports of a local probe do not establish ABI.
 
+**Implementation status (2026-07-22):** every accepted IL-text module is now assembled as the
+appropriate net48 executable or library in both FIR parser pipelines whenever .NET Framework
+ILAsm is available. The strict toolchain lane fails if that assembler is absent; other hosts keep
+the text comparison without claiming assembly validation. This closes the assemble-all accepted-
+goldens item. It does not close modern net10 verification, runtime execution, or the retained
+same-/cross-assembler matrix.
+
 ## 4. P1 consolidation
 
 After P0:
