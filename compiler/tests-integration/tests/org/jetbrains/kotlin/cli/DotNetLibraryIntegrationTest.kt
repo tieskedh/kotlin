@@ -5273,6 +5273,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "both map to 'choose(string)'",
         )
         assertPublicationFails(
+            "Generic.Interface.InheritedCallableOverloads",
+            """
+            package sample
+
+            public interface CallableLeft<T> {
+                public fun apply(callback: (T) -> String): Int
+            }
+
+            public interface CallableRight<T> {
+                public fun apply(callback: (String) -> T): Int
+            }
+
+            public interface InheritedCallableOverloads<T> :
+                CallableLeft<T>, CallableRight<T>
+            """,
+            "inherited members 'apply' and 'apply'",
+            "clash on its declared CLR capability",
+            "no selected derived intersection slot covers both Kotlin members",
+        )
+        assertPublicationFails(
             "Generic.Interface.UnsupportedAnyConstraint",
             """
             package sample

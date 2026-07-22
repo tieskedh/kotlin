@@ -1397,6 +1397,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `String`/`String?` parameters erase to one CLR `string` parameter while their mapped results
   differ, closing the return-type-only physical collision item. Broader inherited and
   reserved-name collisions remain open.
+- A same-name inherited overload continuation derives from two generic parent interfaces whose
+  Kotlin-distinct function-type parameters both map to CLR `Function1`. Because Kotlin selected no
+  common override intersection, the derived interface now has a committed publication regression
+  proving atomic rejection instead of an invented CLR slot. Transitive and cross-module inherited
+  substitutions remain open.
 - The reserved-name continuation uses a probe compilation to obtain one interface member's actual
   canonical method name, then declares a second source member with exactly that spelling. On the
   implementation class both have the same apparent CLR name/signature relationship, but the
