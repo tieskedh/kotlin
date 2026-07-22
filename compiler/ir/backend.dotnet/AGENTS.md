@@ -1351,6 +1351,13 @@ landed shape as a compatibility constraint.
   storage/cast identity and owns deterministic erased slots; declaration-variant
   `'Producer`1'<+ 'T'> : Producer` is the same object's C#-friendly typed capability; and an
   all-invariant exact sibling is emitted only when member placement or a superedge requires it.
+  The emitter reserves the canonical, declared, and optional exact TypeDef identities as one
+  atomic physical-name set. A non-local collision evicts the offending logical declaration; a
+  published library treats any such eviction as fatal. Declared- and exact-view members are
+  independently clash-checked after their physical signature mapping, with return types excluded
+  from CLR overload identity. `testLibraryPublicationFailsWhenADeclarationIsEvicted` pins a
+  property/user-accessor clash on each typed view and a user TypeDef occupying a generated exact
+  name; all three produce diagnostics and no KLIB/DLL pair.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
