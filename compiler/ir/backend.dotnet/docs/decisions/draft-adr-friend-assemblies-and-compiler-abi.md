@@ -2,9 +2,12 @@
 
 ## Status
 
-Selected pre-ABI design, implemented for unsigned assemblies. Strong-name consumption and Gradle
-model integration remain incomplete. Nothing has shipped, so the manifest schema and emitted
-metadata may still be replaced atomically if those implementations expose a flaw.
+Selected pre-ABI design, implemented for unsigned assemblies. Strong-name consumption remains
+incomplete. Gradle association is intentionally blocked on a real Kotlin/.NET target and
+compilation model; this repository currently has only the compiler CLI and must not approximate
+association by injecting raw flags into another target's tasks. Nothing has shipped, so the
+manifest schema and emitted metadata may still be replaced atomically if those implementations
+expose a flaw.
 
 ## Semantic invariant
 
@@ -45,7 +48,9 @@ The provisional manifest schema 4 stores the deterministic producer-authorized i
 They are implementation controls, not the eventual public build architecture. A future .NET
 Gradle target must expose a structured association and wire both producer authorization and
 consumer friend dependency from one model relationship, analogous in intent to Kotlin target
-compilation association.
+compilation association. That target model must first own assembly naming, profile variants,
+artifacts, compilation outputs, and task dependencies; friend authorization cannot define those
+concepts indirectly.
 
 An ordinary C# assembly with the authorized CLR identity receives the same access to assembly
 internals. That is the deliberate CLR meaning of `InternalsVisibleTo`, not an interop leak to be
@@ -109,4 +114,5 @@ and marker policy must be audited before ABI freeze.
   consumer friend;
 - ordinary C# negative access, trusted-friend C# positive access, and reflection inspection;
 - `@PublishedApi internal` type/member/field accessibility and marker inspection;
-- Gradle association tests once the .NET compilation model exists.
+- Gradle association tests once the .NET target and compilation model exist; no provisional task-
+  local flag convention is accepted as a substitute.
