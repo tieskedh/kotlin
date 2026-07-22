@@ -6,8 +6,9 @@ layout validation: test data in `compiler/testData/codegen/dotnet/ilText/`, runn
 `compiler/fir/fir2ir/testFixtures/.../codegen/AbstractDotNetIlTextTest.kt` (`./gradlew generateTests`).
 When either supported ILAsm is available, every emitted golden module is also assembled by it;
 the strict toolchain lane requires both Framework and modern ILAsm. CLI tests live in
-`compiler/testData/cli/dotnet/`. Box tests compile with target `net10.0` to a dll and execute it
-on the real CoreCLR runtime via `dotnet exec` (see "Box tests" below).
+`compiler/testData/cli/dotnet/`. The same box corpus compiles for `net10.0` and `net48` and
+executes on real CoreCLR and Framework CLR 4 runtimes through signed system hosts (see "Box tests"
+below).
 
 ## Architectural review and work ordering
 
@@ -2055,22 +2056,21 @@ landed shape as a compatibility constraint.
 
 ## Box tests
 
-- Like every mature target, box tests execute on the real runtime (JVM in-process, JS under Node,
-  Native via its runner): the box suite (`AbstractDotNetBoxTestBase` in `AbstractDotNetIlTextTest.kt`)
-  compiles with target `net` to `foo.dll` + `foo.runtimeconfig.json` and runs it via
-  `<dotnet> exec foo.dll`. The signed `dotnet` host sidesteps Smart App Control blocking of freshly
-  assembled unsigned exes; box never launches an `.exe` directly.
-- The signed `dotnet` host only avoids SAC for direct `.exe` *execution*; it does NOT stop SAC from
-  blocking the CLR from *loading* the freshly assembled unsigned dll. On a machine with Smart App
-  Control ON, SAC makes a per-file cloud-reputation call the first time each unsigned dll is loaded
+- Like every mature target, box tests execute on real runtimes (JVM in-process, JS under Node,
+  Native via its runner). Both FIR parsers run the same corpus through two generated lanes in
+  `AbstractDotNetIlTextTest.kt`: `net10.0` emits a dll plus its runtime config and uses signed
+  `dotnet exec`; `net48` emits an exe, which the signed Windows PowerShell CLR 4 host loads before
+  invoking its exact managed entry point. Neither lane directly activates an unsigned executable.
+- A signed host only avoids SAC for direct `.exe` *execution*; it does NOT stop SAC from blocking
+  the CLR from *loading* the freshly assembled unsigned assembly. On a machine with Smart App
+  Control ON, SAC makes a per-file cloud-reputation call the first time each unsigned file is loaded
   and fails-closed on a negative verdict (`FileLoadException`, HRESULT `0x800711C7`, Code Integrity
   policy `VerifiedAndReputableDesktop`). Measured behavior (2026-07, SAC-enforced Win 11 host): the
-  SmartScreen verdict is derived from the assembly CONTENT, not just its hash. The ordinary
-  executable/test modern-ilasm invocation is non-deterministic (same `.il` assembles to a
-  different hash every time; portable library publication separately uses `/det`), yet the exact
-  IL of an affected test program reassembled under a fresh hash is blocked again, every time — the
-  block is deterministic and effectively permanent per affected program on that machine, and
-  re-running the suite does NOT clear it (an earlier "transient burst" theory is disproved).
+  SmartScreen verdict is derived from the assembly CONTENT, not just its hash. At measurement
+  time, reassembling identical IL produced differing hashes yet the affected programs were blocked
+  again; current writers use `/det`, but that does not weaken the content-derived conclusion. The
+  block is effectively permanent per affected program on that machine, and re-running the suite
+  does NOT clear it (an earlier "transient burst" theory is disproved).
   Concretely, of the 11 dotnet box programs existing at measurement time, 2 (`booleanShortCircuit`,
   `forLoopEdges`) were always blocked; the other 9 usually loaded but were occasionally blocked
   transiently too when a whole-suite run loads many fresh dlls in a burst (e.g. `charOperations`
@@ -2081,7 +2081,7 @@ landed shape as a compatibility constraint.
   alone, or the string-comparison half alone) passes when assembled separately; only the
   complete program is flagged, and the equally div-guard-heavy
   `intMinValueDivision` program passes.
-- `DotNetBoxRunner` retries a blocked load a few times with a short delay to absorb a genuinely
+- The shared profile-aware box runner retries a blocked load with a short delay to absorb a genuinely
   in-flight verdict, then normally aborts the test as SKIPPED (JUnit `TestAbortedException`) with a
   diagnostic that names SAC (any other non-zero exit fails immediately). Rationale (user decision,
   2026-07): a host whose OS refuses to load the assembly cannot execute the test — the same
@@ -2095,8 +2095,8 @@ landed shape as a compatibility constraint.
   only be turned off wholesale by the user, irreversibly. To execute the affected tests, the
   legitimate options are: run the gate on a host without Smart App Control, sign the test
   assemblies with a certificate SAC trusts, or have the user turn SAC off.
-- When the modern toolchain (ilasm + dotnet host, discovered per the contract below) is missing,
-  box tests normally SKIP via a JUnit 5 assumption before compiling. With
+- When a lane's toolchain is missing (modern ILAsm + dotnet host, or Framework ILAsm + Windows
+  PowerShell CLR 4 host), its box tests normally SKIP via a JUnit 5 assumption before compiling. With
   `KOTLIN_DOTNET_REQUIRE_TOOLCHAIN=1` (or `true`) missing tooling fails instead; use that setting
   for mandatory runtime-execution lanes. Provision the toolchain with
   `compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1`. The ilText suite always keeps

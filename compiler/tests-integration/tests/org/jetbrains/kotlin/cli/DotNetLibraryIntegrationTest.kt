@@ -2929,7 +2929,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(frameworkIlasm != null, ".NET Framework ILAsm is not available")
         requireOrAssumeToolchain(modernIlasm != null, "Modern ILAsm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
-        val frameworkHost = findFrameworkPowerShellHost()
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
         requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
 
         val stdlibPair = produceBoundStdlibPair("net48", "assembler-matrix")
@@ -5343,12 +5343,6 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         return candidates.firstOrNull { candidate -> candidate.isFile }
     }
-
-    private fun findFrameworkPowerShellHost(): File? =
-        System.getenv("WINDIR")
-            ?.let(::File)
-            ?.resolve("System32/WindowsPowerShell/v1.0/powershell.exe")
-            ?.takeIf(File::isFile)
 
     private fun frameworkExecutionCommand(host: File, assembly: File): List<String> {
         val escapedAssemblyPath = assembly.absolutePath.replace("'", "''")
