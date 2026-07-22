@@ -5258,6 +5258,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "clash on its declared CLR capability",
             "both map to 'apply(class [Kotlin.Runtime]'Kotlin.Function1')'",
         )
+        assertPublicationFails(
+            "Generic.Interface.UnsupportedAnyConstraint",
+            """
+            package sample
+
+            public interface UnsupportedAnyConstraint<T : Any> {
+                public fun read(): T
+            }
+            """,
+            "constrains type parameter 'T' with kotlin.Any",
+            "no CLR reference-type constraint metadata",
+        )
     }
 
     @Test

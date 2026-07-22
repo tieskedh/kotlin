@@ -588,7 +588,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   member calls, unrelated-interface identity, and class Any overrides are enabled. Generic
   `T : Any` constraints remain rejected because CLR `class` would exclude value instantiations and
   erasing the constraint would admit null; interface Any redeclarations and data generated members
-  remain separate audited slices. The draft rationale is
+  remain separate audited slices. That rejection now happens in the declaration-level
+  type-parameter gate. A library-publication regression proves that a split generic interface with
+  the bound returns `COMPILATION_ERROR` and produces no KLIB/DLL instead of leaking the live
+  constraint mapper's `DotNetIlUnsupportedException` as `INTERNAL_ERROR`. The draft rationale is
   `docs/decisions/draft-adr-system-object-any-foundation.md`. Both changed exact goldens assemble
   with modern 10.0.9 and Framework 4.8 ILAsm; the new box runs through both toolchain selections.
   The fresh full DotNet suite is 388/0/0/0 across eight XML files.
