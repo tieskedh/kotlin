@@ -1372,8 +1372,10 @@ landed shape as a compatibility constraint.
   from CLR overload identity. `testLibraryPublicationFailsWhenADeclarationIsEvicted` pins a
   property/user-accessor clash on each typed view, a distinct inherited method and local property
   accessor colliding on the declared view, a distinct inherited method and inherited property
-  accessor colliding on that view, and a user TypeDef occupying a generated exact name; all five
-  produce diagnostics and no KLIB/DLL pair. The inherited gate follows the emitted physical
+  accessor colliding on that view, a user TypeDef occupying a generated exact name, a split-view
+  mutable intersection, an owner-dependent generic-method intersection, and a covariant
+  intersection with nonidentical resolved returns; all eight produce diagnostics and no KLIB/DLL
+  pair. The inherited gate follows the emitted physical
   capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected when
   it is a distinct Kotlin member or when no selected derived slot covers both same-name contributor
   families. Merged property fake overrides are checked against atomic accessor selection, so a
@@ -1398,7 +1400,10 @@ landed shape as a compatibility constraint.
   removed atomically rather than exposing a derived getter without its setter. Properties whose
   accessors split across declared/exact views, defaults, owner-dependent method constraints, and
   non-identical resolved signatures remain pending and are rejected as complete declarations when
-  they would otherwise leave an ambiguous same-name CLR surface.
+  they would otherwise leave an ambiguous same-name CLR surface. Logical contributors and their
+  first multi-branch meeting are discovered before those support checks, so every genuine
+  candidate is selected, covered by an existing profile-aware promotion, or rejected rather than
+  silently disappearing from ABI discovery.
   Declaration-site `out`/`in` remains `+`/`-` metadata on the declared sibling, invariant
   parameters stay unmarked, and direct supported constraints compose as
   `<+ (class 'Base') 'T'>` (genifaceprobe_s1). All concrete Kotlin implementations receive
