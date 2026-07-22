@@ -9,30 +9,35 @@ is a proof of concept; this document does not claim a public Kotlin or Kotlin/.N
 
 ## Context
 
-`Kotlin.Runtime.dll` already owns stable language/runtime ABI types such as erased callable
-identities and the canonical/typed collection-interface views, Kotlin-owned exception identities,
-and compiler support helpers. It also contained a handwritten IL `ArrayIterator` only because the
-backend had no target stdlib assembly
+`Kotlin.Runtime.dll` already owns the current language/runtime ABI candidates such as erased
+callable identities and the canonical/typed collection-interface views, Kotlin-owned exception
+identities, and compiler support helpers. It also contained a handwritten IL `ArrayIterator` only
+because the backend had no target stdlib assembly
 and no general compiler-generated Iterator bridges.
 
 Those bridges now exist. Keeping an ordinary collection implementation in the runtime would blur
-the boundary between stable execution identity and library policy, while emitting it into every
+the boundary between compiler/runtime identity and library policy, while emitting it into every
 program would duplicate its type identity. A CLR assembly by itself is not a Kotlin compile-time
 library: the frontend needs Kotlin declaration metadata in addition to the physical methods.
 
 ## Decision
 
-The prototype introduces a second reserved platform assembly:
+The prototype introduces a second reserved platform assembly with this current candidate identity:
 
 ```text
 Kotlin.Stdlib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
 ```
 
-ABI major 1 is unsigned. AssemblyVersion stays fixed for compatible ABI-1 builds; product/package
-versions belong outside CLR AssemblyVersion. `Kotlin.Stdlib.dll` references `Kotlin.Runtime.dll`
-and is produced as `net48`, `netstandard2.0`, or `net10.0`. The variants share Kotlin declarations
-and logical identities but may use profile-specific physical implementations. A consumer selects
-an exact-profile pair first and may use the portable `netstandard2.0` pair from either executable
+All generated pieces use version `1.0.0.0` and no public-key token consistently so profile pairing,
+KLIB binding, and tests are deterministic. This is a pre-publication build/test identity, not a
+published ABI major or a promise to preserve either the version or unsigned status. Before Gate B,
+the project must decide the first public runtime and stdlib assembly names, strong-name policy,
+AssemblyVersion compatibility policy, and package-version relationship as one publication design.
+After publication, changing an assembly name, version binding policy, or strong-name key is an
+explicit CLR ABI transition. `Kotlin.Stdlib.dll` references `Kotlin.Runtime.dll` and is produced as
+`net48`, `netstandard2.0`, or `net10.0`. The variants share Kotlin declarations and logical
+identities but may use profile-specific physical implementations. A consumer selects an
+exact-profile pair first and may use the portable `netstandard2.0` pair from either executable
 profile; see `draft-adr-dotnet-library-target-profile.md`.
 
 Ownership is split as follows:
@@ -51,8 +56,8 @@ calls a generic compiler-facing factory in `Kotlin.Stdlib`; the
 handwritten `System.Array` iterator is removed from `Kotlin.Runtime`. Array `asIterable()`
 calls the corresponding generic factory, whose private view stores the original vector and creates
 a fresh private `ArrayIterator<T>` per request through ordinary Kotlin code. Direct array `for` loops remain
-allocation-free indexed loops. User calls to `first()` and `last()` target the stable physical
-facade `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt`; their implementations use guarded typed
+allocation-free indexed loops. User calls to `first()` and `last()` target the current
+compiler/stdlib facade `[Kotlin.Stdlib]Kotlin.Collections.CollectionsKt`; their implementations use guarded typed
 capabilities with universal canonical fallbacks and therefore work equally for stdlib and
 user-defined producers. The Iterable overloads retain the common runtime List dispatch, so a List
 uses indexed access and its List-specific empty exception path.
@@ -80,7 +85,7 @@ Kotlin.Stdlib.dll   -> CLR implementations referenced by emitted IL
 ```
 
 The metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
-unsigned ABI-1 identity (`dotnet_assembly_name=Kotlin.Stdlib`, version `1.0.0.0`, neutral culture,
+candidate identity (`dotnet_assembly_name=Kotlin.Stdlib`, version `1.0.0.0`, neutral culture,
 and null public-key token), `dotnet_assembly_file=Kotlin.Stdlib.dll`, and
 `dotnet_library_tfm=netstandard2.0`. This binding is what turns that one metadata dependency into a physical CLR
 reference; arbitrary KLIBs remain compile-time-only. The compiler requires the named sibling DLL
@@ -305,7 +310,8 @@ install the diagnostic IL.
 ## Deferred work
 
 This draft does not decide the final .NET KLIB platform marker, general Kotlin/.NET library
-production beyond the compiler-owned stdlib, package-version distribution,
-signing for a future ABI major, CLR/BCL collection adapters, primitive-specialized iterators, or the
-broader collection API. Those features must preserve the runtime/stdlib ownership split rather
-than moving ordinary implementations back into the runtime.
+production beyond the compiler-owned stdlib, the first published assembly/version/signing policy,
+CLR/BCL collection adapters, primitive-specialized iterators, or the broader collection API. The
+publication identity decision is required before Gate B; it is not deferred until after an
+unsigned ABI major has shipped. Those features must preserve the runtime/stdlib
+ownership split rather than moving ordinary implementations back into the runtime.
