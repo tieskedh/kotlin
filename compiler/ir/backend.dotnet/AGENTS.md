@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 63 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 64 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 843 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 844 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2080,7 +2080,10 @@ landed shape as a compatibility constraint.
     multiple reference element shapes), `box/genericInterfaces.kt` (reference/value covariance
     and contravariance, transitive/permuted interface inheritance, nested variance, generic
     implementers, exact value-type instantiations, canonical hard/safe casts, erased logical
-    arguments, nullable type tests, failure categories, and single operand evaluation),
+    arguments, nullable type tests, failure categories, and single operand evaluation), plus a
+    separate `netstandard2.0` 65-parameter interface consumed by Kotlin and C# on both application
+    profiles (canonical/declared/exact arity, high-index variance, exact-capability metadata,
+    identity-preserving widening, canonical fallback, and wrong-shape failure),
     `box/genericMembers.kt` (method
     pass-through, nullable method instantiations, inherited interface implementation, generic
     virtual/super dispatch, constrained interface calls, arity overloads, objects, companions and
