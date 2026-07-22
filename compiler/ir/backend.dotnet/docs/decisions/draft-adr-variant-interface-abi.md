@@ -151,16 +151,18 @@ to `string` while their results remain physically different. The latter would be
 return-type-only overload. A derived interface also rejects two same-named inherited overloads
 whose distinct Kotlin function types both become `Function1`; without a Kotlin-selected
 intersection there is no semantic basis for inventing one derived CLR slot. The inherited checks
-follow the
-physical capability graph and exempt a genuine Kotlin override of the inherited member. A
+follow the physical capability graph and exempt a genuine Kotlin override of the inherited
+member. They also work across module boundaries: a separately compiled producer owns the two
+roots, consumer-owned intermediate interfaces inherit them, and the final consumer declaration
+is rejected without publishing either artifact. A
 same-name inherited intersection is admitted only when the producer selects a derived slot
 covering both contributing families; merged property fake overrides are checked against the
 atomic accessor-selection result rather than relying on pairwise IR claims. Parent-slot execution
 and the bodyless typed derived slot are covered below. Each failure names the affected physical
 view or generated-type collision and produces neither KLIB nor DLL. This pins the current
 whole-declaration rejection policy without declaring the general inherited collision matrix
-complete. Stable
-disambiguation remains the final ABI direction; whole-declaration rejection is the safe temporary
+complete. Stable disambiguation remains the final ABI direction; whole-declaration rejection is the
+safe temporary
 implementation while that mapping is absent.
 
 A source member whose name exactly equals another logical member's producer-derived canonical name
@@ -893,8 +895,9 @@ coverage for at least:
   by physical owner and explicit `MethodImpl`. Properties with independently placed getters and
   setters are covered by the split-property lane;
 - same-name inherited overloads that collide only after callable erasure are rejected unless a
-  Kotlin-selected intersection slot covers both logical members. Transitive and cross-module
-  inherited overload substitutions remain in the required matrix;
+  Kotlin-selected intersection slot covers both logical members. Direct and cross-module
+  transitive inheritance are covered; more general substituted overload families remain in the
+  required matrix;
 - generic methods, recursive bounds, default bodies, fun interfaces, and suspend members;
 - `Iterator`, collections/maps, `Comparable`, `Continuation`, property delegates, reflection
   interfaces, ranges, and marker-only interfaces;
