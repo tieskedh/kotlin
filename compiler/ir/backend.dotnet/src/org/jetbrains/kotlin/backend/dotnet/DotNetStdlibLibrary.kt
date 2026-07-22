@@ -13,10 +13,11 @@ import java.io.File
 /**
  * The first physical Kotlin/.NET target-stdlib boundary.
  *
- * Like `Kotlin.Runtime`, ABI major 1 is unsigned and keeps AssemblyVersion 1.0.0.0. The bootstrap
- * compiler still rebuilds this assembly beside ordinary executables. The explicit stdlib product
- * mode emits this assembly and its bound metadata KLIB from one frontend/IR run; a separate
- * consumer may then import that pair without injected implementation sources.
+ * Like `Kotlin.Runtime`, the current pre-publication artifact uses the unsigned candidate
+ * AssemblyVersion 1.0.0.0 consistently across profiles. This is not a published ABI freeze. The
+ * bootstrap compiler still rebuilds this assembly beside ordinary executables. The explicit
+ * stdlib product mode emits this assembly and its bound metadata KLIB from one frontend/IR run; a
+ * separate consumer may then import that pair without injected implementation sources.
  */
 internal object DotNetStdlibLibrary {
     const val ASSEMBLY_NAME = DotNetStdlibArtifact.ASSEMBLY_NAME

@@ -163,6 +163,12 @@ model and ABI-freeze audit.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
+The current version and unsigned form are deterministic prototype binding inputs, not a public ABI
+freeze. Before Gate B, platform assemblies and general user-library production need an explicit
+first-publication policy for naming, strong names, AssemblyVersion compatibility, and package
+versions. After publication, changing those CLR identity components requires an explicit ABI
+transition; before publication, architecture may still require breaking them together with the
+KLIB schema and all producers and consumers.
 CLR consumers can use the existing explicit export boundary from that DLL. Kotlin consumers do
 not need a second selector language. Following JS/Native linking, the logical key is Kotlin's
 public `IdSignature`. Because this POC KLIB contains declaration metadata while the executable
@@ -213,10 +219,12 @@ IL churn before the boundary is represented deliberately.
 
 ## Deferred work
 
-This decision does not choose NuGet package layout/versioning, the public multi-TFM selection
-syntax, or the eventual direct PE writer. Before productionization, the declaration index needs a
-proper versioned KLIB component and a compatibility policy for Kotlin signature-mangler evolution;
-the current manifest encoding is intentionally provisional. Transitive dependency publication,
+This decision does not choose NuGet package layout/versioning, the first published assembly
+identity/signing/version policy, the public multi-TFM selection syntax, or the eventual direct PE
+writer. The publication identity policy is a Gate B prerequisite. Before productionization, the
+declaration index needs a proper versioned KLIB component and a compatibility policy for Kotlin
+signature-mangler evolution; the current manifest encoding is intentionally provisional.
+Transitive dependency publication,
 asset selection in Gradle/KMP, and package-manager layout also remain open. None of those concerns
 should reuse executable `main` semantics merely because the existing POC runtime option is named
 `-Xdotnet-target`.
