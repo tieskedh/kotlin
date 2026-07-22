@@ -139,22 +139,24 @@ widened Kotlin views. This validates the current public view spelling, same-obje
 property shape, generic-method forwarding, and barrier distinction; generated C# adapters/analyzers
 and the broader foreign-implementor matrix remain pending.
 
-Library publication also now fails on seven independently replayed physical collisions: a
+Library publication also now fails on eight independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
 which exists only on the invariant exact view, a distinct inherited Kotlin member and local
 property accessor mapping to the same declared-view slot, an inherited method and inherited
 property accessor mapping to one declared-view slot, a user declaration occupying the generated
 exact-view TypeDef identity, a same-name intersection whose nested owner-relative method constraint
-has no complete physical adapter, and two source overloads whose distinct Kotlin function types
-erase to the same CLR `Function1` parameter. The inherited checks follow the
+has no complete physical adapter, two source overloads whose distinct Kotlin function types erase
+to the same CLR `Function1` parameter, and two overloads whose `String`/`String?` parameters erase
+to `string` while their results remain physically different. The latter would be a CLR
+return-type-only overload. The inherited checks follow the
 physical capability graph and exempt a genuine Kotlin override of the inherited member. A
 same-name inherited intersection is admitted only when the producer selects a derived slot
 covering both contributing families; merged property fake overrides are checked against the
 atomic accessor-selection result rather than relying on pairwise IR claims. Parent-slot execution
 and the bodyless typed derived slot are covered below. Each failure names the affected physical
 view or generated-type collision and produces neither KLIB nor DLL. This pins the current
-whole-declaration rejection policy without declaring the return-only and general inherited
-collision matrix complete. Stable
+whole-declaration rejection policy without declaring the general inherited collision matrix
+complete. Stable
 disambiguation remains the final ABI direction; whole-declaration rejection is the safe temporary
 implementation while that mapping is absent.
 
@@ -882,11 +884,11 @@ coverage for at least:
   accessor on the declared view and its complete getter/setter row on the exact view.
   Nested/general owner-relative generic methods and general inherited overload disambiguation
   remain required;
-- erased callable overload collisions are rejected; return-type-only physical collisions,
-  generic/non-generic source name collisions, and real same-owner generated-name collisions remain
-  in the required matrix. A source member that only looks like another member's canonical name is
-  safely separated by physical owner and explicit `MethodImpl`. Properties with independently
-  placed getters and setters are covered by the split-property lane;
+- erased callable and return-type-only physical collisions are rejected. Generic/non-generic
+  source name collisions and real same-owner generated-name collisions remain in the required
+  matrix. A source member that only looks like another member's canonical name is safely separated
+  by physical owner and explicit `MethodImpl`. Properties with independently placed getters and
+  setters are covered by the split-property lane;
 - generic methods, recursive bounds, default bodies, fun interfaces, and suspend members;
 - `Iterator`, collections/maps, `Comparable`, `Continuation`, property delegates, reflection
   interfaces, ranges, and marker-only interfaces;

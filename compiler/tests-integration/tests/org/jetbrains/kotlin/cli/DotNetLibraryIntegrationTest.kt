@@ -5259,6 +5259,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "both map to 'apply(class [Kotlin.Runtime]'Kotlin.Function1')'",
         )
         assertPublicationFails(
+            "Generic.Interface.ReturnOnlyPhysicalClash",
+            """
+            package sample
+
+            public interface ReturnOnlyPhysicalClash<T> {
+                public fun choose(value: String): T
+                public fun choose(value: String?): Any?
+            }
+            """,
+            "members 'choose' and 'choose'",
+            "clash on its declared CLR capability",
+            "both map to 'choose(string)'",
+        )
+        assertPublicationFails(
             "Generic.Interface.UnsupportedAnyConstraint",
             """
             package sample
