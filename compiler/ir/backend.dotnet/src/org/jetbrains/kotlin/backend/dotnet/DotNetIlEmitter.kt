@@ -654,8 +654,8 @@ internal class DotNetIlEmitter(
         // C# diagnoses two equally applicable inherited source-named members as CS0121 even
         // when Kotlin has one valid intersection fake override. Materialize the conservative
         // bodyless slice here, after the physical view graph exists: direct generic parents,
-        // no value or type parameters/default/property surface, and one identical resolved
-        // signature.
+        // no method type parameters/default/property surface, and one identical resolved
+        // signature, including ordinary value parameters.
         // More complex intersections stay unchanged until their adapter semantics are explicit.
         val localGenericInterfaceIntersectionSlots = genericInterfaces.keys.flatMap { irClass ->
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes().mapNotNullTo(hashSetOf()) { type ->
@@ -664,9 +664,6 @@ internal class DotNetIlEmitter(
             irClass.dotNetMemberFakeOverrides().mapNotNull slot@{ fakeOverride ->
                 if (fakeOverride.correspondingPropertySymbol != null ||
                     fakeOverride.typeParameters.isNotEmpty() ||
-                    fakeOverride.parameters.any { parameter ->
-                        parameter.kind != IrParameterKind.DispatchReceiver
-                    } ||
                     fakeOverride.body != null
                 ) {
                     return@slot null
@@ -674,12 +671,9 @@ internal class DotNetIlEmitter(
                 val contributors = fakeOverride.overriddenSymbols
                     .map { symbol -> symbol.owner }
                     .filter { member ->
-                        !member.isFakeOverride &&
+                                !member.isFakeOverride &&
                                 member.name == fakeOverride.name &&
                                 member.typeParameters.isEmpty() &&
-                                member.parameters.all { parameter ->
-                                    parameter.kind == IrParameterKind.DispatchReceiver
-                                } &&
                                 member.body == null &&
                                 (member.parent as? IrClass) in directSuperInterfaces &&
                                 (member.parent as? IrClass)?.let(typeMapper::isSplitGenericInterface) == true &&
