@@ -53,6 +53,20 @@ object DotNetIlAssembler {
         messageCollector,
     )
 
+    /** Reassembles one profile-selected runtime definition with a test-selected compatibility writer. */
+    @TestOnly
+    fun assembleRuntimeWithExplicitIlasmForTests(
+        outputDirectory: File,
+        target: DotNetTarget,
+        ilasm: File,
+        messageCollector: MessageCollector,
+    ): File? = DotNetRuntimeLibrary.assembleWithExplicitIlasmForTests(
+        outputDirectory,
+        target,
+        ilasm,
+        messageCollector,
+    )
+
     /**
      * Assembles a portable library with the modern ILAsm. Framework ILAsm accepts netstandard
      * source but injects an `mscorlib` AssemblyRef into the PE, so it is a compatibility oracle,

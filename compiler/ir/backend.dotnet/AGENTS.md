@@ -2180,10 +2180,11 @@ landed shape as a compatibility constraint.
 - Integration tests pin the compatibility matrix, exact manifest/header metadata, repeat-build
   determinism, target-specific stdlib variants, and real execution of one portable stdlib pair on
   both runtime profiles. A net48 assembler-pairing matrix also writes the same compiler-produced
-  application and stdlib IL with Framework and modern ILAsm, then executes all four artifact
-  pairings on both runtimes. The Framework lane uses the signed Windows PowerShell CLR 4 host to
-  load and invoke the exact managed entry point rather than directly launching an unsigned exe.
-  `assembleWithExplicitIlasm` is test-only; production always selects its writer from the profile.
+  application, stdlib, and runtime IL with Framework and modern ILAsm, then executes all eight
+  artifact-writer combinations on both runtimes. The Framework lane uses the signed Windows
+  PowerShell CLR 4 host to load and invoke the exact managed entry point rather than directly
+  launching an unsigned exe. Explicit-writer hooks are test-only; production always selects its
+  writer from the profile.
 
 ## Modern .NET toolchain
 

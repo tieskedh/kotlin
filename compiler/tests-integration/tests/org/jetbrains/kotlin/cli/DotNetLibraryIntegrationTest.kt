@@ -3272,7 +3272,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testNet48ApplicationAndStdlibExecuteAcrossAssemblerPairings() {
+    fun testNet48AssemblerMatrix() {
         val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
         val modernIlasm = DotNetIlAssembler.findModernIlasm()
         requireOrAssumeToolchain(frameworkIlasm != null, ".NET Framework ILAsm is not available")
@@ -3337,18 +3337,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         )
 
-        val runtime = applicationDirectory.resolve("Kotlin.Runtime.dll")
-        assertTrue(runtime.isFile)
+        val frameworkRuntime = applicationDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(frameworkRuntime.isFile)
+        val modernRuntime = DotNetIlAssembler.assembleRuntimeWithExplicitIlasmForTests(
+            File(tmpdir, "assembler-matrix-modern-runtime"),
+            DotNetTarget.NET48,
+            checkNotNull(modernIlasm),
+            MessageCollector.NONE,
+        )
+        assertTrue(modernRuntime?.isFile == true)
         val coreClrRuntimeConfig = applicationDirectory.resolve("AssemblerMatrix-modern.runtimeconfig.json")
         assertTrue(coreClrRuntimeConfig.isFile)
 
         val applications = listOf(
-            "framework" to (frameworkApplication to frameworkApplication),
-            "modern" to (modernFrameworkApplication to modernCoreClrApplication),
+            "f" to (frameworkApplication to frameworkApplication),
+            "m" to (modernFrameworkApplication to modernCoreClrApplication),
         )
         val stdlibs = listOf(
-            "framework" to frameworkStdlib,
-            "modern" to modernStdlib,
+            "f" to frameworkStdlib,
+            "m" to modernStdlib,
+        )
+        val runtimes = listOf(
+            "f" to frameworkRuntime,
+            "m" to checkNotNull(modernRuntime),
         )
         for (application in applications) {
             val applicationAssembler = application.first
@@ -3356,31 +3367,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             for (stdlibEntry in stdlibs) {
                 val stdlibAssembler = stdlibEntry.first
                 val stdlib = stdlibEntry.second
-                val pairing = "$applicationAssembler-application-$stdlibAssembler-stdlib"
-                val frameworkDirectory = File(tmpdir, "assembler-matrix-framework-$pairing").apply { mkdirs() }
-                val frameworkExecutable = applicationFiles.first.copyTo(
-                    frameworkDirectory.resolve("AssemblerMatrix.exe")
-                )
-                stdlib.copyTo(frameworkDirectory.resolve("Kotlin.Stdlib.dll"))
-                runtime.copyTo(frameworkDirectory.resolve("Kotlin.Runtime.dll"))
-                runAssemblerPairing(
-                    frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable),
-                    frameworkDirectory,
-                    "Framework runtime, $pairing",
-                )
+                for (runtimeEntry in runtimes) {
+                    val runtimeAssembler = runtimeEntry.first
+                    val runtime = runtimeEntry.second
+                    val pairing = "$applicationAssembler-$stdlibAssembler-$runtimeAssembler"
+                    val frameworkDirectory = File(tmpdir, "am-f-$pairing").apply { mkdirs() }
+                    val frameworkExecutable = applicationFiles.first.copyTo(
+                        frameworkDirectory.resolve("AssemblerMatrix.exe")
+                    )
+                    stdlib.copyTo(frameworkDirectory.resolve("Kotlin.Stdlib.dll"))
+                    runtime.copyTo(frameworkDirectory.resolve("Kotlin.Runtime.dll"))
+                    runAssemblerPairing(
+                        frameworkExecutionCommand(checkNotNull(frameworkHost), frameworkExecutable),
+                        frameworkDirectory,
+                        "Framework host, $pairing",
+                    )
 
-                val coreClrDirectory = File(tmpdir, "assembler-matrix-coreclr-$pairing").apply { mkdirs() }
-                val coreClrExecutable = applicationFiles.second.copyTo(
-                    coreClrDirectory.resolve("AssemblerMatrix.${applicationFiles.second.extension}")
-                )
-                coreClrRuntimeConfig.copyTo(coreClrDirectory.resolve("AssemblerMatrix.runtimeconfig.json"))
-                stdlib.copyTo(coreClrDirectory.resolve("Kotlin.Stdlib.dll"))
-                runtime.copyTo(coreClrDirectory.resolve("Kotlin.Runtime.dll"))
-                runAssemblerPairing(
-                    listOf(dotnetHost.path, "exec", coreClrExecutable.path),
-                    coreClrDirectory,
-                    "CoreCLR runtime, $pairing",
-                )
+                    val coreClrDirectory = File(tmpdir, "am-n-$pairing").apply { mkdirs() }
+                    val coreClrExecutable = applicationFiles.second.copyTo(
+                        coreClrDirectory.resolve("AssemblerMatrix.${applicationFiles.second.extension}")
+                    )
+                    coreClrRuntimeConfig.copyTo(coreClrDirectory.resolve("AssemblerMatrix.runtimeconfig.json"))
+                    stdlib.copyTo(coreClrDirectory.resolve("Kotlin.Stdlib.dll"))
+                    runtime.copyTo(coreClrDirectory.resolve("Kotlin.Runtime.dll"))
+                    runAssemblerPairing(
+                        listOf(dotnetHost.path, "exec", coreClrExecutable.path),
+                        coreClrDirectory,
+                        "CoreCLR host, $pairing",
+                    )
+                }
             }
         }
     }
