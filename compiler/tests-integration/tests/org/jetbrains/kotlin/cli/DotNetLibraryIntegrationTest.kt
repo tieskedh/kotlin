@@ -5179,6 +5179,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             if (!condition) throw new Exception(message);
                         }
 
+                        private static void RequireClassifierTotal(Assembly runtimeAssembly, Exception[] values)
+                        {
+                            Type classifierType = runtimeAssembly.GetType(
+                                "Kotlin.Runtime.Internal.ExceptionClassifier", true);
+                            MethodInfo classifier = classifierType.GetMethod(
+                                "IsKotlinExceptionInstance", BindingFlags.Public | BindingFlags.Static);
+                            Require(classifier != null, "runtime exception classifier is not public compiler ABI");
+                            int[] typeIds = {
+                                Int32.MinValue, -1, 0,
+                                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+                                14, Int32.MaxValue,
+                            };
+                            foreach (Exception value in values)
+                            {
+                                foreach (int typeId in typeIds)
+                                {
+                                    try
+                                    {
+                                        object result = classifier.Invoke(null, new object[] { value, typeId });
+                                        Require(result is bool, "classifier returned a non-Boolean result");
+                                    }
+                                    catch (TargetInvocationException invocation)
+                                    {
+                                        throw new Exception(
+                                            "exception classifier threw for id " + typeId,
+                                            invocation.InnerException);
+                                    }
+                                }
+                            }
+                        }
+
                         public static int Main()
                         {
                             Assembly kotlinAssembly = Assembly.LoadFrom("${application.name}");
@@ -5276,6 +5307,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Require(errorClassification == 4, "CLR fatal error must be Error and not Exception");
                             Require(Object.ReferenceEquals(error, roundTrip.Invoke(null, new object[] { error })),
                                 "CLR error identity was replaced");
+                            RequireClassifierTotal(
+                                kotlinRuntimeFailureType.BaseType.Assembly,
+                                new Exception[] { null, foreign, runtime, error, kotlinRuntime, kotlinFatal });
                             return 0;
                         }
                     }
