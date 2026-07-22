@@ -494,8 +494,10 @@ mutable-reference cell. Those concrete layouts are implementation evidence, not 
   capabilities, or the exact Kotlin
   metadata encoding. Those features must
   preserve the canonical ABI invariants above or explicitly revise this draft before they land.
-The POC's .NET Framework 4.8 compatibility is probe evidence for the candidate representation, not
-a decision about the eventual product support baseline.
+`.NET Framework 4.8` is a required target profile. Its CLR and BCL constraints therefore shape the
+portable callable fallback and are not optional probe constraints. The recorded Framework runs are
+evidence for this candidate representation; they do not by themselves establish completed
+distribution, tooling, or CI support for the target.
 
 ## Promotion or revision
 

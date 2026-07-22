@@ -519,7 +519,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Promotion requires three layers to be validated separately: the erased Kotlin identity/fallback,
   a measured exact-shape non-boxing execution path, and typed CLR export projections. Only ordinary
   Kotlin subtype upcasts must preserve identity; SAM/adapted references and foreign projections may
-  allocate wrappers. Framework 4.8 is probe coverage for this POC, not a product-support promise.
+  allocate wrappers. Framework 4.8 is a required target profile; this particular probe is evidence
+  for the callable representation, not by itself a claim that distribution and CI support are
+  complete.
   The final assembly sanity check also caught that non-executable ilText output referenced runtime
   callable types without declaring the runtime AssemblyRef. Header emission now derives that ref
   from the final post-eviction IL body, so both ILAsm versions assemble callable-bearing library IL
