@@ -1440,6 +1440,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   belongs to the declared view and setter to the exact view now fails publication with neither KLIB
   nor DLL until a coherent split-view property adapter is designed. Supported declared/exact,
   parameterized, generic, property, permuted, and indirect intersections continue to pass.
+- Intersection discovery now identifies nonfake logical contributors and the first meeting of at
+  least two physical parent branches before applying the supported-shape filters. A real candidate
+  is therefore selected into schema 14, covered by an existing profile-aware default promotion, or
+  rejected before publication. Owner-dependent method constraints and valid covariant
+  intersections with nonidentical resolved return signatures have explicit negative regressions;
+  neither can silently publish an ambiguous C# surface while its adapter remains deferred. This
+  enforces the existing variant-interface ADR rather than introducing another representation.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.

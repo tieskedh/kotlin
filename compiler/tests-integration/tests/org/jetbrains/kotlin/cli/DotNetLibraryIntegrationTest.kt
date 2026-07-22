@@ -4571,6 +4571,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface SplitMutableIntersection<out T> :
                 SplitMutableLeft<T>, SplitMutableRight<T>
 
+            public interface OwnerBoundLeft<T> {
+                public fun <R : T> retain(value: R): R
+            }
+
+            public interface OwnerBoundRight<T> {
+                public fun <R : T> retain(value: R): R
+            }
+
+            public interface OwnerBoundIntersection<T> :
+                OwnerBoundLeft<T>, OwnerBoundRight<T>
+
+            public interface CovariantWide<out T> {
+                public fun result(): Any?
+            }
+
+            public interface CovariantNarrow<out T> {
+                public fun result(): T
+            }
+
+            public interface CovariantIntersection<out T> :
+                CovariantWide<T>, CovariantNarrow<T>
+
             public interface ReservedOwner<out T> {
                 public fun accept(value: @UnsafeVariance T)
             }
@@ -4583,6 +4605,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "inherited members '<get-item>' and 'get_item'",
             "but are distinct Kotlin members",
             "has no complete derived CLR property surface on one typed capability",
+            "has an owner-dependent method constraint",
+            "does not have one identical resolved signature",
             "maps to a duplicate canonical, declared, or exact IL type",
         )
     }
