@@ -183,6 +183,36 @@ sealed interface DotNetPhysicalDeclaration {
         }
     }
 
+    /** One derived typed slot representing a Kotlin intersection of inherited generic members. */
+    data class GenericInterfaceIntersectionSlot(
+        override val ownerPath: List<String>,
+        val ownerLogicalKey: String,
+        val contributingLogicalMemberKeys: List<String>,
+        val physicalView: DotNetInterfaceDefaultPromotionView,
+        val methodName: String,
+    ) : DotNetPhysicalDeclaration {
+        init {
+            require(ownerPath.isNotEmpty()) {
+                "a generic-interface intersection slot requires an owning CLR interface"
+            }
+            require(ownerLogicalKey.isNotEmpty()) {
+                "a generic-interface intersection slot requires an owning logical interface"
+            }
+            require(contributingLogicalMemberKeys.size >= 2 &&
+                    contributingLogicalMemberKeys.all(String::isNotEmpty) &&
+                    contributingLogicalMemberKeys == contributingLogicalMemberKeys.distinct().sorted()
+            ) {
+                "a generic-interface intersection slot requires at least two sorted unique logical members"
+            }
+            require(physicalView != DotNetInterfaceDefaultPromotionView.CANONICAL) {
+                "a generic-interface intersection slot requires a typed CLR capability"
+            }
+            require(methodName.isNotEmpty()) {
+                "a generic-interface intersection slot requires a CLR method name"
+            }
+        }
+    }
+
     /** A final MethodImpl adapting one ordinary Kotlin slot to a wider CLR return. */
     data class CovariantReturnBridge(
         override val ownerPath: List<String>,
@@ -232,6 +262,10 @@ internal fun DotNetPhysicalDeclaration.InterfaceDefaultPromotion.indexKey(): Str
 
 internal fun DotNetPhysicalDeclaration.GenericInterfaceViewBridge.indexKey(): String =
     "B:$ownerLogicalKey:$inheritedLogicalMemberKey:${physicalView.name}"
+
+internal fun DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot.indexKey(): String =
+    "I:$ownerLogicalKey:${physicalView.name}:" +
+            DotNetLibraryAbiCodec.logicalIdentityDigest(contributingLogicalMemberKeys.joinToString("\u0000"))
 
 internal fun DotNetPhysicalDeclaration.CovariantReturnBridge.indexKey(): String =
     "R:$ownerLogicalKey:$inheritedLogicalMemberKey"
@@ -300,7 +334,7 @@ data class DotNetFriendAssemblyIdentity(
 
 /** Manifest codec for the provisional declaration-index schema. */
 object DotNetLibraryAbiCodec {
-    const val ABI_VERSION = "13"
+    const val ABI_VERSION = "14"
     const val ABI_VERSION_PROPERTY = "dotnet_abi_version"
     const val LOGICAL_IDENTITY_SCHEME = "kotlin-public-id-signature-legacy-v1"
     const val LOGICAL_IDENTITY_SCHEME_PROPERTY = "dotnet_logical_identity_scheme"
@@ -354,6 +388,7 @@ object DotNetLibraryAbiCodec {
                 is DotNetPhysicalDeclaration.Function -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultPromotion -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.GenericInterfaceViewBridge -> declaration.encodeFields()
+                is DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.CovariantReturnBridge -> declaration.encodeFields()
                 is DotNetPhysicalDeclaration.InterfaceDefaultClassForwarder -> declaration.encodeFields()
             }
@@ -371,6 +406,7 @@ object DotNetLibraryAbiCodec {
                 "FD" -> decodeInterfaceDefaultFunction(fields, logicalKey)
                 "P" -> decodeInterfaceDefaultPromotion(fields, logicalKey)
                 "B" -> decodeGenericInterfaceViewBridge(fields, logicalKey)
+                "I" -> decodeGenericInterfaceIntersectionSlot(fields, logicalKey)
                 "R" -> decodeCovariantReturnBridge(fields, logicalKey)
                 "W" -> decodeInterfaceDefaultClassForwarder(fields, logicalKey)
                 "FA" -> decodeDefaultArgumentFunction(fields, logicalKey)
@@ -704,6 +740,60 @@ object DotNetLibraryAbiCodec {
         ).also { bridge ->
             require(bridge.indexKey() == logicalKey) {
                 "generic-interface view bridge '$logicalKey' is inconsistent with its structured identity"
+            }
+        }
+    }
+
+    private fun DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot.encodeFields(): List<String> =
+        listOf(
+            "I",
+            when (physicalView) {
+                DotNetInterfaceDefaultPromotionView.DECLARED -> "D"
+                DotNetInterfaceDefaultPromotionView.EXACT -> "E"
+                DotNetInterfaceDefaultPromotionView.CANONICAL -> error("intersection slot cannot be canonical")
+            },
+            ownerLogicalKey,
+            methodName,
+            ownerPath.size.toString(),
+            contributingLogicalMemberKeys.size.toString(),
+        ) + ownerPath + contributingLogicalMemberKeys
+
+    private fun decodeGenericInterfaceIntersectionSlot(
+        fields: List<String>,
+        logicalKey: String,
+    ): DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot {
+        require(fields.size >= 9) {
+            "generic-interface intersection slot '$logicalKey' has an incomplete CLR identity"
+        }
+        val physicalView = when (fields[1]) {
+            "D" -> DotNetInterfaceDefaultPromotionView.DECLARED
+            "E" -> DotNetInterfaceDefaultPromotionView.EXACT
+            else -> throw IllegalArgumentException(
+                "generic-interface intersection slot '$logicalKey' has invalid physical view '${fields[1]}'"
+            )
+        }
+        val ownerSize = fields[4].toIntOrNull()
+        val contributorCount = fields[5].toIntOrNull()
+        require(ownerSize != null && ownerSize > 0 && contributorCount != null && contributorCount >= 2 &&
+                fields.size == 6 + ownerSize + contributorCount
+        ) {
+            "generic-interface intersection slot '$logicalKey' has an invalid CLR payload size"
+        }
+        val ownerPath = fields.subList(6, 6 + ownerSize)
+            .requireOwnerPath(logicalKey, "generic-interface intersection slot")
+        val contributors = fields.drop(6 + ownerSize)
+        require(fields[2].isNotEmpty()) {
+            "generic-interface intersection slot '$logicalKey' has an empty logical owner"
+        }
+        return DotNetPhysicalDeclaration.GenericInterfaceIntersectionSlot(
+            ownerPath = ownerPath,
+            ownerLogicalKey = fields[2],
+            contributingLogicalMemberKeys = contributors,
+            physicalView = physicalView,
+            methodName = fields[3].requireMethodName(logicalKey, "intersection"),
+        ).also { slot ->
+            require(slot.indexKey() == logicalKey) {
+                "generic-interface intersection slot '$logicalKey' is inconsistent with its structured identity"
             }
         }
     }
