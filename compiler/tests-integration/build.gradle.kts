@@ -81,6 +81,26 @@ sourceSets {
     "testFixtures" { projectDefault() }
 }
 
+fun Test.configureIntegrationTestTask() {
+    dependsOn(":dist")
+    dependsOn(":kotlin-stdlib:compileKotlinWasmJs")
+
+    workingDir = rootDir
+    useJUnitPlatform()
+
+    jvmArgumentProviders.add(
+        project.objects.newInstance(SystemPropertyClasspathProvider::class.java).apply {
+            property.set("kotlin.test.script.classpath")
+            classpath.from(testSourceSet.output.classesDirs)
+        }
+    )
+    addClasspathProperty(antLauncherJar, "kotlin.ant.classpath")
+    systemProperty("kotlin.ant.launcher.class", "org.apache.tools.ant.Main")
+
+    // This test set still contains JUnit 3 tests, so category/tag filtering is unavailable.
+    smokeTestConfig = SmokeTestConfig.RunAllTests
+}
+
 projectTests {
     testTask(
         defineJDKEnvVariables = listOf(
@@ -94,27 +114,11 @@ projectTests {
         // Use Parallel GC because this test runs on JDK 8.
         garbageCollector = GarbageCollector.Parallel,
     ) {
-        dependsOn(":dist")
-        dependsOn(":kotlin-stdlib:compileKotlinWasmJs")
-
-        workingDir = rootDir
-
-        useJUnitPlatform()
-
-        jvmArgumentProviders.add(
-            project.objects.newInstance(SystemPropertyClasspathProvider::class.java).apply {
-                property.set("kotlin.test.script.classpath")
-                classpath.from(testSourceSet.output.classesDirs)
-            }
-        )
-        addClasspathProperty(antLauncherJar, "kotlin.ant.classpath")
-        systemProperty("kotlin.ant.launcher.class", "org.apache.tools.ant.Main")
-
+        configureIntegrationTestTask()
         /*
         This test is still using junit3 style tests, neither 'Category' nor 'Tag' mechanics are supported.
         We declare smoke tests here, junit3 compliant.
         */
-        smokeTestConfig = SmokeTestConfig.RunAllTests
         if (isSmokeTestMode.get()) {
             filter {
                 includeTestsMatching("*SmokeTest")
@@ -122,6 +126,28 @@ projectTests {
                 includeTestsMatching("*DotNetCliTestGenerated")
             }
         }
+    }
+
+    // Keep this internal task name short: the test convention embeds it in
+    // temporary paths consumed by Framework ILAsm and CLR4, which retain
+    // MAX_PATH behavior. The supported aggregate entry point remains dotNetTest.
+    testTask(
+        "dn",
+        defineJDKEnvVariables = listOf(
+            JdkMajorVersion.JDK_1_8,
+            JdkMajorVersion.JDK_11_0,
+            JdkMajorVersion.JDK_17_0,
+            JdkMajorVersion.JDK_21_0,
+        ),
+        javaLauncher = JdkMajorVersion.JDK_1_8,
+        skipInLocalBuild = false,
+    ) {
+        configureIntegrationTestTask()
+        filter {
+            includeTestsMatching("org.jetbrains.kotlin.cli.DotNetLibraryIntegrationTest")
+            includeTestsMatching("org.jetbrains.kotlin.cli.DotNetCliTestGenerated")
+        }
+        environment("KOTLIN_DOTNET_REQUIRE_TOOLCHAIN", "1")
     }
 
     testGenerator("org.jetbrains.kotlin.TestGeneratorForTestsIntegrationTestsKt")

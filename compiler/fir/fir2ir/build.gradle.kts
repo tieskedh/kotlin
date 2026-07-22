@@ -129,6 +129,19 @@ projectTests {
         }
     }
 
+    testTask(
+        "dotNetTest",
+        defineJDKEnvVariables = listOf(JdkMajorVersion.JDK_1_8),
+        skipInLocalBuild = false,
+    ) {
+        configure {
+            filter {
+                includeTestsMatching("*DotNet*")
+            }
+            environment("KOTLIN_DOTNET_REQUIRE_TOOLCHAIN", "1")
+        }
+    }
+
     testGenerator("org.jetbrains.kotlin.test.TestGeneratorForFir2IrTestsKt", generateTestsInBuildDirectory = true)
 
     withJvmStdlibAndReflect()

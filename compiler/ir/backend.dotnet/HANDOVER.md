@@ -1290,6 +1290,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   explicitly. A new portable generic-interface producer executes its recorded dispatcher from
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
+- `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 36 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 837/0/0/0
+  across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
+  the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
+  can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
+  20 digits. The aggregate task is the supported entry point. This is validation infrastructure,
+  not an ABI decision, so it updates evidence rather than an ADR.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1337,15 +1345,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Rituals
 
-- **Run tests:** `./gradlew :compiler:fir:fir2ir:test --tests "*DotNet*" -q` — but do NOT trust
-  the quiet console alone. Verify from the JUnit XML:
-  `compiler/fir/fir2ir/build/test-results/test/TEST-*DotNet*.xml` (sum tests/failures/skipped).
-  SKIPs are acceptable only for SAC/toolchain reasons; failures never.
+- **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
+  strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
+  `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 837 tests across 16
+  files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
+  failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
+  the backend-owned aggregate rather than treating that child as public API.
 - **Update goldens:** add/modify the `.kt`, then run with `-Pkotlin.test.update.test.data=true`
   (QUOTE the whole `-P...` argument in PowerShell or it gets mangled), then READ the generated
   `.txt` critically — auto-generated goldens will happily pin broken output (this happened: a
   golden once pinned duplicate IL methods that ilasm rejects).
-- **Before every commit:** fresh `--rerun` of the full suite + XML verification; `git status`
+- **Before every commit:** a fresh aggregate gate + XML verification; `git status`
   shows only intended files (no scratch test data — a prior session leaked `zzrev*` files);
   the IL-text suite automatically assembles all net48 goldens with every available supported ILAsm.
   Still assemble and execute profile-specific net10 output, cross-assembler cases, and integration
