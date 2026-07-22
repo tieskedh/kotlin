@@ -212,10 +212,14 @@ complete intersection; a descendant of an interface which already owns the selec
 without another slot or schema record. Contributors may have different resolved return types when
 Kotlin selects one covariant result and at least one contributor has that exact resolved return.
 The bridge for that contributor receives the derived `MethodImpl`; wider parent bridges remain
-separate adapters to the same implementation body. Nested or general owner-relative constraints,
-properties whose accessors split across views, and default bodies remain pending. Until their
-adapters exist, an otherwise ambiguous same-name shape is rejected as a whole and produces neither
-KLIB nor DLL; name equality alone is never publication evidence. Discovery identifies the logical
+separate adapters to the same implementation body. A selected portable default shared by several
+branches is resolved by the profile-aware promotion bundle from the default-interface ADR,
+including competing generic canonical/declared/exact providers. It is not a schema-14 bodyless
+intersection. Unrelated default declarations require an explicit Kotlin override and therefore
+follow the ordinary declared-body path. Nested or general owner-relative constraints and properties
+whose accessors split across views remain pending. Until their adapters exist, an otherwise
+ambiguous same-name shape is rejected as a whole and produces neither KLIB nor DLL; name equality
+alone is never publication evidence. Discovery identifies the logical
 contributors and the first physical meeting of at least two parent branches before applying those
 support checks. Consequently every real multi-branch candidate is selected into schema 14, covered
 by an already generated profile-aware default promotion, or rejected; an unsupported candidate is
@@ -668,11 +672,12 @@ ordinary inherited member.
 
 The producer must discover that logical override group before deciding whether its physical shape
 is currently supported. A bodyless group with one resolved signature receives the recorded slot;
-a selected portable default may instead be covered by the profile-aware promotion mandated by the
-default-interface ADR. Any remaining group that needs a nested owner-relative constraint adapter, a
-split property surface, a default adapter, or incompatible parameter/constraint adaptation is
-rejected before the KLIB/DLL pair is published. Silently omitting such a group is not a temporary
-representation: it would publish a Kotlin-valid but C#-ambiguous and cross-module-incomplete ABI.
+a selected portable default is covered by the profile-aware promotion mandated by the
+default-interface ADR, including a resolver promotion for incomparable generic providers. Any
+remaining group that needs a nested owner-relative constraint adapter, a split property surface,
+or incompatible parameter/constraint adaptation is rejected before the KLIB/DLL pair is published.
+Silently omitting such a group is not a temporary representation: it would publish a Kotlin-valid
+but C#-ambiguous and cross-module-incomplete ABI.
 
 Keeping the ambiguity, dropping a typed parent edge, or relying on an extension method are not
 alternatives: the first leaves the normal strongly typed C# surface unusable, the second destroys

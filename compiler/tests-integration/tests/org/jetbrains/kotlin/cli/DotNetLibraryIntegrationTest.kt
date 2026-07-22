@@ -2334,6 +2334,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     fun testGenericInterfaceDefaultsAcrossPortableAndNet10Assemblies() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
 
         val portableDirectory = File(tmpdir, "portable-generic-interface-default").apply { mkdirs() }
         val portableSource = portableDirectory.resolve("portable.kt").apply {
@@ -2377,6 +2382,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 package genericdefaults
 
                 public interface PromotedGeneric<out T> : PortableGeneric<T>
+                public interface PromotedLeft<out T> : PortableGeneric<T>
+                public interface PromotedRight<out T> : PortableGeneric<T>
+                public interface PromotedDiamond<out T> : PromotedLeft<T>, PromotedRight<T>
                 public interface PromotedInt : PortableGeneric<Int>
                 public interface OverriddenInt : PortableGeneric<Int> {
                     public override fun value(): Int = 91
@@ -2397,7 +2405,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val promotedDeclarations = DotNetLibraryAbiCodec.decode(promotedMetadata.readKlibManifest())
         val promotions = promotedDeclarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
-        assertEquals(16, promotions.size, promotions.joinToString("\n"))
+        assertEquals(34, promotions.size, promotions.joinToString("\n"))
+        for (owner in listOf("PromotedLeft", "PromotedRight", "PromotedDiamond")) {
+            val ownerPromotions = promotions.filter { declaration ->
+                declaration.ownerPath == listOf("genericdefaults.$owner")
+            }
+            assertEquals(6, ownerPromotions.size, ownerPromotions.joinToString("\n"))
+            assertEquals(
+                setOf(
+                    DotNetInterfaceDefaultPromotionView.CANONICAL,
+                    DotNetInterfaceDefaultPromotionView.DECLARED,
+                    DotNetInterfaceDefaultPromotionView.EXACT,
+                ),
+                ownerPromotions.mapTo(hashSetOf()) { it.physicalView },
+            )
+        }
         val viewBridges = promotedDeclarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.GenericInterfaceViewBridge>()
         assertEquals(12, viewBridges.size, viewBridges.joinToString("\n"))
@@ -2449,6 +2471,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
 
                 public class OverriddenImplementation(private val current: Int) : OverriddenInt {
+                    public override fun seed(): Int = current
+                }
+
+                public class DiamondImplementation(private val current: Int) : PromotedDiamond<Int> {
                     public override fun seed(): Int = current
                 }
                 """.trimIndent()
@@ -2505,6 +2531,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     val widenedOverride: PortableGeneric<Any> = overriddenView
                     if (widenedOverride.value() != 91) throw Error("closed interface override widened view")
 
+                    val diamondView: PromotedDiamond<Int> = DiamondImplementation(46)
+                    val diamondLeft: PromotedLeft<Int> = diamondView
+                    val diamondRight: PromotedRight<Int> = diamondView
+                    val diamondBase: PortableGeneric<Int> = diamondView
+                    if (diamondView.value() != 46) throw Error("diamond promoted derived result")
+                    if (diamondLeft.value() != 46) throw Error("diamond promoted left result")
+                    if (diamondRight.value() != 46) throw Error("diamond promoted right result")
+                    if (diamondBase.value() != 46) throw Error("diamond promoted base result")
+                    if (diamondView.echo(46) != 46) throw Error("diamond promoted method generic")
+                    if (!diamondView.same(46)) throw Error("diamond promoted exact argument")
+                    val widenedDiamond: PortableGeneric<Any> = diamondView
+                    if (widenedDiamond.value() != 46) throw Error("diamond promoted widened result")
+                    if (widenedDiamond.echo("diamond") != "diamond") {
+                        throw Error("diamond promoted widened method constraint")
+                    }
+
                     val portable: PortableGeneric<Int> = ThroughPortable(43)
                     if (portable.value() != 43) throw Error("portable class forwarder result")
                     if (portable.echo(43) != 43) throw Error("portable class method generic")
@@ -2546,11 +2588,84 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("<GenericInterfaceCanonicalBridge-genericdefaults.PortableGeneric-value-" !in closedImplementationIl) {
             "The implementor must inherit OverriddenInt's value adapters instead of duplicating them:\n$closedImplementationIl"
         }
+        assertTrue("<GenericInterfaceDefaultForwarderTarget-genericdefaults.DiamondImplementation-" !in closedImplementationIl) {
+            "The selected diamond DIMs must suppress helper-backed class forwarders:\n$closedImplementationIl"
+        }
         runDotNet(
             dotnetHost,
             consumerAssembly,
             consumerDirectory,
             "Generic interface defaults failed across portable and net10 assemblies",
+        )
+
+        val csharpDirectory = File(tmpdir, "generic-interface-default-csharp-consumer").apply { mkdirs() }
+        val csharpSource = csharpDirectory.resolve("main.cs").apply {
+            writeText(
+                """
+                using genericdefaults;
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        var implementation = new DiamondImplementation(47);
+                        PromotedDiamond<int> diamond = implementation;
+                        PromotedLeft<int> left = implementation;
+                        PromotedRight<int> right = implementation;
+                        PortableGeneric<int> root = implementation;
+                        PromotedDiamond__KotlinExact<int> exact = implementation;
+
+                        if (diamond.value() != 47 || left.value() != 47 ||
+                            right.value() != 47 || root.value() != 47)
+                            return 1;
+                        if (exact.echo<int>(48) != 48 || !exact.same(47))
+                            return 2;
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val csharpAssembly = csharpDirectory.resolve("GenericDefaultCSharpConsumer.dll")
+        val runtimeAssembly = consumerDirectory.resolve("Kotlin.Runtime.dll")
+        val csharpCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            csharpSource,
+            csharpAssembly,
+            portableDirectory.resolve("Portable.GenericDefaults.dll"),
+            promotedDirectory.resolve("Promoted.GenericDefaults.dll"),
+            closedImplementationDirectory.resolve("Closed.GenericDefaults.dll"),
+            runtimeAssembly,
+            target = "exe",
+        )
+        assertEquals(0, csharpCompile.exitCode, csharpCompile.output)
+        listOf(
+            portableDirectory.resolve("Portable.GenericDefaults.dll"),
+            promotedDirectory.resolve("Promoted.GenericDefaults.dll"),
+            closedImplementationDirectory.resolve("Closed.GenericDefaults.dll"),
+            runtimeAssembly,
+        ).forEach { dependency ->
+            dependency.copyTo(csharpDirectory.resolve(dependency.name), overwrite = true)
+        }
+        csharpDirectory.resolve("GenericDefaultCSharpConsumer.runtimeconfig.json").writeText(
+            """
+            {
+              "runtimeOptions": {
+                "tfm": "net10.0",
+                "framework": {
+                  "name": "Microsoft.NETCore.App",
+                  "version": "10.0.0"
+                },
+                "rollForward": "LatestMinor"
+              }
+            }
+            """.trimIndent()
+        )
+        runDotNet(
+            checkNotNull(modernCSharp).dotNetHost,
+            csharpAssembly,
+            csharpDirectory,
+            "C# failed to consume the promoted generic-interface diamond",
         )
     }
 
