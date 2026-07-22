@@ -106,6 +106,55 @@ internal fun IrType.isDotNetOwnerDependentConstraint(interfaceClass: IrClass): B
     }
 }
 
+/**
+ * Returns the direct owner-relative bound for each method parameter, or `null` when the erased
+ * CLR slot would need a representation-changing generic adapter. A direct `R : T` used as a
+ * complete parameter/result can be adapted by instantiating the implementation at `T` and
+ * casting at the bridge boundary. Nested uses such as `Box<R>` cannot use that conversion.
+ */
+internal fun IrSimpleFunction.dotNetDirectOwnerRelativeMethodBoundsOrNull(
+    interfaceClass: IrClass,
+): List<IrType?>? {
+    fun IrType.references(parameter: IrTypeParameterSymbol): Boolean {
+        val simpleType = this as? IrSimpleType ?: return false
+        if (simpleType.classifier == parameter) return true
+        return simpleType.arguments.any { argument ->
+            (argument as? IrTypeProjection)?.type?.references(parameter) == true
+        }
+    }
+
+    fun IrType.isDirect(parameter: IrTypeParameterSymbol): Boolean =
+        (this as? IrSimpleType)?.classifier == parameter
+
+    val signatureTypes = sequenceOf(returnType) +
+            parameters.asSequence()
+                .filter { it.kind != IrParameterKind.DispatchReceiver }
+                .map { it.type }
+    return typeParameters.map { parameter ->
+        val ownerRelativeBounds = parameter.superTypes.filter { bound ->
+            bound.isDotNetOwnerDependentConstraint(interfaceClass)
+        }
+        if (ownerRelativeBounds.isEmpty()) return@map null
+        val ownerBound = parameter.superTypes.singleOrNull() ?: return null
+        val boundParameter = (ownerBound as? IrSimpleType)?.classifier as? IrTypeParameterSymbol
+        if (boundParameter?.owner?.parent != interfaceClass) return null
+        if (signatureTypes.any { type ->
+                type.references(parameter.symbol) && !type.isDirect(parameter.symbol)
+            }
+        ) {
+            return null
+        }
+        if (typeParameters.asSequence()
+                .filterNot { it == parameter }
+                .flatMap { it.superTypes.asSequence() }
+                .any { bound -> bound.references(parameter.symbol) }
+        ) {
+            return null
+        }
+        ownerBound
+    }
+}
+
 internal fun IrType.isDotNetVariantOwnerDependentConstraint(interfaceClass: IrClass): Boolean {
     val simpleType = this as? IrSimpleType ?: return false
     val parameter = (simpleType.classifier as? IrTypeParameterSymbol)?.owner

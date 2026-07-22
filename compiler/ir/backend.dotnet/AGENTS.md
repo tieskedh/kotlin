@@ -1373,7 +1373,7 @@ landed shape as a compatibility constraint.
   property/user-accessor clash on each typed view, a distinct inherited method and local property
   accessor colliding on the declared view, a distinct inherited method and inherited property
   accessor colliding on that view, a user TypeDef occupying a generated exact name, a split-view
-  mutable intersection, an owner-dependent generic-method intersection, and a covariant
+  mutable intersection, a nested owner-relative generic-method intersection, and a covariant
   intersection with nonidentical resolved returns; all eight produce diagnostics and no KLIB/DLL
   pair. The inherited gate follows the emitted physical
   capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected when
@@ -1385,9 +1385,16 @@ landed shape as a compatibility constraint.
   calls also work from C#. The pre-adapter derived call was CS0121. Bodyless intersections of
   generic parents with one resolved signature now emit a source-named abstract slot on the first
   common declared/exact typed capability. Ordinary value parameters and
-  method type parameters with owner-independent constraints are normalized positionally and
-  covered. Parent-parameter permutations and contributors reached through bodyless intermediate
-  interfaces are normalized through the derived owner and admitted when their signatures converge.
+  method type parameters with owner-independent constraints or a direct owner-relative `<R : T>`
+  constraint are normalized positionally and covered. The logical owner-relative bound remains in
+  KLIB while every split CLR interface view erases it. When its target retains a physical bound, the
+  unconstrained class bridge invokes that implementation at substituted `T`, adapting a direct `R`
+  parameter/result through `object`; an invalid foreign instantiation therefore fails at the
+  generated cast. An already-erased default/helper forwarder keeps the actual `R`, preserving calls
+  made valid by Kotlin variance widening. Restating the stronger bound only on that `MethodImpl` is
+  not valid CLR metadata. Parent-parameter permutations and contributors reached through bodyless
+  intermediate interfaces are normalized through the derived owner and admitted when their
+  signatures converge.
   At least two direct branches must contribute, and a parent which already contains the complete
   intersection suppresses a redundant descendant slot/record. Property intersections additionally
   emit a real derived CLR property row bound to the recorded getter and, only when it exists on that
@@ -1398,8 +1405,8 @@ landed shape as a compatibility constraint.
   logical-member group; it is not encoded as an already-implemented view bridge. A property needs
   no second record because KLIB retains the accessor association; its accessors are admitted or
   removed atomically rather than exposing a derived getter without its setter. Properties whose
-  accessors split across declared/exact views, defaults, owner-dependent method constraints, and
-  non-identical resolved signatures remain pending and are rejected as complete declarations when
+  accessors split across declared/exact views, defaults, nested/general owner-relative method
+  constraints, and non-identical resolved signatures remain pending and are rejected as complete declarations when
   they would otherwise leave an ambiguous same-name CLR surface. Logical contributors and their
   first multi-branch meeting are discovered before those support checks, so every genuine
   candidate is selected, covered by an existing profile-aware promotion, or rejected rather than
