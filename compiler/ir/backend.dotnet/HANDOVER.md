@@ -1387,6 +1387,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   and produce neither KLIB nor DLL. The existing atomic canonical/declared/exact registration and
   per-view member gates required no representation change; the variant-interface ADR records the
   evidence while keeping overload, inheritance, and reserved-member cases open.
+- Commit `898f995f5` extends that publication gate across one physical inheritance edge. A
+  frontend-valid derived generic interface whose local property accessor and distinct inherited
+  method map to the same declared-capability slot now fails atomically, while a genuine Kotlin
+  property override remains valid. The gate walks the emitted capability graph rather than
+  assuming every logical supertype is present on every physical view. The variant-interface ADR
+  records whole-declaration rejection as temporary; stable typed-slot disambiguation remains the
+  final direction, and inherited-only collisions are still open. The strict baseline remains
+  845/0/0/0 across 16 XML suites.
 - The split generic-interface ABI now has an adversarial cross-module arity pin beyond both common
   machine-word boundaries. A `netstandard2.0` producer declares a 65-parameter covariant interface
   with a high-index unsafe operation, its invariant exact view, and one same-object implementation.
