@@ -1101,9 +1101,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   verifier over the assembled PEs. Each executable-profile runtime/stdlib pair must retain the
   portable public/protected types, hierarchy edges, constraints, methods, fields, properties, and
   events with compatible access and overridability. Portable abstract interface slots may become
-  modern DIMs. The verifier is test data, not a compiler/assembler sidecar, and a target-owned
-  `@TestOnly` hook produces standalone runtime variants for it. Raw custom-attribute payloads,
-  MethodImpl rows, resources, and friend-only internals remain for the structured metadata audit.
+  modern DIMs. Normalized custom-attribute identities and constructor/named payloads on assemblies
+  and exposed declarations must also retain the portable floor; `TargetFrameworkAttribute` is the
+  deliberate profile-specific exception. The verifier is test data, not a compiler/assembler
+  sidecar, and a target-owned `@TestOnly` hook produces standalone runtime variants for it. Raw
+  attribute-blob encoding, MethodImpl rows, resources, and friend-only internals remain for the
+  structured metadata audit.
 - `docs/decisions/adr-profile-aware-interface-default-implementations.md` is accepted,
   and the non-generic implementation is now present. Portable profiles move each Kotlin interface
   body to a marked public `<DefaultImpls>` compiler-ABI helper, keep the CLR slot abstract, and
