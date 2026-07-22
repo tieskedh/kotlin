@@ -862,6 +862,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         val csharpCompiler = DotNetIlAssembler.findFrameworkCSharpCompiler()
         requireOrAssumeToolchain(csharpCompiler != null, ".NET Framework C# compiler is not available")
+        val frameworkNetStandardFacade = findFrameworkNetStandardFacade()
+        requireOrAssumeToolchain(
+            frameworkNetStandardFacade != null,
+            ".NET Framework netstandard 2.0 facade is not available",
+        )
         val dotnetHost = modernDotNetHostOrSkip()
 
         val parameterNames = (0..64).map { index -> "T${index.toString().padStart(2, '0')}" }
@@ -927,6 +932,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public fun acceptQuad(value: Quad<Int, Any, String, Any?>, candidate: Any): Boolean =
                     value.acceptsOutput(candidate)
+
+                public interface IntersectionLeft<out T> {
+                    public fun read(): T
+                }
+
+                public interface IntersectionRight<out T> {
+                    public fun read(): T
+                }
+
+                public interface Intersection<out T> : IntersectionLeft<T>, IntersectionRight<T>
+
+                public class IntersectionImpl : Intersection<Int> {
+                    override fun read(): Int = 73
+                }
+
+                public fun newIntersection(): Intersection<Int> = IntersectionImpl()
+
+                public fun sameIntersection(value: Intersection<Int>): Boolean {
+                    val left: IntersectionLeft<Int> = value
+                    val right: IntersectionRight<Int> = value
+                    return left === value && right === value
+                }
+
+                public fun readIntersection(value: Intersection<Int>): Int {
+                    val left: IntersectionLeft<Int> = value
+                    val right: IntersectionRight<Int> = value
+                    return left.read() + right.read() + value.read()
+                }
                 """.trimIndent()
             )
         }
@@ -946,6 +979,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("'wide.Wide__KotlinExact`65'" in libraryIl) { libraryIl }
         assertTrue("'wide.Quad`4'<- 'I', + 'O', 'X', + 'N'>" in libraryIl) { libraryIl }
         assertTrue("'wide.Quad__KotlinExact`4'<'I', 'O', 'X', 'N'>" in libraryIl) { libraryIl }
+        assertTrue(
+            "implements 'wide.Intersection', class 'wide.IntersectionLeft`1'<!0>, " +
+                    "class 'wide.IntersectionRight`1'<!0>" in libraryIl
+        ) { libraryIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionLeft-read-" in libraryIl) { libraryIl }
+        assertTrue("<GenericInterfaceDeclaredBridge-wide.IntersectionRight-read-" in libraryIl) { libraryIl }
 
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
@@ -983,6 +1022,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             acceptQuad(widenedQuad, "wrong")
                             throw Error("mixed exact bridge accepted the wrong shape")
                         } catch (_: ClassCastException) {
+                        }
+
+                        val intersection = newIntersection()
+                        val left: IntersectionLeft<Int> = intersection
+                        val right: IntersectionRight<Int> = intersection
+                        if (!sameIntersection(intersection) || left !== intersection || right !== intersection) {
+                            throw Error("intersection view changed identity")
+                        }
+                        if (left.read() != 73 || right.read() != 73 || readIntersection(intersection) != 219) {
+                            throw Error("intersection slots did not share one implementation")
                         }
                     }
                     """.trimIndent()
@@ -1043,6 +1092,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Type quadDeclared = library.GetType("wide.Quad`4", true);
                             Type quadExact = library.GetType("wide.Quad__KotlinExact`4", true);
                             Type quadImplementation = library.GetType("wide.QuadImpl", true);
+                            Type intersectionCanonical = library.GetType("wide.Intersection", true);
                             Type facade = library.GetType("wide.wideLibraryKt", true);
 
                             Type[] declaredParameters = declared.GetGenericArguments();
@@ -1161,6 +1211,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 Require(failure.InnerException is InvalidCastException,
                                     "wrong-shaped quad argument failure");
                             }
+
+                            MethodInfo createIntersection = RequireMethod(facade, "newIntersection");
+                            MethodInfo sameIntersection = RequireMethod(facade, "sameIntersection");
+                            MethodInfo readIntersection = RequireMethod(facade, "readIntersection");
+                            object intersection = createIntersection.Invoke(null, null);
+                            Require(intersectionCanonical.IsInstanceOfType(intersection),
+                                "intersection canonical identity");
+                            Require((bool) sameIntersection.Invoke(null, new object[] { intersection }),
+                                "intersection parent identity");
+                            wide.IntersectionLeft<int> left = (wide.IntersectionLeft<int>) intersection;
+                            wide.IntersectionRight<int> right = (wide.IntersectionRight<int>) intersection;
+                            Require(Object.ReferenceEquals(left, right), "intersection C# identity");
+                            Require(left.read() == 73 && right.read() == 73,
+                                "intersection parent dispatch");
+                            Require((int) readIntersection.Invoke(null, new object[] { intersection }) == 219,
+                                "intersection Kotlin dispatch");
                             return 0;
                         }
                     }
@@ -1172,9 +1238,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 checkNotNull(csharpCompiler),
                 verifierSource,
                 verifier,
+                libraryAssembly,
+                checkNotNull(frameworkNetStandardFacade),
                 target = "exe",
             )
             assertEquals(0, compileResult.exitCode, compileResult.output)
+
+            val ambiguousSource = consumerDirectory.resolve("AmbiguousIntersection.cs").apply {
+                writeText(
+                    """
+                    public static class AmbiguousIntersection
+                    {
+                        public static int Read(wide.Intersection<int> value)
+                        {
+                            return value.read();
+                        }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val ambiguousOutput = consumerDirectory.resolve("AmbiguousIntersection.dll")
+            val ambiguousCompile = runCSharpCompiler(
+                checkNotNull(csharpCompiler),
+                ambiguousSource,
+                ambiguousOutput,
+                libraryAssembly,
+                checkNotNull(frameworkNetStandardFacade),
+            )
+            assertTrue(ambiguousCompile.exitCode != 0) {
+                "Direct C# intersection call unexpectedly compiled"
+            }
+            assertTrue("error CS0121" in ambiguousCompile.output) { ambiguousCompile.output }
+            assertTrue(!ambiguousOutput.exists())
 
             val verifierProcess = if (target == "net10.0") {
                 consumerDirectory.resolve("WideConsumer.runtimeconfig.json")
