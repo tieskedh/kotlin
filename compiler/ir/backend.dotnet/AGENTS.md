@@ -1036,7 +1036,9 @@ landed shape as a compatibility constraint.
   nullable-primitive-to-Any equality by boxing to the CLR boxed-underlying-or-null boundary.
   Open `T?` is the declaration-stable boxed-or-null `object` carrier fixed by
   `docs/decisions/adr-hybrid-generic-nullability-and-covariant-returns.md`; concrete nullable
-  primitives remain `Nullable<T>` and non-null `T` remains reified. STAYS REJECTED, loudly:
+  primitives remain `Nullable<T>` and non-null `T` remains reified. This ordering precedes the
+  legacy string-bound shortcut: method-level `T : String` maps `T?` to `object`, keeps non-null
+  `T` as `string`, and recovers it after `!!` with `castclass`. STAYS REJECTED, loudly:
   nested open-nullable arguments of invariant reified carriers without an erased view, identity
   between two nullable-primitive values (the
   operands would box; identity of separately boxed values is unrelated to value equality — `ceq`

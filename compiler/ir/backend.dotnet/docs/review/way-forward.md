@@ -374,9 +374,11 @@ by both runtime profiles; Framework and modern C# consumers verify the precise p
 private bridge visibility. Import/export projections and pre-stable compatibility-version tests
 remain, but the Kotlin-owned physical bridge direction is implemented. ABI schema 12 records each
 covariant MethodImpl as a structured `R` entry, so a downstream class inherits an external
-interface-owned bridge without rediscovering it or emitting a duplicate class adapter. The legacy string-bound
-mapping still recognizes nullable `T?` as `string` before the accepted open-nullable `object` rule;
-this ordering bug is the immediate follow-up and is not a platform-specific exception.
+interface-owned bridge without rediscovering it or emitting a duplicate class adapter. The
+open-nullable check now also precedes the legacy non-null string-bound shortcut: method-level
+`T : String` keeps `T` as `string`, but maps `T?` to `object` and casts back only after Kotlin's
+`!!` null check. Portable-library consumers execute that ABI on both runtime profiles, and modern
+C# consumes the object boundary directly.
 
 ### P0-E — Decide the unresolved semantic representations
 

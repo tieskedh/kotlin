@@ -2058,6 +2058,16 @@ private object DotNetIlCheckNotNullIntrinsic : DotNetIlIntrinsicMethod() {
                         pops = 1,
                         pushes = 1,
                     )
+                } else if (
+                    argumentType == DotNetIlValueType.Object &&
+                    expectedType == DotNetIlValueType.String
+                ) {
+                    // `T?` with `T : String` still enters through the uniform object carrier,
+                    // while non-null T keeps the established string slot. Null-check first, then
+                    // recover that statically guaranteed bound without changing the generic ABI.
+                    codegen.emitExpression(argument, argumentType)
+                    codegen.emitReferenceNotNullOrThrowNpe()
+                    codegen.emit("castclass string", pops = 1, pushes = 1)
                 } else if (!argumentType.isDotNetAssignableTo(expectedType)) {
                     dotNetUnsupported(
                         "'!!' produces ${argumentType.nameInSignature} " +

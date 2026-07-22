@@ -12,6 +12,10 @@ fun <T> echoNullable(value: T?): T? = value
 
 fun <T> requireNullable(value: T?): T = value!!
 
+fun <T : String> echoStringBoundNullable(value: T?): T? = value
+
+fun <T : String> requireStringBoundNullable(value: T?): T = value!!
+
 fun primitiveNullable(value: Int?): Int? = echoNullable(value)
 
 fun referenceNullable(value: String?): String? = echoNullable(value)
@@ -24,4 +28,7 @@ fun main() {
     println(primitiveNullable(7))
     println(referenceNullable("ok"))
     println(requireNullable(8))
+    println(echoStringBoundNullable<String>(null))
+    println(echoStringBoundNullable("bounded"))
+    println(requireStringBoundNullable("required-bound"))
 }
