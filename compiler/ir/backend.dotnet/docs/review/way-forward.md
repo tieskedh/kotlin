@@ -443,7 +443,9 @@ The remaining P0-D implementation order is:
    five collection execution interfaces, and C# implementations execute `contains`/`indexOf`
    through exact and widened Kotlin views with the recorded barriers. Cross-profile portable-helper
    promotion needs no manifest record: the parent locators plus the child DLL's
-   concrete `MethodImpl` bundle are sufficient and are now metadata-only execution tested. Do not
+   concrete `MethodImpl` bundle are sufficient and are now metadata-only execution tested. The
+   reader matches complete return and parameter signatures and rejects a doctored return, rather
+   than treating owner/name/arity/count as a declaration identity. Do not
    add a blanket ban for source names that merely resemble canonical names; physical-owner
    separation and explicit `MethodImpl` already preserve their semantics. Do not make a generated
    base class the only path because C# has single class inheritance. Close the remaining raw
