@@ -265,7 +265,9 @@ properties, and events for both runtime/stdlib pairs, while allowing portable ab
 become modern DIMs. It also retains normalized portable custom-attribute identities and payloads
 on assemblies and exposed declarations, excluding the deliberately profile-specific target-
 framework attribute. Raw attribute-blob encoding, MethodImpl rows, resources, and friend-only
-internal surface remain open for the structured metadata model.
+internal surface remain open for the general portable-superset model. The C# source-authoring
+slice now independently pins its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and
+promotion MethodImpl signatures through a metadata-only reader.
 The accepted `adr-profile-aware-interface-default-implementations.md` fixes item 2's body
 placement, and its non-generic foundation is now implemented. Portable profiles emit abstract
 interface slots, helper-owned bodies, and hidden explicit class forwarders. `net10.0` emits real
@@ -448,9 +450,10 @@ The remaining P0-D implementation order is:
    than treating owner/name/arity/count as a declaration identity. Do not
    add a blanket ban for source names that merely resemble canonical names; physical-owner
    separation and explicit `MethodImpl` already preserve their semantics. Do not make a generated
-   base class the only path because C# has single class inheritance. Close the remaining raw
-   `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the structured
-   metadata work rather than with IL substring tests.
+   base class the only path because C# has single class inheritance. The authoring-specific raw
+   MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. Close
+   the remaining general attribute-blob, resource, MethodImpl, and internal-surface comparison in
+   the structured metadata work rather than with IL substring tests.
 
 There is no remaining implicit-intersection representation or production-adapter migration on the
 critical path. The next backend implementation item is the foreign boundary and structured

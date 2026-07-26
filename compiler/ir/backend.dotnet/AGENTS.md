@@ -211,7 +211,8 @@ landed shape as a compatibility constraint.
   assemblies and the exposed surface; `TargetFrameworkAttribute` alone is excluded because its
   value is profile-specific. It is isolated C# test data, not a compiler sidecar; raw attribute-
   blob encoding, MethodImpl rows, resources, and friend-only internal surface remain outside this
-  bounded audit.
+  bounded portable-superset audit. The C# authoring matrix separately audits its exact
+  `InternalsVisibleTo` blob, friend TypeDef visibility, and promotion MethodImpl signatures.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
   and no `mscorlib` MemberRefs. The complete
@@ -1684,7 +1685,10 @@ landed shape as a compatibility constraint.
   widens the type. Effective public/internal owner chains are included; private/protected chains
   and `@PublishedApi internal` compiler-ABI interfaces are excluded. DLL-only tests implement
   top-level and nested internal contracts from an authorized C# assembly on every profile and pin
-  `CS0122` for an unauthorized identity. Generated adapters must reach the one typed body;
+  `CS0122` for an unauthorized identity. The metadata reader also pins the exact
+  `InternalsVisibleTo("GeneratedShape")` blob and the non-public, NestedPublic, NestedPrivate, and
+  public-compiler-ABI TypeDef visibility rows; this evidence does not come from IL text.
+  Generated adapters must reach the one typed body;
   portable defaults call the recorded nameable
   `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current
   hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an
