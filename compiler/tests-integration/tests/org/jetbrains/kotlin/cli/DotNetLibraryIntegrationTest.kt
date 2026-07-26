@@ -227,15 +227,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(0, readerCompile.exitCode, readerCompile.output)
         readerDirectory.resolve("ManifestReader.runtimeconfig.json").writeText(net10RuntimeConfig())
 
-        val sourceText = """
-            package manifest
-
+        val parentDeclarationText = """
             public interface ShapeParent<out T> {
                 public val value: T
                 public var label: String
                 public fun fallback(): T = value
             }
-
+        """.trimIndent()
+        val childDeclarationText = """
             public interface Shape<out T> : ShapeParent<T> {
                 public fun <R> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
@@ -263,27 +262,75 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         """.trimIndent()
 
-        val manifests = linkedMapOf<String, DotNetCSharpImplementationManifest>()
+        val contractsByProfile = linkedMapOf<String, List<DotNetCSharpInterfaceContract>>()
         for (targetProfile in listOf("net48", "netstandard2.0", "net10.0")) {
             val profileDirectory = File(tmpdir, "csharp-implementation-$targetProfile").apply { mkdirs() }
-            val source = profileDirectory.resolve("api.kt").apply { writeText(sourceText) }
+            val externalParent = targetProfile != "net48"
+            val parentModuleName = if (targetProfile == "net10.0") {
+                "Manifest.Parent.Modern"
+            } else {
+                "Manifest.Parent.Portable"
+            }
+            val parentMetadata = if (externalParent) {
+                val parentSource = profileDirectory.resolve("parent.kt").apply {
+                    writeText("package manifest\n\n$parentDeclarationText")
+                }
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    parentSource.path,
+                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, parentModuleName,
+                    K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
+                )
+                profileDirectory.resolve("$parentModuleName.klib")
+            } else {
+                null
+            }
+            val source = profileDirectory.resolve("api.kt").apply {
+                val declarations = if (externalParent) {
+                    childDeclarationText
+                } else {
+                    "$parentDeclarationText\n\n$childDeclarationText"
+                }
+                writeText("package manifest\n\n$declarations")
+            }
             val moduleName = if (targetProfile == "net10.0") {
                 "Manifest.Modern"
             } else {
                 "Manifest.Portable"
             }
-            compileInProcess(
-                K2DotNetCompiler(),
-                source.path,
-                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
-                K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
-                K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
-            )
+            if (parentMetadata == null) {
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    source.path,
+                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                    K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
+                )
+            } else {
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    source.path,
+                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                    K2DotNetCompilerArguments::classpath.cliArgument, parentMetadata.path,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                    K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
+                )
+            }
             val producerAssembly = profileDirectory.resolve("$moduleName.dll")
             val producerKlib = profileDirectory.resolve("$moduleName.klib")
             assertTrue(producerAssembly.isFile && producerKlib.isFile)
             assertTrue(producerKlib.delete()) { "The no-KLIB manifest test could not remove $producerKlib" }
+            val parentAssembly = parentMetadata?.let { metadata ->
+                assertTrue(metadata.isFile)
+                assertTrue(metadata.delete()) { "The no-KLIB manifest test could not remove $metadata" }
+                profileDirectory.resolve("$parentModuleName.dll").also { assembly ->
+                    assertTrue(assembly.isFile)
+                }
+            }
 
             val manifest = readCSharpImplementationManifestFromDll(
                 modernCSharp,
@@ -293,17 +340,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertEquals(moduleName, manifest.assemblyName)
             assertEquals(targetProfile, manifest.targetProfile)
-            manifests[targetProfile] = manifest
+            val parentManifest = parentAssembly?.let { assembly ->
+                readCSharpImplementationManifestFromDll(
+                    modernCSharp,
+                    readerAssembly,
+                    readerDirectory,
+                    assembly,
+                )
+            } ?: manifest
 
             val contract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.Shape"
             }
-            val parentContract = manifest.interfaces.single { interfaceContract ->
+            val parentContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeParent"
             }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
-            assertEquals(2, manifest.interfaces.size)
+            assertEquals(if (externalParent) 1 else 2, manifest.interfaces.size)
+            contractsByProfile[targetProfile] =
+                listOf(parentContract, contract).sortedBy(DotNetCSharpInterfaceContract::logicalKey)
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
             assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
             assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
@@ -363,14 +419,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 writeText(generateShapeImplementation(contract, parentContract))
             }
             val generatedAssembly = profileDirectory.resolve("GeneratedShape.dll")
-            val generatedCompile = runModernCSharpCompiler(
-                modernCSharp,
-                generatedSource,
-                generatedAssembly,
-                producerAssembly,
-                runtimeAssembly,
-                target = "exe",
-            )
+            val generatedCompile = if (parentAssembly == null) {
+                runModernCSharpCompiler(
+                    modernCSharp,
+                    generatedSource,
+                    generatedAssembly,
+                    producerAssembly,
+                    runtimeAssembly,
+                    target = "exe",
+                )
+            } else {
+                runModernCSharpCompiler(
+                    modernCSharp,
+                    generatedSource,
+                    generatedAssembly,
+                    producerAssembly,
+                    parentAssembly,
+                    runtimeAssembly,
+                    target = "exe",
+                )
+            }
             assertEquals(0, generatedCompile.exitCode, generatedCompile.output)
             runtimeAssembly.copyTo(profileDirectory.resolve(runtimeAssembly.name), overwrite = true)
             profileDirectory.resolve("GeneratedShape.runtimeconfig.json").writeText(net10RuntimeConfig())
@@ -382,24 +450,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
 
-        val modern = manifests.getValue("net10.0")
+        val modern = contractsByProfile.getValue("net10.0")
         for (portableProfile in listOf("net48", "netstandard2.0")) {
-            val portable = manifests.getValue(portableProfile)
+            val portable = contractsByProfile.getValue(portableProfile)
             assertEquals(
-                portable.interfaces.map { contract ->
+                portable.map { contract ->
                     contract.logicalKey to contract.members.map { it.logicalKey }
                 },
-                modern.interfaces.map { contract ->
+                modern.map { contract ->
                     contract.logicalKey to contract.members.map { it.logicalKey }
                 },
             )
             assertEquals(
-                portable.interfaces.flatMap { contract ->
+                portable.flatMap { contract ->
                     contract.members.mapNotNull { member ->
                         member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
                     }
                 },
-                modern.interfaces.flatMap { contract ->
+                modern.flatMap { contract ->
                     contract.members.mapNotNull { member ->
                         member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
                     }

@@ -168,11 +168,13 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-One same-DLL Kotlin generic parent is composed from its own manifest contract and the ordinary CLR
-interface edge. This covers a parent-owned mutable property and helper/DIM default through a child
-exact view without duplicating the physical TypeSpec in the manifest. Multiple parents,
-cross-assembly parents, and non-generic parents are explicitly marked unsupported by the first
-schema slice; they must not be silently generated.
+One Kotlin generic parent is composed from its own manifest contract and the ordinary CLR
+interface edge, whether the parent is in the same DLL or a referenced compiler-produced Kotlin
+library DLL. This covers a parent-owned mutable property and helper/DIM default through a child
+exact view without duplicating the local or assembly-qualified physical TypeSpec in the manifest.
+The cross-assembly test deletes both KLIBs before reading the two DLL contracts. Multiple parents,
+cross-profile promotion from a portable helper to a child-owned DIM, and non-generic parents are
+explicitly unsupported by the first schema slice; they must not be silently generated.
 Runtime-bootstrap interfaces and ordinary non-generic interfaces are not yet source-authoring
 inputs. Friend-accessible internal interfaces are also omitted by the public-only first collector.
 All must gain equivalent manifest records before the generator claims support for implementing

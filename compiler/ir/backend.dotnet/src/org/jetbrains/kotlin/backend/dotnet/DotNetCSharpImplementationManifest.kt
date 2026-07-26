@@ -479,6 +479,7 @@ internal fun collectDotNetCSharpImplementationManifest(
     target: DotNetTarget,
     files: Set<IrFile>,
     genericInterfaces: Map<IrClass, DotNetGenericInterfaceInfo>,
+    externalLibraries: List<DotNetExternalLibrary>,
     availableFunctions: Map<IrSimpleFunction, DotNetIlFunctionInfo>,
     typeMapper: DotNetIlTypeMapper,
     preLoweringDeclarationKeys: Map<IrDeclaration, String>,
@@ -535,9 +536,18 @@ internal fun collectDotNetCSharpImplementationManifest(
                     directSuperInterfaces.size == 1 -> {
                         val superInterface =
                             (directSuperInterfaces.single().classifier as? IrClassSymbol)?.owner
-                        if (superInterface !in genericInterfaces || superInterface?.fileOrNull !in files) {
+                        val isSameAssemblyGenericParent =
+                            superInterface in genericInterfaces && superInterface?.fileOrNull in files
+                        val externalParentAssembly = superInterface
+                            ?.let(typeMapper::genericInterfaceInfoOrNull)
+                            ?.canonicalClassInfo
+                            ?.assemblyName
+                        val isExternalKotlinLibraryParent = externalLibraries.any { library ->
+                            library.artifact.assemblyName.equals(externalParentAssembly, ignoreCase = true)
+                        }
+                        if (!isSameAssemblyGenericParent && !isExternalKotlinLibraryParent) {
                             add(
-                                "cross-assembly or non-generic inherited interface contracts are not supported " +
+                                "non-generic or non-library inherited interface contracts are not supported " +
                                         "by the first C# authoring schema"
                             )
                         }
