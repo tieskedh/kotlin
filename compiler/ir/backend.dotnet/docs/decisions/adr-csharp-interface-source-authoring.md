@@ -57,7 +57,7 @@ external assembly qualifiers remain identity-significant. The one exception is t
 core-facade set (`mscorlib`, `netstandard`, `System.Runtime`, and `System.Private.CoreLib`) for
 `System.*` types, which Roslyn may unify through type forwarding across profiles.
 
-Schema 6 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
+Schema 7 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
 and member records use the same public `IdSignature` rendered by
 `PublicIdSignatureComputer(DotNetIrMangler)` for the KLIB/DLL physical index. A manifest must not
 introduce a runtime-, Roslyn-, or tooling-owned declaration identity. The `X:` key of a derived
@@ -208,7 +208,7 @@ Kotlin owner-relative constraint deliberately omitted because it is illegal on a
 must not be reconstructed as a C# constraint; any additional analyzer guidance is Kotlin tooling
 metadata, not executable CLR signature metadata.
 
-Schema 6 records that guidance as normalized pairs of method-type-parameter and
+Schema 7 records that guidance as normalized pairs of method-type-parameter and
 interface-owner-type-parameter indices on direct members and derived intersection slots. This is
 only the logical fact needed to explain the weakened boundary and generate an appropriate runtime
 adapter. It is not a CLR `where` clause and does not duplicate arbitrary Kotlin types or
@@ -240,6 +240,23 @@ physical interface views before treating the DIM as effective. The manifest does
 those physical mappings, and tooling never infers promotion merely from the consumer profile.
 Missing, incomplete, or ambiguous mappings are diagnostics rather than a reason to guess or emit
 an overriding helper forwarder.
+
+Schema 7 also records each declaration's sorted Kotlin logical override keys. These are ordinary
+`DotNetIrMangler` member identities, not a tooling namespace. They preserve the Kotlin-selected
+member when several inherited defaults share a CLR signature but portable metadata contains only
+abstract slots and independent helpers. Generated adapters for every inherited slot invoke the
+most-derived selected helper; on `net10.0` the selected DIM remains method-free. A child-selected
+body is never reconstructed by calling each parent's helper independently.
+
+Tooling cross-checks every consumed edge against the CLR interface ancestry and the resolved
+authoring signatures, including source name, member kind, generic arity, parameters, and
+covariant-compatible result. A syntactically valid logical key cannot redirect an unrelated CLR
+slot; stale or tampered edges fail as `KDNCS006`.
+
+If a C# class combines unrelated authored Kotlin roots whose competing defaults have no
+Kotlin-owned resolving declaration, the generator requires one C# source body. It does not invent
+a parent preference. This is the foreign-source equivalent of Kotlin requiring an explicit
+override for an unresolved default conflict.
 
 Promotion matching uses the complete raw ECMA-335 MethodImpl declaration signature: declaring
 assembly and owner, method name, generic arity, return type, and every parameter type. A row with a
@@ -340,7 +357,7 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-Schema 6 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
+Schema 7 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
 graph, whether they are in the same DLL or referenced compiler-produced Kotlin library DLLs. This
 covers a two-branch generic diamond with a shared root default, a parent-owned mutable property,
 and a sibling-owned property through a child exact view. Logical root keys deduplicate the diamond;
@@ -348,7 +365,7 @@ the manifest does not duplicate local or assembly-qualified physical TypeSpecs.
 
 An unrelated same-named parent intersection is different: CLR metadata exposes the bodyless
 derived slot but not the fact that Kotlin selected it to unify several logical declarations.
-Schema 6 therefore records the sorted contributor logical keys and the derived declared/exact
+Schema 7 therefore records the sorted contributor logical keys and the derived declared/exact
 MethodDef locators. Generated C# keeps one source body, explicitly adapts the derived slot, and
 maps the parent canonical identities to that same body. For a variant mutable-property
 intersection, the declared record contains the variance-safe getter while the exact records
@@ -372,6 +389,10 @@ derived and inherited physical slots, and a bodyless C# implementor receives `KD
 silently inheriting either the portable helper or modern DIM. The same rule is pinned for a
 covariant generic declaration: the declared typed slot is the authoring member, canonical and
 inherited views adapt to that one body, and no view acquires a copied semantic body.
+The same DLL-only matrix resolves two competing parent defaults in Kotlin and gives a bodyless C#
+class that derived interface. Portable adapters for the child and both parent slots call only the
+child helper; modern profiles inherit only the selected DIM. Calls through all three views observe
+the Kotlin-selected body.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their
@@ -384,7 +405,7 @@ from the authoring manifest.
 
 The first production Roslyn slice is now present under `csharp-authoring`. It builds as a
 `netstandard2.0` analyzer/generator component with a locked Roslyn dependency graph. It reads the
-actual schema-6 assembly metadata through Roslyn symbols, enforces bounded payload, record, and
+actual schema-7 assembly metadata through Roslyn symbols, enforces bounded payload, record, and
 string limits, validates the complete record graph, recognizes only a real canonical/non-generic
 or declared/generic base-list opt-in, and emits the diagnostics listed above. DLL-only tests prove
 generic and non-generic discovery, malformed/version-skew rejection, unavailable friendship,
@@ -440,7 +461,7 @@ explicit `[Kotlin.Runtime]` self-reference and the equivalent local Roslyn symbo
 MethodDef. A nullable overload additionally proves that a producer's `[mscorlib]System.Nullable`
 locator binds the core-forwarded Roslyn symbol without weakening non-core assembly identity.
 
-Schema 6 also records special-barrier policy directly from Kotlin's shared
+Schema 7 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding
 `Collection.contains` records one checked argument with a `false` fallback, while a child
 overriding `List.indexOf` records `-1`. An ordinary user unsafe input records no policy. The

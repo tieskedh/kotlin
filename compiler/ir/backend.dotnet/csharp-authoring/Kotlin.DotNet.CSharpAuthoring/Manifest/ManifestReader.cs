@@ -16,7 +16,7 @@ namespace Kotlin.DotNet.CSharpAuthoring.Manifest;
 
 internal static class ManifestReader
 {
-    internal const int CurrentSchemaVersion = 6;
+    internal const int CurrentSchemaVersion = 7;
     internal const string AssemblyMetadataKey = "Kotlin.CSharpImplementationManifest";
 
     private const string LogicalIdentityScheme = "kotlin-public-id-signature-legacy-v1";
@@ -284,7 +284,7 @@ internal static class ManifestReader
         var members = new Dictionary<string, PendingMember>(StringComparer.Ordinal);
         foreach (Record record in records.Where(record => record.Tag == "M"))
         {
-            RequireArity(record, 11, "member");
+            RequireArity(record, 12, "member");
             string interfaceKey = RequireField(record, 0, "member interface key");
             string logicalKey = RequireKotlinKey(
                 RequireField(record, 1, "member logical key"), "F:", "member");
@@ -324,6 +324,9 @@ internal static class ManifestReader
                     policy,
                     DecodeConstraints(
                         RequireField(record, 10, "erased owner-relative constraints"),
+                        logicalKey),
+                    DecodeLogicalKeys(
+                        RequireField(record, 11, "overridden logical members"),
                         logicalKey)));
         }
 
@@ -354,6 +357,7 @@ internal static class ManifestReader
                 pending.SemanticBodyView,
                 pending.WrongShapePolicy,
                 pending.ErasedOwnerRelativeConstraints,
+                pending.OverriddenLogicalMemberKeys,
                 slots));
         }
         if (slotsByMember.Count != 0)
@@ -563,6 +567,28 @@ internal static class ManifestReader
                 throw new ManifestFormatException(
                     $"C# implementation member '{member.LogicalKey}' has an unknown default kind.");
         }
+    }
+
+    private static ImmutableArray<string> DecodeLogicalKeys(
+        string encoded,
+        string memberKey)
+    {
+        ImmutableArray<string> result = DecodeList(encoded);
+        string[] normalized = result
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(key => key, StringComparer.Ordinal)
+            .ToArray();
+        if (result.Length != normalized.Length ||
+            !result.SequenceEqual(normalized, StringComparer.Ordinal) ||
+            result.Any(key =>
+                !key.StartsWith("F:", StringComparison.Ordinal) ||
+                key.Length <= 2 ||
+                string.Equals(key, memberKey, StringComparison.Ordinal)))
+        {
+            throw new ManifestFormatException(
+                $"C# implementation member '{memberKey}' has invalid overridden members.");
+        }
+        return result;
     }
 
     private static void ValidateConstraints(
@@ -907,7 +933,8 @@ internal static class ManifestReader
             KotlinDefaultKind defaultKind,
             KotlinInterfaceView? semanticBodyView,
             KotlinWrongShapePolicy? wrongShapePolicy,
-            ImmutableArray<KotlinErasedOwnerRelativeConstraint> erasedOwnerRelativeConstraints)
+            ImmutableArray<KotlinErasedOwnerRelativeConstraint> erasedOwnerRelativeConstraints,
+            ImmutableArray<string> overriddenLogicalMemberKeys)
         {
             InterfaceKey = interfaceKey;
             LogicalKey = logicalKey;
@@ -918,6 +945,7 @@ internal static class ManifestReader
             SemanticBodyView = semanticBodyView;
             WrongShapePolicy = wrongShapePolicy;
             ErasedOwnerRelativeConstraints = erasedOwnerRelativeConstraints;
+            OverriddenLogicalMemberKeys = overriddenLogicalMemberKeys;
         }
 
         internal string InterfaceKey { get; }
@@ -929,6 +957,7 @@ internal static class ManifestReader
         internal KotlinInterfaceView? SemanticBodyView { get; }
         internal KotlinWrongShapePolicy? WrongShapePolicy { get; }
         internal ImmutableArray<KotlinErasedOwnerRelativeConstraint> ErasedOwnerRelativeConstraints { get; }
+        internal ImmutableArray<string> OverriddenLogicalMemberKeys { get; }
     }
 
     private sealed class PendingIntersection
