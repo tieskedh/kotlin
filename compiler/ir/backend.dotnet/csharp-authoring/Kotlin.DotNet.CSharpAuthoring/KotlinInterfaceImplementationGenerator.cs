@@ -42,7 +42,8 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
                         continue;
                     string source = EmitContractMarker(
                         contract,
-                        emission.GeneratedMembers);
+                        emission.GeneratedMembers,
+                        emission.AdditionalInterfaces);
                     productionContext.AddSource(
                         HintName(contract.ImplementationType) + ".KotlinInterfaceImplementation.g.cs",
                         SourceText.From(source, Encoding.UTF8));
@@ -52,7 +53,8 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
 
     private static string EmitContractMarker(
         AuthoringContract contract,
-        string generatedMembers)
+        string generatedMembers,
+        System.Collections.Immutable.ImmutableArray<INamedTypeSymbol> additionalInterfaces)
     {
         INamedTypeSymbol type = contract.ImplementationType;
         var source = new StringBuilder();
@@ -79,6 +81,15 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
                 ", ",
                 type.TypeParameters.Select(parameter => EscapeIdentifier(parameter.Name))));
             source.Append('>');
+        }
+        if (!additionalInterfaces.IsEmpty)
+        {
+            source.Append(" : ");
+            source.Append(string.Join(
+                ", ",
+                additionalInterfaces.Select(interfaceType =>
+                    interfaceType.ToDisplayString(
+                        SymbolDisplayFormat.FullyQualifiedFormat))));
         }
         source.AppendLine();
         source.Append(indent);
