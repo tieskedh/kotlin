@@ -1961,6 +1961,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public abstract class ExistingCSharpBase
+                    {
+                        protected ExistingCSharpBase(int baseValue)
+                        {
+                            BaseValue = baseValue;
+                        }
+
+                        public int BaseValue { get; }
+                    }
+
+                    public sealed partial class MultiRootBaseListProbe :
+                        ExistingCSharpBase,
+                        manifest.OrdinaryShape,
+                        manifest.OwnerBound<manifest.ManifestMarker>
+                    {
+                        public MultiRootBaseListProbe() : base(42) {}
+
+                        public string DisplayName { get { return "ordinary"; } }
+                        public int Count { get; set; } = 3;
+                        public string Format(string prefix)
+                        {
+                            return prefix + DisplayName;
+                        }
+
+                        public R Retain<R>(R value)
+                        {
+                            return value;
+                        }
+                    }
+
                     public sealed partial class IntersectionBaseListProbe :
                         manifest.ResolvedIntersection<string>
                     {
@@ -2088,6 +2118,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated owner-bound implementation failed: " +
                                     ownerBoundResult);
+                            var multiRoot = new MultiRootBaseListProbe();
+                            int multiOrdinaryResult =
+                                manifest.apiKt.verifyOrdinary(multiRoot);
+                            int multiOwnerBoundResult =
+                                manifest.apiKt.verifyOwnerBound(multiRoot);
+                            if (multiRoot.BaseValue != 42 ||
+                                    multiOrdinaryResult != 0 ||
+                                    multiOwnerBoundResult != 0)
+                                throw new System.Exception(
+                                    "Generated multi-root/base-class implementation failed");
                             int intersectionResult =
                                 manifest.apiKt.verifyIntersection(
                                     new IntersectionBaseListProbe());
