@@ -1597,7 +1597,10 @@ landed shape as a compatibility constraint.
   opts in with the real base list (`partial class C<T> : Shape<T>`): canonical for a non-generic
   Kotlin interface and the declared Kotlin view for a split generic interface. Attributes,
   generated base classes, marker interfaces, exact-view base lists, and separate tooling
-  identities are not authoring contracts. The `netstandard2.0` Roslyn component under
+  identities are not authoring contracts. A real C# class base remains untouched, and multiple
+  unrelated Kotlin roots compose in the same generated partial; a DLL-only class executes both
+  ordinary and generic Kotlin contracts while retaining its base constructor and state. The
+  `netstandard2.0` Roslyn component under
   `csharp-authoring` parses the authoritative DLL manifest with explicit limits and diagnoses
   missing `partial`, inaccessible friendship, conflicting explicit ABI members, unsupported
   substitutions, malformed manifests, and schema/version mismatch. Generated canonical/exact
