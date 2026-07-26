@@ -678,6 +678,14 @@ canonical Property on the C# class. The generator emits that physical adapter an
 virtually through the typed DIM. Portable adapters use the selected generic child helper, and
 declared/exact results never detour through an erased cast.
 
+A covariant mutable default now pins the complementary setter path. The declared getter and exact
+setter own their typed DIM bodies; secondary typed DIM adapters are inherited rather than
+re-emitted on the class. Only the abstract erased Property and selected inherited slots receive
+class adapters. Portable erased setters convert `object` to the selected helper's constructed
+parameter, while modern erased setters dispatch to the exact DIM after the same boundary cast.
+Wrong-shaped `@UnsafeVariance` writes retain ordinary cast failure and do not reach either parent
+body.
+
 A second portable exception-signature lane now returns each broad logical category, stores and
 mutates all four through public properties, and returns a nested generic runtime-exception value.
 Separate net48 and net10 consumers preserve classifier results and exact object identity across the
