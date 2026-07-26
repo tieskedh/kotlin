@@ -1684,8 +1684,11 @@ landed shape as a compatibility constraint.
   `InternalsVisibleTo` remain the sole access authority. The manifest never grants friendship or
   widens the type. Effective public/internal owner chains are included; private/protected chains
   and `@PublishedApi internal` compiler-ABI interfaces are excluded. DLL-only tests implement
-  top-level and nested internal contracts from an authorized C# assembly on every profile and pin
-  `CS0122` for an unauthorized identity. The metadata reader also pins the exact
+  top-level and nested internal contracts through the production generator from an authorized C#
+  assembly on every profile and pin `CS0122` separately for both unauthorized identities.
+  Nested owner paths use `+` for Roslyn metadata lookup and `.` only for source-name matching;
+  accessibility walks every public/internal owner and applies producer friendship to internal
+  components. The metadata reader also pins the exact
   `InternalsVisibleTo("GeneratedShape")` blob and the non-public, NestedPublic, NestedPrivate, and
   public-compiler-ABI TypeDef visibility rows; this evidence does not come from IL text.
   Generated adapters must reach the one typed body;

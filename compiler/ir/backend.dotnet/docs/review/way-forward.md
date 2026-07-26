@@ -416,7 +416,9 @@ The remaining P0-D implementation order is:
    the additional partial declaration and is exercised against DLL-only references. Nested
    reference-class and record-class implementors reconstruct a partial containing-type chain;
    non-partial containers receive `KDNCS011`, while file-local and value-type implementors remain
-   explicit unsupported shapes. Ordinary
+   explicit unsupported shapes. Nested friend interfaces also execute through production
+   generation: structured owner paths use CLR `+` lookup, and accessibility walks the complete
+   public/internal chain with producer friendship. Ordinary
    non-generic method/property adapters now execute public and authorized-internal Kotlin
    verification on every profile, including portable helper forwarding and modern/promotion DIM
    suppression. MethodDef locators are matched against complete open return and parameter

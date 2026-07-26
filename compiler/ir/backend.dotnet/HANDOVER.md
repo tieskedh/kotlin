@@ -1677,6 +1677,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   contract is NestedPublic, a private nested interface is NestedPrivate, and
   `@PublishedApi internal` compiler ABI remains physically public but absent from the authoring
   manifest. C# positive/negative access tests remain the observable companion evidence.
+- The production generator now implements the nested friend contract too. Manifest owner paths
+  stay structured: dotted names match C# source while `+` resolves nested CLR metadata. The
+  analyzer walks the complete public/internal owner chain and applies the producer friend grant
+  to internal components instead of letting Roslyn's broad accessibility shortcut reject the
+  nested public interface. Authorized execution and a dedicated unauthorized `CS0122` lane pin
+  both sides.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot
