@@ -420,8 +420,12 @@ The remaining P0-D implementation order is:
    generator emits the additional partial declaration and is exercised against DLL-only
    references. Nested
    reference-class and record-class implementors reconstruct a partial containing-type chain;
-   non-partial containers receive `KDNCS011`, while file-local and value-type implementors remain
-   explicit unsupported shapes. Nested friend interfaces also execute through production
+   non-partial containers receive `KDNCS011`, while file-local types remain explicitly
+   unsupported. Value-type implementors are an accepted deferral behind `KDNCS010`, not a
+   reference-class generator backlog item: portable helper boxing and modern DIM/constrained
+   dispatch need one Kotlin contract for identity, copies, mutation, and default dispatch first.
+   No implicit wrapper is permitted, and the source-authoring ADR records the cross-profile exit
+   matrix. Nested friend interfaces also execute through production
    generation: structured owner paths use CLR `+` lookup, and accessibility walks the complete
    public/internal chain with producer friendship. A nested covariant generic friend additionally
    executes its canonical and typed view adapters from one C# property body. Ordinary
