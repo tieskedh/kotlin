@@ -7,7 +7,10 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -17,12 +20,13 @@ namespace Kotlin.DotNet.CSharpAuthoring.Manifest;
 internal static class ManifestReader
 {
     internal const int CurrentSchemaVersion = 7;
-    internal const string AssemblyMetadataKey = "Kotlin.CSharpImplementationManifest";
+    internal const string ManagedResourceName = "Kotlin.CSharpImplementationManifest";
 
     private const string LogicalIdentityScheme = "kotlin-public-id-signature-legacy-v1";
-    private const int MaximumChunkCount = 1_024;
-    private const int MaximumEncodedPayloadCharacters = 8 * 1_024 * 1_024;
+    private const int ManagedResourceHeaderSize = 48;
     private const int MaximumDecodedPayloadBytes = 4 * 1_024 * 1_024;
+    private const int MaximumManagedResourceBytes =
+        ManagedResourceHeaderSize + MaximumDecodedPayloadBytes;
     private const int MaximumRecordCount = 50_000;
     private const int MaximumFieldCharacters = 65_536;
     private const char ListSeparator = '\0';
@@ -30,6 +34,7 @@ internal static class ManifestReader
     private static readonly Encoding StrictUtf8 = new UTF8Encoding(
         encoderShouldEmitUTF8Identifier: false,
         throwOnInvalidBytes: true);
+    private static readonly byte[] ManagedResourceMagic = Encoding.ASCII.GetBytes("KDNCSM01");
 
     internal static KotlinManifestSet Read(Compilation compilation)
     {
@@ -37,13 +42,14 @@ internal static class ManifestReader
         var problems = ImmutableArray.CreateBuilder<KotlinManifestProblem>();
         foreach (MetadataReference reference in compilation.References)
         {
-            if (!(compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly))
+            if (!(reference is PortableExecutableReference portableReference) ||
+                !(compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly))
                 continue;
 
-            ImmutableArray<KeyValuePair<string, string>> metadata;
+            byte[]? resource;
             try
             {
-                metadata = ReadAssemblyMetadata(assembly);
+                resource = ReadManagedResource(portableReference);
             }
             catch (ManifestFormatException failure)
             {
@@ -51,13 +57,12 @@ internal static class ManifestReader
                 continue;
             }
 
-            if (!metadata.Any(entry =>
-                    string.Equals(entry.Key, AssemblyMetadataKey, StringComparison.Ordinal)))
+            if (resource == null)
                 continue;
 
             try
             {
-                KotlinCSharpManifest manifest = DecodeAssemblyMetadata(metadata);
+                KotlinCSharpManifest manifest = DecodeManagedResource(resource);
                 if (!string.Equals(
                         manifest.AssemblyName,
                         assembly.Identity.Name,
@@ -80,118 +85,132 @@ internal static class ManifestReader
         return new KotlinManifestSet(references.ToImmutable(), problems.ToImmutable());
     }
 
-    private static ImmutableArray<KeyValuePair<string, string>> ReadAssemblyMetadata(
-        IAssemblySymbol assembly)
+    private static byte[]? ReadManagedResource(PortableExecutableReference reference)
     {
-        var result = ImmutableArray.CreateBuilder<KeyValuePair<string, string>>();
-        foreach (AttributeData attribute in assembly.GetAttributes())
-        {
-            if (!string.Equals(
-                    attribute.AttributeClass?.ToDisplayString(),
-                    "System.Reflection.AssemblyMetadataAttribute",
-                    StringComparison.Ordinal))
-                continue;
-            if (attribute.ConstructorArguments.Length != 2 ||
-                !(attribute.ConstructorArguments[0].Value is string key) ||
-                !(attribute.ConstructorArguments[1].Value is string value))
-                throw new ManifestFormatException(
-                    $"Assembly '{assembly.Identity.Name}' has a malformed AssemblyMetadataAttribute.");
-            if (key == AssemblyMetadataKey ||
-                key.StartsWith(AssemblyMetadataKey + ".", StringComparison.Ordinal))
-                result.Add(new KeyValuePair<string, string>(key, value));
-        }
+        string? path = reference.FilePath ?? reference.Display;
+        if (string.IsNullOrEmpty(path))
+            return null;
 
-        return result.ToImmutable();
+        try
+        {
+#pragma warning disable RS1035 // The contract is embedded in the referenced PE, not a sidecar.
+            using (FileStream stream = File.OpenRead(path))
+#pragma warning restore RS1035
+            using (var peReader = new PEReader(stream))
+            {
+                if (!peReader.HasMetadata)
+                    return null;
+                MetadataReader metadata = peReader.GetMetadataReader();
+                ManifestResource? selected = null;
+                foreach (ManifestResourceHandle handle in metadata.ManifestResources)
+                {
+                    ManifestResource resource = metadata.GetManifestResource(handle);
+                    if (!string.Equals(
+                            metadata.GetString(resource.Name),
+                            ManagedResourceName,
+                            StringComparison.Ordinal))
+                        continue;
+                    if (selected != null)
+                        throw new ManifestFormatException(
+                            $"Assembly contains duplicate managed resource '{ManagedResourceName}'.");
+                    selected = resource;
+                }
+                if (selected == null)
+                    return null;
+
+                ManifestResource manifestResource = selected.Value;
+                if (!manifestResource.Implementation.IsNil)
+                    throw new ManifestFormatException(
+                        $"Managed resource '{ManagedResourceName}' is linked instead of embedded.");
+                if (peReader.PEHeaders.CorHeader == null)
+                    throw new ManifestFormatException(
+                        $"Managed resource '{ManagedResourceName}' has no CLR resource directory.");
+                DirectoryEntry directory =
+                    peReader.PEHeaders.CorHeader.ResourcesDirectory;
+                if (directory.RelativeVirtualAddress == 0 || directory.Size < sizeof(int))
+                    throw new ManifestFormatException(
+                        $"Managed resource '{ManagedResourceName}' has no CLR resource data.");
+
+                int offset = checked((int)manifestResource.Offset);
+                if (offset < 0 || offset > directory.Size - sizeof(int))
+                    throw new ManifestFormatException(
+                        $"Managed resource '{ManagedResourceName}' has an invalid offset.");
+                PEMemoryBlock block = peReader.GetSectionData(directory.RelativeVirtualAddress);
+                if (block.Length < directory.Size)
+                    throw new ManifestFormatException(
+                        $"Managed resource '{ManagedResourceName}' extends beyond its PE section.");
+                BlobReader reader = block.GetReader(offset, directory.Size - offset);
+                int resourceSize = reader.ReadInt32();
+                if (resourceSize < 0 ||
+                    resourceSize > MaximumManagedResourceBytes ||
+                    resourceSize > reader.RemainingBytes)
+                    throw new ManifestFormatException(
+                        $"Managed resource '{ManagedResourceName}' has an invalid size.");
+                return reader.ReadBytes(resourceSize);
+            }
+        }
+        catch (ManifestFormatException)
+        {
+            throw;
+        }
+        catch (Exception failure) when (
+            failure is IOException ||
+            failure is UnauthorizedAccessException ||
+            failure is BadImageFormatException ||
+            failure is InvalidOperationException ||
+            failure is ArgumentOutOfRangeException ||
+            failure is OverflowException)
+        {
+            throw new ManifestFormatException(
+                $"Cannot read managed resource '{ManagedResourceName}' from " +
+                $"'{path}': {failure.Message}",
+                failure);
+        }
     }
 
-    private static KotlinCSharpManifest DecodeAssemblyMetadata(
-        ImmutableArray<KeyValuePair<string, string>> metadata)
+    private static KotlinCSharpManifest DecodeManagedResource(byte[] resource)
     {
-        var byKey = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (KeyValuePair<string, string> entry in metadata)
+        if (resource.Length < ManagedResourceHeaderSize)
+            throw new ManifestFormatException(
+                "C# implementation manifest resource is truncated.");
+        for (int index = 0; index < ManagedResourceMagic.Length; index++)
         {
-            if (byKey.ContainsKey(entry.Key))
+            if (resource[index] != ManagedResourceMagic[index])
                 throw new ManifestFormatException(
-                    $"Duplicate C# implementation assembly metadata key '{entry.Key}'.");
-            byKey.Add(entry.Key, entry.Value);
+                    "C# implementation manifest resource has an invalid magic.");
         }
 
-        if (!byKey.TryGetValue(AssemblyMetadataKey, out string marker))
-            throw new ManifestFormatException("Assembly has no C# implementation manifest.");
-        byKey.Remove(AssemblyMetadataKey);
-
-        string[] markerFields = marker.Split(':');
-        if (markerFields.Length != 3)
-            throw new ManifestFormatException("C# implementation manifest marker is malformed.");
-        if (!int.TryParse(
-                markerFields[0],
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out int schemaVersion))
-            throw new ManifestFormatException(
-                "C# implementation manifest marker has no numeric schema.");
+        int schemaVersion = ReadInt32LittleEndian(resource, ManagedResourceMagic.Length);
         if (schemaVersion != CurrentSchemaVersion)
             throw new ManifestVersionException(
                 $"Assembly manifest schema {schemaVersion} is incompatible with " +
                 $"Kotlin C# tooling schema {CurrentSchemaVersion}.");
-        if (!int.TryParse(
-                markerFields[1],
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out int chunkCount))
+        int payloadSize = ReadInt32LittleEndian(
+            resource,
+            ManagedResourceMagic.Length + sizeof(int));
+        if (payloadSize < 0 || payloadSize > MaximumDecodedPayloadBytes)
             throw new ManifestFormatException(
-                "C# implementation manifest marker has no numeric chunk count.");
-        if (chunkCount < 1 || chunkCount > MaximumChunkCount)
+                "C# implementation manifest resource has an invalid payload size.");
+        if (resource.Length != ManagedResourceHeaderSize + payloadSize)
             throw new ManifestFormatException(
-                $"C# implementation manifest chunk count {chunkCount} exceeds the supported limit.");
-        if (markerFields[2].Length != 64 || markerFields[2].Any(character =>
-                !((character >= '0' && character <= '9') ||
-                  (character >= 'a' && character <= 'f'))))
-            throw new ManifestFormatException(
-                "C# implementation manifest marker has an invalid SHA-256 digest.");
-
-        var payload = new StringBuilder();
-        for (int index = 0; index < chunkCount; index++)
+                "C# implementation manifest resource size does not match its header.");
+        var payload = new byte[payloadSize];
+        Buffer.BlockCopy(resource, ManagedResourceHeaderSize, payload, 0, payloadSize);
+        using (SHA256 sha256 = SHA256.Create())
         {
-            string key = AssemblyMetadataKey + "." +
-                index.ToString("D4", CultureInfo.InvariantCulture);
-            if (!byKey.TryGetValue(key, out string chunk))
-                throw new ManifestFormatException(
-                    $"C# implementation manifest is missing chunk '{key}'.");
-            byKey.Remove(key);
-            if (payload.Length + chunk.Length > MaximumEncodedPayloadCharacters)
-                throw new ManifestFormatException(
-                    "C# implementation manifest payload exceeds the supported size.");
-            payload.Append(chunk);
+            byte[] digest = sha256.ComputeHash(payload);
+            for (int index = 0; index < digest.Length; index++)
+            {
+                if (resource[16 + index] != digest[index])
+                    throw new ManifestFormatException(
+                        "C# implementation manifest resource payload hash does not match its header.");
+            }
         }
-
-        if (byKey.Count != 0)
-            throw new ManifestFormatException(
-                "C# implementation manifest has unexpected chunks: " +
-                string.Join(", ", byKey.Keys.OrderBy(key => key, StringComparer.Ordinal)));
-
-        byte[] bytes;
-        try
-        {
-            bytes = Convert.FromBase64String(payload.ToString());
-        }
-        catch (FormatException failure)
-        {
-            throw new ManifestFormatException(
-                "C# implementation manifest payload is not base64.", failure);
-        }
-
-        if (bytes.Length > MaximumDecodedPayloadBytes)
-            throw new ManifestFormatException(
-                "C# implementation manifest payload exceeds the supported decoded size.");
-        if (!string.Equals(Sha256Hex(bytes), markerFields[2], StringComparison.Ordinal))
-            throw new ManifestFormatException(
-                "C# implementation manifest payload hash does not match its marker.");
 
         string encoded;
         try
         {
-            encoded = StrictUtf8.GetString(bytes);
+            encoded = StrictUtf8.GetString(payload);
         }
         catch (DecoderFallbackException failure)
         {
@@ -201,8 +220,16 @@ internal static class ManifestReader
         KotlinCSharpManifest manifest = Decode(encoded);
         if (manifest.SchemaVersion != schemaVersion)
             throw new ManifestFormatException(
-                "C# implementation manifest marker and payload schemas differ.");
+                "C# implementation manifest resource and payload schemas differ.");
         return manifest;
+    }
+
+    private static int ReadInt32LittleEndian(byte[] bytes, int offset)
+    {
+        return bytes[offset] |
+            (bytes[offset + 1] << 8) |
+            (bytes[offset + 2] << 16) |
+            (bytes[offset + 3] << 24);
     }
 
     private static KotlinCSharpManifest Decode(string encoded)
@@ -847,18 +874,6 @@ internal static class ManifestReader
                 return KotlinSlotRole.Exact;
             default:
                 throw new ManifestFormatException("Unknown C# authoring view.");
-        }
-    }
-
-    private static string Sha256Hex(byte[] bytes)
-    {
-        using (SHA256 sha256 = SHA256.Create())
-        {
-            byte[] digest = sha256.ComputeHash(bytes);
-            var result = new StringBuilder(digest.Length * 2);
-            foreach (byte value in digest)
-                result.Append(value.ToString("x2", CultureInfo.InvariantCulture));
-            return result.ToString();
         }
     }
 

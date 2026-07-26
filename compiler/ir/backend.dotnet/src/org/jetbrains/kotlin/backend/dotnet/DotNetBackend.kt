@@ -188,7 +188,13 @@ object DotNetBackend {
                 return result(output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME))
             }
             return result(
-                DotNetStdlibLibrary.assembleIn(output, stdlibIlText, target, messageCollector)
+                DotNetStdlibLibrary.assembleIn(
+                    output,
+                    stdlibIlText,
+                    target,
+                    messageCollector,
+                    stdlibEmission.managedResources,
+                )
                     ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
                 stdlibEmission.declarations,
             )
@@ -303,7 +309,13 @@ object DotNetBackend {
 
         if (producesLibrary) {
             val assemblyOutput = output.resolve(checkNotNull(producedLibraryArtifact).assemblyFileName)
-            DotNetIlAssembler.assembleLibrary(ilTarget, assemblyOutput, target, messageCollector)
+            DotNetIlAssembler.assembleLibrary(
+                ilTarget,
+                assemblyOutput,
+                target,
+                messageCollector,
+                emission.managedResources,
+            )
             return result(assemblyOutput, emission.declarations)
         }
 
@@ -319,11 +331,23 @@ object DotNetBackend {
                 return result(binaryOutput)
             }
             if (stdlibIlText != null &&
-                DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, target, messageCollector) == null
+                DotNetStdlibLibrary.assembleNextTo(
+                    binaryOutput,
+                    stdlibIlText,
+                    target,
+                    messageCollector,
+                    checkNotNull(stdlibEmission).managedResources,
+                ) == null
             ) {
                 return result(binaryOutput)
             }
-            DotNetIlAssembler.assembleExecutable(ilTarget, binaryOutput, target, messageCollector)
+            DotNetIlAssembler.assembleExecutable(
+                ilTarget,
+                binaryOutput,
+                target,
+                messageCollector,
+                emission.managedResources,
+            )
             return result(binaryOutput)
         }
 
