@@ -1676,6 +1676,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   portable profiles and to the selected DIM on net10; all child/left/right calls execute the same
   body. Override edges are checked against CLR interface ancestry and resolved signature
   compatibility; a tampered but syntactically valid edge is pinned to one `KDNCS006`. The DLL-only
+  matrix also selects between two covariant generic defaults whose bodies return different
+  parent-owned typed properties. Child, left, right, and widened-parent views all execute the
+  selected child helper/DIM, with no rejected-parent helper adapter or exact-result erasure. The
+  DLL-only
   four-lane fixture now compiles and executes the real generator for an ordinary public interface
   and an authorized internal friend interface. The existing handwritten fixture remains an
   independent full-schema sufficiency oracle while each production family is also executed

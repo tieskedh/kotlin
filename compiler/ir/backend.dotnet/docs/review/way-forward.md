@@ -440,7 +440,9 @@ The remaining P0-D implementation order is:
    modern lanes inherit the selected DIM. All child/left/right runtime views agree; unrelated C#
    roots without a Kotlin resolver require a C# body rather than an inferred preference. Consumed
    edges are checked against CLR ancestry and resolved signature compatibility; a tampered edge
-   fails once with `KDNCS006`.
+   fails once with `KDNCS006`. Covariant generic conflict coverage now proves that child, both
+   typed parents, and a widened parent all reach the selected child helper/DIM without an
+   exact-result erased cast or rejected-parent helper.
    MethodDef locators are matched against complete open return and parameter signatures before
    generic-owner substitution; same-named overloads bind independently and stale parameter or
    result signatures fail closed. Standard CLR core-facade forwarding is normalized for
