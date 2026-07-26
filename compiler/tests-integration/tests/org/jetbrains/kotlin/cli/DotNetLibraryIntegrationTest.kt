@@ -265,6 +265,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     Encode(((int)(
                                         type.Attributes &
                                         TypeAttributes.VisibilityMask)).ToString()));
+                                foreach (CustomAttributeHandle attributeHandle
+                                    in type.GetCustomAttributes())
+                                {
+                                    CustomAttribute attribute =
+                                        metadata.GetCustomAttribute(attributeHandle);
+                                    TypeIdentity attributeOwner = AttributeOwner(
+                                        metadata,
+                                        provider,
+                                        attribute.Constructor);
+                                    Console.WriteLine(
+                                        "E|" +
+                                        Encode(typeIdentity.Path) + "|" +
+                                        Encode(attributeOwner.AssemblyName) + "|" +
+                                        Encode(attributeOwner.Path) + "|" +
+                                        Encode(Convert.ToBase64String(
+                                            metadata.GetBlobBytes(attribute.Value))));
+                                }
                                 foreach (MethodImplementationHandle implementationHandle
                                     in type.GetMethodImplementations())
                                 {
@@ -1311,6 +1328,72 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ).visibility,
                 "@PublishedApi internal compiler ABI must remain physically public",
             )
+            val declarationAttributes =
+                readCSharpPhysicalDeclarationAttributesFromDll(
+                    modernCSharp,
+                    readerAssembly,
+                    readerDirectory,
+                    producerAssembly,
+                )
+            val compilerAbiAttributePath =
+                listOf(
+                    "Kotlin.Runtime.Internal." +
+                            "KotlinCompilerAbiAttribute"
+                )
+            val ordinaryFriendAttributes =
+                declarationAttributes.filter { attribute ->
+                    attribute.declarationOwnerPath ==
+                            friendContract.canonicalOwnerPath
+                }
+            assertTrue(ordinaryFriendAttributes.none { attribute ->
+                attribute.attributeOwnerPath == compilerAbiAttributePath
+            }) {
+                "Ordinary internal source API must not be marked as public compiler ABI"
+            }
+            val publishedAttributes =
+                declarationAttributes.filter { attribute ->
+                    attribute.declarationOwnerPath ==
+                            listOf("manifest.PublishedInternalShape")
+                }
+            val compilerAbiAttribute =
+                publishedAttributes.single { attribute ->
+                    attribute.attributeOwnerPath == compilerAbiAttributePath
+                }
+            assertEquals(
+                "Kotlin.Runtime",
+                compilerAbiAttribute.attributeAssemblyName,
+            )
+            assertTrue(
+                compilerAbiAttribute.value.contentEquals(
+                    byteArrayOf(0x01, 0x00, 0x00, 0x00)
+                )
+            ) {
+                "Unexpected KotlinCompilerAbiAttribute blob"
+            }
+            val editorBrowsableAttribute =
+                publishedAttributes.single { attribute ->
+                    attribute.attributeOwnerPath ==
+                            listOf(
+                                "System.ComponentModel." +
+                                        "EditorBrowsableAttribute"
+                            )
+                }
+            assertTrue(
+                editorBrowsableAttribute.value.contentEquals(
+                    byteArrayOf(
+                        0x01,
+                        0x00,
+                        0x01,
+                        0x00,
+                        0x00,
+                        0x00,
+                        0x00,
+                        0x00,
+                    )
+                )
+            ) {
+                "Unexpected EditorBrowsable(Never) blob"
+            }
             val rootContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
             }
@@ -11492,6 +11575,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val visibility: Int,
     )
 
+    private data class CSharpPhysicalDeclarationAttribute(
+        val declarationOwnerPath: List<String>,
+        val attributeAssemblyName: String,
+        val attributeOwnerPath: List<String>,
+        val value: ByteArray,
+    )
+
     private data class CSharpPhysicalGenericParameter(
         val ownerPath: List<String>,
         val methodName: String,
@@ -11632,6 +11722,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 CSharpPhysicalTypeDefinition(
                     ownerPath = decoded[0].split('\u0000'),
                     visibility = decoded[1].toInt(),
+                )
+            }
+
+    private fun readCSharpPhysicalDeclarationAttributesFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): List<CSharpPhysicalDeclarationAttribute> =
+        runCSharpImplementationManifestReader(
+            toolchain,
+            readerAssembly,
+            readerDirectory,
+            producerAssembly,
+        )
+            .filter { line -> line.startsWith("E|") }
+            .map { line ->
+                val fields = line.split('|')
+                require(fields.size == 5) {
+                    "Invalid manifest-reader declaration-attribute output: $line"
+                }
+                val decoded = fields.drop(1).map { field ->
+                    Base64.getDecoder().decode(field).toString(Charsets.UTF_8)
+                }
+                CSharpPhysicalDeclarationAttribute(
+                    declarationOwnerPath = decoded[0].split('\u0000'),
+                    attributeAssemblyName = decoded[1],
+                    attributeOwnerPath = decoded[2].split('\u0000'),
+                    value = Base64.getDecoder().decode(decoded[3]),
                 )
             }
 
