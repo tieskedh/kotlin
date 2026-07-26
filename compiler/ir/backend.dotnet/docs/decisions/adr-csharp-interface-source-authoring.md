@@ -254,6 +254,13 @@ dispatch virtually through the child property's selected DIM. They do not call t
 helper or copy the body. A child-selected body is never reconstructed by calling each parent's
 helper independently.
 
+Getter and setter declarations remain independently authoritative even though CLR metadata groups
+their MethodDefs under one Property row. Kotlin may select one qualified-super getter and a
+different qualified-super setter. The manifest records separate logical override edges and helper
+locators for both accessors; generated explicit properties batch the syntax only after resolving
+each accessor's semantic member independently. Tooling must never select one parent as the owner
+of the whole mutable property.
+
 Tooling cross-checks every consumed edge against the CLR interface ancestry and the resolved
 authoring signatures, including source name, member kind, generic arity, parameters, and
 covariant-compatible result. A syntactically valid logical key cannot redirect an unrelated CLR
@@ -408,6 +415,10 @@ the Kotlin-selected body. A covariant generic conflict is pinned separately: its
 defaults return different parent-owned typed properties, while the selected child helper drives
 child, left, right, and widened-parent views to one result. Canonical widening occurs only where
 that physical ABI requires it; no exact or declared result is routed through an erased cast.
+The mutable-property conflict independently selects its left getter and right setter. Child and
+both parent views continue to read through the left body, while writes through all three views
+execute the child setter and its exact qualified-super selection. This pins separate accessor
+identity instead of treating the CLR Property row as one semantic body.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their
