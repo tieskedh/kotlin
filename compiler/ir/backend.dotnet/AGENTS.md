@@ -1595,8 +1595,10 @@ landed shape as a compatibility constraint.
   for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 1
   records direct public generic interfaces, canonical/declared/exact owner paths, typed authoring
   views, read-only/mutable property and generic-method associations, exact-only inputs, and
-  portable-helper versus `net10.0` DIM obligations. It marks inherited contracts unsupported
-  instead of guessing.
+  portable-helper versus `net10.0` DIM obligations. One same-DLL generic parent composes through
+  its own manifest contract and the CLR-authored interface TypeSpec; the manifest does not duplicate
+  that physical edge. Multiple parents, cross-assembly parents, and non-generic parents remain
+  explicitly unsupported instead of being guessed.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
