@@ -901,6 +901,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun selected(): String = "inherited-default"
             }
 
+            public interface DefaultConflictLeft {
+                public fun resolvedDefault(): String = "left-default"
+            }
+
+            public interface DefaultConflictRight {
+                public fun resolvedDefault(): String = "right-default"
+            }
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -942,6 +950,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public interface GenericReabstractedShape<out T> : ShapeRoot<T> {
                 public override fun fallback(): T
+            }
+
+            public interface ResolvedDefaultConflict :
+                DefaultConflictLeft, DefaultConflictRight {
+                public override fun resolvedDefault(): String =
+                    super<DefaultConflictLeft>.resolvedDefault()
             }
 
             public interface BarrierShape<out T> : Collection<T> {
@@ -1011,6 +1025,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (value.value != "generic-value") return 1
                 if (value.fallback() != "generic-reabstracted") return 2
                 return if (root.fallback() == "generic-reabstracted") 0 else 3
+            }
+
+            public fun verifyResolvedDefaultConflict(
+                value: ResolvedDefaultConflict
+            ): Int {
+                val left: DefaultConflictLeft = value
+                val right: DefaultConflictRight = value
+                if (value.resolvedDefault() != "left-default") return 1
+                if (left.resolvedDefault() != "left-default") return 2
+                return if (right.resolvedDefault() == "left-default") 0 else 3
             }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
@@ -1239,6 +1263,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val reabstractableContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.Reabstractable"
             }
+            val defaultConflictLeftContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.DefaultConflictLeft"
+                }
+            val defaultConflictRightContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.DefaultConflictRight"
+                }
             val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
             }
@@ -1258,6 +1292,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 manifest.interfaces.single { interfaceContract ->
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.GenericReabstractedShape"
+                }
+            val resolvedDefaultConflictContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.ResolvedDefaultConflict"
                 }
             val barrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
@@ -1463,12 +1502,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(markerContract.sourceAuthoringSupported)
             assertTrue(ordinaryParentContract.sourceAuthoringSupported)
             assertTrue(reabstractableContract.sourceAuthoringSupported)
+            assertTrue(defaultConflictLeftContract.sourceAuthoringSupported)
+            assertTrue(defaultConflictRightContract.sourceAuthoringSupported)
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
             assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
             assertTrue(reabstractedContract.sourceAuthoringSupported)
             assertTrue(genericReabstractedContract.sourceAuthoringSupported)
+            assertTrue(resolvedDefaultConflictContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
@@ -1547,6 +1589,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(reabstractedSelected.slots.none { slot ->
                 slot.role == DotNetCSharpSlotRole.HELPER
             })
+            assertEquals(
+                listOf(inheritedSelected.logicalKey),
+                reabstractedSelected.overriddenLogicalMemberKeys,
+            )
             val genericReabstractedFallback =
                 genericReabstractedContract.members.single { member ->
                     member.sourceName == "fallback"
@@ -1563,8 +1609,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(genericReabstractedFallback.slots.none { slot ->
                 slot.role == DotNetCSharpSlotRole.HELPER
             })
-            assertEquals(if (externalParent) 12 else 25, manifest.interfaces.size)
-            assertEquals(if (externalParent) 13 else 25, parentManifest.interfaces.size)
+            assertEquals(
+                listOf(
+                    rootContract.members.single { member ->
+                        member.sourceName == "fallback"
+                    }.logicalKey
+                ),
+                genericReabstractedFallback.overriddenLogicalMemberKeys,
+            )
+            val resolvedDefault =
+                resolvedDefaultConflictContract.members.single { member ->
+                    member.sourceName == "resolvedDefault"
+                }
+            assertEquals(
+                if (targetProfile == "net10.0") {
+                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                } else {
+                    DotNetCSharpDefaultKind.PORTABLE_HELPER
+                },
+                resolvedDefault.defaultKind,
+            )
+            assertEquals(
+                setOf(
+                    defaultConflictLeftContract.members.single().logicalKey,
+                    defaultConflictRightContract.members.single().logicalKey,
+                ),
+                resolvedDefault.overriddenLogicalMemberKeys.toSet(),
+            )
+            assertEquals(if (externalParent) 13 else 28, manifest.interfaces.size)
+            assertEquals(if (externalParent) 15 else 28, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1577,6 +1650,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         reabstractableContract,
                         reabstractedContract,
                         genericReabstractedContract,
+                        defaultConflictLeftContract,
+                        defaultConflictRightContract,
+                        resolvedDefaultConflictContract,
                         barrierContract,
                         searchBarrierContract,
                         friendContract,
@@ -2063,6 +2139,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         public string Fallback() { return "generic-reabstracted"; }
                     }
 
+                    public sealed partial class ResolvedDefaultConflictBaseListProbe :
+                        manifest.ResolvedDefaultConflict
+                    {
+                    }
+
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
@@ -2265,6 +2346,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated generic reabstracted implementation failed: " +
                                     genericReabstractedResult);
+                            int resolvedDefaultConflictResult =
+                                manifest.apiKt.verifyResolvedDefaultConflict(
+                                    new ResolvedDefaultConflictBaseListProbe());
+                            if (resolvedDefaultConflictResult != 0)
+                                throw new System.Exception(
+                                    "Generated resolved-default conflict failed: " +
+                                    resolvedDefaultConflictResult);
                             int friendResult =
                                 manifest.apiKt.verifyFriend(new FriendBaseListProbe());
                             if (friendResult != 0)
@@ -2445,6 +2533,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "The reabstracted CLR slots did not converge on the C# source body:\n" +
                         generatedAuthoringText
             }
+            assertFalse(
+                "DefaultConflictRight.__KotlinDefaultImpls.resolvedDefault" in
+                        generatedAuthoringText
+            ) {
+                "The rejected right-parent default leaked into generated adapters:\n" +
+                        generatedAuthoringText
+            }
+            if (targetProfile != "net10.0") {
+                assertTrue(
+                    "ResolvedDefaultConflict.__KotlinDefaultImpls.resolvedDefault" in
+                            generatedAuthoringText
+                ) {
+                    "Portable conflict adapters did not use the Kotlin-selected child helper:\n" +
+                            generatedAuthoringText
+                }
+            }
             assertTrue(
                 checkNotNull(contract.exactOwnerPath)
                     .last()
@@ -2525,7 +2629,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 portable.map { contract ->
                     Triple(
                         contract.logicalKey,
-                        contract.members.map { it.logicalKey },
+                        contract.members.map { member ->
+                            member.logicalKey to member.overriddenLogicalMemberKeys
+                        },
                         contract.intersections.map { intersection ->
                             intersection.logicalKey to intersection.contributingLogicalMemberKeys
                         },
@@ -2534,7 +2640,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 modern.map { contract ->
                     Triple(
                         contract.logicalKey,
-                        contract.members.map { it.logicalKey },
+                        contract.members.map { member ->
+                            member.logicalKey to member.overriddenLogicalMemberKeys
+                        },
                         contract.intersections.map { intersection ->
                             intersection.logicalKey to intersection.contributingLogicalMemberKeys
                         },
@@ -2672,6 +2780,70 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                     role = DotNetCSharpSlotRole.CANONICAL,
                                     ownerPath = listOf("diagnostics.Ordinary"),
                                     methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = listOf("int32"),
+                                )
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/OverrideParent",
+                    canonicalOwnerPath = listOf("diagnostics.OverrideParent"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/OverrideParent.compute",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.OverrideParent"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = listOf("int32"),
+                                )
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/OverrideChild",
+                    canonicalOwnerPath = listOf("diagnostics.OverrideChild"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/OverrideChild.different",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "different",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.OverrideChild"),
+                                    methodName = "Different",
                                     propertyName = null,
                                     genericArity = 0,
                                     returnType = "int32",
@@ -2955,6 +3127,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         int Compute(int value);
                     }
 
+                    public interface OverrideParent
+                    {
+                        int Compute(int value);
+                    }
+
+                    public interface OverrideChild : OverrideParent
+                    {
+                        int Different(int value);
+                    }
+
                     public interface Overloaded
                     {
                         int Compute(int value);
@@ -3002,6 +3184,80 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             producer,
         )
         assertEquals(0, producerCompile.exitCode, producerCompile.output)
+
+        val invalidOverrideManifest = manifest.copy(
+            assemblyName = "InvalidOverrideProducer",
+            interfaces = manifest.interfaces.map { contract ->
+                if (contract.logicalKey != "C:diagnostics/OverrideChild") {
+                    contract
+                } else {
+                    contract.copy(
+                        members = contract.members.map { member ->
+                            member.copy(
+                                overriddenLogicalMemberKeys = listOf(
+                                    "F:diagnostics/OverrideParent.compute"
+                                )
+                            )
+                        }
+                    )
+                }
+            },
+        )
+        val invalidOverrideMetadata = DotNetCSharpImplementationManifestCodec
+            .encodeAssemblyMetadata(invalidOverrideManifest)
+            .joinToString("\n") { entry ->
+                """[assembly: System.Reflection.AssemblyMetadata("${entry.first}", "${entry.second}")]"""
+            }
+        val invalidOverrideProducerSource =
+            directory.resolve("invalid-override-producer.cs").apply {
+                writeText(
+                    producerSource.readText().replace(
+                        assemblyMetadata,
+                        invalidOverrideMetadata,
+                    )
+                )
+            }
+        val invalidOverrideProducer =
+            directory.resolve("InvalidOverrideProducer.dll")
+        val invalidOverrideProducerCompile = runModernCSharpCompiler(
+            modernCSharp,
+            invalidOverrideProducerSource,
+            invalidOverrideProducer,
+        )
+        assertEquals(
+            0,
+            invalidOverrideProducerCompile.exitCode,
+            invalidOverrideProducerCompile.output,
+        )
+        val invalidOverrideConsumerSource =
+            directory.resolve("invalid-override-consumer.cs").apply {
+                writeText(
+                    """
+                    public sealed partial class InvalidOverrideConsumer :
+                        diagnostics.OverrideChild
+                    {
+                        public int Compute(int value) { return value; }
+                        public int Different(int value) { return value; }
+                    }
+                    """.trimIndent()
+                )
+            }
+        val invalidOverrideConsumer = runModernCSharpCompiler(
+            modernCSharp,
+            invalidOverrideConsumerSource,
+            directory.resolve("InvalidOverrideConsumer.dll"),
+            invalidOverrideProducer,
+            analyzers = listOf(tooling),
+        )
+        assertTrue(invalidOverrideConsumer.exitCode != 0)
+        assertTrue("KDNCS006" in invalidOverrideConsumer.output) {
+            invalidOverrideConsumer.output
+        }
+        assertEquals(
+            1,
+            Regex("KDNCS006").findAll(invalidOverrideConsumer.output).count(),
+            invalidOverrideConsumer.output,
+        )
 
         fun compileDiagnostic(name: String, sourceText: String): CSharpCompilerResult {
             val source = directory.resolve("$name.cs").apply { writeText(sourceText) }
@@ -3506,6 +3762,59 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
                 manifest.copy(interfaces = listOf(invalidConstraintContract))
             )
+        }
+        val overrideMember = DotNetCSharpMemberContract(
+            logicalKey = "F:sample/Child.selected",
+            kind = DotNetCSharpMemberKind.METHOD,
+            sourceName = "selected",
+            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+            semanticBodyView = null,
+            wrongShapePolicy = null,
+            slots = listOf(
+                DotNetCSharpMethodLocator(
+                    role = DotNetCSharpSlotRole.CANONICAL,
+                    ownerPath = listOf("sample.Child"),
+                    methodName = "selected",
+                    propertyName = null,
+                    genericArity = 0,
+                    returnType = "string",
+                    parameterTypes = emptyList(),
+                )
+            ),
+        )
+        val overrideContract = DotNetCSharpInterfaceContract(
+            logicalKey = "C:sample/Child",
+            canonicalOwnerPath = listOf("sample.Child"),
+            declaredOwnerPath = null,
+            exactOwnerPath = null,
+            typeParameters = emptyList(),
+            sourceAuthoringSupported = true,
+            unsupportedReasons = emptyList(),
+            members = listOf(overrideMember),
+            intersections = emptyList(),
+        )
+        listOf(
+            listOf(overrideMember.logicalKey),
+            listOf("runtime:sample/Parent.selected"),
+            listOf("F:sample/Z.selected", "F:sample/A.selected"),
+            listOf("F:sample/Parent.selected", "F:sample/Parent.selected"),
+        ).forEach { invalidOverrides ->
+            assertThrows(IllegalArgumentException::class.java) {
+                DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+                    manifest.copy(
+                        interfaces = listOf(
+                            overrideContract.copy(
+                                members = listOf(
+                                    overrideMember.copy(
+                                        overriddenLogicalMemberKeys = invalidOverrides
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            }
         }
     }
 

@@ -56,6 +56,8 @@ internal static class KotlinImplementationEmitter
         var additionalInterfaces = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
         ImmutableArray<IntersectionBinding> intersections =
             ResolveIntersections(authoringContract, diagnostics);
+        OverrideResolution overrideResolution =
+            ResolveOverrideSelections(authoringContract, diagnostics);
         var intersectionsByContributor =
             new Dictionary<string, IntersectionBinding>(StringComparer.Ordinal);
         foreach (IntersectionBinding intersection in intersections)
@@ -110,6 +112,7 @@ internal static class KotlinImplementationEmitter
                 authoringContract,
                 bound,
                 intersectionsByContributor,
+                overrideResolution,
                 generatedMembers,
                 diagnostics);
         }
@@ -130,39 +133,45 @@ internal static class KotlinImplementationEmitter
         AuthoringContract authoringContract,
         BoundKotlinInterface bound,
         IReadOnlyDictionary<string, IntersectionBinding> intersectionsByContributor,
+        OverrideResolution overrideResolution,
         StringBuilder output,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         var resolvedMembers = new List<ResolvedMember>();
         foreach (KotlinMemberContract member in bound.Contract.Members)
         {
+            MemberBinding semanticBinding =
+                overrideResolution.SelectedByOverriddenKey.TryGetValue(
+                    member.LogicalKey,
+                    out MemberBinding? selected)
+                    ? selected
+                    : new MemberBinding(bound, member);
+            KotlinMemberContract semanticMember = semanticBinding.Member;
             KotlinMethodLocator[] physicalSlots = member.Slots.Where(slot =>
                     slot.Role != KotlinSlotRole.Helper)
                 .ToArray();
-            KotlinSlotRole authoringRole = AuthoringRole(
-                bound.Contract,
-                member.AuthoringView);
             intersectionsByContributor.TryGetValue(
                 member.LogicalKey,
                 out IntersectionBinding? intersection);
-            KotlinMethodLocator? authoringLocator = intersection == null
-                ? physicalSlots.SingleOrDefault(slot =>
-                    slot.Role == authoringRole)
-                : null;
+            KotlinMethodLocator? authoringLocator = null;
+            if (intersection == null)
+            {
+                authoringLocator = AuthoringLocator(semanticBinding);
+            }
             IMethodSymbol? authoringMethod = intersection?.AuthoringMethod ??
                 (authoringLocator == null
                     ? null
                     : ResolveMethod(
-                        bound.Reference.Assembly,
+                        semanticBinding.Bound.Reference.Assembly,
                         authoringLocator,
-                        bound.InterfaceType.TypeArguments));
+                        semanticBinding.Bound.InterfaceType.TypeArguments));
             if (authoringMethod == null)
             {
                 diagnostics.Add(Diagnostic.Create(
                     Diagnostics.MalformedManifest,
                     authoringContract.Declaration.Identifier.GetLocation(),
-                    bound.Reference.Assembly.Identity.Name,
-                    $"authoring locator for '{member.LogicalKey}' does not resolve uniquely"));
+                    semanticBinding.Bound.Reference.Assembly.Identity.Name,
+                    $"authoring locator for '{semanticMember.LogicalKey}' does not resolve uniquely"));
                 continue;
             }
             foreach (KotlinMethodLocator locator in physicalSlots)
@@ -181,14 +190,17 @@ internal static class KotlinImplementationEmitter
                     continue;
                 }
                 resolvedMembers.Add(new ResolvedMember(
-                    member,
+                    semanticMember,
                     locator,
                     method,
                     authoringMethod,
-                    bound.InterfaceType.TypeArguments,
-                    intersection?.Contract.SourceName ?? member.SourceName,
-                    intersection?.Contract.LogicalKey ?? member.LogicalKey,
-                    requiresSource: intersection != null));
+                    semanticBinding.Bound.InterfaceType.TypeArguments,
+                    semanticBinding.Bound.Reference.Assembly,
+                    intersection?.Contract.SourceName ?? semanticMember.SourceName,
+                    intersection?.Contract.LogicalKey ?? semanticMember.LogicalKey,
+                    requiresSource:
+                        intersection != null ||
+                        overrideResolution.AmbiguousOverriddenKeys.Contains(member.LogicalKey)));
             }
         }
 
@@ -197,6 +209,203 @@ internal static class KotlinImplementationEmitter
             resolvedMembers,
             output,
             diagnostics);
+    }
+
+    private static OverrideResolution ResolveOverrideSelections(
+        AuthoringContract authoringContract,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        MemberBinding[] bindings = authoringContract.Interfaces
+            .SelectMany(bound => bound.Contract.Members.Select(member =>
+                new MemberBinding(bound, member)))
+            .ToArray();
+        var bindingsByLogicalKey = bindings.ToDictionary(
+            binding => binding.Member.LogicalKey,
+            StringComparer.Ordinal);
+        var candidatesByOverriddenKey =
+            new Dictionary<string, List<MemberBinding>>(StringComparer.Ordinal);
+        foreach (MemberBinding binding in bindings)
+        {
+            var pending = new Stack<string>(
+                binding.Member.OverriddenLogicalMemberKeys);
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            while (pending.Count != 0)
+            {
+                string overriddenKey = pending.Pop();
+                if (!visited.Add(overriddenKey))
+                    continue;
+                if (bindingsByLogicalKey.TryGetValue(
+                        overriddenKey,
+                        out MemberBinding? overriddenBinding) &&
+                    (!IsStrictlyMoreDerived(
+                         binding.Bound.InterfaceType,
+                         overriddenBinding.Bound.InterfaceType) ||
+                     !IsOverrideSignatureCompatible(
+                         authoringContract.Compilation,
+                         binding,
+                         overriddenBinding)))
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.MalformedManifest,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        binding.Bound.Reference.Assembly.Identity.Name,
+                        $"member '{binding.Member.LogicalKey}' has an invalid override edge to '{overriddenKey}'"));
+                    continue;
+                }
+                if (!candidatesByOverriddenKey.TryGetValue(
+                        overriddenKey,
+                        out List<MemberBinding>? candidates))
+                {
+                    candidates = new List<MemberBinding>();
+                    candidatesByOverriddenKey.Add(overriddenKey, candidates);
+                }
+                candidates.Add(binding);
+                if (overriddenBinding != null)
+                {
+                    foreach (string transitiveKey in
+                             overriddenBinding.Member.OverriddenLogicalMemberKeys)
+                        pending.Push(transitiveKey);
+                }
+            }
+        }
+
+        var selected =
+            new Dictionary<string, MemberBinding>(StringComparer.Ordinal);
+        var ambiguous = new HashSet<string>(StringComparer.Ordinal);
+        foreach (KeyValuePair<string, List<MemberBinding>> entry in
+                 candidatesByOverriddenKey)
+        {
+            MemberBinding[] mostDerived = entry.Value
+                .Where(candidate =>
+                    !entry.Value.Any(other =>
+                        !ReferenceEquals(candidate, other) &&
+                        IsStrictlyMoreDerived(other.Bound.InterfaceType,
+                            candidate.Bound.InterfaceType)))
+                .GroupBy(
+                    candidate => candidate.Member.LogicalKey,
+                    StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToArray();
+            if (mostDerived.Length == 1)
+                selected.Add(entry.Key, mostDerived[0]);
+            else
+                ambiguous.Add(entry.Key);
+        }
+        return new OverrideResolution(selected, ambiguous);
+    }
+
+    private static bool IsStrictlyMoreDerived(
+        INamedTypeSymbol candidate,
+        INamedTypeSymbol possibleBase)
+    {
+        if (SymbolEqualityComparer.Default.Equals(
+                candidate.OriginalDefinition,
+                possibleBase.OriginalDefinition))
+            return false;
+        return candidate.AllInterfaces.Any(inherited =>
+            SymbolEqualityComparer.Default.Equals(
+                inherited.OriginalDefinition,
+                possibleBase.OriginalDefinition));
+    }
+
+    private static bool IsOverrideSignatureCompatible(
+        Compilation compilation,
+        MemberBinding implementation,
+        MemberBinding overridden)
+    {
+        if (implementation.Member.Kind != overridden.Member.Kind ||
+            !string.Equals(
+                implementation.Member.SourceName,
+                overridden.Member.SourceName,
+                StringComparison.Ordinal))
+            return false;
+        IMethodSymbol? implementationMethod = ResolveAuthoringMethod(implementation);
+        IMethodSymbol? overriddenMethod = ResolveAuthoringMethod(overridden);
+        if (implementationMethod == null ||
+            overriddenMethod == null ||
+            implementationMethod.Arity != overriddenMethod.Arity ||
+            implementationMethod.Parameters.Length !=
+                overriddenMethod.Parameters.Length)
+            return false;
+        for (int index = 0; index < implementationMethod.Parameters.Length; index++)
+        {
+            IParameterSymbol implementationParameter =
+                implementationMethod.Parameters[index];
+            IParameterSymbol overriddenParameter =
+                overriddenMethod.Parameters[index];
+            if (implementationParameter.RefKind != overriddenParameter.RefKind ||
+                !OverrideTypeEquals(
+                    implementationParameter.Type,
+                    overriddenParameter.Type))
+                return false;
+        }
+        if (implementationMethod.ReturnsVoid || overriddenMethod.ReturnsVoid)
+            return implementationMethod.ReturnsVoid && overriddenMethod.ReturnsVoid;
+        return OverrideTypeEquals(
+                   implementationMethod.ReturnType,
+                   overriddenMethod.ReturnType) ||
+            compilation.ClassifyConversion(
+                implementationMethod.ReturnType,
+                overriddenMethod.ReturnType).IsImplicit;
+    }
+
+    private static IMethodSymbol? ResolveAuthoringMethod(
+        MemberBinding binding)
+    {
+        KotlinMethodLocator? locator = AuthoringLocator(binding);
+        return locator == null
+            ? null
+            : ResolveMethod(
+                binding.Bound.Reference.Assembly,
+                locator,
+                binding.Bound.InterfaceType.TypeArguments);
+    }
+
+    private static KotlinMethodLocator? AuthoringLocator(
+        MemberBinding binding)
+    {
+        KotlinSlotRole role = AuthoringRole(
+            binding.Bound.Contract,
+            binding.Member.AuthoringView);
+        return binding.Member.Slots
+            .Where(slot => slot.Role != KotlinSlotRole.Helper)
+            .SingleOrDefault(slot => slot.Role == role);
+    }
+
+    private static bool OverrideTypeEquals(
+        ITypeSymbol left,
+        ITypeSymbol right)
+    {
+        if (left is ITypeParameterSymbol leftParameter &&
+            right is ITypeParameterSymbol rightParameter)
+        {
+            return leftParameter.TypeParameterKind ==
+                       rightParameter.TypeParameterKind &&
+                leftParameter.Ordinal == rightParameter.Ordinal;
+        }
+        if (left is IArrayTypeSymbol leftArray &&
+            right is IArrayTypeSymbol rightArray)
+        {
+            return leftArray.Rank == rightArray.Rank &&
+                leftArray.IsSZArray == rightArray.IsSZArray &&
+                OverrideTypeEquals(
+                    leftArray.ElementType,
+                    rightArray.ElementType);
+        }
+        if (left is INamedTypeSymbol leftNamed &&
+            right is INamedTypeSymbol rightNamed &&
+            SymbolEqualityComparer.Default.Equals(
+                leftNamed.OriginalDefinition,
+                rightNamed.OriginalDefinition) &&
+            leftNamed.TypeArguments.Length == rightNamed.TypeArguments.Length)
+        {
+            return leftNamed.TypeArguments
+                .Zip(
+                    rightNamed.TypeArguments,
+                    OverrideTypeEquals)
+                .All(equal => equal);
+        }
+        return SymbolEqualityComparer.Default.Equals(left, right);
     }
 
     private static ImmutableArray<IntersectionBinding> ResolveIntersections(
@@ -287,6 +496,7 @@ internal static class KotlinImplementationEmitter
                 semanticBodyView: null,
                 wrongShapePolicy: null,
                 intersection.Contract.ErasedOwnerRelativeConstraints,
+                ImmutableArray<string>.Empty,
                 intersection.Contract.Slots);
             foreach (KotlinMethodLocator locator in intersection.Contract.Slots)
             {
@@ -309,6 +519,7 @@ internal static class KotlinImplementationEmitter
                     method,
                     intersection.AuthoringMethod,
                     intersection.Owner.InterfaceType.TypeArguments,
+                    intersection.Owner.Reference.Assembly,
                     intersection.Contract.SourceName,
                     intersection.Contract.LogicalKey,
                     requiresSource: true));
@@ -569,7 +780,7 @@ internal static class KotlinImplementationEmitter
             slot.Role == KotlinSlotRole.Helper);
         if (helper == null ||
             !TryHelperCall(
-                accessor.Method.ContainingAssembly,
+                accessor.MemberAssembly,
                 helper,
                 HelperTypeArguments(accessor, accessor.Method, helper),
                 accessor.Member.Kind == KotlinMemberKind.PropertySetter
@@ -581,7 +792,7 @@ internal static class KotlinImplementationEmitter
             diagnostics.Add(Diagnostic.Create(
                 Diagnostics.MalformedManifest,
                 authoringContract.Declaration.Identifier.GetLocation(),
-                accessor.Method.ContainingAssembly.Identity.Name,
+                accessor.MemberAssembly.Identity.Name,
                 $"helper locator for '{accessor.Member.LogicalKey}' cannot be emitted"));
             return null;
         }
@@ -699,7 +910,7 @@ internal static class KotlinImplementationEmitter
                                 (_, index) => "p" + index)));
                     if (helper == null ||
                         !TryHelperCall(
-                            physicalMethod.ContainingAssembly,
+                            resolved.MemberAssembly,
                             helper,
                             HelperTypeArguments(resolved, physicalMethod, helper),
                             arguments,
@@ -709,7 +920,7 @@ internal static class KotlinImplementationEmitter
                         diagnostics.Add(Diagnostic.Create(
                             Diagnostics.MalformedManifest,
                             authoringContract.Declaration.Identifier.GetLocation(),
-                            physicalMethod.ContainingAssembly.Identity.Name,
+                            resolved.MemberAssembly.Identity.Name,
                             $"helper locator for '{resolved.Member.LogicalKey}' cannot be emitted"));
                         return;
                     }
@@ -1645,6 +1856,7 @@ internal static class KotlinImplementationEmitter
             IMethodSymbol method,
             IMethodSymbol authoringMethod,
             ImmutableArray<ITypeSymbol> ownerTypeArguments,
+            IAssemblySymbol memberAssembly,
             string sourceName,
             string sourceLogicalKey,
             bool requiresSource)
@@ -1654,6 +1866,7 @@ internal static class KotlinImplementationEmitter
             Method = method;
             AuthoringMethod = authoringMethod;
             OwnerTypeArguments = ownerTypeArguments;
+            MemberAssembly = memberAssembly;
             SourceName = sourceName;
             SourceLogicalKey = sourceLogicalKey;
             RequiresSource = requiresSource;
@@ -1664,9 +1877,38 @@ internal static class KotlinImplementationEmitter
         internal IMethodSymbol Method { get; }
         internal IMethodSymbol AuthoringMethod { get; }
         internal ImmutableArray<ITypeSymbol> OwnerTypeArguments { get; }
+        internal IAssemblySymbol MemberAssembly { get; }
         internal string SourceName { get; }
         internal string SourceLogicalKey { get; }
         internal bool RequiresSource { get; }
+    }
+
+    private sealed class MemberBinding
+    {
+        internal MemberBinding(
+            BoundKotlinInterface bound,
+            KotlinMemberContract member)
+        {
+            Bound = bound;
+            Member = member;
+        }
+
+        internal BoundKotlinInterface Bound { get; }
+        internal KotlinMemberContract Member { get; }
+    }
+
+    private sealed class OverrideResolution
+    {
+        internal OverrideResolution(
+            IReadOnlyDictionary<string, MemberBinding> selectedByOverriddenKey,
+            ISet<string> ambiguousOverriddenKeys)
+        {
+            SelectedByOverriddenKey = selectedByOverriddenKey;
+            AmbiguousOverriddenKeys = ambiguousOverriddenKeys;
+        }
+
+        internal IReadOnlyDictionary<string, MemberBinding> SelectedByOverriddenKey { get; }
+        internal ISet<string> AmbiguousOverriddenKeys { get; }
     }
 
     private readonly struct PropertyIdentity : IEquatable<PropertyIdentity>
