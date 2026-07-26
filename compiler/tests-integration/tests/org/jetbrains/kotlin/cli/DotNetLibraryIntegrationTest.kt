@@ -897,6 +897,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun fallbackName(): String = displayName
             }
 
+            public interface Reabstractable {
+                public fun selected(): String = "inherited-default"
+            }
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -930,6 +934,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface OrdinaryShape : OrdinaryParent {
                 public var count: Int
                 public fun format(prefix: String): String
+            }
+
+            public interface ReabstractedShape : Reabstractable {
+                public override fun selected(): String
             }
 
             public interface BarrierShape<out T> : Collection<T> {
@@ -988,6 +996,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 value.count = 7
                 return if (value.count == 7) 0 else 5
             }
+
+            public fun verifyReabstracted(value: ReabstractedShape): Int =
+                if (value.selected() == "csharp-reabstracted") 0 else 1
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
                 val left: IntersectionLeft<String> = value
@@ -1212,6 +1223,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val ordinaryParentContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryParent"
             }
+            val reabstractableContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.Reabstractable"
+            }
             val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
             }
@@ -1223,6 +1237,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             val ordinaryContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryShape"
+            }
+            val reabstractedContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ReabstractedShape"
             }
             val barrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
@@ -1427,10 +1444,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(markerContract.sourceAuthoringSupported)
             assertTrue(ordinaryParentContract.sourceAuthoringSupported)
+            assertTrue(reabstractableContract.sourceAuthoringSupported)
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
             assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
+            assertTrue(reabstractedContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
@@ -1490,8 +1509,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .propertyName,
                 mutableSetter.slots.single().propertyName,
             )
-            assertEquals(if (externalParent) 10 else 22, manifest.interfaces.size)
-            assertEquals(if (externalParent) 12 else 22, parentManifest.interfaces.size)
+            val inheritedSelected = reabstractableContract.members.single { member ->
+                member.sourceName == "selected"
+            }
+            val reabstractedSelected = reabstractedContract.members.single { member ->
+                member.sourceName == "selected"
+            }
+            assertEquals(
+                if (parentManifest.targetProfile == "net10.0") {
+                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                } else {
+                    DotNetCSharpDefaultKind.PORTABLE_HELPER
+                },
+                inheritedSelected.defaultKind,
+            )
+            assertEquals(DotNetCSharpDefaultKind.ABSTRACT, reabstractedSelected.defaultKind)
+            assertTrue(reabstractedSelected.semanticBodyView == null)
+            assertTrue(reabstractedSelected.slots.none { slot ->
+                slot.role == DotNetCSharpSlotRole.HELPER
+            })
+            assertEquals(if (externalParent) 11 else 24, manifest.interfaces.size)
+            assertEquals(if (externalParent) 13 else 24, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1501,6 +1539,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ownerBoundRightContract,
                         ordinaryParentContract,
                         ordinaryContract,
+                        reabstractableContract,
+                        reabstractedContract,
                         barrierContract,
                         searchBarrierContract,
                         friendContract,
@@ -1974,6 +2014,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         public string Format(string prefix) { return prefix + DisplayName; }
                     }
 
+                    public sealed partial class ReabstractedBaseListProbe :
+                        manifest.ReabstractedShape
+                    {
+                        public string Selected() { return "csharp-reabstracted"; }
+                    }
+
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
@@ -2162,6 +2208,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             if (result != 0)
                                 throw new System.Exception(
                                     "Generated base-list implementation failed: " + result);
+                            int reabstractedResult =
+                                manifest.apiKt.verifyReabstracted(
+                                    new ReabstractedBaseListProbe());
+                            if (reabstractedResult != 0)
+                                throw new System.Exception(
+                                    "Generated reabstracted implementation failed: " +
+                                    reabstractedResult);
                             int friendResult =
                                 manifest.apiKt.verifyFriend(new FriendBaseListProbe());
                             if (friendResult != 0)
@@ -2269,6 +2322,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 generatedFilesDirectory = generatedFiles,
             )
             assertEquals(0, baseListCompile.exitCode, baseListCompile.output)
+            val missingReabstractedSource =
+                profileDirectory.resolve("missing-reabstracted.cs").apply {
+                    writeText(
+                        """
+                        public sealed partial class MissingReabstractedProbe :
+                            manifest.ReabstractedShape
+                        {
+                        }
+                        """.trimIndent()
+                    )
+                }
+            val missingReabstractedCompile = runModernCSharpCompiler(
+                modernCSharp,
+                missingReabstractedSource,
+                profileDirectory.resolve("MissingReabstractedShape.dll"),
+                *baseListCompileReferences.toTypedArray(),
+                analyzers = listOf(csharpAuthoringTooling),
+            )
+            assertTrue(missingReabstractedCompile.exitCode != 0) {
+                "A C# implementor silently inherited the default reabstracted by Kotlin"
+            }
+            assertTrue("KDNCS008" in missingReabstractedCompile.output) {
+                "The missing reabstracted C# body was not diagnosed:\n" +
+                        missingReabstractedCompile.output
+            }
             val generatedAuthoringSources = generatedFiles.walkTopDown().filter { file ->
                 file.isFile &&
                         file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
@@ -2286,6 +2364,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertTrue("this.Format" in generatedAuthoringText) {
                 generatedAuthoringText
+            }
+            assertTrue("this.Selected" in generatedAuthoringText) {
+                "The reabstracted CLR slots did not converge on the C# source body:\n" +
+                        generatedAuthoringText
             }
             assertTrue(
                 checkNotNull(contract.exactOwnerPath)
