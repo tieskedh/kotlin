@@ -125,6 +125,12 @@ interface, generated base class, or tooling-only identity is not an alternative 
 either lose arbitrary generic substitution, consume C#'s single class base, or create an identity
 which does not participate in ordinary C# type checking.
 
+The base list may retain an ordinary C# class base and may name multiple unrelated Kotlin
+interface roots. Generation adds only interface views and explicit members in another partial
+declaration; it never repeats or replaces the class base. The DLL-only matrix executes one class
+whose existing base constructor and state remain intact while independent ordinary and generic
+Kotlin contracts both dispatch through their generated adapters.
+
 Generated partial declarations add the canonical and exact physical views, explicit adapters,
 barriers, and profile-specific forwarding required by the manifest. Those generated physical
 interfaces are compiler ABI, not interfaces the C# author is expected to name in a base list or

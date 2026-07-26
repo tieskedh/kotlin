@@ -1686,6 +1686,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   canonical and declared/exact views: every physical TypeDef remains NestedPublic inside the
   internal owner, generated C# supplies one typed property body, and Kotlin executes it in all
   profile combinations.
+- Partial generation now has an executed class-composition proof. One C# implementor retains an
+  unrelated C# base constructor and state while naming two independent Kotlin roots, ordinary and
+  generic. The generated declaration adds only their physical interface views/adapters, and both
+  Kotlin verifiers dispatch correctly on every DLL-only lane. Do not replace this with a generated
+  base-class design.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot

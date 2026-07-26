@@ -453,7 +453,9 @@ The remaining P0-D implementation order is:
    than treating owner/name/arity/count as a declaration identity. Do not
    add a blanket ban for source names that merely resemble canonical names; physical-owner
    separation and explicit `MethodImpl` already preserve their semantics. Do not make a generated
-   base class the only path because C# has single class inheritance. The authoring-specific raw
+   base class the only path because C# has single class inheritance. An executed multi-root
+   implementor now retains its unrelated C# base state while generated adapters satisfy ordinary
+   and generic Kotlin contracts. The authoring-specific raw
    MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. Close
    the remaining general attribute-blob, resource, MethodImpl, and internal-surface comparison in
    the structured metadata work rather than with IL substring tests.
