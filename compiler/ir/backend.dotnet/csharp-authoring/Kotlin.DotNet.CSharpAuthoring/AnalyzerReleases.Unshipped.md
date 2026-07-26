@@ -12,3 +12,4 @@ KDNCS007 | Kotlin.NET | Error | The producer records the interface as unsupporte
 KDNCS008 | Kotlin.NET | Error | An abstract Kotlin member has no matching C# source body.
 KDNCS009 | Kotlin.NET | Info | A Kotlin owner-relative constraint is erased from the CLR signature.
 KDNCS010 | Kotlin.NET | Error | A manifest shape is valid but unsupported by this generator version.
+KDNCS011 | Kotlin.NET | Error | A containing type of a nested C# implementor must be partial.

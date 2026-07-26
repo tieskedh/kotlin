@@ -111,12 +111,28 @@ implement explicitly. The analyzer reports incomplete, ambiguous, inaccessible, 
 source bodies before ordinary CLR load or dispatch. At minimum it diagnoses:
 
 - a Kotlin implementor which is not `partial`;
+- a nested implementor whose containing source type is not `partial`;
 - a contract which the current assembly cannot access through ordinary CLR visibility and
   producer-emitted friendship;
 - a user member which conflicts with a member the compiler ABI requires the generator to emit;
 - a generic substitution the generator cannot represent;
 - a manifest/generator schema or logical-identity version mismatch; and
 - a malformed or unsupported manifest without executing code from the referenced assembly.
+
+A nested reference-class or record-class implementor uses the same contract. The generator
+reconstructs partial declarations for its containing source-type chain, preserving type kind,
+generic parameters, interface variance, and required `static`, `readonly`, or `ref` shape.
+Constraints remain owned by the user declaration and need not be copied onto a generated partial
+part. Every containing type must itself be partial because generation occurs in another syntax
+tree. File-local types cannot cross that syntax-tree boundary and are rejected.
+Each generated syntax tree receives a SHA-256 hint derived from the fully qualified C# type
+display so punctuation and nested-name variants cannot collide. That hint is only a Roslyn
+generated-source filename; it is not persisted in the DLL and is not a Kotlin or tooling
+declaration identity.
+
+C# struct and record-struct implementors are not silently projected as classes. Their interface
+boxing, mutation, and runtime-identity contract requires a separate Kotlin interop decision, so
+the current source-authoring tool reports an unsupported-shape diagnostic.
 
 The exact typed view is the normal complete C# surface when it exists. Declared-variance and
 canonical slots adapt to that typed behavior, boxing, widening, or narrowing only when their own
@@ -306,8 +322,11 @@ string limits, validates the complete record graph, recognizes only a real canon
 or declared/generic base-list opt-in, and emits the diagnostics listed above. DLL-only tests prove
 generic and non-generic discovery, malformed/version-skew rejection, unavailable friendship,
 conflicting explicit ABI members, unsupported `dynamic` substitution, and generated partial
-participation. The next slice emits ordinary non-generic method and Property adapters from
-PascalCase or Kotlin-named source members. Portable defaults call the recorded helper; native and
+participation. Nested generic class and nested record-class implementors execute through generated
+partial containing declarations; a non-partial container and a value-type implementor fail with
+dedicated diagnostics. Production emission includes ordinary non-generic method and Property
+adapters from PascalCase or Kotlin-named source members. Portable defaults call the recorded
+helper; native and
 child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
 implementations execute Kotlin verification on every profile.
 
