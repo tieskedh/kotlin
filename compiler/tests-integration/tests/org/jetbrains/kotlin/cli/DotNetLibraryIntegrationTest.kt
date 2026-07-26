@@ -960,6 +960,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     get() = rightPropertyConflictValue
             }
 
+            public var leftGenericMutableWrite: Any? = null
+            public var rightGenericMutableWrite: Any? = null
+
+            public interface GenericDefaultMutablePropertyConflictLeft<out T> {
+                public val leftMutablePropertyConflictValue: T
+                public var resolvedGenericMutableProperty: @UnsafeVariance T
+                    get() = leftMutablePropertyConflictValue
+                    set(value) {
+                        leftGenericMutableWrite = value
+                    }
+            }
+
+            public interface GenericDefaultMutablePropertyConflictRight<out T> {
+                public val rightMutablePropertyConflictValue: T
+                public var resolvedGenericMutableProperty: @UnsafeVariance T
+                    get() = rightMutablePropertyConflictValue
+                    set(value) {
+                        rightGenericMutableWrite = value
+                    }
+            }
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -1037,6 +1058,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public override val resolvedGenericProperty: T
                     get() =
                         super<GenericDefaultPropertyConflictLeft>.resolvedGenericProperty
+            }
+
+            public interface ResolvedGenericDefaultMutablePropertyConflict<out T> :
+                GenericDefaultMutablePropertyConflictLeft<T>,
+                GenericDefaultMutablePropertyConflictRight<T> {
+                public override var resolvedGenericMutableProperty: @UnsafeVariance T
+                    get() = super<GenericDefaultMutablePropertyConflictLeft>.resolvedGenericMutableProperty
+                    set(value) {
+                        super<GenericDefaultMutablePropertyConflictRight>.resolvedGenericMutableProperty = value
+                    }
             }
 
             public interface BarrierShape<out T> : Collection<T> {
@@ -1174,6 +1205,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 return if (
                     wide.resolvedGenericProperty == "left-generic-property"
                 ) 0 else 4
+            }
+
+            public fun verifyResolvedGenericDefaultMutablePropertyConflict(
+                value: ResolvedGenericDefaultMutablePropertyConflict<String>
+            ): Int {
+                val left: GenericDefaultMutablePropertyConflictLeft<String> = value
+                val right: GenericDefaultMutablePropertyConflictRight<String> = value
+                val wide: GenericDefaultMutablePropertyConflictRight<Any?> = value
+                if (value.resolvedGenericMutableProperty != "left-generic-mutable") return 1
+                if (left.resolvedGenericMutableProperty != "left-generic-mutable") return 2
+                if (right.resolvedGenericMutableProperty != "left-generic-mutable") return 3
+                if (wide.resolvedGenericMutableProperty != "left-generic-mutable") return 4
+                value.resolvedGenericMutableProperty = "child-generic-write"
+                if (rightGenericMutableWrite != "child-generic-write") return 5
+                if (leftGenericMutableWrite != null) return 6
+                left.resolvedGenericMutableProperty = "left-view-generic-write"
+                if (rightGenericMutableWrite != "left-view-generic-write") return 7
+                wide.resolvedGenericMutableProperty = "wide-generic-write"
+                if (rightGenericMutableWrite != "wide-generic-write") return 8
+                try {
+                    wide.resolvedGenericMutableProperty = 42
+                    return 9
+                } catch (_: ClassCastException) {
+                    // Ordinary @UnsafeVariance keeps cast failure at the erased boundary.
+                }
+                return if (
+                    rightGenericMutableWrite == "wide-generic-write" &&
+                    leftGenericMutableWrite == null
+                ) 0 else 10
             }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
@@ -1452,6 +1512,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.GenericDefaultPropertyConflictRight"
                 }
+            val genericDefaultMutablePropertyConflictLeftContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericDefaultMutablePropertyConflictLeft"
+                }
+            val genericDefaultMutablePropertyConflictRightContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericDefaultMutablePropertyConflictRight"
+                }
             val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
             }
@@ -1496,6 +1566,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 manifest.interfaces.single { interfaceContract ->
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.ResolvedGenericDefaultPropertyConflict"
+                }
+            val resolvedGenericDefaultMutablePropertyConflictContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.ResolvedGenericDefaultMutablePropertyConflict"
                 }
             val barrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
@@ -1711,6 +1786,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(genericDefaultConflictRightContract.sourceAuthoringSupported)
             assertTrue(genericDefaultPropertyConflictLeftContract.sourceAuthoringSupported)
             assertTrue(genericDefaultPropertyConflictRightContract.sourceAuthoringSupported)
+            assertTrue(genericDefaultMutablePropertyConflictLeftContract.sourceAuthoringSupported)
+            assertTrue(genericDefaultMutablePropertyConflictRightContract.sourceAuthoringSupported)
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
             assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
@@ -1722,6 +1799,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(resolvedDefaultMutablePropertyConflictContract.sourceAuthoringSupported)
             assertTrue(resolvedGenericDefaultConflictContract.sourceAuthoringSupported)
             assertTrue(resolvedGenericDefaultPropertyConflictContract.sourceAuthoringSupported)
+            assertTrue(resolvedGenericDefaultMutablePropertyConflictContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
@@ -2052,8 +2130,86 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 genericDefaultPropertyHelperNames.size,
                 genericDefaultPropertyHelperNames.toSet().size,
             )
-            assertEquals(if (externalParent) 17 else 40, manifest.interfaces.size)
-            assertEquals(if (externalParent) 23 else 40, parentManifest.interfaces.size)
+            val resolvedGenericDefaultMutableGetter =
+                resolvedGenericDefaultMutablePropertyConflictContract.members.single { member ->
+                    member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+                }
+            val resolvedGenericDefaultMutableSetter =
+                resolvedGenericDefaultMutablePropertyConflictContract.members.single { member ->
+                    member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
+                }
+            assertEquals(
+                DotNetCSharpInterfaceView.DECLARED,
+                resolvedGenericDefaultMutableGetter.authoringView,
+            )
+            assertEquals(
+                DotNetCSharpInterfaceView.EXACT,
+                resolvedGenericDefaultMutableSetter.authoringView,
+            )
+            for (member in listOf(
+                resolvedGenericDefaultMutableGetter,
+                resolvedGenericDefaultMutableSetter,
+            )) {
+                assertEquals(
+                    if (targetProfile == "net10.0") {
+                        DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                    } else {
+                        DotNetCSharpDefaultKind.PORTABLE_HELPER
+                    },
+                    member.defaultKind,
+                )
+                assertEquals(
+                    if (targetProfile == "net10.0") {
+                        member.authoringView
+                    } else {
+                        null
+                    },
+                    member.semanticBodyView,
+                )
+                assertEquals(
+                    setOf(
+                        genericDefaultMutablePropertyConflictLeftContract.members.single { parent ->
+                            parent.kind == member.kind &&
+                                    parent.sourceName == "resolvedGenericMutableProperty"
+                        }.logicalKey,
+                        genericDefaultMutablePropertyConflictRightContract.members.single { parent ->
+                            parent.kind == member.kind &&
+                                    parent.sourceName == "resolvedGenericMutableProperty"
+                        }.logicalKey,
+                    ),
+                    member.overriddenLogicalMemberKeys.toSet(),
+                )
+            }
+            val genericDefaultMutablePropertyHelperNames =
+                listOf(
+                    genericDefaultMutablePropertyConflictLeftContract,
+                    genericDefaultMutablePropertyConflictRightContract,
+                    resolvedGenericDefaultMutablePropertyConflictContract,
+                ).flatMap { interfaceContract ->
+                    interfaceContract.members
+                        .filter { member ->
+                            member.sourceName == "resolvedGenericMutableProperty"
+                        }
+                        .map { member ->
+                            member.slots.single { slot ->
+                                slot.role == DotNetCSharpSlotRole.HELPER
+                            }.methodName
+                        }
+                }
+            assertTrue(genericDefaultMutablePropertyHelperNames.all { helperName ->
+                helperName.matches(
+                    Regex(
+                        "(get|set)_resolvedGenericMutableProperty" +
+                                "__KotlinDefault__[0-9a-f]{32}"
+                    )
+                )
+            })
+            assertEquals(
+                genericDefaultMutablePropertyHelperNames.size,
+                genericDefaultMutablePropertyHelperNames.toSet().size,
+            )
+            assertEquals(if (externalParent) 18 else 43, manifest.interfaces.size)
+            assertEquals(if (externalParent) 25 else 43, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -2081,6 +2237,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         genericDefaultPropertyConflictLeftContract,
                         genericDefaultPropertyConflictRightContract,
                         resolvedGenericDefaultPropertyConflictContract,
+                        genericDefaultMutablePropertyConflictLeftContract,
+                        genericDefaultMutablePropertyConflictRightContract,
+                        resolvedGenericDefaultMutablePropertyConflictContract,
                         barrierContract,
                         searchBarrierContract,
                         friendContract,
@@ -2610,6 +2769,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public sealed partial class ResolvedGenericDefaultMutablePropertyConflictBaseListProbe :
+                        manifest.ResolvedGenericDefaultMutablePropertyConflict<string>
+                    {
+                        public string LeftMutablePropertyConflictValue
+                        {
+                            get { return "left-generic-mutable"; }
+                        }
+
+                        public string RightMutablePropertyConflictValue
+                        {
+                            get { return "right-generic-mutable"; }
+                        }
+                    }
+
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
@@ -2847,6 +3020,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated generic resolved-property conflict failed: " +
                                     resolvedGenericDefaultPropertyConflictResult);
+                            int resolvedGenericDefaultMutablePropertyConflictResult =
+                                manifest.apiKt.verifyResolvedGenericDefaultMutablePropertyConflict(
+                                    new ResolvedGenericDefaultMutablePropertyConflictBaseListProbe());
+                            if (resolvedGenericDefaultMutablePropertyConflictResult != 0)
+                                throw new System.Exception(
+                                    "Generated generic mutable-property conflict failed: " +
+                                    resolvedGenericDefaultMutablePropertyConflictResult);
                             int friendResult =
                                 manifest.apiKt.verifyFriend(new FriendBaseListProbe());
                             if (friendResult != 0)
@@ -3169,6 +3349,53 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertFalse(selectedGenericPropertyHelperName in generatedAuthoringText) {
                     "A modern generic property adapter called the compatibility helper:\n" +
                             generatedAuthoringText
+                }
+            }
+            val rejectedGenericMutablePropertyHelperNames =
+                genericDefaultMutablePropertyConflictRightContract.members
+                    .filter { member ->
+                        member.sourceName == "resolvedGenericMutableProperty"
+                    }
+                    .map { member ->
+                        member.slots.single { slot ->
+                            slot.role == DotNetCSharpSlotRole.HELPER
+                        }.methodName
+                    }
+            for (helperName in rejectedGenericMutablePropertyHelperNames) {
+                assertFalse(
+                    "GenericDefaultMutablePropertyConflictRight.__KotlinDefaultImpls." +
+                            helperName in generatedAuthoringText
+                ) {
+                    "A rejected generic mutable-property helper leaked into adapters:\n" +
+                            generatedAuthoringText
+                }
+            }
+            val selectedGenericMutablePropertyHelperNames =
+                resolvedGenericDefaultMutablePropertyConflictContract.members
+                    .filter { member ->
+                        member.sourceName == "resolvedGenericMutableProperty"
+                    }
+                    .map { member ->
+                        member.slots.single { slot ->
+                            slot.role == DotNetCSharpSlotRole.HELPER
+                        }.methodName
+                    }
+            if (targetProfile != "net10.0") {
+                for (helperName in selectedGenericMutablePropertyHelperNames) {
+                    assertTrue(
+                        "ResolvedGenericDefaultMutablePropertyConflict.__KotlinDefaultImpls." +
+                                helperName in generatedAuthoringText
+                    ) {
+                        "Portable generic mutable-property adapters missed the selected helper:\n" +
+                                generatedAuthoringText
+                    }
+                }
+            } else {
+                for (helperName in selectedGenericMutablePropertyHelperNames) {
+                    assertFalse(helperName in generatedAuthoringText) {
+                        "A modern generic mutable-property adapter called a compatibility helper:\n" +
+                                generatedAuthoringText
+                    }
                 }
             }
             assertTrue(
