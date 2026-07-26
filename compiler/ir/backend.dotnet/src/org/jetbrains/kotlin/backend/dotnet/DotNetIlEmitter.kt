@@ -1752,6 +1752,7 @@ internal class DotNetIlEmitter(
                     assemblyName = assemblyName,
                     target = target,
                     files = emittedFiles,
+                    availableClasses = availableClasses,
                     genericInterfaces = genericInterfaces,
                     externalLibraries = externalLibraries,
                     availableFunctions = availableFunctions,
