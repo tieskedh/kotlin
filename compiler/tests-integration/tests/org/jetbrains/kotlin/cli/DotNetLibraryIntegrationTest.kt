@@ -253,6 +253,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                         Encode(declaration.GenericArity.ToString()) + "|" +
                                         Encode(declaration.ParameterCount.ToString()));
                                 }
+                                TypeIdentity methodOwner = provider.FromDefinition(typeHandle);
+                                foreach (MethodDefinitionHandle methodHandle in type.GetMethods())
+                                {
+                                    MethodDefinition method = metadata.GetMethodDefinition(methodHandle);
+                                    foreach (GenericParameterHandle parameterHandle
+                                        in method.GetGenericParameters())
+                                    {
+                                        GenericParameter parameter =
+                                            metadata.GetGenericParameter(parameterHandle);
+                                        StringBuilder constraints = new StringBuilder();
+                                        foreach (GenericParameterConstraintHandle constraintHandle
+                                            in parameter.GetConstraints())
+                                        {
+                                            GenericParameterConstraint constraint =
+                                                metadata.GetGenericParameterConstraint(constraintHandle);
+                                            TypeIdentity constraintType =
+                                                provider.FromTypeHandle(constraint.Type);
+                                            if (constraints.Length != 0)
+                                                constraints.Append("\u0001");
+                                            constraints.Append(constraintType.AssemblyName);
+                                            constraints.Append("\0");
+                                            constraints.Append(constraintType.Path);
+                                        }
+                                        Console.WriteLine(
+                                            "G|" +
+                                            Encode(methodOwner.Path) + "|" +
+                                            Encode(metadata.GetString(method.Name)) + "|" +
+                                            Encode(parameter.Index.ToString()) + "|" +
+                                            Encode(((int)parameter.Attributes).ToString()) + "|" +
+                                            Encode(constraints.ToString()));
+                                    }
+                                }
                             }
                         }
                         return 0;
@@ -428,6 +460,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             "Unsupported MemberRef parent " + handle.Kind);
                     }
 
+                    internal TypeIdentity FromTypeHandle(EntityHandle handle)
+                    {
+                        if (handle.Kind == HandleKind.TypeDefinition)
+                            return FromDefinition((TypeDefinitionHandle)handle);
+                        if (handle.Kind == HandleKind.TypeReference)
+                            return FromReference((TypeReferenceHandle)handle);
+                        if (handle.Kind == HandleKind.TypeSpecification)
+                        {
+                            return metadata.GetTypeSpecification(
+                                (TypeSpecificationHandle)handle).DecodeSignature(this, null);
+                        }
+                        throw new BadImageFormatException(
+                            "Unsupported type handle " + handle.Kind);
+                    }
+
                     public TypeIdentity GetArrayType(
                         TypeIdentity elementType,
                         ArrayShape shape)
@@ -550,6 +597,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         readerDirectory.resolve("ManifestReader.runtimeconfig.json").writeText(net10RuntimeConfig())
 
         val parentDeclarationText = """
+            public interface ManifestMarker
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -581,9 +630,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         """.trimIndent()
         val childDeclarationText = """
             public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
-                public fun <R> map(input: R): T
+                public fun <R : ManifestMarker> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
             }
+
+            private object Marker : ManifestMarker
 
             public interface ResolvedIntersection<out T> :
                 IntersectionLeft<T>, IntersectionRight<T>
@@ -616,14 +667,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public fun verify(value: Shape<String>): Int {
                 if (value.value != "typed") return 1
                 if (value.secondary != "secondary") return 2
-                if (value.map(42) != "typed") return 3
+                if (value.map(Marker) != "typed") return 3
                 if (!value.accepts("typed")) return 4
                 if (value.fallback() != "typed") return 5
                 if (value.label != "initial") return 6
                 value.label = "changed"
                 val wide: Shape<Any?> = value
                 if (wide.value != "typed" || wide.secondary != "secondary") return 7
-                if (wide.map("wide") != "typed") return 8
+                if (wide.map(Marker) != "typed") return 8
                 if (wide.fallback() != "typed") return 9
                 if (wide.label != "changed") return 10
                 wide.label = "wide"
@@ -894,6 +945,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 listOf(DotNetCSharpSlotRole.ERASED, DotNetCSharpSlotRole.EXACT),
                 accepts.slots.map { it.role }.sorted(),
             )
+            val genericParameters = readCSharpPhysicalGenericParametersFromDll(
+                modernCSharp,
+                readerAssembly,
+                readerDirectory,
+                producerAssembly,
+            )
+            val mapParameters = map.slots
+                .filter { slot ->
+                    slot.role == DotNetCSharpSlotRole.ERASED ||
+                            slot.role == DotNetCSharpSlotRole.DECLARED
+                }
+                .map { slot ->
+                    genericParameters.single { parameter ->
+                        parameter.ownerPath == slot.ownerPath &&
+                                parameter.methodName == slot.methodName &&
+                                parameter.index == 0
+                    }
+                }
+            assertTrue(mapParameters.all { parameter -> parameter.attributes == 0 })
+            val mapConstraint = mapParameters
+                .flatMap { parameter -> parameter.constraints }
+                .distinct()
+                .single()
+            assertEquals(listOf("manifest.ManifestMarker"), mapConstraint.ownerPath)
+            assertEquals(
+                if (externalParent) parentModuleName else moduleName,
+                mapConstraint.assemblyName,
+            )
+            val mapConstraintType = mapConstraint.ownerPath.joinToString(".") { component ->
+                component.substringBefore('`')
+            }
             val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
             assertEquals("__KotlinDefaultImpls", helper.ownerPath.last())
             if (parentManifest.targetProfile == "net10.0") {
@@ -943,6 +1025,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         resolvedMutable,
                         mutableGetter,
                         mutableSetter,
+                        mapConstraintType,
                         inheritedDefaultHasEffectiveDim =
                             fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
                                     promotedDim,
@@ -9293,6 +9376,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val declarationParameterCount: Int,
     )
 
+    private data class CSharpPhysicalTypeIdentity(
+        val assemblyName: String,
+        val ownerPath: List<String>,
+    )
+
+    private data class CSharpPhysicalGenericParameter(
+        val ownerPath: List<String>,
+        val methodName: String,
+        val index: Int,
+        val attributes: Int,
+        val constraints: List<CSharpPhysicalTypeIdentity>,
+    )
+
     private fun runCSharpImplementationManifestReader(
         toolchain: DotNetModernCSharpToolchain,
         readerAssembly: File,
@@ -9367,6 +9463,49 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
             }
 
+    private fun readCSharpPhysicalGenericParametersFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): List<CSharpPhysicalGenericParameter> =
+        runCSharpImplementationManifestReader(
+            toolchain,
+            readerAssembly,
+            readerDirectory,
+            producerAssembly,
+        )
+            .filter { line -> line.startsWith("G|") }
+            .map { line ->
+                val fields = line.split('|')
+                require(fields.size == 6) {
+                    "Invalid manifest-reader generic-parameter output: $line"
+                }
+                val decoded = fields.drop(1).map { field ->
+                    Base64.getDecoder().decode(field).toString(Charsets.UTF_8)
+                }
+                CSharpPhysicalGenericParameter(
+                    ownerPath = decoded[0].split('\u0000'),
+                    methodName = decoded[1],
+                    index = decoded[2].toInt(),
+                    attributes = decoded[3].toInt(),
+                    constraints = decoded[4]
+                        .takeIf(String::isNotEmpty)
+                        ?.split('\u0001')
+                        ?.map { encodedConstraint ->
+                            val separator = encodedConstraint.indexOf('\u0000')
+                            require(separator > 0) {
+                                "Invalid generic-parameter constraint '$encodedConstraint'"
+                            }
+                            CSharpPhysicalTypeIdentity(
+                                assemblyName = encodedConstraint.substring(0, separator),
+                                ownerPath = encodedConstraint.substring(separator + 1).split('\u0000'),
+                            )
+                        }
+                        .orEmpty(),
+                )
+            }
+
     private fun hasEffectivePromotedDim(
         childContract: DotNetCSharpInterfaceContract,
         parentManifest: DotNetCSharpImplementationManifest,
@@ -9411,6 +9550,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         resolvedMutableContract: DotNetCSharpInterfaceContract,
         mutableGetter: DotNetCSharpIntersectionContract,
         mutableSetter: DotNetCSharpIntersectionContract,
+        mapConstraintType: String,
         inheritedDefaultHasEffectiveDim: Boolean =
             rootContract.members.single { member -> member.sourceName == "fallback" }
                 .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
@@ -9535,7 +9675,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public string label { get; set; } = "initial";
 
-                public string map<R>(R input) { return value; }
+                public string map<R>(R input) where R : $mapConstraintType { return value; }
 
                 public bool accepts(string input) { return input == value; }
             }
@@ -9560,7 +9700,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     set { label = value; }
                 }
 
-                public object ${canonicalMap.methodName}<R>(R input)
+                public object ${canonicalMap.methodName}<R>(R input) where R : $mapConstraintType
                 {
                     return map(input);
                 }
