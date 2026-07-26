@@ -549,34 +549,54 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         readerDirectory.resolve("ManifestReader.runtimeconfig.json").writeText(net10RuntimeConfig())
 
         val parentDeclarationText = """
-            public interface ShapeParent<out T> {
+            public interface ShapeRoot<out T> {
                 public val value: T
-                public var label: String
                 public fun fallback(): T = value
+            }
+
+            public interface ShapeParent<out T> : ShapeRoot<T> {
+                public var label: String
+            }
+
+            public interface ShapeSibling<out T> : ShapeRoot<T> {
+                public val secondary: T
+            }
+
+            public interface IntersectionLeft<out T> {
+                public fun overlap(): T
+            }
+
+            public interface IntersectionRight<out T> {
+                public fun overlap(): T
             }
         """.trimIndent()
         val childDeclarationText = """
-            public interface Shape<out T> : ShapeParent<T> {
+            public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
                 public fun <R> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
             }
 
+            public interface UnsupportedIntersection<out T> :
+                IntersectionLeft<T>, IntersectionRight<T>
+
             public fun verify(value: Shape<String>): Int {
                 if (value.value != "typed") return 1
-                if (value.map(42) != "typed") return 2
-                if (!value.accepts("typed")) return 3
-                if (value.fallback() != "typed") return 4
-                if (value.label != "initial") return 5
+                if (value.secondary != "secondary") return 2
+                if (value.map(42) != "typed") return 3
+                if (!value.accepts("typed")) return 4
+                if (value.fallback() != "typed") return 5
+                if (value.label != "initial") return 6
                 value.label = "changed"
                 val wide: Shape<Any?> = value
-                if (wide.value != "typed" || wide.map("wide") != "typed") return 6
-                if (wide.fallback() != "typed") return 7
-                if (wide.label != "changed") return 8
+                if (wide.value != "typed" || wide.secondary != "secondary") return 7
+                if (wide.map("wide") != "typed") return 8
+                if (wide.fallback() != "typed") return 9
+                if (wide.label != "changed") return 10
                 wide.label = "wide"
-                if (value.label != "wide") return 9
+                if (value.label != "wide") return 11
                 try {
                     wide.accepts(42)
-                    return 10
+                    return 12
                 } catch (_: ClassCastException) {
                     return 0
                 }
@@ -692,21 +712,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val contract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.Shape"
             }
+            val rootContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
+            }
             val parentContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeParent"
             }
+            val siblingContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeSibling"
+            }
+            val unsupportedIntersection = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.UnsupportedIntersection"
+            }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
+            assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
-            assertEquals(if (externalParent) 1 else 2, manifest.interfaces.size)
+            assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
+            assertFalse(unsupportedIntersection.sourceAuthoringSupported)
+            assertEquals(
+                listOf(
+                    "derived generic-interface intersection slots are not supported by " +
+                            "the first C# authoring schema"
+                ),
+                unsupportedIntersection.unsupportedReasons,
+            )
+            assertEquals(if (externalParent) 2 else 7, manifest.interfaces.size)
+            assertEquals(if (externalParent) 5 else 7, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
-                    listOf(parentContract, contract).sortedBy(DotNetCSharpInterfaceContract::logicalKey)
+                    listOf(rootContract, parentContract, siblingContract, contract)
+                        .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
             }
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
             assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
             assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
+            assertEquals(listOf("manifest.ShapeRoot`1"), rootContract.declaredOwnerPath)
             assertEquals(listOf("manifest.ShapeParent`1"), parentContract.declaredOwnerPath)
+            assertEquals(listOf("manifest.ShapeSibling`1"), siblingContract.declaredOwnerPath)
+            assertEquals(null, rootContract.exactOwnerPath)
             assertEquals(null, parentContract.exactOwnerPath)
+            assertEquals(null, siblingContract.exactOwnerPath)
 
             val stdlibAssembly = profileDirectory.resolve("Kotlin.Stdlib.dll")
             if (stdlibAssembly.isFile) {
@@ -721,7 +766,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 })
             }
 
-            val value = parentContract.members.single { member ->
+            val value = rootContract.members.single { member ->
                 member.sourceName == "value" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
             }
             val labelGetter = parentContract.members.single { member ->
@@ -730,12 +775,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val labelSetter = parentContract.members.single { member ->
                 member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
             }
+            val secondary = siblingContract.members.single { member ->
+                member.sourceName == "secondary" &&
+                        member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+            }
             val map = contract.members.single { member -> member.sourceName == "map" }
             val accepts = contract.members.single { member -> member.sourceName == "accepts" }
-            val fallback = parentContract.members.single { member -> member.sourceName == "fallback" }
+            val fallback = rootContract.members.single { member -> member.sourceName == "fallback" }
             assertEquals(DotNetCSharpInterfaceView.DECLARED, value.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, labelGetter.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, labelSetter.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.DECLARED, secondary.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, map.authoringView)
             assertEquals(DotNetCSharpInterfaceView.EXACT, accepts.authoringView)
             assertEquals(
@@ -784,7 +834,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 writeText(
                     generateShapeImplementation(
                         contract,
+                        rootContract,
                         parentContract,
+                        siblingContract,
                         inheritedDefaultHasEffectiveDim =
                             fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
                                     promotedDim,
@@ -9229,9 +9281,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     private fun generateShapeImplementation(
         contract: DotNetCSharpInterfaceContract,
+        rootContract: DotNetCSharpInterfaceContract,
         parentContract: DotNetCSharpInterfaceContract,
+        siblingContract: DotNetCSharpInterfaceContract,
         inheritedDefaultHasEffectiveDim: Boolean =
-            parentContract.members.single { member -> member.sourceName == "fallback" }
+            rootContract.members.single { member -> member.sourceName == "fallback" }
                 .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
     ): String {
         fun DotNetCSharpInterfaceContract.member(
@@ -9245,18 +9299,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         fun DotNetCSharpInterfaceContract.csharpOwner(path: List<String>): String =
             path.joinToString(".") { component -> component.substringBefore('`') }
 
-        val canonicalType = contract.csharpOwner(contract.canonicalOwnerPath)
+        val rootCanonicalType = rootContract.csharpOwner(rootContract.canonicalOwnerPath)
         val parentCanonicalType = parentContract.csharpOwner(parentContract.canonicalOwnerPath)
+        val siblingCanonicalType = siblingContract.csharpOwner(siblingContract.canonicalOwnerPath)
         val exactType = contract.csharpOwner(checkNotNull(contract.exactOwnerPath))
-        val value = parentContract.member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
+        val value = rootContract.member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val labelGetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val labelSetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_SETTER)
+        val secondary = siblingContract.member("secondary", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val map = contract.member("map")
         val accepts = contract.member("accepts")
-        val fallback = parentContract.member("fallback")
+        val fallback = rootContract.member("fallback")
         val canonicalValue = value.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelGetter = labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelSetter = labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val canonicalSecondary = secondary.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalMap = map.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalAccepts = accepts.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalFallback = fallback.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
@@ -9292,6 +9349,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             {
                 public string value { get { return "typed"; } }
 
+                public string secondary { get { return "secondary"; } }
+
                 public string label { get; set; } = "initial";
 
                 public string map<R>(R input) { return value; }
@@ -9303,9 +9362,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             {
                 $generatedTypedDefault
 
-                object $parentCanonicalType.${checkNotNull(canonicalValue.propertyName)}
+                object $rootCanonicalType.${checkNotNull(canonicalValue.propertyName)}
                 {
                     get { return value; }
+                }
+
+                object $siblingCanonicalType.${checkNotNull(canonicalSecondary.propertyName)}
+                {
+                    get { return secondary; }
                 }
 
                 string $parentCanonicalType.${checkNotNull(canonicalLabelGetter.propertyName)}

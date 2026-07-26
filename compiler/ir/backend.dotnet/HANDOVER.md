@@ -1557,8 +1557,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   partial type implements the child exact view, supplies parent and child canonical adapters,
   forwards the parent helper on portable profiles, and inherits the parent DIM on `net10.0`.
   Kotlin executes parent properties/defaults and child methods through the child view on all three
-  profiles. Schema 1 now admits exactly one same-DLL generic parent. Multiple parents,
-  cross-assembly parents, and non-generic parents remain explicitly unsupported.
+  profiles. This first slice admitted one same-DLL generic parent; the later entries below extend
+  it to cross-assembly and multi-parent generic graphs. Non-generic parents remain unsupported.
 - Cross-assembly single-parent composition now uses the same schema. The `netstandard2.0` and
   `net10.0` lanes compile `ShapeParent` and `Shape` into separate Kotlin libraries, bind the child
   through the existing physical KLIB index, then delete both KLIBs. The generated C# compilation
@@ -1566,13 +1566,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   property/default plus child method obligations. The external CLR TypeSpec remains authoritative
   for assembly identity and substitution; the child manifest does not copy it. The parent and
   child use the same profile in this slice.
-- Cross-profile single-parent composition now compiles the same parent for `netstandard2.0` and
+- Cross-profile composition now compiles the parent graph for `netstandard2.0` and
   the child for `net10.0`. After both KLIBs are deleted, a C# metadata reader resolves the portable
   parent slots against the child's standard ECMA-335 MethodImpl rows and requires the complete
   concrete promotion bundle. The generated class then omits both typed and erased helper
   forwarders and Kotlin execution reaches the child-owned DIM. No schema record or version change
   is needed: the manifest owns logical member/view association, while CLR metadata remains
   authoritative for physical promotion.
+- Multi-parent generic composition now uses the same schema/CLR split. The manifest fixture forms
+  `Shape` from two generic branches sharing `ShapeRoot`; logical root keys deduplicate its
+  obligations while ordinary interface TypeSpecs retain the graph and substitutions. Generated
+  C# supplies root, parent, sibling, and child adapters through only the child exact capability,
+  and executes on every profile plus the portable-parent/net10-promotion lane after KLIB removal.
+  An unrelated same-named two-parent intersection is kept fail-closed: its child contract records
+  an explicit unsupported reason until schema 1 associates the generated derived slot with all
+  contributing logical members.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1647,13 +1655,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 1 over multi-parent and
-   intersection slots, constraints, inherited mutable-property obligations, special barriers,
-   non-generic interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts.
-   Then implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
-   resource before freezing the schema or package. Continue the foreign provider/implementor
-   collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
-   structured metadata work; do not substitute IL substring checks.
+1. **Complete the C# interface-authoring contract.** Extend schema 1 over intersection slots,
+   constraints, inherited mutable-property obligations, special barriers, non-generic interfaces,
+   friend-accessible internal interfaces, and runtime-bootstrap contracts. Then implement the
+   Roslyn partial-type generator/analyzer and move the payload to a true managed resource before
+   freezing the schema or package. Continue the foreign provider/implementor collision matrix in
+   parallel with that contract. Keep raw metadata-table auditing with the structured metadata
+   work; do not substitute IL substring checks.
 2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
    producer authorization and consumer declaration are implemented. The repository has no
    Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or

@@ -1759,6 +1759,7 @@ internal class DotNetIlEmitter(
                     preLoweringDeclarationKeys = preLoweringDeclarationKeys,
                     interfaceDefaultImplementations = interfaceDefaultImplementations,
                     genericInterfaceDefaults = genericInterfaceDefaults,
+                    genericInterfaceIntersectionSlots = localGenericInterfaceIntersectionSlots,
                 )
             )
         }.orEmpty()
