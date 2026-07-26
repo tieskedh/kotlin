@@ -1600,7 +1600,11 @@ landed shape as a compatibility constraint.
   `csharp-authoring` parses the authoritative DLL manifest with explicit limits and diagnoses
   missing `partial`, inaccessible friendship, conflicting explicit ABI members, unsupported
   substitutions, malformed manifests, and schema/version mismatch. Generated canonical/exact
-  views remain compiler ABI rather than user-authored API. Schema 6
+  views remain compiler ABI rather than user-authored API. Its ordinary non-generic slice binds
+  Kotlin-named or PascalCase source methods/properties to explicit recorded CLR slots. Portable
+  defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
+  class forwarder. The DLL-only matrix executes public and authorized-internal implementations
+  through Kotlin on every profile. Schema 6
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are

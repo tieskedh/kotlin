@@ -34,7 +34,15 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
                              manifests,
                              productionContext.ReportDiagnostic))
                 {
-                    string source = EmitContractMarker(contract);
+                    KotlinImplementationEmission emission =
+                        KotlinImplementationEmitter.Emit(contract);
+                    foreach (Diagnostic diagnostic in emission.Diagnostics)
+                        productionContext.ReportDiagnostic(diagnostic);
+                    if (emission.HasErrors)
+                        continue;
+                    string source = EmitContractMarker(
+                        contract,
+                        emission.GeneratedMembers);
                     productionContext.AddSource(
                         HintName(contract.ImplementationType) + ".KotlinInterfaceImplementation.g.cs",
                         SourceText.From(source, Encoding.UTF8));
@@ -42,7 +50,9 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
             });
     }
 
-    private static string EmitContractMarker(AuthoringContract contract)
+    private static string EmitContractMarker(
+        AuthoringContract contract,
+        string generatedMembers)
     {
         INamedTypeSymbol type = contract.ImplementationType;
         var source = new StringBuilder();
@@ -73,6 +83,15 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
         source.AppendLine();
         source.Append(indent);
         source.AppendLine("{");
+        if (generatedMembers.Length != 0)
+        {
+            foreach (string line in generatedMembers.Split('\n'))
+            {
+                if (line.Length != 0)
+                    source.Append(indent);
+                source.AppendLine(line.TrimEnd('\r'));
+            }
+        }
         source.Append(indent);
         source.AppendLine("}");
         if (!type.ContainingNamespace.IsGlobalNamespace)

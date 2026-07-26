@@ -411,11 +411,13 @@ The remaining P0-D implementation order is:
    declared C# base list is the only opt-in, its bounded reader consumes the authoritative DLL
    manifest, and diagnostics cover missing `partial`, unavailable friendship, explicit ABI-member
    conflicts, unsupported substitutions, malformed manifests, and schema/tool mismatch. It emits
-   the additional partial declaration and is exercised against DLL-only references; next migrate
-   physical view, member, barrier, and profile-default adapters from the independent handwritten
-   sufficiency fixture into that production emitter. Multi-parent generic diamonds compose from
-   parent manifest contracts plus the CLR graph; schema 6 records the logical contributor mapping
-   that CLR metadata lacks for derived method and split mutable-property intersection slots.
+   the additional partial declaration and is exercised against DLL-only references. Ordinary
+   non-generic method/property adapters now execute public and authorized-internal Kotlin
+   verification on every profile, including portable helper forwarding and modern/promotion DIM
+   suppression. Next migrate split generic views, generic methods, intersections, and barriers
+   from the independent handwritten sufficiency fixture. Multi-parent generic diamonds compose
+   from parent manifest contracts plus the CLR graph; schema 6 records the logical contributor
+   mapping that CLR metadata lacks for derived method and split mutable-property intersection slots.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
    no-KLIB C# `where` clauses. Schema 6 supplies normalized positional analyzer guidance for
    owner-relative constraints erased from illegal variant positions; tooling must explain them,
