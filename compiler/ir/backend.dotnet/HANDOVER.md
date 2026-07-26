@@ -1760,6 +1760,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   views on portable, modern, and promoted-parent lanes. Portable generated accessors call only the
   matching child helpers; modern parent Property adapters dispatch through the selected child
   DIMs, and no rejected parent helper leaks into generated C#.
+- A covariant generic default-property conflict exposed the same Roslyn Property limitation on the
+  child interface's erased canonical view. The declared typed interface owns the DIM body and its
+  private MethodImpl adapter satisfies CLR dispatch, but Roslyn still reports the inherited
+  canonical Property as unimplemented on a C# class. The production generator now emits the
+  physically required explicit canonical Property and forwards virtually to the typed DIM. The
+  DLL-only matrix executes child, typed parents, and a widened erased parent on all four lanes;
+  portable profiles call only the selected generic child helper, modern adapters contain no
+  helper call, and strongly typed results do not take an erased cast.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
