@@ -1592,7 +1592,7 @@ landed shape as a compatibility constraint.
   `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
   DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
   sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
-  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 5
+  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 6
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
@@ -1606,7 +1606,7 @@ landed shape as a compatibility constraint.
   concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
   Promotion is never inferred from profile and is not copied into a second manifest record.
   Multiple generic parents compose through that same manifest/CLR graph split, including a
-  shared-root diamond whose logical root is deduplicated. Schema 5 associates a physical derived
+  shared-root diamond whose logical root is deduplicated. Schema 6 associates a physical derived
   declared/exact intersection slot with its sorted contributing logical members because CLR
   metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
   canonical identities on one source body. Split mutable intersections record the declared getter
@@ -1617,9 +1617,13 @@ landed shape as a compatibility constraint.
   manifest does not duplicate them. The no-KLIB fixture resolves a public marker constraint and
   generates matching C# `where` clauses for typed and canonical slots. Owner-relative constraints
   erased because CLR variant metadata cannot carry them stay erased and are never guessed by C#
-  tooling.
+  tooling. Schema 6 records only normalized method-parameter/owner-parameter index pairs as
+  analyzer guidance on direct and derived-intersection slots. Those pairs explain the weakened
+  foreign boundary and can drive a runtime adapter; they must never become reconstructed CLR or
+  C# constraints. The DLL-only matrix proves the corresponding GenericParamConstraint rows remain
+  absent on every profile and rejects invalid positional records.
   Declaration-specific wrong-shape behavior comes from common `SpecialBridgeMethods`, never from
-  a name or `@UnsafeVariance` heuristic. Schema 5 records the checked parameter count and
+  a name or `@UnsafeVariance` heuristic. Schema 6 records the checked parameter count and
   `false`, `null`, `-1`, or argument fallback. No record means ordinary cast/unbox failure. The
   no-KLIB fixture pins `Collection.contains`, `List.indexOf`, and an ordinary unsafe member.
   `Kotlin.Runtime.dll` publishes built-in-derived manifests for `Iterator`, `ListIterator`,
