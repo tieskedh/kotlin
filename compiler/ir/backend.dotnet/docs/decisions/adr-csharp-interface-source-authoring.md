@@ -365,7 +365,11 @@ implements an ordinary inherited property, mutable property, method, and profile
 through an idiomatic PascalCase partial C# surface. Generated explicit members map that surface to
 the Kotlin physical Property and MethodDef names; no property state or default body is duplicated.
 The same fixture proves helper forwarding on both portable profiles, natural DIM inheritance on
-`net10.0`, and child-owned DIM promotion when the selected parent DLL is portable.
+`net10.0`, and child-owned DIM promotion when the selected parent DLL is portable. A derived
+Kotlin interface that explicitly reabstracts the inherited member remains authoritative: its
+manifest member is abstract and has no helper/body locator, one C# source body satisfies both the
+derived and inherited physical slots, and a bodyless C# implementor receives `KDNCS008` instead of
+silently inheriting either the portable helper or modern DIM.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their
@@ -390,7 +394,9 @@ non-generic method and Property
 adapters from PascalCase or Kotlin-named source members. Portable defaults call the recorded
 helper; native and
 child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
-implementations execute Kotlin verification on every profile.
+implementations execute Kotlin verification on every profile. Explicit Kotlin reabstraction
+suppresses inherited default selection on those same lanes and requires one C# implementation
+body.
 
 Split generic emission is now also production-owned. A C# type names only the declared Kotlin
 interface in its real base list; the generated partial adds the exact constructed view with the
