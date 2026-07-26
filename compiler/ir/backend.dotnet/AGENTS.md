@@ -1725,7 +1725,15 @@ landed shape as a compatibility constraint.
   from IL text.
   Generated adapters must reach the one typed body;
   portable defaults call the recorded nameable
-  `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current
+  `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. A
+  child-selected property DIM still needs generated explicit parent Property adapters when
+  Roslyn's C# base-list validation does not accept the interface-owned MethodImpl mapping; those
+  adapters dispatch virtually through the selected child property and never call the helper.
+  Property helpers alone use the physical-name-grammar-3 reserved
+  `get_/set_...__KotlinDefault__<logical-identity-digest>` form so generated C# can name them
+  without changing the ordinary CLR Property row or accessor names. Consumers use manifest
+  locators and never derive this name.
+  The current
   hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an
   arbitrary self-contained managed resource. Move the carrier-independent payload to a real
   managed resource before schema/package freeze; never add a sidecar or make production tooling
@@ -2026,8 +2034,9 @@ landed shape as a compatibility constraint.
   Producers record ordinary physical names in the KLIB index; generic-interface typed views apply
   the same deterministic rule. Explicit export facades own C#-facing names. CLR constructors
   cannot use this mechanism and colliding exception-category constructors remain unsupported
-  pending a recorded compiler-ABI factory design. Physical-name grammar version 2 owns this rule;
-  stale prototype libraries are rejected rather than bridged.
+  pending a recorded compiler-ABI factory design. Physical-name grammar version 2 introduced this
+  rule. Version 3 retains it and adds C#-expressible, logical-identity-suffixed interface-default
+  property helper names; stale prototype libraries are rejected rather than bridged.
   `kotlin.coroutines.cancellation.CancellationException` is exactly
   `System.OperationCanceledException`; `TaskCanceledException` and other CLR subclasses retain
   identity and classify under Cancellation/IllegalState/Runtime/Exception/Throwable, never Error.

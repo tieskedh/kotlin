@@ -140,12 +140,13 @@ internal static class KotlinImplementationEmitter
         var resolvedMembers = new List<ResolvedMember>();
         foreach (KotlinMemberContract member in bound.Contract.Members)
         {
-            MemberBinding semanticBinding =
+            bool hasSelectedOverride =
                 overrideResolution.SelectedByOverriddenKey.TryGetValue(
                     member.LogicalKey,
-                    out MemberBinding? selected)
-                    ? selected
-                    : new MemberBinding(bound, member);
+                    out MemberBinding? selected);
+            MemberBinding semanticBinding = hasSelectedOverride
+                ? selected!
+                : new MemberBinding(bound, member);
             KotlinMemberContract semanticMember = semanticBinding.Member;
             KotlinMethodLocator[] physicalSlots = member.Slots.Where(slot =>
                     slot.Role != KotlinSlotRole.Helper)
@@ -200,7 +201,13 @@ internal static class KotlinImplementationEmitter
                     intersection?.Contract.LogicalKey ?? semanticMember.LogicalKey,
                     requiresSource:
                         intersection != null ||
-                        overrideResolution.AmbiguousOverriddenKeys.Contains(member.LogicalKey)));
+                        overrideResolution.AmbiguousOverriddenKeys.Contains(member.LogicalKey),
+                    requiresSelectedDefaultAdapter:
+                        hasSelectedOverride &&
+                        !string.Equals(
+                            member.LogicalKey,
+                            semanticMember.LogicalKey,
+                            StringComparison.Ordinal)));
             }
         }
 
@@ -522,7 +529,8 @@ internal static class KotlinImplementationEmitter
                     intersection.Owner.Reference.Assembly,
                     intersection.Contract.SourceName,
                     intersection.Contract.LogicalKey,
-                    requiresSource: true));
+                    requiresSource: true,
+                    requiresSelectedDefaultAdapter: false));
             }
         }
         EmitResolvedMembers(
@@ -749,7 +757,8 @@ internal static class KotlinImplementationEmitter
                 diagnostics);
             return null;
         }
-        if (HasEffectiveDim(authoringContract.ImplementationType, accessor.Method))
+        if (!accessor.RequiresSelectedDefaultAdapter &&
+            HasEffectiveDim(authoringContract.ImplementationType, accessor.Method))
             return null;
         switch (accessor.Member.DefaultKind)
         {
@@ -765,10 +774,77 @@ internal static class KotlinImplementationEmitter
                     accessor,
                     diagnostics);
             case KotlinDefaultKind.DimWithHelper:
-                return null;
+                return DimAccessorBody(
+                    authoringContract,
+                    accessor,
+                    diagnostics);
             default:
                 throw new InvalidOperationException("Unknown Kotlin default kind.");
         }
+    }
+
+    private static string? DimAccessorBody(
+        AuthoringContract authoringContract,
+        ResolvedMember accessor,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        if (accessor.AuthoringMethod.AssociatedSymbol is not
+                IPropertySymbol semanticProperty ||
+            accessor.Method.AssociatedSymbol is not
+                IPropertySymbol physicalProperty ||
+            !TryCSharpIdentifier(
+                semanticProperty.Name,
+                out string semanticPropertyName))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.MalformedManifest,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                accessor.MemberAssembly.Identity.Name,
+                $"DIM property locator for '{accessor.Member.LogicalKey}' cannot be emitted"));
+            return null;
+        }
+
+        string semanticExpression =
+            "((" + DisplayType(semanticProperty.ContainingType) +
+            ")this)." + semanticPropertyName;
+        if (accessor.Member.Kind == KotlinMemberKind.PropertySetter)
+        {
+            if (semanticProperty.SetMethod == null ||
+                !TryConvertExpression(
+                    authoringContract.Compilation,
+                    physicalProperty.Type,
+                    semanticProperty.Type,
+                    "value",
+                    out string valueExpression))
+            {
+                ReportUnsupportedConversion(
+                    authoringContract,
+                    accessor,
+                    physicalProperty.Type,
+                    semanticProperty.Type,
+                    diagnostics);
+                return null;
+            }
+            return "{ " + semanticExpression + " = " + valueExpression + "; }";
+        }
+
+        if (semanticProperty.GetMethod == null ||
+            !TryConvertExpression(
+                authoringContract.Compilation,
+                semanticProperty.Type,
+                physicalProperty.Type,
+                semanticExpression,
+                out string resultExpression))
+        {
+            ReportUnsupportedConversion(
+                authoringContract,
+                accessor,
+                semanticProperty.Type,
+                physicalProperty.Type,
+                diagnostics);
+            return null;
+        }
+        return "{ return " + resultExpression + "; }";
     }
 
     private static string? HelperAccessorBody(
@@ -1859,7 +1935,8 @@ internal static class KotlinImplementationEmitter
             IAssemblySymbol memberAssembly,
             string sourceName,
             string sourceLogicalKey,
-            bool requiresSource)
+            bool requiresSource,
+            bool requiresSelectedDefaultAdapter)
         {
             Member = member;
             Locator = locator;
@@ -1870,6 +1947,7 @@ internal static class KotlinImplementationEmitter
             SourceName = sourceName;
             SourceLogicalKey = sourceLogicalKey;
             RequiresSource = requiresSource;
+            RequiresSelectedDefaultAdapter = requiresSelectedDefaultAdapter;
         }
 
         internal KotlinMemberContract Member { get; }
@@ -1881,6 +1959,7 @@ internal static class KotlinImplementationEmitter
         internal string SourceName { get; }
         internal string SourceLogicalKey { get; }
         internal bool RequiresSource { get; }
+        internal bool RequiresSelectedDefaultAdapter { get; }
     }
 
     private sealed class MemberBinding

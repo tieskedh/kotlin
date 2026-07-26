@@ -245,8 +245,14 @@ Schema 7 also records each declaration's sorted Kotlin logical override keys. Th
 `DotNetIrMangler` member identities, not a tooling namespace. They preserve the Kotlin-selected
 member when several inherited defaults share a CLR signature but portable metadata contains only
 abstract slots and independent helpers. Generated adapters for every inherited slot invoke the
-most-derived selected helper; on `net10.0` the selected DIM remains method-free. A child-selected
-body is never reconstructed by calling each parent's helper independently.
+most-derived selected helper. On `net10.0`, ordinary method defaults remain method-free when the
+CLR and Roslyn both recognize the selected DIM. A property conflict is different: the child
+interface's MethodImpl rows select the getter DIM for CLR dispatch, but Roslyn's C# base-list
+validation still requires the inherited parent Property obligations to be satisfied on the
+implementing class. The generator therefore emits explicit parent Property adapters which
+dispatch virtually through the child property's selected DIM. They do not call the compatibility
+helper or copy the body. A child-selected body is never reconstructed by calling each parent's
+helper independently.
 
 Tooling cross-checks every consumed edge against the CLR interface ancestry and the resolved
 authoring signatures, including source name, member kind, generic arity, parameters, and
@@ -265,8 +271,14 @@ metadata-only test reader decodes those signatures without loading the producer 
 deliberately corrupted return type.
 
 The helper type and method are marked compiler ABI and deliberately nameable from generated C#
-source. Tools consume their recorded physical identity; they do not derive a helper name from the
-interface.
+source. Ordinary function helpers retain their CLR method name. Property-accessor helpers use the
+physical-name-grammar-3 form
+`get_<property>__KotlinDefault__<logical-identity-digest>` or
+`set_<property>__KotlinDefault__<logical-identity-digest>`. This changes only the compiler helper:
+the public interface retains a normal CLR Property row and `get_`/`set_` accessors. The reserved
+suffix makes the helper C#-expressible and collision-resistant without creating a tooling-only
+identity; its digest comes from the existing `DotNetIrMangler` declaration identity. Tools consume
+the recorded physical locator and never derive the helper name from the interface.
 
 ### 4. This is not the universal CLR implementation mechanism
 
