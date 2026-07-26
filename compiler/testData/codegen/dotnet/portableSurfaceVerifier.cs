@@ -99,8 +99,7 @@ internal static class Program
             AddAttributes(
                 result,
                 "ASSEMBLY:" + assembly.GetName().Name,
-                assembly.CustomAttributes.Where(attribute =>
-                    attribute.AttributeType.FullName != "System.Runtime.Versioning.TargetFrameworkAttribute"),
+                assembly.CustomAttributes.Where(IsProfileInvariantAssemblyAttribute),
                 access: 3);
             foreach (Type type in assembly.GetTypes().OrderBy(TypeIdentity, StringComparer.Ordinal))
             {
@@ -141,6 +140,21 @@ internal static class Program
             }
         }
         return result;
+    }
+
+    private static bool IsProfileInvariantAssemblyAttribute(CustomAttributeData attribute)
+    {
+        if (attribute.AttributeType.FullName == "System.Runtime.Versioning.TargetFrameworkAttribute")
+            return false;
+        if (attribute.AttributeType.FullName != "System.Reflection.AssemblyMetadataAttribute" ||
+            attribute.ConstructorArguments.Count == 0)
+        {
+            return true;
+        }
+
+        string key = attribute.ConstructorArguments[0].Value as string;
+        return key == null ||
+            !key.StartsWith("Kotlin.CSharpImplementationManifest", StringComparison.Ordinal);
     }
 
     private static List<string> Compare(

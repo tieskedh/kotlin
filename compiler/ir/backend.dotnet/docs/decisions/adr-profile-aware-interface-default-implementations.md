@@ -325,6 +325,8 @@ The helper type name is deliberately a valid C# identifier. Portable C# source-a
 must be able to forward an inherited default to that single Kotlin body; copying the body into
 generated C# is forbidden. The name remains producer-recorded ABI and must not be reconstructed
 from the interface name.
+The supported generated implementation path and its DLL-owned helper/view metadata are specified
+by [`adr-csharp-interface-source-authoring.md`](adr-csharp-interface-source-authoring.md).
 
 
 The implementation body belongs in target lowering and generated compiler ABI. The runtime owns
