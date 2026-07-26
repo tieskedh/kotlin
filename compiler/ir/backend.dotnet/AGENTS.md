@@ -1608,6 +1608,15 @@ landed shape as a compatibility constraint.
   canonical identities on one source body. Split mutable intersections record the declared getter
   and exact getter/setter; the exact accessors name the same getter-selected CLR Property row.
   Non-generic parents remain explicitly unsupported.
+  Representable method constraints come only from the located CLR GenericParam metadata; the
+  manifest does not duplicate them. The no-KLIB fixture resolves a public marker constraint and
+  generates matching C# `where` clauses for typed and canonical slots. Owner-relative constraints
+  erased because CLR variant metadata cannot carry them stay erased and are never guessed by C#
+  tooling.
+  One idiomatic C# property body may use a C#-facing PascalCase name; generated explicit
+  properties bind it to every recorded Kotlin physical name. Kotlin ABI names stay unchanged.
+  `init`, `required`, indexers, events, and consumer aliases require explicit export policy rather
+  than being inferred from Kotlin `val`/`var`.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
