@@ -1592,7 +1592,15 @@ landed shape as a compatibility constraint.
   `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
   DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
   sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
-  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 6
+  for a user-authored partial C# type, not a universal CLR implementation mechanism. The C# author
+  opts in with the real base list (`partial class C<T> : Shape<T>`): canonical for a non-generic
+  Kotlin interface and the declared Kotlin view for a split generic interface. Attributes,
+  generated base classes, marker interfaces, exact-view base lists, and separate tooling
+  identities are not authoring contracts. The `netstandard2.0` Roslyn component under
+  `csharp-authoring` parses the authoritative DLL manifest with explicit limits and diagnoses
+  missing `partial`, inaccessible friendship, conflicting explicit ABI members, unsupported
+  substitutions, malformed manifests, and schema/version mismatch. Generated canonical/exact
+  views remain compiler ABI rather than user-authored API. Schema 6
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are

@@ -1633,6 +1633,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Actual CLR GenericParamConstraint rows remain absent, representable constraints still come only
   from CLR metadata, and malformed positional guidance is rejected. The future analyzer must
   explain this weakened foreign boundary and must not reconstruct a C# `where` clause.
+- The production C# authoring component now begins under `csharp-authoring` as a locked
+  `netstandard2.0` Roslyn analyzer/generator. Its opt-in is the real C# base list: canonical for an
+  ordinary Kotlin interface and the declared view for a split generic interface. It does not
+  introduce an attribute, marker, generated base, exact-view authoring rule, or separate
+  declaration identity. The bounded schema-6 reader consumes only Roslyn assembly symbols and
+  rejects corrupt, oversized, unknown-version, or unknown-identity payloads without loading target
+  code. Analyzer/generator diagnostics pin missing `partial`, unavailable CLR friendship,
+  conflicting explicit ABI members, unsupported substitutions, and manifest/tool skew. A
+  DLL-only test builds the actual component, proves valid generic and non-generic discovery from
+  real base lists, and checks every mandated failure. The generator currently emits the additional
+  partial declaration as the production integration seam; migrate adapter families from the
+  independent handwritten manifest-sufficiency fixture in subsequent feature commits.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
