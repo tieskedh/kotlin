@@ -1600,7 +1600,13 @@ landed shape as a compatibility constraint.
   `csharp-authoring` parses the authoritative DLL manifest with explicit limits and diagnoses
   missing `partial`, inaccessible friendship, conflicting explicit ABI members, unsupported
   substitutions, malformed manifests, and schema/version mismatch. Generated canonical/exact
-  views remain compiler ABI rather than user-authored API. Its ordinary non-generic slice binds
+  views remain compiler ABI rather than user-authored API. Nested reference-class and record-class
+  implementors are generated inside a reconstructed partial containing-type chain; every
+  container must be partial, and file-local types cannot participate across the generated syntax
+  tree. C# struct and record-struct implementors remain explicitly unsupported pending a boxing,
+  mutation, and identity design. Generated-source hint names use a SHA-256 digest of the fully
+  qualified C# type solely to avoid Roslyn filename collisions; they are not declaration
+  identities or persisted ABI. Its ordinary non-generic slice binds
   Kotlin-named or PascalCase source methods/properties to explicit recorded CLR slots. Portable
   defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
   class forwarder. The DLL-only matrix executes public and authorized-internal implementations
