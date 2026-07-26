@@ -1695,7 +1695,10 @@ landed shape as a compatibility constraint.
   accessibility walks every public/internal owner and applies producer friendship to internal
   components. The metadata reader also pins the exact
   `InternalsVisibleTo("GeneratedShape")` blob and the non-public, NestedPublic, NestedPrivate, and
-  public-compiler-ABI TypeDef visibility rows; this evidence does not come from IL text.
+  public-compiler-ABI TypeDef visibility rows. It additionally compares the exact
+  `KotlinCompilerAbiAttribute` and `EditorBrowsable(Never)` blobs on `@PublishedApi internal` and
+  proves an ordinary internal interface has no compiler-ABI marker; this evidence does not come
+  from IL text.
   Generated adapters must reach the one typed body;
   portable defaults call the recorded nameable
   `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current

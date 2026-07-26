@@ -267,7 +267,9 @@ on assemblies and exposed declarations, excluding the deliberately profile-speci
 framework attribute. Raw attribute-blob encoding, MethodImpl rows, resources, and friend-only
 internal surface remain open for the general portable-superset model. The C# source-authoring
 slice now independently pins its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and
-promotion MethodImpl signatures through a metadata-only reader.
+promotion MethodImpl signatures through a metadata-only reader. It also pins the public
+compiler-ABI marker and `EditorBrowsable(Never)` blobs while proving ordinary internal source API
+is unmarked.
 The accepted `adr-profile-aware-interface-default-implementations.md` fixes item 2's body
 placement, and its non-generic foundation is now implemented. Portable profiles emit abstract
 interface slots, helper-owned bodies, and hidden explicit class forwarders. `net10.0` emits real
