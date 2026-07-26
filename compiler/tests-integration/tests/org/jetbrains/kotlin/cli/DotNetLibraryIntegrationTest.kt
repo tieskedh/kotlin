@@ -948,6 +948,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun resolvedGenericDefault(): T = rightConflictValue
             }
 
+            public interface GenericDefaultPropertyConflictLeft<out T> {
+                public val leftPropertyConflictValue: T
+                public val resolvedGenericProperty: T
+                    get() = leftPropertyConflictValue
+            }
+
+            public interface GenericDefaultPropertyConflictRight<out T> {
+                public val rightPropertyConflictValue: T
+                public val resolvedGenericProperty: T
+                    get() = rightPropertyConflictValue
+            }
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -1017,6 +1029,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 GenericDefaultConflictLeft<T>, GenericDefaultConflictRight<T> {
                 public override fun resolvedGenericDefault(): T =
                     super<GenericDefaultConflictLeft>.resolvedGenericDefault()
+            }
+
+            public interface ResolvedGenericDefaultPropertyConflict<out T> :
+                GenericDefaultPropertyConflictLeft<T>,
+                GenericDefaultPropertyConflictRight<T> {
+                public override val resolvedGenericProperty: T
+                    get() =
+                        super<GenericDefaultPropertyConflictLeft>.resolvedGenericProperty
             }
 
             public interface BarrierShape<out T> : Collection<T> {
@@ -1140,6 +1160,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     right.resolvedMutableProperty == "left-initial" &&
                     rightMutableDefaultState == "selected:left-view-set"
                 ) 0 else 8
+            }
+
+            public fun verifyResolvedGenericDefaultPropertyConflict(
+                value: ResolvedGenericDefaultPropertyConflict<String>
+            ): Int {
+                val left: GenericDefaultPropertyConflictLeft<String> = value
+                val right: GenericDefaultPropertyConflictRight<String> = value
+                val wide: GenericDefaultPropertyConflictRight<Any?> = value
+                if (value.resolvedGenericProperty != "left-generic-property") return 1
+                if (left.resolvedGenericProperty != "left-generic-property") return 2
+                if (right.resolvedGenericProperty != "left-generic-property") return 3
+                return if (
+                    wide.resolvedGenericProperty == "left-generic-property"
+                ) 0 else 4
             }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
@@ -1408,6 +1442,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.GenericDefaultConflictRight"
                 }
+            val genericDefaultPropertyConflictLeftContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericDefaultPropertyConflictLeft"
+                }
+            val genericDefaultPropertyConflictRightContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericDefaultPropertyConflictRight"
+                }
             val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
             }
@@ -1447,6 +1491,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 manifest.interfaces.single { interfaceContract ->
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.ResolvedGenericDefaultConflict"
+                }
+            val resolvedGenericDefaultPropertyConflictContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.ResolvedGenericDefaultPropertyConflict"
                 }
             val barrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
@@ -1660,6 +1709,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(defaultMutablePropertyConflictRightContract.sourceAuthoringSupported)
             assertTrue(genericDefaultConflictLeftContract.sourceAuthoringSupported)
             assertTrue(genericDefaultConflictRightContract.sourceAuthoringSupported)
+            assertTrue(genericDefaultPropertyConflictLeftContract.sourceAuthoringSupported)
+            assertTrue(genericDefaultPropertyConflictRightContract.sourceAuthoringSupported)
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
             assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
@@ -1670,6 +1721,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(resolvedDefaultPropertyConflictContract.sourceAuthoringSupported)
             assertTrue(resolvedDefaultMutablePropertyConflictContract.sourceAuthoringSupported)
             assertTrue(resolvedGenericDefaultConflictContract.sourceAuthoringSupported)
+            assertTrue(resolvedGenericDefaultPropertyConflictContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
@@ -1946,8 +1998,62 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 resolvedGenericDefault.overriddenLogicalMemberKeys.toSet(),
             )
-            assertEquals(if (externalParent) 16 else 37, manifest.interfaces.size)
-            assertEquals(if (externalParent) 21 else 37, parentManifest.interfaces.size)
+            val resolvedGenericDefaultProperty =
+                resolvedGenericDefaultPropertyConflictContract.members.single { member ->
+                    member.sourceName == "resolvedGenericProperty"
+                }
+            assertEquals(
+                DotNetCSharpInterfaceView.DECLARED,
+                resolvedGenericDefaultProperty.authoringView,
+            )
+            assertEquals(
+                DotNetCSharpMemberKind.PROPERTY_GETTER,
+                resolvedGenericDefaultProperty.kind,
+            )
+            assertEquals(
+                if (targetProfile == "net10.0") {
+                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                } else {
+                    DotNetCSharpDefaultKind.PORTABLE_HELPER
+                },
+                resolvedGenericDefaultProperty.defaultKind,
+            )
+            assertEquals(
+                setOf(
+                    genericDefaultPropertyConflictLeftContract.members.single { member ->
+                        member.sourceName == "resolvedGenericProperty"
+                    }.logicalKey,
+                    genericDefaultPropertyConflictRightContract.members.single { member ->
+                        member.sourceName == "resolvedGenericProperty"
+                    }.logicalKey,
+                ),
+                resolvedGenericDefaultProperty.overriddenLogicalMemberKeys.toSet(),
+            )
+            val genericDefaultPropertyHelperNames =
+                listOf(
+                    genericDefaultPropertyConflictLeftContract,
+                    genericDefaultPropertyConflictRightContract,
+                    resolvedGenericDefaultPropertyConflictContract,
+                ).map { interfaceContract ->
+                    interfaceContract.members.single { member ->
+                        member.sourceName == "resolvedGenericProperty"
+                    }.slots.single { slot ->
+                        slot.role == DotNetCSharpSlotRole.HELPER
+                    }.methodName
+                }
+            assertTrue(genericDefaultPropertyHelperNames.all { helperName ->
+                helperName.matches(
+                    Regex(
+                        "get_resolvedGenericProperty__KotlinDefault__[0-9a-f]{32}"
+                    )
+                )
+            })
+            assertEquals(
+                genericDefaultPropertyHelperNames.size,
+                genericDefaultPropertyHelperNames.toSet().size,
+            )
+            assertEquals(if (externalParent) 17 else 40, manifest.interfaces.size)
+            assertEquals(if (externalParent) 23 else 40, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1972,6 +2078,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         genericDefaultConflictLeftContract,
                         genericDefaultConflictRightContract,
                         resolvedGenericDefaultConflictContract,
+                        genericDefaultPropertyConflictLeftContract,
+                        genericDefaultPropertyConflictRightContract,
+                        resolvedGenericDefaultPropertyConflictContract,
                         barrierContract,
                         searchBarrierContract,
                         friendContract,
@@ -2487,6 +2596,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public sealed partial class ResolvedGenericDefaultPropertyConflictBaseListProbe :
+                        manifest.ResolvedGenericDefaultPropertyConflict<string>
+                    {
+                        public string LeftPropertyConflictValue
+                        {
+                            get { return "left-generic-property"; }
+                        }
+
+                        public string RightPropertyConflictValue
+                        {
+                            get { return "right-generic-property"; }
+                        }
+                    }
+
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
@@ -2717,6 +2840,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated generic resolved-default conflict failed: " +
                                     resolvedGenericDefaultConflictResult);
+                            int resolvedGenericDefaultPropertyConflictResult =
+                                manifest.apiKt.verifyResolvedGenericDefaultPropertyConflict(
+                                    new ResolvedGenericDefaultPropertyConflictBaseListProbe());
+                            if (resolvedGenericDefaultPropertyConflictResult != 0)
+                                throw new System.Exception(
+                                    "Generated generic resolved-property conflict failed: " +
+                                    resolvedGenericDefaultPropertyConflictResult);
                             int friendResult =
                                 manifest.apiKt.verifyFriend(new FriendBaseListProbe());
                             if (friendResult != 0)
@@ -2996,6 +3126,48 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             "resolvedGenericDefault" in generatedAuthoringText
                 ) {
                     "Portable generic conflict adapters did not use the selected child helper:\n" +
+                            generatedAuthoringText
+                }
+            }
+            val rejectedGenericPropertyHelperName =
+                genericDefaultPropertyConflictRightContract.members.single { member ->
+                    member.sourceName == "resolvedGenericProperty"
+                }.slots.single { slot ->
+                    slot.role == DotNetCSharpSlotRole.HELPER
+                }.methodName
+            assertFalse(
+                "GenericDefaultPropertyConflictRight.__KotlinDefaultImpls." +
+                        rejectedGenericPropertyHelperName in generatedAuthoringText
+            ) {
+                "The rejected generic property helper leaked into generated adapters:\n" +
+                        generatedAuthoringText
+            }
+            val selectedGenericPropertyHelperName =
+                resolvedGenericDefaultProperty.slots.single { slot ->
+                    slot.role == DotNetCSharpSlotRole.HELPER
+                }.methodName
+            if (targetProfile != "net10.0") {
+                val selectedGenericPropertyHelper =
+                    "ResolvedGenericDefaultPropertyConflict.__KotlinDefaultImpls." +
+                            selectedGenericPropertyHelperName
+                assertTrue(selectedGenericPropertyHelper in generatedAuthoringText) {
+                    "Portable generic property adapters did not use the selected child helper:\n" +
+                            generatedAuthoringText
+                }
+                assertFalse("(string)$selectedGenericPropertyHelper" in generatedAuthoringText) {
+                    "A strongly typed generic property helper result was routed through a cast:\n" +
+                            generatedAuthoringText
+                }
+            } else {
+                assertTrue(
+                    "ResolvedGenericDefaultPropertyConflict<string>)this)." +
+                            "resolvedGenericProperty" in generatedAuthoringText
+                ) {
+                    "Modern generic property adapters did not dispatch through the selected DIM:\n" +
+                            generatedAuthoringText
+                }
+                assertFalse(selectedGenericPropertyHelperName in generatedAuthoringText) {
+                    "A modern generic property adapter called the compatibility helper:\n" +
                             generatedAuthoringText
                 }
             }

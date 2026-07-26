@@ -671,6 +671,13 @@ declarations even though both physical accessors belong to one CLR Property row.
 through child and parent views execute those distinct selections across all profile combinations;
 portable C# uses only the matching child helpers and modern C# dispatches through the child DIMs.
 
+A covariant generic property conflict now covers the split physical views too. The declared typed
+interface owns the DIM; its erased canonical slot is abstract and mapped by an interface-owned
+MethodImpl. CLR dispatch accepts that representation, while Roslyn still requires an explicit
+canonical Property on the C# class. The generator emits that physical adapter and forwards
+virtually through the typed DIM. Portable adapters use the selected generic child helper, and
+declared/exact results never detour through an erased cast.
+
 A second portable exception-signature lane now returns each broad logical category, stores and
 mutates all four through public properties, and returns a nested generic runtime-exception value.
 Separate net48 and net10 consumers preserve classifier results and exact object identity across the

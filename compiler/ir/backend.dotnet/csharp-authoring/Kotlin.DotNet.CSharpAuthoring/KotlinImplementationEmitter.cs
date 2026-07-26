@@ -202,12 +202,20 @@ internal static class KotlinImplementationEmitter
                     requiresSource:
                         intersection != null ||
                         overrideResolution.AmbiguousOverriddenKeys.Contains(member.LogicalKey),
-                    requiresSelectedDefaultAdapter:
-                        hasSelectedOverride &&
-                        !string.Equals(
-                            member.LogicalKey,
-                            semanticMember.LogicalKey,
-                            StringComparison.Ordinal)));
+                    requiresDimAdapter:
+                        semanticMember.DefaultKind == KotlinDefaultKind.DimWithHelper &&
+                        (
+                            hasSelectedOverride &&
+                            !string.Equals(
+                                member.LogicalKey,
+                                semanticMember.LogicalKey,
+                                StringComparison.Ordinal) ||
+                            semanticMember.SemanticBodyView is
+                                KotlinInterfaceView semanticBodyView &&
+                            locator.Role != AuthoringRole(
+                                semanticBinding.Bound.Contract,
+                                semanticBodyView)
+                        )));
             }
         }
 
@@ -530,7 +538,7 @@ internal static class KotlinImplementationEmitter
                     intersection.Contract.SourceName,
                     intersection.Contract.LogicalKey,
                     requiresSource: true,
-                    requiresSelectedDefaultAdapter: false));
+                    requiresDimAdapter: false));
             }
         }
         EmitResolvedMembers(
@@ -757,7 +765,7 @@ internal static class KotlinImplementationEmitter
                 diagnostics);
             return null;
         }
-        if (!accessor.RequiresSelectedDefaultAdapter &&
+        if (!accessor.RequiresDimAdapter &&
             HasEffectiveDim(authoringContract.ImplementationType, accessor.Method))
             return null;
         switch (accessor.Member.DefaultKind)
@@ -1936,7 +1944,7 @@ internal static class KotlinImplementationEmitter
             string sourceName,
             string sourceLogicalKey,
             bool requiresSource,
-            bool requiresSelectedDefaultAdapter)
+            bool requiresDimAdapter)
         {
             Member = member;
             Locator = locator;
@@ -1947,7 +1955,7 @@ internal static class KotlinImplementationEmitter
             SourceName = sourceName;
             SourceLogicalKey = sourceLogicalKey;
             RequiresSource = requiresSource;
-            RequiresSelectedDefaultAdapter = requiresSelectedDefaultAdapter;
+            RequiresDimAdapter = requiresDimAdapter;
         }
 
         internal KotlinMemberContract Member { get; }
@@ -1959,7 +1967,7 @@ internal static class KotlinImplementationEmitter
         internal string SourceName { get; }
         internal string SourceLogicalKey { get; }
         internal bool RequiresSource { get; }
-        internal bool RequiresSelectedDefaultAdapter { get; }
+        internal bool RequiresDimAdapter { get; }
     }
 
     private sealed class MemberBinding

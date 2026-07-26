@@ -1733,6 +1733,11 @@ landed shape as a compatibility constraint.
   edges, helpers, and qualified-super choices. The generator may batch them into one explicit C#
   Property only after selecting each accessor independently; never choose one semantic parent for
   the complete property.
+  A covariant generic property's declared typed view owns its DIM body. Roslyn does not treat the
+  interface-owned MethodImpl adapter as satisfying the inherited erased canonical Property on a
+  C# class, so the generator emits an explicit canonical Property adapter which dispatches
+  virtually through that typed DIM. Exact and declared results must not route through an erased
+  cast.
   Property helpers alone use the physical-name-grammar-3 reserved
   `get_/set_...__KotlinDefault__<logical-identity-digest>` form so generated C# can name them
   without changing the ordinary CLR Property row or accessor names. Consumers use manifest
