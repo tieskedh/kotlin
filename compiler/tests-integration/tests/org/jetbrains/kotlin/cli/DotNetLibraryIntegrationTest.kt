@@ -875,6 +875,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     return 0
                 }
             }
+
+            public fun verifyInt(value: Shape<Int>): Int {
+                if (value.value != 42) return 1
+                if (value.secondary != 43) return 2
+                if (value.map(Marker) != 42) return 3
+                if (!value.accepts(42)) return 4
+                if (value.fallback() != 42) return 5
+                val wide: Shape<Any?> = value
+                if (wide.value != 42 || wide.secondary != 43) return 6
+                if (wide.map(Marker) != 42 || wide.fallback() != 42) return 7
+                try {
+                    wide.accepts("wrong")
+                    return 8
+                } catch (_: ClassCastException) {
+                    return 0
+                }
+            }
+
+            public fun verifyOwnerBound(value: OwnerBound<ManifestMarker>): Int =
+                if (value.retain(Marker) === Marker) 0 else 1
         """.trimIndent()
 
         data class ManifestScenario(
@@ -1542,6 +1562,59 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         internal int Code { get { return 41; } }
                     }
 
+                    public sealed partial class GenericBaseListProbe<T> : manifest.Shape<T>
+                        where T : class
+                    {
+                        public GenericBaseListProbe(T value, T secondary)
+                        {
+                            Value = value;
+                            Secondary = secondary;
+                        }
+
+                        public T Value { get; }
+                        public T Secondary { get; }
+                        public string Label { get; set; } = "initial";
+
+                        public T Map<R>(R input)
+                            where R : manifest.ManifestMarker
+                        {
+                            return Value;
+                        }
+
+                        public bool Accepts(T input)
+                        {
+                            return object.Equals(input, Value);
+                        }
+                    }
+
+                    public sealed partial class IntGenericBaseListProbe :
+                        manifest.Shape<int>
+                    {
+                        public int Value { get { return 42; } }
+                        public int Secondary { get { return 43; } }
+                        public string Label { get; set; } = "initial";
+
+                        public int Map<R>(R input)
+                            where R : manifest.ManifestMarker
+                        {
+                            return Value;
+                        }
+
+                        public bool Accepts(int input)
+                        {
+                            return input == Value;
+                        }
+                    }
+
+                    public sealed partial class OwnerBoundBaseListProbe<T> :
+                        manifest.OwnerBound<T>
+                    {
+                        public R Retain<R>(R value)
+                        {
+                            return value;
+                        }
+                    }
+
                     public static class BaseListProgram
                     {
                         public static int Main()
@@ -1555,6 +1628,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             if (friendResult != 0)
                                 throw new System.Exception(
                                     "Generated friend implementation failed: " + friendResult);
+                            int genericResult =
+                                manifest.apiKt.verify(
+                                    new GenericBaseListProbe<string>(
+                                        "typed",
+                                        "secondary"));
+                            if (genericResult != 0)
+                                throw new System.Exception(
+                                    "Generated generic implementation failed: " + genericResult);
+                            int intResult =
+                                manifest.apiKt.verifyInt(new IntGenericBaseListProbe());
+                            if (intResult != 0)
+                                throw new System.Exception(
+                                    "Generated value-type implementation failed: " + intResult);
+                            int ownerBoundResult =
+                                manifest.apiKt.verifyOwnerBound(
+                                    new OwnerBoundBaseListProbe<manifest.ManifestMarker>());
+                            if (ownerBoundResult != 0)
+                                throw new System.Exception(
+                                    "Generated owner-bound implementation failed: " +
+                                    ownerBoundResult);
                             return 0;
                         }
                     }
@@ -1595,6 +1688,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertTrue("this.Format" in generatedAuthoringText) {
                 generatedAuthoringText
+            }
+            assertTrue(
+                checkNotNull(contract.exactOwnerPath)
+                    .last()
+                    .substringBefore('`') in generatedAuthoringText
+            ) {
+                "The generated partial did not add the exact generic view:\n" +
+                        generatedAuthoringText
+            }
+            assertTrue("this.Map<R>" in generatedAuthoringText) {
+                generatedAuthoringText
+            }
+            assertTrue("this.Retain<R>" in generatedAuthoringText) {
+                generatedAuthoringText
+            }
+            assertTrue("(object)" in generatedAuthoringText) {
+                "The erased value-type result was not boxed:\n$generatedAuthoringText"
+            }
+            assertTrue("(int)" in generatedAuthoringText) {
+                "The erased value-type argument was not unboxed:\n$generatedAuthoringText"
+            }
+            assertTrue("KDNCS009" in baseListCompile.output) {
+                "The analyzer did not explain the erased R : T boundary:\n" +
+                        baseListCompile.output
             }
             val shouldForwardPortableDefault =
                 targetProfile != "net10.0"
