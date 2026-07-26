@@ -18,13 +18,16 @@ internal sealed class KotlinImplementationEmission
 {
     internal KotlinImplementationEmission(
         string generatedMembers,
+        ImmutableArray<INamedTypeSymbol> additionalInterfaces,
         ImmutableArray<Diagnostic> diagnostics)
     {
         GeneratedMembers = generatedMembers;
+        AdditionalInterfaces = additionalInterfaces;
         Diagnostics = diagnostics;
     }
 
     internal string GeneratedMembers { get; }
+    internal ImmutableArray<INamedTypeSymbol> AdditionalInterfaces { get; }
     internal ImmutableArray<Diagnostic> Diagnostics { get; }
     internal bool HasErrors => Diagnostics.Any(
         diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
@@ -45,6 +48,7 @@ internal static class KotlinImplementationEmitter
         {
             return new KotlinImplementationEmission(
                 "",
+                ImmutableArray<INamedTypeSymbol>.Empty,
                 ImmutableArray.Create(Diagnostic.Create(
                     Diagnostics.UnsupportedToolingShape,
                     authoringContract.Declaration.Identifier.GetLocation(),
@@ -52,16 +56,9 @@ internal static class KotlinImplementationEmitter
                     "a nested C# implementor requires containing partial declarations")));
         }
 
-        // Generic split views require substitution-aware construction and are the next emission
-        // slice. Keep their already-tested discovery seam without guessing an adapter shape.
-        if (authoringContract.Interfaces.Any(bound =>
-                !bound.Contract.TypeParameters.IsEmpty))
-            return new KotlinImplementationEmission(
-                "",
-                ImmutableArray<Diagnostic>.Empty);
-
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var generatedMembers = new StringBuilder();
+        var additionalInterfaces = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
         foreach (BoundKotlinInterface bound in authoringContract.Interfaces)
         {
             if (!bound.Contract.Intersections.IsEmpty)
@@ -70,11 +67,34 @@ internal static class KotlinImplementationEmitter
                     Diagnostics.UnsupportedToolingShape,
                     authoringContract.Declaration.Identifier.GetLocation(),
                     bound.InterfaceType.ToDisplayString(),
-                    "non-generic intersection slots"));
+                    "intersection slots"));
                 continue;
             }
 
-            EmitOrdinaryContract(
+            if (bound.IsAuthoredRoot &&
+                !bound.Contract.ExactOwnerPath.IsDefaultOrEmpty)
+            {
+                INamedTypeSymbol? exactDefinition = ResolveType(
+                    bound.Reference.Assembly,
+                    bound.Contract.ExactOwnerPath);
+                if (exactDefinition == null ||
+                    exactDefinition.Arity != bound.InterfaceType.TypeArguments.Length)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.MalformedManifest,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        bound.Reference.Assembly.Identity.Name,
+                        $"exact owner for '{bound.Contract.LogicalKey}' cannot be constructed"));
+                }
+                else
+                {
+                    additionalInterfaces.Add(
+                        exactDefinition.Construct(
+                            bound.InterfaceType.TypeArguments.ToArray()));
+                }
+            }
+
+            EmitContract(
                 authoringContract,
                 bound,
                 generatedMembers,
@@ -82,10 +102,13 @@ internal static class KotlinImplementationEmitter
         }
         return new KotlinImplementationEmission(
             generatedMembers.ToString(),
+            additionalInterfaces
+                .Distinct(NamedTypeSymbolEqualityComparer.Instance)
+                .ToImmutableArray(),
             diagnostics.ToImmutable());
     }
 
-    private static void EmitOrdinaryContract(
+    private static void EmitContract(
         AuthoringContract authoringContract,
         BoundKotlinInterface bound,
         StringBuilder output,
@@ -97,30 +120,48 @@ internal static class KotlinImplementationEmitter
             KotlinMethodLocator[] physicalSlots = member.Slots.Where(slot =>
                     slot.Role != KotlinSlotRole.Helper)
                 .ToArray();
-            if (physicalSlots.Length != 1 ||
-                physicalSlots[0].Role != KotlinSlotRole.Canonical)
-            {
-                diagnostics.Add(Diagnostic.Create(
-                    Diagnostics.UnsupportedToolingShape,
-                    authoringContract.Declaration.Identifier.GetLocation(),
-                    bound.InterfaceType.ToDisplayString(),
-                    $"ordinary member '{member.SourceName}' has a split physical surface"));
-                continue;
-            }
-            KotlinMethodLocator locator = physicalSlots[0];
-            IMethodSymbol? method = ResolveMethod(
-                bound.Reference.Assembly,
-                locator);
-            if (method == null)
+            KotlinSlotRole authoringRole = AuthoringRole(
+                bound.Contract,
+                member.AuthoringView);
+            KotlinMethodLocator? authoringLocator =
+                physicalSlots.SingleOrDefault(slot => slot.Role == authoringRole);
+            IMethodSymbol? authoringMethod = authoringLocator == null
+                ? null
+                : ResolveMethod(
+                    bound.Reference.Assembly,
+                    authoringLocator,
+                    bound.InterfaceType.TypeArguments);
+            if (authoringMethod == null)
             {
                 diagnostics.Add(Diagnostic.Create(
                     Diagnostics.MalformedManifest,
                     authoringContract.Declaration.Identifier.GetLocation(),
                     bound.Reference.Assembly.Identity.Name,
-                    $"method locator for '{member.LogicalKey}' does not resolve uniquely"));
+                    $"authoring locator for '{member.LogicalKey}' does not resolve uniquely"));
                 continue;
             }
-            resolvedMembers.Add(new ResolvedMember(member, locator, method));
+            foreach (KotlinMethodLocator locator in physicalSlots)
+            {
+                IMethodSymbol? method = ResolveMethod(
+                    bound.Reference.Assembly,
+                    locator,
+                    bound.InterfaceType.TypeArguments);
+                if (method == null)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.MalformedManifest,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        bound.Reference.Assembly.Identity.Name,
+                        $"method locator for '{member.LogicalKey}' does not resolve uniquely"));
+                    continue;
+                }
+                resolvedMembers.Add(new ResolvedMember(
+                    member,
+                    locator,
+                    method,
+                    authoringMethod,
+                    bound.InterfaceType.TypeArguments));
+            }
         }
 
         foreach (IGrouping<PropertyIdentity, ResolvedMember> propertyGroup in resolvedMembers
@@ -169,6 +210,17 @@ internal static class KotlinImplementationEmitter
 
         IPropertySymbol physicalProperty =
             (IPropertySymbol)accessors[0].Method.AssociatedSymbol!;
+        IPropertySymbol? authoringProperty =
+            accessors[0].AuthoringMethod.AssociatedSymbol as IPropertySymbol;
+        if (authoringProperty == null)
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.MalformedManifest,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                accessors[0].Method.ContainingAssembly.Identity.Name,
+                "property authoring locator does not resolve to a CLR Property row"));
+            return;
+        }
         if (physicalProperty.RefKind != RefKind.None)
         {
             diagnostics.Add(Diagnostic.Create(
@@ -182,7 +234,7 @@ internal static class KotlinImplementationEmitter
         IPropertySymbol? sourceProperty = FindSourceProperty(
             authoringContract.ImplementationType,
             sourceName,
-            physicalProperty.Type,
+            authoringProperty.Type,
             out ImmutableArray<IPropertySymbol> ambiguousProperties);
         if (!ambiguousProperties.IsEmpty)
         {
@@ -268,7 +320,24 @@ internal static class KotlinImplementationEmitter
                         diagnostics);
                     return null;
                 }
-                return "{ return this." + EscapeIdentifier(sourceProperty.Name) + "; }";
+                string sourceExpression =
+                    "this." + EscapeIdentifier(sourceProperty.Name);
+                if (!TryConvertExpression(
+                        authoringContract.Compilation,
+                        sourceProperty.Type,
+                        ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                        sourceExpression,
+                        out string resultExpression))
+                {
+                    ReportUnsupportedConversion(
+                        authoringContract,
+                        accessor,
+                        sourceProperty.Type,
+                        ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                        diagnostics);
+                    return null;
+                }
+                return "{ return " + resultExpression + "; }";
             }
             if (sourceProperty.SetMethod == null)
             {
@@ -278,7 +347,23 @@ internal static class KotlinImplementationEmitter
                     diagnostics);
                 return null;
             }
-            return "{ this." + EscapeIdentifier(sourceProperty.Name) + " = value; }";
+            if (!TryConvertExpression(
+                    authoringContract.Compilation,
+                    ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                    sourceProperty.Type,
+                    "value",
+                    out string valueExpression))
+            {
+                ReportUnsupportedConversion(
+                    authoringContract,
+                    accessor,
+                    ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type,
+                    sourceProperty.Type,
+                    diagnostics);
+                return null;
+            }
+            return "{ this." + EscapeIdentifier(sourceProperty.Name) +
+                " = " + valueExpression + "; }";
         }
 
         if (HasEffectiveDim(authoringContract.ImplementationType, accessor.Method))
@@ -314,10 +399,12 @@ internal static class KotlinImplementationEmitter
             !TryHelperCall(
                 accessor.Method.ContainingAssembly,
                 helper,
+                HelperTypeArguments(accessor, accessor.Method, helper),
                 accessor.Member.Kind == KotlinMemberKind.PropertySetter
                     ? "this, value"
                     : "this",
-                out string call))
+                out string call,
+                out IMethodSymbol? helperMethod))
         {
             diagnostics.Add(Diagnostic.Create(
                 Diagnostics.MalformedManifest,
@@ -326,9 +413,26 @@ internal static class KotlinImplementationEmitter
                 $"helper locator for '{accessor.Member.LogicalKey}' cannot be emitted"));
             return null;
         }
-        return accessor.Member.Kind == KotlinMemberKind.PropertyGetter
-            ? "{ return " + call + "; }"
-            : "{ " + call + "; }";
+        if (accessor.Member.Kind == KotlinMemberKind.PropertySetter)
+            return "{ " + call + "; }";
+        ITypeSymbol physicalType =
+            ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type;
+        if (!TryConvertExpression(
+                authoringContract.Compilation,
+                helperMethod!.ReturnType,
+                physicalType,
+                call,
+                out string result))
+        {
+            ReportUnsupportedConversion(
+                authoringContract,
+                accessor,
+                helperMethod!.ReturnType,
+                physicalType,
+                diagnostics);
+            return null;
+        }
+        return "{ return " + result + "; }";
     }
 
     private static void EmitMethod(
@@ -338,8 +442,7 @@ internal static class KotlinImplementationEmitter
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         IMethodSymbol physicalMethod = resolved.Method;
-        if (physicalMethod.Arity != 0 ||
-            physicalMethod.ReturnsByRef ||
+        if (physicalMethod.ReturnsByRef ||
             physicalMethod.ReturnsByRefReadonly ||
             physicalMethod.Parameters.Any(parameter =>
                 parameter.RefKind != RefKind.None))
@@ -348,7 +451,7 @@ internal static class KotlinImplementationEmitter
                 Diagnostics.UnsupportedToolingShape,
                 authoringContract.Declaration.Identifier.GetLocation(),
                 physicalMethod.ContainingType.ToDisplayString(),
-                $"generic or by-reference method '{resolved.Member.SourceName}'"));
+                $"by-reference method '{resolved.Member.SourceName}'"));
             return;
         }
         if (!TryCSharpIdentifier(physicalMethod.Name, out string methodName))
@@ -364,7 +467,7 @@ internal static class KotlinImplementationEmitter
         IMethodSymbol? sourceMethod = FindSourceMethod(
             authoringContract.ImplementationType,
             resolved.Member.SourceName,
-            physicalMethod,
+            resolved.AuthoringMethod,
             out ImmutableArray<IMethodSymbol> ambiguousMethods);
         if (!ambiguousMethods.IsEmpty)
         {
@@ -383,7 +486,14 @@ internal static class KotlinImplementationEmitter
         string? body;
         if (sourceMethod != null)
         {
-            body = MethodSourceBody(sourceMethod, physicalMethod);
+            body = MethodSourceBody(
+                authoringContract,
+                sourceMethod,
+                physicalMethod,
+                resolved.AuthoringMethod,
+                diagnostics);
+            if (body == null)
+                return;
         }
         else if (HasEffectiveDim(authoringContract.ImplementationType, physicalMethod))
         {
@@ -412,8 +522,10 @@ internal static class KotlinImplementationEmitter
                         !TryHelperCall(
                             physicalMethod.ContainingAssembly,
                             helper,
+                            HelperTypeArguments(resolved, physicalMethod, helper),
                             arguments,
-                            out string call))
+                            out string call,
+                            out IMethodSymbol? helperMethod))
                     {
                         diagnostics.Add(Diagnostic.Create(
                             Diagnostics.MalformedManifest,
@@ -422,9 +534,29 @@ internal static class KotlinImplementationEmitter
                             $"helper locator for '{resolved.Member.LogicalKey}' cannot be emitted"));
                         return;
                     }
-                    body = physicalMethod.ReturnsVoid
-                        ? "{ " + call + "; }"
-                        : "{ return " + call + "; }";
+                    if (physicalMethod.ReturnsVoid)
+                    {
+                        body = "{ " + call + "; }";
+                    }
+                    else if (TryConvertExpression(
+                                 authoringContract.Compilation,
+                                 helperMethod!.ReturnType,
+                                 physicalMethod.ReturnType,
+                                 call,
+                                 out string helperResult))
+                    {
+                        body = "{ return " + helperResult + "; }";
+                    }
+                    else
+                    {
+                        ReportUnsupportedConversion(
+                            authoringContract,
+                            resolved,
+                            helperMethod!.ReturnType,
+                            physicalMethod.ReturnType,
+                            diagnostics);
+                        return;
+                    }
                     break;
                 case KotlinDefaultKind.DimWithHelper:
                     return;
@@ -439,6 +571,15 @@ internal static class KotlinImplementationEmitter
         output.Append(DisplayType(physicalMethod.ContainingType));
         output.Append('.');
         output.Append(methodName);
+        if (physicalMethod.Arity != 0)
+        {
+            output.Append('<');
+            output.Append(string.Join(
+                ", ",
+                physicalMethod.TypeParameters.Select(parameter =>
+                    EscapeIdentifier(parameter.Name))));
+            output.Append('>');
+        }
         output.Append('(');
         output.Append(string.Join(
             ", ",
@@ -448,18 +589,67 @@ internal static class KotlinImplementationEmitter
         output.AppendLine();
     }
 
-    private static string MethodSourceBody(
+    private static string? MethodSourceBody(
+        AuthoringContract authoringContract,
         IMethodSymbol sourceMethod,
-        IMethodSymbol physicalMethod)
+        IMethodSymbol physicalMethod,
+        IMethodSymbol authoringMethod,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
     {
-        string call = "this." + EscapeIdentifier(sourceMethod.Name) + "(" +
-            string.Join(
+        IMethodSymbol substitutedAuthoringMethod = authoringMethod.Arity == 0
+            ? authoringMethod
+            : authoringMethod.Construct(
+                physicalMethod.TypeParameters.Cast<ITypeSymbol>().ToArray());
+        var arguments = new List<string>();
+        for (int index = 0; index < physicalMethod.Parameters.Length; index++)
+        {
+            if (!TryConvertExpression(
+                    authoringContract.Compilation,
+                    physicalMethod.Parameters[index].Type,
+                    substitutedAuthoringMethod.Parameters[index].Type,
+                    "p" + index,
+                    out string argument))
+            {
+                ReportUnsupportedConversion(
+                    authoringContract,
+                    physicalMethod,
+                    physicalMethod.Parameters[index].Type,
+                    substitutedAuthoringMethod.Parameters[index].Type,
+                    diagnostics);
+                return null;
+            }
+            arguments.Add(argument);
+        }
+        string call = "this." + EscapeIdentifier(sourceMethod.Name);
+        if (physicalMethod.Arity != 0)
+        {
+            call += "<" + string.Join(
                 ", ",
-                physicalMethod.Parameters.Select((_, index) => "p" + index)) +
-            ")";
+                physicalMethod.TypeParameters.Select(parameter =>
+                    EscapeIdentifier(parameter.Name))) + ">";
+        }
+        call += "(" + string.Join(", ", arguments) + ")";
         return physicalMethod.ReturnsVoid
             ? "{ " + call + "; }"
-            : "{ return " + call + "; }";
+            : TryConvertExpression(
+                authoringContract.Compilation,
+                substitutedAuthoringMethod.ReturnType,
+                physicalMethod.ReturnType,
+                call,
+                out string result)
+                ? "{ return " + result + "; }"
+                : ReportUnsupportedResult();
+
+        string? ReportUnsupportedResult()
+        {
+            ReportUnsupportedConversion(
+                authoringContract,
+                physicalMethod,
+                substitutedAuthoringMethod.ReturnType,
+                physicalMethod.ReturnType,
+                diagnostics);
+            return null;
+        }
     }
 
     private static IPropertySymbol? FindSourceProperty(
@@ -501,10 +691,7 @@ internal static class KotlinImplementationEmitter
                 method.ExplicitInterfaceImplementations.IsEmpty &&
                 IsSourceName(method.Name, sourceName) &&
                 method.Arity == expectedMethod.Arity &&
-                SymbolEqualityComparer.Default.Equals(
-                    method.ReturnType,
-                    expectedMethod.ReturnType) &&
-                ParametersMatch(method.Parameters, expectedMethod.Parameters))
+                MethodShapeMatches(method, expectedMethod))
             .ToImmutableArray();
         if (candidates.Length == 1)
         {
@@ -515,6 +702,54 @@ internal static class KotlinImplementationEmitter
             ? candidates
             : ImmutableArray<IMethodSymbol>.Empty;
         return null;
+    }
+
+    private static bool MethodShapeMatches(
+        IMethodSymbol sourceMethod,
+        IMethodSymbol expectedMethod)
+    {
+        IMethodSymbol substitutedExpected = expectedMethod.Arity == 0
+            ? expectedMethod
+            : expectedMethod.Construct(
+                sourceMethod.TypeParameters.Cast<ITypeSymbol>().ToArray());
+        if (!SymbolEqualityComparer.Default.Equals(
+                sourceMethod.ReturnType,
+                substitutedExpected.ReturnType) ||
+            !ParametersMatch(
+                sourceMethod.Parameters,
+                substitutedExpected.Parameters))
+            return false;
+        for (int index = 0; index < sourceMethod.TypeParameters.Length; index++)
+        {
+            ITypeParameterSymbol source = sourceMethod.TypeParameters[index];
+            ITypeParameterSymbol expected = substitutedExpected.TypeParameters[index];
+            if (source.HasConstructorConstraint != expected.HasConstructorConstraint ||
+                source.HasReferenceTypeConstraint != expected.HasReferenceTypeConstraint ||
+                source.ReferenceTypeConstraintNullableAnnotation !=
+                    expected.ReferenceTypeConstraintNullableAnnotation ||
+                source.HasValueTypeConstraint != expected.HasValueTypeConstraint ||
+                source.HasUnmanagedTypeConstraint != expected.HasUnmanagedTypeConstraint ||
+                source.HasNotNullConstraint != expected.HasNotNullConstraint ||
+                !TypeArraysEqual(
+                    source.ConstraintTypes,
+                    expected.ConstraintTypes))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool TypeArraysEqual(
+        ImmutableArray<ITypeSymbol> left,
+        ImmutableArray<ITypeSymbol> right)
+    {
+        if (left.Length != right.Length)
+            return false;
+        for (int index = 0; index < left.Length; index++)
+        {
+            if (!SymbolEqualityComparer.Default.Equals(left[index], right[index]))
+                return false;
+        }
+        return true;
     }
 
     private static bool ParametersMatch(
@@ -558,13 +793,40 @@ internal static class KotlinImplementationEmitter
             !method.IsAbstract;
     }
 
+    private static KotlinSlotRole AuthoringRole(
+        KotlinInterfaceContract contract,
+        KotlinInterfaceView view)
+    {
+        switch (view)
+        {
+            case KotlinInterfaceView.Canonical:
+                return contract.TypeParameters.IsEmpty
+                    ? KotlinSlotRole.Canonical
+                    : KotlinSlotRole.Erased;
+            case KotlinInterfaceView.Declared:
+                return KotlinSlotRole.Declared;
+            case KotlinInterfaceView.Exact:
+                return KotlinSlotRole.Exact;
+            default:
+                throw new InvalidOperationException("Unknown Kotlin authoring view.");
+        }
+    }
+
     private static IMethodSymbol? ResolveMethod(
         IAssemblySymbol assembly,
-        KotlinMethodLocator locator)
+        KotlinMethodLocator locator,
+        ImmutableArray<ITypeSymbol> ownerTypeArguments = default)
     {
         INamedTypeSymbol? owner = ResolveType(assembly, locator.OwnerPath);
         if (owner == null)
             return null;
+        if (owner.Arity != 0)
+        {
+            if (ownerTypeArguments.IsDefault ||
+                owner.Arity != ownerTypeArguments.Length)
+                return null;
+            owner = owner.Construct(ownerTypeArguments.ToArray());
+        }
         IMethodSymbol[] candidates = owner.GetMembers(locator.MethodName)
             .OfType<IMethodSymbol>()
             .Where(method =>
@@ -589,20 +851,48 @@ internal static class KotlinImplementationEmitter
     private static bool TryHelperCall(
         IAssemblySymbol assembly,
         KotlinMethodLocator helper,
+        ImmutableArray<ITypeSymbol> typeArguments,
         string arguments,
-        out string call)
+        out string call,
+        out IMethodSymbol? helperMethod)
     {
-        IMethodSymbol? helperMethod = ResolveMethod(assembly, helper);
+        helperMethod = ResolveMethod(assembly, helper);
         if (helperMethod == null ||
             !helperMethod.IsStatic ||
+            helperMethod.Arity != typeArguments.Length ||
             !TryCSharpIdentifier(helperMethod.Name, out string helperName))
         {
             call = "";
             return false;
         }
+        if (helperMethod.Arity != 0)
+            helperMethod = helperMethod.Construct(typeArguments.ToArray());
         call = DisplayType(helperMethod.ContainingType) +
-            "." + helperName + "(" + arguments + ")";
+            "." + helperName;
+        if (!typeArguments.IsEmpty)
+        {
+            call += "<" + string.Join(
+                ", ",
+                typeArguments.Select(DisplayType)) + ">";
+        }
+        call += "(" + arguments + ")";
         return true;
+    }
+
+    private static ImmutableArray<ITypeSymbol> HelperTypeArguments(
+        ResolvedMember resolved,
+        IMethodSymbol physicalMethod,
+        KotlinMethodLocator helper)
+    {
+        ImmutableArray<ITypeSymbol> methodArguments =
+            physicalMethod.TypeParameters.Cast<ITypeSymbol>().ToImmutableArray();
+        ImmutableArray<ITypeSymbol> allArguments =
+            resolved.OwnerTypeArguments.AddRange(methodArguments);
+        if (helper.GenericArity == allArguments.Length)
+            return allArguments;
+        if (helper.GenericArity == methodArguments.Length)
+            return methodArguments;
+        return ImmutableArray<ITypeSymbol>.Empty;
     }
 
     private static string ParameterDeclaration(
@@ -631,6 +921,58 @@ internal static class KotlinImplementationEmitter
     private static string DisplayType(ITypeSymbol type)
     {
         return type.ToDisplayString(TypeDisplayFormat);
+    }
+
+    private static bool TryConvertExpression(
+        Compilation compilation,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType,
+        string expression,
+        out string convertedExpression)
+    {
+        if (SymbolEqualityComparer.Default.Equals(sourceType, targetType))
+        {
+            convertedExpression = expression;
+            return true;
+        }
+        if (!(compilation is CSharpCompilation csharpCompilation) ||
+            !csharpCompilation.ClassifyConversion(sourceType, targetType).Exists)
+        {
+            convertedExpression = "";
+            return false;
+        }
+        convertedExpression =
+            "(" + DisplayType(targetType) + ")(" + expression + ")";
+        return true;
+    }
+
+    private static void ReportUnsupportedConversion(
+        AuthoringContract authoringContract,
+        ResolvedMember member,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        ReportUnsupportedConversion(
+            authoringContract,
+            member.Method,
+            sourceType,
+            targetType,
+            diagnostics);
+    }
+
+    private static void ReportUnsupportedConversion(
+        AuthoringContract authoringContract,
+        ISymbol physicalMember,
+        ITypeSymbol sourceType,
+        ITypeSymbol targetType,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        diagnostics.Add(Diagnostic.Create(
+            Diagnostics.UnsupportedToolingShape,
+            authoringContract.Declaration.Identifier.GetLocation(),
+            physicalMember.ContainingType.ToDisplayString(),
+            $"conversion from '{DisplayType(sourceType)}' to '{DisplayType(targetType)}'"));
     }
 
     private static bool TryCSharpIdentifier(string name, out string escaped)
@@ -669,16 +1011,22 @@ internal static class KotlinImplementationEmitter
         internal ResolvedMember(
             KotlinMemberContract member,
             KotlinMethodLocator locator,
-            IMethodSymbol method)
+            IMethodSymbol method,
+            IMethodSymbol authoringMethod,
+            ImmutableArray<ITypeSymbol> ownerTypeArguments)
         {
             Member = member;
             Locator = locator;
             Method = method;
+            AuthoringMethod = authoringMethod;
+            OwnerTypeArguments = ownerTypeArguments;
         }
 
         internal KotlinMemberContract Member { get; }
         internal KotlinMethodLocator Locator { get; }
         internal IMethodSymbol Method { get; }
+        internal IMethodSymbol AuthoringMethod { get; }
+        internal ImmutableArray<ITypeSymbol> OwnerTypeArguments { get; }
     }
 
     private readonly struct PropertyIdentity : IEquatable<PropertyIdentity>
@@ -711,6 +1059,23 @@ internal static class KotlinImplementationEmitter
                 (propertyName == null
                     ? 0
                     : StringComparer.Ordinal.GetHashCode(propertyName));
+        }
+    }
+
+    private sealed class NamedTypeSymbolEqualityComparer :
+        IEqualityComparer<INamedTypeSymbol>
+    {
+        internal static readonly NamedTypeSymbolEqualityComparer Instance =
+            new NamedTypeSymbolEqualityComparer();
+
+        public bool Equals(INamedTypeSymbol? left, INamedTypeSymbol? right)
+        {
+            return SymbolEqualityComparer.Default.Equals(left, right);
+        }
+
+        public int GetHashCode(INamedTypeSymbol value)
+        {
+            return SymbolEqualityComparer.Default.GetHashCode(value);
         }
     }
 }

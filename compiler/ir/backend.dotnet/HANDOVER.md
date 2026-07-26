@@ -1654,6 +1654,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   compiles and executes the real generator for an ordinary public interface and an authorized
   internal friend interface. The existing handwritten fixture remains the oracle for split
   generic, intersection, generic-method, and barrier adapters until those families migrate.
+- Production generation now covers split generic views and generic methods. The user base list
+  contains only the declared Kotlin interface; the generated partial constructs the exact view
+  from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot
+  adapts to one strongly typed source body. Exact results never take an erased cast; canonical
+  adapters alone box, widen, cast, or unbox. Representable generic-method constraints are resolved
+  from CLR symbols, while schema-6 owner-relative guidance emits `KDNCS009` and no illegal C#
+  constraint. Generic portable helpers receive owner and method substitutions, and complete
+  native/promoted DIMs still suppress class methods. The real generator executes open
+  reference-constrained and closed `int` shapes, generic methods, typed/exact/canonical dispatch,
+  value boxing, ordinary unsafe cast failure, and `R : T` guidance on all four DLL-only lanes.
+  Intersections and special-barrier fallbacks remain on the handwritten sufficiency fixture.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

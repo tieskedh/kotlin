@@ -305,6 +305,18 @@ implementations execute Kotlin verification on every profile. Split generic view
 generic methods, and special barriers remain in the independent handwritten manifest-sufficiency
 fixture until each family is migrated.
 
+Split generic emission is now also production-owned. A C# type names only the declared Kotlin
+interface in its real base list; the generated partial adds the exact constructed view with the
+same closed or open type arguments. Declared, exact, and erased canonical methods and Property
+rows adapt to one strongly typed C# body. Exact adapters do not route results through `object`;
+only canonical slots cast, box, or widen where their own ABI requires it. Generic method
+constraints come from the resolved authoring MethodDef, while erased owner-relative `R : T`
+guidance remains a diagnostic and never becomes a generated `where` clause. Portable generic
+defaults invoke the one helper identity with the owner and method substitutions; native and
+promoted DIMs remain method-free. DLL-only execution covers open reference substitutions,
+closed value substitutions and boxing, exact-only inputs, generic methods, unsafe cast failure,
+identity-preserving widening, and the erased owner-relative boundary on every profile.
+
 Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding
 `Collection.contains` records one checked argument with a `false` fallback, while a child

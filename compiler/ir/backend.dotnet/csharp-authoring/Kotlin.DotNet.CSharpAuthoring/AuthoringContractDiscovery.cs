@@ -17,15 +17,18 @@ namespace Kotlin.DotNet.CSharpAuthoring;
 internal sealed class AuthoringContract
 {
     internal AuthoringContract(
+        Compilation compilation,
         INamedTypeSymbol implementationType,
         TypeDeclarationSyntax declaration,
         ImmutableArray<BoundKotlinInterface> interfaces)
     {
+        Compilation = compilation;
         ImplementationType = implementationType;
         Declaration = declaration;
         Interfaces = interfaces;
     }
 
+    internal Compilation Compilation { get; }
     internal INamedTypeSymbol ImplementationType { get; }
     internal TypeDeclarationSyntax Declaration { get; }
     internal ImmutableArray<BoundKotlinInterface> Interfaces { get; }
@@ -36,16 +39,19 @@ internal sealed class BoundKotlinInterface
     internal BoundKotlinInterface(
         KotlinManifestReference reference,
         KotlinInterfaceContract contract,
-        INamedTypeSymbol interfaceType)
+        INamedTypeSymbol interfaceType,
+        bool isAuthoredRoot)
     {
         Reference = reference;
         Contract = contract;
         InterfaceType = interfaceType;
+        IsAuthoredRoot = isAuthoredRoot;
     }
 
     internal KotlinManifestReference Reference { get; }
     internal KotlinInterfaceContract Contract { get; }
     internal INamedTypeSymbol InterfaceType { get; }
+    internal bool IsAuthoredRoot { get; }
 }
 
 internal static class AuthoringContractDiscovery
@@ -167,7 +173,11 @@ internal static class AuthoringContractDiscovery
                     hasError = true;
                 }
                 if (!hasError)
-                    result.Add(new AuthoringContract(implementation, declaration, interfaces));
+                    result.Add(new AuthoringContract(
+                        compilation,
+                        implementation,
+                        declaration,
+                        interfaces));
             }
         }
         return result.ToImmutable();
@@ -214,7 +224,11 @@ internal static class AuthoringContractDiscovery
                         AuthoringOwnerMetadataName(candidate) == metadataName);
                 if (contract == null)
                     continue;
-                authoredRoots.Add(new BoundKotlinInterface(reference, contract, interfaceType));
+                authoredRoots.Add(new BoundKotlinInterface(
+                    reference,
+                    contract,
+                    interfaceType,
+                    isAuthoredRoot: true));
             }
         }
         if (declaration.BaseList != null)
@@ -253,7 +267,8 @@ internal static class AuthoringContractDiscovery
                 authoredRoots.Add(new BoundKotlinInterface(
                     match.reference,
                     match.contract,
-                    definition));
+                    definition,
+                    isAuthoredRoot: true));
             }
         }
 
@@ -278,7 +293,8 @@ internal static class AuthoringContractDiscovery
                     result.Add(new BoundKotlinInterface(
                         reference,
                         inheritedContract,
-                        inheritedType));
+                        inheritedType,
+                        isAuthoredRoot: false));
                 }
             }
         }
