@@ -276,7 +276,7 @@ independent physical owner/method of the masked default-argument dispatcher, der
 DIM promotions as structured `P` records, inherited final generic-interface view adapters as
 structured `B` records, and hidden class MethodImpl forwarders as structured `W` records.
 Consumers do not derive
-`<DefaultImpls>` or `$default` names and do not infer producer
+`__KotlinDefaultImpls` or `$default` names and do not infer producer
 lowering from a target profile. Later lowering and whole-class shape validation traverse `W`
 records through arbitrary base-class depth and suppress a class forwarder only when the selected
 DIM is physically effective. If an inherited portable class MethodImpl would mask a more-specific
@@ -418,7 +418,7 @@ producer-recorded masked dispatchers for omitted and named arguments. The dispat
 interface slot virtually, so consumer overrides win. An abstract interface method with default
 parameters proves the dispatcher record is independent of DIM/default-body metadata; the test
 asserts both physical declaration shapes before executing on CoreCLR.
-Compiler-owned `<DefaultImpls>` classes and methods are excluded from the logical declaration-key
+Compiler-owned `__KotlinDefaultImpls` classes and methods are excluded from the logical declaration-key
 set: their physical identities are reachable only through records attached to real KLIB members.
 The same separate-module test asserts that no synthetic helper name leaks into the logical index
 while the marked public compiler ABI remains callable.

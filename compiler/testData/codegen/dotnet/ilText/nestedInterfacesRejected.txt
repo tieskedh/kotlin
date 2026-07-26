@@ -19,7 +19,7 @@
 {
   .class nested public interface abstract auto ansi 'BrokenContract'
   {
-    .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+    .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
            extends [mscorlib]System.Object
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)

@@ -75,7 +75,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodName = "abstractWithDefaults",
                 isInstance = true,
                 defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
-                    ownerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     methodName = "abstractWithDefaults\$default",
                 ),
             ),
@@ -85,11 +85,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 isInstance = true,
                 interfaceDefaultImplementation = DotNetInterfaceDefaultImplementation(
                     bodyPlacement = DotNetInterfaceDefaultBodyPlacement.HELPER_ONLY,
-                    helperOwnerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    helperOwnerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     helperMethodName = "defaultWithDefaults",
                 ),
                 defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
-                    ownerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     methodName = "defaultWithDefaults\$default",
                 ),
             ),
@@ -166,7 +166,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodName = "withDefaults",
                 isInstance = true,
                 defaultArgumentDispatcher = DotNetDefaultArgumentDispatcher(
-                    ownerPath = listOf("sample.Contract", "<DefaultImpls>"),
+                    ownerPath = listOf("sample.Contract", "__KotlinDefaultImpls"),
                     methodName = "withDefaults\$default",
                 ),
             ),
@@ -2617,7 +2617,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val portableMetadata = portableDirectory.resolve("Portable.GenericDefaults.klib")
         val portableIl = portableDirectory.resolve("Portable.GenericDefaults.il").readText()
         assertTrue("abstract virtual instance object 'value__KotlinErased__" in portableIl) { portableIl }
-        assertTrue("/'<DefaultImpls>'::'value'" in portableIl) { portableIl }
+        assertTrue("/'__KotlinDefaultImpls'::'value'" in portableIl) { portableIl }
         assertTrue("<GenericInterfaceCanonicalBridge-" in portableIl) { portableIl }
         assertTrue("<GenericInterfaceDeclaredBridge-" in portableIl) { portableIl }
         assertTrue("<GenericInterfaceExactBridge-" in portableIl) { portableIl }
@@ -2695,7 +2695,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("<GenericInterfaceDefaultPromotionDeclared-" in promotedIl) { promotedIl }
         assertTrue("<GenericInterfaceDefaultPromotionExact-" in promotedIl) { promotedIl }
         assertTrue("[Portable.GenericDefaults]" in promotedIl) { promotedIl }
-        assertTrue("/'<DefaultImpls>'::'value'" in promotedIl) { promotedIl }
+        assertTrue("/'__KotlinDefaultImpls'::'value'" in promotedIl) { promotedIl }
         assertTrue("<GenericInterfaceCanonicalBridge-genericdefaults.PortableGeneric-value-" in promotedIl) {
             "The closed override must explicitly map the inherited canonical slot:\n$promotedIl"
         }
@@ -3141,7 +3141,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             portableIl,
         )
         assertTrue("abstract virtual instance string 'value'()" in portableIl) { portableIl }
-        assertTrue("'PortableBase'/'<DefaultImpls>'::'value'" !in portableIl) {
+        assertTrue("'PortableBase'/'__KotlinDefaultImpls'::'value'" !in portableIl) {
             "The portable helper owns the body; it must not call an unavailable DIM:\n$portableIl"
         }
 
@@ -3223,7 +3223,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 .containsMatchIn(derivedIl)
         ) { derivedIl }
         assertTrue(
-            Regex("""call string \[Portable\.Defaults].*/'<DefaultImpls>'::'value'""")
+            Regex("""call string \[Portable\.Defaults].*/'__KotlinDefaultImpls'::'value'""")
                 .containsMatchIn(derivedIl)
         ) { derivedIl }
         assertTrue("call instance string 'defaults.Net10Base'::'value'()" in derivedIl) {
@@ -3232,7 +3232,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("callvirt instance string 'defaults.Net10Base'::'value'()" !in derivedIl) {
             "The exact helper must not redispatch virtually:\n$derivedIl"
         }
-        assertTrue("call string 'defaults.Net10Base'/'<DefaultImpls>'::'value'" in derivedIl) {
+        assertTrue("call string 'defaults.Net10Base'/'__KotlinDefaultImpls'::'value'" in derivedIl) {
             "Qualified super must route through the exact-call helper:\n$derivedIl"
         }
         assertEquals(
@@ -3460,7 +3460,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val portableMetadata = portableDirectory.resolve("Portable.Features.klib")
         val portableDeclarations = DotNetLibraryAbiCodec.decode(portableMetadata.readKlibManifest())
         assertTrue(
-            portableDeclarations.keys.none { "<DefaultImpls>" in it || "\$default" in it },
+            portableDeclarations.keys.none { "__KotlinDefaultImpls" in it || "\$default" in it },
             portableDeclarations.keys.joinToString("\n"),
         )
         val portableFunctions = portableDeclarations.values

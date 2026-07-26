@@ -1525,7 +1525,7 @@ landed shape as a compatibility constraint.
   `ilText/interfaceDelegation.kt`, `box/interfaceDelegation.kt`, and
   `ilText/interfaceDelegationRejected.kt`.
   INTERFACE ARGUMENT DEFAULTS use a producer-owned masked dispatcher in the compiler-reserved
-  nested `<DefaultImpls>` class. The static `$default` dispatcher takes the interface receiver as
+  nested `__KotlinDefaultImpls` class. The static `$default` dispatcher takes the interface receiver as
   its first ordinary parameter, evaluates defaults and masks in source order, and calls the
   interface slot through `callvirt`, so the implementing override still owns dispatch on every
   profile. Common Kotlin forbids omitted arguments in a super call
@@ -1553,7 +1553,7 @@ landed shape as a compatibility constraint.
   PROFILE-AWARE INTERFACE DEFAULTS follow
   `docs/decisions/adr-profile-aware-interface-default-implementations.md`. `net48` and
   `netstandard2.0` emit abstract CLR slots, one marked public compiler-ABI
-  `<DefaultImpls>` body, and physically required hidden class MethodImpl forwarders.
+  `__KotlinDefaultImpls` body, and physically required hidden class MethodImpl forwarders.
   `net10.0` emits one canonical DIM body and retains the same helper identity for portable
   compatibility and exact calls. Qualified `super<I>.f()` always lowers to exactly `I`'s helper:
   portable helpers own the moved body, while modern helpers use a plain nonvirtual `call` to

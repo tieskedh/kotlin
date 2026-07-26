@@ -13,7 +13,7 @@
 
 .class interface public abstract auto ansi 'WithBody'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -92,13 +92,13 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    call int32 'WithBody'/'<DefaultImpls>'::'withDefault'(class 'WithBody', int32)
+    call int32 'WithBody'/'__KotlinDefaultImpls'::'withDefault'(class 'WithBody', int32)
     ret
   }
 }
 .class interface public abstract auto ansi 'WithAccessorBody'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -122,7 +122,7 @@
 }
 .class interface public abstract auto ansi 'GenericBody'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -266,7 +266,7 @@
   {
     .maxstack 1
     ldarg.0
-    call !!0 'GenericBody'/'<DefaultImpls>'::'value'<int32>(class 'GenericBody')
+    call !!0 'GenericBody'/'__KotlinDefaultImpls'::'value'<int32>(class 'GenericBody')
     ret
   }
   .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceDefaultForwarderTarget-GenericBody-echo-15187c83a0ad8f557afa2cfd5f24eb99>'<'R'>(!!0 'value') cil managed
@@ -274,7 +274,7 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    call !!1 'GenericBody'/'<DefaultImpls>'::'echo'<int32, !!0>(class 'GenericBody', !!1)
+    call !!1 'GenericBody'/'__KotlinDefaultImpls'::'echo'<int32, !!0>(class 'GenericBody', !!1)
     ret
   }
   .method private hidebysig newslot virtual final instance bool '<GenericInterfaceDefaultForwarderTarget-GenericBody-same-4e9f162987f57afd95ce144c7840ec06>'(int32 'value') cil managed
@@ -282,7 +282,7 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    call bool 'GenericBody'/'<DefaultImpls>'::'same'<int32>(class 'GenericBody', !!0)
+    call bool 'GenericBody'/'__KotlinDefaultImpls'::'same'<int32>(class 'GenericBody', !!0)
     ret
   }
   .method private hidebysig newslot virtual final instance object '<GenericInterfaceCanonicalBridge-GenericBody-seed-516885e6a7a8f6bb5e78212d9923bbda>'() cil managed
@@ -363,7 +363,7 @@
 }
 .class interface public abstract auto ansi 'InvariantGenericBody'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -404,7 +404,7 @@
     .maxstack 2
     ldarg.0
     ldarg.1
-    call !!1 'InvariantGenericBody'/'<DefaultImpls>'::'echo'<int32, !!0>(class 'InvariantGenericBody', !!1)
+    call !!1 'InvariantGenericBody'/'__KotlinDefaultImpls'::'echo'<int32, !!0>(class 'InvariantGenericBody', !!1)
     ret
   }
   .method private hidebysig newslot virtual final instance !!0 '<GenericInterfaceCanonicalBridge-InvariantGenericBody-echo-d5f3d5de759468f228c143b033b83c29>'<'R'>(!!0 'value') cil managed
