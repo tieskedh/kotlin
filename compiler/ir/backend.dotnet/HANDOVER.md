@@ -1644,10 +1644,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   DLL-only test builds the actual component, proves valid generic and non-generic discovery from
   real base lists, and checks every mandated failure. Nested generic class and nested record-class
   implementors now reconstruct their complete partial containing-type chain and execute generated
-  adapters. A non-partial container is `KDNCS011`; file-local types and value-type implementors
-  fail explicitly rather than receiving an invalid class-shaped generated part. Roslyn source
-  hints now hash the fully qualified C# type, preventing punctuation/nesting filename collisions
-  without creating a persisted declaration identity. The independent handwritten
+  adapters. A non-partial container is `KDNCS011`; file-local types fail explicitly rather than
+  receiving an invalid generated part. Value-type implementors are an accepted deferral and
+  remain `KDNCS010`: no implicit wrapper is permitted while portable helper boxing and modern
+  DIM/constrained dispatch lack a profile-uniform Kotlin identity, copy, mutation, and default
+  dispatch contract. Reopening that boundary requires the cross-profile matrix in the
+  source-authoring ADR. Roslyn source hints now hash the fully qualified C# type, preventing
+  punctuation/nesting filename collisions without creating a persisted declaration identity. The
+  independent handwritten
   manifest-sufficiency fixture remains the full-schema oracle while production adapter families
   execute in the generator matrix.
 - The production emitter now owns ordinary non-generic interface adapters. It resolves canonical

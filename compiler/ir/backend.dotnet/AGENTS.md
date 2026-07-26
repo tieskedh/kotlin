@@ -1607,10 +1607,14 @@ landed shape as a compatibility constraint.
   views remain compiler ABI rather than user-authored API. Nested reference-class and record-class
   implementors are generated inside a reconstructed partial containing-type chain; every
   container must be partial, and file-local types cannot participate across the generated syntax
-  tree. C# struct and record-struct implementors remain explicitly unsupported pending a boxing,
-  mutation, and identity design. Generated-source hint names use a SHA-256 digest of the fully
-  qualified C# type solely to avoid Roslyn filename collisions; they are not declaration
-  identities or persisted ABI. Every emitted analyzer diagnostic, including the containing-type
+  tree. C# struct and record-struct implementors are an accepted deferred shape: `KDNCS010`
+  remains the deliberate boundary until a separate interop decision gives portable helper
+  boxing and modern DIM/constrained dispatch one profile-uniform identity, copy, mutation, and
+  default-dispatch contract. Do not generate an implicit reference wrapper or remove that
+  diagnostic without the cross-profile value-type matrix recorded in the source-authoring ADR.
+  Generated-source hint names use a SHA-256 digest of the fully qualified C# type solely to avoid
+  Roslyn filename collisions; they are not declaration identities or persisted ABI. Every emitted
+  analyzer diagnostic, including the containing-type
   `KDNCS011` rule, must appear in `SupportedDiagnostics`; release-table documentation alone is not
   registration. Diagnostic ownership is per C# type: the analyzer reports semantically analyzable
   shapes, while the generator reports only when a blocking C# error inside that same type would
