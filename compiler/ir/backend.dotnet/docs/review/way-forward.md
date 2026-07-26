@@ -264,8 +264,13 @@ consumable public/protected types, hierarchy edges, generic constraints, methods
 properties, and events for both runtime/stdlib pairs, while allowing portable abstract slots to
 become modern DIMs. It also retains normalized portable custom-attribute identities and payloads
 on assemblies and exposed declarations, excluding the deliberately profile-specific target-
-framework attribute. Raw attribute-blob encoding, MethodImpl rows, resources, and friend-only
-internal surface remain open for the general portable-superset model. The C# source-authoring
+framework attribute. The verifier now also reads raw ManifestResource rows: a portable public
+resource must remain present, public, and embedded, while the C# authoring manifest retains its
+schema, assembly identity, logical-identity scheme, and portable logical declarations across
+profile-specific physical slot records. A copied platform PE with one rewritten logical
+declaration and a recomputed envelope digest is rejected as a negative oracle. Raw attribute-blob
+encoding, general MethodImpl rows, and friend-only internal surface remain open for the general
+portable-superset model. The C# source-authoring
 slice now independently pins its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and
 promotion MethodImpl signatures through a metadata-only reader. It also pins the public
 compiler-ABI marker and `EditorBrowsable(Never)` blobs while proving ordinary internal source API
@@ -481,9 +486,11 @@ The remaining P0-D implementation order is:
    base class the only path because C# has single class inheritance. An executed multi-root
    implementor now retains its unrelated C# base state while generated adapters satisfy ordinary
    and generic Kotlin contracts. The authoring-specific raw
-   MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. Close
-   the remaining general attribute-blob, resource, MethodImpl, and internal-surface comparison in
-   the structured metadata work rather than with IL substring tests.
+   MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. The
+   structured portable-superset verifier also closes the managed-resource row and C# manifest
+   logical-contract comparison without requiring byte-identical profile payloads. Close the
+   remaining general attribute-blob, MethodImpl, and internal-surface comparison in the structured
+   metadata work rather than with IL substring tests.
 
 There is no remaining implicit-intersection representation or production-adapter migration on the
 critical path. The next backend implementation item is the foreign boundary and structured
