@@ -580,9 +580,10 @@ The behavior of a wrong-shaped erased argument is declaration specific:
 - the backend must not generalize collection defaults to every annotated member.
 
 The special policy is selected by member ABI identity in shared backend logic, not rediscovered
-from a source name alone. C# implementation manifest schema 4 records the checked parameter count
-and the shared `false`, `null`, `-1`, or argument fallback on the logical member contract. An
-absent policy means ordinary narrowing semantics, including cast or unbox failure.
+from a source name alone. C# implementation manifest schema 5 records the existing
+`PublicIdSignatureComputer(DotNetIrMangler)` identity scheme, the checked parameter count, and the
+shared `false`, `null`, `-1`, or argument fallback on the logical member contract. An absent policy
+means ordinary narrowing semantics, including cast or unbox failure.
 
 ## C# surface
 

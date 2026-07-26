@@ -47,9 +47,23 @@ object DotNetIlAssembler {
         outputDirectory: File,
         target: DotNetTarget,
         messageCollector: MessageCollector,
-    ): File? = DotNetRuntimeLibrary.assembleNextTo(
-        outputDirectory.resolve("runtime-conformance-placeholder"),
+    ): File? = DotNetRuntimeLibrary.assembleWithoutManifestForTests(
+        outputDirectory,
         target,
+        messageCollector,
+    )
+
+    /** Re-emits a built-in-derived runtime manifest for a profile-specific carrier test. */
+    @TestOnly
+    fun assembleRuntimeWithManifestForTests(
+        outputDirectory: File,
+        target: DotNetTarget,
+        cSharpImplementationManifest: DotNetCSharpImplementationManifest,
+        messageCollector: MessageCollector,
+    ): File? = DotNetRuntimeLibrary.assembleWithManifestForTests(
+        outputDirectory,
+        target,
+        cSharpImplementationManifest,
         messageCollector,
     )
 
