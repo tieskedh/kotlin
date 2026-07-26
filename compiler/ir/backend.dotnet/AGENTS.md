@@ -1612,7 +1612,11 @@ landed shape as a compatibility constraint.
   qualified C# type solely to avoid Roslyn filename collisions; they are not declaration
   identities or persisted ABI. Every emitted analyzer diagnostic, including the containing-type
   `KDNCS011` rule, must appear in `SupportedDiagnostics`; release-table documentation alone is not
-  registration. Its ordinary non-generic slice binds
+  registration. Diagnostic ownership is per C# type: the analyzer reports semantically analyzable
+  shapes, while the generator reports only when a blocking C# error inside that same type would
+  suppress analyzer output. Both still perform validation to decide whether generation is safe;
+  unrelated compiler errors never transfer ownership, and representative IDs are pinned to one
+  occurrence. Its ordinary non-generic slice binds
   Kotlin-named or PascalCase source methods/properties to explicit recorded CLR slots. Portable
   defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
   class forwarder. The DLL-only matrix executes public and authorized-internal implementations

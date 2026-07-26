@@ -32,15 +32,32 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
                 KotlinManifestSet manifests = ManifestReader.Read(compilation);
                 if (!manifests.Problems.IsEmpty)
                     return;
+                System.Collections.Immutable.ImmutableArray<Diagnostic>
+                    compilerErrors = DiagnosticOwnership.CompilerErrors(
+                        compilation,
+                        productionContext.CancellationToken);
                 foreach (AuthoringContract contract in AuthoringContractDiscovery.Discover(
                              compilation,
                              manifests,
-                             productionContext.ReportDiagnostic))
+                             diagnostic =>
+                             {
+                                 if (DiagnosticOwnership.HasBlockingCompilerError(
+                                         diagnostic.Location,
+                                         compilerErrors,
+                                         productionContext.CancellationToken))
+                                     productionContext.ReportDiagnostic(diagnostic);
+                             }))
                 {
                     KotlinImplementationEmission emission =
                         KotlinImplementationEmitter.Emit(contract);
                     foreach (Diagnostic diagnostic in emission.Diagnostics)
-                        productionContext.ReportDiagnostic(diagnostic);
+                    {
+                        if (DiagnosticOwnership.HasBlockingCompilerError(
+                                diagnostic.Location,
+                                compilerErrors,
+                                productionContext.CancellationToken))
+                            productionContext.ReportDiagnostic(diagnostic);
+                    }
                     if (emission.HasErrors)
                         continue;
                     string source = EmitContractMarker(
