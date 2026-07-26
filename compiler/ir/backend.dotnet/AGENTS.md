@@ -1638,7 +1638,9 @@ landed shape as a compatibility constraint.
   CLR-authored interface TypeSpec; the manifest does not duplicate that physical edge. A
   `net10.0` child consuming a portable parent discovers a selected promoted DIM from the child's
   concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
-  Promotion is never inferred from profile and is not copied into a second manifest record.
+  The raw MethodImpl declaration must match assembly, owner, method, generic arity, return type,
+  and every parameter type; owner/name/count matching is forbidden. Promotion is never inferred
+  from profile and is not copied into a second manifest record.
   Multiple generic parents compose through that same manifest/CLR graph split, including a
   shared-root diamond whose logical root is deduplicated. Schema 6 associates a physical derived
   declared/exact intersection slot with its sorted contributing logical members because CLR

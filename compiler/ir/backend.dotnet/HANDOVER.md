@@ -1666,6 +1666,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   compiles and executes the real generator for an ordinary public interface and an authorized
   internal friend interface. The existing handwritten fixture remains an independent full-schema
   sufficiency oracle while each production family is also executed directly.
+- The metadata-only promotion reader now decodes the complete raw MethodImpl declaration return
+  and parameter signatures in addition to assembly, owner, name, and generic arity. Effective-DIM
+  detection compares all of them against the parent manifest locator. A deliberately corrupted
+  return signature is rejected, so the promotion fixture can no longer approve a coincident
+  overload by name and parameter count.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot
