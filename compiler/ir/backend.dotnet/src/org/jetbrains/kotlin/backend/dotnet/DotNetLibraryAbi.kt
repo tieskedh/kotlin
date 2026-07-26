@@ -997,6 +997,13 @@ private fun IrDeclaration.computeDotNetLibraryAbiKeyOrNull(
     return "$kind:${signature.render(IdSignatureRenderer.LEGACY)}"
 }
 
+/** Public logical identity for metadata-backed records outside the KLIB physical-index builder. */
+internal fun IrDeclaration.dotNetLibraryAbiKeyOrNull(kind: String): String? =
+    computeDotNetLibraryAbiKeyOrNull(
+        kind,
+        PublicIdSignatureComputer(DotNetIrMangler),
+    )
+
 /**
  * Captures the public logical declarations which need a CLR binding before backend lowerings can
  * mutate signatures or introduce synthetic declarations. KLIB remains the authority for which

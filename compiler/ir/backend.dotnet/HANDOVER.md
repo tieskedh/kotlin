@@ -1578,9 +1578,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   obligations while ordinary interface TypeSpecs retain the graph and substitutions. Generated
   C# supplies root, parent, sibling, and child adapters through only the child exact capability,
   and executes on every profile plus the portable-parent/net10-promotion lane after KLIB removal.
-  An unrelated same-named two-parent intersection is kept fail-closed: its child contract records
-  an explicit unsupported reason until schema 1 associates the generated derived slot with all
-  contributing logical members.
+  The initial slice kept an unrelated same-named two-parent intersection fail-closed.
+- C# implementation manifest schema 2 now represents that derived intersection. It records the
+  sorted logical contributor keys plus the derived declared/exact MethodDef locators; ordinary CLR
+  signatures remain authoritative. After every KLIB is deleted, generated C# supplies one
+  `overlap` body, an explicit derived-slot adapter, and both parent canonical adapters. Kotlin
+  execution through the derived, left, and right views reaches that one body on all profiles and
+  the cross-profile lane. This is a real schema bump, not an unversioned reinterpretation of
+  schema 1.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1655,7 +1660,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 1 over intersection slots,
+1. **Complete the C# interface-authoring contract.** Extend schema 2 over intersection properties,
    constraints, inherited mutable-property obligations, special barriers, non-generic interfaces,
    friend-accessible internal interfaces, and runtime-bootstrap contracts. Then implement the
    Roslyn partial-type generator/analyzer and move the payload to a true managed resource before

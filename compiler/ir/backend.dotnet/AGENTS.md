@@ -1592,7 +1592,7 @@ landed shape as a compatibility constraint.
   `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
   DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
   sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
-  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 1
+  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 2
   records direct public generic interfaces, canonical/declared/exact owner paths, typed authoring
   views, read-only/mutable property and generic-method associations, exact-only inputs, and
   portable-helper versus `net10.0` DIM obligations. One generic parent from the same DLL or a
@@ -1602,9 +1602,10 @@ landed shape as a compatibility constraint.
   concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
   Promotion is never inferred from profile and is not copied into a second manifest record.
   Multiple generic parents compose through that same manifest/CLR graph split, including a
-  shared-root diamond whose logical root is deduplicated. A physical derived intersection slot
-  still marks the complete child contract unsupported until the manifest can associate that slot
-  with all contributing logical members. Non-generic parents remain explicitly unsupported.
+  shared-root diamond whose logical root is deduplicated. Schema 2 associates a physical derived
+  declared/exact intersection slot with its sorted contributing logical members because CLR
+  metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
+  canonical identities on one source body. Non-generic parents remain explicitly unsupported.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable

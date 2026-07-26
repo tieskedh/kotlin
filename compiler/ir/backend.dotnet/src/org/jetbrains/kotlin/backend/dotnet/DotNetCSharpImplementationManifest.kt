@@ -43,6 +43,7 @@ data class DotNetCSharpInterfaceContract(
     val sourceAuthoringSupported: Boolean,
     val unsupportedReasons: List<String>,
     val members: List<DotNetCSharpMemberContract>,
+    val intersections: List<DotNetCSharpIntersectionContract>,
 )
 
 data class DotNetCSharpTypeParameter(
@@ -90,6 +91,15 @@ data class DotNetCSharpMemberContract(
     val slots: List<DotNetCSharpMethodLocator>,
 )
 
+data class DotNetCSharpIntersectionContract(
+    val logicalKey: String,
+    val kind: DotNetCSharpMemberKind,
+    val sourceName: String,
+    val authoringView: DotNetCSharpInterfaceView,
+    val contributingLogicalMemberKeys: List<String>,
+    val slots: List<DotNetCSharpMethodLocator>,
+)
+
 /**
  * Stable lookup of one MethodDef in the containing DLL.
  *
@@ -116,13 +126,15 @@ data class DotNetCSharpMethodLocator(
  * backend owns a capable PE writer; changing carriers must not change these records.
  */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 1
+    const val CURRENT_SCHEMA_VERSION = 2
     const val ASSEMBLY_METADATA_KEY = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
     private const val INTERFACE_RECORD = "I"
     private const val MEMBER_RECORD = "M"
     private const val SLOT_RECORD = "S"
+    private const val INTERSECTION_RECORD = "X"
+    private const val INTERSECTION_SLOT_RECORD = "Y"
     private const val NULL_FIELD = "~"
     private const val CHUNK_CHARACTER_COUNT = 12_000
     private const val LIST_SEPARATOR = "\u0000"
@@ -173,6 +185,30 @@ object DotNetCSharpImplementationManifestCodec {
                     )
                 }
             }
+            for (intersection in contract.intersections.sortedBy(DotNetCSharpIntersectionContract::logicalKey)) {
+                appendRecord(
+                    INTERSECTION_RECORD,
+                    contract.logicalKey,
+                    intersection.logicalKey,
+                    intersection.kind.name,
+                    intersection.sourceName,
+                    intersection.authoringView.name,
+                    intersection.contributingLogicalMemberKeys.encodeList(),
+                )
+                for (slot in intersection.slots.sortedBy(DotNetCSharpMethodLocator::role)) {
+                    appendRecord(
+                        INTERSECTION_SLOT_RECORD,
+                        intersection.logicalKey,
+                        slot.role.name,
+                        slot.ownerPath.encodeList(),
+                        slot.methodName,
+                        slot.propertyName,
+                        slot.genericArity.toString(),
+                        slot.returnType,
+                        slot.parameterTypes.encodeList(),
+                    )
+                }
+            }
         }
     }
 
@@ -185,6 +221,14 @@ object DotNetCSharpImplementationManifestCodec {
             val authoringView: DotNetCSharpInterfaceView,
             val defaultKind: DotNetCSharpDefaultKind,
             val semanticBodyView: DotNetCSharpInterfaceView?,
+        )
+        data class PendingIntersection(
+            val interfaceKey: String,
+            val logicalKey: String,
+            val kind: DotNetCSharpMemberKind,
+            val sourceName: String,
+            val authoringView: DotNetCSharpInterfaceView,
+            val contributingLogicalMemberKeys: List<String>,
         )
 
         val records = encoded.lineSequence()
@@ -236,6 +280,7 @@ object DotNetCSharpImplementationManifestCodec {
                     sourceAuthoringSupported = supported,
                     unsupportedReasons = requireNotNull(fields[6]).decodeList(),
                     members = emptyList(),
+                    intersections = emptyList(),
                 )
             ) == null) {
                 "Duplicate C# implementation interface '$logicalKey'"
@@ -306,6 +351,93 @@ object DotNetCSharpImplementationManifestCodec {
         require(slotsByMember.isEmpty()) {
             "C# implementation manifest contains slots for unknown members: ${slotsByMember.keys.sorted()}"
         }
+
+        val pendingIntersections = linkedMapOf<String, PendingIntersection>()
+        for (record in records.filter { it.first == INTERSECTION_RECORD }) {
+            val fields = record.second
+            require(fields.size == 6) { "C# implementation intersection record has invalid arity" }
+            val intersectionKey = requireNotNull(fields[1]) {
+                "C# implementation intersection has no logical key"
+            }
+            val contributors = requireNotNull(fields[5]).decodeList()
+            require(
+                contributors.size >= 2 &&
+                        contributors.all(String::isNotEmpty) &&
+                        contributors == contributors.distinct().sorted()
+            ) {
+                "C# implementation intersection '$intersectionKey' has invalid contributors"
+            }
+            val pending = PendingIntersection(
+                interfaceKey = requireNotNull(fields[0]) {
+                    "C# implementation intersection '$intersectionKey' has no interface key"
+                },
+                logicalKey = intersectionKey,
+                kind = enumValueOf(requireNotNull(fields[2])),
+                sourceName = requireNotNull(fields[3]),
+                authoringView = enumValueOf(requireNotNull(fields[4])),
+                contributingLogicalMemberKeys = contributors,
+            )
+            require(pendingIntersections.put(intersectionKey, pending) == null) {
+                "Duplicate C# implementation intersection '$intersectionKey'"
+            }
+        }
+        val slotsByIntersection = linkedMapOf<String, MutableList<DotNetCSharpMethodLocator>>()
+        for (record in records.filter { it.first == INTERSECTION_SLOT_RECORD }) {
+            val fields = record.second
+            require(fields.size == 8) {
+                "C# implementation intersection slot record has invalid arity"
+            }
+            val intersectionKey = requireNotNull(fields[0]) {
+                "C# implementation intersection slot has no intersection key"
+            }
+            val locator = DotNetCSharpMethodLocator(
+                role = enumValueOf(requireNotNull(fields[1])),
+                ownerPath = requireNotNull(fields[2]).decodeList(),
+                methodName = requireNotNull(fields[3]),
+                propertyName = fields[4],
+                genericArity = requireNotNull(fields[5]).toInt(),
+                returnType = requireNotNull(fields[6]),
+                parameterTypes = requireNotNull(fields[7]).decodeList(),
+            )
+            require(
+                locator.role == DotNetCSharpSlotRole.DECLARED ||
+                        locator.role == DotNetCSharpSlotRole.EXACT
+            ) {
+                "C# implementation intersection '$intersectionKey' has a non-typed slot"
+            }
+            val slots = slotsByIntersection.getOrPut(intersectionKey, ::mutableListOf)
+            require(slots.none { it.role == locator.role }) {
+                "Duplicate ${locator.role.name.lowercase()} slot for C# implementation " +
+                        "intersection '$intersectionKey'"
+            }
+            slots += locator
+        }
+        for (entry in pendingIntersections) {
+            val intersectionKey = entry.key
+            val pending = entry.value
+            val owner = interfaceRecords[pending.interfaceKey]
+                ?: error("C# implementation intersection '$intersectionKey' names an unknown interface")
+            val slots = slotsByIntersection.remove(intersectionKey)
+                .orEmpty()
+                .sortedBy(DotNetCSharpMethodLocator::role)
+            require(slots.any { slot -> slot.role.toManifestView() == pending.authoringView }) {
+                "C# implementation intersection '$intersectionKey' has no authoring-view slot"
+            }
+            interfaceRecords[pending.interfaceKey] = owner.copy(
+                intersections = owner.intersections + DotNetCSharpIntersectionContract(
+                    logicalKey = intersectionKey,
+                    kind = pending.kind,
+                    sourceName = pending.sourceName,
+                    authoringView = pending.authoringView,
+                    contributingLogicalMemberKeys = pending.contributingLogicalMemberKeys,
+                    slots = slots,
+                )
+            )
+        }
+        require(slotsByIntersection.isEmpty()) {
+            "C# implementation manifest contains slots for unknown intersections: " +
+                    slotsByIntersection.keys.sorted()
+        }
         for (contract in interfaceRecords.values) {
             require(contract.canonicalOwnerPath.isNotEmpty() && contract.declaredOwnerPath.isNotEmpty()) {
                 "C# implementation interface '${contract.logicalKey}' has an empty physical owner"
@@ -319,7 +451,11 @@ object DotNetCSharpImplementationManifestCodec {
             assemblyName = assemblyName,
             targetProfile = targetProfile,
             interfaces = interfaceRecords.values.map { contract ->
-                contract.copy(members = contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey))
+                contract.copy(
+                    members = contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey),
+                    intersections = contract.intersections
+                        .sortedBy(DotNetCSharpIntersectionContract::logicalKey),
+                )
             },
         )
     }
@@ -450,6 +586,8 @@ object DotNetCSharpImplementationManifestCodec {
             INTERFACE_RECORD,
             MEMBER_RECORD,
             SLOT_RECORD,
+            INTERSECTION_RECORD,
+            INTERSECTION_SLOT_RECORD,
         )) {
             "Unknown C# implementation manifest record '${components.firstOrNull()}'"
         }
@@ -530,12 +668,6 @@ internal fun collectDotNetCSharpImplementationManifest(
             }
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes()
             val unsupportedReasons = buildList {
-                if (genericInterfaceIntersectionSlots.any { slot -> slot.owner == irClass }) {
-                    add(
-                        "derived generic-interface intersection slots are not supported by " +
-                                "the first C# authoring schema"
-                    )
-                }
                 directSuperInterfaces.forEach { superType ->
                     val superInterface = (superType.classifier as? IrClassSymbol)?.owner
                     val isSameAssemblyGenericParent =
@@ -689,6 +821,80 @@ internal fun collectDotNetCSharpImplementationManifest(
                 }
                 .sortedBy(DotNetCSharpMemberContract::logicalKey)
                 .toList()
+            val intersections = genericInterfaceIntersectionSlots
+                .asSequence()
+                .filter { slot -> slot.owner == irClass }
+                .groupBy { slot -> slot.signatureSource.symbol }
+                .values
+                .map { intersectionSlots ->
+                    val source = intersectionSlots.first().signatureSource
+                    require(intersectionSlots.all { slot -> slot.signatureSource == source })
+                    val contributorKeys = intersectionSlots
+                        .flatMap { slot -> slot.contributingMembers }
+                        .map { contributor ->
+                            preLoweringDeclarationKeys[contributor]
+                                ?: contributor.dotNetLibraryAbiKeyOrNull("F")
+                                ?: error(
+                                    "C# implementation intersection contributor has no logical identity"
+                                )
+                        }
+                        .distinct()
+                        .sorted()
+                    require(contributorKeys.size >= 2) {
+                        "C# implementation intersection has fewer than two logical contributors"
+                    }
+                    val kind = source.memberKind()
+                    val intersectionKey = buildString {
+                        append("X:")
+                        append(interfaceKey)
+                        append(':')
+                        append(kind.name)
+                        append(':')
+                        append(
+                            DotNetLibraryAbiCodec.logicalIdentityDigest(
+                                contributorKeys.joinToString("\u0000")
+                            )
+                        )
+                    }
+                    val slots = intersectionSlots.map { intersection ->
+                        val memberView = intersection.memberView
+                        val signatureMapper = typeMapper.genericInterfaceSignatureView(memberView)
+                        val owner = checkNotNull(interfaceInfo.classInfo(memberView.physicalView))
+                        val info = DotNetIlFunctionInfo(
+                            owner,
+                            source.dotNetSignature(signatureMapper),
+                            intersection.physicalMethodName,
+                        )
+                        locator(
+                            memberView.toManifestSlotRole(),
+                            source,
+                            info,
+                            intersection.physicalMethodName,
+                            typedPropertyName(
+                                source,
+                                memberView,
+                                intersection.physicalMethodName,
+                            ),
+                        )
+                    }.sortedBy(DotNetCSharpMethodLocator::role)
+                    val authoringView = if (
+                        slots.any { slot -> slot.role == DotNetCSharpSlotRole.EXACT }
+                    ) {
+                        DotNetCSharpInterfaceView.EXACT
+                    } else {
+                        DotNetCSharpInterfaceView.DECLARED
+                    }
+                    DotNetCSharpIntersectionContract(
+                        logicalKey = intersectionKey,
+                        kind = kind,
+                        sourceName = source.correspondingPropertySymbol?.owner?.name?.asString()
+                            ?: source.name.asString(),
+                        authoringView = authoringView,
+                        contributingLogicalMemberKeys = contributorKeys,
+                        slots = slots,
+                    )
+                }
+                .sortedBy(DotNetCSharpIntersectionContract::logicalKey)
             DotNetCSharpInterfaceContract(
                 logicalKey = interfaceKey,
                 canonicalOwnerPath = interfaceInfo.canonicalClassInfo.physicalPathComponents(),
@@ -707,6 +913,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                 sourceAuthoringSupported = unsupportedReasons.isEmpty(),
                 unsupportedReasons = unsupportedReasons,
                 members = members,
+                intersections = intersections,
             )
         }
         .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
@@ -727,4 +934,11 @@ private fun DotNetGenericInterfaceMemberView.toManifestView(): DotNetCSharpInter
 private fun DotNetGenericInterfaceMemberView.toManifestSlotRole(): DotNetCSharpSlotRole = when (this) {
     DotNetGenericInterfaceMemberView.DECLARED -> DotNetCSharpSlotRole.DECLARED
     DotNetGenericInterfaceMemberView.EXACT -> DotNetCSharpSlotRole.EXACT
+}
+
+private fun DotNetCSharpSlotRole.toManifestView(): DotNetCSharpInterfaceView = when (this) {
+    DotNetCSharpSlotRole.DECLARED -> DotNetCSharpInterfaceView.DECLARED
+    DotNetCSharpSlotRole.EXACT -> DotNetCSharpInterfaceView.EXACT
+    DotNetCSharpSlotRole.ERASED,
+    DotNetCSharpSlotRole.HELPER -> error("A canonical/helper slot has no typed C# authoring view")
 }

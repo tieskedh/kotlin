@@ -320,9 +320,10 @@ surface; that does not freeze identical Framework/modern IL. The remaining gener
 the remaining foreign-implementor and clash matrix, the Roslyn generator/analyzer, and the raw
 metadata-table audit; those keep P0-D open. The accepted C# source-authoring ADR now selects a
 partial-type Roslyn generator/analyzer rather than a generated base class or universal CLR
-mechanism. Its first schema-1 DLL manifest is implemented: it records profile, canonical,
+mechanism. Its schema-2 DLL manifest is implemented: it records profile, canonical,
 declared, and exact owners, member and property groupings, strongly typed authoring views,
-MethodDef locators, and helper/DIM obligations without requiring the sibling KLIB. A no-KLIB
+MethodDef locators, helper/DIM obligations, and logical contributor mappings for derived
+intersection slots without requiring the sibling KLIB. A no-KLIB
 integration test reads the actual assembly metadata, generates a partial C# implementation for a
 property, generic method, exact-only unsafe input, and default, then executes Kotlin verification
 for `net48`, `netstandard2.0`, and `net10.0`. The current hashed
@@ -399,12 +400,12 @@ The remaining P0-D implementation order is:
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
-   families and the real same-owner clash matrix. Extend the DLL manifest over intersection slots,
-   constraints, inherited mutable-property obligations, special barriers, non-generic interfaces,
-   friend-accessible internal interfaces, and runtime-bootstrap contracts; then implement the
-   Roslyn partial-type generator/analyzer. Multi-parent generic diamonds already compose from
-   parent manifest contracts plus the CLR graph; a generated derived intersection slot remains
-   fail-closed until its contributing logical-member mapping is recorded. Cross-profile
+   families and the real same-owner clash matrix. Extend the DLL manifest over intersection
+   properties, constraints, inherited mutable-property obligations, special barriers, non-generic
+   interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts; then
+   implement the Roslyn partial-type generator/analyzer. Multi-parent generic diamonds compose from
+   parent manifest contracts plus the CLR graph; schema 2 now records the logical contributor
+   mapping that CLR metadata lacks for a generated derived intersection slot. Cross-profile
    portable-helper promotion needs no manifest record: the parent locators plus the child DLL's
    concrete `MethodImpl` bundle are sufficient and are now metadata-only execution tested. Do not
    add a blanket ban for source names that merely resemble canonical names; physical-owner
