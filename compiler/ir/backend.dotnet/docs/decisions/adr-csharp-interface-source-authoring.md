@@ -170,9 +170,24 @@ display so punctuation and nested-name variants cannot collide. That hint is onl
 generated-source filename; it is not persisted in the DLL and is not a Kotlin or tooling
 declaration identity.
 
-C# struct and record-struct implementors are not silently projected as classes. Their interface
-boxing, mutation, and runtime-identity contract requires a separate Kotlin interop decision, so
-the current source-authoring tool reports an unsupported-shape diagnostic.
+C# struct and record-struct implementors are deliberately deferred. The supported Roslyn
+source-authoring path currently covers reference classes and record classes only, and reports
+`KDNCS010` for a value-type implementor. It must neither generate a reference wrapper nor
+reinterpret the source type as a class: either choice changes the identity and copy semantics the
+C# author selected.
+
+This is not only a generator limitation. A portable helper forwarder converts `this` to an
+interface receiver and therefore boxes a struct, while a `net10.0` DIM or constrained call can
+execute against the unboxed receiver. Adopting those physical mechanisms without a Kotlin
+interop contract could make mutation visibility, interface-box identity, and even default
+dispatch profile-dependent.
+
+Value-type source authoring may be enabled only by a separate accepted interop decision and a
+cross-profile test matrix covering interface-box identity, copies and mutation, default values,
+qualified and ordinary default dispatch, equality, generic constraints, nullable value types,
+and calls through canonical, declared, and exact views. Until then `KDNCS010` is a deliberate ABI
+boundary, not a temporary request to synthesize a wrapper. Manually authored CLR structs are not
+claimed as part of this supported C# authoring path.
 
 The exact typed view is the normal complete C# surface when it exists. Declared-variance and
 canonical slots adapt to that typed behavior, boxing, widening, or narrowing only when their own
@@ -369,8 +384,9 @@ or declared/generic base-list opt-in, and emits the diagnostics listed above. DL
 generic and non-generic discovery, malformed/version-skew rejection, unavailable friendship,
 conflicting explicit ABI members, unsupported `dynamic` substitution, and generated partial
 participation. Nested generic class and nested record-class implementors execute through generated
-partial containing declarations; a non-partial container and a value-type implementor fail with
-dedicated diagnostics. Production emission includes ordinary non-generic method and Property
+partial containing declarations; a non-partial container and the deliberately deferred
+value-type authoring shape fail with dedicated diagnostics. Production emission includes ordinary
+non-generic method and Property
 adapters from PascalCase or Kotlin-named source members. Portable defaults call the recorded
 helper; native and
 child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
