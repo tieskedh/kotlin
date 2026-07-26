@@ -269,6 +269,16 @@ The generator therefore emits the physically required explicit canonical Propert
 dispatches virtually through the typed DIM. Any exact typed view follows the same body without an
 erased-result cast. This is a CLR/C# representation bridge, not a second Kotlin implementation.
 
+For a covariant mutable default property, the variance-safe getter body lives on the declared
+typed view and the setter body lives on the exact typed view. Other typed view accessors already
+contain DIM adapters and must be inherited; generating a class adapter back to the same typed
+Property would recurse. Only the abstract erased canonical Property and Kotlin-selected inherited
+slots receive class adapters. On portable profiles an erased setter converts its `object` value to
+the helper's constructed value parameter before calling the selected helper. On `net10.0` it
+performs the same boundary conversion before virtual dispatch to the exact setter DIM. An ordinary
+`@UnsafeVariance` wrong-shape value therefore fails with the normal cast exception before entering
+the typed body.
+
 Tooling cross-checks every consumed edge against the CLR interface ancestry and the resolved
 authoring signatures, including source name, member kind, generic arity, parameters, and
 covariant-compatible result. A syntactically valid logical key cannot redirect an unrelated CLR
@@ -432,6 +442,11 @@ views converge on the child-selected typed body. Portable adapters call the sele
 helper with the producer-recorded substitutions; modern canonical and parent Property adapters
 dispatch through the selected typed DIM. Strongly typed results do not pass through an erased
 cast.
+The mutable generic lane separates the physical body views further: its getter is declared-view
+canonical, its setter is exact-view canonical, and both remain one logical Kotlin property only at
+the source/Property-row level. Portable erased setter adapters cast to the constructed helper
+parameter; modern erased adapters dispatch to the exact setter DIM. A wrong-shaped widened write
+fails before either selected body executes.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their

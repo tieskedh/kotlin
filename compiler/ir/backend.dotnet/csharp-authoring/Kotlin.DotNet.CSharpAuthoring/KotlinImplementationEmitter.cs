@@ -210,11 +210,7 @@ internal static class KotlinImplementationEmitter
                                 member.LogicalKey,
                                 semanticMember.LogicalKey,
                                 StringComparison.Ordinal) ||
-                            semanticMember.SemanticBodyView is
-                                KotlinInterfaceView semanticBodyView &&
-                            locator.Role != AuthoringRole(
-                                semanticBinding.Bound.Contract,
-                                semanticBodyView)
+                            locator.Role == KotlinSlotRole.Erased
                         )));
             }
         }
@@ -766,7 +762,10 @@ internal static class KotlinImplementationEmitter
             return null;
         }
         if (!accessor.RequiresDimAdapter &&
-            HasEffectiveDim(authoringContract.ImplementationType, accessor.Method))
+            (
+                accessor.Member.DefaultKind == KotlinDefaultKind.DimWithHelper ||
+                HasEffectiveDim(authoringContract.ImplementationType, accessor.Method)
+            ))
             return null;
         switch (accessor.Member.DefaultKind)
         {
@@ -862,12 +861,14 @@ internal static class KotlinImplementationEmitter
     {
         KotlinMethodLocator? helper = accessor.Member.Slots.SingleOrDefault(slot =>
             slot.Role == KotlinSlotRole.Helper);
+        bool isSetter =
+            accessor.Member.Kind == KotlinMemberKind.PropertySetter;
         if (helper == null ||
             !TryHelperCall(
                 accessor.MemberAssembly,
                 helper,
                 HelperTypeArguments(accessor, accessor.Method, helper),
-                accessor.Member.Kind == KotlinMemberKind.PropertySetter
+                isSetter
                     ? "this, value"
                     : "this",
                 out string call,
@@ -880,8 +881,53 @@ internal static class KotlinImplementationEmitter
                 $"helper locator for '{accessor.Member.LogicalKey}' cannot be emitted"));
             return null;
         }
-        if (accessor.Member.Kind == KotlinMemberKind.PropertySetter)
+        if (isSetter)
+        {
+            if (helperMethod!.Parameters.Length < 2)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    Diagnostics.MalformedManifest,
+                    authoringContract.Declaration.Identifier.GetLocation(),
+                    accessor.MemberAssembly.Identity.Name,
+                    $"setter helper locator for '{accessor.Member.LogicalKey}' has no value parameter"));
+                return null;
+            }
+            ITypeSymbol setterPhysicalType =
+                ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type;
+            ITypeSymbol helperType = helperMethod.Parameters.Last().Type;
+            if (!TryConvertExpression(
+                    authoringContract.Compilation,
+                    setterPhysicalType,
+                    helperType,
+                    "value",
+                    out string valueExpression))
+            {
+                ReportUnsupportedConversion(
+                    authoringContract,
+                    accessor,
+                    setterPhysicalType,
+                    helperType,
+                    diagnostics);
+                return null;
+            }
+            if (!string.Equals(valueExpression, "value", StringComparison.Ordinal) &&
+                !TryHelperCall(
+                    accessor.MemberAssembly,
+                    helper,
+                    HelperTypeArguments(accessor, accessor.Method, helper),
+                    "this, " + valueExpression,
+                    out call,
+                    out helperMethod))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    Diagnostics.MalformedManifest,
+                    authoringContract.Declaration.Identifier.GetLocation(),
+                    accessor.MemberAssembly.Identity.Name,
+                    $"helper locator for '{accessor.Member.LogicalKey}' cannot be emitted"));
+                return null;
+            }
             return "{ " + call + "; }";
+        }
         ITypeSymbol physicalType =
             ((IPropertySymbol)accessor.Method.AssociatedSymbol!).Type;
         if (!TryConvertExpression(

@@ -1768,6 +1768,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   DLL-only matrix executes child, typed parents, and a widened erased parent on all four lanes;
   portable profiles call only the selected generic child helper, modern adapters contain no
   helper call, and strongly typed results do not take an erased cast.
+- The covariant mutable-default lane now splits the selected getter and setter across their legal
+  typed views: declared getter DIM and exact setter DIM. The generator emits class adapters only
+  for the abstract erased canonical Property and Kotlin-selected inherited slots; it no longer
+  generates an exact Property adapter which dispatches back to itself and stack-overflows.
+  Portable erased setters now convert `object` to the helper's constructed value parameter before
+  the call. Child, exact, declared, both parents, and widened erased views execute across all four
+  lanes, and a wrong-shaped widened write throws before mutating either parent state.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

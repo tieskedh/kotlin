@@ -1738,6 +1738,12 @@ landed shape as a compatibility constraint.
   C# class, so the generator emits an explicit canonical Property adapter which dispatches
   virtually through that typed DIM. Exact and declared results must not route through an erased
   cast.
+  For a covariant mutable default, the declared getter and exact setter each own their typed DIM
+  body. Other typed accessors already contain interface DIM adapters and must not receive a class
+  adapter back to their own slot. The erased canonical Property does require a class adapter.
+  Portable erased setters cast from their physical `object` value to the constructed helper
+  parameter; modern erased setters perform the same conversion before virtual exact-DIM dispatch.
+  Ordinary `@UnsafeVariance` wrong-shape values retain cast failure.
   Property helpers alone use the physical-name-grammar-3 reserved
   `get_/set_...__KotlinDefault__<logical-identity-digest>` form so generated C# can name them
   without changing the ordinary CLR Property row or accessor names. Consumers use manifest
