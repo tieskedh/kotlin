@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifest
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceView
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpIntersectionContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
@@ -576,8 +577,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun accepts(input: @UnsafeVariance T): Boolean
             }
 
-            public interface UnsupportedIntersection<out T> :
+            public interface ResolvedIntersection<out T> :
                 IntersectionLeft<T>, IntersectionRight<T>
+
+            public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
+                val left: IntersectionLeft<String> = value
+                val right: IntersectionRight<String> = value
+                return if (
+                    value.overlap() == "intersection" &&
+                    left.overlap() == "intersection" &&
+                    right.overlap() == "intersection"
+                ) 0 else 1
+            }
 
             public fun verify(value: Shape<String>): Int {
                 if (value.value != "typed") return 1
@@ -721,26 +732,53 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val siblingContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeSibling"
             }
-            val unsupportedIntersection = manifest.interfaces.single { interfaceContract ->
-                interfaceContract.canonicalOwnerPath.last() == "manifest.UnsupportedIntersection"
+            val leftContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.IntersectionLeft"
+            }
+            val rightContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.IntersectionRight"
+            }
+            val resolvedIntersection = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedIntersection"
             }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
-            assertFalse(unsupportedIntersection.sourceAuthoringSupported)
+            assertTrue(leftContract.sourceAuthoringSupported, leftContract.unsupportedReasons.joinToString())
+            assertTrue(rightContract.sourceAuthoringSupported, rightContract.unsupportedReasons.joinToString())
+            assertTrue(
+                resolvedIntersection.sourceAuthoringSupported,
+                resolvedIntersection.unsupportedReasons.joinToString(),
+            )
+            val intersection = resolvedIntersection.intersections.single()
+            assertEquals("overlap", intersection.sourceName)
+            assertEquals(DotNetCSharpMemberKind.METHOD, intersection.kind)
+            assertEquals(DotNetCSharpInterfaceView.DECLARED, intersection.authoringView)
             assertEquals(
-                listOf(
-                    "derived generic-interface intersection slots are not supported by " +
-                            "the first C# authoring schema"
+                setOf(
+                    leftContract.members.single().logicalKey,
+                    rightContract.members.single().logicalKey,
                 ),
-                unsupportedIntersection.unsupportedReasons,
+                intersection.contributingLogicalMemberKeys.toSet(),
+            )
+            assertEquals(
+                listOf(DotNetCSharpSlotRole.DECLARED),
+                intersection.slots.map { slot -> slot.role },
             )
             assertEquals(if (externalParent) 2 else 7, manifest.interfaces.size)
             assertEquals(if (externalParent) 5 else 7, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
-                    listOf(rootContract, parentContract, siblingContract, contract)
+                    listOf(
+                        rootContract,
+                        parentContract,
+                        siblingContract,
+                        leftContract,
+                        rightContract,
+                        contract,
+                        resolvedIntersection,
+                    )
                         .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
             }
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
@@ -837,6 +875,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         rootContract,
                         parentContract,
                         siblingContract,
+                        leftContract,
+                        rightContract,
+                        resolvedIntersection,
+                        intersection,
                         inheritedDefaultHasEffectiveDim =
                             fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
                                     promotedDim,
@@ -885,10 +927,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val portable = contractsByProfile.getValue(portableProfile)
             assertEquals(
                 portable.map { contract ->
-                    contract.logicalKey to contract.members.map { it.logicalKey }
+                    Triple(
+                        contract.logicalKey,
+                        contract.members.map { it.logicalKey },
+                        contract.intersections.map { intersection ->
+                            intersection.logicalKey to intersection.contributingLogicalMemberKeys
+                        },
+                    )
                 },
                 modern.map { contract ->
-                    contract.logicalKey to contract.members.map { it.logicalKey }
+                    Triple(
+                        contract.logicalKey,
+                        contract.members.map { it.logicalKey },
+                        contract.intersections.map { intersection ->
+                            intersection.logicalKey to intersection.contributingLogicalMemberKeys
+                        },
+                    )
                 },
             )
             assertEquals(
@@ -9284,6 +9338,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         rootContract: DotNetCSharpInterfaceContract,
         parentContract: DotNetCSharpInterfaceContract,
         siblingContract: DotNetCSharpInterfaceContract,
+        leftContract: DotNetCSharpInterfaceContract,
+        rightContract: DotNetCSharpInterfaceContract,
+        resolvedIntersectionContract: DotNetCSharpInterfaceContract,
+        intersection: DotNetCSharpIntersectionContract,
         inheritedDefaultHasEffectiveDim: Boolean =
             rootContract.members.single { member -> member.sourceName == "fallback" }
                 .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
@@ -9303,6 +9361,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val parentCanonicalType = parentContract.csharpOwner(parentContract.canonicalOwnerPath)
         val siblingCanonicalType = siblingContract.csharpOwner(siblingContract.canonicalOwnerPath)
         val exactType = contract.csharpOwner(checkNotNull(contract.exactOwnerPath))
+        val leftCanonicalType = leftContract.csharpOwner(leftContract.canonicalOwnerPath)
+        val rightCanonicalType = rightContract.csharpOwner(rightContract.canonicalOwnerPath)
+        val resolvedIntersectionType = resolvedIntersectionContract.csharpOwner(
+            when (intersection.authoringView) {
+                DotNetCSharpInterfaceView.DECLARED -> resolvedIntersectionContract.declaredOwnerPath
+                DotNetCSharpInterfaceView.EXACT ->
+                    checkNotNull(resolvedIntersectionContract.exactOwnerPath)
+            }
+        )
         val value = rootContract.member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val labelGetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val labelSetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_SETTER)
@@ -9317,6 +9384,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val canonicalMap = map.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalAccepts = accepts.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalFallback = fallback.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val leftOverlap = leftContract.member("overlap")
+            .slots
+            .single { it.role == DotNetCSharpSlotRole.ERASED }
+        val rightOverlap = rightContract.member("overlap")
+            .slots
+            .single { it.role == DotNetCSharpSlotRole.ERASED }
+        val typedIntersection = intersection.slots.single { slot ->
+            slot.role == when (intersection.authoringView) {
+                DotNetCSharpInterfaceView.DECLARED -> DotNetCSharpSlotRole.DECLARED
+                DotNetCSharpInterfaceView.EXACT -> DotNetCSharpSlotRole.EXACT
+            }
+        }
         require(canonicalLabelGetter.propertyName == canonicalLabelSetter.propertyName)
         val portableDefault =
             fallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER &&
@@ -9391,6 +9470,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 $generatedCanonicalDefault
             }
 
+            public sealed partial class GeneratedIntersection
+            {
+                public string ${intersection.sourceName}()
+                {
+                    return "intersection";
+                }
+            }
+
+            public sealed partial class GeneratedIntersection : $resolvedIntersectionType<string>
+            {
+                string $resolvedIntersectionType<string>.${typedIntersection.methodName}()
+                {
+                    return ${intersection.sourceName}();
+                }
+
+                object $leftCanonicalType.${leftOverlap.methodName}()
+                {
+                    return ${intersection.sourceName}();
+                }
+
+                object $rightCanonicalType.${rightOverlap.methodName}()
+                {
+                    return ${intersection.sourceName}();
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -9398,6 +9503,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     int result = manifest.apiKt.verify(new GeneratedShape());
                     if (result != 0)
                         throw new System.Exception("Kotlin verification failed: " + result);
+                    int intersectionResult =
+                        manifest.apiKt.verifyIntersection(new GeneratedIntersection());
+                    if (intersectionResult != 0)
+                        throw new System.Exception(
+                            "Kotlin intersection verification failed: " + intersectionResult);
                     return 0;
                 }
             }
