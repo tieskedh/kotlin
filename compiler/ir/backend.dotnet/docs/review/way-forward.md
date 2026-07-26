@@ -433,12 +433,13 @@ The remaining P0-D implementation order is:
    verification on every profile, including portable helper forwarding and modern/promotion DIM
    suppression. A derived Kotlin reabstraction is also production-pinned: it defeats either
    inherited default representation, maps every inherited/redeclared slot to one C# body, and
-   reports `KDNCS008` when that body is absent. MethodDef locators are matched against complete
-   open return and parameter signatures before generic-owner substitution; same-named overloads
-   bind independently and stale parameter or result signatures fail closed. Standard CLR
-   core-facade forwarding is normalized for `System.*` signatures, including nullable overloads,
-   without weakening external user-assembly identity. Split generic views and generic methods now
-   also execute through
+   reports `KDNCS008` when that body is absent. Covariant generic reabstraction likewise authors
+   the declared typed member and routes canonical and inherited views to it without selecting the
+   older helper or DIM. MethodDef locators are matched against complete open return and parameter
+   signatures before generic-owner substitution; same-named overloads bind independently and
+   stale parameter or result signatures fail closed. Standard CLR core-facade forwarding is
+   normalized for `System.*` signatures, including nullable overloads, without weakening external
+   user-assembly identity. Split generic views and generic methods now also execute through
    production code:
    the declared base-list view gains the exact constructed interface, while canonical adapters
    alone perform erased casts/boxing and generic constraints remain CLR-authoritative.
