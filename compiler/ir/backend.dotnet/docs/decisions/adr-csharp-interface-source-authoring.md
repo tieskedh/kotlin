@@ -39,6 +39,8 @@ manifest supplies the information CLR metadata cannot express:
 - declaration type-parameter names and Kotlin variance;
 - the normal strongly typed authoring view of every member;
 - each erased, declared, exact, property-accessor, and helper MethodDef locator;
+- declaration-specific wrong-shaped erased-argument behavior, including the checked argument count
+  and `false`, `null`, `-1`, or argument fallback selected by Kotlin's shared special-bridge table;
 - each derived intersection slot and the sorted logical members it unifies;
 - whether the member is abstract, helper-backed on a portable profile, or DIM-backed on
   `net10.0`; and
@@ -77,6 +79,11 @@ GenericParamConstraint rows. The manifest does not copy them into a second type 
 Kotlin owner-relative constraint deliberately omitted because it is illegal on a CLR variant view
 must not be reconstructed as a C# constraint; any additional analyzer guidance is Kotlin tooling
 metadata, not executable CLR signature metadata.
+
+Wrong-shape behavior is likewise semantic metadata, not a C# naming convention. Generated
+canonical adapters use the recorded policy before narrowing to the typed source body. An ordinary
+user `@UnsafeVariance` member has no policy and retains normal cast or unbox failure. Tooling must
+not generalize the collection policy from an annotation, source spelling, or a return type.
 
 The manifest prototype is implemented before the generator so its sufficiency can be tested
 without freezing a generator around inferred names or KLIB access.
@@ -193,7 +200,7 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-Schema 3 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
+Schema 4 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
 graph, whether they are in the same DLL or referenced compiler-produced Kotlin library DLLs. This
 covers a two-branch generic diamond with a shared root default, a parent-owned mutable property,
 and a sibling-owned property through a child exact view. Logical root keys deduplicate the diamond;
@@ -201,7 +208,7 @@ the manifest does not duplicate local or assembly-qualified physical TypeSpecs.
 
 An unrelated same-named parent intersection is different: CLR metadata exposes the bodyless
 derived slot but not the fact that Kotlin selected it to unify several logical declarations.
-Schema 3 therefore records the sorted contributor logical keys and the derived declared/exact
+Schema 4 therefore records the sorted contributor logical keys and the derived declared/exact
 MethodDef locators. Generated C# keeps one source body, explicitly adapts the derived slot, and
 maps the parent canonical identities to that same body. For a variant mutable-property
 intersection, the declared record contains the variance-safe getter while the exact records
@@ -225,3 +232,11 @@ Runtime-bootstrap interfaces and friend-accessible internal interfaces are still
 public-only collector or recorded as unsupported when their parent is not a compiler-produced
 library contract. They must gain equivalent manifest records before the generator claims support
 for implementing them.
+
+Schema 4 also records special-barrier policy directly from Kotlin's shared
+`SpecialBridgeMethods` identity table. A no-KLIB child contract overriding
+`Collection.contains` records one checked argument with a `false` fallback, while a child
+overriding `List.indexOf` records `-1`. An ordinary user unsafe input records no policy. The
+collection children remain fail-closed for source authoring because their runtime-owned parent
+contracts are not yet present in `Kotlin.Runtime.dll`; recording a correct local policy does not
+make an incomplete inherited contract supported.

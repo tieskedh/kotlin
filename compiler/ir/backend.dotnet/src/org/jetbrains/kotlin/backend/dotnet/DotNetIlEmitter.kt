@@ -110,6 +110,8 @@ internal class DotNetIlEmitter(
             List<DotNetLoweredCovariantReturnBridge> = emptyList(),
     private val interfaceDefaultClassForwarders:
             List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
+    private val cSharpWrongShapePolicies:
+            Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = emptyMap(),
     private val cSharpImplementationManifestTarget: DotNetTarget? = null,
 ) {
     private val covariantReturnImplementations: Set<IrSimpleFunction> =
@@ -1761,6 +1763,7 @@ internal class DotNetIlEmitter(
                     interfaceDefaultImplementations = interfaceDefaultImplementations,
                     genericInterfaceDefaults = genericInterfaceDefaults,
                     genericInterfaceIntersectionSlots = localGenericInterfaceIntersectionSlots,
+                    wrongShapePolicies = cSharpWrongShapePolicies,
                 )
             )
         }.orEmpty()

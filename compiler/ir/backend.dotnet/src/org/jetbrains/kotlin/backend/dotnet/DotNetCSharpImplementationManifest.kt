@@ -5,6 +5,8 @@
 
 package org.jetbrains.kotlin.backend.dotnet
 
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeDefaultValueKind
+import org.jetbrains.kotlin.backend.common.lower.SpecialBridgeMethods
 import org.jetbrains.kotlin.backend.dotnet.lower.isDotNetGenericInterfaceDefaultPhysicalMethod
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
@@ -91,8 +93,22 @@ data class DotNetCSharpMemberContract(
     val authoringView: DotNetCSharpInterfaceView,
     val defaultKind: DotNetCSharpDefaultKind,
     val semanticBodyView: DotNetCSharpInterfaceView?,
+    val wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
     val slots: List<DotNetCSharpMethodLocator>,
 )
+
+data class DotNetCSharpWrongShapePolicy(
+    val checkedParameterCount: Int,
+    val fallback: DotNetCSharpWrongShapeFallback,
+    val fallbackParameterIndex: Int?,
+)
+
+enum class DotNetCSharpWrongShapeFallback {
+    FALSE,
+    NULL,
+    MINUS_ONE,
+    ARGUMENT,
+}
 
 data class DotNetCSharpIntersectionContract(
     val logicalKey: String,
@@ -129,7 +145,7 @@ data class DotNetCSharpMethodLocator(
  * backend owns a capable PE writer; changing carriers must not change these records.
  */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 3
+    const val CURRENT_SCHEMA_VERSION = 4
     const val ASSEMBLY_METADATA_KEY = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
@@ -173,6 +189,9 @@ object DotNetCSharpImplementationManifestCodec {
                     member.authoringView.name,
                     member.defaultKind.name,
                     member.semanticBodyView?.name,
+                    member.wrongShapePolicy?.checkedParameterCount?.toString(),
+                    member.wrongShapePolicy?.fallback?.name,
+                    member.wrongShapePolicy?.fallbackParameterIndex?.toString(),
                 )
                 for (slot in member.slots.sortedBy(DotNetCSharpMethodLocator::role)) {
                     appendRecord(
@@ -224,6 +243,7 @@ object DotNetCSharpImplementationManifestCodec {
             val authoringView: DotNetCSharpInterfaceView,
             val defaultKind: DotNetCSharpDefaultKind,
             val semanticBodyView: DotNetCSharpInterfaceView?,
+            val wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
         )
         data class PendingIntersection(
             val interfaceKey: String,
@@ -293,8 +313,20 @@ object DotNetCSharpImplementationManifestCodec {
         val pendingMembers = linkedMapOf<String, PendingMember>()
         for (record in records.filter { it.first == MEMBER_RECORD }) {
             val fields = record.second
-            require(fields.size == 7) { "C# implementation member record has invalid arity" }
+            require(fields.size == 10) { "C# implementation member record has invalid arity" }
             val memberKey = requireNotNull(fields[1]) { "C# implementation member has no logical key" }
+            val wrongShapePolicy = fields[7]?.let { checkedParameterCount ->
+                DotNetCSharpWrongShapePolicy(
+                    checkedParameterCount = checkedParameterCount.toInt(),
+                    fallback = enumValueOf(requireNotNull(fields[8]) {
+                        "C# implementation member '$memberKey' has no wrong-shape fallback"
+                    }),
+                    fallbackParameterIndex = fields[9]?.toInt(),
+                )
+            }
+            require(wrongShapePolicy != null || fields[8] == null && fields[9] == null) {
+                "C# implementation member '$memberKey' has an incomplete wrong-shape policy"
+            }
             val pending = PendingMember(
                 interfaceKey = requireNotNull(fields[0]) {
                     "C# implementation member '$memberKey' has no interface key"
@@ -305,6 +337,7 @@ object DotNetCSharpImplementationManifestCodec {
                 authoringView = enumValueOf(requireNotNull(fields[4])),
                 defaultKind = enumValueOf(requireNotNull(fields[5])),
                 semanticBodyView = fields[6]?.let { enumValueOf<DotNetCSharpInterfaceView>(it) },
+                wrongShapePolicy = wrongShapePolicy,
             )
             require(pendingMembers.put(memberKey, pending) == null) {
                 "Duplicate C# implementation member '$memberKey'"
@@ -342,6 +375,7 @@ object DotNetCSharpImplementationManifestCodec {
                 pending.authoringView,
                 pending.defaultKind,
                 pending.semanticBodyView,
+                pending.wrongShapePolicy,
                 slots,
                 targetProfile,
                 memberKey,
@@ -354,6 +388,7 @@ object DotNetCSharpImplementationManifestCodec {
                     authoringView = pending.authoringView,
                     defaultKind = pending.defaultKind,
                     semanticBodyView = pending.semanticBodyView,
+                    wrongShapePolicy = pending.wrongShapePolicy,
                     slots = slots,
                 )
             )
@@ -574,6 +609,7 @@ object DotNetCSharpImplementationManifestCodec {
         authoringView: DotNetCSharpInterfaceView,
         defaultKind: DotNetCSharpDefaultKind,
         semanticBodyView: DotNetCSharpInterfaceView?,
+        wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
         slots: List<DotNetCSharpMethodLocator>,
         targetProfile: String,
         memberKey: String,
@@ -588,6 +624,32 @@ object DotNetCSharpImplementationManifestCodec {
         }
         require(slots.any { slot -> slot.role.toManifestView() == authoringView }) {
             "C# implementation member '$memberKey' has no authoring-view slot"
+        }
+        wrongShapePolicy?.let { policy ->
+            val canonicalSlot = slots.single { slot ->
+                slot.role == DotNetCSharpSlotRole.ERASED
+            }
+            require(
+                policy.checkedParameterCount in 1..canonicalSlot.parameterTypes.size
+            ) {
+                "C# implementation member '$memberKey' has an invalid wrong-shape check count"
+            }
+            when (policy.fallback) {
+                DotNetCSharpWrongShapeFallback.ARGUMENT -> require(
+                    policy.fallbackParameterIndex != null &&
+                            policy.fallbackParameterIndex in canonicalSlot.parameterTypes.indices &&
+                            policy.fallbackParameterIndex >= policy.checkedParameterCount
+                ) {
+                    "C# implementation member '$memberKey' has an invalid fallback parameter"
+                }
+                DotNetCSharpWrongShapeFallback.FALSE,
+                DotNetCSharpWrongShapeFallback.NULL,
+                DotNetCSharpWrongShapeFallback.MINUS_ONE -> require(
+                    policy.fallbackParameterIndex == null
+                ) {
+                    "C# implementation member '$memberKey' has an unexpected fallback parameter"
+                }
+            }
         }
         when (defaultKind) {
             DotNetCSharpDefaultKind.ABSTRACT -> {
@@ -670,6 +732,7 @@ internal fun collectDotNetCSharpImplementationManifest(
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation>,
     genericInterfaceDefaults: List<DotNetLoweredGenericInterfaceDefault>,
     genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
+    wrongShapePolicies: Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy>,
 ): DotNetCSharpImplementationManifest {
     fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
         val property = correspondingPropertySymbol?.owner ?: return DotNetCSharpMemberKind.METHOD
@@ -876,6 +939,11 @@ internal fun collectDotNetCSharpImplementationManifest(
                         } else {
                             null
                         },
+                        wrongShapePolicy = if (interfaceInfo == null) {
+                            null
+                        } else {
+                            wrongShapePolicies[source]
+                        },
                         slots = slots,
                     )
                 }
@@ -996,6 +1064,40 @@ internal fun collectDotNetCSharpImplementationManifest(
         targetProfile = target.flagValue,
         interfaces = interfaces,
     )
+}
+
+internal fun collectDotNetCSharpWrongShapePolicies(
+    context: DotNetBackendContext,
+    declarations: Set<IrDeclaration>,
+): Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> {
+    val specialBridgeMethods = SpecialBridgeMethods(context)
+    return declarations.asSequence()
+        .filterIsInstance<IrSimpleFunction>()
+        .mapNotNull { function ->
+            val info = specialBridgeMethods.findSpecialWithOverride(
+                function,
+                includeSelf = true,
+            )?.second ?: return@mapNotNull null
+            val fallback = when (info.defaultValueKind) {
+                SpecialBridgeDefaultValueKind.FALSE -> DotNetCSharpWrongShapeFallback.FALSE
+                SpecialBridgeDefaultValueKind.NULL -> DotNetCSharpWrongShapeFallback.NULL
+                SpecialBridgeDefaultValueKind.MINUS_ONE -> DotNetCSharpWrongShapeFallback.MINUS_ONE
+                SpecialBridgeDefaultValueKind.SECOND_ARGUMENT ->
+                    DotNetCSharpWrongShapeFallback.ARGUMENT
+            }
+            function to DotNetCSharpWrongShapePolicy(
+                checkedParameterCount = info.argumentsToCheck,
+                fallback = fallback,
+                fallbackParameterIndex = if (
+                    info.defaultValueKind == SpecialBridgeDefaultValueKind.SECOND_ARGUMENT
+                ) {
+                    1
+                } else {
+                    null
+                },
+            )
+        }
+        .toMap()
 }
 
 private fun DotNetGenericInterfaceMemberView.toManifestView(): DotNetCSharpInterfaceView = when (this) {
