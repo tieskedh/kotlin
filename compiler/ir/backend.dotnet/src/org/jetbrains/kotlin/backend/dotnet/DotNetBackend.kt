@@ -127,6 +127,8 @@ object DotNetBackend {
         }
 
         val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable, irModuleFragment)
+        val runtimeCSharpImplementationManifest =
+            collectDotNetRuntimeCSharpImplementationManifest(context, target)
         val cSharpWrongShapePolicies = collectDotNetCSharpWrongShapePolicies(
             context,
             preLoweringDeclarationKeys.keys,
@@ -306,7 +308,16 @@ object DotNetBackend {
         }
 
         if (emitsExecutable) {
-            if (DotNetRuntimeLibrary.assembleNextTo(binaryOutput, target, messageCollector) == null) return result(binaryOutput)
+            if (
+                DotNetRuntimeLibrary.assembleNextTo(
+                    binaryOutput,
+                    target,
+                    runtimeCSharpImplementationManifest,
+                    messageCollector,
+                ) == null
+            ) {
+                return result(binaryOutput)
+            }
             if (stdlibIlText != null &&
                 DotNetStdlibLibrary.assembleNextTo(binaryOutput, stdlibIlText, target, messageCollector) == null
             ) {

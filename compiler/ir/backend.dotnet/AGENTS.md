@@ -1592,9 +1592,12 @@ landed shape as a compatibility constraint.
   `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
   DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
   sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
-  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 4
-  records direct public interfaces, canonical/declared/exact owner paths where split generic views
-  exist, typed authoring views, read-only/mutable property and generic-method associations,
+  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 5
+  explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
+  and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
+  the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
+  rejected. It records direct public interfaces, canonical/declared/exact owner paths where split
+  generic views exist, typed authoring views, read-only/mutable property and generic-method associations,
   exact-only inputs, and portable-helper versus `net10.0` DIM obligations. One parent from the
   same DLL or a
   referenced compiler-produced Kotlin library composes through its own manifest contract and the
@@ -1603,7 +1606,7 @@ landed shape as a compatibility constraint.
   concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
   Promotion is never inferred from profile and is not copied into a second manifest record.
   Multiple generic parents compose through that same manifest/CLR graph split, including a
-  shared-root diamond whose logical root is deduplicated. Schema 4 associates a physical derived
+  shared-root diamond whose logical root is deduplicated. Schema 5 associates a physical derived
   declared/exact intersection slot with its sorted contributing logical members because CLR
   metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
   canonical identities on one source body. Split mutable intersections record the declared getter
@@ -1616,18 +1619,20 @@ landed shape as a compatibility constraint.
   erased because CLR variant metadata cannot carry them stay erased and are never guessed by C#
   tooling.
   Declaration-specific wrong-shape behavior comes from common `SpecialBridgeMethods`, never from
-  a name or `@UnsafeVariance` heuristic. Schema 4 records the checked parameter count and
+  a name or `@UnsafeVariance` heuristic. Schema 5 records the checked parameter count and
   `false`, `null`, `-1`, or argument fallback. No record means ordinary cast/unbox failure. The
-  no-KLIB fixture pins `Collection.contains`, `List.indexOf`, and an ordinary unsafe member; the
-  collection-derived contracts remain unsupported until the runtime-owned parent contracts are
-  published by `Kotlin.Runtime.dll`.
+  no-KLIB fixture pins `Collection.contains`, `List.indexOf`, and an ordinary unsafe member.
+  `Kotlin.Runtime.dll` publishes built-in-derived manifests for `Iterator`, `ListIterator`,
+  `Iterable`, `Collection`, and `List`. A structured runtime registry supplies only their CLR
+  owners, methods, and Property rows (`size` maps deliberately to CLR `Size`); logical keys come
+  from the actual common built-ins. Generated C# implementations of the two collection children
+  execute through exact and widened Kotlin views on all three profiles.
   One idiomatic C# property body may use a C#-facing PascalCase name; generated explicit
   properties bind it to every recorded Kotlin physical name. Kotlin ABI names stay unchanged.
   `init`, `required`, indexers, events, and consumer aliases require explicit export policy rather
   than being inferred from Kotlin `val`/`var`.
-  Runtime-bootstrap and friend-accessible internal interfaces remain outside the first authoring
-  slice. Generated adapters must reach the one typed body; portable defaults call
-  the recorded nameable
+  Friend-accessible internal interfaces remain outside the first authoring slice. Generated
+  adapters must reach the one typed body; portable defaults call the recorded nameable
   `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current
   hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an
   arbitrary self-contained managed resource. Move the carrier-independent payload to a real

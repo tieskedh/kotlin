@@ -34,6 +34,7 @@ data class DotNetCSharpImplementationManifest(
     val schemaVersion: Int,
     val assemblyName: String,
     val targetProfile: String,
+    val logicalIdentityScheme: String,
     val interfaces: List<DotNetCSharpInterfaceContract>,
 )
 
@@ -145,7 +146,7 @@ data class DotNetCSharpMethodLocator(
  * backend owns a capable PE writer; changing carriers must not change these records.
  */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 4
+    const val CURRENT_SCHEMA_VERSION = 5
     const val ASSEMBLY_METADATA_KEY = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
@@ -160,13 +161,22 @@ object DotNetCSharpImplementationManifestCodec {
     private const val TYPE_PARAMETER_SEPARATOR = "\u0001"
 
     fun encode(manifest: DotNetCSharpImplementationManifest): String = buildString {
+        require(manifest.schemaVersion == CURRENT_SCHEMA_VERSION) {
+            "Unsupported C# implementation manifest schema '${manifest.schemaVersion}'"
+        }
+        require(manifest.logicalIdentityScheme == DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME) {
+            "Unsupported C# implementation manifest logical identity scheme " +
+                    "'${manifest.logicalIdentityScheme}'"
+        }
         appendRecord(
             HEADER_RECORD,
             manifest.schemaVersion.toString(),
             manifest.assemblyName,
             manifest.targetProfile,
+            manifest.logicalIdentityScheme,
         )
         for (contract in manifest.interfaces.sortedBy(DotNetCSharpInterfaceContract::logicalKey)) {
+            requirePublicLogicalKey("C", contract.logicalKey, "interface")
             appendRecord(
                 INTERFACE_RECORD,
                 contract.logicalKey,
@@ -180,6 +190,7 @@ object DotNetCSharpImplementationManifestCodec {
                 contract.unsupportedReasons.encodeList(),
             )
             for (member in contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey)) {
+                requirePublicLogicalKey("F", member.logicalKey, "member")
                 appendRecord(
                     MEMBER_RECORD,
                     contract.logicalKey,
@@ -208,6 +219,12 @@ object DotNetCSharpImplementationManifestCodec {
                 }
             }
             for (intersection in contract.intersections.sortedBy(DotNetCSharpIntersectionContract::logicalKey)) {
+                require(intersection.logicalKey.startsWith("X:") && intersection.logicalKey.length > 2) {
+                    "C# implementation intersection '${intersection.logicalKey}' has no physical identity"
+                }
+                intersection.contributingLogicalMemberKeys.forEach { contributor ->
+                    requirePublicLogicalKey("F", contributor, "intersection contributor")
+                }
                 appendRecord(
                     INTERSECTION_RECORD,
                     contract.logicalKey,
@@ -260,7 +277,7 @@ object DotNetCSharpImplementationManifestCodec {
             .toList()
         val header = records.singleOrNull { it.first == HEADER_RECORD }
             ?: error("C# implementation manifest must contain exactly one header")
-        require(header.second.size == 3) { "C# implementation manifest header has invalid arity" }
+        require(header.second.size == 4) { "C# implementation manifest header has invalid arity" }
         val schemaVersion = header.second[0]?.toIntOrNull()
             ?: error("C# implementation manifest has no numeric schema version")
         require(schemaVersion == CURRENT_SCHEMA_VERSION) {
@@ -275,12 +292,19 @@ object DotNetCSharpImplementationManifestCodec {
         require(targetProfile in DotNetTarget.entries.map(DotNetTarget::flagValue)) {
             "C# implementation manifest has unknown target profile '$targetProfile'"
         }
+        val logicalIdentityScheme = requireNotNull(header.second[3]) {
+            "C# implementation manifest has no logical identity scheme"
+        }
+        require(logicalIdentityScheme == DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME) {
+            "Unsupported C# implementation manifest logical identity scheme '$logicalIdentityScheme'"
+        }
 
         val interfaceRecords = linkedMapOf<String, DotNetCSharpInterfaceContract>()
         for (record in records.filter { it.first == INTERFACE_RECORD }) {
             val fields = record.second
             require(fields.size == 7) { "C# implementation interface record has invalid arity" }
             val logicalKey = requireNotNull(fields[0]) { "C# implementation interface has no logical key" }
+            requirePublicLogicalKey("C", logicalKey, "interface")
             val parameters = requireNotNull(fields[4]).decodeList().map { encodedParameter ->
                 val components = encodedParameter.split(TYPE_PARAMETER_SEPARATOR)
                 require(components.size == 2) {
@@ -315,6 +339,7 @@ object DotNetCSharpImplementationManifestCodec {
             val fields = record.second
             require(fields.size == 10) { "C# implementation member record has invalid arity" }
             val memberKey = requireNotNull(fields[1]) { "C# implementation member has no logical key" }
+            requirePublicLogicalKey("F", memberKey, "member")
             val wrongShapePolicy = fields[7]?.let { checkedParameterCount ->
                 DotNetCSharpWrongShapePolicy(
                     checkedParameterCount = checkedParameterCount.toInt(),
@@ -404,6 +429,9 @@ object DotNetCSharpImplementationManifestCodec {
             val intersectionKey = requireNotNull(fields[1]) {
                 "C# implementation intersection has no logical key"
             }
+            require(intersectionKey.startsWith("X:") && intersectionKey.length > 2) {
+                "C# implementation intersection '$intersectionKey' has no physical identity"
+            }
             val contributors = requireNotNull(fields[5]).decodeList()
             require(
                 contributors.size >= 2 &&
@@ -411,6 +439,9 @@ object DotNetCSharpImplementationManifestCodec {
                         contributors == contributors.distinct().sorted()
             ) {
                 "C# implementation intersection '$intersectionKey' has invalid contributors"
+            }
+            contributors.forEach { contributor ->
+                requirePublicLogicalKey("F", contributor, "intersection contributor")
             }
             val pending = PendingIntersection(
                 interfaceKey = requireNotNull(fields[0]) {
@@ -525,6 +556,7 @@ object DotNetCSharpImplementationManifestCodec {
             schemaVersion = schemaVersion,
             assemblyName = assemblyName,
             targetProfile = targetProfile,
+            logicalIdentityScheme = logicalIdentityScheme,
             interfaces = interfaceRecords.values.map { contract ->
                 contract.copy(
                     members = contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey),
@@ -676,6 +708,12 @@ object DotNetCSharpImplementationManifestCodec {
         }
     }
 
+    private fun requirePublicLogicalKey(expectedKind: String, key: String, recordKind: String) {
+        require(key.startsWith("$expectedKind:") && key.length > expectedKind.length + 1) {
+            "C# implementation $recordKind '$key' is not a Kotlin public declaration identity"
+        }
+    }
+
     private fun StringBuilder.appendRecord(tag: String, vararg fields: String?) {
         append(tag)
         fields.forEach { field ->
@@ -787,7 +825,13 @@ internal fun collectDotNetCSharpImplementationManifest(
                     val isExternalKotlinLibraryParent = externalLibraries.any { library ->
                         library.artifact.assemblyName.equals(externalParentAssembly, ignoreCase = true)
                     }
-                    if (!isSameAssemblyParent && !isExternalKotlinLibraryParent) {
+                    val isRuntimeManifestParent =
+                        superInterface?.let(DotNetRuntimeTypes::supportsCSharpSourceAuthoring) == true
+                    if (
+                        !isSameAssemblyParent &&
+                        !isExternalKotlinLibraryParent &&
+                        !isRuntimeManifestParent
+                    ) {
                         add(
                             "non-library inherited interface contracts are not supported " +
                                     "by the first C# authoring schema"
@@ -1062,7 +1106,168 @@ internal fun collectDotNetCSharpImplementationManifest(
         schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
         assemblyName = assemblyName,
         targetProfile = target.flagValue,
+        logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
         interfaces = interfaces,
+    )
+}
+
+/**
+ * Builds Kotlin.Runtime's source-authoring contract from the actual common built-in declarations.
+ *
+ * Runtime IL is hand-written during the bootstrap stage, but its logical identities are not. The
+ * same [dotNetLibraryAbiKeyOrNull] path used by compiler-produced libraries computes every class
+ * and member key from [DotNetIrMangler]. This registry contributes only the CLR projection.
+ */
+internal fun collectDotNetRuntimeCSharpImplementationManifest(
+    context: DotNetBackendContext,
+    target: DotNetTarget,
+): DotNetCSharpImplementationManifest {
+    val irBuiltIns = context.irBuiltIns
+    val runtimeInterfaces = listOf(
+        irBuiltIns.iteratorClass.owner,
+        irBuiltIns.listIteratorClass.owner,
+        irBuiltIns.iterableClass.owner,
+        irBuiltIns.collectionClass.owner,
+        irBuiltIns.listClass.owner,
+    )
+    val typeMapper = DotNetIlTypeMapper(
+        availableClasses = emptyMap(),
+        coreLibrary = target.coreLibrary,
+    )
+    val sourceMembers = runtimeInterfaces.associateWith { irClass ->
+        irClass.declarations.flatMap { declaration ->
+            when (declaration) {
+                is IrSimpleFunction -> listOf(declaration)
+                is IrProperty -> listOfNotNull(declaration.getter, declaration.setter)
+                else -> emptyList()
+            }
+        }.filterNot { function -> function.isFakeOverride }
+    }
+    val wrongShapePolicies = collectDotNetCSharpWrongShapePolicies(
+        context,
+        sourceMembers.values.flatten().toSet(),
+    )
+
+    fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
+        val property = correspondingPropertySymbol?.owner ?: return DotNetCSharpMemberKind.METHOD
+        return if (property.getter == this) {
+            DotNetCSharpMemberKind.PROPERTY_GETTER
+        } else {
+            DotNetCSharpMemberKind.PROPERTY_SETTER
+        }
+    }
+
+    fun locator(
+        role: DotNetCSharpSlotRole,
+        source: IrSimpleFunction,
+        owner: DotNetIlClassInfo,
+        signatureMapper: DotNetIlTypeMapper,
+        physicalMethodName: String,
+    ): DotNetCSharpMethodLocator {
+        val signature = source.dotNetSignature(signatureMapper)
+        return DotNetCSharpMethodLocator(
+            role = role,
+            ownerPath = owner.physicalPathComponents(),
+            methodName = physicalMethodName,
+            propertyName = source.correspondingPropertySymbol?.owner?.let {
+                checkNotNull(DotNetRuntimeTypes.genericInterfacePropertyNameOrNull(source)) {
+                    "Runtime C# property accessor '${source.name}' has no physical Property name"
+                }
+            },
+            genericArity = source.typeParameters.size,
+            returnType = signature.returnType.nameInSignature,
+            parameterTypes = signature.parameterTypes
+                .drop(if (signature.hasThis) 1 else 0)
+                .map { type -> type.nameInSignature },
+        )
+    }
+
+    val contracts = runtimeInterfaces.map { irClass ->
+        val interfaceInfo = checkNotNull(DotNetRuntimeTypes.genericInterfaceInfoFor(irClass)) {
+            "Runtime C# interface contract has no physical interface registry entry"
+        }
+        val interfaceKey = checkNotNull(irClass.dotNetLibraryAbiKeyOrNull("C")) {
+            "Runtime C# interface contract has no Kotlin public identity"
+        }
+        val members = sourceMembers.getValue(irClass).map { source ->
+            val memberKey = checkNotNull(source.dotNetLibraryAbiKeyOrNull("F")) {
+                "Runtime C# interface member has no Kotlin public identity"
+            }
+            val canonicalMethodName = checkNotNull(
+                DotNetRuntimeTypes.genericInterfaceCanonicalMethodNameOrNull(source)
+            ) {
+                "Runtime C# interface member '${source.name}' has no canonical physical name"
+            }
+            val memberViews = typeMapper.genericInterfaceMemberViews(source, irClass)
+            val authoringMemberView = typeMapper.genericInterfaceMemberView(source, irClass)
+            val slots = buildList {
+                add(
+                    locator(
+                        DotNetCSharpSlotRole.ERASED,
+                        source,
+                        interfaceInfo.canonicalClassInfo,
+                        typeMapper,
+                        canonicalMethodName,
+                    )
+                )
+                for (memberView in memberViews) {
+                    val owner = checkNotNull(interfaceInfo.classInfo(memberView.physicalView))
+                    val typedMethodName = checkNotNull(
+                        DotNetRuntimeTypes.genericInterfaceTypedMethodNameOrNull(source)
+                    ) {
+                        "Runtime C# interface member '${source.name}' has no typed physical name"
+                    }
+                    add(
+                        locator(
+                            memberView.toManifestSlotRole(),
+                            source,
+                            owner,
+                            typeMapper.genericInterfaceSignatureView(memberView),
+                            typedMethodName,
+                        )
+                    )
+                }
+            }
+            DotNetCSharpMemberContract(
+                logicalKey = memberKey,
+                kind = source.memberKind(),
+                sourceName = source.correspondingPropertySymbol?.owner?.name?.asString()
+                    ?: source.name.asString(),
+                authoringView = authoringMemberView.toManifestView(),
+                defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                semanticBodyView = null,
+                wrongShapePolicy = wrongShapePolicies[source],
+                slots = slots,
+            )
+        }.sortedBy(DotNetCSharpMemberContract::logicalKey)
+        DotNetCSharpInterfaceContract(
+            logicalKey = interfaceKey,
+            canonicalOwnerPath = interfaceInfo.canonicalClassInfo.physicalPathComponents(),
+            declaredOwnerPath = interfaceInfo.declaredClassInfo.physicalPathComponents(),
+            exactOwnerPath = interfaceInfo.exactClassInfo?.physicalPathComponents(),
+            typeParameters = irClass.typeParameters.map { parameter ->
+                DotNetCSharpTypeParameter(
+                    parameter.name.asString(),
+                    when (parameter.variance) {
+                        Variance.INVARIANT -> DotNetCSharpTypeParameterVariance.INVARIANT
+                        Variance.IN_VARIANCE -> DotNetCSharpTypeParameterVariance.IN
+                        Variance.OUT_VARIANCE -> DotNetCSharpTypeParameterVariance.OUT
+                    },
+                )
+            },
+            sourceAuthoringSupported = true,
+            unsupportedReasons = emptyList(),
+            members = members,
+            intersections = emptyList(),
+        )
+    }.sortedBy(DotNetCSharpInterfaceContract::logicalKey)
+
+    return DotNetCSharpImplementationManifest(
+        schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
+        assemblyName = DotNetRuntimeLibrary.ASSEMBLY_NAME,
+        targetProfile = target.flagValue,
+        logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+        interfaces = contracts,
     )
 }
 

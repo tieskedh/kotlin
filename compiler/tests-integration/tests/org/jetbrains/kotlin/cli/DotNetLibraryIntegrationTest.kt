@@ -167,6 +167,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     @Test
     fun testDllManifestGeneratesCSharpImplementorsWithoutKlib() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ilasm is not available",
+        )
         val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(
             csharpToolchain != null,
@@ -596,6 +600,101 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertEquals(0, readerCompile.exitCode, readerCompile.output)
         readerDirectory.resolve("ManifestReader.runtimeconfig.json").writeText(net10RuntimeConfig())
+        val runtimeManifest = readCSharpImplementationManifestFromDll(
+            modernCSharp,
+            readerAssembly,
+            readerDirectory,
+            runtimeAssembly,
+        )
+        assertEquals("Kotlin.Runtime", runtimeManifest.assemblyName)
+        assertEquals("net10.0", runtimeManifest.targetProfile)
+        assertEquals(
+            DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+            runtimeManifest.logicalIdentityScheme,
+        )
+        assertEquals(5, runtimeManifest.interfaces.size)
+        assertTrue(runtimeManifest.interfaces.all { contract ->
+            contract.logicalKey.startsWith("C:") &&
+                    !contract.logicalKey.startsWith("runtime:") &&
+                    contract.members.all { member ->
+                        member.logicalKey.startsWith("F:") &&
+                                !member.logicalKey.startsWith("runtime:")
+                    }
+        })
+        val runtimeCollectionContract = runtimeManifest.interfaces.single { contract ->
+            contract.canonicalOwnerPath.last() == "Kotlin.Collections.Collection"
+        }
+        val runtimeListContract = runtimeManifest.interfaces.single { contract ->
+            contract.canonicalOwnerPath.last() == "Kotlin.Collections.List"
+        }
+        val runtimeIterableContract = runtimeManifest.interfaces.single { contract ->
+            contract.canonicalOwnerPath.last() == "Kotlin.Collections.Iterable"
+        }
+        assertTrue(runtimeCollectionContract.sourceAuthoringSupported)
+        assertTrue(runtimeListContract.sourceAuthoringSupported)
+        assertEquals(
+            DotNetCSharpWrongShapeFallback.FALSE,
+            runtimeCollectionContract.members.single { member ->
+                member.sourceName == "contains"
+            }.wrongShapePolicy?.fallback,
+        )
+        assertEquals(
+            DotNetCSharpWrongShapeFallback.MINUS_ONE,
+            runtimeListContract.members.single { member ->
+                member.sourceName == "indexOf"
+            }.wrongShapePolicy?.fallback,
+        )
+        val runtimeContractsByProfile = DotNetTarget.entries.associateWith { target ->
+            val assembly = if (target == DotNetTarget.NET10_0) {
+                runtimeAssembly
+            } else {
+                val profileDirectory =
+                    File(tmpdir, "runtime-manifest-${target.flagValue}").apply { mkdirs() }
+                checkNotNull(
+                    DotNetIlAssembler.assembleRuntimeWithManifestForTests(
+                        profileDirectory,
+                        target,
+                        runtimeManifest.copy(targetProfile = target.flagValue),
+                        MessageCollector.NONE,
+                    )
+                )
+            }
+            val profileReaderDirectory = checkNotNull(assembly.parentFile)
+            val profileReader = if (profileReaderDirectory == readerDirectory) {
+                readerAssembly
+            } else {
+                readerAssembly.copyTo(
+                    profileReaderDirectory.resolve(readerAssembly.name),
+                    overwrite = true,
+                ).also {
+                    readerDirectory.resolve("ManifestReader.runtimeconfig.json").copyTo(
+                        profileReaderDirectory.resolve("ManifestReader.runtimeconfig.json"),
+                        overwrite = true,
+                    )
+                }
+            }
+            readCSharpImplementationManifestFromDll(
+                modernCSharp,
+                profileReader,
+                profileReaderDirectory,
+                assembly,
+            ).also { manifest ->
+                assertEquals(target.flagValue, manifest.targetProfile)
+                assertEquals(
+                    DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+                    manifest.logicalIdentityScheme,
+                )
+            }
+        }
+        val modernRuntimeContracts = runtimeContractsByProfile
+            .getValue(DotNetTarget.NET10_0)
+            .interfaces
+        for (portableTarget in listOf(DotNetTarget.NET48, DotNetTarget.NETSTANDARD_2_0)) {
+            assertEquals(
+                modernRuntimeContracts,
+                runtimeContractsByProfile.getValue(portableTarget).interfaces,
+            )
+        }
 
         val parentDeclarationText = """
             public interface ManifestMarker
@@ -690,6 +789,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (value.merged != "left" || right.merged != "left") return 2
                 right.merged = "right"
                 return if (value.merged == "right" && left.merged == "right") 0 else 3
+            }
+
+            public fun verifyBarrier(value: BarrierShape<String>): Int {
+                if (!value.contains("typed")) return 1
+                val wide: Collection<Any?> = value
+                if (!wide.contains("typed")) return 2
+                if (wide.contains(42) || wide.contains(null)) return 3
+                return 0
+            }
+
+            public fun verifySearchBarrier(value: SearchBarrier<String>): Int {
+                if (value.indexOf("typed") != 0) return 1
+                val wide: List<Any?> = value
+                if (wide.indexOf("typed") != 0) return 2
+                if (wide.indexOf(42) != -1 || wide.indexOf(null) != -1) return 3
+                return 0
             }
 
             public fun verify(value: Shape<String>): Int {
@@ -813,6 +928,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             assertEquals(moduleName, manifest.assemblyName)
             assertEquals(targetProfile, manifest.targetProfile)
+            assertEquals(
+                DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+                manifest.logicalIdentityScheme,
+            )
             val parentManifest = parentAssembly?.let { assembly ->
                 readCSharpImplementationManifestFromDll(
                     modernCSharp,
@@ -871,12 +990,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(markerContract.sourceAuthoringSupported)
             assertTrue(ordinaryParentContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
-            assertFalse(barrierContract.sourceAuthoringSupported)
-            assertTrue(barrierContract.unsupportedReasons.single().contains("non-library inherited"))
-            assertFalse(searchBarrierContract.sourceAuthoringSupported)
-            assertTrue(
-                searchBarrierContract.unsupportedReasons.single().contains("non-library inherited")
-            )
+            assertTrue(barrierContract.sourceAuthoringSupported)
+            assertTrue(barrierContract.unsupportedReasons.isEmpty())
+            assertTrue(searchBarrierContract.sourceAuthoringSupported)
+            assertTrue(searchBarrierContract.unsupportedReasons.isEmpty())
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
@@ -1184,6 +1301,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         mapConstraintType,
                         ordinaryParentContract,
                         ordinaryContract,
+                        barrierContract,
+                        searchBarrierContract,
+                        runtimeIterableContract,
+                        runtimeCollectionContract,
+                        runtimeListContract,
                         inheritedDefaultHasEffectiveDim =
                             fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
                                     promotedDim,
@@ -1275,6 +1397,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
             assemblyName = "Manifest.Empty",
             targetProfile = "netstandard2.0",
+            logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
             interfaces = emptyList(),
         )
         val metadata = DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(manifest)
@@ -1300,6 +1423,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertThrows(IllegalArgumentException::class.java) {
             DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata + metadata.last())
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+                manifest.copy(logicalIdentityScheme = "runtime-member-names-v1")
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+                manifest.copy(
+                    interfaces = listOf(
+                        DotNetCSharpInterfaceContract(
+                            logicalKey = "runtime:Kotlin.Collections.Collection",
+                            canonicalOwnerPath = listOf("Kotlin.Collections.Collection"),
+                            declaredOwnerPath = null,
+                            exactOwnerPath = null,
+                            typeParameters = emptyList(),
+                            sourceAuthoringSupported = true,
+                            unsupportedReasons = emptyList(),
+                            members = emptyList(),
+                            intersections = emptyList(),
+                        )
+                    )
+                )
+            )
         }
     }
 
@@ -9715,6 +9862,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         mapConstraintType: String,
         ordinaryParentContract: DotNetCSharpInterfaceContract,
         ordinaryContract: DotNetCSharpInterfaceContract,
+        barrierContract: DotNetCSharpInterfaceContract,
+        searchBarrierContract: DotNetCSharpInterfaceContract,
+        runtimeIterableContract: DotNetCSharpInterfaceContract,
+        runtimeCollectionContract: DotNetCSharpInterfaceContract,
+        runtimeListContract: DotNetCSharpInterfaceContract,
         inheritedDefaultHasEffectiveDim: Boolean =
             rootContract.members.single { member -> member.sourceName == "fallback" }
                 .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
@@ -9726,9 +9878,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         fun DotNetCSharpInterfaceContract.member(
             name: String,
             kind: DotNetCSharpMemberKind? = null,
+            parameterCount: Int? = null,
         ): DotNetCSharpMemberContract =
             members.single { candidate ->
-                candidate.sourceName == name && (kind == null || candidate.kind == kind)
+                candidate.sourceName == name &&
+                        (kind == null || candidate.kind == kind) &&
+                        (parameterCount == null ||
+                                candidate.slots.any { slot ->
+                                    slot.parameterTypes.size == parameterCount
+                                })
             }
 
         fun DotNetCSharpInterfaceContract.csharpOwner(path: List<String>): String =
@@ -9789,6 +9947,115 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val ordinaryFormat = ordinaryContract.member("format")
             .slots
             .single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        val barrierCanonicalType =
+            barrierContract.csharpOwner(barrierContract.canonicalOwnerPath)
+        val barrierExactType =
+            barrierContract.csharpOwner(checkNotNull(barrierContract.exactOwnerPath))
+        val barrierContains = barrierContract.member("contains")
+        val barrierCanonicalContains = barrierContains.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.ERASED
+        }
+        val barrierExactContains = barrierContains.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.EXACT
+        }
+        val searchCanonicalType =
+            searchBarrierContract.csharpOwner(searchBarrierContract.canonicalOwnerPath)
+        val searchExactType =
+            searchBarrierContract.csharpOwner(checkNotNull(searchBarrierContract.exactOwnerPath))
+        val searchIndexOf = searchBarrierContract.member("indexOf")
+        val searchCanonicalIndexOf = searchIndexOf.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.ERASED
+        }
+        val searchExactIndexOf = searchIndexOf.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.EXACT
+        }
+        val runtimeListCanonicalType =
+            runtimeListContract.csharpOwner(runtimeListContract.canonicalOwnerPath)
+        val runtimeListDeclaredType =
+            runtimeListContract.csharpOwner(checkNotNull(runtimeListContract.declaredOwnerPath))
+        val runtimeIterableIterator = runtimeIterableContract.member("iterator")
+        val runtimeCollectionSize = runtimeCollectionContract.member(
+            "size",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        )
+        val runtimeCollectionIsEmpty = runtimeCollectionContract.member("isEmpty")
+        val runtimeCollectionContains = runtimeCollectionContract.member("contains")
+        val runtimeCollectionIterator = runtimeCollectionContract.member("iterator")
+        val runtimeCollectionContainsAll = runtimeCollectionContract.member("containsAll")
+        val runtimeListSize = runtimeListContract.member(
+            "size",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        )
+        val runtimeListIsEmpty = runtimeListContract.member("isEmpty")
+        val runtimeListContains = runtimeListContract.member("contains")
+        val runtimeListIterator = runtimeListContract.member("iterator")
+        val runtimeListContainsAll = runtimeListContract.member("containsAll")
+        val runtimeListGet = runtimeListContract.member("get")
+        val runtimeListIndexOf = runtimeListContract.member("indexOf")
+        val runtimeListLastIndexOf = runtimeListContract.member("lastIndexOf")
+        val runtimeListIteratorWithoutIndex =
+            runtimeListContract.member("listIterator", parameterCount = 0)
+        val runtimeListIteratorWithIndex =
+            runtimeListContract.member("listIterator", parameterCount = 1)
+        val runtimeListSubList = runtimeListContract.member("subList")
+
+        fun DotNetCSharpMemberContract.slot(role: DotNetCSharpSlotRole) =
+            slots.single { slot -> slot.role == role }
+
+        val collectionSizeProperty =
+            checkNotNull(runtimeCollectionSize.slot(DotNetCSharpSlotRole.DECLARED).propertyName)
+        val collectionIsEmptyMethod =
+            runtimeCollectionIsEmpty.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val collectionIteratorMethod =
+            runtimeCollectionIterator.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val collectionContainsAllMethod =
+            runtimeCollectionContainsAll.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val collectionContainsErasedMethod =
+            runtimeCollectionContains.slot(DotNetCSharpSlotRole.ERASED).methodName
+        val collectionContainsExactMethod =
+            runtimeCollectionContains.slot(DotNetCSharpSlotRole.EXACT).methodName
+        val listSizeProperty =
+            checkNotNull(runtimeListSize.slot(DotNetCSharpSlotRole.DECLARED).propertyName)
+        val listIsEmptyMethod =
+            runtimeListIsEmpty.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val listIteratorMethod =
+            runtimeListIterator.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val listContainsAllMethod =
+            runtimeListContainsAll.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val listContainsErasedMethod =
+            runtimeListContains.slot(DotNetCSharpSlotRole.ERASED).methodName
+        val listContainsExactMethod =
+            runtimeListContains.slot(DotNetCSharpSlotRole.EXACT).methodName
+        val listGetErasedMethod =
+            runtimeListGet.slot(DotNetCSharpSlotRole.ERASED).methodName
+        val listGetDeclaredMethod =
+            runtimeListGet.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val listIndexOfErasedMethod =
+            runtimeListIndexOf.slot(DotNetCSharpSlotRole.ERASED).methodName
+        val listIndexOfExactMethod =
+            runtimeListIndexOf.slot(DotNetCSharpSlotRole.EXACT).methodName
+        val listLastIndexOfErasedMethod =
+            runtimeListLastIndexOf.slot(DotNetCSharpSlotRole.ERASED).methodName
+        val listLastIndexOfExactMethod =
+            runtimeListLastIndexOf.slot(DotNetCSharpSlotRole.EXACT).methodName
+        val listIteratorWithoutIndexMethod =
+            runtimeListIteratorWithoutIndex.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val listIteratorWithIndexMethod =
+            runtimeListIteratorWithIndex.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        val listSubListMethod =
+            runtimeListSubList.slot(DotNetCSharpSlotRole.DECLARED).methodName
+        require(
+            runtimeIterableIterator.slot(DotNetCSharpSlotRole.DECLARED).methodName ==
+                    collectionIteratorMethod &&
+                    collectionIteratorMethod == listIteratorMethod &&
+                    collectionSizeProperty == listSizeProperty &&
+                    collectionIsEmptyMethod == listIsEmptyMethod &&
+                    collectionContainsAllMethod == listContainsAllMethod &&
+                    collectionContainsErasedMethod == listContainsErasedMethod &&
+                    collectionContainsExactMethod == listContainsExactMethod
+        ) {
+            "The runtime collection inheritance graph needs distinct C# adapters"
+        }
         require(ordinaryCountGetter.propertyName == ordinaryCountSetter.propertyName)
         val canonicalValue = value.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelGetter = labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
@@ -10016,6 +10283,127 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 $generatedOrdinaryDefault
             }
 
+            public sealed partial class GeneratedBarrier
+            {
+                public bool ContainsValue(string element) { return element == "typed"; }
+            }
+
+            public sealed partial class GeneratedBarrier : $barrierExactType<string>
+            {
+                public int $collectionSizeProperty { get { return 1; } }
+
+                public bool $collectionIsEmptyMethod() { return false; }
+
+                public Kotlin.Collections.Iterator $collectionIteratorMethod() { return null; }
+
+                public bool $collectionContainsAllMethod(
+                    Kotlin.Collections.Collection elements) { return false; }
+
+                public bool $collectionContainsErasedMethod(object element)
+                {
+                    return element is string && ContainsValue((string)element);
+                }
+
+                public bool $collectionContainsExactMethod(string element)
+                {
+                    return ContainsValue(element);
+                }
+
+                bool $barrierCanonicalType.${barrierCanonicalContains.methodName}(object element)
+                {
+                    return element is string && ContainsValue((string)element);
+                }
+
+                bool $barrierExactType<string>.${barrierExactContains.methodName}(string element)
+                {
+                    return ContainsValue(element);
+                }
+            }
+
+            public sealed partial class GeneratedSearchBarrier
+            {
+                public bool ContainsValue(string element) { return element == "typed"; }
+
+                public int IndexOfValue(string element) { return ContainsValue(element) ? 0 : -1; }
+            }
+
+            public sealed partial class GeneratedSearchBarrier : $searchExactType<string>
+            {
+                public int $listSizeProperty { get { return 1; } }
+
+                public bool $listIsEmptyMethod() { return false; }
+
+                public Kotlin.Collections.Iterator $listIteratorMethod() { return null; }
+
+                public bool $listContainsAllMethod(
+                    Kotlin.Collections.Collection elements) { return false; }
+
+                public bool $listContainsErasedMethod(object element)
+                {
+                    return element is string && ContainsValue((string)element);
+                }
+
+                public bool $listContainsExactMethod(string element)
+                {
+                    return ContainsValue(element);
+                }
+
+                object $runtimeListCanonicalType.$listGetErasedMethod(int index)
+                {
+                    return index == 0 ? "typed" : null;
+                }
+
+                string $runtimeListDeclaredType<string>.$listGetDeclaredMethod(int index)
+                {
+                    return index == 0 ? "typed" : null;
+                }
+
+                public int $listIndexOfErasedMethod(object element)
+                {
+                    return element is string ? IndexOfValue((string)element) : -1;
+                }
+
+                public int $listLastIndexOfErasedMethod(object element)
+                {
+                    return element is string ? IndexOfValue((string)element) : -1;
+                }
+
+                public int $listIndexOfExactMethod(string element)
+                {
+                    return IndexOfValue(element);
+                }
+
+                public int $listLastIndexOfExactMethod(string element)
+                {
+                    return IndexOfValue(element);
+                }
+
+                public Kotlin.Collections.ListIterator $listIteratorWithoutIndexMethod()
+                {
+                    return null;
+                }
+
+                public Kotlin.Collections.ListIterator $listIteratorWithIndexMethod(int index)
+                {
+                    return null;
+                }
+
+                public Kotlin.Collections.List $listSubListMethod(int fromIndex, int toIndex)
+                {
+                    return null;
+                }
+
+                int $searchCanonicalType.${searchCanonicalIndexOf.methodName}(object element)
+                {
+                    return element is string ? IndexOfValue((string)element) : -1;
+                }
+
+                int $searchExactType<string>.${searchExactIndexOf.methodName}(string element)
+                {
+                    return IndexOfValue(element);
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -10038,6 +10426,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (ordinaryResult != 0)
                         throw new System.Exception(
                             "Kotlin ordinary verification failed: " + ordinaryResult);
+                    int barrierResult =
+                        manifest.apiKt.verifyBarrier(new GeneratedBarrier());
+                    if (barrierResult != 0)
+                        throw new System.Exception(
+                            "Kotlin Collection barrier verification failed: " + barrierResult);
+                    int searchBarrierResult =
+                        manifest.apiKt.verifySearchBarrier(new GeneratedSearchBarrier());
+                    if (searchBarrierResult != 0)
+                        throw new System.Exception(
+                            "Kotlin List barrier verification failed: " + searchBarrierResult);
                     return 0;
                 }
             }

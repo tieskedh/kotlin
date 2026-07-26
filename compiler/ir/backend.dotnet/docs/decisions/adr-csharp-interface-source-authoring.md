@@ -49,10 +49,24 @@ manifest supplies the information CLR metadata cannot express:
 Physical signatures are repeated only as stable MethodDef locators and integrity checks. They do
 not form a second Kotlin type system.
 
+Schema 5 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
+and member records use the same public `IdSignature` rendered by
+`PublicIdSignatureComputer(DotNetIrMangler)` for the KLIB/DLL physical index. A manifest must not
+introduce a runtime-, Roslyn-, or tooling-owned declaration identity. The `X:` key of a derived
+intersection record is a deterministic identity for that physical composition record, not a
+second identity for any contributing Kotlin declaration.
+
+Hand-written runtime IL follows the same rule. `Kotlin.Runtime.dll` resolves its supported
+`Iterator`, `ListIterator`, `Iterable`, `Collection`, and `List` declarations and members from the
+actual common `IrBuiltIns`, computes their ordinary `C:` and `F:` keys through
+`DotNetIrMangler`, and then attaches a runtime-owned registry of CLR owners, slots, and Property
+rows. That registry owns only the physical projection. In particular, CLR `Size` remains distinct
+from Kotlin source `size` without acquiring a second logical declaration identity.
+
 The schema is a compiler ABI. Readers reject unknown versions, duplicate records, missing chunks,
-inconsistent profile/body combinations, and corrupt payloads. No compatibility is promised for
-the current unshipped schema; an incompatible change increments the schema and stale artifacts
-fail explicitly.
+unknown logical-identity schemes, non-Kotlin declaration keys, inconsistent profile/body
+combinations, and corrupt payloads. No compatibility is promised for the current unshipped
+schema; an incompatible change increments the schema and stale artifacts fail explicitly.
 
 ### 2. Roslyn partial-type generation is the supported C# source-authoring path
 
@@ -200,7 +214,7 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-Schema 4 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
+Schema 5 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
 graph, whether they are in the same DLL or referenced compiler-produced Kotlin library DLLs. This
 covers a two-branch generic diamond with a shared root default, a parent-owned mutable property,
 and a sibling-owned property through a child exact view. Logical root keys deduplicate the diamond;
@@ -208,7 +222,7 @@ the manifest does not duplicate local or assembly-qualified physical TypeSpecs.
 
 An unrelated same-named parent intersection is different: CLR metadata exposes the bodyless
 derived slot but not the fact that Kotlin selected it to unify several logical declarations.
-Schema 4 therefore records the sorted contributor logical keys and the derived declared/exact
+Schema 5 therefore records the sorted contributor logical keys and the derived declared/exact
 MethodDef locators. Generated C# keeps one source body, explicitly adapts the derived slot, and
 maps the parent canonical identities to that same body. For a variant mutable-property
 intersection, the declared record contains the variance-safe getter while the exact records
@@ -228,15 +242,15 @@ The same fixture proves helper forwarding on both portable profiles, natural DIM
 `net10.0`, and child-owned DIM promotion when the selected parent DLL is portable.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
-Runtime-bootstrap interfaces and friend-accessible internal interfaces are still omitted by the
-public-only collector or recorded as unsupported when their parent is not a compiler-produced
-library contract. They must gain equivalent manifest records before the generator claims support
-for implementing them.
+Friend-accessible internal interfaces are still omitted by the public-only collector. They must
+gain equivalent manifest records before the generator claims support for implementing them.
 
-Schema 4 also records special-barrier policy directly from Kotlin's shared
+Schema 5 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding
 `Collection.contains` records one checked argument with a `false` fallback, while a child
 overriding `List.indexOf` records `-1`. An ordinary user unsafe input records no policy. The
-collection children remain fail-closed for source authoring because their runtime-owned parent
-contracts are not yet present in `Kotlin.Runtime.dll`; recording a correct local policy does not
-make an incomplete inherited contract supported.
+runtime DLL now supplies the complete inherited contracts. The no-KLIB fixture reads those
+contracts, generates partial C# implementations, and executes both children through exact and
+widened Kotlin views. Wrong-shaped values therefore return `false` or `-1` without changing the
+typed C# body. The same built-in-derived manifest payload is emitted and compared on `net48`,
+`netstandard2.0`, and `net10.0`.

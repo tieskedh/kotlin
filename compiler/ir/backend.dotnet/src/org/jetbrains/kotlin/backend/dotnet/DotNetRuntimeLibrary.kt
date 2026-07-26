@@ -59,8 +59,44 @@ internal object DotNetRuntimeLibrary {
     fun assembleNextTo(
         executableOutput: File,
         target: DotNetTarget,
+        cSharpImplementationManifest: DotNetCSharpImplementationManifest,
         messageCollector: MessageCollector,
-    ): File? = assembleRuntime(executableOutput, target) { ilFile, output ->
+    ): File? = assembleRuntime(
+        executableOutput,
+        target,
+        cSharpImplementationManifest,
+    ) { ilFile, output ->
+        DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
+    }
+
+    /**
+     * Low-level runtime representation fixture. Production runtime artifacts always receive the
+     * built-in-derived C# implementation manifest through [assembleNextTo].
+     */
+    @TestOnly
+    fun assembleWithoutManifestForTests(
+        outputDirectory: File,
+        target: DotNetTarget,
+        messageCollector: MessageCollector,
+    ): File? = assembleRuntime(
+        outputDirectory.resolve("runtime-conformance-placeholder"),
+        target,
+        cSharpImplementationManifest = null,
+    ) { ilFile, output ->
+        DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
+    }
+
+    @TestOnly
+    fun assembleWithManifestForTests(
+        outputDirectory: File,
+        target: DotNetTarget,
+        cSharpImplementationManifest: DotNetCSharpImplementationManifest,
+        messageCollector: MessageCollector,
+    ): File? = assembleRuntime(
+        outputDirectory.resolve("runtime-manifest-conformance-placeholder"),
+        target,
+        cSharpImplementationManifest,
+    ) { ilFile, output ->
         DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
     }
 
@@ -73,6 +109,7 @@ internal object DotNetRuntimeLibrary {
     ): File? = assembleRuntime(
         outputDirectory.resolve("runtime-explicit-writer-placeholder"),
         target,
+        cSharpImplementationManifest = null,
     ) { ilFile, output ->
         DotNetIlAssembler.assembleWithExplicitIlasm(
             ilasm,
@@ -86,6 +123,7 @@ internal object DotNetRuntimeLibrary {
     private fun assembleRuntime(
         outputAnchor: File,
         target: DotNetTarget,
+        cSharpImplementationManifest: DotNetCSharpImplementationManifest?,
         assemble: (ilFile: File, output: File) -> Boolean,
     ): File? {
         val outputDirectory = outputAnchor.parentFile ?: File(".")
@@ -95,14 +133,19 @@ internal object DotNetRuntimeLibrary {
         return try {
             // ILAsm decodes BOM-less input as ANSI; keep the runtime source on the same UTF-8+BOM
             // path as generated program IL even though its current text is ASCII-only.
-            ilFile.writeBytes(UTF8_BOM + ilText(target).toByteArray(Charsets.UTF_8))
+            ilFile.writeBytes(
+                UTF8_BOM + ilText(target, cSharpImplementationManifest).toByteArray(Charsets.UTF_8)
+            )
             output.takeIf { assemble(ilFile, output) }
         } finally {
             ilFile.delete()
         }
     }
 
-    private fun ilText(target: DotNetTarget): String {
+    private fun ilText(
+        target: DotNetTarget,
+        cSharpImplementationManifest: DotNetCSharpImplementationManifest?,
+    ): String {
         val coreLibrary = target.coreLibrary
         val coreLibraryReference = coreLibrary.reference
         val assemblyReferenceIl = buildString {
@@ -119,6 +162,26 @@ internal object DotNetRuntimeLibrary {
                 DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
             )
         }.trimEnd().prependIndent("        ")
+        val cSharpImplementationManifestIl = cSharpImplementationManifest?.let { manifest ->
+            require(manifest.assemblyName == ASSEMBLY_NAME) {
+                "Kotlin.Runtime C# implementation manifest names '${manifest.assemblyName}'"
+            }
+            require(manifest.targetProfile == target.flagValue) {
+                "Kotlin.Runtime C# implementation manifest targets '${manifest.targetProfile}', " +
+                        "not '${target.flagValue}'"
+            }
+            require(manifest.logicalIdentityScheme == DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME)
+            buildString {
+                DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(manifest)
+                    .forEach { entry ->
+                        coreLibrary.appendAssemblyMetadataAttributeTo(
+                            this,
+                            entry.first,
+                            entry.second,
+                        )
+                    }
+            }.trimEnd().prependIndent("        ")
+        }.orEmpty()
         val compilerAbiAttributeTypeIl =
             DotNetCompilerAbi.attributeTypeIl(
                 coreLibraryReference,
@@ -135,6 +198,7 @@ $assemblyReferenceIl
           .ver $ASSEMBLY_VERSION_IL
 $targetFrameworkAttributeIl
 $runtimeSurfaceAttributeIl
+$cSharpImplementationManifestIl
         }
         .module Kotlin.Runtime.dll
 
