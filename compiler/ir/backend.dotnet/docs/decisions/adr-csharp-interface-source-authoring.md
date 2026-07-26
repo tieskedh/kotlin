@@ -39,6 +39,7 @@ manifest supplies the information CLR metadata cannot express:
 - declaration type-parameter names and Kotlin variance;
 - the normal strongly typed authoring view of every member;
 - each erased, declared, exact, property-accessor, and helper MethodDef locator;
+- each derived intersection slot and the sorted logical members it unifies;
 - whether the member is abstract, helper-backed on a portable profile, or DIM-backed on
   `net10.0`; and
 - which typed view owns the one semantic DIM body.
@@ -177,18 +178,22 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-Kotlin generic parents are composed from their own manifest contracts and the ordinary CLR
+Schema 2 composes Kotlin generic parents from their own manifest contracts and the ordinary CLR
 interface graph, whether they are in the same DLL or referenced compiler-produced Kotlin library
 DLLs. This covers a two-branch diamond with a shared root default, a parent-owned mutable property,
 and a sibling-owned property through a child exact view. Logical root keys deduplicate the diamond;
-the manifest does not duplicate local or assembly-qualified physical TypeSpecs. An unrelated
-same-named parent intersection remains explicitly unsupported until the derived physical slot can
-be related to all contributing logical members. The cross-assembly test deletes both KLIBs before
-reading the DLL contracts. It also compiles a
+the manifest does not duplicate local or assembly-qualified physical TypeSpecs.
+
+An unrelated same-named parent intersection is different: CLR metadata exposes the bodyless
+derived slot but not the fact that Kotlin selected it to unify several logical declarations.
+Schema 2 therefore records the sorted contributor logical keys and the derived declared/exact
+MethodDef locators. Generated C# keeps one source body, explicitly adapts the derived slot, and
+maps the parent canonical identities to that same body. The cross-assembly test deletes both KLIBs
+before reading the DLL contracts. It also compiles a
 `netstandard2.0` parent into a `net10.0` child, reads the child promotion directly from ECMA-335
 `MethodImpl` metadata, omits generated class forwarders only after every parent slot has a concrete
-child mapping, and executes the inherited default. Non-generic parents and derived intersection
-slots are explicitly unsupported by the first schema slice; they must not be silently generated.
+child mapping, and executes the inherited default. Non-generic parents remain explicitly
+unsupported by the current schema; they must not be silently generated.
 Runtime-bootstrap interfaces and ordinary non-generic interfaces are not yet source-authoring
 inputs. Friend-accessible internal interfaces are also omitted by the public-only first collector.
 All must gain equivalent manifest records before the generator claims support for implementing
