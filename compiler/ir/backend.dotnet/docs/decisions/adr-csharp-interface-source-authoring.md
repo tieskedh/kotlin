@@ -298,9 +298,12 @@ string limits, validates the complete record graph, recognizes only a real canon
 or declared/generic base-list opt-in, and emits the diagnostics listed above. DLL-only tests prove
 generic and non-generic discovery, malformed/version-skew rejection, unavailable friendship,
 conflicting explicit ABI members, unsupported `dynamic` substitution, and generated partial
-participation. Adapter generation is intentionally the next production slice; the existing
-handwritten generated-source fixture remains an independent manifest-sufficiency oracle until
-each adapter family is migrated.
+participation. The next slice emits ordinary non-generic method and Property adapters from
+PascalCase or Kotlin-named source members. Portable defaults call the recorded helper; native and
+child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
+implementations execute Kotlin verification on every profile. Split generic views, intersections,
+generic methods, and special barriers remain in the independent handwritten manifest-sufficiency
+fixture until each family is migrated.
 
 Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding

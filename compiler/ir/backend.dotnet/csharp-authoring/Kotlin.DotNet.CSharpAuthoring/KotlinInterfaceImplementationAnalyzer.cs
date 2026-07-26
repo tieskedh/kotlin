@@ -80,9 +80,15 @@ public sealed class KotlinInterfaceImplementationAnalyzer : DiagnosticAnalyzer
                 contractName,
                 context.Compilation.AssemblyName ?? "<unnamed>"));
         }
-        AuthoringContractDiscovery.Discover(
+        foreach (AuthoringContract contract in AuthoringContractDiscovery.Discover(
             context.Compilation,
             manifests,
-            context.ReportDiagnostic);
+            context.ReportDiagnostic))
+        {
+            foreach (Diagnostic diagnostic in KotlinImplementationEmitter
+                         .Emit(contract)
+                         .Diagnostics)
+                context.ReportDiagnostic(diagnostic);
+        }
     }
 }
