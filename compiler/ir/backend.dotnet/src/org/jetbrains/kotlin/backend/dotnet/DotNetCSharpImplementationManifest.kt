@@ -18,6 +18,7 @@ import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
+import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.types.Variance
 import java.security.MessageDigest
 import java.util.Base64
@@ -176,7 +177,7 @@ object DotNetCSharpImplementationManifestCodec {
             manifest.logicalIdentityScheme,
         )
         for (contract in manifest.interfaces.sortedBy(DotNetCSharpInterfaceContract::logicalKey)) {
-            requirePublicLogicalKey("C", contract.logicalKey, "interface")
+            requireKotlinLogicalKey("C", contract.logicalKey, "interface")
             appendRecord(
                 INTERFACE_RECORD,
                 contract.logicalKey,
@@ -190,7 +191,7 @@ object DotNetCSharpImplementationManifestCodec {
                 contract.unsupportedReasons.encodeList(),
             )
             for (member in contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey)) {
-                requirePublicLogicalKey("F", member.logicalKey, "member")
+                requireKotlinLogicalKey("F", member.logicalKey, "member")
                 appendRecord(
                     MEMBER_RECORD,
                     contract.logicalKey,
@@ -223,7 +224,7 @@ object DotNetCSharpImplementationManifestCodec {
                     "C# implementation intersection '${intersection.logicalKey}' has no physical identity"
                 }
                 intersection.contributingLogicalMemberKeys.forEach { contributor ->
-                    requirePublicLogicalKey("F", contributor, "intersection contributor")
+                    requireKotlinLogicalKey("F", contributor, "intersection contributor")
                 }
                 appendRecord(
                     INTERSECTION_RECORD,
@@ -304,7 +305,7 @@ object DotNetCSharpImplementationManifestCodec {
             val fields = record.second
             require(fields.size == 7) { "C# implementation interface record has invalid arity" }
             val logicalKey = requireNotNull(fields[0]) { "C# implementation interface has no logical key" }
-            requirePublicLogicalKey("C", logicalKey, "interface")
+            requireKotlinLogicalKey("C", logicalKey, "interface")
             val parameters = requireNotNull(fields[4]).decodeList().map { encodedParameter ->
                 val components = encodedParameter.split(TYPE_PARAMETER_SEPARATOR)
                 require(components.size == 2) {
@@ -339,7 +340,7 @@ object DotNetCSharpImplementationManifestCodec {
             val fields = record.second
             require(fields.size == 10) { "C# implementation member record has invalid arity" }
             val memberKey = requireNotNull(fields[1]) { "C# implementation member has no logical key" }
-            requirePublicLogicalKey("F", memberKey, "member")
+            requireKotlinLogicalKey("F", memberKey, "member")
             val wrongShapePolicy = fields[7]?.let { checkedParameterCount ->
                 DotNetCSharpWrongShapePolicy(
                     checkedParameterCount = checkedParameterCount.toInt(),
@@ -441,7 +442,7 @@ object DotNetCSharpImplementationManifestCodec {
                 "C# implementation intersection '$intersectionKey' has invalid contributors"
             }
             contributors.forEach { contributor ->
-                requirePublicLogicalKey("F", contributor, "intersection contributor")
+                requireKotlinLogicalKey("F", contributor, "intersection contributor")
             }
             val pending = PendingIntersection(
                 interfaceKey = requireNotNull(fields[0]) {
@@ -708,9 +709,9 @@ object DotNetCSharpImplementationManifestCodec {
         }
     }
 
-    private fun requirePublicLogicalKey(expectedKind: String, key: String, recordKind: String) {
+    private fun requireKotlinLogicalKey(expectedKind: String, key: String, recordKind: String) {
         require(key.startsWith("$expectedKind:") && key.length > expectedKind.length + 1) {
-            "C# implementation $recordKind '$key' is not a Kotlin public declaration identity"
+            "C# implementation $recordKind '$key' is not a Kotlin declaration identity"
         }
     }
 
@@ -772,6 +773,20 @@ internal fun collectDotNetCSharpImplementationManifest(
     genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
     wrongShapePolicies: Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy>,
 ): DotNetCSharpImplementationManifest {
+    fun IrClass.isCSharpSourceAuthorableInterface(): Boolean {
+        if (!isInterface || fileOrNull !in files || this !in preLoweringDeclarationKeys) return false
+        var owner: IrClass? = this
+        while (owner != null) {
+            when (owner.visibility) {
+                DescriptorVisibilities.PUBLIC -> {}
+                DescriptorVisibilities.INTERNAL -> if (owner.isPublishedApi()) return false
+                else -> return false
+            }
+            owner = owner.parent as? IrClass
+        }
+        return true
+    }
+
     fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
         val property = correspondingPropertySymbol?.owner ?: return DotNetCSharpMemberKind.METHOD
         return if (property.getter == this) {
@@ -801,17 +816,12 @@ internal fun collectDotNetCSharpImplementationManifest(
 
     val interfaces = availableClasses.keys
         .asSequence()
-        .filter { irClass ->
-            irClass.isInterface &&
-                    irClass.fileOrNull in files &&
-                    irClass.visibility == DescriptorVisibilities.PUBLIC &&
-                    preLoweringDeclarationKeys.containsKey(irClass)
-        }
+        .filter(IrClass::isCSharpSourceAuthorableInterface)
         .map { irClass ->
             val interfaceInfo = genericInterfaces[irClass]
             val canonicalClassInfo = availableClasses.getValue(irClass)
             val interfaceKey = checkNotNull(preLoweringDeclarationKeys[irClass]) {
-                "Public interface has no pre-lowering logical key"
+                "Source-authorable interface has no pre-lowering logical key"
             }
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes()
             val unsupportedReasons = buildList {
