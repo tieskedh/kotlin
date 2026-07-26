@@ -127,6 +127,10 @@ object DotNetBackend {
         }
 
         val context = DotNetBackendContext(irBuiltIns, configuration, symbolTable, irModuleFragment)
+        val cSharpWrongShapePolicies = collectDotNetCSharpWrongShapePolicies(
+            context,
+            preLoweringDeclarationKeys.keys,
+        )
         try {
             configuration.perfManager.tryMeasurePhaseTime(PhaseType.IrLowering) {
                 DotNetLoweringPhases.lower(irModuleFragment, context)
@@ -162,6 +166,7 @@ object DotNetBackend {
                 covariantReturnBridges = context.covariantReturnBridges,
                 companionInitializations = context.companionInitializations,
                 objectInstanceFields = context.objectInstanceFields,
+                cSharpWrongShapePolicies = cSharpWrongShapePolicies,
                 cSharpImplementationManifestTarget = target,
             ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
@@ -220,6 +225,7 @@ object DotNetBackend {
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,
             covariantReturnBridges = context.covariantReturnBridges,
             interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
+            cSharpWrongShapePolicies = cSharpWrongShapePolicies,
             cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
         )
         val emission = emitter.emit(irModuleFragment)
