@@ -102,14 +102,9 @@ internal enum class DotNetCoreLibraryProfile(
 
     /** Emits one standard AssemblyMetadataAttribute with two UTF-8 string arguments. */
     fun appendAssemblyMetadataAttributeTo(builder: StringBuilder, key: String, value: String) {
-        fun serializedString(text: String): List<Int> {
-            val bytes = text.toByteArray(Charsets.UTF_8)
-            require(bytes.size < 0x80) { "assembly metadata text is too long for the one-byte blob encoding" }
-            return listOf(bytes.size) + bytes.map { it.toInt() and 0xff }
-        }
         val blob = (listOf(0x01, 0x00) +
-                serializedString(key) +
-                serializedString(value) +
+                serializedCustomAttributeString(key) +
+                serializedCustomAttributeString(value) +
                 listOf(0x00, 0x00))
             .joinToString(" ") { byte -> byte.toString(16).padStart(2, '0') }
         builder.appendLine(

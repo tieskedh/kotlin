@@ -7,6 +7,14 @@ package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetCompanionInitialization
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifest
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceView
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberContract
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -34,10 +42,12 @@ import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.util.Base64
 import java.util.Properties
 import java.util.zip.ZipFile
 
@@ -150,6 +160,250 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DotNetLibraryAbiCodec.encodeFriendAssemblies(friendIdentities)
             ),
         )
+    }
+
+    @Test
+    fun testDllManifestGeneratesCSharpImplementorsWithoutKlib() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val readerDirectory = File(tmpdir, "csharp-implementation-manifest-reader").apply { mkdirs() }
+        val bootstrapSource = readerDirectory.resolve("bootstrap.kt").apply { writeText("fun main() {}") }
+        compileInProcess(
+            K2DotNetCompiler(),
+            bootstrapSource.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "ManifestReaderBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            readerDirectory.resolve("ManifestReaderBootstrap.dll").path,
+        )
+        val runtimeAssembly = readerDirectory.resolve("Kotlin.Runtime.dll")
+        assertTrue(runtimeAssembly.isFile)
+
+        val readerSource = readerDirectory.resolve("reader.cs").apply {
+            writeText(
+                """
+                using System;
+                using System.Reflection;
+                using System.Text;
+
+                public static class Program
+                {
+                    public static int Main(string[] args)
+                    {
+                        Assembly assembly = Assembly.LoadFrom(args[0]);
+                        foreach (CustomAttributeData attribute in assembly.GetCustomAttributesData())
+                        {
+                            if (attribute.AttributeType.FullName !=
+                                "System.Reflection.AssemblyMetadataAttribute")
+                                continue;
+                            string key = (string)attribute.ConstructorArguments[0].Value;
+                            if (!key.StartsWith(
+                                    "${DotNetCSharpImplementationManifestCodec.ASSEMBLY_METADATA_KEY}",
+                                    StringComparison.Ordinal))
+                                continue;
+                            string value = (string)attribute.ConstructorArguments[1].Value;
+                            Console.WriteLine(
+                                Convert.ToBase64String(Encoding.UTF8.GetBytes(key)) + "|" +
+                                Convert.ToBase64String(Encoding.UTF8.GetBytes(value)));
+                        }
+                        return 0;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val readerAssembly = readerDirectory.resolve("ManifestReader.dll")
+        val readerCompile = runModernCSharpCompiler(
+            modernCSharp,
+            readerSource,
+            readerAssembly,
+            target = "exe",
+        )
+        assertEquals(0, readerCompile.exitCode, readerCompile.output)
+        readerDirectory.resolve("ManifestReader.runtimeconfig.json").writeText(net10RuntimeConfig())
+
+        val sourceText = """
+            package manifest
+
+            public interface Shape<out T> {
+                public val value: T
+                public fun <R> map(input: R): T
+                public fun accepts(input: @UnsafeVariance T): Boolean
+                public fun fallback(): T = value
+            }
+
+            public fun verify(value: Shape<String>): Int {
+                if (value.value != "typed") return 1
+                if (value.map(42) != "typed") return 2
+                if (!value.accepts("typed")) return 3
+                if (value.fallback() != "typed") return 4
+                val wide: Shape<Any?> = value
+                if (wide.value != "typed" || wide.map("wide") != "typed") return 5
+                if (wide.fallback() != "typed") return 6
+                try {
+                    wide.accepts(42)
+                    return 7
+                } catch (_: ClassCastException) {
+                    return 0
+                }
+            }
+        """.trimIndent()
+
+        val manifests = linkedMapOf<String, DotNetCSharpImplementationManifest>()
+        for (targetProfile in listOf("net48", "netstandard2.0", "net10.0")) {
+            val profileDirectory = File(tmpdir, "csharp-implementation-$targetProfile").apply { mkdirs() }
+            val source = profileDirectory.resolve("api.kt").apply { writeText(sourceText) }
+            val moduleName = if (targetProfile == "net10.0") {
+                "Manifest.Modern"
+            } else {
+                "Manifest.Portable"
+            }
+            compileInProcess(
+                K2DotNetCompiler(),
+                source.path,
+                K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
+                K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
+            )
+            val producerAssembly = profileDirectory.resolve("$moduleName.dll")
+            val producerKlib = profileDirectory.resolve("$moduleName.klib")
+            assertTrue(producerAssembly.isFile && producerKlib.isFile)
+            assertTrue(producerKlib.delete()) { "The no-KLIB manifest test could not remove $producerKlib" }
+
+            val manifest = readCSharpImplementationManifestFromDll(
+                modernCSharp,
+                readerAssembly,
+                readerDirectory,
+                producerAssembly,
+            )
+            assertEquals(moduleName, manifest.assemblyName)
+            assertEquals(targetProfile, manifest.targetProfile)
+            manifests[targetProfile] = manifest
+
+            val contract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.Shape"
+            }
+            assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
+            assertEquals(listOf("T"), contract.typeParameters.map { it.name })
+            assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
+            assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
+
+            val stdlibAssembly = profileDirectory.resolve("Kotlin.Stdlib.dll")
+            if (stdlibAssembly.isFile) {
+                val stdlibManifest = readCSharpImplementationManifestFromDll(
+                    modernCSharp,
+                    readerAssembly,
+                    readerDirectory,
+                    stdlibAssembly,
+                )
+                assertTrue(stdlibManifest.interfaces.none { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.lastOrNull() == "manifest.Shape"
+                })
+            }
+
+            val value = contract.members.single { member ->
+                member.sourceName == "value" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+            }
+            val map = contract.members.single { member -> member.sourceName == "map" }
+            val accepts = contract.members.single { member -> member.sourceName == "accepts" }
+            val fallback = contract.members.single { member -> member.sourceName == "fallback" }
+            assertEquals(DotNetCSharpInterfaceView.DECLARED, value.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.DECLARED, map.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.EXACT, accepts.authoringView)
+            assertEquals(1, map.slots.single { it.role == DotNetCSharpSlotRole.DECLARED }.genericArity)
+            assertEquals(
+                listOf(DotNetCSharpSlotRole.ERASED, DotNetCSharpSlotRole.EXACT),
+                accepts.slots.map { it.role }.sorted(),
+            )
+            val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
+            assertEquals("__KotlinDefaultImpls", helper.ownerPath.last())
+            if (targetProfile == "net10.0") {
+                assertEquals(DotNetCSharpDefaultKind.DIM_WITH_HELPER, fallback.defaultKind)
+                assertEquals(DotNetCSharpInterfaceView.DECLARED, fallback.semanticBodyView)
+            } else {
+                assertEquals(DotNetCSharpDefaultKind.PORTABLE_HELPER, fallback.defaultKind)
+                assertEquals(null, fallback.semanticBodyView)
+            }
+
+            val generatedSource = profileDirectory.resolve("generated.cs").apply {
+                writeText(generateShapeImplementation(contract))
+            }
+            val generatedAssembly = profileDirectory.resolve("GeneratedShape.dll")
+            val generatedCompile = runModernCSharpCompiler(
+                modernCSharp,
+                generatedSource,
+                generatedAssembly,
+                producerAssembly,
+                runtimeAssembly,
+                target = "exe",
+            )
+            assertEquals(0, generatedCompile.exitCode, generatedCompile.output)
+            runtimeAssembly.copyTo(profileDirectory.resolve(runtimeAssembly.name), overwrite = true)
+            profileDirectory.resolve("GeneratedShape.runtimeconfig.json").writeText(net10RuntimeConfig())
+            runDotNet(
+                modernCSharp.dotNetHost,
+                generatedAssembly,
+                profileDirectory,
+                "Manifest-generated C# implementation failed for $targetProfile",
+            )
+        }
+
+        val modern = manifests.getValue("net10.0")
+        for (portableProfile in listOf("net48", "netstandard2.0")) {
+            val portable = manifests.getValue(portableProfile)
+            assertEquals(
+                portable.interfaces.single().members.map { it.logicalKey },
+                modern.interfaces.single().members.map { it.logicalKey },
+            )
+            assertEquals(
+                portable.interfaces.single().members.mapNotNull { member ->
+                    member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
+                },
+                modern.interfaces.single().members.mapNotNull { member ->
+                    member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
+                },
+            )
+        }
+    }
+
+    @Test
+    fun testCSharpImplementationManifestCarrierRejectsCorruption() {
+        val manifest = DotNetCSharpImplementationManifest(
+            schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
+            assemblyName = "Manifest.Empty",
+            targetProfile = "netstandard2.0",
+            interfaces = emptyList(),
+        )
+        val metadata = DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(manifest)
+        assertEquals(
+            manifest,
+            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata),
+        )
+        val missingChunk = metadata.filterNot { entry ->
+            entry.first.endsWith(".0000")
+        }
+        assertThrows(IllegalStateException::class.java) {
+            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(missingChunk)
+        }
+        val corruptChunk = metadata.map { entry ->
+            if (entry.first.endsWith(".0000")) {
+                entry.first to entry.second.replaceRange(0, 1, if (entry.second[0] == 'A') "B" else "A")
+            } else {
+                entry
+            }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(corruptChunk)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata + metadata.last())
+        }
     }
 
     @Test
@@ -8375,6 +8629,138 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     private data class CSharpCompilerResult(val exitCode: Int, val output: String)
+
+    private fun readCSharpImplementationManifestFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): DotNetCSharpImplementationManifest {
+        val process = ProcessBuilder(
+            toolchain.dotNetHost.path,
+            "exec",
+            readerAssembly.path,
+            producerAssembly.absolutePath,
+        )
+            .directory(readerDirectory)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), "Could not read manifest from $producerAssembly:\n$output")
+        val metadata = output.lineSequence()
+            .filter(String::isNotBlank)
+            .map { line ->
+                val separator = line.indexOf('|')
+                require(separator > 0) { "Invalid manifest-reader output: $line" }
+                val key = Base64.getDecoder().decode(line.substring(0, separator)).toString(Charsets.UTF_8)
+                val value = Base64.getDecoder().decode(line.substring(separator + 1)).toString(Charsets.UTF_8)
+                key to value
+            }
+            .toList()
+        return DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata)
+    }
+
+    private fun generateShapeImplementation(contract: DotNetCSharpInterfaceContract): String {
+        fun member(name: String, kind: DotNetCSharpMemberKind? = null): DotNetCSharpMemberContract =
+            contract.members.single { candidate ->
+                candidate.sourceName == name && (kind == null || candidate.kind == kind)
+            }
+
+        fun DotNetCSharpInterfaceContract.csharpOwner(path: List<String>): String =
+            path.joinToString(".") { component -> component.substringBefore('`') }
+
+        val canonicalType = contract.csharpOwner(contract.canonicalOwnerPath)
+        val exactType = contract.csharpOwner(checkNotNull(contract.exactOwnerPath))
+        val value = member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
+        val map = member("map")
+        val accepts = member("accepts")
+        val fallback = member("fallback")
+        val canonicalValue = value.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val canonicalMap = map.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val canonicalAccepts = accepts.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val canonicalFallback = fallback.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val portableDefault = fallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER
+        val generatedTypedDefault = if (portableDefault) {
+            val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
+            require(helper.genericArity == contract.typeParameters.size)
+            val helperOwner = contract.csharpOwner(helper.ownerPath)
+            """
+                public string ${fallback.sourceName}()
+                {
+                    return $helperOwner.${helper.methodName}<string>(this);
+                }
+            """.trimIndent()
+        } else {
+            ""
+        }
+        val generatedCanonicalDefault = if (portableDefault) {
+            """
+                public object ${canonicalFallback.methodName}()
+                {
+                    return ${fallback.sourceName}();
+                }
+            """.trimIndent()
+        } else {
+            ""
+        }
+        return """
+            public sealed partial class GeneratedShape
+            {
+                public string value { get { return "typed"; } }
+
+                public string map<R>(R input) { return value; }
+
+                public bool accepts(string input) { return input == value; }
+            }
+
+            public sealed partial class GeneratedShape : $exactType<string>
+            {
+                $generatedTypedDefault
+
+                object $canonicalType.${checkNotNull(canonicalValue.propertyName)}
+                {
+                    get { return value; }
+                }
+
+                public object ${canonicalMap.methodName}<R>(R input)
+                {
+                    return map(input);
+                }
+
+                public bool ${canonicalAccepts.methodName}(object input)
+                {
+                    return accepts((string)input);
+                }
+
+                $generatedCanonicalDefault
+            }
+
+            public static class Program
+            {
+                public static int Main()
+                {
+                    int result = manifest.apiKt.verify(new GeneratedShape());
+                    if (result != 0)
+                        throw new System.Exception("Kotlin verification failed: " + result);
+                    return 0;
+                }
+            }
+        """.trimIndent()
+    }
+
+    private fun net10RuntimeConfig(): String =
+        """
+        {
+          "runtimeOptions": {
+            "tfm": "net10.0",
+            "framework": {
+              "name": "Microsoft.NETCore.App",
+              "version": "10.0.0"
+            },
+            "rollForward": "LatestMinor"
+          }
+        }
+        """.trimIndent()
 
     private fun runCSharpCompiler(
         compiler: File,

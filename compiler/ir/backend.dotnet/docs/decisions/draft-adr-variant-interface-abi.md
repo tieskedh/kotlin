@@ -136,8 +136,10 @@ cast failure instead of receiving the collection barrier. Kotlin catches that or
 covariant property, a method-generic operation, and an exact-only unsafe input. Its source-named
 typed members and explicitly implemented canonical property/methods execute through both typed and
 widened Kotlin views. This validates the current public view spelling, same-object contract,
-property shape, generic-method forwarding, and barrier distinction; generated C# adapters/analyzers
-and the broader foreign-implementor matrix remain pending.
+property shape, generic-method forwarding, and barrier distinction. The accepted
+[`adr-csharp-interface-source-authoring.md`](adr-csharp-interface-source-authoring.md) now owns the
+generated partial-type path. Its first DLL-only manifest slice covers this direct shape; the
+Roslyn generator/analyzer and broader foreign-implementor matrix remain pending.
 
 Library publication also now fails on nine independently replayed physical collisions: a
 property accessor and user method mapping to the same declared-view slot, the corresponding clash
@@ -723,9 +725,10 @@ required. A C# class may:
 
 When it implements several views, its typed/exact methods and canonical methods must implement one
 logical behavior. Generated Kotlin implementations enforce this by forwarding all physical slots
-to one source body. C# tooling should eventually offer a generated base/adapter or an analyzer to
-make the rule easy to satisfy; until then, inconsistent results are a foreign contract breach in
-the same sense as an ordinary C# implementation violating any Kotlin interface invariant.
+to one source body. The accepted C# source-authoring ADR selects a Roslyn partial-type generator
+and analyzer, backed by a versioned DLL manifest, to make the rule easy to satisfy. This is not a
+universal CLR implementation mechanism: precompiled, non-partial, and non-C# types remain manual
+physical-contract implementors.
 
 Default-body placement is owned by the accepted
 [`adr-profile-aware-interface-default-implementations.md`](adr-profile-aware-interface-default-implementations.md).
