@@ -1605,7 +1605,9 @@ landed shape as a compatibility constraint.
   shared-root diamond whose logical root is deduplicated. Schema 2 associates a physical derived
   declared/exact intersection slot with its sorted contributing logical members because CLR
   metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
-  canonical identities on one source body. Non-generic parents remain explicitly unsupported.
+  canonical identities on one source body. Split mutable intersections record the declared getter
+  and exact getter/setter; the exact accessors name the same getter-selected CLR Property row.
+  Non-generic parents remain explicitly unsupported.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
