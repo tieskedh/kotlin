@@ -1633,8 +1633,10 @@ landed shape as a compatibility constraint.
   adapters inherit the selected DIM. Never generate independent parent-helper semantics. Roslyn
   validates each edge against physical interface ancestry and the resolved override-compatible
   signature; a stale or unrelated edge is `KDNCS006`. Unrelated C#-authored roots without a Kotlin
-  resolver require one C# source body instead of an invented parent preference. The DLL-only
-  matrix executes public and authorized-internal
+  resolver require one C# source body instead of an invented parent preference. Covariant generic
+  conflict coverage additionally runs child, both typed parents, and a widened parent through the
+  selected child helper/DIM; the rejected parent helper is never generated. The DLL-only matrix
+  executes public and authorized-internal
   implementations through Kotlin on every profile. Split generic authoring names only the
   declared interface;
   generated partials add the exact view with the identical closed or open substitution and adapt
