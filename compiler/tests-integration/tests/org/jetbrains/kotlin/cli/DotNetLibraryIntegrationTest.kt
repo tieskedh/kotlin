@@ -3054,6 +3054,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("KDNCS011" in missingContainingPartial.output) {
             missingContainingPartial.output
         }
+        assertTrue("AD0001" !in missingContainingPartial.output) {
+            missingContainingPartial.output
+        }
 
         val valueTypeImplementor = compileDiagnostic(
             "ValueTypeImplementor",
