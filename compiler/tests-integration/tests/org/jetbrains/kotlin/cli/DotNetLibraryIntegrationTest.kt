@@ -1532,10 +1532,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     """
                     public sealed partial class BaseListProbe : manifest.OrdinaryShape
                     {
-                        public string displayName { get { return "ordinary"; } }
-                        public int count { get; set; }
-                        public string format(string prefix) { return prefix + displayName; }
-                        public string fallbackName() { return displayName; }
+                        public string DisplayName { get { return "ordinary"; } }
+                        public int Count { get; set; } = 3;
+                        public string Format(string prefix) { return prefix + DisplayName; }
+                    }
+
+                    internal sealed partial class FriendBaseListProbe : manifest.FriendShape
+                    {
+                        internal int Code { get { return 41; } }
+                    }
+
+                    public static class BaseListProgram
+                    {
+                        public static int Main()
+                        {
+                            int result = manifest.apiKt.verifyOrdinary(new BaseListProbe());
+                            if (result != 0)
+                                throw new System.Exception(
+                                    "Generated base-list implementation failed: " + result);
+                            int friendResult =
+                                manifest.apiKt.verifyFriend(new FriendBaseListProbe());
+                            if (friendResult != 0)
+                                throw new System.Exception(
+                                    "Generated friend implementation failed: " + friendResult);
+                            return 0;
+                        }
                     }
                     """.trimIndent()
                 )
@@ -1550,20 +1571,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val baseListCompile = runModernCSharpCompiler(
                 modernCSharp,
                 baseListProbe,
-                profileDirectory.resolve("BaseListProbe.dll"),
+                profileDirectory.resolve("GeneratedShape.dll"),
                 *baseListCompileReferences.toTypedArray(),
+                target = "exe",
                 analyzers = listOf(csharpAuthoringTooling),
                 generatedFilesDirectory = generatedFiles,
             )
             assertEquals(0, baseListCompile.exitCode, baseListCompile.output)
-            assertTrue(
-                generatedFiles.walkTopDown().any { file ->
-                    file.isFile &&
-                            file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
-                }
-            ) {
+            val generatedAuthoringSources = generatedFiles.walkTopDown().filter { file ->
+                file.isFile &&
+                        file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+            }.toList()
+            assertTrue(generatedAuthoringSources.isNotEmpty()) {
                 "The production Kotlin C# generator did not recognize a real Kotlin base list"
             }
+            val generatedAuthoringText =
+                generatedAuthoringSources.joinToString("\n", transform = File::readText)
+            assertTrue("this.DisplayName" in generatedAuthoringText) {
+                generatedAuthoringText
+            }
+            assertTrue("this.Count" in generatedAuthoringText) {
+                generatedAuthoringText
+            }
+            assertTrue("this.Format" in generatedAuthoringText) {
+                generatedAuthoringText
+            }
+            val shouldForwardPortableDefault =
+                targetProfile != "net10.0"
+            assertEquals(
+                shouldForwardPortableDefault,
+                "__KotlinDefaultImpls" in generatedAuthoringText,
+                generatedAuthoringText,
+            )
+            profileDirectory.resolve("GeneratedShape.runtimeconfig.json")
+                .writeText(net10RuntimeConfig())
+            runDotNet(
+                modernCSharp.dotNetHost,
+                profileDirectory.resolve("GeneratedShape.dll"),
+                profileDirectory,
+                "Production base-list C# implementation failed for ${scenario.name}",
+            )
         }
 
         val modern = contractsByProfile.getValue("net10.0")
@@ -1698,6 +1745,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ),
                     intersections = emptyList(),
                 ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/Ordinary",
+                    canonicalOwnerPath = listOf("diagnostics.Ordinary"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/Ordinary.compute",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.Ordinary"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = listOf("int32"),
+                                )
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
             ),
         )
         val assemblyMetadata = DotNetCSharpImplementationManifestCodec
@@ -1725,6 +1804,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     internal interface Friend
                     {
                         int code { get; }
+                    }
+
+                    public interface Ordinary
+                    {
+                        int Compute(int value);
                     }
                 }
                 """.trimIndent()
@@ -1829,6 +1913,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(unsupportedSubstitution.exitCode != 0)
         assertTrue("KDNCS004" in unsupportedSubstitution.output) {
             unsupportedSubstitution.output
+        }
+
+        val missingSourceMember = compileDiagnostic(
+            "MissingSourceMember",
+            """
+            public sealed partial class MissingSourceMember : diagnostics.Ordinary
+            {
+            }
+            """.trimIndent(),
+        )
+        assertTrue(missingSourceMember.exitCode != 0)
+        assertTrue("KDNCS008" in missingSourceMember.output) {
+            missingSourceMember.output
         }
 
         val staleSource = directory.resolve("stale.cs").apply {
