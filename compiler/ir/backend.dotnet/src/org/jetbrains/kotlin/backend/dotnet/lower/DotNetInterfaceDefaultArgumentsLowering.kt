@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetExternalLibraries
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceCanonicalSlotId
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberViews
 import org.jetbrains.kotlin.backend.dotnet.dotNetGenericInterfaceMemberView
+import org.jetbrains.kotlin.backend.dotnet.dotNetIlMethodName
 import org.jetbrains.kotlin.backend.dotnet.dotNetTarget
 import org.jetbrains.kotlin.backend.dotnet.isDotNetGenericInterfaceDeclaration
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -404,7 +405,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
         origin: IrDeclarationOrigin,
     ): IrSimpleFunction = context.irFactory.createStaticFunctionWithReceivers(
         irParent = helper,
-        name = source.name,
+        name = source.dotNetInterfaceDefaultHelperName(),
         oldFunction = source,
         dispatchReceiverType = owner.symbol.defaultType,
         origin = origin,
@@ -426,6 +427,13 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             .forEach { pair ->
                 pair.second.origin = DOTNET_ERASED_OWNER_RELATIONAL_CONSTRAINT_TYPE_PARAMETER
             }
+    }
+
+    private fun IrSimpleFunction.dotNetInterfaceDefaultHelperName(): Name {
+        if (correspondingPropertySymbol == null) return name
+        return Name.identifier(
+            "${dotNetIlMethodName()}__KotlinDefault__${dotNetGenericInterfaceCanonicalSlotId()}"
+        )
     }
 
     private fun remapHelperBodyTypes(

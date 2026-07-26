@@ -1741,6 +1741,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   execute through the derived and both parent Kotlin views on all four lanes. Intersection
   `R : T` guidance is diagnosed and never reconstructed as a C# constraint. The handwritten
   fixture remains an independent manifest-sufficiency oracle rather than the production emitter.
+- Interface-default property helpers now use physical-name grammar 3:
+  `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
+  renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
+  This removes the unnameable Kotlin IR `<get-...>`/`<set-...>` spelling from the C# authoring
+  path without adding a second identity namespace. The manifest remains the authority for the
+  physical locator. The DLL-only matrix now resolves two competing default getters and executes
+  child, left-parent, and right-parent Kotlin property views on all four lanes. Portable generated
+  properties call only the Kotlin-selected child helper. On net10, Roslyn still requires explicit
+  inherited parent Property implementations even though the child DIM has MethodImpl mappings;
+  generated adapters satisfy that C# source check by dispatching virtually through the selected
+  child DIM, never through the compatibility helper or a copied body. The fresh strict gate is
+  848/0/0/0 across 16 XML suites.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1791,7 +1803,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 847 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 848 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.

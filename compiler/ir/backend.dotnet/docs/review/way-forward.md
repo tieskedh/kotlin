@@ -623,7 +623,7 @@ no false owner context. This closes the previously crashing cross-module generic
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
 whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 44
-library-integration tests; the current audited result is 845/0/0/0 across 16 JUnit XML suites with
+library-integration tests; the current audited result is 848/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -654,6 +654,16 @@ retains its original slot, and an explicit `MethodImpl` maps that body to a diff
 non-generic interface slot. This closes method-overload
 disambiguation; exception returns/properties, constructor collisions, narrow export admission, and
 remaining generic boundary shapes stay open.
+
+Physical-name grammar version 3 retains that exception-signature rule and additionally gives
+interface-default property helpers a C#-expressible
+`get_/set_...__KotlinDefault__<logical-identity-digest>` name. The public Property row and ordinary
+CLR accessors do not change. The producer records the helper locator; neither the compiler
+consumer nor Roslyn tooling derives it. A four-lane DLL-only conflict test selects one Kotlin
+default getter. Portable parent adapters call only the selected child helper; modern parent
+Property adapters dispatch virtually through the selected child DIM because Roslyn's C# base-list
+validation does not treat the interface-owned getter MethodImpl as satisfying those source-level
+parent Property obligations.
 
 A second portable exception-signature lane now returns each broad logical category, stores and
 mutates all four through public properties, and returns a nested generic runtime-exception value.
