@@ -75,6 +75,15 @@ For `net10.0`, generated C# types inherit an effective DIM and omit redundant me
 retained helper remains recorded for qualified-super compatibility and exact body selection, but
 ordinary generated calls and implementations preserve virtual dispatch.
 
+An inherited portable declaration remains recorded as helper-backed in its own DLL. When a
+`net10.0` child promotes that declaration into a selected DIM, the child DLL's ordinary CLR
+interface graph and `MethodImpl` rows are authoritative for the promotion. Tooling resolves the
+parent manifest's MethodDef locators, then requires a complete concrete mapping from the child's
+physical interface views before treating the DIM as effective. The manifest does not duplicate
+those physical mappings, and tooling never infers promotion merely from the consumer profile.
+Missing, incomplete, or ambiguous mappings are diagnostics rather than a reason to guess or emit
+an overriding helper forwarder.
+
 The helper type and method are marked compiler ABI and deliberately nameable from generated C#
 source. Tools consume their recorded physical identity; they do not derive a helper name from the
 interface.
@@ -172,8 +181,10 @@ One Kotlin generic parent is composed from its own manifest contract and the ord
 interface edge, whether the parent is in the same DLL or a referenced compiler-produced Kotlin
 library DLL. This covers a parent-owned mutable property and helper/DIM default through a child
 exact view without duplicating the local or assembly-qualified physical TypeSpec in the manifest.
-The cross-assembly test deletes both KLIBs before reading the two DLL contracts. Multiple parents,
-cross-profile promotion from a portable helper to a child-owned DIM, and non-generic parents are
+The cross-assembly test deletes both KLIBs before reading the two DLL contracts. It also compiles a
+`netstandard2.0` parent into a `net10.0` child, reads the child promotion directly from ECMA-335
+`MethodImpl` metadata, omits generated class forwarders only after every parent slot has a concrete
+child mapping, and executes the inherited default. Multiple parents and non-generic parents are
 explicitly unsupported by the first schema slice; they must not be silently generated.
 Runtime-bootstrap interfaces and ordinary non-generic interfaces are not yet source-authoring
 inputs. Friend-accessible internal interfaces are also omitted by the public-only first collector.

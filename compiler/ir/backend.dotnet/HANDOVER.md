@@ -1565,7 +1565,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   reads the two DLL manifests, lists only the child exact interface, and executes parent
   property/default plus child method obligations. The external CLR TypeSpec remains authoritative
   for assembly identity and substitution; the child manifest does not copy it. The parent and
-  child use the same profile in this slice, so portable-helper-to-net10-promotion remains pending.
+  child use the same profile in this slice.
+- Cross-profile single-parent composition now compiles the same parent for `netstandard2.0` and
+  the child for `net10.0`. After both KLIBs are deleted, a C# metadata reader resolves the portable
+  parent slots against the child's standard ECMA-335 MethodImpl rows and requires the complete
+  concrete promotion bundle. The generated class then omits both typed and erased helper
+  forwarders and Kotlin execution reaches the child-owned DIM. No schema record or version change
+  is needed: the manifest owns logical member/view association, while CLR metadata remains
+  authoritative for physical promotion.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1641,13 +1648,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
 ## Task menu (recommended order)
 
 1. **Complete the C# interface-authoring contract.** Extend schema 1 over multi-parent and
-   cross-profile inherited promotion, intersection slots, constraints, inherited mutable-property
-   obligations, special barriers, non-generic interfaces, friend-accessible internal interfaces,
-   and runtime-bootstrap contracts. Then implement the Roslyn partial-type generator/analyzer and
-   move the payload to a true managed resource before freezing the schema or package. Continue the
-   foreign provider/implementor collision matrix in parallel with that contract. Keep raw
-   metadata-table auditing with the structured metadata work; do not substitute IL substring
-   checks.
+   intersection slots, constraints, inherited mutable-property obligations, special barriers,
+   non-generic interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts.
+   Then implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
+   resource before freezing the schema or package. Continue the foreign provider/implementor
+   collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
+   structured metadata work; do not substitute IL substring checks.
 2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
    producer authorization and consumer declaration are implemented. The repository has no
    Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or

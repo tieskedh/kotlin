@@ -1597,9 +1597,11 @@ landed shape as a compatibility constraint.
   views, read-only/mutable property and generic-method associations, exact-only inputs, and
   portable-helper versus `net10.0` DIM obligations. One generic parent from the same DLL or a
   referenced compiler-produced Kotlin library composes through its own manifest contract and the
-  CLR-authored interface TypeSpec; the manifest does not duplicate that physical edge. Multiple
-  parents, cross-profile portable-helper promotion, and non-generic parents remain explicitly
-  unsupported instead of being guessed.
+  CLR-authored interface TypeSpec; the manifest does not duplicate that physical edge. A
+  `net10.0` child consuming a portable parent discovers a selected promoted DIM from the child's
+  concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
+  Promotion is never inferred from profile and is not copied into a second manifest record.
+  Multiple parents and non-generic parents remain explicitly unsupported instead of being guessed.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
