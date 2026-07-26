@@ -65,8 +65,14 @@ internal object DotNetRuntimeLibrary {
         executableOutput,
         target,
         cSharpImplementationManifest,
-    ) { ilFile, output ->
-        DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
+    ) { ilFile, output, managedResources ->
+        DotNetIlAssembler.assembleLibrary(
+            ilFile,
+            output,
+            target,
+            messageCollector,
+            managedResources,
+        )
     }
 
     /**
@@ -82,8 +88,14 @@ internal object DotNetRuntimeLibrary {
         outputDirectory.resolve("runtime-conformance-placeholder"),
         target,
         cSharpImplementationManifest = null,
-    ) { ilFile, output ->
-        DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
+    ) { ilFile, output, managedResources ->
+        DotNetIlAssembler.assembleLibrary(
+            ilFile,
+            output,
+            target,
+            messageCollector,
+            managedResources,
+        )
     }
 
     @TestOnly
@@ -96,8 +108,14 @@ internal object DotNetRuntimeLibrary {
         outputDirectory.resolve("runtime-manifest-conformance-placeholder"),
         target,
         cSharpImplementationManifest,
-    ) { ilFile, output ->
-        DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector)
+    ) { ilFile, output, managedResources ->
+        DotNetIlAssembler.assembleLibrary(
+            ilFile,
+            output,
+            target,
+            messageCollector,
+            managedResources,
+        )
     }
 
     @TestOnly
@@ -110,13 +128,14 @@ internal object DotNetRuntimeLibrary {
         outputDirectory.resolve("runtime-explicit-writer-placeholder"),
         target,
         cSharpImplementationManifest = null,
-    ) { ilFile, output ->
+    ) { ilFile, output, managedResources ->
         DotNetIlAssembler.assembleWithExplicitIlasm(
             ilasm,
             ilFile,
             output,
             dll = true,
             messageCollector = messageCollector,
+            managedResources = managedResources,
         )
     }
 
@@ -124,19 +143,36 @@ internal object DotNetRuntimeLibrary {
         outputAnchor: File,
         target: DotNetTarget,
         cSharpImplementationManifest: DotNetCSharpImplementationManifest?,
-        assemble: (ilFile: File, output: File) -> Boolean,
+        assemble: (ilFile: File, output: File, managedResources: Map<String, ByteArray>) -> Boolean,
     ): File? {
         val outputDirectory = outputAnchor.parentFile ?: File(".")
         outputDirectory.mkdirs()
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
         val ilFile = File.createTempFile("Kotlin.Runtime-", ".il", outputDirectory)
+        val managedResources = cSharpImplementationManifest?.let { manifest ->
+            require(manifest.assemblyName == ASSEMBLY_NAME) {
+                "Kotlin.Runtime C# implementation manifest names '${manifest.assemblyName}'"
+            }
+            require(manifest.targetProfile == target.flagValue) {
+                "Kotlin.Runtime C# implementation manifest targets '${manifest.targetProfile}', " +
+                        "not '${target.flagValue}'"
+            }
+            require(manifest.logicalIdentityScheme == DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME)
+            mapOf(
+                DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
+                        DotNetCSharpImplementationManifestCodec.encodeManagedResource(manifest)
+            )
+        }.orEmpty()
         return try {
             // ILAsm decodes BOM-less input as ANSI; keep the runtime source on the same UTF-8+BOM
             // path as generated program IL even though its current text is ASCII-only.
             ilFile.writeBytes(
-                UTF8_BOM + ilText(target, cSharpImplementationManifest).toByteArray(Charsets.UTF_8)
+                UTF8_BOM + ilText(
+                    target,
+                    hasCSharpImplementationManifest = managedResources.isNotEmpty(),
+                ).toByteArray(Charsets.UTF_8)
             )
-            output.takeIf { assemble(ilFile, output) }
+            output.takeIf { assemble(ilFile, output, managedResources) }
         } finally {
             ilFile.delete()
         }
@@ -144,7 +180,7 @@ internal object DotNetRuntimeLibrary {
 
     private fun ilText(
         target: DotNetTarget,
-        cSharpImplementationManifest: DotNetCSharpImplementationManifest?,
+        hasCSharpImplementationManifest: Boolean,
     ): String {
         val coreLibrary = target.coreLibrary
         val coreLibraryReference = coreLibrary.reference
@@ -162,26 +198,6 @@ internal object DotNetRuntimeLibrary {
                 DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
             )
         }.trimEnd().prependIndent("        ")
-        val cSharpImplementationManifestIl = cSharpImplementationManifest?.let { manifest ->
-            require(manifest.assemblyName == ASSEMBLY_NAME) {
-                "Kotlin.Runtime C# implementation manifest names '${manifest.assemblyName}'"
-            }
-            require(manifest.targetProfile == target.flagValue) {
-                "Kotlin.Runtime C# implementation manifest targets '${manifest.targetProfile}', " +
-                        "not '${target.flagValue}'"
-            }
-            require(manifest.logicalIdentityScheme == DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME)
-            buildString {
-                DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(manifest)
-                    .forEach { entry ->
-                        coreLibrary.appendAssemblyMetadataAttributeTo(
-                            this,
-                            entry.first,
-                            entry.second,
-                        )
-                    }
-            }.trimEnd().prependIndent("        ")
-        }.orEmpty()
         val compilerAbiAttributeTypeIl =
             DotNetCompilerAbi.attributeTypeIl(
                 coreLibraryReference,
@@ -198,9 +214,13 @@ $assemblyReferenceIl
           .ver $ASSEMBLY_VERSION_IL
 $targetFrameworkAttributeIl
 $runtimeSurfaceAttributeIl
-$cSharpImplementationManifestIl
         }
         .module Kotlin.Runtime.dll
+${if (hasCSharpImplementationManifest) """
+        .mresource public ${DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME}
+        {
+        }
+""".trimEnd() else ""}
 
 $compilerAbiAttributeTypeIl
 

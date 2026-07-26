@@ -22,6 +22,10 @@ import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isPublishedApi
 import org.jetbrains.kotlin.types.Variance
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -153,17 +157,10 @@ data class DotNetCSharpMethodLocator(
     val parameterTypes: List<String>,
 )
 
-/**
- * Deterministic versioned codec plus its current assembly-metadata carrier.
- *
- * The record format is carrier-independent. ILAsm cannot put arbitrary bytes in the managed
- * resource section, so the prototype stores a base64 payload in indexed
- * `AssemblyMetadataAttribute` chunks. The ABI design requires a true managed resource once the
- * backend owns a capable PE writer; changing carriers must not change these records.
- */
+/** Deterministic versioned records and their self-contained managed-resource carrier. */
 object DotNetCSharpImplementationManifestCodec {
     const val CURRENT_SCHEMA_VERSION = 7
-    const val ASSEMBLY_METADATA_KEY = "Kotlin.CSharpImplementationManifest"
+    const val MANAGED_RESOURCE_NAME = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
     private const val INTERFACE_RECORD = "I"
@@ -172,9 +169,11 @@ object DotNetCSharpImplementationManifestCodec {
     private const val INTERSECTION_RECORD = "X"
     private const val INTERSECTION_SLOT_RECORD = "Y"
     private const val NULL_FIELD = "~"
-    private const val CHUNK_CHARACTER_COUNT = 12_000
     private const val LIST_SEPARATOR = "\u0000"
     private const val TYPE_PARAMETER_SEPARATOR = "\u0001"
+    private const val MANAGED_RESOURCE_HEADER_SIZE = 48
+    private const val MAXIMUM_MANAGED_RESOURCE_PAYLOAD_BYTES = 4 * 1_024 * 1_024
+    private val MANAGED_RESOURCE_MAGIC = "KDNCSM01".toByteArray(Charsets.US_ASCII)
 
     fun encode(manifest: DotNetCSharpImplementationManifest): String = buildString {
         require(manifest.schemaVersion == CURRENT_SCHEMA_VERSION) {
@@ -650,72 +649,61 @@ object DotNetCSharpImplementationManifestCodec {
         )
     }
 
-    fun encodeAssemblyMetadata(
-        manifest: DotNetCSharpImplementationManifest,
-    ): List<Pair<String, String>> {
-        val bytes = encode(manifest).toByteArray(Charsets.UTF_8)
-        val payload = Base64.getEncoder().encodeToString(bytes)
-        val chunks = payload.chunked(CHUNK_CHARACTER_COUNT)
-        val marker = listOf(
-            manifest.schemaVersion.toString(),
-            chunks.size.toString(),
-            bytes.sha256Hex(),
-        ).joinToString(":")
-        return buildList {
-            add(ASSEMBLY_METADATA_KEY to marker)
-            chunks.forEachIndexed { index, chunk ->
-                add("$ASSEMBLY_METADATA_KEY.${index.toString().padStart(4, '0')}" to chunk)
-            }
+    fun encodeManagedResource(manifest: DotNetCSharpImplementationManifest): ByteArray {
+        val payload = encode(manifest).toByteArray(Charsets.UTF_8)
+        require(payload.size <= MAXIMUM_MANAGED_RESOURCE_PAYLOAD_BYTES) {
+            "C# implementation manifest payload exceeds the supported size"
         }
+        return ByteBuffer.allocate(MANAGED_RESOURCE_HEADER_SIZE + payload.size)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .put(MANAGED_RESOURCE_MAGIC)
+            .putInt(manifest.schemaVersion)
+            .putInt(payload.size)
+            .put(payload.sha256())
+            .put(payload)
+            .array()
     }
 
-    fun decodeAssemblyMetadata(
-        metadata: Iterable<Pair<String, String>>,
-    ): DotNetCSharpImplementationManifest {
-        val relevant = metadata.filter { entry ->
-            entry.first == ASSEMBLY_METADATA_KEY ||
-                    entry.first.startsWith("$ASSEMBLY_METADATA_KEY.")
+    fun decodeManagedResource(resource: ByteArray): DotNetCSharpImplementationManifest {
+        require(resource.size >= MANAGED_RESOURCE_HEADER_SIZE) {
+            "C# implementation manifest resource is truncated"
         }
-        val byKey = linkedMapOf<String, String>()
-        for (entry in relevant) {
-            val key = entry.first
-            val value = entry.second
-            require(byKey.put(key, value) == null) {
-                "Duplicate C# implementation assembly metadata key '$key'"
-            }
+        val buffer = ByteBuffer.wrap(resource).order(ByteOrder.LITTLE_ENDIAN)
+        val magic = ByteArray(MANAGED_RESOURCE_MAGIC.size).also(buffer::get)
+        require(magic.contentEquals(MANAGED_RESOURCE_MAGIC)) {
+            "C# implementation manifest resource has an invalid magic"
         }
-        val marker = byKey.remove(ASSEMBLY_METADATA_KEY)
-            ?: error("Assembly has no C# implementation manifest")
-        val markerFields = marker.split(':')
-        require(markerFields.size == 3) { "C# implementation manifest marker is malformed" }
-        val schemaVersion = markerFields[0].toIntOrNull()
-            ?: error("C# implementation manifest marker has no numeric schema")
+        val schemaVersion = buffer.int
         require(schemaVersion == CURRENT_SCHEMA_VERSION) {
             "Unsupported C# implementation manifest schema '$schemaVersion'"
         }
-        val chunkCount = markerFields[1].toIntOrNull()
-            ?: error("C# implementation manifest marker has no numeric chunk count")
-        require(chunkCount >= 1) { "C# implementation manifest must contain at least one chunk" }
-        val payload = buildString {
-            repeat(chunkCount) { index ->
-                val key = "$ASSEMBLY_METADATA_KEY.${index.toString().padStart(4, '0')}"
-                append(byKey.remove(key) ?: error("C# implementation manifest is missing chunk '$key'"))
-            }
+        val payloadSize = buffer.int
+        require(payloadSize in 0..MAXIMUM_MANAGED_RESOURCE_PAYLOAD_BYTES) {
+            "C# implementation manifest resource has an invalid payload size"
         }
-        require(byKey.isEmpty()) {
-            "C# implementation manifest has unexpected chunks: ${byKey.keys.sorted()}"
+        require(resource.size == MANAGED_RESOURCE_HEADER_SIZE + payloadSize) {
+            "C# implementation manifest resource size does not match its header"
         }
-        val bytes = try {
-            Base64.getDecoder().decode(payload)
-        } catch (failure: IllegalArgumentException) {
-            throw IllegalArgumentException("C# implementation manifest payload is not base64", failure)
+        val expectedDigest = ByteArray(32).also(buffer::get)
+        val payload = ByteArray(payloadSize).also(buffer::get)
+        require(payload.sha256().contentEquals(expectedDigest)) {
+            "C# implementation manifest resource payload hash does not match its header"
         }
-        require(bytes.sha256Hex() == markerFields[2]) {
-            "C# implementation manifest payload hash does not match its marker"
+        val encoded = try {
+            Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(payload))
+                .toString()
+        } catch (failure: CharacterCodingException) {
+            throw IllegalArgumentException(
+                "C# implementation manifest resource payload is not valid UTF-8",
+                failure,
+            )
         }
-        return decode(bytes.toString(Charsets.UTF_8)).also { manifest ->
+        return decode(encoded).also { manifest ->
             require(manifest.schemaVersion == schemaVersion) {
-                "C# implementation manifest marker and payload schemas differ"
+                "C# implementation manifest resource and payload schemas differ"
             }
         }
     }
@@ -899,9 +887,8 @@ object DotNetCSharpImplementationManifestCodec {
     private fun String.decodeList(): List<String> =
         if (isEmpty()) emptyList() else split(LIST_SEPARATOR)
 
-    private fun ByteArray.sha256Hex(): String =
+    private fun ByteArray.sha256(): ByteArray =
         MessageDigest.getInstance("SHA-256").digest(this)
-            .joinToString("") { byte -> "%02x".format(byte) }
 }
 
 internal fun collectDotNetCSharpImplementationManifest(

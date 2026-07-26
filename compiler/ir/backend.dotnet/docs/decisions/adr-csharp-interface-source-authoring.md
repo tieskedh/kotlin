@@ -322,16 +322,20 @@ Roslyn generator.
 
 ### 5. The schema is independent of its physical carrier
 
-The final DLL representation should use a named managed manifest resource plus a small
-discoverability marker. This avoids custom-attribute size concerns and gives metadata-only tools
-a conventional opaque payload.
+The DLL representation uses the public managed-resource name
+`Kotlin.CSharpImplementationManifest`. The ManifestResource row itself is the discoverability
+marker. Its embedded bytes contain an eight-byte magic (`KDNCSM01`), the little-endian schema and
+payload length, the raw SHA-256 payload digest, and the bounded UTF-8 record payload. This avoids
+custom-attribute size concerns and gives metadata-only tools a conventional opaque payload while
+leaving the logical record schema carrier-independent.
 
-The current ILAsm pipeline cannot place arbitrary bytes in a DLL's managed-resource section.
-ILAsm's `.mresource` grammar can only point at a linked external file, which is not self-contained.
-The initial prototype therefore uses hashed, indexed `AssemblyMetadataAttribute` chunks. This is
-a correct temporary carrier, not the final ABI. A capable PE writer or post-assembly metadata
-stage must move the unchanged record payload into a true managed resource before the schema or
-packaging format is frozen.
+Direct probes corrected the earlier ILAsm assumption: both the selected Framework 4.8 and modern
+.NET 10 ILAsm embed the contents of a same-directory `.mresource` source file into the resulting
+PE. The compiler-owned assembler therefore copies the IL and payload into an isolated temporary
+directory, invokes ILAsm there, and deletes the staged files. Copying the resulting DLL without
+the staged source preserves `GetManifestResourceStream`, proving that the artifact is
+self-contained. `AssemblyMetadataAttribute` chunks were removed before publication and have no
+compatibility standing.
 
 The compiler must not add an external sidecar, load the target assembly to discover the manifest,
 or make the runtime responsible for per-library implementation metadata.
@@ -344,7 +348,10 @@ assembly; reject duplicates and unknown required records; and produce determinis
 They never use reflection-based assembly loading as their production metadata reader.
 
 Reflection is acceptable in execution tests that prove the payload is physically present in the
-DLL. Production tooling uses Roslyn/ECMA-335 metadata APIs.
+DLL. Production tooling opens the referenced PE, reads its ECMA-335 ManifestResource row and CLR
+resource section, and never uses `Assembly.Load`. Roslyn does not expose managed-resource bytes
+through its symbol model, so this DLL-only reader is the narrowly scoped file-access exception to
+the normal analyzer rule against arbitrary file I/O.
 
 ## Alternatives rejected
 

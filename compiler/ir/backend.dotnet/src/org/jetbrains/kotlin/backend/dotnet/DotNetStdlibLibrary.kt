@@ -76,13 +76,22 @@ internal object DotNetStdlibLibrary {
         ilText: String,
         target: DotNetTarget,
         messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray> = emptyMap(),
     ): File? {
         outputDirectory.mkdirs()
         val ilFile = outputDirectory.resolve(ASSEMBLY_IL_FILE_NAME)
         val output = outputDirectory.resolve(ASSEMBLY_FILE_NAME)
         output.delete()
         ilFile.writeBytes(UTF8_BOM + ilText.toByteArray(Charsets.UTF_8))
-        return output.takeIf { DotNetIlAssembler.assembleLibrary(ilFile, output, target, messageCollector) }
+        return output.takeIf {
+            DotNetIlAssembler.assembleLibrary(
+                ilFile,
+                output,
+                target,
+                messageCollector,
+                managedResources,
+            )
+        }
     }
 
     /** Bootstrap compatibility path while ordinary executable builds still rebuild the stdlib. */
@@ -91,7 +100,14 @@ internal object DotNetStdlibLibrary {
         ilText: String,
         target: DotNetTarget,
         messageCollector: MessageCollector,
-    ): File? = assembleIn(executableOutput.parentFile ?: File("."), ilText, target, messageCollector)
+        managedResources: Map<String, ByteArray> = emptyMap(),
+    ): File? = assembleIn(
+        executableOutput.parentFile ?: File("."),
+        ilText,
+        target,
+        messageCollector,
+        managedResources,
+    )
 
     /** Calls the stdlib-owned iterator factory for a vector already on the IL stack. */
     fun arrayIteratorFactoryCallInstruction(elementType: DotNetIlValueType): String =

@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 67 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 68 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 847 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 848 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -1748,11 +1748,14 @@ landed shape as a compatibility constraint.
   `get_/set_...__KotlinDefault__<logical-identity-digest>` form so generated C# can name them
   without changing the ordinary CLR Property row or accessor names. Consumers use manifest
   locators and never derive this name.
-  The current
-  hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an
-  arbitrary self-contained managed resource. Move the carrier-independent payload to a real
-  managed resource before schema/package freeze; never add a sidecar or make production tooling
-  load target code.
+  The carrier-independent payload is embedded under the stable managed-resource name
+  `Kotlin.CSharpImplementationManifest`. A 48-byte envelope records magic, schema, payload length,
+  and the raw SHA-256 digest before the bounded UTF-8 record payload. Both selected ILAsm
+  implementations embed a same-directory `.mresource` source file into the PE; the assembler
+  stages both the IL and payload in an isolated temporary directory and removes them after
+  assembly, so the DLL is self-contained. Production Roslyn tooling reads the ManifestResource
+  row and CLR resource section directly from the referenced PE without loading target code or
+  consulting a sidecar.
   STAYS REJECTED, loudly, whole-interface/whole-class: private callable interface members,
   companions on generic interfaces, `fun interface` (no SAM-conversion model),
   interfaces imported from arbitrary CLR metadata without a bound Kotlin KLIB/physical-ABI index,

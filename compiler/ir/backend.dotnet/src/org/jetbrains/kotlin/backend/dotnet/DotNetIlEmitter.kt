@@ -1748,23 +1748,26 @@ internal class DotNetIlEmitter(
             companionInitializations,
             objectInstanceFields,
         )
-        val cSharpImplementationMetadata = cSharpImplementationManifestTarget?.let { target ->
-            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
-                collectDotNetCSharpImplementationManifest(
-                    assemblyName = assemblyName,
-                    target = target,
-                    files = emittedFiles,
-                    availableClasses = availableClasses,
-                    genericInterfaces = genericInterfaces,
-                    externalLibraries = externalLibraries,
-                    availableFunctions = availableFunctions,
-                    typeMapper = typeMapper,
-                    preLoweringDeclarationKeys = preLoweringDeclarationKeys,
-                    interfaceDefaultImplementations = interfaceDefaultImplementations,
-                    genericInterfaceDefaults = genericInterfaceDefaults,
-                    genericInterfaceIntersectionSlots = localGenericInterfaceIntersectionSlots,
-                    wrongShapePolicies = cSharpWrongShapePolicies,
-                )
+        val managedResources = cSharpImplementationManifestTarget?.let { target ->
+            mapOf(
+                DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
+                        DotNetCSharpImplementationManifestCodec.encodeManagedResource(
+                            collectDotNetCSharpImplementationManifest(
+                                assemblyName = assemblyName,
+                                target = target,
+                                files = emittedFiles,
+                                availableClasses = availableClasses,
+                                genericInterfaces = genericInterfaces,
+                                externalLibraries = externalLibraries,
+                                availableFunctions = availableFunctions,
+                                typeMapper = typeMapper,
+                                preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                                interfaceDefaultImplementations = interfaceDefaultImplementations,
+                                genericInterfaceDefaults = genericInterfaceDefaults,
+                                genericInterfaceIntersectionSlots = localGenericInterfaceIntersectionSlots,
+                                wrongShapePolicies = cSharpWrongShapePolicies,
+                            )
+                        )
             )
         }.orEmpty()
         val ilText = buildString {
@@ -1780,7 +1783,7 @@ internal class DotNetIlEmitter(
                             }
                 },
                 friendAssemblies = friendAssemblies,
-                cSharpImplementationMetadata = cSharpImplementationMetadata,
+                hasCSharpImplementationManifest = managedResources.isNotEmpty(),
             )
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
@@ -1791,6 +1794,7 @@ internal class DotNetIlEmitter(
             ilText,
             declarations,
             referencedAssemblies.toSet(),
+            managedResources,
         )
     }
 
@@ -3943,7 +3947,7 @@ internal class DotNetIlEmitter(
         referencesEditorBrowsableAssembly: Boolean,
         referencedExternalLibraries: List<DotNetExternalLibrary>,
         friendAssemblies: List<DotNetFriendAssemblyIdentity>,
-        cSharpImplementationMetadata: List<Pair<String, String>>,
+        hasCSharpImplementationManifest: Boolean,
     ) {
         coreLibrary.appendAssemblyReferenceTo(this)
         if (referencesEditorBrowsableAssembly) {
@@ -3974,7 +3978,7 @@ internal class DotNetIlEmitter(
         if (
             emittedAssemblyVersion != null ||
             friendAssemblies.isNotEmpty() ||
-            cSharpImplementationMetadata.isNotEmpty()
+            hasCSharpImplementationManifest
         ) {
             appendLine(".assembly ${assemblyName.toIlIdentifier()}")
             appendLine("{")
@@ -3983,14 +3987,16 @@ internal class DotNetIlEmitter(
             friendAssemblies.sortedBy { it.displayName.lowercase() }.forEach { identity ->
                 coreLibrary.appendInternalsVisibleToAttributeTo(this, identity)
             }
-            cSharpImplementationMetadata.forEach { entry ->
-                coreLibrary.appendAssemblyMetadataAttributeTo(this, entry.first, entry.second)
-            }
             appendLine("}")
         } else {
             appendLine(".assembly ${assemblyName.toIlIdentifier()} {}")
         }
         appendLine(".module ${moduleFileName.toIlIdentifier()}")
+        if (hasCSharpImplementationManifest) {
+            appendLine(".mresource public ${DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME}")
+            appendLine("{")
+            appendLine("}")
+        }
         appendLine()
     }
 }
@@ -3999,4 +4005,5 @@ internal data class DotNetIlEmissionResult(
     val ilText: String,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val referencedAssemblies: Set<String>,
+    val managedResources: Map<String, ByteArray>,
 )
