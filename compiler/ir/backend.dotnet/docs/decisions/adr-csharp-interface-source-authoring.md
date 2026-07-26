@@ -63,6 +63,21 @@ The exact typed view is the normal complete C# surface when it exists. Declared-
 canonical slots adapt to that typed behavior, boxing, widening, or narrowing only when their own
 physical ABI requires it. No generated adapter may introduce independent Kotlin behavior.
 
+Properties remain real CLR Property rows. The user-authored C# partial owns one typed property
+body and its storage; generated explicit properties adapt canonical, declared, exact, and
+intersection views to that body. A variant declared view exposes only the accessor legal under CLR
+variance, while the exact view exposes the complete Kotlin `var`. Kotlin ABI names remain stable.
+The generator may accept an idiomatic PascalCase C# source property and bind it explicitly to the
+recorded Kotlin/CLR property names; optional consumer-facing aliases belong to an explicit C#
+export facade. C#-specific `init`, `required`, indexer, and event semantics are not inferred from a
+Kotlin property.
+
+Representable method constraints are read from the located CLR GenericParam and
+GenericParamConstraint rows. The manifest does not copy them into a second type model. A
+Kotlin owner-relative constraint deliberately omitted because it is illegal on a CLR variant view
+must not be reconstructed as a C# constraint; any additional analyzer guidance is Kotlin tooling
+metadata, not executable CLR signature metadata.
+
 The manifest prototype is implemented before the generator so its sufficiency can be tested
 without freezing a generator around inferred names or KLIB access.
 
@@ -197,6 +212,8 @@ reading the DLL contracts. It also compiles a
 `MethodImpl` metadata, omits generated class forwarders only after every parent slot has a concrete
 child mapping, and executes the inherited default. Non-generic parents remain explicitly
 unsupported by the current schema; they must not be silently generated.
+The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
+metadata and emits the matching C# `where` clause without a manifest constraint record.
 Runtime-bootstrap interfaces and ordinary non-generic interfaces are not yet source-authoring
 inputs. Friend-accessible internal interfaces are also omitted by the public-only first collector.
 All must gain equivalent manifest records before the generator claims support for implementing
