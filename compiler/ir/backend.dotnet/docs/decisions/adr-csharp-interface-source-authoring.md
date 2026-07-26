@@ -91,6 +91,13 @@ is physically public but absent from the authoring manifest. The producer's
 `InternalsVisibleTo("GeneratedShape")` custom-attribute value is compared byte-for-byte, including
 its serialized-string length and terminator, on every target profile.
 
+Nested manifest owner paths remain structured. Dotted rendering is used only to match the C#
+source spelling; Roslyn metadata lookup joins the top-level TypeDef to nested components with the
+CLR `+` separator. Accessibility is then decided by walking the complete owner chain: public
+components pass, internal components require same-assembly access or producer friendship, and
+private/protected components fail. A broad symbol-accessibility shortcut must not override a valid
+friend grant on an internal containing type.
+
 ### 2. Roslyn partial-type generation is the supported C# source-authoring path
 
 The intended tooling is a Roslyn source generator paired with an analyzer. Its artifact targets

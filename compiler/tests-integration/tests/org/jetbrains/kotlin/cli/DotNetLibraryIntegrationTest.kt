@@ -1822,6 +1822,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertTrue("CS0122" in unauthorizedCompile.output) { unauthorizedCompile.output }
 
+            val nestedFriendType =
+                nestedFriendContract.canonicalOwnerPath.joinToString(".") {
+                    component -> component.substringBefore('`')
+                }
+            val unauthorizedNestedSource =
+                profileDirectory.resolve("unauthorized-nested.cs").apply {
+                    writeText(
+                        """
+                        internal static class UnauthorizedNestedReference
+                        {
+                            internal static $nestedFriendType Value;
+                        }
+                        """.trimIndent()
+                    )
+                }
+            val unauthorizedNestedCompile = runModernCSharpCompiler(
+                modernCSharp,
+                unauthorizedNestedSource,
+                profileDirectory.resolve("UnauthorizedNestedShape.dll"),
+                producerAssembly,
+                runtimeAssembly,
+            )
+            assertTrue(unauthorizedNestedCompile.exitCode != 0) {
+                "An unauthorized C# assembly consumed nested internal contract " +
+                        "'$nestedFriendType'"
+            }
+            assertTrue("CS0122" in unauthorizedNestedCompile.output) {
+                unauthorizedNestedCompile.output
+            }
+
             val baseListProbe = profileDirectory.resolve("base-list-probe.cs").apply {
                 writeText(
                     """
@@ -1835,6 +1865,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
+                    }
+
+                    internal sealed partial class NestedFriendBaseListProbe :
+                        manifest.FriendContainer.NestedShape
+                    {
+                        internal int NestedCode { get { return 42; } }
                     }
 
                     public sealed partial class GenericBaseListProbe<T> : manifest.Shape<T>
@@ -1983,6 +2019,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             if (friendResult != 0)
                                 throw new System.Exception(
                                     "Generated friend implementation failed: " + friendResult);
+                            int nestedFriendResult =
+                                manifest.apiKt.verifyNestedFriend(
+                                    new NestedFriendBaseListProbe());
+                            if (nestedFriendResult != 0)
+                                throw new System.Exception(
+                                    "Generated nested friend implementation failed: " +
+                                    nestedFriendResult);
                             int genericResult =
                                 manifest.apiKt.verify(
                                     new GenericBaseListProbe<string>(
