@@ -392,7 +392,10 @@ inherited views adapt to that one body, and no view acquires a copied semantic b
 The same DLL-only matrix resolves two competing parent defaults in Kotlin and gives a bodyless C#
 class that derived interface. Portable adapters for the child and both parent slots call only the
 child helper; modern profiles inherit only the selected DIM. Calls through all three views observe
-the Kotlin-selected body.
+the Kotlin-selected body. A covariant generic conflict is pinned separately: its two parent
+defaults return different parent-owned typed properties, while the selected child helper drives
+child, left, right, and widened-parent views to one result. Canonical widening occurs only where
+that physical ABI requires it; no exact or declared result is routed through an erased cast.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their
