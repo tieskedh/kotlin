@@ -4,6 +4,7 @@ import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import java.io.File
+import java.nio.file.Files
 
 data class DotNetModernCSharpToolchain(
     val dotNetHost: File,
@@ -14,12 +15,20 @@ data class DotNetModernCSharpToolchain(
 object DotNetIlAssembler {
     private const val PROVISION_SCRIPT = "compiler/ir/backend.dotnet/tools/provision-dotnet-toolchain.ps1"
 
-    fun assembleExecutable(ilFile: File, output: File, target: DotNetTarget, messageCollector: MessageCollector): Boolean {
+    fun assembleExecutable(
+        ilFile: File,
+        output: File,
+        target: DotNetTarget,
+        messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray> = emptyMap(),
+    ): Boolean {
         output.delete()
         if (target == DotNetTarget.NET10_0) runtimeConfigFile(output).delete()
         return when (target) {
-            DotNetTarget.NET48 -> assembleForNetFramework(ilFile, output, dll = false, messageCollector)
-            DotNetTarget.NET10_0 -> assembleForNet(ilFile, output, writeExecutableConfig = true, messageCollector)
+            DotNetTarget.NET48 ->
+                assembleForNetFramework(ilFile, output, dll = false, messageCollector, managedResources)
+            DotNetTarget.NET10_0 ->
+                assembleForNet(ilFile, output, writeExecutableConfig = true, messageCollector, managedResources)
             DotNetTarget.NETSTANDARD_2_0 -> {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
@@ -31,13 +40,22 @@ object DotNetIlAssembler {
     }
 
     /** Assembles a non-entry-point assembly without creating an executable runtimeconfig. */
-    fun assembleLibrary(ilFile: File, output: File, target: DotNetTarget, messageCollector: MessageCollector): Boolean {
+    fun assembleLibrary(
+        ilFile: File,
+        output: File,
+        target: DotNetTarget,
+        messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray> = emptyMap(),
+    ): Boolean {
         output.delete()
         runtimeConfigFile(output).delete()
         return when (target) {
-            DotNetTarget.NET48 -> assembleForNetFramework(ilFile, output, dll = true, messageCollector)
-            DotNetTarget.NETSTANDARD_2_0 -> assemblePortableLibrary(ilFile, output, messageCollector)
-            DotNetTarget.NET10_0 -> assembleForNet(ilFile, output, writeExecutableConfig = false, messageCollector)
+            DotNetTarget.NET48 ->
+                assembleForNetFramework(ilFile, output, dll = true, messageCollector, managedResources)
+            DotNetTarget.NETSTANDARD_2_0 ->
+                assemblePortableLibrary(ilFile, output, messageCollector, managedResources)
+            DotNetTarget.NET10_0 ->
+                assembleForNet(ilFile, output, writeExecutableConfig = false, messageCollector, managedResources)
         }
     }
 
@@ -86,7 +104,12 @@ object DotNetIlAssembler {
      * source but injects an `mscorlib` AssemblyRef into the PE, so it is a compatibility oracle,
      * not a writer for the canonical netstandard2.0 asset.
      */
-    fun assemblePortableLibrary(ilFile: File, output: File, messageCollector: MessageCollector): Boolean {
+    fun assemblePortableLibrary(
+        ilFile: File,
+        output: File,
+        messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray> = emptyMap(),
+    ): Boolean {
         output.delete()
         runtimeConfigFile(output).delete()
         val ilasm = findModernIlasm()
@@ -99,7 +122,15 @@ object DotNetIlAssembler {
             )
             return false
         }
-        return runIlasm(ilasm, ilFile, output, dll = true, deterministic = true, messageCollector)
+        return runIlasm(
+            ilasm,
+            ilFile,
+            output,
+            dll = true,
+            deterministic = true,
+            messageCollector,
+            managedResources,
+        )
     }
 
     /**
@@ -117,10 +148,19 @@ object DotNetIlAssembler {
         output: File,
         dll: Boolean,
         messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray> = emptyMap(),
     ): Boolean {
         output.delete()
         runtimeConfigFile(output).delete()
-        return runIlasm(ilasm, ilFile, output, dll, deterministic = true, messageCollector)
+        return runIlasm(
+            ilasm,
+            ilFile,
+            output,
+            dll,
+            deterministic = true,
+            messageCollector,
+            managedResources,
+        )
     }
 
     private fun assembleForNetFramework(
@@ -128,6 +168,7 @@ object DotNetIlAssembler {
         output: File,
         dll: Boolean,
         messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray>,
     ): Boolean {
         val ilasm = findFrameworkIlasm()
         if (ilasm == null) {
@@ -137,7 +178,15 @@ object DotNetIlAssembler {
             )
             return false
         }
-        return runIlasm(ilasm, ilFile, output, dll, deterministic = true, messageCollector)
+        return runIlasm(
+            ilasm,
+            ilFile,
+            output,
+            dll,
+            deterministic = true,
+            messageCollector,
+            managedResources,
+        )
     }
 
     private fun assembleForNet(
@@ -145,6 +194,7 @@ object DotNetIlAssembler {
         output: File,
         writeExecutableConfig: Boolean,
         messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray>,
     ): Boolean {
         val ilasm = findModernIlasm()
         if (ilasm == null) {
@@ -156,7 +206,16 @@ object DotNetIlAssembler {
             )
             return false
         }
-        if (!runIlasm(ilasm, ilFile, output, dll = true, deterministic = true, messageCollector)) return false
+        if (!runIlasm(
+                ilasm,
+                ilFile,
+                output,
+                dll = true,
+                deterministic = true,
+                messageCollector,
+                managedResources,
+            )
+        ) return false
         if (writeExecutableConfig) writeRuntimeConfig(output)
         return true
     }
@@ -168,32 +227,69 @@ object DotNetIlAssembler {
         dll: Boolean,
         deterministic: Boolean,
         messageCollector: MessageCollector,
+        managedResources: Map<String, ByteArray>,
     ): Boolean {
         output.parentFile?.mkdirs()
-        // The legacy flag spelling is understood by both the .NET Framework ilasm and the modern
-        // CoreCLR ilasm (probed on 10.0.9), so a single invocation shape covers both targets.
-        val arguments = buildList {
-            add(ilasm.absolutePath)
-            add("/nologo")
-            add("/quiet")
-            if (deterministic) add("/det")
-            add(if (dll) "/dll" else "/exe")
-            add("/output:${output.absolutePath}")
-            add(ilFile.absolutePath)
+        val resourceDirectory = managedResources.takeIf { it.isNotEmpty() }
+            ?.let { Files.createTempDirectory("kdncs-res-").toFile() }
+        val stagedIlFile = resourceDirectory?.resolve(ilFile.name)
+        val stagedResourceFiles = mutableListOf<File>()
+        try {
+            for (entry in managedResources.entries) {
+                val resourceName = entry.key
+                val resourceBytes = entry.value
+                require(
+                    resourceName.isNotBlank() &&
+                            resourceName != "." &&
+                            resourceName != ".." &&
+                            resourceName.none { character: Char ->
+                                character == '/' || character == '\\' || character == ':'
+                            }
+                ) {
+                    "Managed-resource name '$resourceName' is not a safe ILAsm input file name"
+                }
+                require(resourceName != stagedIlFile?.name) {
+                    "Managed-resource name '$resourceName' collides with the staged IL input"
+                }
+                val resourceFile = checkNotNull(resourceDirectory).resolve(resourceName)
+                resourceFile.writeBytes(resourceBytes)
+                stagedResourceFiles += resourceFile
+            }
+            stagedIlFile?.let { staged -> ilFile.copyTo(staged, overwrite = true) }
+            // The legacy flag spelling is understood by both the .NET Framework ilasm and the
+            // modern CoreCLR ilasm (probed on 10.0.9), so a single invocation shape covers both
+            // targets. ILAsm resolves an embedded-resource source relative to the IL input, so a
+            // resource-bearing input is copied into the isolated staging directory as well.
+            val arguments = buildList {
+                add(ilasm.absolutePath)
+                add("/nologo")
+                add("/quiet")
+                if (deterministic) add("/det")
+                add(if (dll) "/dll" else "/exe")
+                add("/output:${output.absolutePath}")
+                add((stagedIlFile ?: ilFile).absolutePath)
+            }
+            val processBuilder = ProcessBuilder(arguments).redirectErrorStream(true)
+            resourceDirectory?.let(processBuilder::directory)
+            val process = processBuilder.start()
+            val outputText = process.inputStream.bufferedReader().readText()
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                output.delete()
+                runtimeConfigFile(output).delete()
+                messageCollector.report(
+                    CompilerMessageSeverity.ERROR,
+                    "ilasm failed with exit code $exitCode" +
+                            outputText.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()
+                )
+                return false
+            }
+            return true
+        } finally {
+            stagedIlFile?.delete()
+            stagedResourceFiles.forEach(File::delete)
+            resourceDirectory?.delete()
         }
-        val process = ProcessBuilder(arguments).redirectErrorStream(true).start()
-        val outputText = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        if (exitCode != 0) {
-            output.delete()
-            runtimeConfigFile(output).delete()
-            messageCollector.report(
-                CompilerMessageSeverity.ERROR,
-                "ilasm failed with exit code $exitCode${outputText.takeIf(String::isNotBlank)?.let { ": $it" }.orEmpty()}"
-            )
-            return false
-        }
-        return true
     }
 
     /**

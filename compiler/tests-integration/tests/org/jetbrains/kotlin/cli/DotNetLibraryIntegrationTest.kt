@@ -217,26 +217,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public static int Main(string[] args)
                     {
-                        Assembly assembly = Assembly.LoadFrom(args[0]);
-                        foreach (CustomAttributeData attribute in assembly.GetCustomAttributesData())
-                        {
-                            if (attribute.AttributeType.FullName !=
-                                "System.Reflection.AssemblyMetadataAttribute")
-                                continue;
-                            string key = (string)attribute.ConstructorArguments[0].Value;
-                            if (!key.StartsWith(
-                                    "${DotNetCSharpImplementationManifestCodec.ASSEMBLY_METADATA_KEY}",
-                                    StringComparison.Ordinal))
-                                continue;
-                            string value = (string)attribute.ConstructorArguments[1].Value;
-                            Console.WriteLine(
-                                "A|" + Encode(key) + "|" + Encode(value));
-                        }
-
                         using (FileStream stream = File.OpenRead(args[0]))
                         using (PEReader pe = new PEReader(stream))
                         {
                             MetadataReader metadata = pe.GetMetadataReader();
+                            foreach (ManifestResourceHandle resourceHandle
+                                in metadata.ManifestResources)
+                            {
+                                ManifestResource resource =
+                                    metadata.GetManifestResource(resourceHandle);
+                                if (metadata.GetString(resource.Name) !=
+                                    "${DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME}")
+                                    continue;
+                                if (!resource.Implementation.IsNil)
+                                    throw new BadImageFormatException(
+                                        "The C# implementation manifest is linked.");
+                                DirectoryEntry directory =
+                                    pe.PEHeaders.CorHeader.ResourcesDirectory;
+                                PEMemoryBlock block =
+                                    pe.GetSectionData(directory.RelativeVirtualAddress);
+                                int offset = checked((int)resource.Offset);
+                                BlobReader resourceReader =
+                                    block.GetReader(offset, directory.Size - offset);
+                                int resourceSize = resourceReader.ReadInt32();
+                                Console.WriteLine(
+                                    "R|" + ((int)resource.Attributes) + "|" +
+                                    Convert.ToBase64String(
+                                        resourceReader.ReadBytes(resourceSize)));
+                            }
                             TypeProvider provider = new TypeProvider(metadata);
                             foreach (CustomAttributeHandle attributeHandle
                                 in metadata.GetAssemblyDefinition().GetCustomAttributes())
@@ -1601,6 +1609,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     readerDirectory,
                     producerAssembly,
                 )
+            assertTrue(assemblyAttributes.none { attribute ->
+                attribute.ownerPath ==
+                        listOf("System.Reflection.AssemblyMetadataAttribute") &&
+                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME in
+                        attribute.value.toString(Charsets.UTF_8)
+            }) {
+                "The C# implementation manifest leaked into AssemblyMetadataAttribute"
+            }
             val friendAttribute = assemblyAttributes.single { attribute ->
                 attribute.ownerPath ==
                         listOf(
@@ -3944,16 +3960,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             ),
         )
-        val assemblyMetadata = DotNetCSharpImplementationManifestCodec
-            .encodeAssemblyMetadata(manifest)
-            .joinToString("\n") { entry ->
-                """[assembly: System.Reflection.AssemblyMetadata("${entry.first}", "${entry.second}")]"""
-            }
+        val manifestResource = directory.resolve("AnalyzerProducer.manifest").apply {
+            writeBytes(DotNetCSharpImplementationManifestCodec.encodeManagedResource(manifest))
+        }
         val producerSource = directory.resolve("producer.cs").apply {
             writeText(
                 """
-                $assemblyMetadata
-
                 namespace diagnostics
                 {
                     public interface Shape
@@ -4031,6 +4043,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             modernCSharp,
             producerSource,
             producer,
+            resources = listOf(
+                manifestResource to
+                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME
+            ),
         )
         assertEquals(0, producerCompile.exitCode, producerCompile.output)
 
@@ -4052,19 +4068,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             },
         )
-        val invalidOverrideMetadata = DotNetCSharpImplementationManifestCodec
-            .encodeAssemblyMetadata(invalidOverrideManifest)
-            .joinToString("\n") { entry ->
-                """[assembly: System.Reflection.AssemblyMetadata("${entry.first}", "${entry.second}")]"""
+        val invalidOverrideResource =
+            directory.resolve("InvalidOverrideProducer.manifest").apply {
+                writeBytes(
+                    DotNetCSharpImplementationManifestCodec.encodeManagedResource(
+                        invalidOverrideManifest
+                    )
+                )
             }
         val invalidOverrideProducerSource =
             directory.resolve("invalid-override-producer.cs").apply {
-                writeText(
-                    producerSource.readText().replace(
-                        assemblyMetadata,
-                        invalidOverrideMetadata,
-                    )
-                )
+                writeText(producerSource.readText())
             }
         val invalidOverrideProducer =
             directory.resolve("InvalidOverrideProducer.dll")
@@ -4072,6 +4086,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             modernCSharp,
             invalidOverrideProducerSource,
             invalidOverrideProducer,
+            resources = listOf(
+                invalidOverrideResource to
+                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME
+            ),
         )
         assertEquals(
             0,
@@ -4444,20 +4462,27 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
 
         val staleSource = directory.resolve("stale.cs").apply {
-            writeText(
-                """
-                [assembly: System.Reflection.AssemblyMetadata(
-                    "${DotNetCSharpImplementationManifestCodec.ASSEMBLY_METADATA_KEY}",
-                    "999:1:${"0".repeat(64)}")]
-                public interface Stale {}
-                """.trimIndent()
+            writeText("public interface Stale {}")
+        }
+        val staleResource = directory.resolve("Stale.manifest").apply {
+            val bytes = DotNetCSharpImplementationManifestCodec.encodeManagedResource(
+                manifest.copy(assemblyName = "Stale", interfaces = emptyList())
             )
+            bytes[8] = 0xE7.toByte()
+            bytes[9] = 0x03
+            bytes[10] = 0
+            bytes[11] = 0
+            writeBytes(bytes)
         }
         val staleAssembly = directory.resolve("Stale.dll")
         val staleCompile = runModernCSharpCompiler(
             modernCSharp,
             staleSource,
             staleAssembly,
+            resources = listOf(
+                staleResource to
+                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME
+            ),
         )
         assertEquals(0, staleCompile.exitCode, staleCompile.output)
         val versionConsumer = directory.resolve("version-consumer.cs").apply {
@@ -4474,20 +4499,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("KDNCS005" in versionMismatch.output) { versionMismatch.output }
 
         val malformedSource = directory.resolve("malformed.cs").apply {
-            writeText(
-                """
-                [assembly: System.Reflection.AssemblyMetadata(
-                    "${DotNetCSharpImplementationManifestCodec.ASSEMBLY_METADATA_KEY}",
-                    "${DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION}:1:${"0".repeat(64)}")]
-                public interface Malformed {}
-                """.trimIndent()
+            writeText("public interface Malformed {}")
+        }
+        val malformedResource = directory.resolve("Malformed.manifest").apply {
+            val bytes = DotNetCSharpImplementationManifestCodec.encodeManagedResource(
+                manifest.copy(assemblyName = "Malformed", interfaces = emptyList())
             )
+            bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
+            writeBytes(bytes)
         }
         val malformedAssembly = directory.resolve("Malformed.dll")
         val malformedCompile = runModernCSharpCompiler(
             modernCSharp,
             malformedSource,
             malformedAssembly,
+            resources = listOf(
+                malformedResource to
+                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME
+            ),
         )
         assertEquals(0, malformedCompile.exitCode, malformedCompile.output)
         val malformedConsumer = runModernCSharpCompiler(
@@ -4510,37 +4539,49 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
             interfaces = emptyList(),
         )
-        val metadata = DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(manifest)
+        val resource = DotNetCSharpImplementationManifestCodec.encodeManagedResource(manifest)
         assertEquals(
             manifest,
-            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata),
+            DotNetCSharpImplementationManifestCodec.decodeManagedResource(resource),
         )
-        val missingChunk = metadata.filterNot { entry ->
-            entry.first.endsWith(".0000")
+        val truncated = resource.copyOf(resource.size - 1)
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.decodeManagedResource(truncated)
         }
-        assertThrows(IllegalStateException::class.java) {
-            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(missingChunk)
-        }
-        val corruptChunk = metadata.map { entry ->
-            if (entry.first.endsWith(".0000")) {
-                entry.first to entry.second.replaceRange(0, 1, if (entry.second[0] == 'A') "B" else "A")
-            } else {
-                entry
-            }
+        val invalidMagic = resource.clone().also { bytes ->
+            bytes[0] = (bytes[0].toInt() xor 1).toByte()
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(corruptChunk)
+            DotNetCSharpImplementationManifestCodec.decodeManagedResource(invalidMagic)
+        }
+        val invalidSchema = resource.clone().also { bytes ->
+            bytes[8] = 0xE7.toByte()
+            bytes[9] = 0x03
+            bytes[10] = 0
+            bytes[11] = 0
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata + metadata.last())
+            DotNetCSharpImplementationManifestCodec.decodeManagedResource(invalidSchema)
+        }
+        val invalidLength = resource.clone().also { bytes ->
+            bytes[12] = (bytes[12].toInt() + 1).toByte()
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+            DotNetCSharpImplementationManifestCodec.decodeManagedResource(invalidLength)
+        }
+        val corruptPayload = resource.clone().also { bytes ->
+            bytes[bytes.lastIndex] = (bytes.last().toInt() xor 1).toByte()
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.decodeManagedResource(corruptPayload)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.encodeManagedResource(
                 manifest.copy(logicalIdentityScheme = "runtime-member-names-v1")
             )
         }
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+            DotNetCSharpImplementationManifestCodec.encodeManagedResource(
                 manifest.copy(
                     interfaces = listOf(
                         DotNetCSharpInterfaceContract(
@@ -4608,7 +4649,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             intersections = emptyList(),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+            DotNetCSharpImplementationManifestCodec.encodeManagedResource(
                 manifest.copy(interfaces = listOf(invalidConstraintContract))
             )
         }
@@ -4650,7 +4691,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             listOf("F:sample/Parent.selected", "F:sample/Parent.selected"),
         ).forEach { invalidOverrides ->
             assertThrows(IllegalArgumentException::class.java) {
-                DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+                DotNetCSharpImplementationManifestCodec.encodeManagedResource(
                     manifest.copy(
                         interfaces = listOf(
                             overrideContract.copy(
@@ -9441,6 +9482,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val stdlibPair = produceBoundStdlibPair("net48", "assembler-matrix")
         val frameworkStdlib = stdlibPair.resolve("Kotlin.Stdlib.dll")
         val modernStdlib = File(tmpdir, "assembler-matrix-modern/Kotlin.Stdlib.dll")
+        val stdlibManagedResources = mapOf(
+            DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
+                    readFrameworkManagedResource(
+                        checkNotNull(frameworkHost),
+                        frameworkStdlib,
+                        DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+                    )
+        )
         assertTrue(
             DotNetIlAssembler.assembleWithExplicitIlasm(
                 checkNotNull(modernIlasm),
@@ -9448,6 +9497,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 modernStdlib,
                 dll = true,
                 messageCollector = MessageCollector.NONE,
+                managedResources = stdlibManagedResources,
             )
         )
 
@@ -12960,21 +13010,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         readerDirectory: File,
         producerAssembly: File,
     ): DotNetCSharpImplementationManifest {
-        val metadata = runCSharpImplementationManifestReader(
+        assertFalse(
+            (producerAssembly.parentFile ?: File("."))
+                .resolve(DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME)
+                .exists()
+        ) {
+            "The C# implementation manifest must be embedded in $producerAssembly"
+        }
+        val resources = runCSharpImplementationManifestReader(
             toolchain,
             readerAssembly,
             readerDirectory,
             producerAssembly,
         )
-            .filter { line -> line.startsWith("A|") }
+            .filter { line -> line.startsWith("R|") }
             .map { line ->
                 val fields = line.split('|')
-                require(fields.size == 3) { "Invalid manifest-reader attribute output: $line" }
-                val key = Base64.getDecoder().decode(fields[1]).toString(Charsets.UTF_8)
-                val value = Base64.getDecoder().decode(fields[2]).toString(Charsets.UTF_8)
-                key to value
+                require(fields.size == 3) { "Invalid manifest-reader resource output: $line" }
+                assertEquals("1", fields[1], "C# implementation manifest is not public")
+                Base64.getDecoder().decode(fields[2])
             }
-        return DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata)
+        assertEquals(
+            1,
+            resources.size,
+            "Expected one embedded C# implementation manifest in $producerAssembly",
+        )
+        return DotNetCSharpImplementationManifestCodec.decodeManagedResource(resources.single())
     }
 
     private fun readCSharpPhysicalMethodImplsFromDll(
@@ -13957,6 +14018,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         target: String = "library",
         analyzers: List<File> = emptyList(),
         generatedFilesDirectory: File? = null,
+        resources: List<Pair<File, String>> = emptyList(),
     ): CSharpCompilerResult {
         output.delete()
         val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
@@ -13981,6 +14043,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             analyzers.forEach { analyzer ->
                 assertTrue(analyzer.isFile) { "Missing C# analyzer: $analyzer" }
                 add("/analyzer:${analyzer.path}")
+            }
+            resources.forEach { resourceEntry ->
+                val resource = resourceEntry.first
+                val logicalName = resourceEntry.second
+                assertTrue(resource.isFile) { "Missing C# resource: $resource" }
+                require('/' !in logicalName && '\\' !in logicalName && ':' !in logicalName) {
+                    "Unsafe C# resource logical name: $logicalName"
+                }
+                add("/resource:${resource.path},$logicalName,public")
             }
             generatedFilesDirectory?.let { directory ->
                 directory.mkdirs()
@@ -14071,6 +14142,51 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         """.trimIndent()
         return listOf(host.path, "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command)
+    }
+
+    private fun readFrameworkManagedResource(
+        host: File,
+        assembly: File,
+        resourceName: String,
+    ): ByteArray {
+        val escapedAssemblyPath = assembly.absolutePath.replace("'", "''")
+        val escapedResourceName = resourceName.replace("'", "''")
+        val command = """
+            ${'$'}ErrorActionPreference = 'Stop'
+            try {
+                ${'$'}assembly = [Reflection.Assembly]::ReflectionOnlyLoadFrom('$escapedAssemblyPath')
+                ${'$'}stream = ${'$'}assembly.GetManifestResourceStream('$escapedResourceName')
+                if (${'$'}null -eq ${'$'}stream) { throw 'Assembly has no requested managed resource.' }
+                try {
+                    ${'$'}buffer = New-Object IO.MemoryStream
+                    ${'$'}stream.CopyTo(${'$'}buffer)
+                    [Console]::Out.Write([Convert]::ToBase64String(${'$'}buffer.ToArray()))
+                } finally {
+                    ${'$'}stream.Dispose()
+                }
+            } catch {
+                [Console]::Error.WriteLine(${'$'}_.Exception.ToString())
+                exit 1
+            }
+        """.trimIndent()
+        val process = ProcessBuilder(
+            host.path,
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            command,
+        )
+            .directory(assembly.parentFile ?: File("."))
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(
+            0,
+            process.waitFor(),
+            "Could not read managed resource '$resourceName' from $assembly:\n$output",
+        )
+        return Base64.getDecoder().decode(output.trim())
     }
 
     private fun requireOrAssumeToolchain(condition: Boolean, message: String) {
