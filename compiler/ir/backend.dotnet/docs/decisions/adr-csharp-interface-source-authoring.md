@@ -90,6 +90,10 @@ nested interface remains `NestedPrivate`; and an `@PublishedApi internal` compil
 is physically public but absent from the authoring manifest. The producer's
 `InternalsVisibleTo("GeneratedShape")` custom-attribute value is compared byte-for-byte, including
 its serialized-string length and terminator, on every target profile.
+The physically public `@PublishedApi internal` TypeDef also carries the exact
+`KotlinCompilerAbiAttribute` (`01 00 00 00`) and `EditorBrowsable(Never)` blobs, while the ordinary
+internal friend interface carries no compiler-ABI marker. Thus the manifest omission is backed by
+a mechanically distinct CLR compiler-ABI surface rather than by naming convention.
 
 Nested manifest owner paths remain structured. Dotted rendering is used only to match the C#
 source spelling; Roslyn metadata lookup joins the top-level TypeDef to nested components with the
