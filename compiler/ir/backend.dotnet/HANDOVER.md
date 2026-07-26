@@ -745,7 +745,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   selections. The fresh full-suite count for this slice is recorded in Branch state above.
   Interface-owned argument defaults now consume the same masked lowering without putting a body
   on the CLR interface. A module pass moves each real dispatcher into the public, compiler-only
-  nested `<DefaultImpls>` helper, makes the interface receiver explicit, lifts owner type
+  nested `__KotlinDefaultImpls` helper, makes the interface receiver explicit, lifts owner type
   parameters (constraints included) into invariant helper-method parameters, remaps the moved
   body, and redirects calls using the receiver's instantiated interface view. The original slot
   stays abstract and dispatches to the implementation through `callvirt`; actual DIM bodies and
@@ -1119,7 +1119,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   structured metadata audit.
 - `docs/decisions/adr-profile-aware-interface-default-implementations.md` is accepted,
   and the non-generic implementation is now present. Portable profiles move each Kotlin interface
-  body to a marked public `<DefaultImpls>` compiler-ABI helper, keep the CLR slot abstract, and
+  body to a marked public `__KotlinDefaultImpls` compiler-ABI helper, keep the CLR slot abstract, and
   give Kotlin classes hidden explicit MethodImpl forwarders. `net10.0` keeps the body as a real
   DIM and the same exact-call helper, with no class forwarder when the selected DIM is physically
   available.
@@ -1135,7 +1135,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   records. Downstream lowering and whole-class shape validation
   traverse those records through arbitrary base-class depth before deciding whether a selected DIM
   is physically effective or is masked by an inherited class implementation; they never derive
-  `<DefaultImpls>` or `$default` names from Kotlin declarations or infer producer lowering from its
+  `__KotlinDefaultImpls` or `$default` names from Kotlin declarations or infer producer lowering from its
   target profile. A `W` record is emitted in any profile whose class physically needs a helper-backed
   MethodImpl, including net10 consumers of portable interfaces. It is a dispatch fact rather than a
   callable portable-superset requirement. User-library helper bindings are scoped out of the
@@ -1185,7 +1185,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   dispatcher ABI is independent of default-body/DIM metadata. The focused integration test executes
   on CoreCLR and asserts three promotions and only the three physically required portable class
   forwarders.
-  The same test asserts that no `<DefaultImpls>` class or helper function is published as an
+  The same test asserts that no `__KotlinDefaultImpls` class or helper function is published as an
   invented logical declaration key. Compiler helpers exist only as physical identities attached
   to real KLIB members; this corrected the earlier manifest leak while leaving their marked public
   compiler-ABI IL callable.
