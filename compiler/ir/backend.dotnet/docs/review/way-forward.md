@@ -406,10 +406,16 @@ The remaining P0-D implementation order is:
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
    families and the real same-owner clash matrix. The DLL manifest now covers inherited
-   mutable-property obligations and friend-accessible internal interfaces; next implement the
-   Roslyn partial-type generator/analyzer. Multi-parent generic diamonds compose from parent
-   manifest contracts plus the CLR graph; schema 6 records the logical contributor mapping that
-   CLR metadata lacks for derived method and split mutable-property intersection slots.
+   mutable-property obligations and friend-accessible internal interfaces. The first production
+   `netstandard2.0` Roslyn analyzer/generator slice is now implemented: the real canonical or
+   declared C# base list is the only opt-in, its bounded reader consumes the authoritative DLL
+   manifest, and diagnostics cover missing `partial`, unavailable friendship, explicit ABI-member
+   conflicts, unsupported substitutions, malformed manifests, and schema/tool mismatch. It emits
+   the additional partial declaration and is exercised against DLL-only references; next migrate
+   physical view, member, barrier, and profile-default adapters from the independent handwritten
+   sufficiency fixture into that production emitter. Multi-parent generic diamonds compose from
+   parent manifest contracts plus the CLR graph; schema 6 records the logical contributor mapping
+   that CLR metadata lacks for derived method and split mutable-property intersection slots.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
    no-KLIB C# `where` clauses. Schema 6 supplies normalized positional analyzer guidance for
    owner-relative constraints erased from illegal variant positions; tooling must explain them,
