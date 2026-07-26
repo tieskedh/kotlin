@@ -1693,6 +1693,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
   generic. The generated declaration adds only their physical interface views/adapters, and both
   Kotlin verifiers dispatch correctly on every DLL-only lane. Do not replace this with a generated
   base-class design.
+- `KDNCS011` is now present in the analyzer's formal `SupportedDiagnostics`, not only its
+  descriptor/release table and generator output. The missing-containing-partial regression also
+  rejects analyzer-failure `AD0001`, keeping IDE and command-line analyzer hosts aligned.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot

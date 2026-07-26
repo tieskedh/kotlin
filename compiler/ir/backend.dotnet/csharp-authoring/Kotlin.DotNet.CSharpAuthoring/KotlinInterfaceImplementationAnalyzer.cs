@@ -30,7 +30,8 @@ public sealed class KotlinInterfaceImplementationAnalyzer : DiagnosticAnalyzer
             Diagnostics.UnsupportedContract,
             Diagnostics.MissingSourceMember,
             Diagnostics.ErasedOwnerConstraint,
-            Diagnostics.UnsupportedToolingShape);
+            Diagnostics.UnsupportedToolingShape,
+            Diagnostics.MissingContainingPartial);
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)

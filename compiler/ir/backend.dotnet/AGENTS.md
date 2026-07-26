@@ -1610,7 +1610,9 @@ landed shape as a compatibility constraint.
   tree. C# struct and record-struct implementors remain explicitly unsupported pending a boxing,
   mutation, and identity design. Generated-source hint names use a SHA-256 digest of the fully
   qualified C# type solely to avoid Roslyn filename collisions; they are not declaration
-  identities or persisted ABI. Its ordinary non-generic slice binds
+  identities or persisted ABI. Every emitted analyzer diagnostic, including the containing-type
+  `KDNCS011` rule, must appear in `SupportedDiagnostics`; release-table documentation alone is not
+  registration. Its ordinary non-generic slice binds
   Kotlin-named or PascalCase source methods/properties to explicit recorded CLR slots. Portable
   defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
   class forwarder. The DLL-only matrix executes public and authorized-internal implementations
