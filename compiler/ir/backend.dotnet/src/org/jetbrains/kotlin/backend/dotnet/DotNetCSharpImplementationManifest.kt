@@ -15,6 +15,8 @@ import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
+import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
+import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isInterface
@@ -96,7 +98,18 @@ data class DotNetCSharpMemberContract(
     val defaultKind: DotNetCSharpDefaultKind,
     val semanticBodyView: DotNetCSharpInterfaceView?,
     val wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
+    val erasedOwnerRelativeConstraints: List<DotNetCSharpErasedOwnerRelativeConstraint> = emptyList(),
     val slots: List<DotNetCSharpMethodLocator>,
+)
+
+/**
+ * Kotlin tooling guidance for a logical `R : T` relationship which cannot be placed on a split
+ * CLR interface slot. These positional indices must never be reconstructed as executable C#
+ * constraints; the generator/analyzer uses them to explain the deliberately weakened boundary.
+ */
+data class DotNetCSharpErasedOwnerRelativeConstraint(
+    val methodTypeParameterIndex: Int,
+    val ownerTypeParameterIndex: Int,
 )
 
 data class DotNetCSharpWrongShapePolicy(
@@ -118,6 +131,7 @@ data class DotNetCSharpIntersectionContract(
     val sourceName: String,
     val authoringView: DotNetCSharpInterfaceView,
     val contributingLogicalMemberKeys: List<String>,
+    val erasedOwnerRelativeConstraints: List<DotNetCSharpErasedOwnerRelativeConstraint> = emptyList(),
     val slots: List<DotNetCSharpMethodLocator>,
 )
 
@@ -147,7 +161,7 @@ data class DotNetCSharpMethodLocator(
  * backend owns a capable PE writer; changing carriers must not change these records.
  */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 5
+    const val CURRENT_SCHEMA_VERSION = 6
     const val ASSEMBLY_METADATA_KEY = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
@@ -192,6 +206,13 @@ object DotNetCSharpImplementationManifestCodec {
             )
             for (member in contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey)) {
                 requireKotlinLogicalKey("F", member.logicalKey, "member")
+                validateErasedOwnerRelativeConstraints(
+                    contract,
+                    member.authoringView,
+                    member.erasedOwnerRelativeConstraints,
+                    member.slots,
+                    "member '${member.logicalKey}'",
+                )
                 appendRecord(
                     MEMBER_RECORD,
                     contract.logicalKey,
@@ -204,6 +225,7 @@ object DotNetCSharpImplementationManifestCodec {
                     member.wrongShapePolicy?.checkedParameterCount?.toString(),
                     member.wrongShapePolicy?.fallback?.name,
                     member.wrongShapePolicy?.fallbackParameterIndex?.toString(),
+                    member.erasedOwnerRelativeConstraints.encodeErasedOwnerRelativeConstraints(),
                 )
                 for (slot in member.slots.sortedBy(DotNetCSharpMethodLocator::role)) {
                     appendRecord(
@@ -226,6 +248,13 @@ object DotNetCSharpImplementationManifestCodec {
                 intersection.contributingLogicalMemberKeys.forEach { contributor ->
                     requireKotlinLogicalKey("F", contributor, "intersection contributor")
                 }
+                validateErasedOwnerRelativeConstraints(
+                    contract,
+                    intersection.authoringView,
+                    intersection.erasedOwnerRelativeConstraints,
+                    intersection.slots,
+                    "intersection '${intersection.logicalKey}'",
+                )
                 appendRecord(
                     INTERSECTION_RECORD,
                     contract.logicalKey,
@@ -234,6 +263,7 @@ object DotNetCSharpImplementationManifestCodec {
                     intersection.sourceName,
                     intersection.authoringView.name,
                     intersection.contributingLogicalMemberKeys.encodeList(),
+                    intersection.erasedOwnerRelativeConstraints.encodeErasedOwnerRelativeConstraints(),
                 )
                 for (slot in intersection.slots.sortedBy(DotNetCSharpMethodLocator::role)) {
                     appendRecord(
@@ -262,6 +292,7 @@ object DotNetCSharpImplementationManifestCodec {
             val defaultKind: DotNetCSharpDefaultKind,
             val semanticBodyView: DotNetCSharpInterfaceView?,
             val wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
+            val erasedOwnerRelativeConstraints: List<DotNetCSharpErasedOwnerRelativeConstraint>,
         )
         data class PendingIntersection(
             val interfaceKey: String,
@@ -270,6 +301,7 @@ object DotNetCSharpImplementationManifestCodec {
             val sourceName: String,
             val authoringView: DotNetCSharpInterfaceView,
             val contributingLogicalMemberKeys: List<String>,
+            val erasedOwnerRelativeConstraints: List<DotNetCSharpErasedOwnerRelativeConstraint>,
         )
 
         val records = encoded.lineSequence()
@@ -338,7 +370,7 @@ object DotNetCSharpImplementationManifestCodec {
         val pendingMembers = linkedMapOf<String, PendingMember>()
         for (record in records.filter { it.first == MEMBER_RECORD }) {
             val fields = record.second
-            require(fields.size == 10) { "C# implementation member record has invalid arity" }
+            require(fields.size == 11) { "C# implementation member record has invalid arity" }
             val memberKey = requireNotNull(fields[1]) { "C# implementation member has no logical key" }
             requireKotlinLogicalKey("F", memberKey, "member")
             val wrongShapePolicy = fields[7]?.let { checkedParameterCount ->
@@ -364,6 +396,8 @@ object DotNetCSharpImplementationManifestCodec {
                 defaultKind = enumValueOf(requireNotNull(fields[5])),
                 semanticBodyView = fields[6]?.let { enumValueOf<DotNetCSharpInterfaceView>(it) },
                 wrongShapePolicy = wrongShapePolicy,
+                erasedOwnerRelativeConstraints = requireNotNull(fields[10])
+                    .decodeErasedOwnerRelativeConstraints(memberKey),
             )
             require(pendingMembers.put(memberKey, pending) == null) {
                 "Duplicate C# implementation member '$memberKey'"
@@ -415,6 +449,7 @@ object DotNetCSharpImplementationManifestCodec {
                     defaultKind = pending.defaultKind,
                     semanticBodyView = pending.semanticBodyView,
                     wrongShapePolicy = pending.wrongShapePolicy,
+                    erasedOwnerRelativeConstraints = pending.erasedOwnerRelativeConstraints,
                     slots = slots,
                 )
             )
@@ -426,7 +461,7 @@ object DotNetCSharpImplementationManifestCodec {
         val pendingIntersections = linkedMapOf<String, PendingIntersection>()
         for (record in records.filter { it.first == INTERSECTION_RECORD }) {
             val fields = record.second
-            require(fields.size == 6) { "C# implementation intersection record has invalid arity" }
+            require(fields.size == 7) { "C# implementation intersection record has invalid arity" }
             val intersectionKey = requireNotNull(fields[1]) {
                 "C# implementation intersection has no logical key"
             }
@@ -453,6 +488,8 @@ object DotNetCSharpImplementationManifestCodec {
                 sourceName = requireNotNull(fields[3]),
                 authoringView = enumValueOf(requireNotNull(fields[4])),
                 contributingLogicalMemberKeys = contributors,
+                erasedOwnerRelativeConstraints = requireNotNull(fields[6])
+                    .decodeErasedOwnerRelativeConstraints(intersectionKey),
             )
             require(pendingIntersections.put(intersectionKey, pending) == null) {
                 "Duplicate C# implementation intersection '$intersectionKey'"
@@ -507,6 +544,7 @@ object DotNetCSharpImplementationManifestCodec {
                     sourceName = pending.sourceName,
                     authoringView = pending.authoringView,
                     contributingLogicalMemberKeys = pending.contributingLogicalMemberKeys,
+                    erasedOwnerRelativeConstraints = pending.erasedOwnerRelativeConstraints,
                     slots = slots,
                 )
             )
@@ -551,6 +589,24 @@ object DotNetCSharpImplementationManifestCodec {
             }
             require(contract.sourceAuthoringSupported == contract.unsupportedReasons.isEmpty()) {
                 "C# implementation interface '${contract.logicalKey}' has inconsistent support status"
+            }
+            contract.members.forEach { member ->
+                validateErasedOwnerRelativeConstraints(
+                    contract,
+                    member.authoringView,
+                    member.erasedOwnerRelativeConstraints,
+                    member.slots,
+                    "member '${member.logicalKey}'",
+                )
+            }
+            contract.intersections.forEach { intersection ->
+                validateErasedOwnerRelativeConstraints(
+                    contract,
+                    intersection.authoringView,
+                    intersection.erasedOwnerRelativeConstraints,
+                    intersection.slots,
+                    "intersection '${intersection.logicalKey}'",
+                )
             }
         }
         return DotNetCSharpImplementationManifest(
@@ -715,6 +771,71 @@ object DotNetCSharpImplementationManifestCodec {
         }
     }
 
+    private fun List<DotNetCSharpErasedOwnerRelativeConstraint>
+            .encodeErasedOwnerRelativeConstraints(): String =
+        joinToString(LIST_SEPARATOR) { constraint ->
+            constraint.methodTypeParameterIndex.toString() +
+                    TYPE_PARAMETER_SEPARATOR +
+                    constraint.ownerTypeParameterIndex
+        }
+
+    private fun String.decodeErasedOwnerRelativeConstraints(
+        recordKey: String,
+    ): List<DotNetCSharpErasedOwnerRelativeConstraint> =
+        decodeList().map { encodedConstraint ->
+            val components = encodedConstraint.split(TYPE_PARAMETER_SEPARATOR)
+            require(components.size == 2) {
+                "C# implementation record '$recordKey' has an invalid erased owner-relative constraint"
+            }
+            DotNetCSharpErasedOwnerRelativeConstraint(
+                methodTypeParameterIndex = components[0].toInt(),
+                ownerTypeParameterIndex = components[1].toInt(),
+            )
+        }
+
+    private fun validateErasedOwnerRelativeConstraints(
+        contract: DotNetCSharpInterfaceContract,
+        authoringView: DotNetCSharpInterfaceView,
+        constraints: List<DotNetCSharpErasedOwnerRelativeConstraint>,
+        slots: List<DotNetCSharpMethodLocator>,
+        recordDescription: String,
+    ) {
+        if (constraints.isEmpty()) return
+        require(contract.typeParameters.isNotEmpty()) {
+            "C# implementation $recordDescription has an owner-relative constraint on a non-generic interface"
+        }
+        require(
+            constraints == constraints
+                .distinct()
+                .sortedWith(
+                    compareBy(
+                        DotNetCSharpErasedOwnerRelativeConstraint::methodTypeParameterIndex,
+                        DotNetCSharpErasedOwnerRelativeConstraint::ownerTypeParameterIndex,
+                    )
+                )
+        ) {
+            "C# implementation $recordDescription has duplicate or unordered erased owner-relative constraints"
+        }
+        val authoringRole = when (authoringView) {
+            DotNetCSharpInterfaceView.CANONICAL -> DotNetCSharpSlotRole.CANONICAL
+            DotNetCSharpInterfaceView.DECLARED -> DotNetCSharpSlotRole.DECLARED
+            DotNetCSharpInterfaceView.EXACT -> DotNetCSharpSlotRole.EXACT
+        }
+        val authoringSlots = slots.filter { slot -> slot.role == authoringRole }
+        require(authoringSlots.size == 1) {
+            "C# implementation $recordDescription has no unique authoring-view slot"
+        }
+        val authoringSlot = authoringSlots.single()
+        constraints.forEach { constraint ->
+            require(constraint.methodTypeParameterIndex in 0 until authoringSlot.genericArity) {
+                "C# implementation $recordDescription has an invalid method type-parameter index"
+            }
+            require(constraint.ownerTypeParameterIndex in contract.typeParameters.indices) {
+                "C# implementation $recordDescription has an invalid owner type-parameter index"
+            }
+        }
+    }
+
     private fun StringBuilder.appendRecord(tag: String, vararg fields: String?) {
         append(tag)
         fields.forEach { field ->
@@ -785,6 +906,23 @@ internal fun collectDotNetCSharpImplementationManifest(
             owner = owner.parent as? IrClass
         }
         return true
+    }
+
+    fun erasedOwnerRelativeConstraints(
+        function: IrSimpleFunction,
+        interfaceClass: IrClass,
+    ): List<DotNetCSharpErasedOwnerRelativeConstraint> {
+        val directBounds = function.dotNetDirectOwnerRelativeMethodBoundsOrNull(interfaceClass)
+            ?: return emptyList()
+        return directBounds.mapIndexedNotNull { methodIndex, bound ->
+            val ownerParameter = ((bound as? IrSimpleType)?.classifier as? IrTypeParameterSymbol)?.owner
+                ?: return@mapIndexedNotNull null
+            val ownerIndex = interfaceClass.typeParameters.indexOf(ownerParameter)
+            require(ownerIndex >= 0) {
+                "Erased owner-relative constraint does not name a parameter of its interface"
+            }
+            DotNetCSharpErasedOwnerRelativeConstraint(methodIndex, ownerIndex)
+        }
     }
 
     fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
@@ -998,6 +1136,11 @@ internal fun collectDotNetCSharpImplementationManifest(
                         } else {
                             wrongShapePolicies[source]
                         },
+                        erasedOwnerRelativeConstraints = if (interfaceInfo == null) {
+                            emptyList()
+                        } else {
+                            erasedOwnerRelativeConstraints(source, irClass)
+                        },
                         slots = slots,
                     )
                 }
@@ -1085,6 +1228,8 @@ internal fun collectDotNetCSharpImplementationManifest(
                             ?: source.name.asString(),
                         authoringView = authoringView,
                         contributingLogicalMemberKeys = contributorKeys,
+                        erasedOwnerRelativeConstraints =
+                            erasedOwnerRelativeConstraints(source, irClass),
                         slots = slots,
                     )
                 }

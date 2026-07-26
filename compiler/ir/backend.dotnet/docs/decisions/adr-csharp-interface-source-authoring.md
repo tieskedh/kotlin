@@ -49,7 +49,7 @@ manifest supplies the information CLR metadata cannot express:
 Physical signatures are repeated only as stable MethodDef locators and integrity checks. They do
 not form a second Kotlin type system.
 
-Schema 5 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
+Schema 6 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
 and member records use the same public `IdSignature` rendered by
 `PublicIdSignatureComputer(DotNetIrMangler)` for the KLIB/DLL physical index. A manifest must not
 introduce a runtime-, Roslyn-, or tooling-owned declaration identity. The `X:` key of a derived
@@ -100,6 +100,12 @@ GenericParamConstraint rows. The manifest does not copy them into a second type 
 Kotlin owner-relative constraint deliberately omitted because it is illegal on a CLR variant view
 must not be reconstructed as a C# constraint; any additional analyzer guidance is Kotlin tooling
 metadata, not executable CLR signature metadata.
+
+Schema 6 records that guidance as normalized pairs of method-type-parameter and
+interface-owner-type-parameter indices on direct members and derived intersection slots. This is
+only the logical fact needed to explain the weakened boundary and generate an appropriate runtime
+adapter. It is not a CLR `where` clause and does not duplicate arbitrary Kotlin types or
+representable constraints. Readers reject out-of-range, duplicate, or unordered pairs.
 
 Wrong-shape behavior is likewise semantic metadata, not a C# naming convention. Generated
 canonical adapters use the recorded policy before narrowing to the typed source body. An ordinary
@@ -221,7 +227,7 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-Schema 5 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
+Schema 6 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface
 graph, whether they are in the same DLL or referenced compiler-produced Kotlin library DLLs. This
 covers a two-branch generic diamond with a shared root default, a parent-owned mutable property,
 and a sibling-owned property through a child exact view. Logical root keys deduplicate the diamond;
@@ -229,7 +235,7 @@ the manifest does not duplicate local or assembly-qualified physical TypeSpecs.
 
 An unrelated same-named parent intersection is different: CLR metadata exposes the bodyless
 derived slot but not the fact that Kotlin selected it to unify several logical declarations.
-Schema 5 therefore records the sorted contributor logical keys and the derived declared/exact
+Schema 6 therefore records the sorted contributor logical keys and the derived declared/exact
 MethodDef locators. Generated C# keeps one source body, explicitly adapts the derived slot, and
 maps the parent canonical identities to that same body. For a variant mutable-property
 intersection, the declared record contains the variance-safe getter while the exact records
@@ -257,7 +263,7 @@ reference compiled under an unauthorized assembly identity fails with Roslyn `CS
 nested interfaces and `@PublishedApi internal` compiler-only interfaces are deliberately absent
 from the authoring manifest.
 
-Schema 5 also records special-barrier policy directly from Kotlin's shared
+Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding
 `Collection.contains` records one checked argument with a `false` fallback, while a child
 overriding `List.indexOf` records `-1`. An ordinary user unsafe input records no policy. The
