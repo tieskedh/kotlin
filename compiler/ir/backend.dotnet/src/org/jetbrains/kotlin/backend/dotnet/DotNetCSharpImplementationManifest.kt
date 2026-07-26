@@ -821,9 +821,10 @@ internal fun collectDotNetCSharpImplementationManifest(
                 }
                 .sortedBy(DotNetCSharpMemberContract::logicalKey)
                 .toList()
-            val intersections = genericInterfaceIntersectionSlots
+            val ownerIntersectionSlots =
+                genericInterfaceIntersectionSlots.filter { slot -> slot.owner == irClass }
+            val intersections = ownerIntersectionSlots
                 .asSequence()
-                .filter { slot -> slot.owner == irClass }
                 .groupBy { slot -> slot.signatureSource.symbol }
                 .values
                 .map { intersectionSlots ->
@@ -865,16 +866,22 @@ internal fun collectDotNetCSharpImplementationManifest(
                             source.dotNetSignature(signatureMapper),
                             intersection.physicalMethodName,
                         )
+                        val propertyName = source.correspondingPropertySymbol?.owner?.let { property ->
+                            val getterMethodName = ownerIntersectionSlots.singleOrNull { candidate ->
+                                candidate.memberView == memberView &&
+                                        candidate.signatureSource == property.getter
+                            }?.physicalMethodName
+                            dotNetPhysicalPropertyName(
+                                property.name.asString(),
+                                getterMethodName ?: intersection.physicalMethodName,
+                            )
+                        }
                         locator(
                             memberView.toManifestSlotRole(),
                             source,
                             info,
                             intersection.physicalMethodName,
-                            typedPropertyName(
-                                source,
-                                memberView,
-                                intersection.physicalMethodName,
-                            ),
+                            propertyName,
                         )
                     }.sortedBy(DotNetCSharpMethodLocator::role)
                     val authoringView = if (

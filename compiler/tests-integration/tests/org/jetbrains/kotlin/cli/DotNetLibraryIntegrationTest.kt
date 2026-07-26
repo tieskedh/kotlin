@@ -570,6 +570,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface IntersectionRight<out T> {
                 public fun overlap(): T
             }
+
+            public interface MutableLeft<out T> {
+                public var merged: @UnsafeVariance T
+            }
+
+            public interface MutableRight<out T> {
+                public var merged: @UnsafeVariance T
+            }
         """.trimIndent()
         val childDeclarationText = """
             public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
@@ -580,6 +588,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface ResolvedIntersection<out T> :
                 IntersectionLeft<T>, IntersectionRight<T>
 
+            public interface ResolvedMutable<out T> :
+                MutableLeft<T>, MutableRight<T>
+
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
                 val left: IntersectionLeft<String> = value
                 val right: IntersectionRight<String> = value
@@ -588,6 +599,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     left.overlap() == "intersection" &&
                     right.overlap() == "intersection"
                 ) 0 else 1
+            }
+
+            public fun verifyMutable(value: ResolvedMutable<String>): Int {
+                val left: MutableLeft<String> = value
+                val right: MutableRight<String> = value
+                if (value.merged != "mutable" || left.merged != "mutable" ||
+                    right.merged != "mutable"
+                ) return 1
+                left.merged = "left"
+                if (value.merged != "left" || right.merged != "left") return 2
+                right.merged = "right"
+                return if (value.merged == "right" && left.merged == "right") 0 else 3
             }
 
             public fun verify(value: Shape<String>): Int {
@@ -738,8 +761,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val rightContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.IntersectionRight"
             }
+            val mutableLeftContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.MutableLeft"
+            }
+            val mutableRightContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.MutableRight"
+            }
             val resolvedIntersection = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedIntersection"
+            }
+            val resolvedMutable = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedMutable"
             }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
@@ -751,6 +783,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolvedIntersection.sourceAuthoringSupported,
                 resolvedIntersection.unsupportedReasons.joinToString(),
             )
+            assertTrue(mutableLeftContract.sourceAuthoringSupported)
+            assertTrue(mutableRightContract.sourceAuthoringSupported)
+            assertTrue(resolvedMutable.sourceAuthoringSupported)
             val intersection = resolvedIntersection.intersections.single()
             assertEquals("overlap", intersection.sourceName)
             assertEquals(DotNetCSharpMemberKind.METHOD, intersection.kind)
@@ -766,8 +801,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 listOf(DotNetCSharpSlotRole.DECLARED),
                 intersection.slots.map { slot -> slot.role },
             )
-            assertEquals(if (externalParent) 2 else 7, manifest.interfaces.size)
-            assertEquals(if (externalParent) 5 else 7, parentManifest.interfaces.size)
+            val mutableGetter = resolvedMutable.intersections.single { candidate ->
+                candidate.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+            }
+            val mutableSetter = resolvedMutable.intersections.single { candidate ->
+                candidate.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
+            }
+            assertEquals(DotNetCSharpInterfaceView.EXACT, mutableGetter.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.EXACT, mutableSetter.authoringView)
+            assertEquals(
+                listOf(DotNetCSharpSlotRole.DECLARED, DotNetCSharpSlotRole.EXACT),
+                mutableGetter.slots.map { slot -> slot.role }.sorted(),
+            )
+            assertEquals(
+                listOf(DotNetCSharpSlotRole.EXACT),
+                mutableSetter.slots.map { slot -> slot.role },
+            )
+            assertEquals(
+                mutableGetter.slots.single { slot -> slot.role == DotNetCSharpSlotRole.EXACT }
+                    .propertyName,
+                mutableSetter.slots.single().propertyName,
+            )
+            assertEquals(if (externalParent) 3 else 10, manifest.interfaces.size)
+            assertEquals(if (externalParent) 7 else 10, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -776,8 +832,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         siblingContract,
                         leftContract,
                         rightContract,
+                        mutableLeftContract,
+                        mutableRightContract,
                         contract,
                         resolvedIntersection,
+                        resolvedMutable,
                     )
                         .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
             }
@@ -879,6 +938,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         rightContract,
                         resolvedIntersection,
                         intersection,
+                        mutableLeftContract,
+                        mutableRightContract,
+                        resolvedMutable,
+                        mutableGetter,
+                        mutableSetter,
                         inheritedDefaultHasEffectiveDim =
                             fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
                                     promotedDim,
@@ -9342,6 +9406,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         rightContract: DotNetCSharpInterfaceContract,
         resolvedIntersectionContract: DotNetCSharpInterfaceContract,
         intersection: DotNetCSharpIntersectionContract,
+        mutableLeftContract: DotNetCSharpInterfaceContract,
+        mutableRightContract: DotNetCSharpInterfaceContract,
+        resolvedMutableContract: DotNetCSharpInterfaceContract,
+        mutableGetter: DotNetCSharpIntersectionContract,
+        mutableSetter: DotNetCSharpIntersectionContract,
         inheritedDefaultHasEffectiveDim: Boolean =
             rootContract.members.single { member -> member.sourceName == "fallback" }
                 .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
@@ -9370,6 +9439,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     checkNotNull(resolvedIntersectionContract.exactOwnerPath)
             }
         )
+        val mutableLeftCanonicalType =
+            mutableLeftContract.csharpOwner(mutableLeftContract.canonicalOwnerPath)
+        val mutableRightCanonicalType =
+            mutableRightContract.csharpOwner(mutableRightContract.canonicalOwnerPath)
+        val resolvedMutableDeclaredType =
+            resolvedMutableContract.csharpOwner(resolvedMutableContract.declaredOwnerPath)
+        val resolvedMutableExactType =
+            resolvedMutableContract.csharpOwner(checkNotNull(resolvedMutableContract.exactOwnerPath))
         val value = rootContract.member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val labelGetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_GETTER)
         val labelSetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_SETTER)
@@ -9396,6 +9473,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DotNetCSharpInterfaceView.EXACT -> DotNetCSharpSlotRole.EXACT
             }
         }
+        val mutableDeclaredGetter = mutableGetter.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.DECLARED
+        }
+        val mutableExactGetter = mutableGetter.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.EXACT
+        }
+        val mutableExactSetter = mutableSetter.slots.single()
+        require(mutableExactGetter.propertyName == mutableExactSetter.propertyName)
+        val mutableLeftGetter = mutableLeftContract.member(
+            "merged",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
+        val mutableLeftSetter = mutableLeftContract.member(
+            "merged",
+            DotNetCSharpMemberKind.PROPERTY_SETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
+        val mutableRightGetter = mutableRightContract.member(
+            "merged",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
+        val mutableRightSetter = mutableRightContract.member(
+            "merged",
+            DotNetCSharpMemberKind.PROPERTY_SETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.ERASED }
+        require(mutableLeftGetter.propertyName == mutableLeftSetter.propertyName)
+        require(mutableRightGetter.propertyName == mutableRightSetter.propertyName)
         require(canonicalLabelGetter.propertyName == canonicalLabelSetter.propertyName)
         val portableDefault =
             fallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER &&
@@ -9496,6 +9599,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
 
+            public sealed partial class GeneratedMutableIntersection
+            {
+                public string merged { get; set; } = "mutable";
+            }
+
+            public sealed partial class GeneratedMutableIntersection :
+                $resolvedMutableExactType<string>
+            {
+                string $resolvedMutableDeclaredType<string>.${checkNotNull(mutableDeclaredGetter.propertyName)}
+                {
+                    get { return merged; }
+                }
+
+                string $resolvedMutableExactType<string>.${checkNotNull(mutableExactGetter.propertyName)}
+                {
+                    get { return merged; }
+                    set { merged = value; }
+                }
+
+                object $mutableLeftCanonicalType.${checkNotNull(mutableLeftGetter.propertyName)}
+                {
+                    get { return merged; }
+                    set { merged = (string)value; }
+                }
+
+                object $mutableRightCanonicalType.${checkNotNull(mutableRightGetter.propertyName)}
+                {
+                    get { return merged; }
+                    set { merged = (string)value; }
+                }
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -9508,6 +9643,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (intersectionResult != 0)
                         throw new System.Exception(
                             "Kotlin intersection verification failed: " + intersectionResult);
+                    int mutableResult =
+                        manifest.apiKt.verifyMutable(new GeneratedMutableIntersection());
+                    if (mutableResult != 0)
+                        throw new System.Exception(
+                            "Kotlin mutable verification failed: " + mutableResult);
                     return 0;
                 }
             }

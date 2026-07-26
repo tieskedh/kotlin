@@ -1586,6 +1586,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   execution through the derived, left, and right views reaches that one body on all profiles and
   the cross-profile lane. This is a real schema bump, not an unversioned reinterpretation of
   schema 1.
+- Schema 2 now also covers the split mutable-property intersection. Its declared view records only
+  the variance-safe getter; its exact view records the getter and setter against one
+  getter-selected CLR Property row. Generated C# owns one `merged` property body and adds declared,
+  exact, and two parent-canonical property adapters. Kotlin reads and mutates through the derived
+  and both parent views on all four manifest lanes after KLIB deletion.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1660,13 +1665,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 2 over intersection properties,
-   constraints, inherited mutable-property obligations, special barriers, non-generic interfaces,
-   friend-accessible internal interfaces, and runtime-bootstrap contracts. Then implement the
-   Roslyn partial-type generator/analyzer and move the payload to a true managed resource before
-   freezing the schema or package. Continue the foreign provider/implementor collision matrix in
-   parallel with that contract. Keep raw metadata-table auditing with the structured metadata
-   work; do not substitute IL substring checks.
+1. **Complete the C# interface-authoring contract.** Extend schema 2 over constraints, inherited
+   mutable-property obligations, special barriers, non-generic interfaces, friend-accessible
+   internal interfaces, and runtime-bootstrap contracts. Then implement the Roslyn partial-type
+   generator/analyzer and move the payload to a true managed resource before freezing the schema
+   or package. Continue the foreign provider/implementor collision matrix in parallel with that
+   contract. Keep raw metadata-table auditing with the structured metadata work; do not substitute
+   IL substring checks.
 2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
    producer authorization and consumer declaration are implemented. The repository has no
    Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or

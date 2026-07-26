@@ -188,8 +188,11 @@ An unrelated same-named parent intersection is different: CLR metadata exposes t
 derived slot but not the fact that Kotlin selected it to unify several logical declarations.
 Schema 2 therefore records the sorted contributor logical keys and the derived declared/exact
 MethodDef locators. Generated C# keeps one source body, explicitly adapts the derived slot, and
-maps the parent canonical identities to that same body. The cross-assembly test deletes both KLIBs
-before reading the DLL contracts. It also compiles a
+maps the parent canonical identities to that same body. For a variant mutable-property
+intersection, the declared record contains the variance-safe getter while the exact records
+contain the complete getter/setter property; getter-selected Property rows keep both exact
+accessors associated with one CLR property. The cross-assembly test deletes both KLIBs before
+reading the DLL contracts. It also compiles a
 `netstandard2.0` parent into a `net10.0` child, reads the child promotion directly from ECMA-335
 `MethodImpl` metadata, omits generated class forwarders only after every parent slot has a concrete
 child mapping, and executes the inherited default. Non-generic parents remain explicitly
