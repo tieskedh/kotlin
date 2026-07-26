@@ -405,8 +405,8 @@ The remaining P0-D implementation order is:
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
-   families and the real same-owner clash matrix. Extend the DLL manifest over inherited
-   mutable-property obligations and friend-accessible internal interfaces; then implement the
+   families and the real same-owner clash matrix. The DLL manifest now covers inherited
+   mutable-property obligations and friend-accessible internal interfaces; next implement the
    Roslyn partial-type generator/analyzer. Multi-parent generic diamonds compose from parent
    manifest contracts plus the CLR graph; schema 5 records the logical contributor mapping that
    CLR metadata lacks for derived method and split mutable-property intersection slots.

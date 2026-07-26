@@ -68,6 +68,13 @@ unknown logical-identity schemes, non-Kotlin declaration keys, inconsistent prof
 combinations, and corrupt payloads. No compatibility is promised for the current unshipped
 schema; an incompatible change increments the schema and stale artifacts fail explicitly.
 
+Ordinary `internal` interfaces use the same Kotlin declaration-identity machinery. Their manifest
+records do not make them public and do not copy friend authorization: CLR TypeDef accessibility
+and the producer's ordinary `InternalsVisibleTo` attributes remain authoritative. Tooling may
+generate an implementation only when Roslyn reports the interface and every containing type as
+accessible from the current compilation. Private/protected owner chains and
+`@PublishedApi internal` compiler-ABI interfaces are not source-authoring contracts.
+
 ### 2. Roslyn partial-type generation is the supported C# source-authoring path
 
 The intended tooling is a Roslyn source generator paired with an analyzer. A user supplies a
@@ -242,8 +249,13 @@ The same fixture proves helper forwarding on both portable profiles, natural DIM
 `net10.0`, and child-owned DIM promotion when the selected parent DLL is portable.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
-Friend-accessible internal interfaces are still omitted by the public-only collector. They must
-gain equivalent manifest records before the generator claims support for implementing them.
+Friend-accessible internal interfaces now receive the same records as public contracts when their
+complete containing-type chain is public or ordinary internal. The no-KLIB fixture authorizes one
+C# output identity through producer-emitted `InternalsVisibleTo`, implements top-level and nested
+internal interfaces, and executes an internal Kotlin verifier on every profile. The same source
+reference compiled under an unauthorized assembly identity fails with Roslyn `CS0122`. Private
+nested interfaces and `@PublishedApi internal` compiler-only interfaces are deliberately absent
+from the authoring manifest.
 
 Schema 5 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding

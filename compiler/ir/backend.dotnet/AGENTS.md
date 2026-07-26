@@ -1631,8 +1631,14 @@ landed shape as a compatibility constraint.
   properties bind it to every recorded Kotlin physical name. Kotlin ABI names stay unchanged.
   `init`, `required`, indexers, events, and consumer aliases require explicit export policy rather
   than being inferred from Kotlin `val`/`var`.
-  Friend-accessible internal interfaces remain outside the first authoring slice. Generated
-  adapters must reach the one typed body; portable defaults call the recorded nameable
+  Friend-accessible ordinary internal interfaces use the same declaration identities and records
+  as public contracts, while CLR TypeDef accessibility and producer-emitted
+  `InternalsVisibleTo` remain the sole access authority. The manifest never grants friendship or
+  widens the type. Effective public/internal owner chains are included; private/protected chains
+  and `@PublishedApi internal` compiler-ABI interfaces are excluded. DLL-only tests implement
+  top-level and nested internal contracts from an authorized C# assembly on every profile and pin
+  `CS0122` for an unauthorized identity. Generated adapters must reach the one typed body;
+  portable defaults call the recorded nameable
   `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current
   hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an
   arbitrary self-contained managed resource. Move the carrier-independent payload to a real
