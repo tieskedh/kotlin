@@ -186,6 +186,12 @@ those physical mappings, and tooling never infers promotion merely from the cons
 Missing, incomplete, or ambiguous mappings are diagnostics rather than a reason to guess or emit
 an overriding helper forwarder.
 
+Promotion matching uses the complete raw ECMA-335 MethodImpl declaration signature: declaring
+assembly and owner, method name, generic arity, return type, and every parameter type. A row with a
+coincident name and arity but a different signature is not evidence of an effective DIM. The
+metadata-only test reader decodes those signatures without loading the producer and rejects a
+deliberately corrupted return type.
+
 The helper type and method are marked compiler ABI and deliberately nameable from generated C#
 source. Tools consume their recorded physical identity; they do not derive a helper name from the
 interface.

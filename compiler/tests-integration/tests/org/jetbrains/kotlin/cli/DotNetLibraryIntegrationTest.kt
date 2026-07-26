@@ -202,6 +202,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 using System;
                 using System.Collections.Immutable;
                 using System.IO;
+                using System.Linq;
                 using System.Reflection;
                 using System.Reflection.Metadata;
                 using System.Reflection.PortableExecutable;
@@ -262,7 +263,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                         Encode(declaration.Owner.Path) + "|" +
                                         Encode(declaration.Name) + "|" +
                                         Encode(declaration.GenericArity.ToString()) + "|" +
-                                        Encode(declaration.ParameterCount.ToString()));
+                                        Encode(declaration.ReturnType) + "|" +
+                                        Encode(string.Join(
+                                            "\u0001",
+                                            declaration.ParameterTypes)));
                                 }
                                 TypeIdentity methodOwner = provider.FromDefinition(typeHandle);
                                 foreach (MethodDefinitionHandle methodHandle in type.GetMethods())
@@ -307,20 +311,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     internal readonly TypeIdentity Owner;
                     internal readonly string Name;
                     internal readonly int GenericArity;
-                    internal readonly int ParameterCount;
+                    internal readonly string ReturnType;
+                    internal readonly ImmutableArray<string> ParameterTypes;
                     internal readonly bool IsConcrete;
 
                     private MethodIdentity(
                         TypeIdentity owner,
                         string name,
                         int genericArity,
-                        int parameterCount,
+                        string returnType,
+                        ImmutableArray<string> parameterTypes,
                         bool isConcrete)
                     {
                         Owner = owner;
                         Name = name;
                         GenericArity = genericArity;
-                        ParameterCount = parameterCount;
+                        ReturnType = returnType;
+                        ParameterTypes = parameterTypes;
                         IsConcrete = isConcrete;
                     }
 
@@ -339,7 +346,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 provider.FromDefinition(method.GetDeclaringType()),
                                 metadata.GetString(method.Name),
                                 signature.GenericParameterCount,
-                                signature.ParameterTypes.Length,
+                                signature.ReturnType.Display,
+                                signature.ParameterTypes
+                                    .Select(type => type.Display)
+                                    .ToImmutableArray(),
                                 method.RelativeVirtualAddress != 0 &&
                                     (method.Attributes & MethodAttributes.Abstract) == 0);
                         }
@@ -353,7 +363,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 provider.FromMemberParent(member.Parent),
                                 metadata.GetString(member.Name),
                                 signature.GenericParameterCount,
-                                signature.ParameterTypes.Length,
+                                signature.ReturnType.Display,
+                                signature.ParameterTypes
+                                    .Select(type => type.Display)
+                                    .ToImmutableArray(),
                                 false);
                         }
                         if (handle.Kind == HandleKind.MethodSpecification)
@@ -557,10 +570,71 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     public TypeIdentity GetPrimitiveType(PrimitiveTypeCode typeCode)
                     {
+                        string signature;
+                        switch (typeCode)
+                        {
+                            case PrimitiveTypeCode.Boolean:
+                                signature = "bool";
+                                break;
+                            case PrimitiveTypeCode.Byte:
+                                signature = "uint8";
+                                break;
+                            case PrimitiveTypeCode.SByte:
+                                signature = "int8";
+                                break;
+                            case PrimitiveTypeCode.Char:
+                                signature = "char";
+                                break;
+                            case PrimitiveTypeCode.Int16:
+                                signature = "int16";
+                                break;
+                            case PrimitiveTypeCode.UInt16:
+                                signature = "uint16";
+                                break;
+                            case PrimitiveTypeCode.Int32:
+                                signature = "int32";
+                                break;
+                            case PrimitiveTypeCode.UInt32:
+                                signature = "uint32";
+                                break;
+                            case PrimitiveTypeCode.Int64:
+                                signature = "int64";
+                                break;
+                            case PrimitiveTypeCode.UInt64:
+                                signature = "uint64";
+                                break;
+                            case PrimitiveTypeCode.Single:
+                                signature = "float32";
+                                break;
+                            case PrimitiveTypeCode.Double:
+                                signature = "float64";
+                                break;
+                            case PrimitiveTypeCode.String:
+                                signature = "string";
+                                break;
+                            case PrimitiveTypeCode.Object:
+                                signature = "object";
+                                break;
+                            case PrimitiveTypeCode.IntPtr:
+                                signature = "native int";
+                                break;
+                            case PrimitiveTypeCode.UIntPtr:
+                                signature = "native uint";
+                                break;
+                            case PrimitiveTypeCode.TypedReference:
+                                signature = "typedref";
+                                break;
+                            case PrimitiveTypeCode.Void:
+                                signature = "void";
+                                break;
+                            default:
+                                throw new BadImageFormatException(
+                                    "Unsupported primitive type " + typeCode);
+                        }
                         return new TypeIdentity(
-                            "System.Private.CoreLib",
+                            currentAssembly,
                             "",
-                            typeCode.ToString());
+                            signature);
                     }
 
                     public TypeIdentity GetSZArrayType(TypeIdentity elementType)
@@ -573,7 +647,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         TypeDefinitionHandle handle,
                         byte rawTypeKind)
                     {
-                        return FromDefinition(handle);
+                        return SignatureType(
+                            FromDefinition(handle),
+                            rawTypeKind);
                     }
 
                     public TypeIdentity GetTypeFromReference(
@@ -581,7 +657,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         TypeReferenceHandle handle,
                         byte rawTypeKind)
                     {
-                        return FromReference(handle);
+                        return SignatureType(
+                            FromReference(handle),
+                            rawTypeKind);
                     }
 
                     public TypeIdentity GetTypeFromSpecification(
@@ -592,6 +670,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         return reader.GetTypeSpecification(handle)
                             .DecodeSignature(this, genericContext);
+                    }
+
+                    private TypeIdentity SignatureType(
+                        TypeIdentity type,
+                        byte rawTypeKind)
+                    {
+                        string prefix;
+                        if (rawTypeKind == 0x11)
+                        {
+                            prefix = "valuetype ";
+                        }
+                        else if (rawTypeKind == 0x12)
+                        {
+                            prefix = "class ";
+                        }
+                        else
+                        {
+                            throw new BadImageFormatException(
+                                "Unsupported raw type kind " + rawTypeKind);
+                        }
+                        string assembly = type.AssemblyName == currentAssembly
+                            ? ""
+                            : "[" + type.AssemblyName + "]";
+                        string path = string.Join(
+                            "/",
+                            type.Path.Split('\0').Select(Identifier));
+                        return type.WithDisplay(prefix + assembly + path);
+                    }
+
+                    private static string Identifier(string value)
+                    {
+                        return "'" +
+                            value.Replace("\\", "\\\\").Replace("'", "\\'") +
+                            "'";
                     }
                 }
                 """.trimIndent()
@@ -1450,6 +1562,43 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertTrue(ordinaryPromotedDim) {
                     "The ordinary child DLL does not expose its promoted CLR DIM:\n" +
                             methodImpls.joinToString("\n")
+                }
+                val fallbackSlots = fallback.slots.filter { slot ->
+                    slot.role != DotNetCSharpSlotRole.HELPER
+                }
+                var tampered = false
+                val wrongReturnMethodImpls = methodImpls.map { implementation ->
+                    val matchesLocator = fallbackSlots.any { slot ->
+                        implementation.declarationAssemblyName.equals(
+                            parentManifest.assemblyName,
+                            ignoreCase = true,
+                        ) &&
+                                implementation.declarationOwnerPath == slot.ownerPath &&
+                                implementation.declarationMethodName == slot.methodName &&
+                                implementation.declarationGenericArity == slot.genericArity
+                    }
+                    if (!tampered && matchesLocator) {
+                        tampered = true
+                        implementation.copy(
+                            declarationReturnType =
+                                implementation.declarationReturnType + "[]"
+                        )
+                    } else {
+                        implementation
+                    }
+                }
+                assertTrue(tampered) {
+                    "No promoted MethodImpl was available for signature-integrity testing"
+                }
+                assertFalse(
+                    hasEffectivePromotedDim(
+                        contract,
+                        parentManifest,
+                        fallback,
+                        wrongReturnMethodImpls,
+                    )
+                ) {
+                    "A MethodImpl with the wrong return signature satisfied the promotion contract"
                 }
             } else {
                 assertFalse(promotedDim) {
@@ -11083,7 +11232,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val declarationOwnerPath: List<String>,
         val declarationMethodName: String,
         val declarationGenericArity: Int,
-        val declarationParameterCount: Int,
+        val declarationReturnType: String,
+        val declarationParameterTypes: List<String>,
     )
 
     private data class CSharpPhysicalTypeIdentity(
@@ -11157,7 +11307,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .filter { line -> line.startsWith("P|") }
             .map { line ->
                 val fields = line.split('|')
-                require(fields.size == 9) { "Invalid manifest-reader MethodImpl output: $line" }
+                require(fields.size == 10) {
+                    "Invalid manifest-reader MethodImpl output: $line"
+                }
                 val decoded = fields.drop(1).map { field ->
                     Base64.getDecoder().decode(field).toString(Charsets.UTF_8)
                 }
@@ -11169,7 +11321,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     declarationOwnerPath = decoded[4].split('\u0000'),
                     declarationMethodName = decoded[5],
                     declarationGenericArity = decoded[6].toInt(),
-                    declarationParameterCount = decoded[7].toInt(),
+                    declarationReturnType = decoded[7],
+                    declarationParameterTypes = decoded[8]
+                        .takeIf(String::isNotEmpty)
+                        ?.split('\u0001')
+                        .orEmpty(),
                 )
             }
 
@@ -11241,9 +11397,86 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         implementation.declarationOwnerPath == slot.ownerPath &&
                         implementation.declarationMethodName == slot.methodName &&
                         implementation.declarationGenericArity == slot.genericArity &&
-                        implementation.declarationParameterCount == slot.parameterTypes.size
+                        physicalSignatureEquals(
+                            implementation.declarationReturnType,
+                            slot.returnType,
+                            parentManifest.assemblyName,
+                        ) &&
+                        implementation.declarationParameterTypes.size ==
+                            slot.parameterTypes.size &&
+                        implementation.declarationParameterTypes
+                            .zip(slot.parameterTypes)
+                            .all { types ->
+                                physicalSignatureEquals(
+                                    types.first,
+                                    types.second,
+                                    parentManifest.assemblyName,
+                                )
+                            }
             }
         }
+    }
+
+    private fun physicalSignatureEquals(
+        actual: String,
+        expected: String,
+        localAssemblyName: String,
+    ): Boolean {
+        return normalizePhysicalSignature(actual, localAssemblyName) ==
+                normalizePhysicalSignature(expected, localAssemblyName)
+    }
+
+    private fun normalizePhysicalSignature(
+        signature: String,
+        localAssemblyName: String,
+    ): String {
+        val localPrefix = "[$localAssemblyName]"
+        val corePrefixes = listOf(
+            "[mscorlib]",
+            "[netstandard]",
+            "[System.Runtime]",
+            "[System.Private.CoreLib]",
+        )
+        var quoted = false
+        var index = 0
+        val result = buildString(signature.length) {
+            while (index < signature.length) {
+                if (!quoted && signature.startsWith(localPrefix, index)) {
+                    index += localPrefix.length
+                    continue
+                }
+                val corePrefix = if (quoted) {
+                    null
+                } else {
+                    corePrefixes.firstOrNull { prefix ->
+                        signature.startsWith(prefix, index) &&
+                                signature.startsWith("System.", index + prefix.length)
+                    }
+                }
+                if (corePrefix != null) {
+                    append("[corelib]")
+                    index += corePrefix.length
+                    continue
+                }
+                val current = signature[index]
+                if (current == '\'') {
+                    quoted = !quoted
+                    index++
+                    continue
+                }
+                if (quoted && current == '\\' && index + 1 < signature.length) {
+                    val next = signature[index + 1]
+                    if (next == '\\' || next == '\'') {
+                        append(next)
+                        index += 2
+                        continue
+                    }
+                }
+                append(current)
+                index++
+            }
+        }
+        return if (quoted) signature else result
     }
 
     private fun generateShapeImplementation(
