@@ -83,6 +83,14 @@ generate an implementation only when Roslyn reports the interface and every cont
 accessible from the current compilation. Private/protected owner chains and
 `@PublishedApi internal` compiler-ABI interfaces are not source-authoring contracts.
 
+The DLL-only matrix verifies this boundary from raw ECMA-335 metadata, not only from C# access
+results. An ordinary top-level internal interface and its internal containing class are non-public
+TypeDefs; a public nested contract remains `NestedPublic` inside that internal owner; a private
+nested interface remains `NestedPrivate`; and an `@PublishedApi internal` compiler-ABI interface
+is physically public but absent from the authoring manifest. The producer's
+`InternalsVisibleTo("GeneratedShape")` custom-attribute value is compared byte-for-byte, including
+its serialized-string length and terminator, on every target profile.
+
 ### 2. Roslyn partial-type generation is the supported C# source-authoring path
 
 The intended tooling is a Roslyn source generator paired with an analyzer. Its artifact targets
