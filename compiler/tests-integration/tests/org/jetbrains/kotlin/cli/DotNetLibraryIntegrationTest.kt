@@ -188,11 +188,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             writeText(
                 """
                 using System;
+                using System.Collections.Immutable;
+                using System.IO;
                 using System.Reflection;
+                using System.Reflection.Metadata;
+                using System.Reflection.PortableExecutable;
                 using System.Text;
 
                 public static class Program
                 {
+                    private static string Encode(string value)
+                    {
+                        return Convert.ToBase64String(Encoding.UTF8.GetBytes(value));
+                    }
+
                     public static int Main(string[] args)
                     {
                         Assembly assembly = Assembly.LoadFrom(args[0]);
@@ -208,10 +217,322 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 continue;
                             string value = (string)attribute.ConstructorArguments[1].Value;
                             Console.WriteLine(
-                                Convert.ToBase64String(Encoding.UTF8.GetBytes(key)) + "|" +
-                                Convert.ToBase64String(Encoding.UTF8.GetBytes(value)));
+                                "A|" + Encode(key) + "|" + Encode(value));
+                        }
+
+                        using (FileStream stream = File.OpenRead(args[0]))
+                        using (PEReader pe = new PEReader(stream))
+                        {
+                            MetadataReader metadata = pe.GetMetadataReader();
+                            TypeProvider provider = new TypeProvider(metadata);
+                            foreach (TypeDefinitionHandle typeHandle in metadata.TypeDefinitions)
+                            {
+                                TypeDefinition type = metadata.GetTypeDefinition(typeHandle);
+                                foreach (MethodImplementationHandle implementationHandle
+                                    in type.GetMethodImplementations())
+                                {
+                                    MethodImplementation implementation =
+                                        metadata.GetMethodImplementation(implementationHandle);
+                                    MethodIdentity body = MethodIdentity.Read(
+                                        metadata,
+                                        provider,
+                                        implementation.MethodBody);
+                                    MethodIdentity declaration = MethodIdentity.Read(
+                                        metadata,
+                                        provider,
+                                        implementation.MethodDeclaration);
+                                    Console.WriteLine(
+                                        "P|" +
+                                        Encode(body.Owner.Path) + "|" +
+                                        Encode(body.Name) + "|" +
+                                        Encode(body.IsConcrete.ToString()) + "|" +
+                                        Encode(declaration.Owner.AssemblyName) + "|" +
+                                        Encode(declaration.Owner.Path) + "|" +
+                                        Encode(declaration.Name) + "|" +
+                                        Encode(declaration.GenericArity.ToString()) + "|" +
+                                        Encode(declaration.ParameterCount.ToString()));
+                                }
+                            }
                         }
                         return 0;
+                    }
+                }
+
+                internal sealed class MethodIdentity
+                {
+                    internal readonly TypeIdentity Owner;
+                    internal readonly string Name;
+                    internal readonly int GenericArity;
+                    internal readonly int ParameterCount;
+                    internal readonly bool IsConcrete;
+
+                    private MethodIdentity(
+                        TypeIdentity owner,
+                        string name,
+                        int genericArity,
+                        int parameterCount,
+                        bool isConcrete)
+                    {
+                        Owner = owner;
+                        Name = name;
+                        GenericArity = genericArity;
+                        ParameterCount = parameterCount;
+                        IsConcrete = isConcrete;
+                    }
+
+                    internal static MethodIdentity Read(
+                        MetadataReader metadata,
+                        TypeProvider provider,
+                        EntityHandle handle)
+                    {
+                        if (handle.Kind == HandleKind.MethodDefinition)
+                        {
+                            MethodDefinition method = metadata.GetMethodDefinition(
+                                (MethodDefinitionHandle)handle);
+                            MethodSignature<TypeIdentity> signature =
+                                method.DecodeSignature(provider, null);
+                            return new MethodIdentity(
+                                provider.FromDefinition(method.GetDeclaringType()),
+                                metadata.GetString(method.Name),
+                                signature.GenericParameterCount,
+                                signature.ParameterTypes.Length,
+                                method.RelativeVirtualAddress != 0 &&
+                                    (method.Attributes & MethodAttributes.Abstract) == 0);
+                        }
+                        if (handle.Kind == HandleKind.MemberReference)
+                        {
+                            MemberReference member = metadata.GetMemberReference(
+                                (MemberReferenceHandle)handle);
+                            MethodSignature<TypeIdentity> signature =
+                                member.DecodeMethodSignature(provider, null);
+                            return new MethodIdentity(
+                                provider.FromMemberParent(member.Parent),
+                                metadata.GetString(member.Name),
+                                signature.GenericParameterCount,
+                                signature.ParameterTypes.Length,
+                                false);
+                        }
+                        if (handle.Kind == HandleKind.MethodSpecification)
+                        {
+                            MethodSpecification specification = metadata.GetMethodSpecification(
+                                (MethodSpecificationHandle)handle);
+                            return Read(metadata, provider, specification.Method);
+                        }
+                        throw new BadImageFormatException(
+                            "Unsupported MethodImpl method handle " + handle.Kind);
+                    }
+                }
+
+                internal sealed class TypeIdentity
+                {
+                    internal readonly string AssemblyName;
+                    internal readonly string Path;
+                    internal readonly string Display;
+
+                    internal TypeIdentity(string assemblyName, string path, string display)
+                    {
+                        AssemblyName = assemblyName;
+                        Path = path;
+                        Display = display;
+                    }
+
+                    internal TypeIdentity WithDisplay(string display)
+                    {
+                        return new TypeIdentity(AssemblyName, Path, display);
+                    }
+                }
+
+                internal sealed class TypeProvider :
+                    ISignatureTypeProvider<TypeIdentity, object>
+                {
+                    private readonly MetadataReader metadata;
+                    private readonly string currentAssembly;
+
+                    internal TypeProvider(MetadataReader metadata)
+                    {
+                        this.metadata = metadata;
+                        currentAssembly = metadata.GetString(
+                            metadata.GetAssemblyDefinition().Name);
+                    }
+
+                    internal TypeIdentity FromDefinition(TypeDefinitionHandle handle)
+                    {
+                        TypeDefinition type = metadata.GetTypeDefinition(handle);
+                        string name = metadata.GetString(type.Name);
+                        TypeDefinitionHandle declaring = type.GetDeclaringType();
+                        string path;
+                        if (!declaring.IsNil)
+                        {
+                            path = FromDefinition(declaring).Path + "\0" + name;
+                        }
+                        else
+                        {
+                            string namespaceName = metadata.GetString(type.Namespace);
+                            path = namespaceName.Length == 0
+                                ? name
+                                : namespaceName + "." + name;
+                        }
+                        return new TypeIdentity(currentAssembly, path, path);
+                    }
+
+                    private TypeIdentity FromReference(TypeReferenceHandle handle)
+                    {
+                        TypeReference type = metadata.GetTypeReference(handle);
+                        string name = metadata.GetString(type.Name);
+                        EntityHandle scope = type.ResolutionScope;
+                        if (scope.Kind == HandleKind.TypeReference)
+                        {
+                            TypeIdentity declaring = FromReference((TypeReferenceHandle)scope);
+                            string path = declaring.Path + "\0" + name;
+                            return new TypeIdentity(
+                                declaring.AssemblyName,
+                                path,
+                                path);
+                        }
+                        string namespaceName = metadata.GetString(type.Namespace);
+                        string topLevelPath = namespaceName.Length == 0
+                            ? name
+                            : namespaceName + "." + name;
+                        return new TypeIdentity(
+                            AssemblyName(scope),
+                            topLevelPath,
+                            topLevelPath);
+                    }
+
+                    private string AssemblyName(EntityHandle scope)
+                    {
+                        if (scope.Kind == HandleKind.AssemblyReference)
+                        {
+                            return metadata.GetString(
+                                metadata.GetAssemblyReference(
+                                    (AssemblyReferenceHandle)scope).Name);
+                        }
+                        if (scope.Kind == HandleKind.TypeReference)
+                            return FromReference((TypeReferenceHandle)scope).AssemblyName;
+                        return currentAssembly;
+                    }
+
+                    internal TypeIdentity FromMemberParent(EntityHandle handle)
+                    {
+                        if (handle.Kind == HandleKind.TypeDefinition)
+                            return FromDefinition((TypeDefinitionHandle)handle);
+                        if (handle.Kind == HandleKind.TypeReference)
+                            return FromReference((TypeReferenceHandle)handle);
+                        if (handle.Kind == HandleKind.TypeSpecification)
+                        {
+                            return metadata.GetTypeSpecification(
+                                (TypeSpecificationHandle)handle).DecodeSignature(this, null);
+                        }
+                        throw new BadImageFormatException(
+                            "Unsupported MemberRef parent " + handle.Kind);
+                    }
+
+                    public TypeIdentity GetArrayType(
+                        TypeIdentity elementType,
+                        ArrayShape shape)
+                    {
+                        return elementType.WithDisplay(elementType.Display + "[*]");
+                    }
+
+                    public TypeIdentity GetByReferenceType(TypeIdentity elementType)
+                    {
+                        return elementType.WithDisplay(elementType.Display + "&");
+                    }
+
+                    public TypeIdentity GetFunctionPointerType(
+                        MethodSignature<TypeIdentity> signature)
+                    {
+                        return new TypeIdentity(
+                            currentAssembly,
+                            "",
+                            "methodptr");
+                    }
+
+                    public TypeIdentity GetGenericInstantiation(
+                        TypeIdentity genericType,
+                        ImmutableArray<TypeIdentity> typeArguments)
+                    {
+                        StringBuilder display = new StringBuilder(genericType.Display);
+                        display.Append("<");
+                        for (int index = 0; index < typeArguments.Length; index++)
+                        {
+                            if (index != 0)
+                                display.Append(",");
+                            display.Append(typeArguments[index].Display);
+                        }
+                        display.Append(">");
+                        return genericType.WithDisplay(display.ToString());
+                    }
+
+                    public TypeIdentity GetGenericMethodParameter(
+                        object genericContext,
+                        int index)
+                    {
+                        return new TypeIdentity(currentAssembly, "", "!!" + index);
+                    }
+
+                    public TypeIdentity GetGenericTypeParameter(
+                        object genericContext,
+                        int index)
+                    {
+                        return new TypeIdentity(currentAssembly, "", "!" + index);
+                    }
+
+                    public TypeIdentity GetModifiedType(
+                        TypeIdentity modifier,
+                        TypeIdentity unmodifiedType,
+                        bool isRequired)
+                    {
+                        return unmodifiedType;
+                    }
+
+                    public TypeIdentity GetPinnedType(TypeIdentity elementType)
+                    {
+                        return elementType;
+                    }
+
+                    public TypeIdentity GetPointerType(TypeIdentity elementType)
+                    {
+                        return elementType.WithDisplay(elementType.Display + "*");
+                    }
+
+                    public TypeIdentity GetPrimitiveType(PrimitiveTypeCode typeCode)
+                    {
+                        return new TypeIdentity(
+                            "System.Private.CoreLib",
+                            "",
+                            typeCode.ToString());
+                    }
+
+                    public TypeIdentity GetSZArrayType(TypeIdentity elementType)
+                    {
+                        return elementType.WithDisplay(elementType.Display + "[]");
+                    }
+
+                    public TypeIdentity GetTypeFromDefinition(
+                        MetadataReader reader,
+                        TypeDefinitionHandle handle,
+                        byte rawTypeKind)
+                    {
+                        return FromDefinition(handle);
+                    }
+
+                    public TypeIdentity GetTypeFromReference(
+                        MetadataReader reader,
+                        TypeReferenceHandle handle,
+                        byte rawTypeKind)
+                    {
+                        return FromReference(handle);
+                    }
+
+                    public TypeIdentity GetTypeFromSpecification(
+                        MetadataReader reader,
+                        object genericContext,
+                        TypeSpecificationHandle handle,
+                        byte rawTypeKind)
+                    {
+                        return reader.GetTypeSpecification(handle)
+                            .DecodeSignature(this, genericContext);
                     }
                 }
                 """.trimIndent()
@@ -262,14 +583,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         """.trimIndent()
 
+        data class ManifestScenario(
+            val name: String,
+            val childProfile: String,
+            val parentProfile: String = childProfile,
+            val externalParent: Boolean = true,
+        )
+
+        val scenarios = listOf(
+            ManifestScenario("net48", "net48", externalParent = false),
+            ManifestScenario("netstandard2.0", "netstandard2.0"),
+            ManifestScenario("net10.0", "net10.0"),
+            ManifestScenario(
+                name = "net10.0-promoted-portable-parent",
+                childProfile = "net10.0",
+                parentProfile = "netstandard2.0",
+            ),
+        )
         val contractsByProfile = linkedMapOf<String, List<DotNetCSharpInterfaceContract>>()
-        for (targetProfile in listOf("net48", "netstandard2.0", "net10.0")) {
-            val profileDirectory = File(tmpdir, "csharp-implementation-$targetProfile").apply { mkdirs() }
-            val externalParent = targetProfile != "net48"
-            val parentModuleName = if (targetProfile == "net10.0") {
-                "Manifest.Parent.Modern"
-            } else {
-                "Manifest.Parent.Portable"
+        for (scenario in scenarios) {
+            val targetProfile = scenario.childProfile
+            val profileDirectory = File(tmpdir, "csharp-implementation-${scenario.name}").apply { mkdirs() }
+            val externalParent = scenario.externalParent
+            val parentModuleName = when {
+                !externalParent -> "Manifest.Parent.Portable"
+                scenario.parentProfile == "net10.0" -> "Manifest.Parent.Modern"
+                scenario.childProfile == "net10.0" -> "Manifest.Parent.CrossProfile"
+                else -> "Manifest.Parent.Portable"
             }
             val parentMetadata = if (externalParent) {
                 val parentSource = profileDirectory.resolve("parent.kt").apply {
@@ -279,7 +619,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     K2DotNetCompiler(),
                     parentSource.path,
                     K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, scenario.parentProfile,
                     K2DotNetCompilerArguments::moduleName.cliArgument, parentModuleName,
                     K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
                 )
@@ -295,10 +635,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
                 writeText("package manifest\n\n$declarations")
             }
-            val moduleName = if (targetProfile == "net10.0") {
-                "Manifest.Modern"
-            } else {
-                "Manifest.Portable"
+            val moduleName = when (scenario.name) {
+                "net10.0" -> "Manifest.Modern"
+                "net10.0-promoted-portable-parent" -> "Manifest.Promoted"
+                else -> "Manifest.Portable"
             }
             if (parentMetadata == null) {
                 compileInProcess(
@@ -358,8 +698,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertEquals(if (externalParent) 1 else 2, manifest.interfaces.size)
-            contractsByProfile[targetProfile] =
-                listOf(parentContract, contract).sortedBy(DotNetCSharpInterfaceContract::logicalKey)
+            if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
+                contractsByProfile[scenario.name] =
+                    listOf(parentContract, contract).sortedBy(DotNetCSharpInterfaceContract::logicalKey)
+            }
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
             assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
             assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
@@ -407,7 +749,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
             val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
             assertEquals("__KotlinDefaultImpls", helper.ownerPath.last())
-            if (targetProfile == "net10.0") {
+            if (parentManifest.targetProfile == "net10.0") {
                 assertEquals(DotNetCSharpDefaultKind.DIM_WITH_HELPER, fallback.defaultKind)
                 assertEquals(DotNetCSharpInterfaceView.DECLARED, fallback.semanticBodyView)
             } else {
@@ -415,8 +757,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertEquals(null, fallback.semanticBodyView)
             }
 
+            val methodImpls = readCSharpPhysicalMethodImplsFromDll(
+                modernCSharp,
+                readerAssembly,
+                readerDirectory,
+                producerAssembly,
+            )
+            val promotedDim = hasEffectivePromotedDim(
+                contract,
+                parentManifest,
+                fallback,
+                methodImpls,
+            )
+            if (scenario.name == "net10.0-promoted-portable-parent") {
+                assertTrue(promotedDim) {
+                    "The child DLL does not expose a complete CLR MethodImpl promotion bundle:\n" +
+                            methodImpls.joinToString("\n")
+                }
+            } else {
+                assertFalse(promotedDim) {
+                    "Only the cross-profile scenario should require a child-owned promotion:\n" +
+                            methodImpls.joinToString("\n")
+                }
+            }
             val generatedSource = profileDirectory.resolve("generated.cs").apply {
-                writeText(generateShapeImplementation(contract, parentContract))
+                writeText(
+                    generateShapeImplementation(
+                        contract,
+                        parentContract,
+                        inheritedDefaultHasEffectiveDim =
+                            fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
+                                    promotedDim,
+                    )
+                )
+            }
+            if (scenario.name == "net10.0-promoted-portable-parent") {
+                assertFalse("__KotlinDefaultImpls" in generatedSource.readText()) {
+                    "A physically promoted DIM must suppress generated helper forwarders"
+                }
             }
             val generatedAssembly = profileDirectory.resolve("GeneratedShape.dll")
             val generatedCompile = if (parentAssembly == null) {
@@ -446,7 +824,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 modernCSharp.dotNetHost,
                 generatedAssembly,
                 profileDirectory,
-                "Manifest-generated C# implementation failed for $targetProfile",
+                "Manifest-generated C# implementation failed for ${scenario.name}",
             )
         }
 
@@ -8734,12 +9112,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
     private data class CSharpCompilerResult(val exitCode: Int, val output: String)
 
-    private fun readCSharpImplementationManifestFromDll(
+    private data class CSharpPhysicalMethodImpl(
+        val bodyOwnerPath: List<String>,
+        val bodyMethodName: String,
+        val bodyIsConcrete: Boolean,
+        val declarationAssemblyName: String,
+        val declarationOwnerPath: List<String>,
+        val declarationMethodName: String,
+        val declarationGenericArity: Int,
+        val declarationParameterCount: Int,
+    )
+
+    private fun runCSharpImplementationManifestReader(
         toolchain: DotNetModernCSharpToolchain,
         readerAssembly: File,
         readerDirectory: File,
         producerAssembly: File,
-    ): DotNetCSharpImplementationManifest {
+    ): List<String> {
         val process = ProcessBuilder(
             toolchain.dotNetHost.path,
             "exec",
@@ -8751,22 +9140,99 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), "Could not read manifest from $producerAssembly:\n$output")
-        val metadata = output.lineSequence()
-            .filter(String::isNotBlank)
+        return output.lineSequence().filter(String::isNotBlank).toList()
+    }
+
+    private fun readCSharpImplementationManifestFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): DotNetCSharpImplementationManifest {
+        val metadata = runCSharpImplementationManifestReader(
+            toolchain,
+            readerAssembly,
+            readerDirectory,
+            producerAssembly,
+        )
+            .filter { line -> line.startsWith("A|") }
             .map { line ->
-                val separator = line.indexOf('|')
-                require(separator > 0) { "Invalid manifest-reader output: $line" }
-                val key = Base64.getDecoder().decode(line.substring(0, separator)).toString(Charsets.UTF_8)
-                val value = Base64.getDecoder().decode(line.substring(separator + 1)).toString(Charsets.UTF_8)
+                val fields = line.split('|')
+                require(fields.size == 3) { "Invalid manifest-reader attribute output: $line" }
+                val key = Base64.getDecoder().decode(fields[1]).toString(Charsets.UTF_8)
+                val value = Base64.getDecoder().decode(fields[2]).toString(Charsets.UTF_8)
                 key to value
             }
-            .toList()
         return DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata)
+    }
+
+    private fun readCSharpPhysicalMethodImplsFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): List<CSharpPhysicalMethodImpl> =
+        runCSharpImplementationManifestReader(
+            toolchain,
+            readerAssembly,
+            readerDirectory,
+            producerAssembly,
+        )
+            .filter { line -> line.startsWith("P|") }
+            .map { line ->
+                val fields = line.split('|')
+                require(fields.size == 9) { "Invalid manifest-reader MethodImpl output: $line" }
+                val decoded = fields.drop(1).map { field ->
+                    Base64.getDecoder().decode(field).toString(Charsets.UTF_8)
+                }
+                CSharpPhysicalMethodImpl(
+                    bodyOwnerPath = decoded[0].split('\u0000'),
+                    bodyMethodName = decoded[1],
+                    bodyIsConcrete = decoded[2].equals("true", ignoreCase = true),
+                    declarationAssemblyName = decoded[3],
+                    declarationOwnerPath = decoded[4].split('\u0000'),
+                    declarationMethodName = decoded[5],
+                    declarationGenericArity = decoded[6].toInt(),
+                    declarationParameterCount = decoded[7].toInt(),
+                )
+            }
+
+    private fun hasEffectivePromotedDim(
+        childContract: DotNetCSharpInterfaceContract,
+        parentManifest: DotNetCSharpImplementationManifest,
+        parentMember: DotNetCSharpMemberContract,
+        methodImpls: List<CSharpPhysicalMethodImpl>,
+    ): Boolean {
+        val childOwners = buildSet {
+            add(childContract.canonicalOwnerPath)
+            add(childContract.declaredOwnerPath)
+            childContract.exactOwnerPath?.let(::add)
+        }
+        val inheritedSlots = parentMember.slots.filter { slot ->
+            slot.role != DotNetCSharpSlotRole.HELPER
+        }
+        return inheritedSlots.isNotEmpty() && inheritedSlots.all { slot ->
+            methodImpls.any { implementation ->
+                implementation.bodyIsConcrete &&
+                        implementation.bodyOwnerPath in childOwners &&
+                        implementation.declarationAssemblyName.equals(
+                            parentManifest.assemblyName,
+                            ignoreCase = true,
+                        ) &&
+                        implementation.declarationOwnerPath == slot.ownerPath &&
+                        implementation.declarationMethodName == slot.methodName &&
+                        implementation.declarationGenericArity == slot.genericArity &&
+                        implementation.declarationParameterCount == slot.parameterTypes.size
+            }
+        }
     }
 
     private fun generateShapeImplementation(
         contract: DotNetCSharpInterfaceContract,
         parentContract: DotNetCSharpInterfaceContract,
+        inheritedDefaultHasEffectiveDim: Boolean =
+            parentContract.members.single { member -> member.sourceName == "fallback" }
+                .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
     ): String {
         fun DotNetCSharpInterfaceContract.member(
             name: String,
@@ -8795,7 +9261,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val canonicalAccepts = accepts.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalFallback = fallback.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         require(canonicalLabelGetter.propertyName == canonicalLabelSetter.propertyName)
-        val portableDefault = fallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER
+        val portableDefault =
+            fallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER &&
+                    !inheritedDefaultHasEffectiveDim
         val generatedTypedDefault = if (portableDefault) {
             val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
             require(helper.genericArity == contract.typeParameters.size)
