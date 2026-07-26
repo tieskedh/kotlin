@@ -81,7 +81,6 @@ internal static class AuthoringContractDiscovery
                 ImmutableArray<string> inaccessibleBaseContracts =
                     FindInaccessibleBaseContracts(
                         compilation,
-                        implementation,
                         declaration,
                         manifests);
                 if (!inaccessibleBaseContracts.IsEmpty)
@@ -155,7 +154,6 @@ internal static class AuthoringContractDiscovery
                 {
                     if (!IsContractAccessible(
                             compilation,
-                            implementation,
                             bound.InterfaceType.OriginalDefinition))
                     {
                         reportDiagnostic(Diagnostic.Create(
@@ -301,7 +299,9 @@ internal static class AuthoringContractDiscovery
                     continue;
                 var match = matches[0];
                 INamedTypeSymbol? definition =
-                    match.reference.Assembly.GetTypeByMetadataName(match.metadataName);
+                    ResolveOwner(
+                        match.reference.Assembly,
+                        AuthoringOwnerPath(match.contract));
                 if (definition == null ||
                     authoredRoots.Any(root =>
                         SymbolEqualityComparer.Default.Equals(
@@ -355,9 +355,27 @@ internal static class AuthoringContractDiscovery
 
     private static string? AuthoringOwnerMetadataName(KotlinInterfaceContract contract)
     {
+        return OwnerMetadataName(AuthoringOwnerPath(contract));
+    }
+
+    private static ImmutableArray<string> AuthoringOwnerPath(
+        KotlinInterfaceContract contract)
+    {
         return contract.TypeParameters.IsEmpty
-            ? OwnerMetadataName(contract.CanonicalOwnerPath)
-            : OwnerMetadataName(contract.DeclaredOwnerPath);
+            ? contract.CanonicalOwnerPath
+            : contract.DeclaredOwnerPath;
+    }
+
+    private static INamedTypeSymbol? ResolveOwner(
+        IAssemblySymbol assembly,
+        ImmutableArray<string> ownerPath)
+    {
+        if (ownerPath.IsDefaultOrEmpty)
+            return null;
+        string metadataName = ownerPath[0];
+        for (int index = 1; index < ownerPath.Length; index++)
+            metadataName += "+" + ownerPath[index];
+        return assembly.GetTypeByMetadataName(metadataName);
     }
 
     private static bool MatchesAnyOwner(
@@ -449,7 +467,6 @@ internal static class AuthoringContractDiscovery
 
     private static ImmutableArray<string> FindInaccessibleBaseContracts(
         Compilation compilation,
-        INamedTypeSymbol implementation,
         TypeDeclarationSyntax declaration,
         KotlinManifestSet manifests)
     {
@@ -474,15 +491,17 @@ internal static class AuthoringContractDiscovery
                            SourceNameForMetadataName(metadataName).Split('.').Last(),
                            sourceName,
                            StringComparison.Ordinal))
-                select new { reference, metadataName }
+                select new { reference, contract, metadataName }
             ).ToArray();
             if (matches.Length != 1)
                 continue;
             var match = matches[0];
             INamedTypeSymbol? interfaceType =
-                match.reference.Assembly.GetTypeByMetadataName(match.metadataName);
+                ResolveOwner(
+                    match.reference.Assembly,
+                    AuthoringOwnerPath(match.contract));
             if (interfaceType == null ||
-                !IsContractAccessible(compilation, implementation, interfaceType))
+                !IsContractAccessible(compilation, interfaceType))
                 result.Add(SourceNameForMetadataName(match.metadataName));
         }
         return result.Distinct(StringComparer.Ordinal).ToImmutableArray();
@@ -588,11 +607,8 @@ internal static class AuthoringContractDiscovery
 
     private static bool IsContractAccessible(
         Compilation compilation,
-        INamedTypeSymbol implementation,
         INamedTypeSymbol interfaceType)
     {
-        if (!compilation.IsSymbolAccessibleWithin(interfaceType, implementation))
-            return false;
         INamedTypeSymbol? owner = interfaceType;
         while (owner != null)
         {
