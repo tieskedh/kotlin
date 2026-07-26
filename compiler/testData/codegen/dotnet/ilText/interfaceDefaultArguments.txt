@@ -13,7 +13,7 @@
 
 .class interface public abstract auto ansi 'Defaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -230,7 +230,7 @@
 }
 .class interface public abstract auto ansi 'GenericDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -570,7 +570,7 @@
 }
 .class interface public abstract auto ansi 'VariantDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -732,7 +732,7 @@
 }
 .class interface public abstract auto ansi 'BoundedDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -900,7 +900,7 @@
 }
 .class interface public abstract auto ansi 'ExtensionDefaults'
 {
-  .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+  .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
          extends [mscorlib]System.Object
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -995,7 +995,7 @@
         .get instance int32 'DefaultContainer'/'NestedDefaults'/'DefaultImpls'::'get_marker'()
       }
     }
-    .class nested public auto ansi sealed beforefieldinit '<DefaultImpls>'
+    .class nested public auto ansi sealed beforefieldinit '__KotlinDefaultImpls'
            extends [mscorlib]System.Object
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
@@ -1075,7 +1075,7 @@
     ldarg.0
     ldc.i4 0
     ldc.i4 1
-    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    call int32 'Defaults'/'__KotlinDefaultImpls'::'apply$default'(class 'Defaults', int32, int32)
     ret
   }
   .method public hidebysig static int32 'interfaceDefault'(class 'Defaults' 'value') cil managed
@@ -1085,7 +1085,7 @@
     ldc.i4 0
     ldc.i4 20
     ldc.i4 1
-    call int32 'Defaults'/'<DefaultImpls>'::'combine$default'(class 'Defaults', int32, int32, int32)
+    call int32 'Defaults'/'__KotlinDefaultImpls'::'combine$default'(class 'Defaults', int32, int32, int32)
     ret
   }
   .method public hidebysig static int32 'inheritedDefault'(class 'DerivedDefaults' 'value') cil managed
@@ -1094,7 +1094,7 @@
     ldarg.0
     ldc.i4 0
     ldc.i4 1
-    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    call int32 'Defaults'/'__KotlinDefaultImpls'::'apply$default'(class 'Defaults', int32, int32)
     ret
   }
   .method public hidebysig static int32 'redeclaredDefault'(class 'RedeclaredDefaults' 'value') cil managed
@@ -1103,7 +1103,7 @@
     ldarg.0
     ldc.i4 0
     ldc.i4 1
-    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    call int32 'Defaults'/'__KotlinDefaultImpls'::'apply$default'(class 'Defaults', int32, int32)
     ret
   }
   .method public hidebysig static int32 'constrainedDefault'<(class 'Defaults') 'T'>(!!0 'value') cil managed
@@ -1113,7 +1113,7 @@
     box !!0
     ldc.i4 0
     ldc.i4 1
-    call int32 'Defaults'/'<DefaultImpls>'::'apply$default'(class 'Defaults', int32, int32)
+    call int32 'Defaults'/'__KotlinDefaultImpls'::'apply$default'(class 'Defaults', int32, int32)
     ret
   }
   .method public hidebysig static !!0 'genericDefault'<'T'>(class 'GenericDefaults' 'value') cil managed
@@ -1127,7 +1127,7 @@
     initobj !!0
     ldloc.0
     ldc.i4 1
-    call !!0 'GenericDefaults'/'<DefaultImpls>'::'choose$default'<!!0>(class 'GenericDefaults', !!0, int32)
+    call !!0 'GenericDefaults'/'__KotlinDefaultImpls'::'choose$default'<!!0>(class 'GenericDefaults', !!0, int32)
     ret
   }
   .method public hidebysig static !!0 'genericMethodDefault'<'T'>(class 'GenericDefaults' 'value', !!0 'item') cil managed
@@ -1142,7 +1142,7 @@
     initobj !!0
     ldloc.0
     ldc.i4 2
-    call !!1 'GenericDefaults'/'<DefaultImpls>'::'echo$default'<!!0, !!0>(class 'GenericDefaults', !!1, !!1, int32)
+    call !!1 'GenericDefaults'/'__KotlinDefaultImpls'::'echo$default'<!!0, !!0>(class 'GenericDefaults', !!1, !!1, int32)
     ret
   }
   .method public hidebysig static string 'redeclaredGenericDefault'(class 'StringDefaults' 'value') cil managed
@@ -1151,7 +1151,7 @@
     ldarg.0
     ldnull
     ldc.i4 1
-    call !!0 'GenericDefaults'/'<DefaultImpls>'::'choose$default'<string>(class 'GenericDefaults', !!0, int32)
+    call !!0 'GenericDefaults'/'__KotlinDefaultImpls'::'choose$default'<string>(class 'GenericDefaults', !!0, int32)
     ret
   }
   .method public hidebysig static string 'variantDefault'(class 'VariantDefaults' 'value') cil managed
@@ -1160,7 +1160,7 @@
     ldarg.0
     ldc.i4 0
     ldc.i4 1
-    call !!0 'VariantDefaults'/'<DefaultImpls>'::'value$default'<string>(class 'VariantDefaults', int32, int32)
+    call !!0 'VariantDefaults'/'__KotlinDefaultImpls'::'value$default'<string>(class 'VariantDefaults', int32, int32)
     ret
   }
   .method public hidebysig static !!0 'boundedDefault'<(class 'BoundValue') 'T'>(class 'BoundedDefaults' 'value') cil managed
@@ -1174,7 +1174,7 @@
     initobj !!0
     ldloc.0
     ldc.i4 1
-    call !!0 'BoundedDefaults'/'<DefaultImpls>'::'choose$default'<!!0>(class 'BoundedDefaults', !!0, int32)
+    call !!0 'BoundedDefaults'/'__KotlinDefaultImpls'::'choose$default'<!!0>(class 'BoundedDefaults', !!0, int32)
     ret
   }
   .method public hidebysig static string 'extensionDefault'(class 'ExtensionDefaults' '<this>', string 'value') cil managed
@@ -1184,7 +1184,7 @@
     ldarg.1
     ldnull
     ldc.i4 1
-    call string 'ExtensionDefaults'/'<DefaultImpls>'::'decorate$default'(class 'ExtensionDefaults', string, string, int32)
+    call string 'ExtensionDefaults'/'__KotlinDefaultImpls'::'decorate$default'(class 'ExtensionDefaults', string, string, int32)
     ret
   }
   .method public hidebysig static int32 'nestedDefault'(class 'DefaultContainer'/'NestedDefaults' 'value') cil managed
@@ -1193,7 +1193,7 @@
     ldarg.0
     ldc.i4 0
     ldc.i4 1
-    call int32 'DefaultContainer'/'NestedDefaults'/'<DefaultImpls>'::'value$default'(class 'DefaultContainer'/'NestedDefaults', int32, int32)
+    call int32 'DefaultContainer'/'NestedDefaults'/'__KotlinDefaultImpls'::'value$default'(class 'DefaultContainer'/'NestedDefaults', int32, int32)
     ret
   }
   .method public hidebysig static void 'main'() cil managed

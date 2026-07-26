@@ -157,10 +157,11 @@ internal val DOTNET_GENERIC_INTERFACE_DEFAULT_VIRTUAL_CALL: IrStatementOrigin =
  * Selects the physical representation of Kotlin-owned interface implementations per CLR profile.
  *
  * `net48` and `netstandard2.0` keep the CLR interface slot abstract and move the Kotlin body into
- * a public, marked `<DefaultImpls>` helper. A class whose effective Kotlin implementation is that
- * helper-only default receives a private explicit MethodImpl forwarder. `net10.0` keeps the body
- * on the interface as a DIM and retains the same helper signature; the helper performs an exact
- * nonvirtual call to that DIM, so ordinary calls remain virtual while `super<I>.f()` is exact.
+ * a public, marked `__KotlinDefaultImpls` helper. A class whose effective Kotlin implementation
+ * is that helper-only default receives a private explicit MethodImpl forwarder. `net10.0` keeps
+ * the body on the interface as a DIM and retains the same helper signature; the helper performs
+ * an exact nonvirtual call to that DIM, so ordinary calls remain virtual while `super<I>.f()` is
+ * exact.
  *
  * Masked default-argument dispatchers remain helper-owned on every profile and perform normal
  * virtual Kotlin dispatch. Common Kotlin rejects super calls that omit default arguments; this
@@ -1631,6 +1632,9 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
     )
 
     private companion object {
-        val DEFAULT_IMPLS_NAME: Name = Name.special("<DefaultImpls>")
+        // Unlike the JVM spelling, this compiler-ABI type must be nameable from generated C#
+        // source. Its physical owner is recorded in the DLL/KLIB contracts, so consumers never
+        // derive the name and a future grammar change remains schema-gated.
+        val DEFAULT_IMPLS_NAME: Name = Name.identifier("__KotlinDefaultImpls")
     }
 }
