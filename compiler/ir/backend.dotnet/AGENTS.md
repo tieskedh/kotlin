@@ -1625,9 +1625,11 @@ landed shape as a compatibility constraint.
   defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
   class forwarder. A direct Kotlin reabstraction remains abstract in the manifest and requires one
   C# source body even when its parent exposes a portable helper or modern DIM; all inherited and
-  redeclared CLR slots adapt to that body, and omission is `KDNCS008`. The DLL-only matrix executes
-  public and authorized-internal implementations through Kotlin on every profile. Split generic
-  authoring names only the declared interface;
+  redeclared CLR slots adapt to that body, and omission is `KDNCS008`. This includes covariant
+  generic reabstraction: the declared typed slot is authored and canonical/inherited views adapt
+  without copying a body. The DLL-only matrix executes public and authorized-internal
+  implementations through Kotlin on every profile. Split generic authoring names only the
+  declared interface;
   generated partials add the exact view with the identical closed or open substitution and adapt
   declared/exact/canonical slots to one typed source body. Exact adapters stay typed; canonical
   adapters alone cast, box, or widen for their erased ABI. Generic method constraints come from
