@@ -400,7 +400,7 @@ The remaining P0-D implementation order is:
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
    families and the real same-owner clash matrix. Extend the DLL manifest over multi-parent and
-   cross-assembly inheritance, intersection slots, constraints, inherited mutable-property
+   cross-profile inherited promotion, intersection slots, constraints, inherited mutable-property
    obligations, special barriers, non-generic interfaces, friend-accessible internal interfaces,
    and runtime-bootstrap contracts; then implement the Roslyn partial-type generator/analyzer. Do
    not add a blanket ban for source names that merely resemble canonical names; physical-owner

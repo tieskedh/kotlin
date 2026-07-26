@@ -1753,6 +1753,7 @@ internal class DotNetIlEmitter(
                     target = target,
                     files = emittedFiles,
                     genericInterfaces = genericInterfaces,
+                    externalLibraries = externalLibraries,
                     availableFunctions = availableFunctions,
                     typeMapper = typeMapper,
                     preLoweringDeclarationKeys = preLoweringDeclarationKeys,
