@@ -486,6 +486,7 @@ internal fun collectDotNetCSharpImplementationManifest(
     interfaceDefaultImplementations:
             Map<IrSimpleFunction, DotNetLoweredInterfaceDefaultImplementation>,
     genericInterfaceDefaults: List<DotNetLoweredGenericInterfaceDefault>,
+    genericInterfaceIntersectionSlots: List<DotNetGenericInterfaceIntersectionSlot>,
 ): DotNetCSharpImplementationManifest {
     fun IrSimpleFunction.memberKind(): DotNetCSharpMemberKind {
         val property = correspondingPropertySymbol?.owner ?: return DotNetCSharpMemberKind.METHOD
@@ -529,28 +530,28 @@ internal fun collectDotNetCSharpImplementationManifest(
             }
             val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes()
             val unsupportedReasons = buildList {
-                when {
-                    directSuperInterfaces.size > 1 -> {
-                        add("multiple inherited interface contracts are not supported by the first C# authoring schema")
+                if (genericInterfaceIntersectionSlots.any { slot -> slot.owner == irClass }) {
+                    add(
+                        "derived generic-interface intersection slots are not supported by " +
+                                "the first C# authoring schema"
+                    )
+                }
+                directSuperInterfaces.forEach { superType ->
+                    val superInterface = (superType.classifier as? IrClassSymbol)?.owner
+                    val isSameAssemblyGenericParent =
+                        superInterface in genericInterfaces && superInterface?.fileOrNull in files
+                    val externalParentAssembly = superInterface
+                        ?.let(typeMapper::genericInterfaceInfoOrNull)
+                        ?.canonicalClassInfo
+                        ?.assemblyName
+                    val isExternalKotlinLibraryParent = externalLibraries.any { library ->
+                        library.artifact.assemblyName.equals(externalParentAssembly, ignoreCase = true)
                     }
-                    directSuperInterfaces.size == 1 -> {
-                        val superInterface =
-                            (directSuperInterfaces.single().classifier as? IrClassSymbol)?.owner
-                        val isSameAssemblyGenericParent =
-                            superInterface in genericInterfaces && superInterface?.fileOrNull in files
-                        val externalParentAssembly = superInterface
-                            ?.let(typeMapper::genericInterfaceInfoOrNull)
-                            ?.canonicalClassInfo
-                            ?.assemblyName
-                        val isExternalKotlinLibraryParent = externalLibraries.any { library ->
-                            library.artifact.assemblyName.equals(externalParentAssembly, ignoreCase = true)
-                        }
-                        if (!isSameAssemblyGenericParent && !isExternalKotlinLibraryParent) {
-                            add(
-                                "non-generic or non-library inherited interface contracts are not supported " +
-                                        "by the first C# authoring schema"
-                            )
-                        }
+                    if (!isSameAssemblyGenericParent && !isExternalKotlinLibraryParent) {
+                        add(
+                            "non-generic or non-library inherited interface contracts are not supported " +
+                                    "by the first C# authoring schema"
+                        )
                     }
                 }
             }

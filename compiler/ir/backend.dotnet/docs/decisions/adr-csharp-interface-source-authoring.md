@@ -177,15 +177,18 @@ properties, a generic method, an exact-only unsafe input, a portable helper defa
 corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
-One Kotlin generic parent is composed from its own manifest contract and the ordinary CLR
-interface edge, whether the parent is in the same DLL or a referenced compiler-produced Kotlin
-library DLL. This covers a parent-owned mutable property and helper/DIM default through a child
-exact view without duplicating the local or assembly-qualified physical TypeSpec in the manifest.
-The cross-assembly test deletes both KLIBs before reading the two DLL contracts. It also compiles a
+Kotlin generic parents are composed from their own manifest contracts and the ordinary CLR
+interface graph, whether they are in the same DLL or referenced compiler-produced Kotlin library
+DLLs. This covers a two-branch diamond with a shared root default, a parent-owned mutable property,
+and a sibling-owned property through a child exact view. Logical root keys deduplicate the diamond;
+the manifest does not duplicate local or assembly-qualified physical TypeSpecs. An unrelated
+same-named parent intersection remains explicitly unsupported until the derived physical slot can
+be related to all contributing logical members. The cross-assembly test deletes both KLIBs before
+reading the DLL contracts. It also compiles a
 `netstandard2.0` parent into a `net10.0` child, reads the child promotion directly from ECMA-335
 `MethodImpl` metadata, omits generated class forwarders only after every parent slot has a concrete
-child mapping, and executes the inherited default. Multiple parents and non-generic parents are
-explicitly unsupported by the first schema slice; they must not be silently generated.
+child mapping, and executes the inherited default. Non-generic parents and derived intersection
+slots are explicitly unsupported by the first schema slice; they must not be silently generated.
 Runtime-bootstrap interfaces and ordinary non-generic interfaces are not yet source-authoring
 inputs. Friend-accessible internal interfaces are also omitted by the public-only first collector.
 All must gain equivalent manifest records before the generator claims support for implementing
