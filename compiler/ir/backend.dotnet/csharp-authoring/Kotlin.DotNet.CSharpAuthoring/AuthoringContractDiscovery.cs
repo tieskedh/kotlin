@@ -160,6 +160,17 @@ internal static class AuthoringContractDiscovery
                                 member.LogicalKey));
                         }
                     }
+                    foreach (KotlinIntersectionContract intersection in
+                             bound.Contract.Intersections)
+                    {
+                        if (!intersection.ErasedOwnerRelativeConstraints.IsEmpty)
+                        {
+                            reportDiagnostic(Diagnostic.Create(
+                                Diagnostics.ErasedOwnerConstraint,
+                                location,
+                                intersection.LogicalKey));
+                        }
+                    }
                 }
                 foreach (ISymbol conflictingMember in FindConflictingMembers(
                              implementation,
