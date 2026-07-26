@@ -181,6 +181,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "Modern Roslyn and the net10 reference pack are not available",
         )
         val modernCSharp = checkNotNull(csharpToolchain)
+        val csharpAuthoringTooling = buildCSharpAuthoringTooling(modernCSharp)
         val readerDirectory = File(tmpdir, "csharp-implementation-manifest-reader").apply { mkdirs() }
         val bootstrapSource = readerDirectory.resolve("bootstrap.kt").apply { writeText("fun main() {}") }
         compileInProcess(
@@ -1525,6 +1526,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "An unauthorized C# assembly consumed internal contract '$friendType'"
             }
             assertTrue("CS0122" in unauthorizedCompile.output) { unauthorizedCompile.output }
+
+            val baseListProbe = profileDirectory.resolve("base-list-probe.cs").apply {
+                writeText(
+                    """
+                    public sealed partial class BaseListProbe : manifest.OrdinaryShape
+                    {
+                        public string displayName { get { return "ordinary"; } }
+                        public int count { get; set; }
+                        public string format(string prefix) { return prefix + displayName; }
+                        public string fallbackName() { return displayName; }
+                    }
+                    """.trimIndent()
+                )
+            }
+            val generatedFiles =
+                profileDirectory.resolve("roslyn-generated").apply { mkdirs() }
+            val baseListCompileReferences = buildList {
+                add(producerAssembly)
+                parentAssembly?.let(::add)
+                add(runtimeAssembly)
+            }
+            val baseListCompile = runModernCSharpCompiler(
+                modernCSharp,
+                baseListProbe,
+                profileDirectory.resolve("BaseListProbe.dll"),
+                *baseListCompileReferences.toTypedArray(),
+                analyzers = listOf(csharpAuthoringTooling),
+                generatedFilesDirectory = generatedFiles,
+            )
+            assertEquals(0, baseListCompile.exitCode, baseListCompile.output)
+            assertTrue(
+                generatedFiles.walkTopDown().any { file ->
+                    file.isFile &&
+                            file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+                }
+            ) {
+                "The production Kotlin C# generator did not recognize a real Kotlin base list"
+            }
         }
 
         val modern = contractsByProfile.getValue("net10.0")
@@ -1563,6 +1602,291 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 },
             )
         }
+    }
+
+    @Test
+    fun testCSharpAuthoringAnalyzerDiagnosesInvalidBaseListContracts() {
+        val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            csharpToolchain != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val modernCSharp = checkNotNull(csharpToolchain)
+        val tooling = buildCSharpAuthoringTooling(modernCSharp)
+        val directory = File(tmpdir, "csharp-authoring-diagnostics").apply { mkdirs() }
+        val manifest = DotNetCSharpImplementationManifest(
+            schemaVersion = DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION,
+            assemblyName = "AnalyzerProducer",
+            targetProfile = "net10.0",
+            logicalIdentityScheme = DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
+            interfaces = listOf(
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/Shape",
+                    canonicalOwnerPath = listOf("diagnostics.Shape"),
+                    declaredOwnerPath = listOf("diagnostics.Shape`1"),
+                    exactOwnerPath = null,
+                    typeParameters = listOf(
+                        DotNetCSharpTypeParameter(
+                            "T",
+                            DotNetCSharpTypeParameterVariance.INVARIANT,
+                        )
+                    ),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/Shape.accept",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "accept",
+                            authoringView = DotNetCSharpInterfaceView.DECLARED,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.ERASED,
+                                    ownerPath = listOf("diagnostics.Shape"),
+                                    methodName = "Accept",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "void",
+                                    parameterTypes = listOf("object"),
+                                ),
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.DECLARED,
+                                    ownerPath = listOf("diagnostics.Shape`1"),
+                                    methodName = "Accept",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "void",
+                                    parameterTypes = listOf("!0"),
+                                ),
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/Friend",
+                    canonicalOwnerPath = listOf("diagnostics.Friend"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/Friend.code",
+                            kind = DotNetCSharpMemberKind.PROPERTY_GETTER,
+                            sourceName = "code",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.Friend"),
+                                    methodName = "get_code",
+                                    propertyName = "code",
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = emptyList(),
+                                )
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+            ),
+        )
+        val assemblyMetadata = DotNetCSharpImplementationManifestCodec
+            .encodeAssemblyMetadata(manifest)
+            .joinToString("\n") { entry ->
+                """[assembly: System.Reflection.AssemblyMetadata("${entry.first}", "${entry.second}")]"""
+            }
+        val producerSource = directory.resolve("producer.cs").apply {
+            writeText(
+                """
+                $assemblyMetadata
+
+                namespace diagnostics
+                {
+                    public interface Shape
+                    {
+                        void Accept(object value);
+                    }
+
+                    public interface Shape<T> : Shape
+                    {
+                        void Accept(T value);
+                    }
+
+                    internal interface Friend
+                    {
+                        int code { get; }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val producer = directory.resolve("AnalyzerProducer.dll")
+        val producerCompile = runModernCSharpCompiler(
+            modernCSharp,
+            producerSource,
+            producer,
+        )
+        assertEquals(0, producerCompile.exitCode, producerCompile.output)
+
+        fun compileDiagnostic(name: String, sourceText: String): CSharpCompilerResult {
+            val source = directory.resolve("$name.cs").apply { writeText(sourceText) }
+            return runModernCSharpCompiler(
+                modernCSharp,
+                source,
+                directory.resolve("$name.dll"),
+                producer,
+                analyzers = listOf(tooling),
+            )
+        }
+
+        val validGeneratedDirectory = directory.resolve("valid-generated").apply { mkdirs() }
+        val validSource = directory.resolve("valid.cs").apply {
+            writeText(
+                """
+                public sealed partial class Valid : diagnostics.Shape<string>
+                {
+                    public void Accept(string value) {}
+                    public void Accept(object value) {}
+                }
+                """.trimIndent()
+            )
+        }
+        val validCompile = runModernCSharpCompiler(
+            modernCSharp,
+            validSource,
+            directory.resolve("Valid.dll"),
+            producer,
+            analyzers = listOf(tooling),
+            generatedFilesDirectory = validGeneratedDirectory,
+        )
+        assertEquals(0, validCompile.exitCode, validCompile.output)
+        assertTrue(
+            validGeneratedDirectory.walkTopDown().any { file ->
+                file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
+            }
+        ) {
+            "A valid generic Kotlin base list did not activate the source generator"
+        }
+
+        val missingPartial = compileDiagnostic(
+            "MissingPartial",
+            """
+            public sealed class MissingPartial : diagnostics.Shape<string>
+            {
+                public void Accept(string value) {}
+                public void Accept(object value) {}
+            }
+            """.trimIndent(),
+        )
+        assertTrue(missingPartial.exitCode != 0)
+        assertTrue("KDNCS001" in missingPartial.output) { missingPartial.output }
+
+        val inaccessibleFriend = compileDiagnostic(
+            "UnavailableFriend",
+            """
+            internal sealed partial class UnavailableFriend : diagnostics.Friend
+            {
+                public int code { get { return 1; } }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(inaccessibleFriend.exitCode != 0)
+        assertTrue("KDNCS002" in inaccessibleFriend.output) { inaccessibleFriend.output }
+
+        val conflict = compileDiagnostic(
+            "ConflictingMember",
+            """
+            public sealed partial class ConflictingMember : diagnostics.Shape<string>
+            {
+                public void Accept(string value) {}
+                public void Accept(object value) {}
+                void diagnostics.Shape<string>.Accept(string value) {}
+            }
+            """.trimIndent(),
+        )
+        assertTrue(conflict.exitCode != 0)
+        assertTrue("KDNCS003" in conflict.output) { conflict.output }
+
+        val unsupportedSubstitution = compileDiagnostic(
+            "UnsupportedSubstitution",
+            """
+            public sealed partial class UnsupportedSubstitution : diagnostics.Shape<dynamic>
+            {
+                public void Accept(dynamic value) {}
+            }
+            """.trimIndent(),
+        )
+        assertTrue(unsupportedSubstitution.exitCode != 0)
+        assertTrue("KDNCS004" in unsupportedSubstitution.output) {
+            unsupportedSubstitution.output
+        }
+
+        val staleSource = directory.resolve("stale.cs").apply {
+            writeText(
+                """
+                [assembly: System.Reflection.AssemblyMetadata(
+                    "${DotNetCSharpImplementationManifestCodec.ASSEMBLY_METADATA_KEY}",
+                    "999:1:${"0".repeat(64)}")]
+                public interface Stale {}
+                """.trimIndent()
+            )
+        }
+        val staleAssembly = directory.resolve("Stale.dll")
+        val staleCompile = runModernCSharpCompiler(
+            modernCSharp,
+            staleSource,
+            staleAssembly,
+        )
+        assertEquals(0, staleCompile.exitCode, staleCompile.output)
+        val versionConsumer = directory.resolve("version-consumer.cs").apply {
+            writeText("public sealed class VersionConsumer {}")
+        }
+        val versionMismatch = runModernCSharpCompiler(
+            modernCSharp,
+            versionConsumer,
+            directory.resolve("VersionConsumer.dll"),
+            staleAssembly,
+            analyzers = listOf(tooling),
+        )
+        assertTrue(versionMismatch.exitCode != 0)
+        assertTrue("KDNCS005" in versionMismatch.output) { versionMismatch.output }
+
+        val malformedSource = directory.resolve("malformed.cs").apply {
+            writeText(
+                """
+                [assembly: System.Reflection.AssemblyMetadata(
+                    "${DotNetCSharpImplementationManifestCodec.ASSEMBLY_METADATA_KEY}",
+                    "${DotNetCSharpImplementationManifestCodec.CURRENT_SCHEMA_VERSION}:1:${"0".repeat(64)}")]
+                public interface Malformed {}
+                """.trimIndent()
+            )
+        }
+        val malformedAssembly = directory.resolve("Malformed.dll")
+        val malformedCompile = runModernCSharpCompiler(
+            modernCSharp,
+            malformedSource,
+            malformedAssembly,
+        )
+        assertEquals(0, malformedCompile.exitCode, malformedCompile.output)
+        val malformedConsumer = runModernCSharpCompiler(
+            modernCSharp,
+            versionConsumer,
+            directory.resolve("MalformedConsumer.dll"),
+            malformedAssembly,
+            analyzers = listOf(tooling),
+        )
+        assertTrue(malformedConsumer.exitCode != 0)
+        assertTrue("KDNCS006" in malformedConsumer.output) { malformedConsumer.output }
     }
 
     @Test
@@ -10560,7 +10884,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 $generatedFriendDefault
             }
 
-            internal sealed class GeneratedNestedFriend : $nestedFriendType
+            internal sealed partial class GeneratedNestedFriend : $nestedFriendType
             {
                 int $nestedFriendType.${checkNotNull(nestedFriendCode.propertyName)}
                 {
@@ -10780,6 +11104,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         output: File,
         vararg references: File,
         target: String = "library",
+        analyzers: List<File> = emptyList(),
+        generatedFilesDirectory: File? = null,
     ): CSharpCompilerResult {
         output.delete()
         val frameworkReferences = toolchain.referenceDirectory.listFiles { file ->
@@ -10801,6 +11127,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertTrue(reference.isFile) { "Missing C# reference: $reference" }
                 add("/reference:${reference.path}")
             }
+            analyzers.forEach { analyzer ->
+                assertTrue(analyzer.isFile) { "Missing C# analyzer: $analyzer" }
+                add("/analyzer:${analyzer.path}")
+            }
+            generatedFilesDirectory?.let { directory ->
+                directory.mkdirs()
+                add("/generatedfilesout:${directory.path}")
+            }
             add(source.path)
         }
         val process = ProcessBuilder(arguments)
@@ -10809,6 +11143,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .start()
         val compilerOutput = process.inputStream.bufferedReader().use { it.readText() }
         return CSharpCompilerResult(process.waitFor(), compilerOutput)
+    }
+
+    private fun buildCSharpAuthoringTooling(
+        toolchain: DotNetModernCSharpToolchain,
+    ): File {
+        val project = File(
+            "compiler/ir/backend.dotnet/csharp-authoring/" +
+                    "Kotlin.DotNet.CSharpAuthoring/Kotlin.DotNet.CSharpAuthoring.csproj"
+        ).absoluteFile
+        assertTrue(project.isFile) { "Missing Kotlin C# authoring project: $project" }
+        val process = ProcessBuilder(
+            toolchain.dotNetHost.path,
+            "build",
+            project.path,
+            "--configuration", "Release",
+            "-p:RestoreLockedMode=true",
+            "--nologo",
+        )
+            .directory(File(".").absoluteFile)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        assertEquals(0, process.waitFor(), "Could not build Kotlin C# authoring tooling:\n$output")
+        return project.parentFile
+            .resolve("bin/Release/netstandard2.0/Kotlin.DotNet.CSharpAuthoring.dll")
+            .also { assembly ->
+                assertTrue(assembly.isFile) {
+                    "Kotlin C# authoring build produced no analyzer assembly:\n$output"
+                }
+            }
     }
 
     private fun compileInProcess(compiler: CLICompiler<*>, vararg args: String) {

@@ -77,10 +77,38 @@ accessible from the current compilation. Private/protected owner chains and
 
 ### 2. Roslyn partial-type generation is the supported C# source-authoring path
 
-The intended tooling is a Roslyn source generator paired with an analyzer. A user supplies a
-partial C# type and the strongly typed source members. Generated partial declarations add the
-required physical interface views and adapters. The analyzer reports incomplete, ambiguous, or
-inconsistent source bodies before ordinary CLR load or dispatch.
+The intended tooling is a Roslyn source generator paired with an analyzer. Its artifact targets
+`netstandard2.0` as a tooling-host contract; this is independent of whether a referenced Kotlin
+library targets `net48`, `netstandard2.0`, or `net10.0`.
+
+A user opts in by writing the real semantic CLR relationship in the ordinary C# base list:
+
+```csharp
+public partial class MyShape<T> : Shape<T>
+{
+    // strongly typed C# source bodies
+}
+```
+
+For a split generic Kotlin interface, that source name is the normal declared Kotlin view. For a
+non-generic interface it is the one canonical CLR interface. A generator attribute, marker
+interface, generated base class, or tooling-only identity is not an alternative opt-in: each would
+either lose arbitrary generic substitution, consume C#'s single class base, or create an identity
+which does not participate in ordinary C# type checking.
+
+Generated partial declarations add the canonical and exact physical views, explicit adapters,
+barriers, and profile-specific forwarding required by the manifest. Those generated physical
+interfaces are compiler ABI, not interfaces the C# author is expected to name in a base list or
+implement explicitly. The analyzer reports incomplete, ambiguous, inaccessible, or inconsistent
+source bodies before ordinary CLR load or dispatch. At minimum it diagnoses:
+
+- a Kotlin implementor which is not `partial`;
+- a contract which the current assembly cannot access through ordinary CLR visibility and
+  producer-emitted friendship;
+- a user member which conflicts with a member the compiler ABI requires the generator to emit;
+- a generic substitution the generator cannot represent;
+- a manifest/generator schema or logical-identity version mismatch; and
+- a malformed or unsupported manifest without executing code from the referenced assembly.
 
 The exact typed view is the normal complete C# surface when it exists. Declared-variance and
 canonical slots adapt to that typed behavior, boxing, widening, or narrowing only when their own
@@ -262,6 +290,17 @@ internal interfaces, and executes an internal Kotlin verifier on every profile. 
 reference compiled under an unauthorized assembly identity fails with Roslyn `CS0122`. Private
 nested interfaces and `@PublishedApi internal` compiler-only interfaces are deliberately absent
 from the authoring manifest.
+
+The first production Roslyn slice is now present under `csharp-authoring`. It builds as a
+`netstandard2.0` analyzer/generator component with a locked Roslyn dependency graph. It reads the
+actual schema-6 assembly metadata through Roslyn symbols, enforces bounded payload, record, and
+string limits, validates the complete record graph, recognizes only a real canonical/non-generic
+or declared/generic base-list opt-in, and emits the diagnostics listed above. DLL-only tests prove
+generic and non-generic discovery, malformed/version-skew rejection, unavailable friendship,
+conflicting explicit ABI members, unsupported `dynamic` substitution, and generated partial
+participation. Adapter generation is intentionally the next production slice; the existing
+handwritten generated-source fixture remains an independent manifest-sufficiency oracle until
+each adapter family is migrated.
 
 Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding
