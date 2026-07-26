@@ -301,9 +301,8 @@ conflicting explicit ABI members, unsupported `dynamic` substitution, and genera
 participation. The next slice emits ordinary non-generic method and Property adapters from
 PascalCase or Kotlin-named source members. Portable defaults call the recorded helper; native and
 child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
-implementations execute Kotlin verification on every profile. Split generic views, intersections,
-generic methods, and special barriers remain in the independent handwritten manifest-sufficiency
-fixture until each family is migrated.
+implementations execute Kotlin verification on every profile. Intersections remain in the
+independent handwritten manifest-sufficiency fixture until that family is migrated.
 
 Split generic emission is now also production-owned. A C# type names only the declared Kotlin
 interface in its real base list; the generated partial adds the exact constructed view with the
@@ -316,6 +315,16 @@ defaults invoke the one helper identity with the owner and method substitutions;
 promoted DIMs remain method-free. DLL-only execution covers open reference substitutions,
 closed value substitutions and boxing, exact-only inputs, generic methods, unsafe cast failure,
 identity-preserving widening, and the erased owner-relative boundary on every profile.
+
+Special-barrier emission is production-owned as well. A policy applies only to the recorded erased
+slot: the generated adapter checks the declared typed shape before casting and returns the recorded
+`false`, `null`, `-1`, or argument fallback on a mismatch. Declared and exact adapters remain direct
+typed calls. An absent policy still performs the ordinary cast or unbox and therefore fails on a
+wrong-shaped value. The generator does not infer this behavior from a method name, collection
+inheritance, or `@UnsafeVariance`; the producer-selected manifest record remains authoritative.
+Real collection and list implementations execute the `false` and `-1` forms through typed and
+widened Kotlin views on all profile combinations. Synthetic manifest-backed interfaces execute
+the `null` and argument forms, including preservation of the fallback argument's object identity.
 
 Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding

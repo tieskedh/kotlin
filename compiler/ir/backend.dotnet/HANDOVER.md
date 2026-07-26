@@ -1664,7 +1664,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   native/promoted DIMs still suppress class methods. The real generator executes open
   reference-constrained and closed `int` shapes, generic methods, typed/exact/canonical dispatch,
   value boxing, ordinary unsafe cast failure, and `R : T` guidance on all four DLL-only lanes.
-  Intersections and special-barrier fallbacks remain on the handwritten sufficiency fixture.
+  The production emitter also applies manifest-recorded wrong-shape policy only at erased slots,
+  before any cast or unbox. Typed and exact views call the source body directly. Real
+  `Collection.contains` and `List.indexOf` implementations execute `false` and `-1` fallbacks
+  through widened Kotlin views in every lane; synthetic DLL-only contracts execute `null` and
+  argument fallbacks and preserve fallback-object identity. Members without policy retain ordinary
+  cast failure. Intersections remain on the handwritten sufficiency fixture.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

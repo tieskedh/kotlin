@@ -1609,7 +1609,12 @@ landed shape as a compatibility constraint.
   declared/exact/canonical slots to one typed source body. Exact adapters stay typed; canonical
   adapters alone cast, box, or widen for their erased ABI. Generic method constraints come from
   CLR metadata. Erased `R : T` guidance stays diagnostic-only. Portable helpers receive the
-  recorded owner/method substitutions, while native and promoted DIMs remain method-free. Schema 6
+  recorded owner/method substitutions, while native and promoted DIMs remain method-free.
+  Production erased adapters also consume the declaration-specific schema barrier: they check the
+  typed authoring parameter before casting and return the recorded `false`, `null`, `-1`, or
+  argument fallback. Exact and declared adapters stay direct, and a member without a policy keeps
+  ordinary cast/unbox failure. Real collection/list and synthetic null/argument fixtures execute
+  all four policies; no behavior is inferred from CLR names or `@UnsafeVariance`. Schema 6
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
