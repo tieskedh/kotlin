@@ -1614,7 +1614,13 @@ landed shape as a compatibility constraint.
   typed authoring parameter before casting and return the recorded `false`, `null`, `-1`, or
   argument fallback. Exact and declared adapters stay direct, and a member without a policy keeps
   ordinary cast/unbox failure. Real collection/list and synthetic null/argument fixtures execute
-  all four policies; no behavior is inferred from CLR names or `@UnsafeVariance`. Schema 6
+  all four policies; no behavior is inferred from CLR names or `@UnsafeVariance`. Production
+  intersection adapters use the schema contributor logical keys, not coincident source names, to
+  converge parent canonical and derived typed slots on one source body. Property accessors are
+  grouped by resolved CLR Property row before emission, preserving a single exact mutable
+  property. Method, mutable-property, and erased owner-relative generic intersections execute
+  through derived and both parent views on every DLL-only lane; intersection-relative `R : T`
+  remains `KDNCS009` guidance only. Schema 6
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are

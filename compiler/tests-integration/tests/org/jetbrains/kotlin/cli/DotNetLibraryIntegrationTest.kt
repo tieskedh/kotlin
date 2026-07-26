@@ -896,6 +896,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public fun verifyOwnerBound(value: OwnerBound<ManifestMarker>): Int =
                 if (value.retain(Marker) === Marker) 0 else 1
+
+            public fun verifyResolvedOwnerBound(
+                value: ResolvedOwnerBound<ManifestMarker>
+            ): Int {
+                val left: OwnerBoundLeft<ManifestMarker> = value
+                val right: OwnerBoundRight<ManifestMarker> = value
+                if (value.retainBoth(Marker) !== Marker) return 1
+                if (left.retainBoth(Marker) !== Marker) return 2
+                return if (right.retainBoth(Marker) === Marker) 0 else 3
+            }
         """.trimIndent()
 
         data class ManifestScenario(
@@ -1616,6 +1626,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public sealed partial class IntersectionBaseListProbe :
+                        manifest.ResolvedIntersection<string>
+                    {
+                        public string Overlap()
+                        {
+                            return "intersection";
+                        }
+                    }
+
+                    public sealed partial class MutableIntersectionBaseListProbe :
+                        manifest.ResolvedMutable<string>
+                    {
+                        public string Merged { get; set; } = "mutable";
+                    }
+
+                    public sealed partial class OwnerBoundIntersectionBaseListProbe<T> :
+                        manifest.ResolvedOwnerBound<T>
+                    {
+                        public R RetainBoth<R>(R value)
+                        {
+                            return value;
+                        }
+                    }
+
                     public sealed partial class BarrierBaseListProbe :
                         manifest.BarrierShape<string>
                     {
@@ -1705,6 +1739,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated owner-bound implementation failed: " +
                                     ownerBoundResult);
+                            int intersectionResult =
+                                manifest.apiKt.verifyIntersection(
+                                    new IntersectionBaseListProbe());
+                            if (intersectionResult != 0)
+                                throw new System.Exception(
+                                    "Generated intersection failed: " +
+                                    intersectionResult);
+                            int mutableIntersectionResult =
+                                manifest.apiKt.verifyMutable(
+                                    new MutableIntersectionBaseListProbe());
+                            if (mutableIntersectionResult != 0)
+                                throw new System.Exception(
+                                    "Generated mutable intersection failed: " +
+                                    mutableIntersectionResult);
+                            int ownerBoundIntersectionResult =
+                                manifest.apiKt.verifyResolvedOwnerBound(
+                                    new OwnerBoundIntersectionBaseListProbe<
+                                        manifest.ManifestMarker>());
+                            if (ownerBoundIntersectionResult != 0)
+                                throw new System.Exception(
+                                    "Generated owner-bound intersection failed: " +
+                                    ownerBoundIntersectionResult);
                             int barrierResult =
                                 manifest.apiKt.verifyBarrier(new BarrierBaseListProbe());
                             if (barrierResult != 0)
@@ -1772,6 +1828,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertTrue("this.Retain<R>" in generatedAuthoringText) {
                 generatedAuthoringText
+            }
+            assertTrue("this.Overlap()" in generatedAuthoringText) {
+                "Intersection adapters did not converge on the C# source body:\n" +
+                        generatedAuthoringText
+            }
+            assertTrue("this.Merged" in generatedAuthoringText) {
+                "Mutable intersection adapters did not share the C# property:\n" +
+                        generatedAuthoringText
+            }
+            assertTrue("this.RetainBoth<R>" in generatedAuthoringText) {
+                "Generic intersection adapters did not share the C# method:\n" +
+                        generatedAuthoringText
+            }
+            assertTrue(
+                checkNotNull(resolvedMutable.exactOwnerPath)
+                    .last()
+                    .substringBefore('`') in generatedAuthoringText
+            ) {
+                "The generated partial did not add the mutable exact view:\n" +
+                        generatedAuthoringText
             }
             assertTrue("(object)" in generatedAuthoringText) {
                 "The erased value-type result was not boxed:\n$generatedAuthoringText"

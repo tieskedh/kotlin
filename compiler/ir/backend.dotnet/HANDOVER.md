@@ -1652,8 +1652,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   native `net10.0` DIMs and complete child-owned promotions are discovered through Roslyn's
   interface implementation map and receive no class forwarder. The DLL-only four-lane fixture now
   compiles and executes the real generator for an ordinary public interface and an authorized
-  internal friend interface. The existing handwritten fixture remains the oracle for split
-  generic, intersection, generic-method, and barrier adapters until those families migrate.
+  internal friend interface. The existing handwritten fixture remains an independent full-schema
+  sufficiency oracle while each production family is also executed directly.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot
@@ -1669,7 +1669,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `Collection.contains` and `List.indexOf` implementations execute `false` and `-1` fallbacks
   through widened Kotlin views in every lane; synthetic DLL-only contracts execute `null` and
   argument fallbacks and preserve fallback-object identity. Members without policy retain ordinary
-  cast failure. Intersections remain on the handwritten sufficiency fixture.
+  cast failure. Production intersection generation now indexes the schema's contributor logical
+  keys and converges each parent canonical slot plus the derived declared/exact slots on one C#
+  method or property. It batches accessors by resolved CLR Property row, preventing duplicate
+  explicit mutable properties. Method, mutable-property, and owner-relative generic intersections
+  execute through the derived and both parent Kotlin views on all four lanes. Intersection
+  `R : T` guidance is diagnosed and never reconstructed as a C# constraint. The handwritten
+  fixture remains an independent manifest-sufficiency oracle rather than the production emitter.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

@@ -301,8 +301,7 @@ conflicting explicit ABI members, unsupported `dynamic` substitution, and genera
 participation. The next slice emits ordinary non-generic method and Property adapters from
 PascalCase or Kotlin-named source members. Portable defaults call the recorded helper; native and
 child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
-implementations execute Kotlin verification on every profile. Intersections remain in the
-independent handwritten manifest-sufficiency fixture until that family is migrated.
+implementations execute Kotlin verification on every profile.
 
 Split generic emission is now also production-owned. A C# type names only the declared Kotlin
 interface in its real base list; the generated partial adds the exact constructed view with the
@@ -325,6 +324,16 @@ inheritance, or `@UnsafeVariance`; the producer-selected manifest record remains
 Real collection and list implementations execute the `false` and `-1` forms through typed and
 widened Kotlin views on all profile combinations. Synthetic manifest-backed interfaces execute
 the `null` and argument forms, including preservation of the fallback argument's object identity.
+
+Intersection emission is now production-owned. The generator resolves contributors by their
+ordinary Kotlin logical member keys, then maps every parent canonical slot and every derived typed
+intersection slot to one C# source member. It does not infer convergence from equal C# names.
+Method intersections, split mutable properties, and erased owner-relative generic-method
+intersections execute through derived and both parent Kotlin views on every profile combination.
+Getter and setter records are collected before emission and grouped by their resolved CLR property
+owner and Property row, so an exact mutable property is emitted once with both accessors. Erased
+owner-relative intersection constraints produce the same `KDNCS009` guidance as direct members and
+never become reconstructed C# constraints.
 
 Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding

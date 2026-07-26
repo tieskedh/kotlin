@@ -419,11 +419,12 @@ The remaining P0-D implementation order is:
    alone perform erased casts/boxing and generic constraints remain CLR-authoritative.
    Owner-relative guidance stays diagnostic-only. Manifest-recorded special barriers are now
    production-generated before erased casts, with all `false`, `null`, `-1`, and argument
-   fallbacks executed while policy-free unsafe members retain cast failure. Next migrate
-   intersections from the independent handwritten sufficiency fixture. Multi-parent generic
-   diamonds compose
-   from parent manifest contracts plus the CLR graph; schema 6 records the logical contributor
-   mapping that CLR metadata lacks for derived method and split mutable-property intersection slots.
+   fallbacks executed while policy-free unsafe members retain cast failure. Production
+   intersections now consume the logical contributor mapping that CLR metadata lacks: parent
+   canonical and derived typed slots converge on one method/property body, and split mutable
+   accessors are grouped by their CLR Property row. Method, mutable, and owner-relative generic
+   intersections execute through the full derived/parent view matrix. Multi-parent generic
+   diamonds continue to compose from parent manifest contracts plus the CLR graph.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
    no-KLIB C# `where` clauses. Schema 6 supplies normalized positional analyzer guidance for
    owner-relative constraints erased from illegal variant positions; tooling must explain them,
@@ -441,8 +442,9 @@ The remaining P0-D implementation order is:
    `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the structured
    metadata work rather than with IL substring tests.
 
-There is no remaining implicit-intersection representation decision on the critical path. The next
-backend implementation item is the foreign boundary and structured metadata audit.
+There is no remaining implicit-intersection representation or production-adapter migration on the
+critical path. The next backend implementation item is the foreign boundary and structured
+metadata audit.
 Nested/general owner-relative carriers may remain rejected until their conversion can be proved
 rather than guessed.
 
