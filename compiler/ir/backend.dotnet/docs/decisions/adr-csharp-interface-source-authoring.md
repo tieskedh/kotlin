@@ -47,7 +47,15 @@ manifest supplies the information CLR metadata cannot express:
 - which typed view owns the one semantic DIM body.
 
 Physical signatures are repeated only as stable MethodDef locators and integrity checks. They do
-not form a second Kotlin type system.
+not form a second Kotlin type system. Tooling resolves a locator against the open declaring
+TypeDef before applying any consumer-owned generic substitution. Owner, method name, generic
+arity, return type, and every parameter type must identify exactly one MethodDef. An absent,
+ambiguous, or signature-inconsistent locator is a malformed-manifest diagnostic rather than
+permission to select a member by name and parameter count. IL identifier quoting is normalized,
+and an explicit reference to the MethodDef's own assembly is equivalent to the local form;
+external assembly qualifiers remain identity-significant. The one exception is the standard CLR
+core-facade set (`mscorlib`, `netstandard`, `System.Runtime`, and `System.Private.CoreLib`) for
+`System.*` types, which Roslyn may unify through type forwarding across profiles.
 
 Schema 6 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
 and member records use the same public `IdSignature` rendered by
@@ -334,6 +342,14 @@ Getter and setter records are collected before emission and grouped by their res
 owner and Property row, so an exact mutable property is emitted once with both accessors. Erased
 owner-relative intersection constraints produce the same `KDNCS009` guidance as direct members and
 never become reconstructed C# constraints.
+
+Production MethodDef resolution now validates the complete open CLR signature carried by each
+locator before constructing a generic owner. Same-named, same-arity, same-parameter-count
+overloads with different parameter types bind independently. Synthetic stale manifests with a
+wrong parameter or return type fail with `KDNCS006`, and runtime-owned locators prove that an
+explicit `[Kotlin.Runtime]` self-reference and the equivalent local Roslyn symbol bind to the same
+MethodDef. A nullable overload additionally proves that a producer's `[mscorlib]System.Nullable`
+locator binds the core-forwarded Roslyn symbol without weakening non-core assembly identity.
 
 Schema 6 also records special-barrier policy directly from Kotlin's shared
 `SpecialBridgeMethods` identity table. A no-KLIB child contract overriding

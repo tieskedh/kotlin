@@ -2053,6 +2053,145 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     intersections = emptyList(),
                 ),
                 DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/Overloaded",
+                    canonicalOwnerPath = listOf("diagnostics.Overloaded"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/Overloaded.computeInt",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.Overloaded"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = listOf("int32"),
+                                )
+                            ),
+                        ),
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/Overloaded.computeString",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.Overloaded"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = listOf("string"),
+                                )
+                            ),
+                        ),
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/Overloaded.computeNullableInt",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.Overloaded"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType =
+                                        "valuetype [mscorlib]System.Nullable`1<int32>",
+                                    parameterTypes = listOf(
+                                        "valuetype [mscorlib]System.Nullable`1<int32>"
+                                    ),
+                                )
+                            ),
+                        ),
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/StaleParameter",
+                    canonicalOwnerPath = listOf("diagnostics.StaleParameter"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/StaleParameter.compute",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.StaleParameter"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "int32",
+                                    parameterTypes = listOf("string"),
+                                )
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/StaleReturn",
+                    canonicalOwnerPath = listOf("diagnostics.StaleReturn"),
+                    declaredOwnerPath = null,
+                    exactOwnerPath = null,
+                    typeParameters = emptyList(),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/StaleReturn.compute",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "compute",
+                            authoringView = DotNetCSharpInterfaceView.CANONICAL,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = null,
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.CANONICAL,
+                                    ownerPath = listOf("diagnostics.StaleReturn"),
+                                    methodName = "Compute",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "string",
+                                    parameterTypes = listOf("int32"),
+                                )
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
                     logicalKey = "C:diagnostics/NullBarrier",
                     canonicalOwnerPath = listOf("diagnostics.NullBarrier"),
                     declaredOwnerPath = listOf("diagnostics.NullBarrier`1"),
@@ -2186,6 +2325,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         int Compute(int value);
                     }
 
+                    public interface Overloaded
+                    {
+                        int Compute(int value);
+                        int Compute(string value);
+                        int? Compute(int? value);
+                    }
+
+                    public interface StaleParameter
+                    {
+                        int Compute(int value);
+                    }
+
+                    public interface StaleReturn
+                    {
+                        int Compute(int value);
+                    }
+
                     public interface NullBarrier
                     {
                         object Lookup(object key);
@@ -2238,6 +2394,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public void Accept(object value) {}
                 }
 
+                public sealed partial class ValidOverloaded :
+                    diagnostics.Overloaded
+                {
+                    public int Compute(int value)
+                    {
+                        return value + 1;
+                    }
+
+                    public int Compute(string value)
+                    {
+                        return value.Length;
+                    }
+
+                    public int? Compute(int? value)
+                    {
+                        return value.HasValue ? value.Value + 1 : null;
+                    }
+                }
+
                 public sealed partial class ValidNullBarrier :
                     diagnostics.NullBarrier<string>
                 {
@@ -2275,6 +2450,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         if (argumentBarrier.Lookup("typed", "fallback") !=
                                 "body:typed")
                             return 4;
+                        var overloaded = new ValidOverloaded();
+                        if (overloaded.Compute(4) != 5)
+                            return 5;
+                        if (overloaded.Compute("typed") != 5)
+                            return 6;
+                        if (overloaded.Compute((int?)4) != 5)
+                            return 7;
+                        if (overloaded.Compute((int?)null) != null)
+                            return 8;
                         return 0;
                     }
                 }
@@ -2379,6 +2563,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(missingSourceMember.exitCode != 0)
         assertTrue("KDNCS008" in missingSourceMember.output) {
             missingSourceMember.output
+        }
+
+        val staleParameter = compileDiagnostic(
+            "StaleParameter",
+            """
+            public sealed partial class StaleParameter :
+                diagnostics.StaleParameter
+            {
+                public int Compute(int value) { return value; }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(staleParameter.exitCode != 0)
+        assertTrue("KDNCS006" in staleParameter.output) {
+            staleParameter.output
+        }
+
+        val staleReturn = compileDiagnostic(
+            "StaleReturn",
+            """
+            public sealed partial class StaleReturn : diagnostics.StaleReturn
+            {
+                public int Compute(int value) { return value; }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(staleReturn.exitCode != 0)
+        assertTrue("KDNCS006" in staleReturn.output) {
+            staleReturn.output
         }
 
         val staleSource = directory.resolve("stale.cs").apply {

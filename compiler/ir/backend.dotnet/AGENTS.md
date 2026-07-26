@@ -1641,6 +1641,13 @@ landed shape as a compatibility constraint.
   and exact getter/setter; the exact accessors name the same getter-selected CLR Property row.
   An ordinary non-generic interface has one canonical owner and uses distinct canonical member
   locators; it does not acquire a fake declared owner or an inaccurately named erased slot.
+  Roslyn resolves every MethodDef locator against the open owner using its complete physical
+  return and parameter signature before applying a consumer substitution. Owner, name, generic
+  arity, return, and parameters must select exactly one definition; name/arity/count matching is
+  forbidden. IL identifier quoting and an optional declaring-assembly self-qualification are
+  normalized, while external assembly qualifiers remain significant. Roslyn's standard
+  `mscorlib`/`netstandard`/`System.Runtime`/`System.Private.CoreLib` forwarding identities are
+  normalized only for `System.*` types. A stale, absent, or ambiguous locator is `KDNCS006`.
   Representable method constraints come only from the located CLR GenericParam metadata; the
   manifest does not duplicate them. The no-KLIB fixture resolves a public marker constraint and
   generates matching C# `where` clauses for typed and canonical slots. Owner-relative constraints

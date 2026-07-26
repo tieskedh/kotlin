@@ -1642,13 +1642,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   code. Analyzer/generator diagnostics pin missing `partial`, unavailable CLR friendship,
   conflicting explicit ABI members, unsupported substitutions, and manifest/tool skew. A
   DLL-only test builds the actual component, proves valid generic and non-generic discovery from
-  real base lists, and checks every mandated failure. The generator currently emits the additional
-  partial declaration as the production integration seam; migrate adapter families from the
-  independent handwritten manifest-sufficiency fixture in subsequent feature commits.
+  real base lists, and checks every mandated failure. The independent handwritten
+  manifest-sufficiency fixture remains the full-schema oracle while production adapter families
+  execute in the generator matrix.
 - The production emitter now owns ordinary non-generic interface adapters. It resolves canonical
   MethodDef and Property locators through Roslyn symbols, binds one Kotlin-named or PascalCase C#
-  source body, and emits explicit interface members without copying state or behavior. Missing
-  abstract bodies are `KDNCS008`. Portable inherited defaults call the producer-recorded helper;
+  source body, and emits explicit interface members without copying state or behavior. MethodDef
+  resolution now matches the complete open return and parameter signature before generic-owner
+  construction rather than selecting by name, arity, and parameter count. Same-shaped overloads
+  bind independently; stale parameter or return locators fail with `KDNCS006`. An explicit
+  declaring-assembly self-reference is normalized to its equivalent local symbol, while external
+  assembly identity remains significant. The standard CLR core facades are normalized for
+  `System.*` types so `[mscorlib]System.Nullable` binds Roslyn's forwarded core symbol on modern
+  profiles. Missing abstract bodies are `KDNCS008`. Portable inherited defaults call the
+  producer-recorded helper;
   native `net10.0` DIMs and complete child-owned promotions are discovered through Roslyn's
   interface implementation map and receive no class forwarder. The DLL-only four-lane fixture now
   compiles and executes the real generator for an ordinary public interface and an authorized
