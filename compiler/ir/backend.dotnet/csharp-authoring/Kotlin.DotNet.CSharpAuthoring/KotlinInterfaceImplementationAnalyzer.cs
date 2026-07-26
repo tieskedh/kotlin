@@ -4,10 +4,8 @@
  */
 
 using System.Collections.Immutable;
-using System.Linq;
 using Kotlin.DotNet.CSharpAuthoring.Manifest;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace Kotlin.DotNet.CSharpAuthoring;
@@ -54,42 +52,32 @@ public sealed class KotlinInterfaceImplementationAnalyzer : DiagnosticAnalyzer
                 problem.Assembly.Identity.Name,
                 problem.Message));
         }
-        foreach (Diagnostic compilerDiagnostic in context.Compilation.GetDiagnostics(
-                     context.CancellationToken))
-        {
-            if (compilerDiagnostic.Id != "CS0122" ||
-                !compilerDiagnostic.Location.IsInSource ||
-                compilerDiagnostic.Location.SourceTree == null)
-                continue;
-            SyntaxNode root = compilerDiagnostic.Location.SourceTree.GetRoot(
+        ImmutableArray<Diagnostic> compilerErrors =
+            DiagnosticOwnership.CompilerErrors(
+                context.Compilation,
                 context.CancellationToken);
-            BaseTypeSyntax? baseType = root
-                .FindNode(compilerDiagnostic.Location.SourceSpan)
-                .AncestorsAndSelf()
-                .OfType<BaseTypeSyntax>()
-                .FirstOrDefault();
-            if (baseType == null)
-                continue;
-            string? contractName = AuthoringContractDiscovery.KotlinAuthoringBaseName(
-                baseType.Type,
-                manifests);
-            if (contractName == null)
-                continue;
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.InaccessibleContract,
-                compilerDiagnostic.Location,
-                contractName,
-                context.Compilation.AssemblyName ?? "<unnamed>"));
-        }
         foreach (AuthoringContract contract in AuthoringContractDiscovery.Discover(
             context.Compilation,
             manifests,
-            context.ReportDiagnostic))
+            diagnostic =>
+            {
+                if (!DiagnosticOwnership.HasBlockingCompilerError(
+                        diagnostic.Location,
+                        compilerErrors,
+                        context.CancellationToken))
+                    context.ReportDiagnostic(diagnostic);
+            }))
         {
             foreach (Diagnostic diagnostic in KotlinImplementationEmitter
                          .Emit(contract)
                          .Diagnostics)
-                context.ReportDiagnostic(diagnostic);
+            {
+                if (!DiagnosticOwnership.HasBlockingCompilerError(
+                        diagnostic.Location,
+                        compilerErrors,
+                        context.CancellationToken))
+                    context.ReportDiagnostic(diagnostic);
+            }
         }
     }
 }
