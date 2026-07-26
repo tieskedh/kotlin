@@ -417,8 +417,11 @@ The remaining P0-D implementation order is:
    suppression. Split generic views and generic methods now also execute through production code:
    the declared base-list view gains the exact constructed interface, while canonical adapters
    alone perform erased casts/boxing and generic constraints remain CLR-authoritative.
-   Owner-relative guidance stays diagnostic-only. Next migrate intersections and special barriers
-   from the independent handwritten sufficiency fixture. Multi-parent generic diamonds compose
+   Owner-relative guidance stays diagnostic-only. Manifest-recorded special barriers are now
+   production-generated before erased casts, with all `false`, `null`, `-1`, and argument
+   fallbacks executed while policy-free unsafe members retain cast failure. Next migrate
+   intersections from the independent handwritten sufficiency fixture. Multi-parent generic
+   diamonds compose
    from parent manifest contracts plus the CLR graph; schema 6 records the logical contributor
    mapping that CLR metadata lacks for derived method and split mutable-property intersection slots.
    Representable method constraints are read from CLR GenericParam metadata and now drive the

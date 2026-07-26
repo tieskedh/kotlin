@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameter
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -1615,6 +1616,62 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public sealed partial class BarrierBaseListProbe :
+                        manifest.BarrierShape<string>
+                    {
+                        public int Size { get { return 1; } }
+                        public bool IsEmpty() { return false; }
+                        public Kotlin.Collections.Iterator Iterator() { return null; }
+                        public bool ContainsAll(Kotlin.Collections.Collection elements)
+                        {
+                            return false;
+                        }
+                        public bool Contains(string element)
+                        {
+                            return element == "typed";
+                        }
+                    }
+
+                    public sealed partial class SearchBarrierBaseListProbe :
+                        manifest.SearchBarrier<string>
+                    {
+                        public int Size { get { return 1; } }
+                        public bool IsEmpty() { return false; }
+                        public Kotlin.Collections.Iterator Iterator() { return null; }
+                        public bool ContainsAll(Kotlin.Collections.Collection elements)
+                        {
+                            return false;
+                        }
+                        public bool Contains(string element)
+                        {
+                            return element == "typed";
+                        }
+                        public string Get(int index)
+                        {
+                            return index == 0 ? "typed" : null;
+                        }
+                        public int IndexOf(string element)
+                        {
+                            return Contains(element) ? 0 : -1;
+                        }
+                        public int LastIndexOf(string element)
+                        {
+                            return IndexOf(element);
+                        }
+                        public Kotlin.Collections.ListIterator ListIterator()
+                        {
+                            return null;
+                        }
+                        public Kotlin.Collections.ListIterator ListIterator(int index)
+                        {
+                            return null;
+                        }
+                        public Kotlin.Collections.List SubList(int fromIndex, int toIndex)
+                        {
+                            return null;
+                        }
+                    }
+
                     public static class BaseListProgram
                     {
                         public static int Main()
@@ -1648,6 +1705,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated owner-bound implementation failed: " +
                                     ownerBoundResult);
+                            int barrierResult =
+                                manifest.apiKt.verifyBarrier(new BarrierBaseListProbe());
+                            if (barrierResult != 0)
+                                throw new System.Exception(
+                                    "Generated collection barrier failed: " +
+                                    barrierResult);
+                            int searchBarrierResult =
+                                manifest.apiKt.verifySearchBarrier(
+                                    new SearchBarrierBaseListProbe());
+                            if (searchBarrierResult != 0)
+                                throw new System.Exception(
+                                    "Generated list barrier failed: " +
+                                    searchBarrierResult);
                             return 0;
                         }
                     }
@@ -1708,6 +1778,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertTrue("(int)" in generatedAuthoringText) {
                 "The erased value-type argument was not unboxed:\n$generatedAuthoringText"
+            }
+            assertTrue("p0 is string" in generatedAuthoringText) {
+                "The erased collection barriers do not check their typed input:\n" +
+                        generatedAuthoringText
+            }
+            assertTrue("return false" in generatedAuthoringText) {
+                "The Collection.contains wrong-shape fallback was not generated:\n" +
+                        generatedAuthoringText
+            }
+            assertTrue("return -1" in generatedAuthoringText) {
+                "The List.indexOf wrong-shape fallback was not generated:\n" +
+                        generatedAuthoringText
             }
             assertTrue("KDNCS009" in baseListCompile.output) {
                 "The analyzer did not explain the erased R : T boundary:\n" +
@@ -1894,6 +1976,106 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ),
                     intersections = emptyList(),
                 ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/NullBarrier",
+                    canonicalOwnerPath = listOf("diagnostics.NullBarrier"),
+                    declaredOwnerPath = listOf("diagnostics.NullBarrier`1"),
+                    exactOwnerPath = null,
+                    typeParameters = listOf(
+                        DotNetCSharpTypeParameter(
+                            "T",
+                            DotNetCSharpTypeParameterVariance.INVARIANT,
+                        )
+                    ),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/NullBarrier.lookup",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "lookup",
+                            authoringView = DotNetCSharpInterfaceView.DECLARED,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = DotNetCSharpWrongShapePolicy(
+                                checkedParameterCount = 1,
+                                fallback = DotNetCSharpWrongShapeFallback.NULL,
+                                fallbackParameterIndex = null,
+                            ),
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.ERASED,
+                                    ownerPath = listOf("diagnostics.NullBarrier"),
+                                    methodName = "Lookup",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "object",
+                                    parameterTypes = listOf("object"),
+                                ),
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.DECLARED,
+                                    ownerPath = listOf("diagnostics.NullBarrier`1"),
+                                    methodName = "Lookup",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "!0",
+                                    parameterTypes = listOf("!0"),
+                                ),
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
+                DotNetCSharpInterfaceContract(
+                    logicalKey = "C:diagnostics/ArgumentBarrier",
+                    canonicalOwnerPath = listOf("diagnostics.ArgumentBarrier"),
+                    declaredOwnerPath = listOf("diagnostics.ArgumentBarrier`1"),
+                    exactOwnerPath = null,
+                    typeParameters = listOf(
+                        DotNetCSharpTypeParameter(
+                            "T",
+                            DotNetCSharpTypeParameterVariance.INVARIANT,
+                        )
+                    ),
+                    sourceAuthoringSupported = true,
+                    unsupportedReasons = emptyList(),
+                    members = listOf(
+                        DotNetCSharpMemberContract(
+                            logicalKey = "F:diagnostics/ArgumentBarrier.lookup",
+                            kind = DotNetCSharpMemberKind.METHOD,
+                            sourceName = "lookup",
+                            authoringView = DotNetCSharpInterfaceView.DECLARED,
+                            defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                            semanticBodyView = null,
+                            wrongShapePolicy = DotNetCSharpWrongShapePolicy(
+                                checkedParameterCount = 1,
+                                fallback = DotNetCSharpWrongShapeFallback.ARGUMENT,
+                                fallbackParameterIndex = 1,
+                            ),
+                            slots = listOf(
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.ERASED,
+                                    ownerPath = listOf("diagnostics.ArgumentBarrier"),
+                                    methodName = "Lookup",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "object",
+                                    parameterTypes = listOf("object", "object"),
+                                ),
+                                DotNetCSharpMethodLocator(
+                                    role = DotNetCSharpSlotRole.DECLARED,
+                                    ownerPath = listOf("diagnostics.ArgumentBarrier`1"),
+                                    methodName = "Lookup",
+                                    propertyName = null,
+                                    genericArity = 0,
+                                    returnType = "!0",
+                                    parameterTypes = listOf("!0", "!0"),
+                                ),
+                            ),
+                        )
+                    ),
+                    intersections = emptyList(),
+                ),
             ),
         )
         val assemblyMetadata = DotNetCSharpImplementationManifestCodec
@@ -1927,6 +2109,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                         int Compute(int value);
                     }
+
+                    public interface NullBarrier
+                    {
+                        object Lookup(object key);
+                    }
+
+                    public interface NullBarrier<T> : NullBarrier
+                    {
+                        T Lookup(T key);
+                    }
+
+                    public interface ArgumentBarrier
+                    {
+                        object Lookup(object key, object fallback);
+                    }
+
+                    public interface ArgumentBarrier<T> : ArgumentBarrier
+                    {
+                        T Lookup(T key, T fallback);
+                    }
                 }
                 """.trimIndent()
             )
@@ -1959,25 +2161,83 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public void Accept(string value) {}
                     public void Accept(object value) {}
                 }
+
+                public sealed partial class ValidNullBarrier :
+                    diagnostics.NullBarrier<string>
+                {
+                    public string Lookup(string key)
+                    {
+                        return "body:" + key;
+                    }
+                }
+
+                public sealed partial class ValidArgumentBarrier :
+                    diagnostics.ArgumentBarrier<string>
+                {
+                    public string Lookup(string key, string fallback)
+                    {
+                        return "body:" + key;
+                    }
+                }
+
+                public static class Program
+                {
+                    public static int Main()
+                    {
+                        var nullBarrier = new ValidNullBarrier();
+                        if (((diagnostics.NullBarrier)nullBarrier).Lookup(42) != null)
+                            return 1;
+                        if (nullBarrier.Lookup("typed") != "body:typed")
+                            return 2;
+
+                        var argumentBarrier = new ValidArgumentBarrier();
+                        object fallback = new object();
+                        object wrong = ((diagnostics.ArgumentBarrier)argumentBarrier)
+                            .Lookup(42, fallback);
+                        if (!object.ReferenceEquals(wrong, fallback))
+                            return 3;
+                        if (argumentBarrier.Lookup("typed", "fallback") !=
+                                "body:typed")
+                            return 4;
+                        return 0;
+                    }
+                }
                 """.trimIndent()
             )
         }
+        val validAssembly = directory.resolve("Valid.dll")
         val validCompile = runModernCSharpCompiler(
             modernCSharp,
             validSource,
-            directory.resolve("Valid.dll"),
+            validAssembly,
             producer,
+            target = "exe",
             analyzers = listOf(tooling),
             generatedFilesDirectory = validGeneratedDirectory,
         )
         assertEquals(0, validCompile.exitCode, validCompile.output)
-        assertTrue(
-            validGeneratedDirectory.walkTopDown().any { file ->
+        val validGeneratedSources =
+            validGeneratedDirectory.walkTopDown().filter { file ->
                 file.isFile && file.name.endsWith(".KotlinInterfaceImplementation.g.cs")
-            }
-        ) {
+            }.toList()
+        assertTrue(validGeneratedSources.isNotEmpty()) {
             "A valid generic Kotlin base list did not activate the source generator"
         }
+        val validGeneratedText =
+            validGeneratedSources.joinToString("\n", transform = File::readText)
+        assertTrue("return null" in validGeneratedText) {
+            "The null wrong-shape fallback was not generated:\n$validGeneratedText"
+        }
+        assertTrue("return p1" in validGeneratedText) {
+            "The argument wrong-shape fallback was not generated:\n$validGeneratedText"
+        }
+        directory.resolve("Valid.runtimeconfig.json").writeText(net10RuntimeConfig())
+        runDotNet(
+            modernCSharp.dotNetHost,
+            validAssembly,
+            directory,
+            "Synthetic C# wrong-shape fallback execution failed",
+        )
 
         val missingPartial = compileDiagnostic(
             "MissingPartial",

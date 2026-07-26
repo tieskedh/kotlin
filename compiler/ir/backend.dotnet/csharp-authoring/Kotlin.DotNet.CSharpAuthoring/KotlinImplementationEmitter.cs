@@ -489,8 +489,7 @@ internal static class KotlinImplementationEmitter
             body = MethodSourceBody(
                 authoringContract,
                 sourceMethod,
-                physicalMethod,
-                resolved.AuthoringMethod,
+                resolved,
                 diagnostics);
             if (body == null)
                 return;
@@ -592,14 +591,23 @@ internal static class KotlinImplementationEmitter
     private static string? MethodSourceBody(
         AuthoringContract authoringContract,
         IMethodSymbol sourceMethod,
-        IMethodSymbol physicalMethod,
-        IMethodSymbol authoringMethod,
+        ResolvedMember resolved,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
+        IMethodSymbol physicalMethod = resolved.Method;
+        IMethodSymbol authoringMethod = resolved.AuthoringMethod;
         IMethodSymbol substitutedAuthoringMethod = authoringMethod.Arity == 0
             ? authoringMethod
             : authoringMethod.Construct(
                 physicalMethod.TypeParameters.Cast<ITypeSymbol>().ToArray());
+        if (!TryWrongShapePrelude(
+                authoringContract,
+                resolved,
+                physicalMethod,
+                substitutedAuthoringMethod,
+                diagnostics,
+                out string wrongShapePrelude))
+            return null;
         var arguments = new List<string>();
         for (int index = 0; index < physicalMethod.Parameters.Length; index++)
         {
@@ -630,14 +638,14 @@ internal static class KotlinImplementationEmitter
         }
         call += "(" + string.Join(", ", arguments) + ")";
         return physicalMethod.ReturnsVoid
-            ? "{ " + call + "; }"
+            ? "{ " + wrongShapePrelude + call + "; }"
             : TryConvertExpression(
                 authoringContract.Compilation,
                 substitutedAuthoringMethod.ReturnType,
                 physicalMethod.ReturnType,
                 call,
                 out string result)
-                ? "{ return " + result + "; }"
+                ? "{ " + wrongShapePrelude + "return " + result + "; }"
                 : ReportUnsupportedResult();
 
         string? ReportUnsupportedResult()
@@ -650,6 +658,155 @@ internal static class KotlinImplementationEmitter
                 diagnostics);
             return null;
         }
+    }
+
+    private static bool TryWrongShapePrelude(
+        AuthoringContract authoringContract,
+        ResolvedMember resolved,
+        IMethodSymbol physicalMethod,
+        IMethodSymbol authoringMethod,
+        ImmutableArray<Diagnostic>.Builder diagnostics,
+        out string prelude)
+    {
+        KotlinWrongShapePolicy? policy = resolved.Member.WrongShapePolicy;
+        if (policy == null || resolved.Locator.Role != KotlinSlotRole.Erased)
+        {
+            prelude = "";
+            return true;
+        }
+        if (physicalMethod.ReturnsVoid ||
+            policy.CheckedParameterCount > physicalMethod.Parameters.Length ||
+            policy.CheckedParameterCount > authoringMethod.Parameters.Length ||
+            !TryWrongShapeFallback(
+                authoringContract.Compilation,
+                physicalMethod,
+                policy,
+                out string fallback))
+        {
+            diagnostics.Add(Diagnostic.Create(
+                Diagnostics.MalformedManifest,
+                authoringContract.Declaration.Identifier.GetLocation(),
+                physicalMethod.ContainingAssembly.Identity.Name,
+                $"wrong-shape policy for '{resolved.Member.LogicalKey}' cannot be emitted"));
+            prelude = "";
+            return false;
+        }
+
+        var result = new StringBuilder();
+        for (int index = 0; index < policy.CheckedParameterCount; index++)
+        {
+            ITypeSymbol physicalType = physicalMethod.Parameters[index].Type;
+            ITypeSymbol expectedType = authoringMethod.Parameters[index].Type;
+            if (SymbolEqualityComparer.Default.Equals(physicalType, expectedType))
+                continue;
+            if (!TryTypeTest(expectedType, "p" + index, out string condition))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    Diagnostics.UnsupportedToolingShape,
+                    authoringContract.Declaration.Identifier.GetLocation(),
+                    physicalMethod.ContainingType.ToDisplayString(),
+                    $"wrong-shape check for '{DisplayType(expectedType)}'"));
+                prelude = "";
+                return false;
+            }
+            result.Append("if (!(");
+            result.Append(condition);
+            result.Append(")) return ");
+            result.Append(fallback);
+            result.Append("; ");
+        }
+        prelude = result.ToString();
+        return true;
+    }
+
+    private static bool TryWrongShapeFallback(
+        Compilation compilation,
+        IMethodSymbol physicalMethod,
+        KotlinWrongShapePolicy policy,
+        out string fallback)
+    {
+        switch (policy.Fallback)
+        {
+            case KotlinWrongShapeFallback.False:
+                return TryConvertExpression(
+                    compilation,
+                    compilation.GetSpecialType(SpecialType.System_Boolean),
+                    physicalMethod.ReturnType,
+                    "false",
+                    out fallback);
+            case KotlinWrongShapeFallback.Null:
+                if (CanAcceptNull(physicalMethod.ReturnType))
+                {
+                    fallback = "null";
+                    return true;
+                }
+                fallback = "";
+                return false;
+            case KotlinWrongShapeFallback.MinusOne:
+                return TryConvertExpression(
+                    compilation,
+                    compilation.GetSpecialType(SpecialType.System_Int32),
+                    physicalMethod.ReturnType,
+                    "-1",
+                    out fallback);
+            case KotlinWrongShapeFallback.Argument:
+                int? index = policy.FallbackParameterIndex;
+                if (index == null || index >= physicalMethod.Parameters.Length)
+                {
+                    fallback = "";
+                    return false;
+                }
+                return TryConvertExpression(
+                    compilation,
+                    physicalMethod.Parameters[index.Value].Type,
+                    physicalMethod.ReturnType,
+                    "p" + index.Value,
+                    out fallback);
+            default:
+                throw new InvalidOperationException(
+                    "Unknown Kotlin wrong-shape fallback.");
+        }
+    }
+
+    private static bool TryTypeTest(
+        ITypeSymbol expectedType,
+        string expression,
+        out string condition)
+    {
+        if (expectedType.TypeKind == TypeKind.Dynamic ||
+            expectedType.TypeKind == TypeKind.Pointer ||
+            expectedType.TypeKind == TypeKind.FunctionPointer)
+        {
+            condition = "";
+            return false;
+        }
+
+        bool acceptsNull =
+            expectedType.NullableAnnotation == NullableAnnotation.Annotated;
+        ITypeSymbol testedType = expectedType.WithNullableAnnotation(
+            NullableAnnotation.NotAnnotated);
+        if (testedType is INamedTypeSymbol namedType &&
+            namedType.OriginalDefinition.SpecialType ==
+                SpecialType.System_Nullable_T)
+        {
+            acceptsNull = true;
+            testedType = namedType.TypeArguments[0].WithNullableAnnotation(
+                NullableAnnotation.NotAnnotated);
+        }
+
+        condition = expression + " is " + DisplayType(testedType);
+        if (acceptsNull)
+            condition = expression + " is null || " + condition;
+        return true;
+    }
+
+    private static bool CanAcceptNull(ITypeSymbol type)
+    {
+        return type.IsReferenceType ||
+            type.NullableAnnotation == NullableAnnotation.Annotated ||
+            type is INamedTypeSymbol namedType &&
+            namedType.OriginalDefinition.SpecialType ==
+                SpecialType.System_Nullable_T;
     }
 
     private static IPropertySymbol? FindSourceProperty(
