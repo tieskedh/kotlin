@@ -51,18 +51,6 @@ internal static class KotlinImplementationEmitter
 
     internal static KotlinImplementationEmission Emit(AuthoringContract authoringContract)
     {
-        if (authoringContract.ImplementationType.ContainingType != null)
-        {
-            return new KotlinImplementationEmission(
-                "",
-                ImmutableArray<INamedTypeSymbol>.Empty,
-                ImmutableArray.Create(Diagnostic.Create(
-                    Diagnostics.UnsupportedToolingShape,
-                    authoringContract.Declaration.Identifier.GetLocation(),
-                    authoringContract.Interfaces[0].InterfaceType.ToDisplayString(),
-                    "a nested C# implementor requires containing partial declarations")));
-        }
-
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var generatedMembers = new StringBuilder();
         var additionalInterfaces = ImmutableArray.CreateBuilder<INamedTypeSymbol>();

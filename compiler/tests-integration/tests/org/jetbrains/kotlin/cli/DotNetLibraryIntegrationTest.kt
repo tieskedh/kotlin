@@ -2413,6 +2413,48 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                public static partial class GenericContainer<T> where T : class
+                {
+                    public sealed partial class Nested :
+                        diagnostics.Shape<T>
+                    {
+                        public T Last { get; private set; } = null!;
+
+                        public void Accept(T value)
+                        {
+                            Last = value;
+                        }
+                    }
+                }
+
+                public partial record class RecordContainer
+                {
+                    public sealed partial record class Nested :
+                        diagnostics.Ordinary
+                    {
+                        public int Compute(int value)
+                        {
+                            return value + 2;
+                        }
+                    }
+                }
+
+                namespace collision
+                {
+                    public sealed partial class A_B : diagnostics.Ordinary
+                    {
+                        public int Compute(int value) { return value + 3; }
+                    }
+                }
+
+                namespace collision.A
+                {
+                    public sealed partial class B : diagnostics.Ordinary
+                    {
+                        public int Compute(int value) { return value + 4; }
+                    }
+                }
+
                 public sealed partial class ValidNullBarrier :
                     diagnostics.NullBarrier<string>
                 {
@@ -2459,6 +2501,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             return 7;
                         if (overloaded.Compute((int?)null) != null)
                             return 8;
+                        var nested =
+                            new GenericContainer<string>.Nested();
+                        ((diagnostics.Shape)nested).Accept("nested");
+                        if (nested.Last != "nested")
+                            return 9;
+                        var nestedRecord = new RecordContainer.Nested();
+                        if (((diagnostics.Ordinary)nestedRecord).Compute(40) != 42)
+                            return 10;
+                        if (new collision.A_B().Compute(39) != 42)
+                            return 11;
+                        if (new collision.A.B().Compute(38) != 42)
+                            return 12;
                         return 0;
                     }
                 }
@@ -2511,6 +2565,38 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(missingPartial.exitCode != 0)
         assertTrue("KDNCS001" in missingPartial.output) { missingPartial.output }
+
+        val missingContainingPartial = compileDiagnostic(
+            "MissingContainingPartial",
+            """
+            public class MissingContainingPartial
+            {
+                public sealed partial class Nested : diagnostics.Ordinary
+                {
+                    public int Compute(int value) { return value; }
+                }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(missingContainingPartial.exitCode != 0)
+        assertTrue("KDNCS011" in missingContainingPartial.output) {
+            missingContainingPartial.output
+        }
+
+        val valueTypeImplementor = compileDiagnostic(
+            "ValueTypeImplementor",
+            """
+            public partial record struct ValueTypeImplementor :
+                diagnostics.Ordinary
+            {
+                public int Compute(int value) { return value; }
+            }
+            """.trimIndent(),
+        )
+        assertTrue(valueTypeImplementor.exitCode != 0)
+        assertTrue("KDNCS010" in valueTypeImplementor.output) {
+            valueTypeImplementor.output
+        }
 
         val inaccessibleFriend = compileDiagnostic(
             "UnavailableFriend",

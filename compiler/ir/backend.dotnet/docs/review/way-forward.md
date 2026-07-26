@@ -404,14 +404,17 @@ The remaining P0-D implementation order is:
 
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-2. Finish foreign nested/signature shapes plus more general substituted inherited overload
+2. Finish nested foreign-signature shapes plus more general substituted inherited overload
    families and the real same-owner clash matrix. The DLL manifest now covers inherited
    mutable-property obligations and friend-accessible internal interfaces. The first production
    `netstandard2.0` Roslyn analyzer/generator slice is now implemented: the real canonical or
    declared C# base list is the only opt-in, its bounded reader consumes the authoritative DLL
    manifest, and diagnostics cover missing `partial`, unavailable friendship, explicit ABI-member
    conflicts, unsupported substitutions, malformed manifests, and schema/tool mismatch. It emits
-   the additional partial declaration and is exercised against DLL-only references. Ordinary
+   the additional partial declaration and is exercised against DLL-only references. Nested
+   reference-class and record-class implementors reconstruct a partial containing-type chain;
+   non-partial containers receive `KDNCS011`, while file-local and value-type implementors remain
+   explicit unsupported shapes. Ordinary
    non-generic method/property adapters now execute public and authorized-internal Kotlin
    verification on every profile, including portable helper forwarding and modern/promotion DIM
    suppression. MethodDef locators are matched against complete open return and parameter

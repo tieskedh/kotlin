@@ -91,4 +91,13 @@ internal static class Diagnostics
         Category,
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    internal static readonly DiagnosticDescriptor MissingContainingPartial =
+        new DiagnosticDescriptor(
+            "KDNCS011",
+            "Containing type of Kotlin implementor must be partial",
+            "C# containing type '{0}' must be declared partial so the generator can augment nested Kotlin implementor '{1}'",
+            Category,
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
 }

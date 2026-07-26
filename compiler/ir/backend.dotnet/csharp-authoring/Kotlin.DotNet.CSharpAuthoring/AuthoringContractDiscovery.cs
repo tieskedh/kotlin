@@ -107,6 +107,27 @@ internal static class AuthoringContractDiscovery
                     continue;
 
                 Location location = declaration.Identifier.GetLocation();
+                if (implementation.TypeKind != TypeKind.Class)
+                {
+                    reportDiagnostic(Diagnostic.Create(
+                        Diagnostics.UnsupportedToolingShape,
+                        location,
+                        interfaces[0].InterfaceType.ToDisplayString(),
+                        "C# value-type implementors require a separate Kotlin boxing and identity contract"));
+                    continue;
+                }
+                INamedTypeSymbol? fileLocalType =
+                    ContainingTypeChain(implementation)
+                        .FirstOrDefault(IsFileLocal);
+                if (fileLocalType != null)
+                {
+                    reportDiagnostic(Diagnostic.Create(
+                        Diagnostics.UnsupportedToolingShape,
+                        location,
+                        interfaces[0].InterfaceType.ToDisplayString(),
+                        $"file-local type '{fileLocalType.ToDisplayString()}' cannot be augmented from generated source"));
+                    continue;
+                }
                 if (!declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
                 {
                     reportDiagnostic(Diagnostic.Create(
@@ -114,6 +135,18 @@ internal static class AuthoringContractDiscovery
                         location,
                         implementation.ToDisplayString(),
                         interfaces[0].InterfaceType.ToDisplayString()));
+                    continue;
+                }
+                INamedTypeSymbol? nonPartialContainer =
+                    ContainingTypeChain(implementation.ContainingType)
+                        .FirstOrDefault(type => !IsPartial(type));
+                if (nonPartialContainer != null)
+                {
+                    reportDiagnostic(Diagnostic.Create(
+                        Diagnostics.MissingContainingPartial,
+                        nonPartialContainer.Locations.FirstOrDefault() ?? location,
+                        nonPartialContainer.ToDisplayString(),
+                        implementation.ToDisplayString()));
                     continue;
                 }
 
@@ -485,6 +518,37 @@ internal static class AuthoringContractDiscovery
         }
         reason = "";
         return true;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> ContainingTypeChain(
+        INamedTypeSymbol? type)
+    {
+        INamedTypeSymbol? current = type;
+        while (current != null)
+        {
+            yield return current;
+            current = current.ContainingType;
+        }
+    }
+
+    private static bool IsFileLocal(INamedTypeSymbol type)
+    {
+        return type.DeclaringSyntaxReferences
+            .Select(reference => reference.GetSyntax())
+            .OfType<TypeDeclarationSyntax>()
+            .Any(declaration =>
+                declaration.Modifiers.Any(SyntaxKind.FileKeyword));
+    }
+
+    private static bool IsPartial(INamedTypeSymbol type)
+    {
+        TypeDeclarationSyntax[] declarations = type.DeclaringSyntaxReferences
+            .Select(reference => reference.GetSyntax())
+            .OfType<TypeDeclarationSyntax>()
+            .ToArray();
+        return declarations.Length != 0 &&
+            declarations.All(declaration =>
+                declaration.Modifiers.Any(SyntaxKind.PartialKeyword));
     }
 
     private static IEnumerable<ISymbol> FindConflictingMembers(
