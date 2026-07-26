@@ -414,7 +414,10 @@ The remaining P0-D implementation order is:
    the additional partial declaration and is exercised against DLL-only references. Ordinary
    non-generic method/property adapters now execute public and authorized-internal Kotlin
    verification on every profile, including portable helper forwarding and modern/promotion DIM
-   suppression. Next migrate split generic views, generic methods, intersections, and barriers
+   suppression. Split generic views and generic methods now also execute through production code:
+   the declared base-list view gains the exact constructed interface, while canonical adapters
+   alone perform erased casts/boxing and generic constraints remain CLR-authoritative.
+   Owner-relative guidance stays diagnostic-only. Next migrate intersections and special barriers
    from the independent handwritten sufficiency fixture. Multi-parent generic diamonds compose
    from parent manifest contracts plus the CLR graph; schema 6 records the logical contributor
    mapping that CLR metadata lacks for derived method and split mutable-property intersection slots.

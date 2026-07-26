@@ -1604,7 +1604,12 @@ landed shape as a compatibility constraint.
   Kotlin-named or PascalCase source methods/properties to explicit recorded CLR slots. Portable
   defaults call the recorded helper, while native and child-promoted `net10.0` DIMs suppress the
   class forwarder. The DLL-only matrix executes public and authorized-internal implementations
-  through Kotlin on every profile. Schema 6
+  through Kotlin on every profile. Split generic authoring names only the declared interface;
+  generated partials add the exact view with the identical closed or open substitution and adapt
+  declared/exact/canonical slots to one typed source body. Exact adapters stay typed; canonical
+  adapters alone cast, box, or widen for their erased ABI. Generic method constraints come from
+  CLR metadata. Erased `R : T` guidance stays diagnostic-only. Portable helpers receive the
+  recorded owner/method substitutions, while native and promoted DIMs remain method-free. Schema 6
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
