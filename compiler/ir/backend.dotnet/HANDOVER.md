@@ -1671,6 +1671,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   detection compares all of them against the parent manifest locator. A deliberately corrupted
   return signature is rejected, so the promotion fixture can no longer approve a coincident
   overload by name and parameter count.
+- The same raw reader now audits the C# authoring friend boundary on all four DLL-only lanes. It
+  compares the complete `InternalsVisibleTo("GeneratedShape")` custom-attribute blob and reads
+  TypeDef visibility directly: ordinary internal owners are non-public, their public nested
+  contract is NestedPublic, a private nested interface is NestedPrivate, and
+  `@PublishedApi internal` compiler ABI remains physically public but absent from the authoring
+  manifest. C# positive/negative access tests remain the observable companion evidence.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot
