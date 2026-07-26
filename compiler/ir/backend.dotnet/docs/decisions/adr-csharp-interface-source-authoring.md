@@ -369,7 +369,9 @@ The same fixture proves helper forwarding on both portable profiles, natural DIM
 Kotlin interface that explicitly reabstracts the inherited member remains authoritative: its
 manifest member is abstract and has no helper/body locator, one C# source body satisfies both the
 derived and inherited physical slots, and a bodyless C# implementor receives `KDNCS008` instead of
-silently inheriting either the portable helper or modern DIM.
+silently inheriting either the portable helper or modern DIM. The same rule is pinned for a
+covariant generic declaration: the declared typed slot is the authoring member, canonical and
+inherited views adapt to that one body, and no view acquires a copied semantic body.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their
@@ -396,7 +398,7 @@ helper; native and
 child-promoted `net10.0` DIMs omit a class forwarder. Public and authorized internal
 implementations execute Kotlin verification on every profile. Explicit Kotlin reabstraction
 suppresses inherited default selection on those same lanes and requires one C# implementation
-body.
+body, including through split generic canonical/declared views.
 
 Split generic emission is now also production-owned. A C# type names only the declared Kotlin
 interface in its real base list; the generated partial adds the exact constructed view with the

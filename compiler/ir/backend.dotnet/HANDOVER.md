@@ -1669,10 +1669,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   interface implementation map and receive no class forwarder. Explicit Kotlin reabstraction
   overrides both mechanisms: the derived manifest declaration remains abstract, one C# body
   satisfies inherited and redeclared physical slots, and a bodyless C# implementor is
-  `KDNCS008` on every profile. The DLL-only four-lane fixture now compiles and executes the real
-  generator for an ordinary public interface and an authorized internal friend interface. The
-  existing handwritten fixture remains an independent full-schema sufficiency oracle while each
-  production family is also executed directly.
+  `KDNCS008` on every profile. Covariant generic reabstraction is pinned separately: C# authors the
+  declared typed slot, while canonical and inherited views adapt to the same body without helper
+  or DIM fallback. The DLL-only four-lane fixture now compiles and executes the real generator for
+  an ordinary public interface and an authorized internal friend interface. The existing
+  handwritten fixture remains an independent full-schema sufficiency oracle while each production
+  family is also executed directly.
 - The metadata-only promotion reader now decodes the complete raw MethodImpl declaration return
   and parameter signatures in addition to assembly, owner, name, and generic arity. Effective-DIM
   detection compares all of them against the parent manifest locator. A deliberately corrupted

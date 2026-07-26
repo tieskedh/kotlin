@@ -940,6 +940,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public override fun selected(): String
             }
 
+            public interface GenericReabstractedShape<out T> : ShapeRoot<T> {
+                public override fun fallback(): T
+            }
+
             public interface BarrierShape<out T> : Collection<T> {
                 override fun contains(element: @UnsafeVariance T): Boolean
             }
@@ -999,6 +1003,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public fun verifyReabstracted(value: ReabstractedShape): Int =
                 if (value.selected() == "csharp-reabstracted") 0 else 1
+
+            public fun verifyGenericReabstracted(
+                value: GenericReabstractedShape<String>
+            ): Int {
+                val root: ShapeRoot<String> = value
+                if (value.value != "generic-value") return 1
+                if (value.fallback() != "generic-reabstracted") return 2
+                return if (root.fallback() == "generic-reabstracted") 0 else 3
+            }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
                 val left: IntersectionLeft<String> = value
@@ -1241,6 +1254,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val reabstractedContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ReabstractedShape"
             }
+            val genericReabstractedContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericReabstractedShape"
+                }
             val barrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
             }
@@ -1450,6 +1468,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
             assertTrue(reabstractedContract.sourceAuthoringSupported)
+            assertTrue(genericReabstractedContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
@@ -1528,8 +1547,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(reabstractedSelected.slots.none { slot ->
                 slot.role == DotNetCSharpSlotRole.HELPER
             })
-            assertEquals(if (externalParent) 11 else 24, manifest.interfaces.size)
-            assertEquals(if (externalParent) 13 else 24, parentManifest.interfaces.size)
+            val genericReabstractedFallback =
+                genericReabstractedContract.members.single { member ->
+                    member.sourceName == "fallback"
+                }
+            assertEquals(
+                DotNetCSharpInterfaceView.DECLARED,
+                genericReabstractedFallback.authoringView,
+            )
+            assertEquals(
+                DotNetCSharpDefaultKind.ABSTRACT,
+                genericReabstractedFallback.defaultKind,
+            )
+            assertTrue(genericReabstractedFallback.semanticBodyView == null)
+            assertTrue(genericReabstractedFallback.slots.none { slot ->
+                slot.role == DotNetCSharpSlotRole.HELPER
+            })
+            assertEquals(if (externalParent) 12 else 25, manifest.interfaces.size)
+            assertEquals(if (externalParent) 13 else 25, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1541,6 +1576,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ordinaryContract,
                         reabstractableContract,
                         reabstractedContract,
+                        genericReabstractedContract,
                         barrierContract,
                         searchBarrierContract,
                         friendContract,
@@ -2020,6 +2056,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         public string Selected() { return "csharp-reabstracted"; }
                     }
 
+                    public sealed partial class GenericReabstractedBaseListProbe :
+                        manifest.GenericReabstractedShape<string>
+                    {
+                        public string Value { get { return "generic-value"; } }
+                        public string Fallback() { return "generic-reabstracted"; }
+                    }
+
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
@@ -2215,6 +2258,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated reabstracted implementation failed: " +
                                     reabstractedResult);
+                            int genericReabstractedResult =
+                                manifest.apiKt.verifyGenericReabstracted(
+                                    new GenericReabstractedBaseListProbe());
+                            if (genericReabstractedResult != 0)
+                                throw new System.Exception(
+                                    "Generated generic reabstracted implementation failed: " +
+                                    genericReabstractedResult);
                             int friendResult =
                                 manifest.apiKt.verifyFriend(new FriendBaseListProbe());
                             if (friendResult != 0)
@@ -2346,6 +2396,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("KDNCS008" in missingReabstractedCompile.output) {
                 "The missing reabstracted C# body was not diagnosed:\n" +
                         missingReabstractedCompile.output
+            }
+            val missingGenericReabstractedSource =
+                profileDirectory.resolve("missing-generic-reabstracted.cs").apply {
+                    writeText(
+                        """
+                        public sealed partial class MissingGenericReabstractedProbe :
+                            manifest.GenericReabstractedShape<string>
+                        {
+                            public string Value { get { return "generic-value"; } }
+                        }
+                        """.trimIndent()
+                    )
+                }
+            val missingGenericReabstractedCompile = runModernCSharpCompiler(
+                modernCSharp,
+                missingGenericReabstractedSource,
+                profileDirectory.resolve("MissingGenericReabstractedShape.dll"),
+                *baseListCompileReferences.toTypedArray(),
+                analyzers = listOf(csharpAuthoringTooling),
+            )
+            assertTrue(missingGenericReabstractedCompile.exitCode != 0) {
+                "A C# implementor silently inherited a reabstracted generic default"
+            }
+            assertTrue("KDNCS008" in missingGenericReabstractedCompile.output) {
+                "The missing generic reabstracted C# body was not diagnosed:\n" +
+                        missingGenericReabstractedCompile.output
             }
             val generatedAuthoringSources = generatedFiles.walkTopDown().filter { file ->
                 file.isFile &&
