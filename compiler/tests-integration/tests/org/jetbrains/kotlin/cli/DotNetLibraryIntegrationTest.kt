@@ -747,6 +747,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 override fun indexOf(element: @UnsafeVariance T): Int
             }
 
+            internal interface FriendShape {
+                public val code: Int
+                public fun fallbackCode(): Int = code
+            }
+
+            internal class FriendContainer {
+                public interface NestedShape {
+                    public val nestedCode: Int
+                }
+
+                private interface HiddenShape {
+                    public val hiddenCode: Int
+                }
+            }
+
+            @PublishedApi
+            internal interface PublishedInternalShape {
+                public val compilerCode: Int
+            }
+
             public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
                 public fun <R : ManifestMarker> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
@@ -806,6 +826,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (wide.indexOf(42) != -1 || wide.indexOf(null) != -1) return 3
                 return 0
             }
+
+            internal fun verifyFriend(value: FriendShape): Int =
+                if (value.code == 41 && value.fallbackCode() == 41) 0 else 1
+
+            internal fun verifyNestedFriend(value: FriendContainer.NestedShape): Int =
+                if (value.nestedCode == 42) 0 else 1
 
             public fun verify(value: Shape<String>): Int {
                 if (value.value != "typed") return 1
@@ -895,6 +921,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
                     K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
                     K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                    "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=GeneratedShape",
                     K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
                 )
             } else {
@@ -905,6 +932,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     K2DotNetCompilerArguments::classpath.cliArgument, parentMetadata.path,
                     K2DotNetCompilerArguments::dotNetTarget.cliArgument, targetProfile,
                     K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
+                    "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=GeneratedShape",
                     K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
                 )
             }
@@ -959,6 +987,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val searchBarrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.SearchBarrier"
             }
+            val friendContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.FriendShape"
+            }
+            val nestedFriendContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "NestedShape"
+            }
+            assertTrue(manifest.interfaces.none { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "HiddenShape" ||
+                        interfaceContract.canonicalOwnerPath.last() ==
+                        "manifest.PublishedInternalShape"
+            })
             val rootContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
             }
@@ -994,6 +1033,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
             assertTrue(searchBarrierContract.unsupportedReasons.isEmpty())
+            assertTrue(friendContract.sourceAuthoringSupported)
+            assertTrue(friendContract.unsupportedReasons.isEmpty())
+            assertTrue(nestedFriendContract.sourceAuthoringSupported)
+            assertTrue(nestedFriendContract.unsupportedReasons.isEmpty())
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
@@ -1042,8 +1085,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .propertyName,
                 mutableSetter.slots.single().propertyName,
             )
-            assertEquals(if (externalParent) 6 else 15, manifest.interfaces.size)
-            assertEquals(if (externalParent) 9 else 15, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 8 else 17, manifest.interfaces.size)
+            assertEquals(if (externalParent) 9 else 17, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1052,6 +1095,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ordinaryContract,
                         barrierContract,
                         searchBarrierContract,
+                        friendContract,
+                        nestedFriendContract,
                         rootContract,
                         parentContract,
                         siblingContract,
@@ -1303,6 +1348,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ordinaryContract,
                         barrierContract,
                         searchBarrierContract,
+                        friendContract,
+                        nestedFriendContract,
                         runtimeIterableContract,
                         runtimeCollectionContract,
                         runtimeListContract,
@@ -1351,6 +1398,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 profileDirectory,
                 "Manifest-generated C# implementation failed for ${scenario.name}",
             )
+
+            val friendType = friendContract.canonicalOwnerPath.joinToString(".") { component ->
+                component.substringBefore('`')
+            }
+            val unauthorizedSource = profileDirectory.resolve("unauthorized.cs").apply {
+                writeText(
+                    """
+                    internal static class UnauthorizedReference
+                    {
+                        internal static $friendType Value;
+                    }
+                    """.trimIndent()
+                )
+            }
+            val unauthorizedCompile = runModernCSharpCompiler(
+                modernCSharp,
+                unauthorizedSource,
+                profileDirectory.resolve("UnauthorizedShape.dll"),
+                producerAssembly,
+                runtimeAssembly,
+            )
+            assertTrue(unauthorizedCompile.exitCode != 0) {
+                "An unauthorized C# assembly consumed internal contract '$friendType'"
+            }
+            assertTrue("CS0122" in unauthorizedCompile.output) { unauthorizedCompile.output }
         }
 
         val modern = contractsByProfile.getValue("net10.0")
@@ -9864,6 +9936,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ordinaryContract: DotNetCSharpInterfaceContract,
         barrierContract: DotNetCSharpInterfaceContract,
         searchBarrierContract: DotNetCSharpInterfaceContract,
+        friendContract: DotNetCSharpInterfaceContract,
+        nestedFriendContract: DotNetCSharpInterfaceContract,
         runtimeIterableContract: DotNetCSharpInterfaceContract,
         runtimeCollectionContract: DotNetCSharpInterfaceContract,
         runtimeListContract: DotNetCSharpInterfaceContract,
@@ -9947,6 +10021,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val ordinaryFormat = ordinaryContract.member("format")
             .slots
             .single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        val friendType = friendContract.csharpOwner(friendContract.canonicalOwnerPath)
+        val friendCode = friendContract.member(
+            "code",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        val friendFallback = friendContract.member("fallbackCode")
+        val friendFallbackCanonical = friendFallback.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.CANONICAL
+        }
+        val nestedFriendType =
+            nestedFriendContract.csharpOwner(nestedFriendContract.canonicalOwnerPath)
+        val nestedFriendCode = nestedFriendContract.member(
+            "nestedCode",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
         val barrierCanonicalType =
             barrierContract.csharpOwner(barrierContract.canonicalOwnerPath)
         val barrierExactType =
@@ -10148,6 +10237,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         } else {
             ""
         }
+        val generatedFriendDefault = if (
+            friendFallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER
+        ) {
+            val helper = friendFallback.slots.single { slot ->
+                slot.role == DotNetCSharpSlotRole.HELPER
+            }
+            require(helper.genericArity == 0)
+            val helperOwner = friendContract.csharpOwner(helper.ownerPath)
+            """
+                int $friendType.${friendFallbackCanonical.methodName}()
+                {
+                    return $helperOwner.${helper.methodName}(this);
+                }
+            """.trimIndent()
+        } else {
+            ""
+        }
         return """
             public sealed partial class GeneratedShape
             {
@@ -10281,6 +10387,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
 
                 $generatedOrdinaryDefault
+            }
+
+            internal sealed partial class GeneratedFriend
+            {
+                internal int Code { get { return 41; } }
+            }
+
+            internal sealed partial class GeneratedFriend : $friendType
+            {
+                int $friendType.${checkNotNull(friendCode.propertyName)}
+                {
+                    get { return Code; }
+                }
+
+                $generatedFriendDefault
+            }
+
+            internal sealed class GeneratedNestedFriend : $nestedFriendType
+            {
+                int $nestedFriendType.${checkNotNull(nestedFriendCode.propertyName)}
+                {
+                    get { return 42; }
+                }
             }
 
             public sealed partial class GeneratedBarrier
@@ -10436,6 +10565,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (searchBarrierResult != 0)
                         throw new System.Exception(
                             "Kotlin List barrier verification failed: " + searchBarrierResult);
+                    int friendResult = manifest.apiKt.verifyFriend(new GeneratedFriend());
+                    if (friendResult != 0)
+                        throw new System.Exception(
+                            "Kotlin friend verification failed: " + friendResult);
+                    int nestedFriendResult =
+                        manifest.apiKt.verifyNestedFriend(new GeneratedNestedFriend());
+                    if (nestedFriendResult != 0)
+                        throw new System.Exception(
+                            "Kotlin nested-friend verification failed: " + nestedFriendResult);
                     return 0;
                 }
             }
