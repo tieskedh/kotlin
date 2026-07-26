@@ -238,9 +238,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         {
                             MetadataReader metadata = pe.GetMetadataReader();
                             TypeProvider provider = new TypeProvider(metadata);
+                            foreach (CustomAttributeHandle attributeHandle
+                                in metadata.GetAssemblyDefinition().GetCustomAttributes())
+                            {
+                                CustomAttribute attribute =
+                                    metadata.GetCustomAttribute(attributeHandle);
+                                TypeIdentity owner = AttributeOwner(
+                                    metadata,
+                                    provider,
+                                    attribute.Constructor);
+                                Console.WriteLine(
+                                    "C|" +
+                                    Encode(owner.AssemblyName) + "|" +
+                                    Encode(owner.Path) + "|" +
+                                    Encode(Convert.ToBase64String(
+                                        metadata.GetBlobBytes(attribute.Value))));
+                            }
                             foreach (TypeDefinitionHandle typeHandle in metadata.TypeDefinitions)
                             {
                                 TypeDefinition type = metadata.GetTypeDefinition(typeHandle);
+                                TypeIdentity typeIdentity =
+                                    provider.FromDefinition(typeHandle);
+                                Console.WriteLine(
+                                    "D|" +
+                                    Encode(typeIdentity.Path) + "|" +
+                                    Encode(((int)(
+                                        type.Attributes &
+                                        TypeAttributes.VisibilityMask)).ToString()));
                                 foreach (MethodImplementationHandle implementationHandle
                                     in type.GetMethodImplementations())
                                 {
@@ -303,6 +327,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             }
                         }
                         return 0;
+                    }
+
+                    private static TypeIdentity AttributeOwner(
+                        MetadataReader metadata,
+                        TypeProvider provider,
+                        EntityHandle constructor)
+                    {
+                        if (constructor.Kind == HandleKind.MethodDefinition)
+                        {
+                            MethodDefinition method = metadata.GetMethodDefinition(
+                                (MethodDefinitionHandle)constructor);
+                            return provider.FromDefinition(method.GetDeclaringType());
+                        }
+                        if (constructor.Kind == HandleKind.MemberReference)
+                        {
+                            MemberReference member = metadata.GetMemberReference(
+                                (MemberReferenceHandle)constructor);
+                            return provider.FromMemberParent(member.Parent);
+                        }
+                        throw new BadImageFormatException(
+                            "Unsupported custom attribute constructor " +
+                            constructor.Kind);
                     }
                 }
 
@@ -1170,6 +1216,75 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         interfaceContract.canonicalOwnerPath.last() ==
                         "manifest.PublishedInternalShape"
             })
+            val assemblyAttributes =
+                readCSharpPhysicalAssemblyAttributesFromDll(
+                    modernCSharp,
+                    readerAssembly,
+                    readerDirectory,
+                    producerAssembly,
+                )
+            val friendAttribute = assemblyAttributes.single { attribute ->
+                attribute.ownerPath ==
+                        listOf(
+                            "System.Runtime.CompilerServices." +
+                                    "InternalsVisibleToAttribute"
+                        )
+            }
+            val friendAssemblyName = "GeneratedShape"
+            val expectedFriendBlob =
+                byteArrayOf(
+                    0x01,
+                    0x00,
+                    friendAssemblyName.length.toByte(),
+                ) +
+                        friendAssemblyName.toByteArray(Charsets.UTF_8) +
+                        byteArrayOf(0x00, 0x00)
+            assertTrue(friendAttribute.value.contentEquals(expectedFriendBlob)) {
+                "Unexpected InternalsVisibleTo blob for $moduleName: " +
+                        friendAttribute.value.joinToString(" ") { value ->
+                            "%02x".format(value)
+                        }
+            }
+
+            val physicalTypes = readCSharpPhysicalTypeDefinitionsFromDll(
+                modernCSharp,
+                readerAssembly,
+                readerDirectory,
+                producerAssembly,
+            ).associateBy(CSharpPhysicalTypeDefinition::ownerPath)
+            assertEquals(
+                0,
+                physicalTypes.getValue(friendContract.canonicalOwnerPath).visibility,
+                "An ordinary internal interface must be a non-public top-level TypeDef",
+            )
+            val friendContainerPath =
+                nestedFriendContract.canonicalOwnerPath.dropLast(1)
+            assertEquals(
+                0,
+                physicalTypes.getValue(friendContainerPath).visibility,
+                "The containing internal class must be a non-public top-level TypeDef",
+            )
+            assertEquals(
+                2,
+                physicalTypes.getValue(
+                    nestedFriendContract.canonicalOwnerPath
+                ).visibility,
+                "A public nested interface must remain NestedPublic inside its internal owner",
+            )
+            assertEquals(
+                3,
+                physicalTypes.getValue(
+                    friendContainerPath + "HiddenShape"
+                ).visibility,
+                "A private nested interface must remain NestedPrivate",
+            )
+            assertEquals(
+                1,
+                physicalTypes.getValue(
+                    listOf("manifest.PublishedInternalShape")
+                ).visibility,
+                "@PublishedApi internal compiler ABI must remain physically public",
+            )
             val rootContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
             }
@@ -11241,6 +11356,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val ownerPath: List<String>,
     )
 
+    private data class CSharpPhysicalCustomAttribute(
+        val ownerAssemblyName: String,
+        val ownerPath: List<String>,
+        val value: ByteArray,
+    )
+
+    private data class CSharpPhysicalTypeDefinition(
+        val ownerPath: List<String>,
+        val visibility: Int,
+    )
+
     private data class CSharpPhysicalGenericParameter(
         val ownerPath: List<String>,
         val methodName: String,
@@ -11326,6 +11452,61 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         .takeIf(String::isNotEmpty)
                         ?.split('\u0001')
                         .orEmpty(),
+                )
+            }
+
+    private fun readCSharpPhysicalAssemblyAttributesFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): List<CSharpPhysicalCustomAttribute> =
+        runCSharpImplementationManifestReader(
+            toolchain,
+            readerAssembly,
+            readerDirectory,
+            producerAssembly,
+        )
+            .filter { line -> line.startsWith("C|") }
+            .map { line ->
+                val fields = line.split('|')
+                require(fields.size == 4) {
+                    "Invalid manifest-reader custom-attribute output: $line"
+                }
+                val decoded = fields.drop(1).map { field ->
+                    Base64.getDecoder().decode(field).toString(Charsets.UTF_8)
+                }
+                CSharpPhysicalCustomAttribute(
+                    ownerAssemblyName = decoded[0],
+                    ownerPath = decoded[1].split('\u0000'),
+                    value = Base64.getDecoder().decode(decoded[2]),
+                )
+            }
+
+    private fun readCSharpPhysicalTypeDefinitionsFromDll(
+        toolchain: DotNetModernCSharpToolchain,
+        readerAssembly: File,
+        readerDirectory: File,
+        producerAssembly: File,
+    ): List<CSharpPhysicalTypeDefinition> =
+        runCSharpImplementationManifestReader(
+            toolchain,
+            readerAssembly,
+            readerDirectory,
+            producerAssembly,
+        )
+            .filter { line -> line.startsWith("D|") }
+            .map { line ->
+                val fields = line.split('|')
+                require(fields.size == 3) {
+                    "Invalid manifest-reader TypeDef output: $line"
+                }
+                val decoded = fields.drop(1).map { field ->
+                    Base64.getDecoder().decode(field).toString(Charsets.UTF_8)
+                }
+                CSharpPhysicalTypeDefinition(
+                    ownerPath = decoded[0].split('\u0000'),
+                    visibility = decoded[1].toInt(),
                 )
             }
 
