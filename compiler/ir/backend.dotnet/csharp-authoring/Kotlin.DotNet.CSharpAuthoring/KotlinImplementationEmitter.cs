@@ -59,18 +59,35 @@ internal static class KotlinImplementationEmitter
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var generatedMembers = new StringBuilder();
         var additionalInterfaces = ImmutableArray.CreateBuilder<INamedTypeSymbol>();
+        ImmutableArray<IntersectionBinding> intersections =
+            ResolveIntersections(authoringContract, diagnostics);
+        var intersectionsByContributor =
+            new Dictionary<string, IntersectionBinding>(StringComparer.Ordinal);
+        foreach (IntersectionBinding intersection in intersections)
+        {
+            foreach (string contributor in
+                     intersection.Contract.ContributingLogicalMemberKeys)
+            {
+                if (intersectionsByContributor.TryGetValue(
+                        contributor,
+                        out IntersectionBinding? existing) &&
+                    existing.Contract.LogicalKey !=
+                        intersection.Contract.LogicalKey)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.UnsupportedToolingShape,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        intersection.Owner.InterfaceType.ToDisplayString(),
+                        $"contributor '{contributor}' belongs to multiple intersection bodies"));
+                }
+                else
+                {
+                    intersectionsByContributor[contributor] = intersection;
+                }
+            }
+        }
         foreach (BoundKotlinInterface bound in authoringContract.Interfaces)
         {
-            if (!bound.Contract.Intersections.IsEmpty)
-            {
-                diagnostics.Add(Diagnostic.Create(
-                    Diagnostics.UnsupportedToolingShape,
-                    authoringContract.Declaration.Identifier.GetLocation(),
-                    bound.InterfaceType.ToDisplayString(),
-                    "intersection slots"));
-                continue;
-            }
-
             if (bound.IsAuthoredRoot &&
                 !bound.Contract.ExactOwnerPath.IsDefaultOrEmpty)
             {
@@ -97,9 +114,15 @@ internal static class KotlinImplementationEmitter
             EmitContract(
                 authoringContract,
                 bound,
+                intersectionsByContributor,
                 generatedMembers,
                 diagnostics);
         }
+        EmitIntersections(
+            authoringContract,
+            intersections,
+            generatedMembers,
+            diagnostics);
         return new KotlinImplementationEmission(
             generatedMembers.ToString(),
             additionalInterfaces
@@ -111,6 +134,7 @@ internal static class KotlinImplementationEmitter
     private static void EmitContract(
         AuthoringContract authoringContract,
         BoundKotlinInterface bound,
+        IReadOnlyDictionary<string, IntersectionBinding> intersectionsByContributor,
         StringBuilder output,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
@@ -123,14 +147,20 @@ internal static class KotlinImplementationEmitter
             KotlinSlotRole authoringRole = AuthoringRole(
                 bound.Contract,
                 member.AuthoringView);
-            KotlinMethodLocator? authoringLocator =
-                physicalSlots.SingleOrDefault(slot => slot.Role == authoringRole);
-            IMethodSymbol? authoringMethod = authoringLocator == null
-                ? null
-                : ResolveMethod(
-                    bound.Reference.Assembly,
-                    authoringLocator,
-                    bound.InterfaceType.TypeArguments);
+            intersectionsByContributor.TryGetValue(
+                member.LogicalKey,
+                out IntersectionBinding? intersection);
+            KotlinMethodLocator? authoringLocator = intersection == null
+                ? physicalSlots.SingleOrDefault(slot =>
+                    slot.Role == authoringRole)
+                : null;
+            IMethodSymbol? authoringMethod = intersection?.AuthoringMethod ??
+                (authoringLocator == null
+                    ? null
+                    : ResolveMethod(
+                        bound.Reference.Assembly,
+                        authoringLocator,
+                        bound.InterfaceType.TypeArguments));
             if (authoringMethod == null)
             {
                 diagnostics.Add(Diagnostic.Create(
@@ -160,10 +190,149 @@ internal static class KotlinImplementationEmitter
                     locator,
                     method,
                     authoringMethod,
-                    bound.InterfaceType.TypeArguments));
+                    bound.InterfaceType.TypeArguments,
+                    intersection?.Contract.SourceName ?? member.SourceName,
+                    intersection?.Contract.LogicalKey ?? member.LogicalKey,
+                    requiresSource: intersection != null));
             }
         }
 
+        EmitResolvedMembers(
+            authoringContract,
+            resolvedMembers,
+            output,
+            diagnostics);
+    }
+
+    private static ImmutableArray<IntersectionBinding> ResolveIntersections(
+        AuthoringContract authoringContract,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        var result = ImmutableArray.CreateBuilder<IntersectionBinding>();
+        var membersByLogicalKey =
+            new Dictionary<string, KotlinMemberContract>(StringComparer.Ordinal);
+        foreach (KotlinMemberContract member in authoringContract.Interfaces
+                     .SelectMany(bound => bound.Contract.Members))
+        {
+            if (!membersByLogicalKey.ContainsKey(member.LogicalKey))
+                membersByLogicalKey.Add(member.LogicalKey, member);
+        }
+
+        foreach (BoundKotlinInterface bound in authoringContract.Interfaces)
+        {
+            foreach (KotlinIntersectionContract intersection in
+                     bound.Contract.Intersections)
+            {
+                bool contributorsValid = true;
+                foreach (string contributor in
+                         intersection.ContributingLogicalMemberKeys)
+                {
+                    if (!membersByLogicalKey.TryGetValue(
+                            contributor,
+                            out KotlinMemberContract? member) ||
+                        member.Kind != intersection.Kind)
+                    {
+                        diagnostics.Add(Diagnostic.Create(
+                            Diagnostics.MalformedManifest,
+                            authoringContract.Declaration.Identifier.GetLocation(),
+                            bound.Reference.Assembly.Identity.Name,
+                            $"intersection '{intersection.LogicalKey}' has an unavailable contributor '{contributor}'"));
+                        contributorsValid = false;
+                    }
+                }
+
+                KotlinSlotRole authoringRole = AuthoringRole(
+                    bound.Contract,
+                    intersection.AuthoringView);
+                KotlinMethodLocator? authoringLocator =
+                    intersection.Slots.SingleOrDefault(slot =>
+                        slot.Role == authoringRole);
+                IMethodSymbol? authoringMethod = authoringLocator == null
+                    ? null
+                    : ResolveMethod(
+                        bound.Reference.Assembly,
+                        authoringLocator,
+                        bound.InterfaceType.TypeArguments);
+                if (authoringMethod == null)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.MalformedManifest,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        bound.Reference.Assembly.Identity.Name,
+                        $"authoring locator for intersection '{intersection.LogicalKey}' does not resolve uniquely"));
+                    continue;
+                }
+                if (contributorsValid)
+                {
+                    result.Add(new IntersectionBinding(
+                        bound,
+                        intersection,
+                        authoringMethod));
+                }
+            }
+        }
+        return result.ToImmutable();
+    }
+
+    private static void EmitIntersections(
+        AuthoringContract authoringContract,
+        ImmutableArray<IntersectionBinding> intersections,
+        StringBuilder output,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        var resolvedMembers = new List<ResolvedMember>();
+        foreach (IntersectionBinding intersection in intersections)
+        {
+            var member = new KotlinMemberContract(
+                intersection.Contract.LogicalKey,
+                intersection.Contract.Kind,
+                intersection.Contract.SourceName,
+                intersection.Contract.AuthoringView,
+                KotlinDefaultKind.Abstract,
+                semanticBodyView: null,
+                wrongShapePolicy: null,
+                intersection.Contract.ErasedOwnerRelativeConstraints,
+                intersection.Contract.Slots);
+            foreach (KotlinMethodLocator locator in intersection.Contract.Slots)
+            {
+                IMethodSymbol? method = ResolveMethod(
+                    intersection.Owner.Reference.Assembly,
+                    locator,
+                    intersection.Owner.InterfaceType.TypeArguments);
+                if (method == null)
+                {
+                    diagnostics.Add(Diagnostic.Create(
+                        Diagnostics.MalformedManifest,
+                        authoringContract.Declaration.Identifier.GetLocation(),
+                        intersection.Owner.Reference.Assembly.Identity.Name,
+                        $"method locator for intersection '{intersection.Contract.LogicalKey}' does not resolve uniquely"));
+                    continue;
+                }
+                resolvedMembers.Add(new ResolvedMember(
+                    member,
+                    locator,
+                    method,
+                    intersection.AuthoringMethod,
+                    intersection.Owner.InterfaceType.TypeArguments,
+                    intersection.Contract.SourceName,
+                    intersection.Contract.LogicalKey,
+                    requiresSource: true));
+            }
+        }
+        EmitResolvedMembers(
+            authoringContract,
+            resolvedMembers,
+            output,
+            diagnostics);
+    }
+
+    private static void EmitResolvedMembers(
+        AuthoringContract authoringContract,
+        IEnumerable<ResolvedMember> members,
+        StringBuilder output,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        List<ResolvedMember> resolvedMembers = members.ToList();
         foreach (IGrouping<PropertyIdentity, ResolvedMember> propertyGroup in resolvedMembers
                      .Where(member => member.Member.Kind != KotlinMemberKind.Method)
                      .GroupBy(member => new PropertyIdentity(
@@ -230,7 +399,7 @@ internal static class KotlinImplementationEmitter
                 $"ref-returning property '{physicalProperty.Name}'"));
             return;
         }
-        string sourceName = accessors[0].Member.SourceName;
+        string sourceName = accessors[0].SourceName;
         IPropertySymbol? sourceProperty = FindSourceProperty(
             authoringContract.ImplementationType,
             sourceName,
@@ -316,7 +485,7 @@ internal static class KotlinImplementationEmitter
                 {
                     ReportMissingSourceMember(
                         authoringContract,
-                        accessor.Member,
+                        accessor,
                         diagnostics);
                     return null;
                 }
@@ -343,7 +512,7 @@ internal static class KotlinImplementationEmitter
             {
                 ReportMissingSourceMember(
                     authoringContract,
-                    accessor.Member,
+                    accessor,
                     diagnostics);
                 return null;
             }
@@ -366,6 +535,14 @@ internal static class KotlinImplementationEmitter
                 " = " + valueExpression + "; }";
         }
 
+        if (accessor.RequiresSource)
+        {
+            ReportMissingSourceMember(
+                authoringContract,
+                accessor,
+                diagnostics);
+            return null;
+        }
         if (HasEffectiveDim(authoringContract.ImplementationType, accessor.Method))
             return null;
         switch (accessor.Member.DefaultKind)
@@ -373,7 +550,7 @@ internal static class KotlinImplementationEmitter
             case KotlinDefaultKind.Abstract:
                 ReportMissingSourceMember(
                     authoringContract,
-                    accessor.Member,
+                    accessor,
                     diagnostics);
                 return null;
             case KotlinDefaultKind.PortableHelper:
@@ -451,7 +628,7 @@ internal static class KotlinImplementationEmitter
                 Diagnostics.UnsupportedToolingShape,
                 authoringContract.Declaration.Identifier.GetLocation(),
                 physicalMethod.ContainingType.ToDisplayString(),
-                $"by-reference method '{resolved.Member.SourceName}'"));
+                $"by-reference method '{resolved.SourceName}'"));
             return;
         }
         if (!TryCSharpIdentifier(physicalMethod.Name, out string methodName))
@@ -466,7 +643,7 @@ internal static class KotlinImplementationEmitter
 
         IMethodSymbol? sourceMethod = FindSourceMethod(
             authoringContract.ImplementationType,
-            resolved.Member.SourceName,
+            resolved.SourceName,
             resolved.AuthoringMethod,
             out ImmutableArray<IMethodSymbol> ambiguousMethods);
         if (!ambiguousMethods.IsEmpty)
@@ -494,6 +671,14 @@ internal static class KotlinImplementationEmitter
             if (body == null)
                 return;
         }
+        else if (resolved.RequiresSource)
+        {
+            ReportMissingSourceMember(
+                authoringContract,
+                resolved,
+                diagnostics);
+            return;
+        }
         else if (HasEffectiveDim(authoringContract.ImplementationType, physicalMethod))
         {
             return;
@@ -505,7 +690,7 @@ internal static class KotlinImplementationEmitter
                 case KotlinDefaultKind.Abstract:
                     ReportMissingSourceMember(
                         authoringContract,
-                        resolved.Member,
+                        resolved,
                         diagnostics);
                     return;
                 case KotlinDefaultKind.PortableHelper:
@@ -1152,7 +1337,7 @@ internal static class KotlinImplementationEmitter
 
     private static void ReportMissingSourceMember(
         AuthoringContract authoringContract,
-        KotlinMemberContract member,
+        ResolvedMember member,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
         diagnostics.Add(Diagnostic.Create(
@@ -1160,7 +1345,24 @@ internal static class KotlinImplementationEmitter
             authoringContract.Declaration.Identifier.GetLocation(),
             authoringContract.ImplementationType.ToDisplayString(),
             member.SourceName,
-            member.LogicalKey));
+            member.SourceLogicalKey));
+    }
+
+    private sealed class IntersectionBinding
+    {
+        internal IntersectionBinding(
+            BoundKotlinInterface owner,
+            KotlinIntersectionContract contract,
+            IMethodSymbol authoringMethod)
+        {
+            Owner = owner;
+            Contract = contract;
+            AuthoringMethod = authoringMethod;
+        }
+
+        internal BoundKotlinInterface Owner { get; }
+        internal KotlinIntersectionContract Contract { get; }
+        internal IMethodSymbol AuthoringMethod { get; }
     }
 
     private sealed class ResolvedMember
@@ -1170,13 +1372,19 @@ internal static class KotlinImplementationEmitter
             KotlinMethodLocator locator,
             IMethodSymbol method,
             IMethodSymbol authoringMethod,
-            ImmutableArray<ITypeSymbol> ownerTypeArguments)
+            ImmutableArray<ITypeSymbol> ownerTypeArguments,
+            string sourceName,
+            string sourceLogicalKey,
+            bool requiresSource)
         {
             Member = member;
             Locator = locator;
             Method = method;
             AuthoringMethod = authoringMethod;
             OwnerTypeArguments = ownerTypeArguments;
+            SourceName = sourceName;
+            SourceLogicalKey = sourceLogicalKey;
+            RequiresSource = requiresSource;
         }
 
         internal KotlinMemberContract Member { get; }
@@ -1184,6 +1392,9 @@ internal static class KotlinImplementationEmitter
         internal IMethodSymbol Method { get; }
         internal IMethodSymbol AuthoringMethod { get; }
         internal ImmutableArray<ITypeSymbol> OwnerTypeArguments { get; }
+        internal string SourceName { get; }
+        internal string SourceLogicalKey { get; }
+        internal bool RequiresSource { get; }
     }
 
     private readonly struct PropertyIdentity : IEquatable<PropertyIdentity>
