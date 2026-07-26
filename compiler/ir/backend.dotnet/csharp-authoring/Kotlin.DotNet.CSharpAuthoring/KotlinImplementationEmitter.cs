@@ -41,6 +41,13 @@ internal static class KotlinImplementationEmitter
                 SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
                 SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
                 SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+    private static readonly string[] CoreLibraryAssemblyPrefixes =
+    {
+        "[mscorlib]",
+        "[netstandard]",
+        "[System.Runtime]",
+        "[System.Private.CoreLib]",
+    };
 
     internal static KotlinImplementationEmission Emit(AuthoringContract authoringContract)
     {
@@ -1159,23 +1166,300 @@ internal static class KotlinImplementationEmitter
         KotlinMethodLocator locator,
         ImmutableArray<ITypeSymbol> ownerTypeArguments = default)
     {
-        INamedTypeSymbol? owner = ResolveType(assembly, locator.OwnerPath);
-        if (owner == null)
+        INamedTypeSymbol? ownerDefinition =
+            ResolveType(assembly, locator.OwnerPath);
+        if (ownerDefinition == null)
             return null;
-        if (owner.Arity != 0)
-        {
-            if (ownerTypeArguments.IsDefault ||
-                owner.Arity != ownerTypeArguments.Length)
-                return null;
-            owner = owner.Construct(ownerTypeArguments.ToArray());
-        }
-        IMethodSymbol[] candidates = owner.GetMembers(locator.MethodName)
+        IMethodSymbol[] definitions = ownerDefinition
+            .GetMembers(locator.MethodName)
             .OfType<IMethodSymbol>()
-            .Where(method =>
-                method.Arity == locator.GenericArity &&
-                method.Parameters.Length == locator.ParameterTypes.Length)
+            .Where(method => MethodMatchesLocator(method, locator))
             .ToArray();
-        return candidates.Length == 1 ? candidates[0] : null;
+        if (definitions.Length != 1)
+            return null;
+        IMethodSymbol definition = definitions[0];
+        if (ownerDefinition.Arity == 0)
+            return definition;
+        if (ownerTypeArguments.IsDefault ||
+            ownerDefinition.Arity != ownerTypeArguments.Length)
+            return null;
+        INamedTypeSymbol owner = ownerDefinition.Construct(
+            ownerTypeArguments.ToArray());
+        IMethodSymbol[] constructedMethods = owner
+            .GetMembers(locator.MethodName)
+            .OfType<IMethodSymbol>()
+            .Where(method => SymbolEqualityComparer.Default.Equals(
+                method.OriginalDefinition,
+                definition))
+            .ToArray();
+        return constructedMethods.Length == 1
+            ? constructedMethods[0]
+            : null;
+    }
+
+    private static bool MethodMatchesLocator(
+        IMethodSymbol method,
+        KotlinMethodLocator locator)
+    {
+        if (method.Arity != locator.GenericArity ||
+            method.Parameters.Length != locator.ParameterTypes.Length ||
+            !TryPhysicalSignatureType(
+                method.ReturnType,
+                method.ContainingAssembly,
+                returnsVoid: method.ReturnsVoid,
+                out string returnType) ||
+            !PhysicalSignatureEquals(
+                returnType,
+                locator.ReturnType,
+                method.ContainingAssembly.Identity.Name))
+            return false;
+        for (int index = 0; index < method.Parameters.Length; index++)
+        {
+            if (method.Parameters[index].RefKind != RefKind.None ||
+                !TryPhysicalSignatureType(
+                    method.Parameters[index].Type,
+                    method.ContainingAssembly,
+                    returnsVoid: false,
+                    out string parameterType) ||
+                !PhysicalSignatureEquals(
+                    parameterType,
+                    locator.ParameterTypes[index],
+                    method.ContainingAssembly.Identity.Name))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool TryPhysicalSignatureType(
+        ITypeSymbol type,
+        IAssemblySymbol declaringAssembly,
+        bool returnsVoid,
+        out string signature)
+    {
+        if (returnsVoid)
+        {
+            signature = "void";
+            return type.SpecialType == SpecialType.System_Void;
+        }
+        switch (type.SpecialType)
+        {
+            case SpecialType.System_Boolean:
+                signature = "bool";
+                return true;
+            case SpecialType.System_Int32:
+                signature = "int32";
+                return true;
+            case SpecialType.System_Int64:
+                signature = "int64";
+                return true;
+            case SpecialType.System_Double:
+                signature = "float64";
+                return true;
+            case SpecialType.System_Char:
+                signature = "char";
+                return true;
+            case SpecialType.System_String:
+                signature = "string";
+                return true;
+            case SpecialType.System_Object:
+                signature = "object";
+                return true;
+            case SpecialType.System_Void:
+                signature = "";
+                return false;
+        }
+        if (type is ITypeParameterSymbol typeParameter)
+        {
+            signature = (typeParameter.TypeParameterKind ==
+                    TypeParameterKind.Method
+                    ? "!!"
+                    : "!") + typeParameter.Ordinal;
+            return true;
+        }
+        if (type is IArrayTypeSymbol arrayType &&
+            arrayType.Rank == 1 &&
+            arrayType.IsSZArray &&
+            TryPhysicalSignatureType(
+                arrayType.ElementType,
+                declaringAssembly,
+                returnsVoid: false,
+                out string elementType))
+        {
+            signature = elementType + "[]";
+            return true;
+        }
+        if (!(type is INamedTypeSymbol namedType) ||
+            namedType.TypeKind == TypeKind.Error)
+        {
+            signature = "";
+            return false;
+        }
+        if (namedType.OriginalDefinition.SpecialType ==
+            SpecialType.System_Nullable_T)
+        {
+            if (namedType.TypeArguments.Length != 1 ||
+                !TryPhysicalSignatureType(
+                    namedType.TypeArguments[0],
+                    declaringAssembly,
+                    returnsVoid: false,
+                    out string nullableElement))
+            {
+                signature = "";
+                return false;
+            }
+            signature = "valuetype [" +
+                namedType.ContainingAssembly.Identity.Name +
+                "]System.Nullable`1<" + nullableElement + ">";
+            return true;
+        }
+
+        string typeReference = PhysicalTypeReference(
+            namedType.OriginalDefinition);
+        if (!SymbolEqualityComparer.Default.Equals(
+                namedType.ContainingAssembly,
+                declaringAssembly))
+        {
+            typeReference = "[" +
+                namedType.ContainingAssembly.Identity.Name +
+                "]" + typeReference;
+        }
+        string prefix = namedType.IsValueType ? "valuetype " : "class ";
+        if (namedType.Arity == 0)
+        {
+            signature = prefix + typeReference;
+            return true;
+        }
+        var arguments = new List<string>();
+        foreach (ITypeSymbol argument in namedType.TypeArguments)
+        {
+            if (!TryPhysicalSignatureType(
+                    argument,
+                    declaringAssembly,
+                    returnsVoid: false,
+                    out string argumentSignature))
+            {
+                signature = "";
+                return false;
+            }
+            arguments.Add(argumentSignature);
+        }
+        signature = prefix + typeReference + "<" +
+            string.Join(", ", arguments) + ">";
+        return true;
+    }
+
+    private static string PhysicalTypeReference(INamedTypeSymbol type)
+    {
+        string current = IlIdentifier(type.MetadataName);
+        if (type.ContainingType != null)
+            return PhysicalTypeReference(type.ContainingType) + "/" + current;
+        string namespaceName = type.ContainingNamespace?.ToDisplayString() ?? "";
+        return IlIdentifier(
+            namespaceName.Length == 0
+                ? type.MetadataName
+                : namespaceName + "." + type.MetadataName);
+    }
+
+    private static string IlIdentifier(string value)
+    {
+        return "'" +
+            value.Replace("\\", "\\\\").Replace("'", "\\'") +
+            "'";
+    }
+
+    private static bool PhysicalSignatureEquals(
+        string symbolSignature,
+        string locatorSignature,
+        string declaringAssemblyName)
+    {
+        string localAssemblyPrefix = "[" + declaringAssemblyName + "]";
+        return string.Equals(
+            NormalizePhysicalSignature(
+                symbolSignature,
+                localAssemblyPrefix),
+            NormalizePhysicalSignature(
+                locatorSignature,
+                localAssemblyPrefix),
+            StringComparison.Ordinal);
+    }
+
+    private static string NormalizePhysicalSignature(
+        string signature,
+        string localAssemblyPrefix)
+    {
+        var result = new StringBuilder(signature.Length);
+        bool quoted = false;
+        for (int index = 0; index < signature.Length; index++)
+        {
+            char current = signature[index];
+            if (!quoted &&
+                MatchesAt(signature, index, localAssemblyPrefix))
+            {
+                index += localAssemblyPrefix.Length - 1;
+                continue;
+            }
+            if (!quoted &&
+                TryCoreLibraryPrefixLength(
+                    signature,
+                    index,
+                    out int corePrefixLength))
+            {
+                result.Append("[corelib]");
+                index += corePrefixLength - 1;
+                continue;
+            }
+            if (current == '\'')
+            {
+                quoted = !quoted;
+                continue;
+            }
+            if (quoted && current == '\\' && index + 1 < signature.Length)
+            {
+                char next = signature[index + 1];
+                if (next == '\\' || next == '\'')
+                {
+                    result.Append(next);
+                    index++;
+                    continue;
+                }
+            }
+            result.Append(current);
+        }
+        return quoted ? signature : result.ToString();
+    }
+
+    private static bool TryCoreLibraryPrefixLength(
+        string signature,
+        int index,
+        out int prefixLength)
+    {
+        foreach (string prefix in CoreLibraryAssemblyPrefixes)
+        {
+            int systemNameIndex = index + prefix.Length;
+            if (MatchesAt(signature, index, prefix) &&
+                MatchesAt(signature, systemNameIndex, "System."))
+            {
+                prefixLength = prefix.Length;
+                return true;
+            }
+        }
+        prefixLength = 0;
+        return false;
+    }
+
+    private static bool MatchesAt(
+        string value,
+        int index,
+        string expected)
+    {
+        return index >= 0 &&
+            index + expected.Length <= value.Length &&
+            string.CompareOrdinal(
+                value,
+                index,
+                expected,
+                0,
+                expected.Length) == 0;
     }
 
     private static INamedTypeSymbol? ResolveType(

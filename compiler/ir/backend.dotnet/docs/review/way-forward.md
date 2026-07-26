@@ -320,7 +320,7 @@ surface; that does not freeze identical Framework/modern IL. The remaining gener
 the remaining foreign-implementor and clash matrix, the Roslyn generator/analyzer, and the raw
 metadata-table audit; those keep P0-D open. The accepted C# source-authoring ADR now selects a
 partial-type Roslyn generator/analyzer rather than a generated base class or universal CLR
-mechanism. Its schema-5 DLL manifest is implemented: it records the canonical
+mechanism. Its schema-6 DLL manifest is implemented: it records the canonical
 `PublicIdSignatureComputer(DotNetIrMangler)` identity scheme and rejects parallel runtime/tooling
 declaration keys. It also records profile, canonical, declared, and exact owners where those split
 views exist, member and property groupings, strongly typed authoring views, MethodDef locators,
@@ -414,7 +414,12 @@ The remaining P0-D implementation order is:
    the additional partial declaration and is exercised against DLL-only references. Ordinary
    non-generic method/property adapters now execute public and authorized-internal Kotlin
    verification on every profile, including portable helper forwarding and modern/promotion DIM
-   suppression. Split generic views and generic methods now also execute through production code:
+   suppression. MethodDef locators are matched against complete open return and parameter
+   signatures before generic-owner substitution; same-named overloads bind independently and
+   stale parameter or result signatures fail closed. Standard CLR core-facade forwarding is
+   normalized for `System.*` signatures, including nullable overloads, without weakening external
+   user-assembly identity. Split generic views and generic methods now also execute through
+   production code:
    the declared base-list view gains the exact constructed interface, while canonical adapters
    alone perform erased casts/boxing and generic constraints remain CLR-authoritative.
    Owner-relative guidance stays diagnostic-only. Manifest-recorded special barriers are now
