@@ -3037,6 +3037,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(missingPartial.exitCode != 0)
         assertTrue("KDNCS001" in missingPartial.output) { missingPartial.output }
+        assertEquals(
+            1,
+            Regex("KDNCS001").findAll(missingPartial.output).count(),
+            missingPartial.output,
+        )
 
         val missingContainingPartial = compileDiagnostic(
             "MissingContainingPartial",
@@ -3054,6 +3059,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("KDNCS011" in missingContainingPartial.output) {
             missingContainingPartial.output
         }
+        assertEquals(
+            1,
+            Regex("KDNCS011").findAll(missingContainingPartial.output).count(),
+            missingContainingPartial.output,
+        )
         assertTrue("AD0001" !in missingContainingPartial.output) {
             missingContainingPartial.output
         }
@@ -3084,6 +3094,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(inaccessibleFriend.exitCode != 0)
         assertTrue("KDNCS002" in inaccessibleFriend.output) { inaccessibleFriend.output }
+        assertEquals(
+            1,
+            Regex("KDNCS002").findAll(inaccessibleFriend.output).count(),
+            inaccessibleFriend.output,
+        )
 
         val conflict = compileDiagnostic(
             "ConflictingMember",
@@ -3125,6 +3140,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("KDNCS008" in missingSourceMember.output) {
             missingSourceMember.output
         }
+        assertEquals(
+            1,
+            Regex("KDNCS008").findAll(missingSourceMember.output).count(),
+            missingSourceMember.output,
+        )
 
         val staleParameter = compileDiagnostic(
             "StaleParameter",
@@ -3140,6 +3160,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("KDNCS006" in staleParameter.output) {
             staleParameter.output
         }
+        assertEquals(
+            1,
+            Regex("KDNCS006").findAll(staleParameter.output).count(),
+            staleParameter.output,
+        )
 
         val staleReturn = compileDiagnostic(
             "StaleReturn",

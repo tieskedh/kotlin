@@ -415,7 +415,10 @@ The remaining P0-D implementation order is:
    declared C# base list is the only opt-in, its bounded reader consumes the authoritative DLL
    manifest, and diagnostics cover missing `partial`, unavailable friendship, explicit ABI-member
    conflicts, unsupported substitutions, malformed manifests, and schema/tool mismatch. It emits
-   the additional partial declaration and is exercised against DLL-only references. Nested
+   each diagnostic once: the analyzer owns semantically valid types, while the generator owns
+   diagnostics suppressed by a blocking C# error in that same type and skips emission. The
+   generator emits the additional partial declaration and is exercised against DLL-only
+   references. Nested
    reference-class and record-class implementors reconstruct a partial containing-type chain;
    non-partial containers receive `KDNCS011`, while file-local and value-type implementors remain
    explicit unsupported shapes. Nested friend interfaces also execute through production
