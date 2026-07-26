@@ -400,12 +400,12 @@ The remaining P0-D implementation order is:
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
    families and the real same-owner clash matrix. Extend the DLL manifest over inheritance,
-   intersection slots, constraints, mutable properties, special barriers, non-generic
-   interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts; then
-   implement the Roslyn partial-type generator/analyzer. Do not add a blanket ban for source names
-   that merely resemble canonical names; physical-owner separation and explicit `MethodImpl`
-   already preserve their semantics. Do not make a generated base class the only path because C#
-   has single class inheritance. Close the
+   intersection slots, constraints, inherited mutable-property obligations, special barriers,
+   non-generic interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts;
+   then implement the Roslyn partial-type generator/analyzer. Do not add a blanket ban for source
+   names that merely resemble canonical names; physical-owner separation and explicit
+   `MethodImpl` already preserve their semantics. Do not make a generated base class the only path
+   because C# has single class inheritance. Close the
    remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
    structured metadata work rather than with IL substring tests.
 

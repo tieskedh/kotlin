@@ -163,12 +163,13 @@ covering:
 - malformed, oversized, duplicate, unknown-version, and tampered manifests; and
 - compatibility across at least two compiler generations once an ABI freeze is proposed.
 
-The initial prototype covers direct canonical/declared/exact views, a read-only property, a generic
-method, an exact-only unsafe input, a portable helper default, and the corresponding `net10.0`
-DIM. It removes the sibling KLIB before extracting the actual DLL metadata, generates a partial C#
-implementation, compiles it with Roslyn, and executes Kotlin-authored verification through typed
-and widened views for `net48`, `netstandard2.0`, and `net10.0`. Inherited contracts are explicitly
-marked unsupported by the first schema slice; they must not be silently generated.
+The initial prototype covers direct canonical/declared/exact views, read-only and mutable
+properties, a generic method, an exact-only unsafe input, a portable helper default, and the
+corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
+generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
+verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
+Inherited contracts are explicitly marked unsupported by the first schema slice; they must not be
+silently generated.
 Runtime-bootstrap interfaces and ordinary non-generic interfaces are not yet source-authoring
 inputs. Friend-accessible internal interfaces are also omitted by the public-only first collector.
 All must gain equivalent manifest records before the generator claims support for implementing

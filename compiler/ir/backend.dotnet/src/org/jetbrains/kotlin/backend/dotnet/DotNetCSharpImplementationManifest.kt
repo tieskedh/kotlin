@@ -494,22 +494,17 @@ internal fun collectDotNetCSharpImplementationManifest(
         }
     }
 
-    fun physicalPropertyName(source: IrSimpleFunction, physicalMethodName: String): String? {
-        val propertyName = source.correspondingPropertySymbol?.owner?.name?.asString() ?: return null
-        return dotNetPhysicalPropertyName(propertyName, physicalMethodName)
-    }
-
     fun locator(
         role: DotNetCSharpSlotRole,
         function: IrSimpleFunction,
         info: DotNetIlFunctionInfo,
         physicalMethodName: String,
-        source: IrSimpleFunction,
+        propertyName: String?,
     ): DotNetCSharpMethodLocator = DotNetCSharpMethodLocator(
         role = role,
         ownerPath = info.owner.physicalPathComponents(),
         methodName = physicalMethodName,
-        propertyName = physicalPropertyName(source, physicalMethodName),
+        propertyName = propertyName,
         genericArity = function.typeParameters.size,
         returnType = info.signature.returnType.nameInSignature,
         parameterTypes = info.signature.parameterTypes
@@ -535,6 +530,43 @@ internal fun collectDotNetCSharpImplementationManifest(
                     add("inherited interface contracts are not supported by the first C# authoring schema")
                 }
             }
+            fun canonicalPropertyName(source: IrSimpleFunction, fallbackMethodName: String): String? {
+                val property = source.correspondingPropertySymbol?.owner ?: return null
+                val getterMethodName = property.getter?.let { getter ->
+                    availableFunctions[getter]?.let { info ->
+                        info.physicalMethodName ?: getter.dotNetIlMethodName()
+                    }
+                }
+                return dotNetPhysicalPropertyName(
+                    property.name.asString(),
+                    getterMethodName ?: fallbackMethodName,
+                )
+            }
+
+            fun typedPropertyName(
+                source: IrSimpleFunction,
+                memberView: DotNetGenericInterfaceMemberView,
+                fallbackMethodName: String,
+            ): String? {
+                val property = source.correspondingPropertySymbol?.owner ?: return null
+                val getter = property.getter
+                    ?.takeUnless { accessor -> accessor.isFakeOverride }
+                    ?.takeIf { accessor ->
+                        memberView in typeMapper.genericInterfaceMemberViews(accessor, irClass)
+                    }
+                val getterMethodName = getter?.let { accessor ->
+                    val getterDefault = genericInterfaceDefaults.singleOrNull { it.source == accessor }
+                    getterDefault
+                        ?.let { typeMapper.genericInterfaceTypedMethodName(accessor) }
+                        ?: accessor.dotNetExceptionCarrierMethodNameOrNull()
+                        ?: accessor.dotNetIlMethodName()
+                }
+                return dotNetPhysicalPropertyName(
+                    property.name.asString(),
+                    getterMethodName ?: fallbackMethodName,
+                )
+            }
+
             val members = irClass.declarations.flatMap { declaration ->
                 when (declaration) {
                     is IrSimpleFunction -> listOf(declaration)
@@ -565,7 +597,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                             source,
                             canonicalInfo,
                             canonicalMethodName,
-                            source,
+                            canonicalPropertyName(source, canonicalMethodName),
                         ))
                         for (memberView in typeMapper.genericInterfaceMemberViews(source, irClass)) {
                             val physicalMember = when {
@@ -589,7 +621,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                                 physicalMember,
                                 info,
                                 physicalMethodName,
-                                source,
+                                typedPropertyName(source, memberView, physicalMethodName),
                             ))
                         }
                         interfaceDefaultImplementations[source]?.let { lowered ->
@@ -603,8 +635,8 @@ internal fun collectDotNetCSharpImplementationManifest(
                                 lowered.helper,
                                 helperInfo,
                                 helperMethodName,
-                                source,
-                            ).copy(propertyName = null))
+                                propertyName = null,
+                            ))
                         }
                     }
                     val defaultImplementation = interfaceDefaultImplementations[source]

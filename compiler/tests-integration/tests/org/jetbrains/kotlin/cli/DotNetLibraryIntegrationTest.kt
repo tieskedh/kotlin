@@ -232,6 +232,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public interface Shape<out T> {
                 public val value: T
+                public var label: String
                 public fun <R> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
                 public fun fallback(): T = value
@@ -242,12 +243,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (value.map(42) != "typed") return 2
                 if (!value.accepts("typed")) return 3
                 if (value.fallback() != "typed") return 4
+                if (value.label != "initial") return 5
+                value.label = "changed"
                 val wide: Shape<Any?> = value
-                if (wide.value != "typed" || wide.map("wide") != "typed") return 5
-                if (wide.fallback() != "typed") return 6
+                if (wide.value != "typed" || wide.map("wide") != "typed") return 6
+                if (wide.fallback() != "typed") return 7
+                if (wide.label != "changed") return 8
+                wide.label = "wide"
+                if (value.label != "wide") return 9
                 try {
                     wide.accepts(42)
-                    return 7
+                    return 10
                 } catch (_: ClassCastException) {
                     return 0
                 }
@@ -310,12 +316,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val value = contract.members.single { member ->
                 member.sourceName == "value" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
             }
+            val labelGetter = contract.members.single { member ->
+                member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+            }
+            val labelSetter = contract.members.single { member ->
+                member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
+            }
             val map = contract.members.single { member -> member.sourceName == "map" }
             val accepts = contract.members.single { member -> member.sourceName == "accepts" }
             val fallback = contract.members.single { member -> member.sourceName == "fallback" }
             assertEquals(DotNetCSharpInterfaceView.DECLARED, value.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.DECLARED, labelGetter.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.DECLARED, labelSetter.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, map.authoringView)
             assertEquals(DotNetCSharpInterfaceView.EXACT, accepts.authoringView)
+            assertEquals(
+                labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }.propertyName,
+                labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }.propertyName,
+            )
             assertEquals(1, map.slots.single { it.role == DotNetCSharpSlotRole.DECLARED }.genericArity)
             assertEquals(
                 listOf(DotNetCSharpSlotRole.ERASED, DotNetCSharpSlotRole.EXACT),
@@ -8672,13 +8690,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val canonicalType = contract.csharpOwner(contract.canonicalOwnerPath)
         val exactType = contract.csharpOwner(checkNotNull(contract.exactOwnerPath))
         val value = member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
+        val labelGetter = member("label", DotNetCSharpMemberKind.PROPERTY_GETTER)
+        val labelSetter = member("label", DotNetCSharpMemberKind.PROPERTY_SETTER)
         val map = member("map")
         val accepts = member("accepts")
         val fallback = member("fallback")
         val canonicalValue = value.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val canonicalLabelGetter = labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        val canonicalLabelSetter = labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalMap = map.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalAccepts = accepts.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalFallback = fallback.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
+        require(canonicalLabelGetter.propertyName == canonicalLabelSetter.propertyName)
         val portableDefault = fallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER
         val generatedTypedDefault = if (portableDefault) {
             val helper = fallback.slots.single { it.role == DotNetCSharpSlotRole.HELPER }
@@ -8708,6 +8731,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             {
                 public string value { get { return "typed"; } }
 
+                public string label { get; set; } = "initial";
+
                 public string map<R>(R input) { return value; }
 
                 public bool accepts(string input) { return input == value; }
@@ -8720,6 +8745,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 object $canonicalType.${checkNotNull(canonicalValue.propertyName)}
                 {
                     get { return value; }
+                }
+
+                string $canonicalType.${checkNotNull(canonicalLabelGetter.propertyName)}
+                {
+                    get { return label; }
+                    set { label = value; }
                 }
 
                 public object ${canonicalMap.methodName}<R>(R input)
