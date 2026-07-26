@@ -665,6 +665,12 @@ Property adapters dispatch virtually through the selected child DIM because Rosl
 validation does not treat the interface-owned getter MethodImpl as satisfying those source-level
 parent Property obligations.
 
+A mutable conflict lane additionally selects the left qualified-super getter and the right
+qualified-super setter. The manifest and generator preserve them as independent Kotlin
+declarations even though both physical accessors belong to one CLR Property row. Reads and writes
+through child and parent views execute those distinct selections across all profile combinations;
+portable C# uses only the matching child helpers and modern C# dispatches through the child DIMs.
+
 A second portable exception-signature lane now returns each broad logical category, stores and
 mutates all four through public properties, and returns a nested generic runtime-exception value.
 Separate net48 and net10 consumers preserve classifier results and exact object identity across the

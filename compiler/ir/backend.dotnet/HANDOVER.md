@@ -1753,6 +1753,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   generated adapters satisfy that C# source check by dispatching virtually through the selected
   child DIM, never through the compatibility helper or a copied body. The fresh strict gate is
   848/0/0/0 across 16 XML suites.
+- The DLL-only conflict matrix now covers a mutable default property whose Kotlin child selects
+  the left qualified-super getter and the right qualified-super setter. Getter and setter keep
+  separate logical override edges, helpers, and bodies even though CLR metadata groups them in one
+  Property row. A bodyless C# partial executes reads and writes through the child and both parent
+  views on portable, modern, and promoted-parent lanes. Portable generated accessors call only the
+  matching child helpers; modern parent Property adapters dispatch through the selected child
+  DIMs, and no rejected parent helper leaks into generated C#.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

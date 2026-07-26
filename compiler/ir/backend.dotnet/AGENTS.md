@@ -1729,6 +1729,10 @@ landed shape as a compatibility constraint.
   child-selected property DIM still needs generated explicit parent Property adapters when
   Roslyn's C# base-list validation does not accept the interface-owned MethodImpl mapping; those
   adapters dispatch virtually through the selected child property and never call the helper.
+  Mutable-property getter and setter declarations retain separate Kotlin identities, override
+  edges, helpers, and qualified-super choices. The generator may batch them into one explicit C#
+  Property only after selecting each accessor independently; never choose one semantic parent for
+  the complete property.
   Property helpers alone use the physical-name-grammar-3 reserved
   `get_/set_...__KotlinDefault__<logical-identity-digest>` form so generated C# can name them
   without changing the ordinary CLR Property row or accessor names. Consumers use manifest
