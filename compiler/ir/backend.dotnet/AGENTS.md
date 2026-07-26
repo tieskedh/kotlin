@@ -209,9 +209,15 @@ landed shape as a compatibility constraint.
   constraint, method, field, property, and event with compatible access and overridability. The
   verifier also compares normalized custom-attribute identities and constructor/named payloads on
   assemblies and the exposed surface; `TargetFrameworkAttribute` alone is excluded because its
-  value is profile-specific. It is isolated C# test data, not a compiler sidecar; raw attribute-
-  blob encoding, MethodImpl rows, resources, and friend-only internal surface remain outside this
-  bounded portable-superset audit. The C# authoring matrix separately audits its exact
+  value is profile-specific. The same verifier reads raw ManifestResource rows from the PEs:
+  portable public resources cannot disappear, narrow, or become external files, and the embedded
+  C# authoring manifest must retain its schema, assembly identity, logical-identity scheme, and
+  every portable logical declaration while profile-specific slot records may differ. It is
+  isolated C# test data, not a compiler sidecar. A negative fixture rewrites one embedded logical
+  declaration and its envelope digest in a copied platform PE; the verifier must report the
+  missing portable declaration. Raw attribute-blob encoding, general MethodImpl rows, and
+  friend-only internal surface remain outside this bounded portable-superset audit. The C#
+  authoring matrix separately audits its exact
   `InternalsVisibleTo` blob, friend TypeDef visibility, and promotion MethodImpl signatures.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef

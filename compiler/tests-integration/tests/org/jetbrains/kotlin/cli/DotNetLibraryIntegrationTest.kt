@@ -54,6 +54,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 import java.io.File
+import java.security.MessageDigest
 import java.util.Base64
 import java.util.Properties
 import java.util.zip.ZipFile
@@ -9188,6 +9189,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(Regex("OK [1-9][0-9]*").matches(comparisonOutput.trim())) { comparisonOutput }
         }
 
+        val corruptedStdlib = File(
+            tmpdir,
+            "portable-surface-corrupted/Kotlin.Stdlib.dll",
+        )
+        corruptCSharpManifestLogicalDeclaration(
+            pairDirectories.getValue("net10.0").resolve("Kotlin.Stdlib.dll"),
+            corruptedStdlib,
+        )
+        val corruptedComparison = ProcessBuilder(
+            checkNotNull(csharpToolchain).dotNetHost.path,
+            "exec",
+            surfaceVerifier.path,
+            runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
+            runtimeAssemblies.getValue(DotNetTarget.NET10_0).path,
+            pairDirectories.getValue("netstandard2.0").resolve("Kotlin.Stdlib.dll").path,
+            corruptedStdlib.path,
+        ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
+        val corruptedOutput = corruptedComparison.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(corruptedComparison.waitFor() != 0) {
+            "The raw resource audit accepted a missing portable logical declaration"
+        }
+        assertTrue("MISSING MANIFEST DECLARATION" in corruptedOutput) { corruptedOutput }
+
     }
 
     @Test
@@ -14187,6 +14211,55 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "Could not read managed resource '$resourceName' from $assembly:\n$output",
         )
         return Base64.getDecoder().decode(output.trim())
+    }
+
+    private fun corruptCSharpManifestLogicalDeclaration(
+        assembly: File,
+        output: File,
+    ) {
+        val image = assembly.readBytes()
+        val magic = "KDNCSM01".toByteArray(Charsets.US_ASCII)
+        val offsets = image.indices.filter { offset ->
+            offset + magic.size <= image.size &&
+                    magic.indices.all { index -> image[offset + index] == magic[index] }
+        }
+        assertEquals(1, offsets.size, "Expected one C# implementation manifest envelope")
+        val envelopeOffset = offsets.single()
+        fun readLittleEndianInt(offset: Int): Int =
+            image[offset].toInt() and 0xff or
+                    ((image[offset + 1].toInt() and 0xff) shl 8) or
+                    ((image[offset + 2].toInt() and 0xff) shl 16) or
+                    ((image[offset + 3].toInt() and 0xff) shl 24)
+
+        val payloadSize = readLittleEndianInt(envelopeOffset + 12)
+        val payloadOffset = envelopeOffset + 48
+        require(payloadSize >= 0 && payloadOffset + payloadSize <= image.size)
+        val payload = image.copyOfRange(payloadOffset, payloadOffset + payloadSize)
+        val encodedPayload = payload.toString(Charsets.UTF_8)
+        val interfaceRecord = encodedPayload.lineSequence()
+            .first { record -> record.startsWith("I\t") }
+        val encodedLogicalKey = interfaceRecord.split('\t')[1]
+        val logicalKey = Base64.getUrlDecoder()
+            .decode(encodedLogicalKey)
+            .toString(Charsets.UTF_8)
+        val replacementLastCharacter = if (logicalKey.last() == 'X') 'Y' else 'X'
+        val replacementLogicalKey = logicalKey.dropLast(1) + replacementLastCharacter
+        val replacementField = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(replacementLogicalKey.toByteArray(Charsets.UTF_8))
+        assertEquals(encodedLogicalKey.length, replacementField.length)
+        val corruptedPayloadText = encodedPayload.replaceFirst(
+            "I\t$encodedLogicalKey\t",
+            "I\t$replacementField\t",
+        )
+        val corruptedPayload = corruptedPayloadText.toByteArray(Charsets.UTF_8)
+        assertEquals(payload.size, corruptedPayload.size)
+        corruptedPayload.copyInto(image, payloadOffset)
+        MessageDigest.getInstance("SHA-256")
+            .digest(corruptedPayload)
+            .copyInto(image, envelopeOffset + 16)
+        output.parentFile?.mkdirs()
+        output.writeBytes(image)
     }
 
     private fun requireOrAssumeToolchain(condition: Boolean, message: String) {

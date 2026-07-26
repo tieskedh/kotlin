@@ -143,7 +143,12 @@ The implementation now:
    `Kotlin.Runtime` and `Kotlin.Stdlib` variants, requiring each executable profile to retain every
    portable public/protected type, base/interface edge, generic constraint, method, field,
    property, and event with compatible accessibility and overridability, together with every
-   portable custom-attribute identity and normalized payload on the assembly or exposed surface.
+   portable custom-attribute identity and normalized payload on the assembly or exposed surface;
+   and
+10. compares raw ManifestResource rows, requiring portable public resources to remain present,
+    public, and embedded. The C# implementation manifest additionally retains its schema, assembly
+    identity, logical-identity scheme, and every portable logical declaration while profile-owned
+    physical slot records may differ.
 
 The repository's opt-in stdlib producer and installer create all three profile variants under
 their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
@@ -157,9 +162,10 @@ narrowed callable surface. It also compares constructor and named custom-attribu
 assemblies, types, members, parameters, returns, and generic parameters; only
 `TargetFrameworkAttribute` is excluded because its profile value must differ. A target-owned
 `@TestOnly` hook produces each runtime variant without turning runtime generation into a library
-side effect. This audit does not yet compare raw attribute-blob encoding, MethodImpl rows,
-resources, or internal friend-only surface; those remain part of the future structured metadata
-model and ABI-freeze audit.
+side effect. The same verifier reads managed-resource rows and validates the embedded C# manifest
+envelope and logical declaration floor without loading its payload as code. This audit does not
+yet compare raw attribute-blob encoding, general MethodImpl rows, or internal friend-only surface;
+those remain part of the future structured metadata model and ABI-freeze audit.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.

@@ -7,10 +7,22 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Runtime.Loader;
+using System.Security.Cryptography;
+using System.Text;
 
 internal static class Program
 {
+    private const string CSharpManifestResourceName = "Kotlin.CSharpImplementationManifest";
+    private const string CSharpManifestLogicalIdentityScheme =
+        "kotlin-public-id-signature-legacy-v1";
+    private const int CSharpManifestHeaderSize = 48;
+    private const int MaximumCSharpManifestPayloadBytes = 4 * 1024 * 1024;
+    private static readonly byte[] CSharpManifestMagic = Encoding.ASCII.GetBytes("KDNCSM01");
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
+
     private sealed class PairLoadContext : AssemblyLoadContext
     {
         private readonly string directory;
@@ -46,6 +58,46 @@ internal static class Program
         internal bool IsFinal { get; }
     }
 
+    private sealed class ResourceItem
+    {
+        internal ResourceItem(
+            string key,
+            ManifestResourceAttributes attributes,
+            bool isEmbedded,
+            CSharpManifestContract manifest)
+        {
+            Key = key;
+            Attributes = attributes;
+            IsEmbedded = isEmbedded;
+            Manifest = manifest;
+        }
+
+        internal string Key { get; }
+        internal ManifestResourceAttributes Attributes { get; }
+        internal bool IsEmbedded { get; }
+        internal CSharpManifestContract Manifest { get; }
+    }
+
+    private sealed class CSharpManifestContract
+    {
+        internal CSharpManifestContract(
+            int schemaVersion,
+            string assemblyName,
+            string logicalIdentityScheme,
+            HashSet<string> logicalDeclarations)
+        {
+            SchemaVersion = schemaVersion;
+            AssemblyName = assemblyName;
+            LogicalIdentityScheme = logicalIdentityScheme;
+            LogicalDeclarations = logicalDeclarations;
+        }
+
+        internal int SchemaVersion { get; }
+        internal string AssemblyName { get; }
+        internal string LogicalIdentityScheme { get; }
+        internal HashSet<string> LogicalDeclarations { get; }
+    }
+
     private static int Main(string[] args)
     {
         if (args.Length != 4)
@@ -65,10 +117,19 @@ internal static class Program
             Dictionary<string, SurfaceItem> platform = Capture(
                 platformContext.LoadFromAssemblyPath(Path.GetFullPath(args[1])),
                 platformContext.LoadFromAssemblyPath(Path.GetFullPath(args[3])));
+            Dictionary<string, ResourceItem> portableResources =
+                CaptureResources(args[0], args[2]);
+            Dictionary<string, ResourceItem> platformResources =
+                CaptureResources(args[1], args[3]);
             if (portable.Count == 0)
                 throw new InvalidOperationException("The portable CLR surface is empty.");
+            string expectedManifestKey = "Kotlin.Stdlib|" + CSharpManifestResourceName;
+            if (!portableResources.ContainsKey(expectedManifestKey))
+                throw new InvalidOperationException(
+                    "The portable stdlib has no embedded C# implementation manifest.");
 
             List<string> differences = Compare(portable, platform);
+            differences.AddRange(CompareResources(portableResources, platformResources));
             if (differences.Count != 0)
             {
                 foreach (string difference in differences)
@@ -76,7 +137,9 @@ internal static class Program
                 return 1;
             }
 
-            Console.WriteLine("OK " + portable.Count.ToString(CultureInfo.InvariantCulture));
+            Console.WriteLine(
+                "OK " + (portable.Count + portableResources.Count)
+                    .ToString(CultureInfo.InvariantCulture));
             return 0;
         }
         catch (Exception failure)
@@ -99,7 +162,9 @@ internal static class Program
             AddAttributes(
                 result,
                 "ASSEMBLY:" + assembly.GetName().Name,
-                assembly.CustomAttributes.Where(IsProfileInvariantAssemblyAttribute),
+                assembly.CustomAttributes.Where(attribute =>
+                    attribute.AttributeType.FullName !=
+                    "System.Runtime.Versioning.TargetFrameworkAttribute"),
                 access: 3);
             foreach (Type type in assembly.GetTypes().OrderBy(TypeIdentity, StringComparer.Ordinal))
             {
@@ -142,19 +207,234 @@ internal static class Program
         return result;
     }
 
-    private static bool IsProfileInvariantAssemblyAttribute(CustomAttributeData attribute)
+    private static Dictionary<string, ResourceItem> CaptureResources(params string[] assemblyPaths)
     {
-        if (attribute.AttributeType.FullName == "System.Runtime.Versioning.TargetFrameworkAttribute")
-            return false;
-        if (attribute.AttributeType.FullName != "System.Reflection.AssemblyMetadataAttribute" ||
-            attribute.ConstructorArguments.Count == 0)
+        var result = new Dictionary<string, ResourceItem>(StringComparer.Ordinal);
+        foreach (string assemblyPath in assemblyPaths)
         {
-            return true;
+            using (FileStream stream = File.OpenRead(Path.GetFullPath(assemblyPath)))
+            using (var peReader = new PEReader(stream))
+            {
+                if (!peReader.HasMetadata)
+                    throw new BadImageFormatException(
+                        "Assembly has no CLR metadata: " + assemblyPath);
+                MetadataReader metadata = peReader.GetMetadataReader();
+                if (!metadata.IsAssembly)
+                    throw new BadImageFormatException(
+                        "Managed module is not an assembly: " + assemblyPath);
+                string assemblyName = metadata.GetString(
+                    metadata.GetAssemblyDefinition().Name);
+                foreach (ManifestResourceHandle handle in metadata.ManifestResources)
+                {
+                    ManifestResource resource = metadata.GetManifestResource(handle);
+                    string resourceName = metadata.GetString(resource.Name);
+                    string key = assemblyName + "|" + resourceName;
+                    bool isEmbedded = resource.Implementation.IsNil;
+                    byte[] bytes = isEmbedded
+                        ? ReadEmbeddedResource(peReader, resource, resourceName)
+                        : null;
+                    CSharpManifestContract manifest =
+                        resourceName == CSharpManifestResourceName
+                            ? DecodeCSharpManifest(bytes ??
+                                throw new BadImageFormatException(
+                                    "The C# implementation manifest is not embedded."))
+                            : null;
+                    if (manifest != null &&
+                        !string.Equals(
+                            manifest.AssemblyName,
+                            assemblyName,
+                            StringComparison.Ordinal))
+                        throw new BadImageFormatException(
+                            "The C# implementation manifest names another assembly.");
+                    if (result.ContainsKey(key))
+                        throw new BadImageFormatException(
+                            "Duplicate managed resource: " + key);
+                    result.Add(
+                        key,
+                        new ResourceItem(
+                            key,
+                            resource.Attributes,
+                            isEmbedded,
+                            manifest));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static byte[] ReadEmbeddedResource(
+        PEReader peReader,
+        ManifestResource resource,
+        string resourceName)
+    {
+        if (peReader.PEHeaders.CorHeader == null)
+            throw new BadImageFormatException(
+                "Managed resource has no CLR resource directory: " + resourceName);
+        DirectoryEntry directory = peReader.PEHeaders.CorHeader.ResourcesDirectory;
+        int offset = checked((int)resource.Offset);
+        if (directory.RelativeVirtualAddress == 0 ||
+            directory.Size < sizeof(int) ||
+            offset < 0 ||
+            offset > directory.Size - sizeof(int))
+            throw new BadImageFormatException(
+                "Managed resource has an invalid location: " + resourceName);
+        PEMemoryBlock block = peReader.GetSectionData(directory.RelativeVirtualAddress);
+        if (block.Length < directory.Size)
+            throw new BadImageFormatException(
+                "Managed resource extends beyond its PE section: " + resourceName);
+        BlobReader reader = block.GetReader(offset, directory.Size - offset);
+        int resourceSize = reader.ReadInt32();
+        if (resourceSize < 0 || resourceSize > reader.RemainingBytes)
+            throw new BadImageFormatException(
+                "Managed resource has an invalid size: " + resourceName);
+        return reader.ReadBytes(resourceSize);
+    }
+
+    private static CSharpManifestContract DecodeCSharpManifest(byte[] resource)
+    {
+        if (resource.Length < CSharpManifestHeaderSize)
+            throw new BadImageFormatException(
+                "The C# implementation manifest resource is truncated.");
+        for (int index = 0; index < CSharpManifestMagic.Length; index++)
+        {
+            if (resource[index] != CSharpManifestMagic[index])
+                throw new BadImageFormatException(
+                    "The C# implementation manifest has invalid magic.");
+        }
+        int schemaVersion = ReadInt32LittleEndian(resource, 8);
+        int payloadSize = ReadInt32LittleEndian(resource, 12);
+        if (payloadSize < 0 ||
+            payloadSize > MaximumCSharpManifestPayloadBytes ||
+            resource.Length != CSharpManifestHeaderSize + payloadSize)
+            throw new BadImageFormatException(
+                "The C# implementation manifest has an invalid payload size.");
+        var payload = new byte[payloadSize];
+        Buffer.BlockCopy(resource, CSharpManifestHeaderSize, payload, 0, payloadSize);
+        using (SHA256 sha256 = SHA256.Create())
+        {
+            byte[] digest = sha256.ComputeHash(payload);
+            for (int index = 0; index < digest.Length; index++)
+            {
+                if (resource[16 + index] != digest[index])
+                    throw new BadImageFormatException(
+                        "The C# implementation manifest payload hash does not match.");
+            }
         }
 
-        string key = attribute.ConstructorArguments[0].Value as string;
-        return key == null ||
-            !key.StartsWith("Kotlin.CSharpImplementationManifest", StringComparison.Ordinal);
+        string[] records = StrictUtf8.GetString(payload)
+            .Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        string[] header = records
+            .Where(record => record.StartsWith("H\t", StringComparison.Ordinal))
+            .Select(record => record.Split('\t'))
+            .Single();
+        if (header.Length != 5)
+            throw new BadImageFormatException(
+                "The C# implementation manifest header has invalid arity.");
+        int payloadSchema = int.Parse(DecodeManifestField(header[1]), CultureInfo.InvariantCulture);
+        if (payloadSchema != schemaVersion)
+            throw new BadImageFormatException(
+                "The C# implementation manifest schemas do not match.");
+        string assemblyName = DecodeManifestField(header[2]);
+        string targetProfile = DecodeManifestField(header[3]);
+        if (targetProfile != "net48" &&
+            targetProfile != "netstandard2.0" &&
+            targetProfile != "net10.0")
+            throw new BadImageFormatException(
+                "The C# implementation manifest has an unknown profile.");
+        string logicalIdentityScheme = DecodeManifestField(header[4]);
+        if (!string.Equals(
+                logicalIdentityScheme,
+                CSharpManifestLogicalIdentityScheme,
+                StringComparison.Ordinal))
+            throw new BadImageFormatException(
+                "The C# implementation manifest has an unknown logical-identity scheme.");
+        var logicalDeclarations = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string record in records)
+        {
+            string[] fields = record.Split('\t');
+            string logicalKey = null;
+            if (fields[0] == "I" && fields.Length == 8)
+                logicalKey = DecodeManifestField(fields[1]);
+            else if (fields[0] == "M" && fields.Length == 13)
+                logicalKey = DecodeManifestField(fields[2]);
+            else if (fields[0] == "X" && fields.Length == 8)
+                logicalKey = DecodeManifestField(fields[2]);
+            if (logicalKey != null && !logicalDeclarations.Add(logicalKey))
+                throw new BadImageFormatException(
+                    "Duplicate C# implementation logical declaration: " + logicalKey);
+        }
+        return new CSharpManifestContract(
+            schemaVersion,
+            assemblyName,
+            logicalIdentityScheme,
+            logicalDeclarations);
+    }
+
+    private static string DecodeManifestField(string encoded)
+    {
+        if (encoded == "~")
+            throw new BadImageFormatException(
+                "A required C# implementation manifest field is null.");
+        string base64 = encoded.Replace('-', '+').Replace('_', '/');
+        base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
+        return StrictUtf8.GetString(Convert.FromBase64String(base64));
+    }
+
+    private static int ReadInt32LittleEndian(byte[] bytes, int offset) =>
+        bytes[offset] |
+        (bytes[offset + 1] << 8) |
+        (bytes[offset + 2] << 16) |
+        (bytes[offset + 3] << 24);
+
+    private static List<string> CompareResources(
+        Dictionary<string, ResourceItem> portable,
+        Dictionary<string, ResourceItem> platform)
+    {
+        var differences = new List<string>();
+        foreach (ResourceItem required in portable.Values
+            .OrderBy(resource => resource.Key, StringComparer.Ordinal))
+        {
+            if ((required.Attributes & ManifestResourceAttributes.Public) == 0)
+                continue;
+            if (!platform.TryGetValue(required.Key, out ResourceItem actual))
+            {
+                differences.Add("MISSING RESOURCE|" + required.Key);
+                continue;
+            }
+            if ((required.Attributes & ManifestResourceAttributes.Public) != 0 &&
+                (actual.Attributes & ManifestResourceAttributes.Public) == 0)
+                differences.Add("NARROWED RESOURCE|" + required.Key);
+            if (required.IsEmbedded && !actual.IsEmbedded)
+                differences.Add("EXTERNALIZED RESOURCE|" + required.Key);
+            if (required.Manifest == null)
+                continue;
+            if (actual.Manifest == null)
+            {
+                differences.Add("MISSING MANIFEST CONTRACT|" + required.Key);
+                continue;
+            }
+            if (required.Manifest.SchemaVersion != actual.Manifest.SchemaVersion)
+                differences.Add("CHANGED MANIFEST SCHEMA|" + required.Key);
+            if (!string.Equals(
+                    required.Manifest.AssemblyName,
+                    actual.Manifest.AssemblyName,
+                    StringComparison.Ordinal))
+                differences.Add("CHANGED MANIFEST ASSEMBLY|" + required.Key);
+            if (!string.Equals(
+                    required.Manifest.LogicalIdentityScheme,
+                    actual.Manifest.LogicalIdentityScheme,
+                    StringComparison.Ordinal))
+                differences.Add("CHANGED MANIFEST IDENTITY SCHEME|" + required.Key);
+            foreach (string logicalDeclaration in required.Manifest.LogicalDeclarations
+                .OrderBy(value => value, StringComparer.Ordinal))
+            {
+                if (!actual.Manifest.LogicalDeclarations.Contains(logicalDeclaration))
+                    differences.Add(
+                        "MISSING MANIFEST DECLARATION|" + required.Key + "|" +
+                        logicalDeclaration);
+            }
+        }
+        return differences;
     }
 
     private static List<string> Compare(
