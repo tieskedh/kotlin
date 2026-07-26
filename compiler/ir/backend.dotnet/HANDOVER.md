@@ -1609,6 +1609,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   those members plus a portable helper default, a natural modern DIM, and a net10 child promotion
   of a portable parent. Empty ordinary contracts such as the method-constraint marker are also
   self-contained in the DLL manifest.
+- C# implementation manifest schema 4 records declaration-specific wrong-shape adapter policy.
+  The policy is translated from common `SpecialBridgeMethods`, so the C# path and backend bridge
+  lowering share one Kotlin declaration-identity table. Records carry the number of leading
+  parameters to test and a `false`, `null`, `-1`, or argument fallback. The no-KLIB matrix pins
+  `Collection.contains` and `List.indexOf`, while the existing user `@UnsafeVariance` member has
+  no policy and retains cast failure. Both collection-derived contracts remain explicitly
+  unsupported for source generation because `Kotlin.Runtime.dll` does not yet publish their
+  inherited runtime-owned contracts.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1683,9 +1691,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 3 over inherited
-   mutable-property obligations, special barriers, friend-accessible internal interfaces, and
-   runtime-bootstrap contracts. Add analyzer diagnostics for deliberately
+1. **Complete the C# interface-authoring contract.** Extend schema 4 over inherited
+   mutable-property obligations, friend-accessible internal interfaces, and runtime-bootstrap
+   contracts. Add analyzer diagnostics for deliberately
    erased owner-relative constraints without reconstructing illegal CLR signatures. Then
    implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
    resource before freezing the schema or package. Continue the foreign provider/implementor

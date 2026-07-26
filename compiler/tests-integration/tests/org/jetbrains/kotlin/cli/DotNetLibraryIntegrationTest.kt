@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpIntersectionContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultPromotionView
@@ -639,6 +640,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun format(prefix: String): String
             }
 
+            public interface BarrierShape<out T> : Collection<T> {
+                override fun contains(element: @UnsafeVariance T): Boolean
+            }
+
+            public interface SearchBarrier<out T> : List<T> {
+                override fun indexOf(element: @UnsafeVariance T): Int
+            }
+
             public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
                 public fun <R : ManifestMarker> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
@@ -825,6 +834,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val ordinaryContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryShape"
             }
+            val barrierContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
+            }
+            val searchBarrierContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.SearchBarrier"
+            }
             val rootContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
             }
@@ -856,6 +871,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(markerContract.sourceAuthoringSupported)
             assertTrue(ordinaryParentContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
+            assertFalse(barrierContract.sourceAuthoringSupported)
+            assertTrue(barrierContract.unsupportedReasons.single().contains("non-library inherited"))
+            assertFalse(searchBarrierContract.sourceAuthoringSupported)
+            assertTrue(
+                searchBarrierContract.unsupportedReasons.single().contains("non-library inherited")
+            )
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
@@ -904,14 +925,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .propertyName,
                 mutableSetter.slots.single().propertyName,
             )
-            assertEquals(if (externalParent) 4 else 13, manifest.interfaces.size)
-            assertEquals(if (externalParent) 9 else 13, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 6 else 15, manifest.interfaces.size)
+            assertEquals(if (externalParent) 9 else 15, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
                         markerContract,
                         ordinaryParentContract,
                         ordinaryContract,
+                        barrierContract,
+                        searchBarrierContract,
                         rootContract,
                         parentContract,
                         siblingContract,
@@ -972,6 +995,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             val map = contract.members.single { member -> member.sourceName == "map" }
             val accepts = contract.members.single { member -> member.sourceName == "accepts" }
+            val barrierContains = barrierContract.members.single { member ->
+                member.sourceName == "contains"
+            }
+            val barrierIndexOf = searchBarrierContract.members.single { member ->
+                member.sourceName == "indexOf"
+            }
             val fallback = rootContract.members.single { member -> member.sourceName == "fallback" }
             val ordinaryDisplayName = ordinaryParentContract.members.single { member ->
                 member.sourceName == "displayName" &&
@@ -1023,6 +1052,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(DotNetCSharpInterfaceView.DECLARED, secondary.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, map.authoringView)
             assertEquals(DotNetCSharpInterfaceView.EXACT, accepts.authoringView)
+            assertEquals(null, accepts.wrongShapePolicy)
+            assertEquals(
+                DotNetCSharpWrongShapeFallback.FALSE,
+                checkNotNull(barrierContains.wrongShapePolicy).fallback,
+            )
+            assertEquals(1, barrierContains.wrongShapePolicy?.checkedParameterCount)
+            assertEquals(null, barrierContains.wrongShapePolicy?.fallbackParameterIndex)
+            assertEquals(
+                DotNetCSharpWrongShapeFallback.MINUS_ONE,
+                checkNotNull(barrierIndexOf.wrongShapePolicy).fallback,
+            )
+            assertEquals(1, barrierIndexOf.wrongShapePolicy?.checkedParameterCount)
+            assertEquals(null, barrierIndexOf.wrongShapePolicy?.fallbackParameterIndex)
             assertEquals(
                 labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }.propertyName,
                 labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }.propertyName,

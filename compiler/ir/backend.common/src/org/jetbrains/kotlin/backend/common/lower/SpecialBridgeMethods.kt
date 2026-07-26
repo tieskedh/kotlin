@@ -25,9 +25,17 @@ import org.jetbrains.kotlin.util.OperatorNameConventions
 data class SpecialMethodWithDefaultInfo(
     val defaultValueGenerator: (IrSimpleFunction) -> IrExpression,
     val argumentsToCheck: Int,
+    val defaultValueKind: SpecialBridgeDefaultValueKind,
     val needsGenericSignature: Boolean = false,
     val needsUnsubstitutedBridge: Boolean = false
 )
+
+enum class SpecialBridgeDefaultValueKind {
+    FALSE,
+    NULL,
+    MINUS_ONE,
+    SECOND_ARGUMENT,
+}
 
 class BuiltInWithDifferentJvmName(
     val needsGenericSignature: Boolean = false,
@@ -70,25 +78,43 @@ class SpecialBridgeMethods(val context: CommonBackendContext) {
 
     private val specialMethodsWithDefaults = mapOf(
         makeDescription(StandardNames.FqNames.collection, "contains", 1) to
-                SpecialMethodWithDefaultInfo(::constFalse, 1),
+                SpecialMethodWithDefaultInfo(::constFalse, 1, SpecialBridgeDefaultValueKind.FALSE),
         makeDescription(StandardNames.FqNames.mutableCollection, "remove", 1) to
-                SpecialMethodWithDefaultInfo(::constFalse, 1),
+                SpecialMethodWithDefaultInfo(::constFalse, 1, SpecialBridgeDefaultValueKind.FALSE),
         makeDescription(StandardNames.FqNames.map, "containsKey", 1) to
-                SpecialMethodWithDefaultInfo(::constFalse, 1),
+                SpecialMethodWithDefaultInfo(::constFalse, 1, SpecialBridgeDefaultValueKind.FALSE),
         makeDescription(StandardNames.FqNames.map, "containsValue", 1) to
-                SpecialMethodWithDefaultInfo(::constFalse, 1),
+                SpecialMethodWithDefaultInfo(::constFalse, 1, SpecialBridgeDefaultValueKind.FALSE),
         makeDescription(StandardNames.FqNames.mutableMap, "remove", 2) to
-                SpecialMethodWithDefaultInfo(::constFalse, 2),
+                SpecialMethodWithDefaultInfo(::constFalse, 2, SpecialBridgeDefaultValueKind.FALSE),
         makeDescription(StandardNames.FqNames.list, "indexOf", 1) to
-                SpecialMethodWithDefaultInfo(::constMinusOne, 1),
+                SpecialMethodWithDefaultInfo(::constMinusOne, 1, SpecialBridgeDefaultValueKind.MINUS_ONE),
         makeDescription(StandardNames.FqNames.list, "lastIndexOf", 1) to
-                SpecialMethodWithDefaultInfo(::constMinusOne, 1),
+                SpecialMethodWithDefaultInfo(::constMinusOne, 1, SpecialBridgeDefaultValueKind.MINUS_ONE),
         makeDescription(StandardNames.FqNames.map, "getOrDefault", 2) to
-                SpecialMethodWithDefaultInfo(::getSecondArg, 1, needsGenericSignature = true, needsUnsubstitutedBridge = true),
+                SpecialMethodWithDefaultInfo(
+                    ::getSecondArg,
+                    1,
+                    SpecialBridgeDefaultValueKind.SECOND_ARGUMENT,
+                    needsGenericSignature = true,
+                    needsUnsubstitutedBridge = true,
+                ),
         makeDescription(StandardNames.FqNames.map, "get", 1) to
-                SpecialMethodWithDefaultInfo(::constNull, 1, needsGenericSignature = true, needsUnsubstitutedBridge = true),
+                SpecialMethodWithDefaultInfo(
+                    ::constNull,
+                    1,
+                    SpecialBridgeDefaultValueKind.NULL,
+                    needsGenericSignature = true,
+                    needsUnsubstitutedBridge = true,
+                ),
         makeDescription(StandardNames.FqNames.mutableMap, "remove", 1) to
-                SpecialMethodWithDefaultInfo(::constNull, 1, needsGenericSignature = true, needsUnsubstitutedBridge = true)
+                SpecialMethodWithDefaultInfo(
+                    ::constNull,
+                    1,
+                    SpecialBridgeDefaultValueKind.NULL,
+                    needsGenericSignature = true,
+                    needsUnsubstitutedBridge = true,
+                )
     )
 
     private val specialProperties = mapOf(
