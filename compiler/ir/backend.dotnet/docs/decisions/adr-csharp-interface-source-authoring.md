@@ -261,6 +261,14 @@ locators for both accessors; generated explicit properties batch the syntax only
 each accessor's semantic member independently. Tooling must never select one parent as the owner
 of the whole mutable property.
 
+For a covariant generic property, the strongly typed declared view owns the canonical DIM body.
+The erased canonical interface remains an abstract CLR Property slot reached by an
+interface-owned MethodImpl adapter. CLR dispatch accepts that mapping, but Roslyn does not count
+the mapped accessor as satisfying the canonical Property obligation on a C# implementing class.
+The generator therefore emits the physically required explicit canonical Property adapter and
+dispatches virtually through the typed DIM. Any exact typed view follows the same body without an
+erased-result cast. This is a CLR/C# representation bridge, not a second Kotlin implementation.
+
 Tooling cross-checks every consumed edge against the CLR interface ancestry and the resolved
 authoring signatures, including source name, member kind, generic arity, parameters, and
 covariant-compatible result. A syntactically valid logical key cannot redirect an unrelated CLR
@@ -419,6 +427,11 @@ The mutable-property conflict independently selects its left getter and right se
 both parent views continue to read through the left body, while writes through all three views
 execute the child setter and its exact qualified-super selection. This pins separate accessor
 identity instead of treating the CLR Property row as one semantic body.
+The covariant generic property conflict separately proves that declared, exact, parent, and erased
+views converge on the child-selected typed body. Portable adapters call the selected generic
+helper with the producer-recorded substitutions; modern canonical and parent Property adapters
+dispatch through the selected typed DIM. Strongly typed results do not pass through an erased
+cast.
 The fixture also resolves a method-generic interface constraint from the actual CLR GenericParam
 metadata and emits the matching C# `where` clause without a manifest constraint record.
 Friend-accessible internal interfaces now receive the same records as public contracts when their
