@@ -150,6 +150,15 @@ source bodies before ordinary CLR load or dispatch. At minimum it diagnoses:
 - a manifest/generator schema or logical-identity version mismatch; and
 - a malformed or unsupported manifest without executing code from the referenced assembly.
 
+The paired artifact has one diagnostic-ownership rule. For a semantically analyzable C# type, the
+analyzer alone reports `KDNCS` diagnostics and the generator only emits or skips source. If an
+existing C# compiler error inside that same type would suppress analyzer output—most importantly
+an inaccessible Kotlin base or a missing inherited interface member—the generator reports the
+Kotlin diagnostic while skipping emission, and the analyzer suppresses its duplicate. Compiler
+errors in unrelated types do not transfer ownership. Manifest-wide version/format failures remain
+analyzer-owned. Tests require one occurrence, not merely the presence, of representative
+analyzer-owned and generator-owned diagnostics.
+
 A nested reference-class or record-class implementor uses the same contract. The generator
 reconstructs partial declarations for its containing source-type chain, preserving type kind,
 generic parameters, interface variance, and required `static`, `readonly`, or `ref` shape.

@@ -440,31 +440,6 @@ internal static class AuthoringContractDiscovery
         }
     }
 
-    internal static string? KotlinAuthoringBaseName(
-        TypeSyntax syntax,
-        KotlinManifestSet manifests)
-    {
-        string? sourceName = SourceTypeName(syntax);
-        if (sourceName == null)
-            return null;
-        string[] matches = (
-            from reference in manifests.References
-            from contract in reference.Manifest.Interfaces
-            let metadataName = AuthoringOwnerMetadataName(contract)
-            where metadataName != null &&
-                  (string.Equals(
-                       SourceNameForMetadataName(metadataName),
-                       sourceName,
-                       StringComparison.Ordinal) ||
-                   string.Equals(
-                       SourceNameForMetadataName(metadataName).Split('.').Last(),
-                       sourceName,
-                       StringComparison.Ordinal))
-            select SourceNameForMetadataName(metadataName)
-        ).Distinct(StringComparer.Ordinal).ToArray();
-        return matches.Length == 1 ? matches[0] : null;
-    }
-
     private static ImmutableArray<string> FindInaccessibleBaseContracts(
         Compilation compilation,
         TypeDeclarationSyntax declaration,
