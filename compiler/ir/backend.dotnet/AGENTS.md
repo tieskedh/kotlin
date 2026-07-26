@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 65 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 67 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 845 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 847 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -1592,22 +1592,24 @@ landed shape as a compatibility constraint.
   `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
   DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
   sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
-  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 2
-  records direct public generic interfaces, canonical/declared/exact owner paths, typed authoring
-  views, read-only/mutable property and generic-method associations, exact-only inputs, and
-  portable-helper versus `net10.0` DIM obligations. One generic parent from the same DLL or a
+  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 3
+  records direct public interfaces, canonical/declared/exact owner paths where split generic views
+  exist, typed authoring views, read-only/mutable property and generic-method associations,
+  exact-only inputs, and portable-helper versus `net10.0` DIM obligations. One parent from the
+  same DLL or a
   referenced compiler-produced Kotlin library composes through its own manifest contract and the
   CLR-authored interface TypeSpec; the manifest does not duplicate that physical edge. A
   `net10.0` child consuming a portable parent discovers a selected promoted DIM from the child's
   concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
   Promotion is never inferred from profile and is not copied into a second manifest record.
   Multiple generic parents compose through that same manifest/CLR graph split, including a
-  shared-root diamond whose logical root is deduplicated. Schema 2 associates a physical derived
+  shared-root diamond whose logical root is deduplicated. Schema 3 associates a physical derived
   declared/exact intersection slot with its sorted contributing logical members because CLR
   metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
   canonical identities on one source body. Split mutable intersections record the declared getter
   and exact getter/setter; the exact accessors name the same getter-selected CLR Property row.
-  Non-generic parents remain explicitly unsupported.
+  An ordinary non-generic interface has one canonical owner and uses distinct canonical member
+  locators; it does not acquire a fake declared owner or an inaccurately named erased slot.
   Representable method constraints come only from the located CLR GenericParam metadata; the
   manifest does not duplicate them. The no-KLIB fixture resolves a public marker constraint and
   generates matching C# `where` clauses for typed and canonical slots. Owner-relative constraints
@@ -1617,8 +1619,8 @@ landed shape as a compatibility constraint.
   properties bind it to every recorded Kotlin physical name. Kotlin ABI names stay unchanged.
   `init`, `required`, indexers, events, and consumer aliases require explicit export policy rather
   than being inferred from Kotlin `val`/`var`.
-  Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
-  first authoring slice. Generated adapters must reach the one typed body; portable defaults call
+  Runtime-bootstrap and friend-accessible internal interfaces remain outside the first authoring
+  slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
   `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current
   hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an

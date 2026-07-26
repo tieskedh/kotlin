@@ -599,6 +599,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val parentDeclarationText = """
             public interface ManifestMarker
 
+            public interface OrdinaryParent {
+                public val displayName: String
+                public fun fallbackName(): String = displayName
+            }
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -629,6 +634,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         """.trimIndent()
         val childDeclarationText = """
+            public interface OrdinaryShape : OrdinaryParent {
+                public var count: Int
+                public fun format(prefix: String): String
+            }
+
             public interface Shape<out T> : ShapeParent<T>, ShapeSibling<T> {
                 public fun <R : ManifestMarker> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
@@ -641,6 +651,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public interface ResolvedMutable<out T> :
                 MutableLeft<T>, MutableRight<T>
+
+            public fun verifyOrdinary(value: OrdinaryShape): Int {
+                if (value.displayName != "ordinary") return 1
+                if (value.count != 3) return 2
+                if (value.format("value:") != "value:ordinary") return 3
+                if (value.fallbackName() != "ordinary") return 4
+                value.count = 7
+                return if (value.count == 7) 0 else 5
+            }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
                 val left: IntersectionLeft<String> = value
@@ -797,6 +816,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val contract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.Shape"
             }
+            val markerContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ManifestMarker"
+            }
+            val ordinaryParentContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryParent"
+            }
+            val ordinaryContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryShape"
+            }
             val rootContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeRoot"
             }
@@ -825,6 +853,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedMutable"
             }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
+            assertTrue(markerContract.sourceAuthoringSupported)
+            assertTrue(ordinaryParentContract.sourceAuthoringSupported)
+            assertTrue(ordinaryContract.sourceAuthoringSupported)
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
@@ -873,11 +904,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .propertyName,
                 mutableSetter.slots.single().propertyName,
             )
-            assertEquals(if (externalParent) 3 else 10, manifest.interfaces.size)
-            assertEquals(if (externalParent) 7 else 10, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 4 else 13, manifest.interfaces.size)
+            assertEquals(if (externalParent) 9 else 13, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
+                        markerContract,
+                        ordinaryParentContract,
+                        ordinaryContract,
                         rootContract,
                         parentContract,
                         siblingContract,
@@ -892,6 +926,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
             }
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
+            assertTrue(markerContract.typeParameters.isEmpty())
+            assertTrue(ordinaryContract.typeParameters.isEmpty())
+            assertEquals(null, markerContract.declaredOwnerPath)
+            assertEquals(null, markerContract.exactOwnerPath)
+            assertTrue(markerContract.members.isEmpty())
+            assertEquals(null, ordinaryParentContract.declaredOwnerPath)
+            assertEquals(null, ordinaryParentContract.exactOwnerPath)
+            assertEquals(null, ordinaryContract.declaredOwnerPath)
+            assertEquals(null, ordinaryContract.exactOwnerPath)
             assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
             assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
             assertEquals(listOf("manifest.ShapeRoot`1"), rootContract.declaredOwnerPath)
@@ -930,6 +973,50 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val map = contract.members.single { member -> member.sourceName == "map" }
             val accepts = contract.members.single { member -> member.sourceName == "accepts" }
             val fallback = rootContract.members.single { member -> member.sourceName == "fallback" }
+            val ordinaryDisplayName = ordinaryParentContract.members.single { member ->
+                member.sourceName == "displayName" &&
+                        member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+            }
+            val ordinaryFallback = ordinaryParentContract.members.single { member ->
+                member.sourceName == "fallbackName"
+            }
+            val ordinaryCountGetter = ordinaryContract.members.single { member ->
+                member.sourceName == "count" &&
+                        member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
+            }
+            val ordinaryCountSetter = ordinaryContract.members.single { member ->
+                member.sourceName == "count" &&
+                        member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
+            }
+            val ordinaryFormat = ordinaryContract.members.single { member ->
+                member.sourceName == "format"
+            }
+            val ordinaryMembers = listOf(
+                ordinaryDisplayName,
+                ordinaryFallback,
+                ordinaryCountGetter,
+                ordinaryCountSetter,
+                ordinaryFormat,
+            )
+            assertTrue(ordinaryMembers.all { member ->
+                member.authoringView == DotNetCSharpInterfaceView.CANONICAL &&
+                        member.slots.count { slot ->
+                            slot.role == DotNetCSharpSlotRole.CANONICAL
+                        } == 1 &&
+                        member.slots.none { slot ->
+                            slot.role == DotNetCSharpSlotRole.ERASED ||
+                                    slot.role == DotNetCSharpSlotRole.DECLARED ||
+                                    slot.role == DotNetCSharpSlotRole.EXACT
+                        }
+            })
+            assertEquals(
+                ordinaryCountGetter.slots.single {
+                    it.role == DotNetCSharpSlotRole.CANONICAL
+                }.propertyName,
+                ordinaryCountSetter.slots.single {
+                    it.role == DotNetCSharpSlotRole.CANONICAL
+                }.propertyName,
+            )
             assertEquals(DotNetCSharpInterfaceView.DECLARED, value.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, labelGetter.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, labelSetter.authoringView)
@@ -981,9 +1068,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             if (parentManifest.targetProfile == "net10.0") {
                 assertEquals(DotNetCSharpDefaultKind.DIM_WITH_HELPER, fallback.defaultKind)
                 assertEquals(DotNetCSharpInterfaceView.DECLARED, fallback.semanticBodyView)
+                assertEquals(
+                    DotNetCSharpDefaultKind.DIM_WITH_HELPER,
+                    ordinaryFallback.defaultKind,
+                )
+                assertEquals(
+                    DotNetCSharpInterfaceView.CANONICAL,
+                    ordinaryFallback.semanticBodyView,
+                )
             } else {
                 assertEquals(DotNetCSharpDefaultKind.PORTABLE_HELPER, fallback.defaultKind)
                 assertEquals(null, fallback.semanticBodyView)
+                assertEquals(
+                    DotNetCSharpDefaultKind.PORTABLE_HELPER,
+                    ordinaryFallback.defaultKind,
+                )
+                assertEquals(null, ordinaryFallback.semanticBodyView)
             }
 
             val methodImpls = readCSharpPhysicalMethodImplsFromDll(
@@ -998,14 +1098,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 fallback,
                 methodImpls,
             )
+            val ordinaryPromotedDim = hasEffectivePromotedDim(
+                ordinaryContract,
+                parentManifest,
+                ordinaryFallback,
+                methodImpls,
+            )
             if (scenario.name == "net10.0-promoted-portable-parent") {
                 assertTrue(promotedDim) {
                     "The child DLL does not expose a complete CLR MethodImpl promotion bundle:\n" +
                             methodImpls.joinToString("\n")
                 }
+                assertTrue(ordinaryPromotedDim) {
+                    "The ordinary child DLL does not expose its promoted CLR DIM:\n" +
+                            methodImpls.joinToString("\n")
+                }
             } else {
                 assertFalse(promotedDim) {
                     "Only the cross-profile scenario should require a child-owned promotion:\n" +
+                            methodImpls.joinToString("\n")
+                }
+                assertFalse(ordinaryPromotedDim) {
+                    "Only the cross-profile ordinary child should require a promoted DIM:\n" +
                             methodImpls.joinToString("\n")
                 }
             }
@@ -1026,9 +1140,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         mutableGetter,
                         mutableSetter,
                         mapConstraintType,
+                        ordinaryParentContract,
+                        ordinaryContract,
                         inheritedDefaultHasEffectiveDim =
                             fallback.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
                                     promotedDim,
+                        ordinaryDefaultHasEffectiveDim =
+                            ordinaryFallback.defaultKind ==
+                                    DotNetCSharpDefaultKind.DIM_WITH_HELPER ||
+                                    ordinaryPromotedDim,
                     )
                 )
             }
@@ -9514,7 +9634,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     ): Boolean {
         val childOwners = buildSet {
             add(childContract.canonicalOwnerPath)
-            add(childContract.declaredOwnerPath)
+            childContract.declaredOwnerPath?.let(::add)
             childContract.exactOwnerPath?.let(::add)
         }
         val inheritedSlots = parentMember.slots.filter { slot ->
@@ -9551,9 +9671,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         mutableGetter: DotNetCSharpIntersectionContract,
         mutableSetter: DotNetCSharpIntersectionContract,
         mapConstraintType: String,
+        ordinaryParentContract: DotNetCSharpInterfaceContract,
+        ordinaryContract: DotNetCSharpInterfaceContract,
         inheritedDefaultHasEffectiveDim: Boolean =
             rootContract.members.single { member -> member.sourceName == "fallback" }
                 .defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
+        ordinaryDefaultHasEffectiveDim: Boolean =
+            ordinaryParentContract.members.single { member ->
+                member.sourceName == "fallbackName"
+            }.defaultKind == DotNetCSharpDefaultKind.DIM_WITH_HELPER,
     ): String {
         fun DotNetCSharpInterfaceContract.member(
             name: String,
@@ -9574,7 +9700,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val rightCanonicalType = rightContract.csharpOwner(rightContract.canonicalOwnerPath)
         val resolvedIntersectionType = resolvedIntersectionContract.csharpOwner(
             when (intersection.authoringView) {
-                DotNetCSharpInterfaceView.DECLARED -> resolvedIntersectionContract.declaredOwnerPath
+                DotNetCSharpInterfaceView.CANONICAL ->
+                    resolvedIntersectionContract.canonicalOwnerPath
+                DotNetCSharpInterfaceView.DECLARED ->
+                    checkNotNull(resolvedIntersectionContract.declaredOwnerPath)
                 DotNetCSharpInterfaceView.EXACT ->
                     checkNotNull(resolvedIntersectionContract.exactOwnerPath)
             }
@@ -9584,7 +9713,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val mutableRightCanonicalType =
             mutableRightContract.csharpOwner(mutableRightContract.canonicalOwnerPath)
         val resolvedMutableDeclaredType =
-            resolvedMutableContract.csharpOwner(resolvedMutableContract.declaredOwnerPath)
+            resolvedMutableContract.csharpOwner(
+                checkNotNull(resolvedMutableContract.declaredOwnerPath)
+            )
         val resolvedMutableExactType =
             resolvedMutableContract.csharpOwner(checkNotNull(resolvedMutableContract.exactOwnerPath))
         val value = rootContract.member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
@@ -9594,6 +9725,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val map = contract.member("map")
         val accepts = contract.member("accepts")
         val fallback = rootContract.member("fallback")
+        val ordinaryParentType =
+            ordinaryParentContract.csharpOwner(ordinaryParentContract.canonicalOwnerPath)
+        val ordinaryType = ordinaryContract.csharpOwner(ordinaryContract.canonicalOwnerPath)
+        val ordinaryDisplayName = ordinaryParentContract.member(
+            "displayName",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        val ordinaryFallback = ordinaryParentContract.member("fallbackName")
+        val ordinaryFallbackCanonical = ordinaryFallback.slots.single { slot ->
+            slot.role == DotNetCSharpSlotRole.CANONICAL
+        }
+        val ordinaryCountGetter = ordinaryContract.member(
+            "count",
+            DotNetCSharpMemberKind.PROPERTY_GETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        val ordinaryCountSetter = ordinaryContract.member(
+            "count",
+            DotNetCSharpMemberKind.PROPERTY_SETTER,
+        ).slots.single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        val ordinaryFormat = ordinaryContract.member("format")
+            .slots
+            .single { slot -> slot.role == DotNetCSharpSlotRole.CANONICAL }
+        require(ordinaryCountGetter.propertyName == ordinaryCountSetter.propertyName)
         val canonicalValue = value.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelGetter = labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelSetter = labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
@@ -9609,6 +9763,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             .single { it.role == DotNetCSharpSlotRole.ERASED }
         val typedIntersection = intersection.slots.single { slot ->
             slot.role == when (intersection.authoringView) {
+                DotNetCSharpInterfaceView.CANONICAL -> DotNetCSharpSlotRole.CANONICAL
                 DotNetCSharpInterfaceView.DECLARED -> DotNetCSharpSlotRole.DECLARED
                 DotNetCSharpInterfaceView.EXACT -> DotNetCSharpSlotRole.EXACT
             }
@@ -9661,6 +9816,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public object ${canonicalFallback.methodName}()
                 {
                     return ${fallback.sourceName}();
+                }
+            """.trimIndent()
+        } else {
+            ""
+        }
+        val generatedOrdinaryDefault = if (
+            ordinaryFallback.defaultKind == DotNetCSharpDefaultKind.PORTABLE_HELPER &&
+            !ordinaryDefaultHasEffectiveDim
+        ) {
+            val helper = ordinaryFallback.slots.single { slot ->
+                slot.role == DotNetCSharpSlotRole.HELPER
+            }
+            require(helper.genericArity == 0)
+            val helperOwner = ordinaryParentContract.csharpOwner(helper.ownerPath)
+            """
+                string $ordinaryParentType.${ordinaryFallbackCanonical.methodName}()
+                {
+                    return $helperOwner.${helper.methodName}(this);
                 }
             """.trimIndent()
         } else {
@@ -9771,6 +9944,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
             }
 
+            public sealed partial class GeneratedOrdinary
+            {
+                public string DisplayName { get { return "ordinary"; } }
+
+                public int Count { get; set; } = 3;
+
+                public string Format(string prefix) { return prefix + DisplayName; }
+            }
+
+            public sealed partial class GeneratedOrdinary : $ordinaryType
+            {
+                string $ordinaryParentType.${checkNotNull(ordinaryDisplayName.propertyName)}
+                {
+                    get { return DisplayName; }
+                }
+
+                int $ordinaryType.${checkNotNull(ordinaryCountGetter.propertyName)}
+                {
+                    get { return Count; }
+                    set { Count = value; }
+                }
+
+                string $ordinaryType.${ordinaryFormat.methodName}(string prefix)
+                {
+                    return Format(prefix);
+                }
+
+                $generatedOrdinaryDefault
+            }
+
             public static class Program
             {
                 public static int Main()
@@ -9788,6 +9991,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     if (mutableResult != 0)
                         throw new System.Exception(
                             "Kotlin mutable verification failed: " + mutableResult);
+                    int ordinaryResult =
+                        manifest.apiKt.verifyOrdinary(new GeneratedOrdinary());
+                    if (ordinaryResult != 0)
+                        throw new System.Exception(
+                            "Kotlin ordinary verification failed: " + ordinaryResult);
                     return 0;
                 }
             }

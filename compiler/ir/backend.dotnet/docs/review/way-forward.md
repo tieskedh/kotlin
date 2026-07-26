@@ -320,13 +320,17 @@ surface; that does not freeze identical Framework/modern IL. The remaining gener
 the remaining foreign-implementor and clash matrix, the Roslyn generator/analyzer, and the raw
 metadata-table audit; those keep P0-D open. The accepted C# source-authoring ADR now selects a
 partial-type Roslyn generator/analyzer rather than a generated base class or universal CLR
-mechanism. Its schema-2 DLL manifest is implemented: it records profile, canonical,
-declared, and exact owners, member and property groupings, strongly typed authoring views,
+mechanism. Its schema-3 DLL manifest is implemented: it records profile, canonical,
+declared, and exact owners where those split views exist, member and property groupings, strongly
+typed authoring views,
 MethodDef locators, helper/DIM obligations, and logical contributor mappings for derived
 intersection slots without requiring the sibling KLIB. A no-KLIB
 integration test reads the actual assembly metadata, generates a partial C# implementation for a
 property, generic method, exact-only unsafe input, and default, then executes Kotlin verification
-for `net48`, `netstandard2.0`, and `net10.0`. The current hashed
+for `net48`, `netstandard2.0`, and `net10.0`. Ordinary non-generic interfaces use one canonical
+owner and canonical member locators rather than artificial split or erased views. The same fixture
+maps PascalCase C# properties and methods to Kotlin physical names and covers ordinary inheritance,
+mutable properties, helpers, DIMs, and portable-parent promotion. The current hashed
 `AssemblyMetadataAttribute` chunk carrier is explicitly temporary because both selected ILAsm
 implementations can only link external `.mresource` files. Before ABI freeze, a capable PE stage
 must move the carrier-independent payload to a real managed resource and add production parser
@@ -401,10 +405,10 @@ The remaining P0-D implementation order is:
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
    families and the real same-owner clash matrix. Extend the DLL manifest over inherited
-   mutable-property obligations, special barriers, non-generic interfaces,
-   friend-accessible internal interfaces, and runtime-bootstrap contracts; then implement the
+   mutable-property obligations, special barriers, friend-accessible internal interfaces, and
+   runtime-bootstrap contracts; then implement the
    Roslyn partial-type generator/analyzer. Multi-parent generic diamonds compose from parent
-   manifest contracts plus the CLR graph; schema 2 records the logical contributor mapping that
+   manifest contracts plus the CLR graph; schema 3 records the logical contributor mapping that
    CLR metadata lacks for derived method and split mutable-property intersection slots.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
    no-KLIB C# `where` clauses; owner-relative constraints erased from illegal variant positions

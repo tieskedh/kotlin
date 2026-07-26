@@ -1600,6 +1600,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   body, optionally PascalCase, while generated explicit Property implementations adapt all
   recorded Kotlin physical names. Kotlin names and semantics remain authoritative; `init`,
   `required`, indexers, events, and consumer aliases require an explicit export policy.
+- C# implementation manifest schema 3 now includes ordinary public Kotlin interfaces. A
+  non-generic contract owns only its natural canonical CLR interface and records canonical member
+  locators; it does not manufacture declared/exact owners or call an ordinary slot erased. The
+  no-KLIB fixture composes an ordinary parent and child in the same DLL and across Kotlin library
+  DLLs. Its partial C# type exposes PascalCase `DisplayName`, `Count`, and `Format` members while
+  generated explicit members implement the recorded Kotlin properties and method. Kotlin executes
+  those members plus a portable helper default, a natural modern DIM, and a net10 child promotion
+  of a portable parent. Empty ordinary contracts such as the method-constraint marker are also
+  self-contained in the DLL manifest.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1674,9 +1683,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 2 over inherited
-   mutable-property obligations, special barriers, non-generic interfaces, friend-accessible
-   internal interfaces, and runtime-bootstrap contracts. Add analyzer diagnostics for deliberately
+1. **Complete the C# interface-authoring contract.** Extend schema 3 over inherited
+   mutable-property obligations, special barriers, friend-accessible internal interfaces, and
+   runtime-bootstrap contracts. Add analyzer diagnostics for deliberately
    erased owner-relative constraints without reconstructing illegal CLR signatures. Then
    implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
    resource before freezing the schema or package. Continue the foreign provider/implementor
