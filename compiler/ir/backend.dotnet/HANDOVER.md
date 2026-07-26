@@ -1620,6 +1620,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   manifests for the five collection execution interfaces. The no-KLIB fixture generates C#
   implementations of both collection children and executes their exact and widened Kotlin views
   on all profiles.
+- The same schema now includes ordinary internal interface contracts without changing their
+  identity or visibility. CLR TypeDef accessibility and producer-emitted `InternalsVisibleTo`
+  remain authoritative; the manifest carries no parallel friend grant. The no-KLIB matrix
+  implements top-level and nested internal interfaces from the authorized `GeneratedShape`
+  assembly, exercises a portable helper and modern DIM, and pins Roslyn `CS0122` for an
+  unauthorized assembly on every profile. Private/protected owner chains and
+  `@PublishedApi internal` compiler-ABI interfaces remain absent from the source-authoring surface.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1694,8 +1701,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 5 over inherited
-   mutable-property obligations and friend-accessible internal interfaces. Add analyzer
+1. **Complete the C# interface-authoring contract.** Inherited mutable-property obligations and
+   friend-accessible internal interfaces are covered. Add analyzer
    diagnostics for deliberately
    erased owner-relative constraints without reconstructing illegal CLR signatures. Then
    implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
