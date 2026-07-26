@@ -335,11 +335,15 @@ property, generic method, exact-only unsafe input, and default, then executes Ko
 for `net48`, `netstandard2.0`, and `net10.0`. Ordinary non-generic interfaces use one canonical
 owner and canonical member locators rather than artificial split or erased views. The same fixture
 maps PascalCase C# properties and methods to Kotlin physical names and covers ordinary inheritance,
-mutable properties, helpers, DIMs, and portable-parent promotion. The current hashed
-`AssemblyMetadataAttribute` chunk carrier is explicitly temporary because both selected ILAsm
-implementations can only link external `.mresource` files. Before ABI freeze, a capable PE stage
-must move the carrier-independent payload to a real managed resource and add production parser
-limits. The first foreign barrier slice is now replayable: ordinary Framework and modern C#
+mutable properties, helpers, DIMs, and portable-parent promotion. The carrier is now the embedded
+public managed resource `Kotlin.CSharpImplementationManifest`: both selected ILAsm implementations
+were proven to copy a same-directory resource source into the PE, and the compiler stages that
+source only for assembly. A versioned, length-bounded, SHA-256-checked envelope protects the
+unchanged record payload. Production Roslyn tooling reads the referenced PE directly without
+loading target code, while the DLL-only matrix proves that no sibling KLIB or resource sidecar is
+needed. The pre-publication `AssemblyMetadataAttribute` chunks were removed rather than retained
+as a compatibility surface. The first foreign barrier slice is now replayable: ordinary Framework
+and modern C#
 classes consume one portable Kotlin library,
 implement the canonical plus exact views on one object, preserve Collection's wrong-shape false
 barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member. The same lane
