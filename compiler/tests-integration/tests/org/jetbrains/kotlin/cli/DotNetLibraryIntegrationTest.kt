@@ -8,6 +8,7 @@ package org.jetbrains.kotlin.cli
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetCompanionInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpErasedOwnerRelativeConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifest
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifestCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceContract
@@ -15,7 +16,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpInterfaceView
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpIntersectionContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberContract
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMemberKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpMethodLocator
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpSlotRole
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameter
+import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
@@ -699,6 +703,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val parentDeclarationText = """
             public interface ManifestMarker
 
+            public interface OwnerBound<out T> {
+                public fun <R : @UnsafeVariance T> retain(value: R): R
+            }
+
+            public interface OwnerBoundLeft<out T> {
+                public fun <R : @UnsafeVariance T> retainBoth(value: R): R
+            }
+
+            public interface OwnerBoundRight<out T> {
+                public fun <R : @UnsafeVariance T> retainBoth(value: R): R
+            }
+
             public interface OrdinaryParent {
                 public val displayName: String
                 public fun fallbackName(): String = displayName
@@ -779,6 +795,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             public interface ResolvedMutable<out T> :
                 MutableLeft<T>, MutableRight<T>
+
+            public interface ResolvedOwnerBound<out T> :
+                OwnerBoundLeft<T>, OwnerBoundRight<T>
 
             public fun verifyOrdinary(value: OrdinaryShape): Int {
                 if (value.displayName != "ordinary") return 1
@@ -978,6 +997,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val ordinaryParentContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryParent"
             }
+            val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
+            }
+            val ownerBoundLeftContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBoundLeft"
+            }
+            val ownerBoundRightContract = parentManifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBoundRight"
+            }
             val ordinaryContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryShape"
             }
@@ -1025,9 +1053,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val resolvedMutable = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedMutable"
             }
+            val resolvedOwnerBound = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedOwnerBound"
+            }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(markerContract.sourceAuthoringSupported)
             assertTrue(ordinaryParentContract.sourceAuthoringSupported)
+            assertTrue(ownerBoundContract.sourceAuthoringSupported)
+            assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
+            assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
@@ -1049,6 +1083,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(mutableLeftContract.sourceAuthoringSupported)
             assertTrue(mutableRightContract.sourceAuthoringSupported)
             assertTrue(resolvedMutable.sourceAuthoringSupported)
+            assertTrue(resolvedOwnerBound.sourceAuthoringSupported)
             val intersection = resolvedIntersection.intersections.single()
             assertEquals("overlap", intersection.sourceName)
             assertEquals(DotNetCSharpMemberKind.METHOD, intersection.kind)
@@ -1085,12 +1120,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .propertyName,
                 mutableSetter.slots.single().propertyName,
             )
-            assertEquals(if (externalParent) 8 else 17, manifest.interfaces.size)
-            assertEquals(if (externalParent) 9 else 17, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 9 else 21, manifest.interfaces.size)
+            assertEquals(if (externalParent) 12 else 21, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
                         markerContract,
+                        ownerBoundContract,
+                        ownerBoundLeftContract,
+                        ownerBoundRightContract,
                         ordinaryParentContract,
                         ordinaryContract,
                         barrierContract,
@@ -1107,11 +1145,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         contract,
                         resolvedIntersection,
                         resolvedMutable,
+                        resolvedOwnerBound,
                     )
                         .sortedBy(DotNetCSharpInterfaceContract::logicalKey)
             }
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
             assertTrue(markerContract.typeParameters.isEmpty())
+            assertEquals(listOf("T"), ownerBoundContract.typeParameters.map { it.name })
             assertTrue(ordinaryContract.typeParameters.isEmpty())
             assertEquals(null, markerContract.declaredOwnerPath)
             assertEquals(null, markerContract.exactOwnerPath)
@@ -1157,6 +1197,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             val map = contract.members.single { member -> member.sourceName == "map" }
             val accepts = contract.members.single { member -> member.sourceName == "accepts" }
+            val retain = ownerBoundContract.members.single { member ->
+                member.sourceName == "retain"
+            }
+            val retainBoth = resolvedOwnerBound.intersections.single { intersectionContract ->
+                intersectionContract.sourceName == "retainBoth"
+            }
             val barrierContains = barrierContract.members.single { member ->
                 member.sourceName == "contains"
             }
@@ -1214,6 +1260,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(DotNetCSharpInterfaceView.DECLARED, secondary.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, map.authoringView)
             assertEquals(DotNetCSharpInterfaceView.EXACT, accepts.authoringView)
+            assertEquals(DotNetCSharpInterfaceView.EXACT, retain.authoringView)
+            assertEquals(
+                listOf(DotNetCSharpErasedOwnerRelativeConstraint(0, 0)),
+                retain.erasedOwnerRelativeConstraints,
+            )
+            assertEquals(DotNetCSharpInterfaceView.EXACT, retainBoth.authoringView)
+            assertEquals(
+                listOf(DotNetCSharpErasedOwnerRelativeConstraint(0, 0)),
+                retainBoth.erasedOwnerRelativeConstraints,
+            )
             assertEquals(null, accepts.wrongShapePolicy)
             assertEquals(
                 DotNetCSharpWrongShapeFallback.FALSE,
@@ -1248,13 +1304,59 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             slot.role == DotNetCSharpSlotRole.DECLARED
                 }
                 .map { slot ->
-                    genericParameters.single { parameter ->
+                    genericParameters.singleOrNull { parameter ->
                         parameter.ownerPath == slot.ownerPath &&
                                 parameter.methodName == slot.methodName &&
                                 parameter.index == 0
-                    }
+                    } ?: error(
+                        "Missing physical generic parameter for constrained map slot $slot:\n" +
+                                genericParameters.joinToString("\n")
+                    )
                 }
             assertTrue(mapParameters.all { parameter -> parameter.attributes == 0 })
+            val ownerBoundGenericParameters = parentAssembly?.let { assembly ->
+                readCSharpPhysicalGenericParametersFromDll(
+                    modernCSharp,
+                    readerAssembly,
+                    readerDirectory,
+                    assembly,
+                )
+            } ?: genericParameters
+            val retainParameters = retain.slots
+                .filter { slot ->
+                    slot.role == DotNetCSharpSlotRole.ERASED ||
+                            slot.role == DotNetCSharpSlotRole.EXACT
+                }
+                .map { slot ->
+                    ownerBoundGenericParameters.singleOrNull { parameter ->
+                        parameter.ownerPath == slot.ownerPath &&
+                                parameter.methodName == slot.methodName &&
+                                parameter.index == 0
+                    } ?: error(
+                        "Missing physical generic parameter for erased owner-relative slot $slot:\n" +
+                                ownerBoundGenericParameters.joinToString("\n")
+                    )
+                }
+            assertTrue(retainParameters.all { parameter ->
+                parameter.constraints.isEmpty()
+            }) {
+                "A tooling guidance record must not reconstruct the erased constraint in CLR metadata"
+            }
+            val retainBothParameters = retainBoth.slots.map { slot ->
+                genericParameters.singleOrNull { parameter ->
+                    parameter.ownerPath == slot.ownerPath &&
+                            parameter.methodName == slot.methodName &&
+                            parameter.index == 0
+                } ?: error(
+                    "Missing physical generic parameter for erased owner-relative intersection $slot:\n" +
+                            genericParameters.joinToString("\n")
+                )
+            }
+            assertTrue(retainBothParameters.all { parameter ->
+                parameter.constraints.isEmpty()
+            }) {
+                "Intersection tooling guidance must not reconstruct the erased CLR constraint"
+            }
             val mapConstraint = mapParameters
                 .flatMap { parameter -> parameter.constraints }
                 .distinct()
@@ -1518,6 +1620,60 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         )
                     )
                 )
+            )
+        }
+        val invalidConstraintContract = DotNetCSharpInterfaceContract(
+            logicalKey = "C:sample/Owner",
+            canonicalOwnerPath = listOf("sample.Owner"),
+            declaredOwnerPath = listOf("sample.Owner`1"),
+            exactOwnerPath = listOf("sample.Owner__KotlinExact`1"),
+            typeParameters = listOf(
+                DotNetCSharpTypeParameter("T", DotNetCSharpTypeParameterVariance.OUT)
+            ),
+            sourceAuthoringSupported = true,
+            unsupportedReasons = emptyList(),
+            members = listOf(
+                DotNetCSharpMemberContract(
+                    logicalKey = "F:sample/Owner.retain",
+                    kind = DotNetCSharpMemberKind.METHOD,
+                    sourceName = "retain",
+                    authoringView = DotNetCSharpInterfaceView.EXACT,
+                    defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
+                    semanticBodyView = null,
+                    wrongShapePolicy = null,
+                    erasedOwnerRelativeConstraints = listOf(
+                        DotNetCSharpErasedOwnerRelativeConstraint(
+                            methodTypeParameterIndex = 1,
+                            ownerTypeParameterIndex = 0,
+                        )
+                    ),
+                    slots = listOf(
+                        DotNetCSharpMethodLocator(
+                            role = DotNetCSharpSlotRole.ERASED,
+                            ownerPath = listOf("sample.Owner"),
+                            methodName = "retain__KotlinErased",
+                            propertyName = null,
+                            genericArity = 1,
+                            returnType = "!!0",
+                            parameterTypes = listOf("!!0"),
+                        ),
+                        DotNetCSharpMethodLocator(
+                            role = DotNetCSharpSlotRole.EXACT,
+                            ownerPath = listOf("sample.Owner__KotlinExact`1"),
+                            methodName = "retain",
+                            propertyName = null,
+                            genericArity = 1,
+                            returnType = "!!0",
+                            parameterTypes = listOf("!!0"),
+                        ),
+                    ),
+                )
+            ),
+            intersections = emptyList(),
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+                manifest.copy(interfaces = listOf(invalidConstraintContract))
             )
         }
     }
