@@ -98,6 +98,12 @@ components pass, internal components require same-assembly access or producer fr
 private/protected components fail. A broad symbol-accessibility shortcut must not override a valid
 friend grant on an internal containing type.
 
+The production lane covers both a non-generic nested friend interface and a nested covariant
+generic friend interface. The latter retains its canonical and declared/exact physical views as
+`NestedPublic` TypeDefs inside the internal owner; an authorized C# base list names the normal
+declared view and the generator supplies the remaining adapters. Kotlin execution observes the
+same typed property body through that contract on every profile.
+
 ### 2. Roslyn partial-type generation is the supported C# source-authoring path
 
 The intended tooling is a Roslyn source generator paired with an analyzer. Its artifact targets
