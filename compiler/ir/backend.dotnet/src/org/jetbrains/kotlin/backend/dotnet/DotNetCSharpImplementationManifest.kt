@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
+import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.types.Variance
@@ -525,9 +526,22 @@ internal fun collectDotNetCSharpImplementationManifest(
             val interfaceKey = checkNotNull(preLoweringDeclarationKeys[irClass]) {
                 "Public generic interface has no pre-lowering logical key"
             }
+            val directSuperInterfaces = irClass.dotNetDirectInterfaceTypes()
             val unsupportedReasons = buildList {
-                if (irClass.dotNetDirectInterfaceTypes().isNotEmpty()) {
-                    add("inherited interface contracts are not supported by the first C# authoring schema")
+                when {
+                    directSuperInterfaces.size > 1 -> {
+                        add("multiple inherited interface contracts are not supported by the first C# authoring schema")
+                    }
+                    directSuperInterfaces.size == 1 -> {
+                        val superInterface =
+                            (directSuperInterfaces.single().classifier as? IrClassSymbol)?.owner
+                        if (superInterface !in genericInterfaces || superInterface?.fileOrNull !in files) {
+                            add(
+                                "cross-assembly or non-generic inherited interface contracts are not supported " +
+                                        "by the first C# authoring schema"
+                            )
+                        }
+                    }
                 }
             }
             fun canonicalPropertyName(source: IrSimpleFunction, fallbackMethodName: String): String? {

@@ -1539,18 +1539,26 @@ session state, process, and a curated task menu. Keep both files updated as you 
   against `net48`, `netstandard2.0`, and `net10.0` producers. Missing, corrupt, and duplicate
   chunks fail explicitly. The carrier is deliberately temporary: both supported ILAsm
   implementations can only link an external `.mresource`, so a future PE stage must move the same
-  payload into a true managed resource before schema/package freeze. Inherited contracts are
-  marked unsupported; intersections, constraints, inherited mutable-property obligations, special
-  barriers, non-generic interfaces, friend-accessible internal interfaces, and runtime-bootstrap
-  interfaces are the next schema coverage, followed by the actual Roslyn generator/analyzer. The
-  general portable CLR-surface comparer excludes only this profile-specific carrier; the manifest
-  test decodes and compares its logical/helper identities separately. The strict baseline becomes
-  847/0/0/0 across 16 XML suites.
+  payload into a true managed resource before schema/package freeze. Multiple-parent,
+  cross-assembly, and non-generic inheritance remain unsupported; intersections, constraints,
+  inherited mutable-property obligations, special barriers, friend-accessible internal
+  interfaces, and runtime-bootstrap interfaces are the next schema coverage, followed by the
+  actual Roslyn generator/analyzer. The general portable CLR-surface comparer excludes only this
+  profile-specific carrier; the manifest test decodes and compares its logical/helper identities
+  separately. The strict baseline becomes 847/0/0/0 across 16 XML suites.
 - The direct manifest-only C# implementation fixture now includes one ordinary mutable `String`
   property. Schema 1 records its getter and setter as separate logical members that name the same
   canonical Property row. The generated partial type supplies one public typed property and one
   explicit canonical property adapter; Kotlin mutates and observes the same storage through typed
   and covariantly widened views on all three profiles. No schema or representation changed.
+- The same fixture now splits those obligations across `ShapeParent<out T>` and
+  `Shape<out T> : ShapeParent<T>`. Both same-DLL declarations own separate manifest contracts;
+  ordinary CLR interface metadata remains authoritative for the edge and substitution. A C#
+  partial type implements the child exact view, supplies parent and child canonical adapters,
+  forwards the parent helper on portable profiles, and inherits the parent DIM on `net10.0`.
+  Kotlin executes parent properties/defaults and child methods through the child view on all three
+  profiles. Schema 1 now admits exactly one same-DLL generic parent. Multiple parents,
+  cross-assembly parents, and non-generic parents remain explicitly unsupported.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1625,13 +1633,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the C# interface-authoring contract.** Extend schema 1 over inherited and
-   intersection slots, constraints, inherited mutable-property obligations, special barriers,
-   non-generic interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts.
-   Then implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
-   resource before freezing the schema or package. Continue the foreign provider/implementor
-   collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
-   structured metadata work; do not substitute IL substring checks.
+1. **Complete the C# interface-authoring contract.** Extend schema 1 over multi-parent and
+   cross-assembly inheritance, intersection slots, constraints, inherited mutable-property
+   obligations, special barriers, non-generic interfaces, friend-accessible internal interfaces,
+   and runtime-bootstrap contracts. Then implement the Roslyn partial-type generator/analyzer and
+   move the payload to a true managed resource before freezing the schema or package. Continue the
+   foreign provider/implementor collision matrix in parallel with that contract. Keep raw
+   metadata-table auditing with the structured metadata work; do not substitute IL substring
+   checks.
 2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
    producer authorization and consumer declaration are implemented. The repository has no
    Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or
