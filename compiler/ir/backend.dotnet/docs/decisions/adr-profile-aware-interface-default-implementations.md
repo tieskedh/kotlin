@@ -44,7 +44,7 @@ the declaring interface:
 I
     abstract F()
 
-I/<DefaultImpls>
+I/__KotlinDefaultImpls
     static F(I self)
         // exact Kotlin body declared by I
 ```
@@ -57,7 +57,7 @@ an additional public class member:
 C : I
     private final virtual <bridge-for-I.F>()
         .override I.F
-        call I/<DefaultImpls>.F(this)
+        call I/__KotlinDefaultImpls.F(this)
 ```
 
 The helper and cross-assembly forwarder are compiler ABI. They are marked with
@@ -87,7 +87,7 @@ logical override result is not represented by the natural CLR mapping.
 The `net10.0` variant retains the same helper signature as the portable variants:
 
 ```text
-I/<DefaultImpls>
+I/__KotlinDefaultImpls
     static F(I self)
         // exact nonvirtual invocation of the DIM declared by I
 ```
@@ -161,7 +161,7 @@ derived-interface implementations, and foreign implementations.
 A qualified call `super<I>.f()` lowers to the helper associated with exactly `I`:
 
 ```text
-call I/<DefaultImpls>.F(this)
+call I/__KotlinDefaultImpls.F(this)
 ```
 
 On portable profiles that helper executes the moved Kotlin body. On `net10.0` it invokes `I`'s
@@ -313,14 +313,18 @@ record must additionally describe:
 - every generated class `MethodImpl` mapping needed to preserve Kotlin resolution, keyed by its
   logical owner and inherited logical member.
 
-Consumers use this structured metadata. They must not derive `<DefaultImpls>` or `$default`
+Consumers use this structured metadata. They must not derive `__KotlinDefaultImpls` or `$default`
 names, assume that a non-abstract metadata declaration contains a DIM, or inspect rendered IL text.
 A library or stdlib cannot be published successfully if a metadata-visible default lacks its
 required physical body record or if a callable with default parameters lacks its required
 dispatcher record.
-Generated `<DefaultImpls>` classes and helper methods are physical compiler ABI only. They do not
+Generated `__KotlinDefaultImpls` classes and helper methods are physical compiler ABI only. They do not
 receive independent logical declaration keys, because there are no corresponding KLIB
 declarations; their identities are reachable through the records of the real source members.
+The helper type name is deliberately a valid C# identifier. Portable C# source-authoring tools
+must be able to forward an inherited default to that single Kotlin body; copying the body into
+generated C# is forbidden. The name remains producer-recorded ABI and must not be reconstructed
+from the interface name.
 
 
 The implementation body belongs in target lowering and generated compiler ABI. The runtime owns
