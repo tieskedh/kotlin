@@ -230,12 +230,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val sourceText = """
             package manifest
 
-            public interface Shape<out T> {
+            public interface ShapeParent<out T> {
                 public val value: T
                 public var label: String
+                public fun fallback(): T = value
+            }
+
+            public interface Shape<out T> : ShapeParent<T> {
                 public fun <R> map(input: R): T
                 public fun accepts(input: @UnsafeVariance T): Boolean
-                public fun fallback(): T = value
             }
 
             public fun verify(value: Shape<String>): Int {
@@ -295,10 +298,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val contract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.Shape"
             }
+            val parentContract = manifest.interfaces.single { interfaceContract ->
+                interfaceContract.canonicalOwnerPath.last() == "manifest.ShapeParent"
+            }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
+            assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
+            assertEquals(2, manifest.interfaces.size)
             assertEquals(listOf("T"), contract.typeParameters.map { it.name })
             assertEquals(listOf("manifest.Shape`1"), contract.declaredOwnerPath)
             assertEquals(listOf("manifest.Shape__KotlinExact`1"), contract.exactOwnerPath)
+            assertEquals(listOf("manifest.ShapeParent`1"), parentContract.declaredOwnerPath)
+            assertEquals(null, parentContract.exactOwnerPath)
 
             val stdlibAssembly = profileDirectory.resolve("Kotlin.Stdlib.dll")
             if (stdlibAssembly.isFile) {
@@ -313,18 +323,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 })
             }
 
-            val value = contract.members.single { member ->
+            val value = parentContract.members.single { member ->
                 member.sourceName == "value" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
             }
-            val labelGetter = contract.members.single { member ->
+            val labelGetter = parentContract.members.single { member ->
                 member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_GETTER
             }
-            val labelSetter = contract.members.single { member ->
+            val labelSetter = parentContract.members.single { member ->
                 member.sourceName == "label" && member.kind == DotNetCSharpMemberKind.PROPERTY_SETTER
             }
             val map = contract.members.single { member -> member.sourceName == "map" }
             val accepts = contract.members.single { member -> member.sourceName == "accepts" }
-            val fallback = contract.members.single { member -> member.sourceName == "fallback" }
+            val fallback = parentContract.members.single { member -> member.sourceName == "fallback" }
             assertEquals(DotNetCSharpInterfaceView.DECLARED, value.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, labelGetter.authoringView)
             assertEquals(DotNetCSharpInterfaceView.DECLARED, labelSetter.authoringView)
@@ -350,7 +360,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
 
             val generatedSource = profileDirectory.resolve("generated.cs").apply {
-                writeText(generateShapeImplementation(contract))
+                writeText(generateShapeImplementation(contract, parentContract))
             }
             val generatedAssembly = profileDirectory.resolve("GeneratedShape.dll")
             val generatedCompile = runModernCSharpCompiler(
@@ -376,15 +386,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         for (portableProfile in listOf("net48", "netstandard2.0")) {
             val portable = manifests.getValue(portableProfile)
             assertEquals(
-                portable.interfaces.single().members.map { it.logicalKey },
-                modern.interfaces.single().members.map { it.logicalKey },
+                portable.interfaces.map { contract ->
+                    contract.logicalKey to contract.members.map { it.logicalKey }
+                },
+                modern.interfaces.map { contract ->
+                    contract.logicalKey to contract.members.map { it.logicalKey }
+                },
             )
             assertEquals(
-                portable.interfaces.single().members.mapNotNull { member ->
-                    member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
+                portable.interfaces.flatMap { contract ->
+                    contract.members.mapNotNull { member ->
+                        member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
+                    }
                 },
-                modern.interfaces.single().members.mapNotNull { member ->
-                    member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
+                modern.interfaces.flatMap { contract ->
+                    contract.members.mapNotNull { member ->
+                        member.slots.singleOrNull { it.role == DotNetCSharpSlotRole.HELPER }
+                    }
                 },
             )
         }
@@ -8678,9 +8696,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         return DotNetCSharpImplementationManifestCodec.decodeAssemblyMetadata(metadata)
     }
 
-    private fun generateShapeImplementation(contract: DotNetCSharpInterfaceContract): String {
-        fun member(name: String, kind: DotNetCSharpMemberKind? = null): DotNetCSharpMemberContract =
-            contract.members.single { candidate ->
+    private fun generateShapeImplementation(
+        contract: DotNetCSharpInterfaceContract,
+        parentContract: DotNetCSharpInterfaceContract,
+    ): String {
+        fun DotNetCSharpInterfaceContract.member(
+            name: String,
+            kind: DotNetCSharpMemberKind? = null,
+        ): DotNetCSharpMemberContract =
+            members.single { candidate ->
                 candidate.sourceName == name && (kind == null || candidate.kind == kind)
             }
 
@@ -8688,13 +8712,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             path.joinToString(".") { component -> component.substringBefore('`') }
 
         val canonicalType = contract.csharpOwner(contract.canonicalOwnerPath)
+        val parentCanonicalType = parentContract.csharpOwner(parentContract.canonicalOwnerPath)
         val exactType = contract.csharpOwner(checkNotNull(contract.exactOwnerPath))
-        val value = member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
-        val labelGetter = member("label", DotNetCSharpMemberKind.PROPERTY_GETTER)
-        val labelSetter = member("label", DotNetCSharpMemberKind.PROPERTY_SETTER)
-        val map = member("map")
-        val accepts = member("accepts")
-        val fallback = member("fallback")
+        val value = parentContract.member("value", DotNetCSharpMemberKind.PROPERTY_GETTER)
+        val labelGetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_GETTER)
+        val labelSetter = parentContract.member("label", DotNetCSharpMemberKind.PROPERTY_SETTER)
+        val map = contract.member("map")
+        val accepts = contract.member("accepts")
+        val fallback = parentContract.member("fallback")
         val canonicalValue = value.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelGetter = labelGetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
         val canonicalLabelSetter = labelSetter.slots.single { it.role == DotNetCSharpSlotRole.ERASED }
@@ -8742,12 +8767,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             {
                 $generatedTypedDefault
 
-                object $canonicalType.${checkNotNull(canonicalValue.propertyName)}
+                object $parentCanonicalType.${checkNotNull(canonicalValue.propertyName)}
                 {
                     get { return value; }
                 }
 
-                string $canonicalType.${checkNotNull(canonicalLabelGetter.propertyName)}
+                string $parentCanonicalType.${checkNotNull(canonicalLabelGetter.propertyName)}
                 {
                     get { return label; }
                     set { label = value; }
