@@ -1645,6 +1645,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   real base lists, and checks every mandated failure. The generator currently emits the additional
   partial declaration as the production integration seam; migrate adapter families from the
   independent handwritten manifest-sufficiency fixture in subsequent feature commits.
+- The production emitter now owns ordinary non-generic interface adapters. It resolves canonical
+  MethodDef and Property locators through Roslyn symbols, binds one Kotlin-named or PascalCase C#
+  source body, and emits explicit interface members without copying state or behavior. Missing
+  abstract bodies are `KDNCS008`. Portable inherited defaults call the producer-recorded helper;
+  native `net10.0` DIMs and complete child-owned promotions are discovered through Roslyn's
+  interface implementation map and receive no class forwarder. The DLL-only four-lane fixture now
+  compiles and executes the real generator for an ordinary public interface and an authorized
+  internal friend interface. The existing handwritten fixture remains the oracle for split
+  generic, intersection, generic-method, and barrier adapters until those families migrate.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
