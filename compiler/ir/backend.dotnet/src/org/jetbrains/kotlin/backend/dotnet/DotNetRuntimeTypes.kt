@@ -128,6 +128,7 @@ internal object DotNetRuntimeTypes {
     private data class RuntimeGenericInterfaceMethodNames(
         val canonical: String,
         val typed: String = canonical,
+        val property: String? = null,
     )
 
     private data class RuntimeGenericInterfaceDescriptor(
@@ -149,7 +150,10 @@ internal object DotNetRuntimeTypes {
         "iterator" to RuntimeGenericInterfaceMethodNames("GetIterator"),
     )
     private val collectionMethods = iterableMethods + mapOf(
-        "get_size" to RuntimeGenericInterfaceMethodNames("get_Size"),
+        "get_size" to RuntimeGenericInterfaceMethodNames(
+            canonical = "get_Size",
+            property = "Size",
+        ),
         "isEmpty" to RuntimeGenericInterfaceMethodNames("IsEmpty"),
         "contains" to RuntimeGenericInterfaceMethodNames(
             canonical = "ContainsErased",
@@ -357,6 +361,13 @@ internal object DotNetRuntimeTypes {
     fun genericInterfaceInfoFor(irClass: IrClass): DotNetGenericInterfaceInfo? =
         genericInterfaceDescriptorFor(irClass)?.info
 
+    /**
+     * Runtime-owned Kotlin interfaces whose complete physical implementation contract is emitted
+     * in Kotlin.Runtime's C# authoring manifest.
+     */
+    fun supportsCSharpSourceAuthoring(irClass: IrClass): Boolean =
+        genericInterfaceDescriptorFor(irClass) != null
+
     /** Stable runtime spellings for one built-in canonical slot and its typed capability. */
     private fun genericInterfaceMethodNamesOrNull(
         function: IrSimpleFunction,
@@ -371,6 +382,9 @@ internal object DotNetRuntimeTypes {
 
     fun genericInterfaceTypedMethodNameOrNull(function: IrSimpleFunction): String? =
         genericInterfaceMethodNamesOrNull(function)?.typed
+
+    fun genericInterfacePropertyNameOrNull(function: IrSimpleFunction): String? =
+        genericInterfaceMethodNamesOrNull(function)?.property
 
     fun genericInterfaceFunctionInfoOrNull(
         function: IrSimpleFunction,

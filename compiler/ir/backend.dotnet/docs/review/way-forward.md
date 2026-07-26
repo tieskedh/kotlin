@@ -320,10 +320,11 @@ surface; that does not freeze identical Framework/modern IL. The remaining gener
 the remaining foreign-implementor and clash matrix, the Roslyn generator/analyzer, and the raw
 metadata-table audit; those keep P0-D open. The accepted C# source-authoring ADR now selects a
 partial-type Roslyn generator/analyzer rather than a generated base class or universal CLR
-mechanism. Its schema-4 DLL manifest is implemented: it records profile, canonical,
-declared, and exact owners where those split views exist, member and property groupings, strongly
-typed authoring views,
-MethodDef locators, helper/DIM obligations, and logical contributor mappings for derived
+mechanism. Its schema-5 DLL manifest is implemented: it records the canonical
+`PublicIdSignatureComputer(DotNetIrMangler)` identity scheme and rejects parallel runtime/tooling
+declaration keys. It also records profile, canonical, declared, and exact owners where those split
+views exist, member and property groupings, strongly typed authoring views, MethodDef locators,
+helper/DIM obligations, and logical contributor mappings for derived
 intersection slots without requiring the sibling KLIB. A no-KLIB
 integration test reads the actual assembly metadata, generates a partial C# implementation for a
 property, generic method, exact-only unsafe input, and default, then executes Kotlin verification
@@ -405,20 +406,19 @@ The remaining P0-D implementation order is:
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
    families and the real same-owner clash matrix. Extend the DLL manifest over inherited
-   mutable-property obligations, friend-accessible internal interfaces, and runtime-bootstrap
-   contracts; then implement the
+   mutable-property obligations and friend-accessible internal interfaces; then implement the
    Roslyn partial-type generator/analyzer. Multi-parent generic diamonds compose from parent
-   manifest contracts plus the CLR graph; schema 4 records the logical contributor mapping that
+   manifest contracts plus the CLR graph; schema 5 records the logical contributor mapping that
    CLR metadata lacks for derived method and split mutable-property intersection slots.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
    no-KLIB C# `where` clauses; owner-relative constraints erased from illegal variant positions
    need analyzer guidance, not reconstructed CLR signatures.
    Special barriers are now explicit schema policy selected from shared Kotlin declaration
    identities: the manifest records checked argument count and fallback, while ordinary unsafe
-   members retain cast failure. Runtime-derived contracts remain fail-closed until
-   `Kotlin.Runtime.dll` owns their complete parent manifests.
-   Cross-profile
-   portable-helper promotion needs no manifest record: the parent locators plus the child DLL's
+   members retain cast failure. `Kotlin.Runtime.dll` now owns built-in-derived contracts for the
+   five collection execution interfaces, and C# implementations execute `contains`/`indexOf`
+   through exact and widened Kotlin views with the recorded barriers. Cross-profile portable-helper
+   promotion needs no manifest record: the parent locators plus the child DLL's
    concrete `MethodImpl` bundle are sufficient and are now metadata-only execution tested. Do not
    add a blanket ban for source names that merely resemble canonical names; physical-owner
    separation and explicit `MethodImpl` already preserve their semantics. Do not make a generated
