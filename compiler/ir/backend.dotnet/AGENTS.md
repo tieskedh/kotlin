@@ -1601,7 +1601,10 @@ landed shape as a compatibility constraint.
   `net10.0` child consuming a portable parent discovers a selected promoted DIM from the child's
   concrete CLR MethodImpl bundle, resolved against the parent manifest's MethodDef locators.
   Promotion is never inferred from profile and is not copied into a second manifest record.
-  Multiple parents and non-generic parents remain explicitly unsupported instead of being guessed.
+  Multiple generic parents compose through that same manifest/CLR graph split, including a
+  shared-root diamond whose logical root is deduplicated. A physical derived intersection slot
+  still marks the complete child contract unsupported until the manifest can associate that slot
+  with all contributing logical members. Non-generic parents remain explicitly unsupported.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
