@@ -1594,8 +1594,9 @@ landed shape as a compatibility constraint.
   sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
   for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 1
   records direct public generic interfaces, canonical/declared/exact owner paths, typed authoring
-  views, property and generic-method associations, exact-only inputs, and portable-helper versus
-  `net10.0` DIM obligations. It marks inherited contracts unsupported instead of guessing.
+  views, read-only/mutable property and generic-method associations, exact-only inputs, and
+  portable-helper versus `net10.0` DIM obligations. It marks inherited contracts unsupported
+  instead of guessing.
   Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
   first authoring slice. Generated adapters must reach the one typed body; portable defaults call
   the recorded nameable
