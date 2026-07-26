@@ -4,7 +4,10 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using Kotlin.DotNet.CSharpAuthoring.Manifest;
 using Microsoft.CodeAnalysis;
@@ -70,30 +73,27 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
         }
 
         string indent = type.ContainingNamespace.IsGlobalNamespace ? "" : "    ";
-        source.Append(indent);
-        source.Append("partial ");
-        source.Append(type.IsRecord ? "record class " : "class ");
-        source.Append(EscapeIdentifier(type.Name));
-        if (type.TypeParameters.Length != 0)
+        var typeChain = new Stack<INamedTypeSymbol>();
+        INamedTypeSymbol? current = type;
+        while (current != null)
         {
-            source.Append('<');
-            source.Append(string.Join(
-                ", ",
-                type.TypeParameters.Select(parameter => EscapeIdentifier(parameter.Name))));
-            source.Append('>');
+            typeChain.Push(current);
+            current = current.ContainingType;
         }
-        if (!additionalInterfaces.IsEmpty)
+        foreach (INamedTypeSymbol declarationType in typeChain)
         {
-            source.Append(" : ");
-            source.Append(string.Join(
-                ", ",
-                additionalInterfaces.Select(interfaceType =>
-                    interfaceType.ToDisplayString(
-                        SymbolDisplayFormat.FullyQualifiedFormat))));
+            source.Append(indent);
+            AppendTypeDeclaration(
+                source,
+                declarationType,
+                SymbolEqualityComparer.Default.Equals(declarationType, type)
+                    ? additionalInterfaces
+                    : default);
+            source.AppendLine();
+            source.Append(indent);
+            source.AppendLine("{");
+            indent += "    ";
         }
-        source.AppendLine();
-        source.Append(indent);
-        source.AppendLine("{");
         if (generatedMembers.Length != 0)
         {
             foreach (string line in generatedMembers.Split('\n'))
@@ -103,18 +103,102 @@ public sealed class KotlinInterfaceImplementationGenerator : IIncrementalGenerat
                 source.AppendLine(line.TrimEnd('\r'));
             }
         }
-        source.Append(indent);
-        source.AppendLine("}");
+        for (int index = 0; index < typeChain.Count; index++)
+        {
+            indent = indent.Substring(0, indent.Length - 4);
+            source.Append(indent);
+            source.AppendLine("}");
+        }
         if (!type.ContainingNamespace.IsGlobalNamespace)
             source.AppendLine("}");
         return source.ToString();
     }
 
+    private static void AppendTypeDeclaration(
+        StringBuilder source,
+        INamedTypeSymbol type,
+        System.Collections.Immutable.ImmutableArray<INamedTypeSymbol> additionalInterfaces)
+    {
+        if (type.IsStatic)
+            source.Append("static ");
+        if (type.TypeKind == TypeKind.Struct)
+        {
+            if (type.IsReadOnly)
+                source.Append("readonly ");
+            if (type.IsRefLikeType)
+                source.Append("ref ");
+        }
+        source.Append("partial ");
+        if (type.IsRecord)
+        {
+            source.Append(type.TypeKind == TypeKind.Struct
+                ? "record struct "
+                : "record class ");
+        }
+        else
+        {
+            switch (type.TypeKind)
+            {
+                case TypeKind.Class:
+                    source.Append("class ");
+                    break;
+                case TypeKind.Struct:
+                    source.Append("struct ");
+                    break;
+                case TypeKind.Interface:
+                    source.Append("interface ");
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        "Unsupported partial containing type " +
+                        type.ToDisplayString());
+            }
+        }
+        source.Append(EscapeIdentifier(type.Name));
+        if (type.TypeParameters.Length != 0)
+        {
+            source.Append('<');
+            source.Append(string.Join(
+                ", ",
+                type.TypeParameters.Select(parameter =>
+                    TypeParameterDeclaration(type, parameter))));
+            source.Append('>');
+        }
+        if (!additionalInterfaces.IsDefaultOrEmpty)
+        {
+            source.Append(" : ");
+            source.Append(string.Join(
+                ", ",
+                additionalInterfaces.Select(interfaceType =>
+                    interfaceType.ToDisplayString(
+                        SymbolDisplayFormat.FullyQualifiedFormat))));
+        }
+    }
+
+    private static string TypeParameterDeclaration(
+        INamedTypeSymbol owner,
+        ITypeParameterSymbol parameter)
+    {
+        string variance = owner.TypeKind == TypeKind.Interface
+            ? parameter.Variance == VarianceKind.In
+                ? "in "
+                : parameter.Variance == VarianceKind.Out
+                    ? "out "
+                    : ""
+            : "";
+        return variance + EscapeIdentifier(parameter.Name);
+    }
+
     private static string HintName(INamedTypeSymbol type)
     {
-        var result = new StringBuilder();
-        foreach (char character in type.ToDisplayString())
-            result.Append(char.IsLetterOrDigit(character) ? character : '_');
+        byte[] identity = Encoding.UTF8.GetBytes(
+            type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat));
+        byte[] digest;
+        using (SHA256 algorithm = SHA256.Create())
+            digest = algorithm.ComputeHash(identity);
+        var result = new StringBuilder(digest.Length * 2);
+        foreach (byte value in digest)
+            result.Append(value.ToString("x2", CultureInfo.InvariantCulture));
         return result.ToString();
     }
 
