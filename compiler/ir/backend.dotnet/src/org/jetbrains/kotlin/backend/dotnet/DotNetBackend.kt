@@ -162,6 +162,7 @@ object DotNetBackend {
                 covariantReturnBridges = context.covariantReturnBridges,
                 companionInitializations = context.companionInitializations,
                 objectInstanceFields = context.objectInstanceFields,
+                cSharpImplementationManifestTarget = target,
             ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
             null
@@ -219,6 +220,7 @@ object DotNetBackend {
             genericInterfaceViewBridges = context.genericInterfaceViewBridges,
             covariantReturnBridges = context.covariantReturnBridges,
             interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
+            cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
         )
         val emission = emitter.emit(irModuleFragment)
         if (emission == null) {

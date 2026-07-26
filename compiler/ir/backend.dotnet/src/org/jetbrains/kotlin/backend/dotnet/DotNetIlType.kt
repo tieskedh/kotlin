@@ -489,6 +489,25 @@ internal class DotNetIlFunctionInfo(
 }
 
 /**
+ * The emitted Property-row name paired with a source property and its selected physical accessor.
+ *
+ * Canonical generic-interface accessors are disambiguated, so their Property row must carry the
+ * same suffix. Keep emission and DLL implementation-manifest recording on this single function;
+ * consumers use the recorded result and never reconstruct it.
+ */
+internal fun dotNetPhysicalPropertyName(
+    sourcePropertyName: String,
+    physicalAccessorName: String?,
+): String {
+    val canonicalSlotSuffix = physicalAccessorName
+        ?.takeIf { "__KotlinErased__" in it }
+        ?.substringAfter("__KotlinErased__")
+    return canonicalSlotSuffix?.let { suffix ->
+        "${sourcePropertyName}__KotlinErased__$suffix"
+    } ?: sourcePropertyName
+}
+
+/**
  * A user class currently considered compilable to .NET IL — top-level (including a popped-up
  * module-private local class), or, with [enclosingClass] set, a recursively nested named/local
  * class, named object, or companion object. The counterpart of

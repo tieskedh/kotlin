@@ -110,6 +110,7 @@ internal class DotNetIlEmitter(
             List<DotNetLoweredCovariantReturnBridge> = emptyList(),
     private val interfaceDefaultClassForwarders:
             List<DotNetLoweredInterfaceDefaultClassForwarder> = emptyList(),
+    private val cSharpImplementationManifestTarget: DotNetTarget? = null,
 ) {
     private val covariantReturnImplementations: Set<IrSimpleFunction> =
         covariantReturnBridges.asSequence()
@@ -1728,6 +1729,38 @@ internal class DotNetIlEmitter(
                 ).generate(this)
             }
         }
+        val emittedFiles = files.toSet()
+        val declarations = collectDotNetLibraryDeclarations(
+            emittedFiles,
+            availableClasses,
+            availableFunctions,
+            genericInterfaces,
+            preLoweringDeclarationKeys,
+            interfaceDefaultImplementations,
+            defaultArgumentDispatchers,
+            interfaceDefaultPromotions,
+            genericInterfaceViewBridges,
+            genericInterfaceIntersectionSlots,
+            covariantReturnBridges,
+            interfaceDefaultClassForwarders,
+            companionInitializations,
+            objectInstanceFields,
+        )
+        val cSharpImplementationMetadata = cSharpImplementationManifestTarget?.let { target ->
+            DotNetCSharpImplementationManifestCodec.encodeAssemblyMetadata(
+                collectDotNetCSharpImplementationManifest(
+                    assemblyName = assemblyName,
+                    target = target,
+                    files = emittedFiles,
+                    genericInterfaces = genericInterfaces,
+                    availableFunctions = availableFunctions,
+                    typeMapper = typeMapper,
+                    preLoweringDeclarationKeys = preLoweringDeclarationKeys,
+                    interfaceDefaultImplementations = interfaceDefaultImplementations,
+                    genericInterfaceDefaults = genericInterfaceDefaults,
+                )
+            )
+        }.orEmpty()
         val ilText = buildString {
             appendHeader(
                 referencesRuntimeAssembly = DotNetRuntimeLibrary.ASSEMBLY_NAME in referencedAssemblies,
@@ -1741,6 +1774,7 @@ internal class DotNetIlEmitter(
                             }
                 },
                 friendAssemblies = friendAssemblies,
+                cSharpImplementationMetadata = cSharpImplementationMetadata,
             )
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
@@ -1749,22 +1783,7 @@ internal class DotNetIlEmitter(
         }
         return DotNetIlEmissionResult(
             ilText,
-            collectDotNetLibraryDeclarations(
-                files.toSet(),
-                availableClasses,
-                availableFunctions,
-                genericInterfaces,
-                preLoweringDeclarationKeys,
-                interfaceDefaultImplementations,
-                defaultArgumentDispatchers,
-                interfaceDefaultPromotions,
-                genericInterfaceViewBridges,
-                genericInterfaceIntersectionSlots,
-                covariantReturnBridges,
-                interfaceDefaultClassForwarders,
-                companionInitializations,
-                objectInstanceFields,
-            ),
+            declarations,
             referencedAssemblies.toSet(),
         )
     }
@@ -3137,14 +3156,8 @@ internal class DotNetIlEmitter(
     ): String {
         val getterInfo = getter?.let(availableFunctions::getValue)
         val setterInfo = setter?.let(availableFunctions::getValue)
-        val sourcePropertyName = property.name.asString()
         val canonicalAccessorName = getterInfo?.physicalMethodName ?: setterInfo?.physicalMethodName
-        val canonicalSlotSuffix = canonicalAccessorName
-            ?.takeIf { "__KotlinErased__" in it }
-            ?.substringAfter("__KotlinErased__")
-        val propertyName = canonicalSlotSuffix?.let { suffix ->
-            "${sourcePropertyName}__KotlinErased__$suffix"
-        } ?: sourcePropertyName
+        val propertyName = dotNetPhysicalPropertyName(property.name.asString(), canonicalAccessorName)
         val propertyType = when {
             getterInfo != null -> (getterInfo.signature.returnType as? DotNetIlReturnType.Value)?.type
                 ?: dotNetUnsupported("getter of property '$propertyName' returns void")
@@ -3924,6 +3937,7 @@ internal class DotNetIlEmitter(
         referencesEditorBrowsableAssembly: Boolean,
         referencedExternalLibraries: List<DotNetExternalLibrary>,
         friendAssemblies: List<DotNetFriendAssemblyIdentity>,
+        cSharpImplementationMetadata: List<Pair<String, String>>,
     ) {
         coreLibrary.appendAssemblyReferenceTo(this)
         if (referencesEditorBrowsableAssembly) {
@@ -3951,13 +3965,20 @@ internal class DotNetIlEmitter(
             emissionScope == DotNetIlEmissionScope.STDLIB -> DotNetStdlibLibrary.ASSEMBLY_VERSION_IL
             else -> assemblyVersionIl
         }
-        if (emittedAssemblyVersion != null || friendAssemblies.isNotEmpty()) {
+        if (
+            emittedAssemblyVersion != null ||
+            friendAssemblies.isNotEmpty() ||
+            cSharpImplementationMetadata.isNotEmpty()
+        ) {
             appendLine(".assembly ${assemblyName.toIlIdentifier()}")
             appendLine("{")
             emittedAssemblyVersion?.let { appendLine("  .ver $it") }
             coreLibrary.appendTargetFrameworkAttributeTo(this)
             friendAssemblies.sortedBy { it.displayName.lowercase() }.forEach { identity ->
                 coreLibrary.appendInternalsVisibleToAttributeTo(this, identity)
+            }
+            cSharpImplementationMetadata.forEach { entry ->
+                coreLibrary.appendAssemblyMetadataAttributeTo(this, entry.first, entry.second)
             }
             appendLine("}")
         } else {

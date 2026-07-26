@@ -1588,6 +1588,22 @@ landed shape as a compatibility constraint.
   invariant exact-DIM constraint rejects valid widened Kotlin calls. Exact arguments/results remain
   typed, all other representable constraints remain physical, and any future constrained C# facade
   is an export adapter rather than a Kotlin dispatch slot.
+  C# SOURCE AUTHORING follows
+  `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
+  DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
+  sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
+  for a user-authored partial C# type, not a universal CLR implementation mechanism. Schema 1
+  records direct public generic interfaces, canonical/declared/exact owner paths, typed authoring
+  views, property and generic-method associations, exact-only inputs, and portable-helper versus
+  `net10.0` DIM obligations. It marks inherited contracts unsupported instead of guessing.
+  Runtime-bootstrap, non-generic, and friend-accessible internal interfaces remain outside the
+  first authoring slice. Generated adapters must reach the one typed body; portable defaults call
+  the recorded nameable
+  `__KotlinDefaultImpls`, while modern implementations inherit the recorded DIM. The current
+  hashed `AssemblyMetadataAttribute` chunk carrier is temporary because ILAsm cannot embed an
+  arbitrary self-contained managed resource. Move the carrier-independent payload to a real
+  managed resource before schema/package freeze; never add a sidecar or make production tooling
+  load target code.
   STAYS REJECTED, loudly, whole-interface/whole-class: private callable interface members,
   companions on generic interfaces, `fun interface` (no SAM-conversion model),
   interfaces imported from arbitrary CLR metadata without a bound Kotlin KLIB/physical-ABI index,

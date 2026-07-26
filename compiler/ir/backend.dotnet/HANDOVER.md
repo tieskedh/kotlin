@@ -1529,6 +1529,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
   portable `readAsAny` function invokes that object unchanged on Framework CLR 4 and CoreCLR 10,
   proving capability absence is a supported fallback rather than a load-time requirement. No ABI
   rule changed; the strict baseline becomes 845/0/0/0 across 16 XML suites.
+- The accepted C# source-authoring direction now has its first DLL-owned manifest slice. Every
+  compiler-produced Kotlin library embeds a versioned, profile-aware contract in hashed
+  `AssemblyMetadataAttribute` chunks. The records identify direct public generic interfaces,
+  canonical/declared/exact owners, typed authoring views, property and generic-method groupings,
+  exact-only inputs, and portable-helper versus modern DIM obligations. A Roslyn-compiled test
+  deletes the sibling KLIB, reads only the actual DLL, generates a two-part partial C#
+  implementation, and executes Kotlin-authored typed, widened, unsafe-cast, and default behavior
+  against `net48`, `netstandard2.0`, and `net10.0` producers. Missing, corrupt, and duplicate
+  chunks fail explicitly. The carrier is deliberately temporary: both supported ILAsm
+  implementations can only link an external `.mresource`, so a future PE stage must move the same
+  payload into a true managed resource before schema/package freeze. Inherited contracts are
+  marked unsupported; intersections, constraints, mutable properties, special barriers,
+  non-generic interfaces, friend-accessible internal interfaces, and runtime-bootstrap interfaces
+  are the next schema coverage, followed by the actual Roslyn generator/analyzer. The general
+  portable CLR-surface comparer excludes only this profile-specific carrier; the manifest test
+  decodes and compares its logical/helper identities separately. The strict baseline becomes
+  847/0/0/0 across 16 XML suites.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1579,7 +1596,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 845 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 847 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -1603,9 +1620,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Complete the foreign generic-interface boundary.** Expand the C# provider/implementor and
-   physical collision matrix, then add generated implementor tooling. Keep raw metadata-table
-   auditing with the structured metadata work; do not substitute IL substring checks.
+1. **Complete the C# interface-authoring contract.** Extend schema 1 over inherited and
+   intersection slots, constraints, mutable properties, special barriers, non-generic interfaces,
+   friend-accessible internal interfaces, and runtime-bootstrap contracts. Then implement the
+   Roslyn partial-type generator/analyzer and move the payload to a true managed resource before
+   freezing the schema or package. Continue the foreign provider/implementor collision matrix in
+   parallel with that contract. Keep raw metadata-table auditing with the structured metadata
+   work; do not substitute IL substring checks.
 2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
    producer authorization and consumer declaration are implemented. The repository has no
    Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or

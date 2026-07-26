@@ -317,9 +317,20 @@ overridden, and helper-backed paths and assert that the Kotlin body occurs once.
 generic capability fallbacks bind recorded physical method names rather than inventing Kotlin hash
 names. The `net10.0` profile temporarily retains `mscorlib` MemberRefs for the current common
 surface; that does not freeze identical Framework/modern IL. The remaining generic/BCL work is
-the remaining foreign-implementor and clash matrix, generated implementor tooling, and the raw
-metadata-table audit; those keep P0-D open. The first foreign barrier slice is now
-replayable: ordinary Framework and modern C# classes consume one portable Kotlin library,
+the remaining foreign-implementor and clash matrix, the Roslyn generator/analyzer, and the raw
+metadata-table audit; those keep P0-D open. The accepted C# source-authoring ADR now selects a
+partial-type Roslyn generator/analyzer rather than a generated base class or universal CLR
+mechanism. Its first schema-1 DLL manifest is implemented: it records profile, canonical,
+declared, and exact owners, member and property groupings, strongly typed authoring views,
+MethodDef locators, and helper/DIM obligations without requiring the sibling KLIB. A no-KLIB
+integration test reads the actual assembly metadata, generates a partial C# implementation for a
+property, generic method, exact-only unsafe input, and default, then executes Kotlin verification
+for `net48`, `netstandard2.0`, and `net10.0`. The current hashed
+`AssemblyMetadataAttribute` chunk carrier is explicitly temporary because both selected ILAsm
+implementations can only link external `.mresource` files. Before ABI freeze, a capable PE stage
+must move the carrier-independent payload to a real managed resource and add production parser
+limits. The first foreign barrier slice is now replayable: ordinary Framework and modern C#
+classes consume one portable Kotlin library,
 implement the canonical plus exact views on one object, preserve Collection's wrong-shape false
 barrier, and retain ordinary CLR cast failure for a user `@UnsafeVariance` member. The same lane
 now covers a source-named typed property, a generic method, an exact-only input, and explicit
@@ -388,11 +399,13 @@ The remaining P0-D implementation order is:
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish foreign nested/signature shapes plus more general substituted inherited overload
-   families and the real same-owner clash matrix. Do not add a blanket ban for source names that
-   merely resemble canonical names;
-   physical-owner separation and explicit `MethodImpl` already preserve their semantics. Then
-   design generated implementor tooling; do not make a generated base class the only path because
-   C# has single class inheritance. Close the
+   families and the real same-owner clash matrix. Extend the DLL manifest over inheritance,
+   intersection slots, constraints, mutable properties, special barriers, non-generic
+   interfaces, friend-accessible internal interfaces, and runtime-bootstrap contracts; then
+   implement the Roslyn partial-type generator/analyzer. Do not add a blanket ban for source names
+   that merely resemble canonical names; physical-owner separation and explicit `MethodImpl`
+   already preserve their semantics. Do not make a generated base class the only path because C#
+   has single class inheritance. Close the
    remaining raw `MethodImpl`, attribute-blob, resource, and friend-internal metadata audit in the
    structured metadata work rather than with IL substring tests.
 
