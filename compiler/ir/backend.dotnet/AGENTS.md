@@ -1627,7 +1627,14 @@ landed shape as a compatibility constraint.
   C# source body even when its parent exposes a portable helper or modern DIM; all inherited and
   redeclared CLR slots adapt to that body, and omission is `KDNCS008`. This includes covariant
   generic reabstraction: the declared typed slot is authored and canonical/inherited views adapt
-  without copying a body. The DLL-only matrix executes public and authorized-internal
+  without copying a body. Schema 7 also carries each member's sorted Kotlin logical override keys.
+  For a Kotlin-resolved default conflict, parent slots follow the most-derived selected member:
+  portable adapters call the selected child helper from its declaring assembly and modern
+  adapters inherit the selected DIM. Never generate independent parent-helper semantics. Roslyn
+  validates each edge against physical interface ancestry and the resolved override-compatible
+  signature; a stale or unrelated edge is `KDNCS006`. Unrelated C#-authored roots without a Kotlin
+  resolver require one C# source body instead of an invented parent preference. The DLL-only
+  matrix executes public and authorized-internal
   implementations through Kotlin on every profile. Split generic authoring names only the
   declared interface;
   generated partials add the exact view with the identical closed or open substitution and adapt
@@ -1645,7 +1652,7 @@ landed shape as a compatibility constraint.
   grouped by resolved CLR Property row before emission, preserving a single exact mutable
   property. Method, mutable-property, and erased owner-relative generic intersections execute
   through derived and both parent views on every DLL-only lane; intersection-relative `R : T`
-  remains `KDNCS009` guidance only. Schema 6
+  remains `KDNCS009` guidance only. Schema 7
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
   the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
@@ -1661,7 +1668,7 @@ landed shape as a compatibility constraint.
   and every parameter type; owner/name/count matching is forbidden. Promotion is never inferred
   from profile and is not copied into a second manifest record.
   Multiple generic parents compose through that same manifest/CLR graph split, including a
-  shared-root diamond whose logical root is deduplicated. Schema 6 associates a physical derived
+  shared-root diamond whose logical root is deduplicated. Schema 7 associates a physical derived
   declared/exact intersection slot with its sorted contributing logical members because CLR
   metadata cannot express that Kotlin selection. C# adapters converge those slots and the parent
   canonical identities on one source body. Split mutable intersections record the declared getter
@@ -1679,13 +1686,13 @@ landed shape as a compatibility constraint.
   manifest does not duplicate them. The no-KLIB fixture resolves a public marker constraint and
   generates matching C# `where` clauses for typed and canonical slots. Owner-relative constraints
   erased because CLR variant metadata cannot carry them stay erased and are never guessed by C#
-  tooling. Schema 6 records only normalized method-parameter/owner-parameter index pairs as
+  tooling. Schema 7 records only normalized method-parameter/owner-parameter index pairs as
   analyzer guidance on direct and derived-intersection slots. Those pairs explain the weakened
   foreign boundary and can drive a runtime adapter; they must never become reconstructed CLR or
   C# constraints. The DLL-only matrix proves the corresponding GenericParamConstraint rows remain
   absent on every profile and rejects invalid positional records.
   Declaration-specific wrong-shape behavior comes from common `SpecialBridgeMethods`, never from
-  a name or `@UnsafeVariance` heuristic. Schema 6 records the checked parameter count and
+  a name or `@UnsafeVariance` heuristic. Schema 7 records the checked parameter count and
   `false`, `null`, `-1`, or argument fallback. No record means ordinary cast/unbox failure. The
   no-KLIB fixture pins `Collection.contains`, `List.indexOf`, and an ordinary unsafe member.
   `Kotlin.Runtime.dll` publishes built-in-derived manifests for `Iterator`, `ListIterator`,

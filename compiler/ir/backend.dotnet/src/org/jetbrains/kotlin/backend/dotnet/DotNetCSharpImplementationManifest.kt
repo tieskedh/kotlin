@@ -99,6 +99,7 @@ data class DotNetCSharpMemberContract(
     val semanticBodyView: DotNetCSharpInterfaceView?,
     val wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
     val erasedOwnerRelativeConstraints: List<DotNetCSharpErasedOwnerRelativeConstraint> = emptyList(),
+    val overriddenLogicalMemberKeys: List<String> = emptyList(),
     val slots: List<DotNetCSharpMethodLocator>,
 )
 
@@ -161,7 +162,7 @@ data class DotNetCSharpMethodLocator(
  * backend owns a capable PE writer; changing carriers must not change these records.
  */
 object DotNetCSharpImplementationManifestCodec {
-    const val CURRENT_SCHEMA_VERSION = 6
+    const val CURRENT_SCHEMA_VERSION = 7
     const val ASSEMBLY_METADATA_KEY = "Kotlin.CSharpImplementationManifest"
 
     private const val HEADER_RECORD = "H"
@@ -206,6 +207,16 @@ object DotNetCSharpImplementationManifestCodec {
             )
             for (member in contract.members.sortedBy(DotNetCSharpMemberContract::logicalKey)) {
                 requireKotlinLogicalKey("F", member.logicalKey, "member")
+                require(
+                    member.overriddenLogicalMemberKeys ==
+                            member.overriddenLogicalMemberKeys.distinct().sorted() &&
+                            member.logicalKey !in member.overriddenLogicalMemberKeys
+                ) {
+                    "C# implementation member '${member.logicalKey}' has invalid overridden members"
+                }
+                member.overriddenLogicalMemberKeys.forEach { overridden ->
+                    requireKotlinLogicalKey("F", overridden, "overridden member")
+                }
                 validateErasedOwnerRelativeConstraints(
                     contract,
                     member.authoringView,
@@ -226,6 +237,7 @@ object DotNetCSharpImplementationManifestCodec {
                     member.wrongShapePolicy?.fallback?.name,
                     member.wrongShapePolicy?.fallbackParameterIndex?.toString(),
                     member.erasedOwnerRelativeConstraints.encodeErasedOwnerRelativeConstraints(),
+                    member.overriddenLogicalMemberKeys.encodeList(),
                 )
                 for (slot in member.slots.sortedBy(DotNetCSharpMethodLocator::role)) {
                     appendRecord(
@@ -293,6 +305,7 @@ object DotNetCSharpImplementationManifestCodec {
             val semanticBodyView: DotNetCSharpInterfaceView?,
             val wrongShapePolicy: DotNetCSharpWrongShapePolicy?,
             val erasedOwnerRelativeConstraints: List<DotNetCSharpErasedOwnerRelativeConstraint>,
+            val overriddenLogicalMemberKeys: List<String>,
         )
         data class PendingIntersection(
             val interfaceKey: String,
@@ -370,7 +383,7 @@ object DotNetCSharpImplementationManifestCodec {
         val pendingMembers = linkedMapOf<String, PendingMember>()
         for (record in records.filter { it.first == MEMBER_RECORD }) {
             val fields = record.second
-            require(fields.size == 11) { "C# implementation member record has invalid arity" }
+            require(fields.size == 12) { "C# implementation member record has invalid arity" }
             val memberKey = requireNotNull(fields[1]) { "C# implementation member has no logical key" }
             requireKotlinLogicalKey("F", memberKey, "member")
             val wrongShapePolicy = fields[7]?.let { checkedParameterCount ->
@@ -398,6 +411,18 @@ object DotNetCSharpImplementationManifestCodec {
                 wrongShapePolicy = wrongShapePolicy,
                 erasedOwnerRelativeConstraints = requireNotNull(fields[10])
                     .decodeErasedOwnerRelativeConstraints(memberKey),
+                overriddenLogicalMemberKeys = requireNotNull(fields[11]).decodeList().also {
+                    overridden ->
+                    require(
+                        overridden == overridden.distinct().sorted() &&
+                                memberKey !in overridden
+                    ) {
+                        "C# implementation member '$memberKey' has invalid overridden members"
+                    }
+                    overridden.forEach { overriddenKey ->
+                        requireKotlinLogicalKey("F", overriddenKey, "overridden member")
+                    }
+                },
             )
             require(pendingMembers.put(memberKey, pending) == null) {
                 "Duplicate C# implementation member '$memberKey'"
@@ -450,6 +475,7 @@ object DotNetCSharpImplementationManifestCodec {
                     semanticBodyView = pending.semanticBodyView,
                     wrongShapePolicy = pending.wrongShapePolicy,
                     erasedOwnerRelativeConstraints = pending.erasedOwnerRelativeConstraints,
+                    overriddenLogicalMemberKeys = pending.overriddenLogicalMemberKeys,
                     slots = slots,
                 )
             )
@@ -1024,6 +1050,16 @@ internal fun collectDotNetCSharpImplementationManifest(
                 )
             }
 
+            fun overriddenLogicalMemberKeys(source: IrSimpleFunction): List<String> =
+                source.overriddenSymbols
+                    .mapNotNull { overridden ->
+                        preLoweringDeclarationKeys[overridden.owner]
+                            ?: overridden.owner.dotNetLibraryAbiKeyOrNull("F")
+                    }
+                    .filter { overriddenKey -> overriddenKey != preLoweringDeclarationKeys[source] }
+                    .distinct()
+                    .sorted()
+
             val members = irClass.declarations.flatMap { declaration ->
                 when (declaration) {
                     is IrSimpleFunction -> listOf(declaration)
@@ -1141,6 +1177,7 @@ internal fun collectDotNetCSharpImplementationManifest(
                         } else {
                             erasedOwnerRelativeConstraints(source, irClass)
                         },
+                        overriddenLogicalMemberKeys = overriddenLogicalMemberKeys(source),
                         slots = slots,
                     )
                 }
@@ -1392,6 +1429,13 @@ internal fun collectDotNetRuntimeCSharpImplementationManifest(
                 defaultKind = DotNetCSharpDefaultKind.ABSTRACT,
                 semanticBodyView = null,
                 wrongShapePolicy = wrongShapePolicies[source],
+                overriddenLogicalMemberKeys = source.overriddenSymbols
+                    .mapNotNull { overridden ->
+                        overridden.owner.dotNetLibraryAbiKeyOrNull("F")
+                    }
+                    .filter { overriddenKey -> overriddenKey != memberKey }
+                    .distinct()
+                    .sorted(),
                 slots = slots,
             )
         }.sortedBy(DotNetCSharpMemberContract::logicalKey)

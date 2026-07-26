@@ -324,7 +324,7 @@ surface; that does not freeze identical Framework/modern IL. The remaining gener
 the remaining foreign-implementor and clash matrix, the Roslyn generator/analyzer, and the raw
 metadata-table audit; those keep P0-D open. The accepted C# source-authoring ADR now selects a
 partial-type Roslyn generator/analyzer rather than a generated base class or universal CLR
-mechanism. Its schema-6 DLL manifest is implemented: it records the canonical
+mechanism. Its schema-7 DLL manifest is implemented: it records the canonical
 `PublicIdSignatureComputer(DotNetIrMangler)` identity scheme and rejects parallel runtime/tooling
 declaration keys. It also records profile, canonical, declared, and exact owners where those split
 views exist, member and property groupings, strongly typed authoring views, MethodDef locators,
@@ -435,11 +435,17 @@ The remaining P0-D implementation order is:
    inherited default representation, maps every inherited/redeclared slot to one C# body, and
    reports `KDNCS008` when that body is absent. Covariant generic reabstraction likewise authors
    the declared typed member and routes canonical and inherited views to it without selecting the
-   older helper or DIM. MethodDef locators are matched against complete open return and parameter
-   signatures before generic-owner substitution; same-named overloads bind independently and
-   stale parameter or result signatures fail closed. Standard CLR core-facade forwarding is
-   normalized for `System.*` signatures, including nullable overloads, without weakening external
-   user-assembly identity. Split generic views and generic methods now also execute through
+   older helper or DIM. Schema 7 adds the missing logical override graph: a Kotlin-resolved
+   competing-default child redirects all portable parent slots to its selected helper, while
+   modern lanes inherit the selected DIM. All child/left/right runtime views agree; unrelated C#
+   roots without a Kotlin resolver require a C# body rather than an inferred preference. Consumed
+   edges are checked against CLR ancestry and resolved signature compatibility; a tampered edge
+   fails once with `KDNCS006`.
+   MethodDef locators are matched against complete open return and parameter signatures before
+   generic-owner substitution; same-named overloads bind independently and stale parameter or
+   result signatures fail closed. Standard CLR core-facade forwarding is normalized for
+   `System.*` signatures, including nullable overloads, without weakening external user-assembly
+   identity. Split generic views and generic methods now also execute through
    production code:
    the declared base-list view gains the exact constructed interface, while canonical adapters
    alone perform erased casts/boxing and generic constraints remain CLR-authoritative.
@@ -452,7 +458,7 @@ The remaining P0-D implementation order is:
    intersections execute through the full derived/parent view matrix. Multi-parent generic
    diamonds continue to compose from parent manifest contracts plus the CLR graph.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
-   no-KLIB C# `where` clauses. Schema 6 supplies normalized positional analyzer guidance for
+   no-KLIB C# `where` clauses. Schema 7 supplies normalized positional analyzer guidance for
    owner-relative constraints erased from illegal variant positions; tooling must explain them,
    not reconstruct CLR signatures.
    Special barriers are now explicit schema policy selected from shared Kotlin declaration

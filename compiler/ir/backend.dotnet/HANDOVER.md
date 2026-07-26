@@ -1609,7 +1609,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   those members plus a portable helper default, a natural modern DIM, and a net10 child promotion
   of a portable parent. Empty ordinary contracts such as the method-constraint marker are also
   self-contained in the DLL manifest.
-- C# implementation manifest schema 6 records the existing
+- C# implementation manifest schema 7 records the existing
   `PublicIdSignatureComputer(DotNetIrMangler)` identity scheme and declaration-specific
   wrong-shape adapter policy. Alternate runtime/tooling declaration keys are rejected. The policy
   is translated from common `SpecialBridgeMethods`, so the C# path and backend bridge lowering
@@ -1627,7 +1627,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   assembly, exercises a portable helper and modern DIM, and pins Roslyn `CS0122` for an
   unauthorized assembly on every profile. Private/protected owner chains and
   `@PublishedApi internal` compiler-ABI interfaces remain absent from the source-authoring surface.
-- Schema 6 also records each deliberately erased direct `R : T` relationship as one normalized
+- Schema 7 also records each deliberately erased direct `R : T` relationship as one normalized
   method-type-parameter/owner-type-parameter index pair. Direct declarations and derived
   intersection slots are covered across same- and separate-DLL profiles after KLIB deletion.
   Actual CLR GenericParamConstraint rows remain absent, representable constraints still come only
@@ -1637,7 +1637,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   `netstandard2.0` Roslyn analyzer/generator. Its opt-in is the real C# base list: canonical for an
   ordinary Kotlin interface and the declared view for a split generic interface. It does not
   introduce an attribute, marker, generated base, exact-view authoring rule, or separate
-  declaration identity. The bounded schema-6 reader consumes only Roslyn assembly symbols and
+  declaration identity. The bounded schema-7 reader consumes only Roslyn assembly symbols and
   rejects corrupt, oversized, unknown-version, or unknown-identity payloads without loading target
   code. Analyzer/generator diagnostics pin missing `partial`, unavailable CLR friendship,
   conflicting explicit ABI members, unsupported substitutions, and manifest/tool skew. A
@@ -1671,10 +1671,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   satisfies inherited and redeclared physical slots, and a bodyless C# implementor is
   `KDNCS008` on every profile. Covariant generic reabstraction is pinned separately: C# authors the
   declared typed slot, while canonical and inherited views adapt to the same body without helper
-  or DIM fallback. The DLL-only four-lane fixture now compiles and executes the real generator for
-  an ordinary public interface and an authorized internal friend interface. The existing
-  handwritten fixture remains an independent full-schema sufficiency oracle while each production
-  family is also executed directly.
+  or DIM fallback. Schema 7 now exports sorted Kotlin logical override keys. A Kotlin child that
+  resolves two competing defaults drives every parent adapter to the selected child helper on
+  portable profiles and to the selected DIM on net10; all child/left/right calls execute the same
+  body. Override edges are checked against CLR interface ancestry and resolved signature
+  compatibility; a tampered but syntactically valid edge is pinned to one `KDNCS006`. The DLL-only
+  four-lane fixture now compiles and executes the real generator for an ordinary public interface
+  and an authorized internal friend interface. The existing handwritten fixture remains an
+  independent full-schema sufficiency oracle while each production family is also executed
+  directly.
 - The metadata-only promotion reader now decodes the complete raw MethodImpl declaration return
   and parameter signatures in addition to assembly, owner, name, and generic arity. Effective-DIM
   detection compares all of them against the parent manifest locator. A deliberately corrupted
@@ -1715,7 +1720,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot
   adapts to one strongly typed source body. Exact results never take an erased cast; canonical
   adapters alone box, widen, cast, or unbox. Representable generic-method constraints are resolved
-  from CLR symbols, while schema-6 owner-relative guidance emits `KDNCS009` and no illegal C#
+  from CLR symbols, while schema-7 owner-relative guidance emits `KDNCS009` and no illegal C#
   constraint. Generic portable helpers receive owner and method substitutions, and complete
   native/promoted DIMs still suppress class methods. The real generator executes open
   reference-constrained and closed `int` shapes, generic methods, typed/exact/canonical dispatch,
@@ -1807,7 +1812,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 ## Task menu (recommended order)
 
 1. **Complete the C# interface-authoring contract.** Inherited mutable-property obligations and
-   friend-accessible internal interfaces are covered. Schema 6 supplies normalized guidance for
+   friend-accessible internal interfaces are covered. Schema 7 supplies normalized guidance for
    analyzer diagnostics about deliberately erased owner-relative constraints without
    reconstructing illegal CLR signatures. Consume it in the Roslyn partial-type
    generator/analyzer, then move the payload to a true managed

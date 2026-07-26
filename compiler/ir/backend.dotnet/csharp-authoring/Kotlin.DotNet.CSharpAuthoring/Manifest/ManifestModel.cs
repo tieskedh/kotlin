@@ -126,6 +126,7 @@ internal sealed class KotlinMemberContract
         KotlinInterfaceView? semanticBodyView,
         KotlinWrongShapePolicy? wrongShapePolicy,
         ImmutableArray<KotlinErasedOwnerRelativeConstraint> erasedOwnerRelativeConstraints,
+        ImmutableArray<string> overriddenLogicalMemberKeys,
         ImmutableArray<KotlinMethodLocator> slots)
     {
         LogicalKey = logicalKey;
@@ -136,6 +137,7 @@ internal sealed class KotlinMemberContract
         SemanticBodyView = semanticBodyView;
         WrongShapePolicy = wrongShapePolicy;
         ErasedOwnerRelativeConstraints = erasedOwnerRelativeConstraints;
+        OverriddenLogicalMemberKeys = overriddenLogicalMemberKeys;
         Slots = slots;
     }
 
@@ -147,6 +149,7 @@ internal sealed class KotlinMemberContract
     internal KotlinInterfaceView? SemanticBodyView { get; }
     internal KotlinWrongShapePolicy? WrongShapePolicy { get; }
     internal ImmutableArray<KotlinErasedOwnerRelativeConstraint> ErasedOwnerRelativeConstraints { get; }
+    internal ImmutableArray<string> OverriddenLogicalMemberKeys { get; }
     internal ImmutableArray<KotlinMethodLocator> Slots { get; }
 }
 
