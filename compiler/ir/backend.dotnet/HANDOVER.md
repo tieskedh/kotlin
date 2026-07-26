@@ -1682,7 +1682,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   analyzer walks the complete public/internal owner chain and applies the producer friend grant
   to internal components instead of letting Roslyn's broad accessibility shortcut reject the
   nested public interface. Authorized execution and a dedicated unauthorized `CS0122` lane pin
-  both sides.
+  both sides. A nested covariant generic friend contract now exercises the same path with its
+  canonical and declared/exact views: every physical TypeDef remains NestedPublic inside the
+  internal owner, generated C# supplies one typed property body, and Kotlin executes it in all
+  profile combinations.
 - Production generation now covers split generic views and generic methods. The user base list
   contains only the declared Kotlin interface; the generated partial constructs the exact view
   from the same arbitrary closed or open arguments. Every declared, exact, and canonical slot

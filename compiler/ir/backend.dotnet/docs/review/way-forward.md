@@ -418,7 +418,8 @@ The remaining P0-D implementation order is:
    non-partial containers receive `KDNCS011`, while file-local and value-type implementors remain
    explicit unsupported shapes. Nested friend interfaces also execute through production
    generation: structured owner paths use CLR `+` lookup, and accessibility walks the complete
-   public/internal chain with producer friendship. Ordinary
+   public/internal chain with producer friendship. A nested covariant generic friend additionally
+   executes its canonical and typed view adapters from one C# property body. Ordinary
    non-generic method/property adapters now execute public and authorized-internal Kotlin
    verification on every profile, including portable helper forwarding and modern/promotion DIM
    suppression. MethodDef locators are matched against complete open return and parameter

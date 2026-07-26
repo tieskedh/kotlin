@@ -933,6 +933,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     public val nestedCode: Int
                 }
 
+                public interface NestedGeneric<out T> {
+                    public val nestedValue: T
+                }
+
                 private interface HiddenShape {
                     public val hiddenCode: Int
                 }
@@ -1011,6 +1015,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
             internal fun verifyNestedFriend(value: FriendContainer.NestedShape): Int =
                 if (value.nestedCode == 42) 0 else 1
+
+            internal fun verifyNestedGeneric(
+                value: FriendContainer.NestedGeneric<String>
+            ): Int = if (value.nestedValue == "nested") 0 else 1
 
             public fun verify(value: Shape<String>): Int {
                 if (value.value != "typed") return 1
@@ -1211,6 +1219,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val nestedFriendContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "NestedShape"
             }
+            val nestedGenericFriendContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "NestedGeneric"
+                }
             assertTrue(manifest.interfaces.none { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "HiddenShape" ||
                         interfaceContract.canonicalOwnerPath.last() ==
@@ -1271,6 +1284,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ).visibility,
                 "A public nested interface must remain NestedPublic inside its internal owner",
             )
+            val nestedGenericOwners = buildSet {
+                add(nestedGenericFriendContract.canonicalOwnerPath)
+                nestedGenericFriendContract.declaredOwnerPath?.let(::add)
+                nestedGenericFriendContract.exactOwnerPath?.let(::add)
+            }
+            assertTrue(nestedGenericOwners.isNotEmpty())
+            nestedGenericOwners.forEach { ownerPath ->
+                assertEquals(
+                    2,
+                    physicalTypes.getValue(ownerPath).visibility,
+                    "Every nested generic view must remain NestedPublic inside its internal owner",
+                )
+            }
             assertEquals(
                 3,
                 physicalTypes.getValue(
@@ -1330,6 +1356,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(friendContract.unsupportedReasons.isEmpty())
             assertTrue(nestedFriendContract.sourceAuthoringSupported)
             assertTrue(nestedFriendContract.unsupportedReasons.isEmpty())
+            assertTrue(nestedGenericFriendContract.sourceAuthoringSupported)
+            assertTrue(nestedGenericFriendContract.unsupportedReasons.isEmpty())
             assertTrue(rootContract.sourceAuthoringSupported, rootContract.unsupportedReasons.joinToString())
             assertTrue(parentContract.sourceAuthoringSupported, parentContract.unsupportedReasons.joinToString())
             assertTrue(siblingContract.sourceAuthoringSupported, siblingContract.unsupportedReasons.joinToString())
@@ -1379,8 +1407,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     .propertyName,
                 mutableSetter.slots.single().propertyName,
             )
-            assertEquals(if (externalParent) 9 else 21, manifest.interfaces.size)
-            assertEquals(if (externalParent) 12 else 21, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 10 else 22, manifest.interfaces.size)
+            assertEquals(if (externalParent) 12 else 22, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1394,6 +1422,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         searchBarrierContract,
                         friendContract,
                         nestedFriendContract,
+                        nestedGenericFriendContract,
                         rootContract,
                         parentContract,
                         siblingContract,
@@ -1873,6 +1902,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         internal int NestedCode { get { return 42; } }
                     }
 
+                    internal sealed partial class NestedGenericFriendBaseListProbe :
+                        manifest.FriendContainer.NestedGeneric<string>
+                    {
+                        internal string NestedValue { get { return "nested"; } }
+                    }
+
                     public sealed partial class GenericBaseListProbe<T> : manifest.Shape<T>
                         where T : class
                     {
@@ -2026,6 +2061,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated nested friend implementation failed: " +
                                     nestedFriendResult);
+                            int nestedGenericFriendResult =
+                                manifest.apiKt.verifyNestedGeneric(
+                                    new NestedGenericFriendBaseListProbe());
+                            if (nestedGenericFriendResult != 0)
+                                throw new System.Exception(
+                                    "Generated nested generic friend implementation failed: " +
+                                    nestedGenericFriendResult);
                             int genericResult =
                                 manifest.apiKt.verify(
                                     new GenericBaseListProbe<string>(

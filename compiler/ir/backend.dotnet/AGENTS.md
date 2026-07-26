@@ -1684,8 +1684,10 @@ landed shape as a compatibility constraint.
   `InternalsVisibleTo` remain the sole access authority. The manifest never grants friendship or
   widens the type. Effective public/internal owner chains are included; private/protected chains
   and `@PublishedApi internal` compiler-ABI interfaces are excluded. DLL-only tests implement
-  top-level and nested internal contracts through the production generator from an authorized C#
-  assembly on every profile and pin `CS0122` separately for both unauthorized identities.
+  top-level, nested, and nested generic internal contracts through the production generator from
+  an authorized C# assembly on every profile and pin `CS0122` separately for top-level and nested
+  unauthorized identities. Nested generic canonical/declared/exact views remain NestedPublic
+  inside the internal owner and adapt one typed C# property body.
   Nested owner paths use `+` for Roslyn metadata lookup and `.` only for source-name matching;
   accessibility walks every public/internal owner and applies producer friendship to internal
   components. The metadata reader also pins the exact
