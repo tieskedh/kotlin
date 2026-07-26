@@ -1609,7 +1609,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   those members plus a portable helper default, a natural modern DIM, and a net10 child promotion
   of a portable parent. Empty ordinary contracts such as the method-constraint marker are also
   self-contained in the DLL manifest.
-- C# implementation manifest schema 5 records the existing
+- C# implementation manifest schema 6 records the existing
   `PublicIdSignatureComputer(DotNetIrMangler)` identity scheme and declaration-specific
   wrong-shape adapter policy. Alternate runtime/tooling declaration keys are rejected. The policy
   is translated from common `SpecialBridgeMethods`, so the C# path and backend bridge lowering
@@ -1627,6 +1627,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   assembly, exercises a portable helper and modern DIM, and pins Roslyn `CS0122` for an
   unauthorized assembly on every profile. Private/protected owner chains and
   `@PublishedApi internal` compiler-ABI interfaces remain absent from the source-authoring surface.
+- Schema 6 also records each deliberately erased direct `R : T` relationship as one normalized
+  method-type-parameter/owner-type-parameter index pair. Direct declarations and derived
+  intersection slots are covered across same- and separate-DLL profiles after KLIB deletion.
+  Actual CLR GenericParamConstraint rows remain absent, representable constraints still come only
+  from CLR metadata, and malformed positional guidance is rejected. The future analyzer must
+  explain this weakened foreign boundary and must not reconstruct a C# `where` clause.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1702,10 +1708,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
 ## Task menu (recommended order)
 
 1. **Complete the C# interface-authoring contract.** Inherited mutable-property obligations and
-   friend-accessible internal interfaces are covered. Add analyzer
-   diagnostics for deliberately
-   erased owner-relative constraints without reconstructing illegal CLR signatures. Then
-   implement the Roslyn partial-type generator/analyzer and move the payload to a true managed
+   friend-accessible internal interfaces are covered. Schema 6 supplies normalized guidance for
+   analyzer diagnostics about deliberately erased owner-relative constraints without
+   reconstructing illegal CLR signatures. Consume it in the Roslyn partial-type
+   generator/analyzer, then move the payload to a true managed
    resource before freezing the schema or package. Continue the foreign provider/implementor
    collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
    structured metadata work; do not substitute IL substring checks.

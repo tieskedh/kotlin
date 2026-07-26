@@ -408,11 +408,12 @@ The remaining P0-D implementation order is:
    families and the real same-owner clash matrix. The DLL manifest now covers inherited
    mutable-property obligations and friend-accessible internal interfaces; next implement the
    Roslyn partial-type generator/analyzer. Multi-parent generic diamonds compose from parent
-   manifest contracts plus the CLR graph; schema 5 records the logical contributor mapping that
+   manifest contracts plus the CLR graph; schema 6 records the logical contributor mapping that
    CLR metadata lacks for derived method and split mutable-property intersection slots.
    Representable method constraints are read from CLR GenericParam metadata and now drive the
-   no-KLIB C# `where` clauses; owner-relative constraints erased from illegal variant positions
-   need analyzer guidance, not reconstructed CLR signatures.
+   no-KLIB C# `where` clauses. Schema 6 supplies normalized positional analyzer guidance for
+   owner-relative constraints erased from illegal variant positions; tooling must explain them,
+   not reconstruct CLR signatures.
    Special barriers are now explicit schema policy selected from shared Kotlin declaration
    identities: the manifest records checked argument count and fallback, while ordinary unsafe
    members retain cast failure. `Kotlin.Runtime.dll` now owns built-in-derived contracts for the
