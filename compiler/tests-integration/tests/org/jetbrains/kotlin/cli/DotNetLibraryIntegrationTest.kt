@@ -909,6 +909,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun resolvedDefault(): String = "right-default"
             }
 
+            public interface DefaultPropertyConflictLeft {
+                public val resolvedProperty: String
+                    get() = "left-property"
+            }
+
+            public interface DefaultPropertyConflictRight {
+                public val resolvedProperty: String
+                    get() = "right-property"
+            }
+
             public interface GenericDefaultConflictLeft<out T> {
                 public val leftConflictValue: T
                 public fun resolvedGenericDefault(): T = leftConflictValue
@@ -966,6 +976,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DefaultConflictLeft, DefaultConflictRight {
                 public override fun resolvedDefault(): String =
                     super<DefaultConflictLeft>.resolvedDefault()
+            }
+
+            public interface ResolvedDefaultPropertyConflict :
+                DefaultPropertyConflictLeft, DefaultPropertyConflictRight {
+                public override val resolvedProperty: String
+                    get() = super<DefaultPropertyConflictLeft>.resolvedProperty
             }
 
             public interface ResolvedGenericDefaultConflict<out T> :
@@ -1063,6 +1079,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (left.resolvedGenericDefault() != "left-generic") return 2
                 if (right.resolvedGenericDefault() != "left-generic") return 3
                 return if (wide.resolvedGenericDefault() == "left-generic") 0 else 4
+            }
+
+            public fun verifyResolvedDefaultPropertyConflict(
+                value: ResolvedDefaultPropertyConflict
+            ): Int {
+                val left: DefaultPropertyConflictLeft = value
+                val right: DefaultPropertyConflictRight = value
+                if (value.resolvedProperty != "left-property") return 1
+                if (left.resolvedProperty != "left-property") return 2
+                return if (right.resolvedProperty == "left-property") 0 else 3
             }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
@@ -1301,6 +1327,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.DefaultConflictRight"
                 }
+            val defaultPropertyConflictLeftContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.DefaultPropertyConflictLeft"
+                }
+            val defaultPropertyConflictRightContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.DefaultPropertyConflictRight"
+                }
             val genericDefaultConflictLeftContract =
                 parentManifest.interfaces.single { interfaceContract ->
                     interfaceContract.canonicalOwnerPath.last() ==
@@ -1335,6 +1371,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 manifest.interfaces.single { interfaceContract ->
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.ResolvedDefaultConflict"
+                }
+            val resolvedDefaultPropertyConflictContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.ResolvedDefaultPropertyConflict"
                 }
             val resolvedGenericDefaultConflictContract =
                 manifest.interfaces.single { interfaceContract ->
@@ -1547,6 +1588,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(reabstractableContract.sourceAuthoringSupported)
             assertTrue(defaultConflictLeftContract.sourceAuthoringSupported)
             assertTrue(defaultConflictRightContract.sourceAuthoringSupported)
+            assertTrue(defaultPropertyConflictLeftContract.sourceAuthoringSupported)
+            assertTrue(defaultPropertyConflictRightContract.sourceAuthoringSupported)
             assertTrue(genericDefaultConflictLeftContract.sourceAuthoringSupported)
             assertTrue(genericDefaultConflictRightContract.sourceAuthoringSupported)
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
@@ -1556,6 +1599,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(reabstractedContract.sourceAuthoringSupported)
             assertTrue(genericReabstractedContract.sourceAuthoringSupported)
             assertTrue(resolvedDefaultConflictContract.sourceAuthoringSupported)
+            assertTrue(resolvedDefaultPropertyConflictContract.sourceAuthoringSupported)
             assertTrue(resolvedGenericDefaultConflictContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
@@ -1682,6 +1726,58 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 resolvedDefault.overriddenLogicalMemberKeys.toSet(),
             )
+            val resolvedDefaultProperty =
+                resolvedDefaultPropertyConflictContract.members.single { member ->
+                    member.sourceName == "resolvedProperty"
+                }
+            assertEquals(
+                DotNetCSharpMemberKind.PROPERTY_GETTER,
+                resolvedDefaultProperty.kind,
+            )
+            assertEquals(
+                if (targetProfile == "net10.0") {
+                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                } else {
+                    DotNetCSharpDefaultKind.PORTABLE_HELPER
+                },
+                resolvedDefaultProperty.defaultKind,
+            )
+            assertEquals(
+                setOf(
+                    defaultPropertyConflictLeftContract.members.single().logicalKey,
+                    defaultPropertyConflictRightContract.members.single().logicalKey,
+                ),
+                resolvedDefaultProperty.overriddenLogicalMemberKeys.toSet(),
+            )
+            val defaultPropertyHelperNames =
+                listOf(
+                    defaultPropertyConflictLeftContract,
+                    defaultPropertyConflictRightContract,
+                    resolvedDefaultPropertyConflictContract,
+                ).map { interfaceContract ->
+                    interfaceContract.members.single().slots.single { slot ->
+                        slot.role == DotNetCSharpSlotRole.HELPER
+                    }.methodName
+                }
+            assertTrue(defaultPropertyHelperNames.all { helperName ->
+                helperName.matches(
+                    Regex("get_resolvedProperty__KotlinDefault__[0-9a-f]{32}")
+                )
+            }) {
+                "Default-property helper names must be C#-expressible and identity-derived: " +
+                        defaultPropertyHelperNames
+            }
+            assertEquals(defaultPropertyHelperNames.size, defaultPropertyHelperNames.toSet().size)
+            assertTrue(
+                resolvedDefaultProperty.slots
+                    .filter { slot -> slot.role != DotNetCSharpSlotRole.HELPER }
+                    .all { slot ->
+                        slot.methodName == "get_resolvedProperty" &&
+                                slot.propertyName == "resolvedProperty"
+                    }
+            ) {
+                "Compiler-only helper naming leaked into the ordinary CLR property surface"
+            }
             val resolvedGenericDefault =
                 resolvedGenericDefaultConflictContract.members.single { member ->
                     member.sourceName == "resolvedGenericDefault"
@@ -1709,8 +1805,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 resolvedGenericDefault.overriddenLogicalMemberKeys.toSet(),
             )
-            assertEquals(if (externalParent) 14 else 31, manifest.interfaces.size)
-            assertEquals(if (externalParent) 17 else 31, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 15 else 34, manifest.interfaces.size)
+            assertEquals(if (externalParent) 19 else 34, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1726,6 +1822,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         defaultConflictLeftContract,
                         defaultConflictRightContract,
                         resolvedDefaultConflictContract,
+                        defaultPropertyConflictLeftContract,
+                        defaultPropertyConflictRightContract,
+                        resolvedDefaultPropertyConflictContract,
                         genericDefaultConflictLeftContract,
                         genericDefaultConflictRightContract,
                         resolvedGenericDefaultConflictContract,
@@ -2220,6 +2319,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed partial class ResolvedDefaultPropertyConflictBaseListProbe :
+                        manifest.ResolvedDefaultPropertyConflict
+                    {
+                    }
+
                     public sealed partial class ResolvedGenericDefaultConflictBaseListProbe :
                         manifest.ResolvedGenericDefaultConflict<string>
                     {
@@ -2443,6 +2547,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated resolved-default conflict failed: " +
                                     resolvedDefaultConflictResult);
+                            int resolvedDefaultPropertyConflictResult =
+                                manifest.apiKt.verifyResolvedDefaultPropertyConflict(
+                                    new ResolvedDefaultPropertyConflictBaseListProbe());
+                            if (resolvedDefaultPropertyConflictResult != 0)
+                                throw new System.Exception(
+                                    "Generated resolved-property conflict failed: " +
+                                    resolvedDefaultPropertyConflictResult);
                             int resolvedGenericDefaultConflictResult =
                                 manifest.apiKt.verifyResolvedGenericDefaultConflict(
                                     new ResolvedGenericDefaultConflictBaseListProbe());
@@ -2644,6 +2755,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ) {
                     "Portable conflict adapters did not use the Kotlin-selected child helper:\n" +
                     generatedAuthoringText
+                }
+            }
+            val rejectedPropertyHelperName =
+                defaultPropertyConflictRightContract.members.single().slots.single { slot ->
+                    slot.role == DotNetCSharpSlotRole.HELPER
+                }.methodName
+            assertFalse(
+                "DefaultPropertyConflictRight.__KotlinDefaultImpls.$rejectedPropertyHelperName" in
+                        generatedAuthoringText
+            ) {
+                "The rejected right-parent property helper leaked into generated adapters:\n" +
+                        generatedAuthoringText
+            }
+            if (targetProfile != "net10.0") {
+                val selectedPropertyHelperName =
+                    resolvedDefaultProperty.slots.single { slot ->
+                        slot.role == DotNetCSharpSlotRole.HELPER
+                    }.methodName
+                assertTrue(
+                    "ResolvedDefaultPropertyConflict.__KotlinDefaultImpls." +
+                            selectedPropertyHelperName in generatedAuthoringText
+                ) {
+                    "Portable property conflict adapters did not use the selected child helper:\n" +
+                            generatedAuthoringText
                 }
             }
             assertFalse(
