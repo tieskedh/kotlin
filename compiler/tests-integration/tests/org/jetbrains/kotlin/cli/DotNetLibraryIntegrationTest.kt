@@ -909,6 +909,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun resolvedDefault(): String = "right-default"
             }
 
+            public interface GenericDefaultConflictLeft<out T> {
+                public val leftConflictValue: T
+                public fun resolvedGenericDefault(): T = leftConflictValue
+            }
+
+            public interface GenericDefaultConflictRight<out T> {
+                public val rightConflictValue: T
+                public fun resolvedGenericDefault(): T = rightConflictValue
+            }
+
             public interface ShapeRoot<out T> {
                 public val value: T
                 public fun fallback(): T = value
@@ -956,6 +966,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DefaultConflictLeft, DefaultConflictRight {
                 public override fun resolvedDefault(): String =
                     super<DefaultConflictLeft>.resolvedDefault()
+            }
+
+            public interface ResolvedGenericDefaultConflict<out T> :
+                GenericDefaultConflictLeft<T>, GenericDefaultConflictRight<T> {
+                public override fun resolvedGenericDefault(): T =
+                    super<GenericDefaultConflictLeft>.resolvedGenericDefault()
             }
 
             public interface BarrierShape<out T> : Collection<T> {
@@ -1035,6 +1051,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (value.resolvedDefault() != "left-default") return 1
                 if (left.resolvedDefault() != "left-default") return 2
                 return if (right.resolvedDefault() == "left-default") 0 else 3
+            }
+
+            public fun verifyResolvedGenericDefaultConflict(
+                value: ResolvedGenericDefaultConflict<String>
+            ): Int {
+                val left: GenericDefaultConflictLeft<String> = value
+                val right: GenericDefaultConflictRight<String> = value
+                val wide: GenericDefaultConflictRight<Any?> = value
+                if (value.resolvedGenericDefault() != "left-generic") return 1
+                if (left.resolvedGenericDefault() != "left-generic") return 2
+                if (right.resolvedGenericDefault() != "left-generic") return 3
+                return if (wide.resolvedGenericDefault() == "left-generic") 0 else 4
             }
 
             public fun verifyIntersection(value: ResolvedIntersection<String>): Int {
@@ -1273,6 +1301,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.DefaultConflictRight"
                 }
+            val genericDefaultConflictLeftContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericDefaultConflictLeft"
+                }
+            val genericDefaultConflictRightContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.GenericDefaultConflictRight"
+                }
             val ownerBoundContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBound"
             }
@@ -1297,6 +1335,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 manifest.interfaces.single { interfaceContract ->
                     interfaceContract.canonicalOwnerPath.last() ==
                             "manifest.ResolvedDefaultConflict"
+                }
+            val resolvedGenericDefaultConflictContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.ResolvedGenericDefaultConflict"
                 }
             val barrierContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.BarrierShape"
@@ -1504,6 +1547,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(reabstractableContract.sourceAuthoringSupported)
             assertTrue(defaultConflictLeftContract.sourceAuthoringSupported)
             assertTrue(defaultConflictRightContract.sourceAuthoringSupported)
+            assertTrue(genericDefaultConflictLeftContract.sourceAuthoringSupported)
+            assertTrue(genericDefaultConflictRightContract.sourceAuthoringSupported)
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
             assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
@@ -1511,6 +1556,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(reabstractedContract.sourceAuthoringSupported)
             assertTrue(genericReabstractedContract.sourceAuthoringSupported)
             assertTrue(resolvedDefaultConflictContract.sourceAuthoringSupported)
+            assertTrue(resolvedGenericDefaultConflictContract.sourceAuthoringSupported)
             assertTrue(barrierContract.sourceAuthoringSupported)
             assertTrue(barrierContract.unsupportedReasons.isEmpty())
             assertTrue(searchBarrierContract.sourceAuthoringSupported)
@@ -1636,8 +1682,35 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 resolvedDefault.overriddenLogicalMemberKeys.toSet(),
             )
-            assertEquals(if (externalParent) 13 else 28, manifest.interfaces.size)
-            assertEquals(if (externalParent) 15 else 28, parentManifest.interfaces.size)
+            val resolvedGenericDefault =
+                resolvedGenericDefaultConflictContract.members.single { member ->
+                    member.sourceName == "resolvedGenericDefault"
+                }
+            assertEquals(
+                DotNetCSharpInterfaceView.DECLARED,
+                resolvedGenericDefault.authoringView,
+            )
+            assertEquals(
+                if (targetProfile == "net10.0") {
+                    DotNetCSharpDefaultKind.DIM_WITH_HELPER
+                } else {
+                    DotNetCSharpDefaultKind.PORTABLE_HELPER
+                },
+                resolvedGenericDefault.defaultKind,
+            )
+            assertEquals(
+                setOf(
+                    genericDefaultConflictLeftContract.members.single { member ->
+                        member.sourceName == "resolvedGenericDefault"
+                    }.logicalKey,
+                    genericDefaultConflictRightContract.members.single { member ->
+                        member.sourceName == "resolvedGenericDefault"
+                    }.logicalKey,
+                ),
+                resolvedGenericDefault.overriddenLogicalMemberKeys.toSet(),
+            )
+            assertEquals(if (externalParent) 14 else 31, manifest.interfaces.size)
+            assertEquals(if (externalParent) 17 else 31, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -1653,6 +1726,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         defaultConflictLeftContract,
                         defaultConflictRightContract,
                         resolvedDefaultConflictContract,
+                        genericDefaultConflictLeftContract,
+                        genericDefaultConflictRightContract,
+                        resolvedGenericDefaultConflictContract,
                         barrierContract,
                         searchBarrierContract,
                         friendContract,
@@ -2144,6 +2220,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     {
                     }
 
+                    public sealed partial class ResolvedGenericDefaultConflictBaseListProbe :
+                        manifest.ResolvedGenericDefaultConflict<string>
+                    {
+                        public string LeftConflictValue
+                        {
+                            get { return "left-generic"; }
+                        }
+
+                        public string RightConflictValue
+                        {
+                            get { return "right-generic"; }
+                        }
+                    }
+
                     internal sealed partial class FriendBaseListProbe : manifest.FriendShape
                     {
                         internal int Code { get { return 41; } }
@@ -2353,6 +2443,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated resolved-default conflict failed: " +
                                     resolvedDefaultConflictResult);
+                            int resolvedGenericDefaultConflictResult =
+                                manifest.apiKt.verifyResolvedGenericDefaultConflict(
+                                    new ResolvedGenericDefaultConflictBaseListProbe());
+                            if (resolvedGenericDefaultConflictResult != 0)
+                                throw new System.Exception(
+                                    "Generated generic resolved-default conflict failed: " +
+                                    resolvedGenericDefaultConflictResult);
                             int friendResult =
                                 manifest.apiKt.verifyFriend(new FriendBaseListProbe());
                             if (friendResult != 0)
@@ -2546,6 +2643,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             generatedAuthoringText
                 ) {
                     "Portable conflict adapters did not use the Kotlin-selected child helper:\n" +
+                    generatedAuthoringText
+                }
+            }
+            assertFalse(
+                "GenericDefaultConflictRight.__KotlinDefaultImpls.resolvedGenericDefault" in
+                        generatedAuthoringText
+            ) {
+                "The rejected generic right-parent default leaked into generated adapters:\n" +
+                        generatedAuthoringText
+            }
+            if (targetProfile != "net10.0") {
+                assertTrue(
+                    "ResolvedGenericDefaultConflict.__KotlinDefaultImpls." +
+                            "resolvedGenericDefault" in generatedAuthoringText
+                ) {
+                    "Portable generic conflict adapters did not use the selected child helper:\n" +
                             generatedAuthoringText
                 }
             }
