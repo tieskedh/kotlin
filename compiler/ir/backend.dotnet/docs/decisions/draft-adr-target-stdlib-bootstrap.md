@@ -4,6 +4,12 @@
 - Date: 2026-07-17
 - Scope: physical ownership and bootstrap production of Kotlin standard-library implementations
 
+> **Artifact amendment (2026-07-27):**
+> [Self-describing DLL as the Kotlin/.NET library artifact](adr-self-describing-dotnet-library-dll.md)
+> supersedes this draft's two-file publication endpoint. The pair described below remains the
+> implemented migration shape: the DLL now embeds the authoritative KLIB payload, while the
+> sibling KLIB exists only for the old compiler/Gradle resolver and will be removed.
+
 This is a repository-local decision record for the experimental .NET backend. The `dotnet` branch
 is a proof of concept; this document does not claim a public Kotlin or Kotlin/.NET commitment.
 
@@ -77,14 +83,14 @@ Kotlin-internal, metadata-public generic factory methods and public stdlib funct
 the implementation class names are not. This follows JVM's public-metadata iterator helper around
 a private `ArrayIterator` and JS's compiler-used internal array-iterator helpers.
 
-A separately compiled consumer uses a paired artifact:
+A separately compiled consumer currently uses a transitional paired artifact:
 
 ```text
-Kotlin.Stdlib.klib  -> Kotlin declaration/type metadata used by FIR
-Kotlin.Stdlib.dll   -> CLR implementations referenced by emitted IL
+Kotlin.Stdlib.klib  -> temporary FIR/resolver input
+Kotlin.Stdlib.dll   -> canonical CLR artifact with the same KLIB embedded as Kotlin.Metadata
 ```
 
-The metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
+The sibling metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
 candidate identity (`dotnet_assembly_name=Kotlin.Stdlib`, version `1.0.0.0`, neutral culture,
 and null public-key token), `dotnet_assembly_file=Kotlin.Stdlib.dll`, and
 `dotnet_library_tfm=netstandard2.0`. This binding is what turns that one metadata dependency into a physical CLR
@@ -92,6 +98,7 @@ reference; arbitrary KLIBs remain compile-time-only. The compiler requires the n
 and copies it beside an executable consumer. The metadata encoding is currently the common KLIB
 encoding because there is no durable .NET KLIB platform kind yet; the custom library-TFM binding
 records the portable CLR API contract without claiming that .NET Standard is an executable runtime.
+The embedded carrier records `dotnet_implementation_binding=self` instead of a recursive DLL hash.
 
 ## Relationship to the stdlib generator
 
@@ -124,10 +131,10 @@ JVM does emit Kotlin metadata during ordinary code generation, but that metadata
 the same class-file product as the executable declarations. It does not rebuild `kotlin-stdlib`
 while compiling a user program.
 
-The current .NET representation is a split KLIB + DLL product, so the JVM exception does not
-apply. The producer must be an explicit library product, following the JS/Wasm and Native
-lifecycle. Emitting or refreshing `Kotlin.Stdlib.klib` as a side effect of every executable
-compilation is rejected.
+The current resolver still observes a split KLIB + DLL migration product, while the accepted final
+representation is one DLL containing Kotlin metadata. The producer remains an explicit library
+product, following the JS/Wasm and Native lifecycle. Emitting or refreshing either metadata
+carrier as a side effect of every executable compilation is rejected.
 
 ## Bootstrap production model
 
@@ -151,12 +158,12 @@ compiler-owned stdlib source
        /              \
 Kotlin metadata       FIR -> IR -> stdlib-owned IL
        \              /
-        Kotlin.Stdlib.klib + Kotlin.Stdlib.dll
+        Kotlin.Stdlib.dll[Kotlin.Metadata] + transitional Kotlin.Stdlib.klib
 ```
 
-The two files therefore cannot silently describe different source compilations. A stale KLIB and
-DLL are removed before a replacement build; metadata is written through a temporary packed KLIB
-after the implementation assembly exists.
+Both carriers therefore originate from the same serialization result and physical declaration
+index. The embedded KLIB is assembled into the DLL as a private managed resource. The transitional
+sibling is written after assembly so it can hash the completed DLL.
 
 ### Reproducibility boundary
 
@@ -172,10 +179,10 @@ remains outside this publication reproducibility contract. The direct PE writer 
 `draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
 depending on the external assembler flag.
 
-### Installed-pair discovery
+### Transitional installed-pair discovery
 
-Following JVM/JS `KotlinPaths` and Native distribution ownership, an ordinary .NET compilation
-prefers the complete exact-profile pair at `lib/dotnet/<selected-profile>`, then the portable pair
+Following JVM/JS `KotlinPaths` and Native distribution ownership, the current resolver prefers the
+complete exact-profile pair at `lib/dotnet/<selected-profile>`, then the portable pair
 at:
 
 ```text
@@ -189,7 +196,9 @@ profile accepts only itself. A half-installed candidate is an error rather than 
 silently rebuild a different implementation. `-no-stdlib` remains the opt-out and, together with
 an explicit classpath, the bootstrap override.
 
-Absence of both files still selects the injected-source compatibility path. Installed-pair use no
+After DLL-first resolution lands, the same directories contain only profile-selected DLL assets
+and FIR reads `Kotlin.Metadata` from the selected DLL. Until then, absence of both files still
+selects the injected-source compatibility path. Installed-pair use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
 compiler-owned injected sources.
 

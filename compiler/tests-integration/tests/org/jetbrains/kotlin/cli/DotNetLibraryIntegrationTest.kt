@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetFriendAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultImplementation
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
@@ -8932,6 +8933,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     @Test
     fun testProducesPortableUserLibraryPair() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
         val source = File(tmpdir, "library.kt").apply {
             writeText(
                 """
@@ -8968,6 +8971,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals("netstandard2.0", manifest.getProperty("dotnet_library_tfm"))
         assertEquals(DotNetLibraryAbiCodec.ABI_VERSION, manifest.getProperty("dotnet_abi_version"))
         assertEquals("", manifest.getProperty(DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY))
+        assertEquals(
+            DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
+            manifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
+        )
+        assertEquals(
+            DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
+            manifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
+        )
         assertTrue(
             manifest.getProperty(DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY) ==
                     DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME
@@ -8986,6 +8997,41 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         assertTrue(manifest.stringPropertyNames().any { it.startsWith("dotnet_decl_") })
 
+        val embeddedMetadata = outputDirectory.resolve("Sample.Library.embedded.klib").apply {
+            writeBytes(
+                readFrameworkManagedResource(
+                    checkNotNull(frameworkHost),
+                    implementationLibrary,
+                    DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+                )
+            )
+        }
+        val embeddedManifest = embeddedMetadata.readKlibManifest()
+        assertEquals("Sample.Library", embeddedManifest.getProperty("unique_name"))
+        assertEquals(
+            DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
+            embeddedManifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
+        )
+        assertEquals(
+            DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
+            embeddedManifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
+        )
+        assertFalse(
+            DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY in embeddedManifest.stringPropertyNames()
+        ) {
+            "Self-bound metadata must not contain a recursive DLL hash"
+        }
+        val siblingPayload = metadataLibrary.readKlibPayloadEntries()
+        val embeddedPayload = embeddedMetadata.readKlibPayloadEntries()
+        assertEquals(siblingPayload.keys, embeddedPayload.keys)
+        for (entryName in siblingPayload.keys) {
+            assertArrayEquals(
+                siblingPayload.getValue(entryName),
+                embeddedPayload.getValue(entryName),
+                "Embedded and sibling Kotlin metadata differ at $entryName",
+            )
+        }
+
         val il = outputDirectory.resolve("Sample.Library.il").readText()
         assertTrue(".assembly extern netstandard" in il)
         assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il)
@@ -8994,6 +9040,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("'Increment'(int32 'value')" in il)
         assertTrue(".entrypoint" !in il)
         assertTrue("[mscorlib]" !in il)
+        assertTrue(
+            ".mresource private ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}" in il
+        ) {
+            il
+        }
 
         val dotnetHost = modernDotNetHostOrSkip()
         val consumerIl = outputDirectory.resolve("LibraryConsumer.il").apply {
@@ -9216,6 +9267,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     fun testRuntimeStdlibVariantsArePortablePhysicalAbiSupersets() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
         val csharpToolchain = DotNetIlAssembler.findModernCSharpCompiler()
         requireOrAssumeToolchain(
             csharpToolchain != null,
@@ -9240,6 +9293,52 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
         val pairDirectories = listOf("netstandard2.0", "net48", "net10.0").associateWith { target ->
             produceBoundStdlibPair(target, "portable-abi-superset")
+        }
+        for (entry in pairDirectories) {
+            val target = entry.key
+            val pairDirectory = entry.value
+            val siblingMetadata = pairDirectory.resolve("Kotlin.Stdlib.klib")
+            val embeddedMetadata = File(tmpdir, "embedded-stdlib-$target.klib").apply {
+                writeBytes(
+                    readFrameworkManagedResource(
+                        checkNotNull(frameworkHost),
+                        pairDirectory.resolve("Kotlin.Stdlib.dll"),
+                        DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+                    )
+                )
+            }
+            val siblingManifest = siblingMetadata.readKlibManifest()
+            val embeddedManifest = embeddedMetadata.readKlibManifest()
+            assertEquals(target, embeddedManifest.getProperty("dotnet_library_tfm"))
+            assertEquals(
+                DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
+                embeddedManifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
+            )
+            assertEquals(
+                DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
+                embeddedManifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
+            )
+            val siblingDeclarations = siblingManifest.stringPropertyNames()
+                .filter { property -> property.startsWith(DotNetLibraryAbiCodec.DECLARATION_PROPERTY_PREFIX) }
+                .associateWith(siblingManifest::getProperty)
+            val embeddedDeclarations = embeddedManifest.stringPropertyNames()
+                .filter { property -> property.startsWith(DotNetLibraryAbiCodec.DECLARATION_PROPERTY_PREFIX) }
+                .associateWith(embeddedManifest::getProperty)
+            assertEquals(siblingDeclarations, embeddedDeclarations)
+            val siblingPayload = siblingMetadata.readKlibPayloadEntries()
+            val embeddedPayload = embeddedMetadata.readKlibPayloadEntries()
+            assertEquals(siblingPayload.keys, embeddedPayload.keys)
+            for (entryName in siblingPayload.keys) {
+                assertArrayEquals(
+                    siblingPayload.getValue(entryName),
+                    embeddedPayload.getValue(entryName),
+                    "$target embedded and sibling Kotlin metadata differ at $entryName",
+                )
+            }
+            assertTrue(
+                ".mresource private ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}" in
+                        pairDirectory.resolve("Kotlin.Stdlib.il").readText()
+            )
         }
         val runtimeAssemblies = DotNetTarget.entries.associateWith { target ->
             val outputDirectory = File(tmpdir, "portable-surface-runtime-${target.flagValue}")
@@ -9589,7 +9688,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
                             DotNetCSharpImplementationManifestCodec.encodeManagedResource(
                                 readCSharpImplementationManifestEnvelope(modernMethodImplAssembly)
-                            )
+                            ),
+                    DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME to
+                            readFrameworkManagedResource(
+                                checkNotNull(frameworkHost),
+                                modernMethodImplAssembly,
+                                DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+                            ),
                 ),
             )
         ) {
@@ -9934,7 +10039,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         checkNotNull(frameworkHost),
                         frameworkStdlib,
                         DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
-                    )
+                    ),
+            DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME to
+                    readFrameworkManagedResource(
+                        checkNotNull(frameworkHost),
+                        frameworkStdlib,
+                        DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
+                    ),
         )
         assertTrue(
             DotNetIlAssembler.assembleWithExplicitIlasm(
@@ -13309,6 +13420,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to
                     DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
             DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
+            DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY to
+                    DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
+            DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY to
+                    DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
             "dotnet_assembly_name" to "Kotlin.Stdlib",
             "dotnet_assembly_version" to "1.0.0.0",
             "dotnet_assembly_culture" to "neutral",
@@ -13434,6 +13549,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to
                     DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
             DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
+            DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY to
+                    DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
+            DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY to
+                    DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
             DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to assemblyName,
             DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to "1.0.0.0",
             DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to "neutral",
@@ -14840,6 +14959,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         Properties().apply {
             load(archive.getInputStream(archive.getEntry("default/manifest")))
         }
+    }
+
+    private fun File.readKlibPayloadEntries(): Map<String, ByteArray> = ZipFile(this).use { archive ->
+        archive.entries().asSequence()
+            .filterNot { entry -> entry.isDirectory || entry.name == "default/manifest" }
+            .associate { entry -> entry.name to archive.getInputStream(entry).use { it.readBytes() } }
     }
 
     private fun runDotNet(

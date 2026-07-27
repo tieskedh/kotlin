@@ -9,6 +9,8 @@ import org.jetbrains.kotlin.backend.common.serialization.addLanguageFeaturesToMa
 import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
+import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
+import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
 import org.jetbrains.kotlin.backend.dotnet.dotNetFriendAssemblies
 import org.jetbrains.kotlin.backend.dotnet.dotNetOutput
 import org.jetbrains.kotlin.backend.dotnet.dotNetProducedLibraryArtifact
@@ -17,6 +19,7 @@ import org.jetbrains.kotlin.backend.dotnet.dotNetProducesStdlib
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
 import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
+import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.KotlinCompilerVersion
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.languageVersionSettings
@@ -40,6 +43,7 @@ import org.jetbrains.kotlin.library.writer.includeMetadata
 import org.jetbrains.kotlin.util.metadataVersion
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.absolute
 
@@ -119,24 +123,67 @@ object DotNetLibraryMetadataSerializationPipelinePhase :
     }
 }
 
-/** Writes the bound metadata companion only after the CLR implementation assembly was produced. */
-object DotNetLibraryMetadataPackagingPipelinePhase :
-    PipelinePhase<DotNetBackendPipelineArtifact, DotNetBackendPipelineArtifact>(
-        name = "DotNetLibraryMetadataPackagingPipelinePhase",
-        postActions = setOf(PerformanceNotifications.KlibWritingFinished, CheckCompilationErrors.CheckDiagnosticCollector),
-    ) {
-    override fun executePhase(input: DotNetBackendPipelineArtifact): DotNetBackendPipelineArtifact {
-        val configuration = input.configuration
-        check(configuration.dotNetProducesStdlib.xor(configuration.dotNetProducesLibrary))
-        val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
-        val metadata = checkNotNull(input.libraryMetadata)
-        val implementationFile = input.output
-        if (!implementationFile.isFile || implementationFile.name != artifact.assemblyFileName) return input
+/**
+ * Produces both metadata carriers from one serialization result and one physical declaration
+ * index. The embedded carrier is self-bound; the transitional sibling additionally binds the
+ * final DLL by SHA-256 after assembly.
+ */
+internal object DotNetLibraryMetadataPackager {
+    fun createEmbeddedResource(
+        configuration: CompilerConfiguration,
+        artifact: DotNetLibraryArtifact,
+        metadata: SerializedMetadata,
+        declarations: Map<String, DotNetPhysicalDeclaration>,
+    ): ByteArray {
+        val temporaryFile = Files.createTempFile("kotlin-dotnet-metadata-", ".klib")
+        Files.delete(temporaryFile)
+        return try {
+            writeKlib(
+                output = temporaryFile,
+                configuration = configuration,
+                artifact = artifact,
+                metadata = metadata,
+                declarations = declarations,
+                containerFormat = DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
+                implementationBinding = DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
+                implementationSha256 = null,
+            )
+            Files.readAllBytes(temporaryFile)
+        } finally {
+            Files.deleteIfExists(temporaryFile)
+        }
+    }
 
-        val outputDirectory = configuration.dotNetOutput!!
-        val finalFile = outputDirectory.resolve(artifact.metadataFileName)
-        val temporaryFile = outputDirectory.resolve(".${artifact.metadataFileName}.tmp")
-        temporaryFile.deleteRecursively()
+    fun writeSibling(
+        output: Path,
+        configuration: CompilerConfiguration,
+        artifact: DotNetLibraryArtifact,
+        metadata: SerializedMetadata,
+        declarations: Map<String, DotNetPhysicalDeclaration>,
+        implementationFile: java.io.File,
+    ) {
+        writeKlib(
+            output = output,
+            configuration = configuration,
+            artifact = artifact,
+            metadata = metadata,
+            declarations = declarations,
+            containerFormat = DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
+            implementationBinding = DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
+            implementationSha256 = DotNetLibraryAbiCodec.implementationSha256(implementationFile),
+        )
+    }
+
+    private fun writeKlib(
+        output: Path,
+        configuration: CompilerConfiguration,
+        artifact: DotNetLibraryArtifact,
+        metadata: SerializedMetadata,
+        declarations: Map<String, DotNetPhysicalDeclaration>,
+        containerFormat: String,
+        implementationBinding: String,
+        implementationSha256: String?,
+    ) {
         val versions = KotlinLibraryVersioning(
             abiVersion = KotlinAbiVersion.CURRENT,
             compilerVersion = KotlinCompilerVersion.getVersion(),
@@ -165,10 +212,8 @@ object DotNetLibraryMetadataPackagingPipelinePhase :
                         DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
                         artifact.targetFramework,
                     )
-                    // Both explicit library products and the target-stdlib product pair Kotlin
-                    // metadata with a CLR implementation. Persist the same physical declaration
-                    // index for both; otherwise ordinary stdlib functions can resolve in FIR but
-                    // have no durable cross-module CLR owner/method binding.
+                    setProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY, containerFormat)
+                    setProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY, implementationBinding)
                     setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
                     setProperty(
                         DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY,
@@ -186,17 +231,45 @@ object DotNetLibraryMetadataPackagingPipelinePhase :
                         DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY,
                         DotNetLibraryAbiCodec.encodeFriendAssemblies(configuration.dotNetFriendAssemblies),
                     )
-                    setProperty(
-                        DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY,
-                        DotNetLibraryAbiCodec.implementationSha256(implementationFile),
-                    )
-                    for (entry in DotNetLibraryAbiCodec.encode(input.declarations)) {
+                    implementationSha256?.let { hash ->
+                        setProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY, hash)
+                    }
+                    for (entry in DotNetLibraryAbiCodec.encode(declarations)) {
                         setProperty(entry.key, entry.value)
                     }
                 }
             }
             includeMetadata(metadata)
-        }.writeTo(temporaryFile.toPath())
+        }.writeTo(output)
+    }
+}
+
+/** Writes the transitional bound metadata companion after the CLR assembly was produced. */
+object DotNetLibraryMetadataPackagingPipelinePhase :
+    PipelinePhase<DotNetBackendPipelineArtifact, DotNetBackendPipelineArtifact>(
+        name = "DotNetLibraryMetadataPackagingPipelinePhase",
+        postActions = setOf(PerformanceNotifications.KlibWritingFinished, CheckCompilationErrors.CheckDiagnosticCollector),
+    ) {
+    override fun executePhase(input: DotNetBackendPipelineArtifact): DotNetBackendPipelineArtifact {
+        val configuration = input.configuration
+        check(configuration.dotNetProducesStdlib.xor(configuration.dotNetProducesLibrary))
+        val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
+        val metadata = checkNotNull(input.libraryMetadata)
+        val implementationFile = input.output
+        if (!implementationFile.isFile || implementationFile.name != artifact.assemblyFileName) return input
+
+        val outputDirectory = configuration.dotNetOutput!!
+        val finalFile = outputDirectory.resolve(artifact.metadataFileName)
+        val temporaryFile = outputDirectory.resolve(".${artifact.metadataFileName}.tmp")
+        temporaryFile.deleteRecursively()
+        DotNetLibraryMetadataPackager.writeSibling(
+            output = temporaryFile.toPath(),
+            configuration = configuration,
+            artifact = artifact,
+            metadata = metadata,
+            declarations = input.declarations,
+            implementationFile = implementationFile,
+        )
 
         finalFile.deleteRecursively()
         try {

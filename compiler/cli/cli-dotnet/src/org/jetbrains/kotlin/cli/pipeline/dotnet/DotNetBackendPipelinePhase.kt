@@ -1,6 +1,8 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetBackend
+import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
+import org.jetbrains.kotlin.backend.dotnet.dotNetProducedLibraryArtifact
 import org.jetbrains.kotlin.cli.pipeline.CheckCompilationErrors
 import org.jetbrains.kotlin.cli.pipeline.PerformanceNotifications
 import org.jetbrains.kotlin.cli.pipeline.PipelinePhase
@@ -11,11 +13,26 @@ object DotNetBackendPipelinePhase : PipelinePhase<DotNetFir2IrPipelineArtifact, 
     postActions = setOf(PerformanceNotifications.BackendFinished, CheckCompilationErrors.CheckDiagnosticCollector),
 ) {
     override fun executePhase(input: DotNetFir2IrPipelineArtifact): DotNetBackendPipelineArtifact {
+        val kotlinMetadataResourceFactory:
+                ((Map<String, DotNetPhysicalDeclaration>) -> ByteArray)? =
+            input.libraryMetadata?.let { metadata ->
+                val artifact = checkNotNull(input.configuration.dotNetProducedLibraryArtifact)
+                val resourceFactory: (Map<String, DotNetPhysicalDeclaration>) -> ByteArray = { declarations ->
+                    DotNetLibraryMetadataPackager.createEmbeddedResource(
+                        configuration = input.configuration,
+                        artifact = artifact,
+                        metadata = metadata,
+                        declarations = declarations,
+                    )
+                }
+                resourceFactory
+            }
         val output = DotNetBackend.compile(
             input.result.irModuleFragment,
             input.result.irBuiltIns,
             input.result.symbolTable,
             input.configuration,
+            kotlinMetadataResourceFactory,
         )
         return DotNetBackendPipelineArtifact(
             output.file,

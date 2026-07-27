@@ -113,6 +113,7 @@ internal class DotNetIlEmitter(
     private val cSharpWrongShapePolicies:
             Map<IrSimpleFunction, DotNetCSharpWrongShapePolicy> = emptyMap(),
     private val cSharpImplementationManifestTarget: DotNetTarget? = null,
+    private val hasKotlinMetadataResource: Boolean = false,
 ) {
     private val covariantReturnImplementations: Set<IrSimpleFunction> =
         covariantReturnBridges.asSequence()
@@ -1779,6 +1780,7 @@ internal class DotNetIlEmitter(
                 },
                 friendAssemblies = friendAssemblies,
                 hasCSharpImplementationManifest = managedResources.isNotEmpty(),
+                hasKotlinMetadataResource = hasKotlinMetadataResource,
             )
             if (exportsUseNullableMetadata) {
                 append(DotNetNullableMetadata.attributeClassIl(coreLibrary.reference))
@@ -3943,6 +3945,7 @@ internal class DotNetIlEmitter(
         referencedExternalLibraries: List<DotNetExternalLibrary>,
         friendAssemblies: List<DotNetFriendAssemblyIdentity>,
         hasCSharpImplementationManifest: Boolean,
+        hasKotlinMetadataResource: Boolean,
     ) {
         coreLibrary.appendAssemblyReferenceTo(this)
         if (referencesEditorBrowsableAssembly) {
@@ -3973,7 +3976,8 @@ internal class DotNetIlEmitter(
         if (
             emittedAssemblyVersion != null ||
             friendAssemblies.isNotEmpty() ||
-            hasCSharpImplementationManifest
+            hasCSharpImplementationManifest ||
+            hasKotlinMetadataResource
         ) {
             appendLine(".assembly ${assemblyName.toIlIdentifier()}")
             appendLine("{")
@@ -3989,6 +3993,11 @@ internal class DotNetIlEmitter(
         appendLine(".module ${moduleFileName.toIlIdentifier()}")
         if (hasCSharpImplementationManifest) {
             appendLine(".mresource public ${DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME}")
+            appendLine("{")
+            appendLine("}")
+        }
+        if (hasKotlinMetadataResource) {
+            appendLine(".mresource private ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}")
             appendLine("{")
             appendLine("}")
         }

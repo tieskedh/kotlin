@@ -9,8 +9,9 @@
 
 Kotlin/.NET has a distinct logical Kotlin platform identity and a separate target-framework
 attribute, but no built-in Gradle target yet. The target must invoke the real .NET compiler,
-preserve common multiplatform behavior, and eventually publish the KLIB/DLL pair from one
-compilation.
+preserve common multiplatform behavior, and eventually publish the self-describing DLL from one
+compilation. The sibling KLIB/DLL output remains a compiler-resolver migration shape, not the
+publication endpoint.
 
 The target-framework choice must be immutable for a target and all of its compilations. Changing
 the profile only at task execution would let dependency resolution select one profile while the
@@ -44,9 +45,10 @@ The profiles can require different generated IL, notably for default interface m
 preserving the same Kotlin semantics. They do not require Native's host manager, cinterop model,
 native linker, compilation caches, or per-architecture binary model.
 
-A .NET library compilation also has two related physical outputs: KLIB is the logical Kotlin
-consumer artifact, while DLL is the CLR runtime and tooling artifact. That pair will be published
-from one compilation, under the same profile attribute and producer identity.
+A .NET library compilation currently has two related physical outputs while the compiler resolver
+is migrating: KLIB is the transitional logical Kotlin consumer artifact, while the DLL is the CLR
+runtime/tooling artifact and already embeds the same KLIB payload. The final outgoing variant
+publishes the self-describing DLL alone under the profile attribute and producer identity.
 
 ## 3. Kotlin Common invariant
 
@@ -128,7 +130,9 @@ Classifications:
   **Correct direction**;
 - one typed `dotnet(profile, name, configure)` entry point:
   **Reasonable platform-specific divergence**;
-- paired KLIB/DLL output owned by one compilation:
+- transitional paired output owned by one compilation:
+  **Correct temporary implementation, but not a final design**;
+- one self-describing DLL outgoing artifact:
   **Reasonable platform-specific divergence**;
 - shipping the .NET FIR checker in the embeddable compiler's frontend-module closure:
   **Correct direction**;
@@ -150,7 +154,7 @@ Each `.NET` Gradle target is profile-coherent before dependency resolution or co
 The target follows mature Kotlin Gradle architecture without pretending that a target framework is
 a machine architecture.
 
-Friend association, exact paired-artifact publication, executable products, test execution,
-profile-aware stdlib Gradle variants, incremental compilation, daemon support, and Build Tools API
-support remain separate work packages. None may introduce a second owner for the target framework
-or split a compilation's KLIB and DLL across profiles.
+Friend association, DLL-first publication, executable products, test execution, profile-aware
+stdlib Gradle variants, incremental compilation, daemon support, and Build Tools API support remain
+separate work packages. None may introduce a second owner for the target framework or select
+embedded Kotlin metadata independently from its containing DLL.

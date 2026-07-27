@@ -801,8 +801,10 @@ After P0:
 - add export null guards or explicitly record a different boundary contract;
 - restructure whole-file IL goldens toward declaration-level ABI assertions plus semantic boxes;
 - add standard `MODULE:` coverage and a target-owned test module;
-- decide packaging, signing, user-library versioning, and whether metadata remains a sibling KLIB
-  or becomes a DLL component.
+- complete the accepted self-describing-DLL migration: consume the private embedded KLIB directly,
+  make Gradle dependency/friend/stdlib variants DLL-first, then remove the transitional sibling
+  KLIB;
+- decide signing and user-library/assembly versioning before publication.
 
 ## 5. Explicitly parked work
 
@@ -834,7 +836,7 @@ arity, markers, and exception/cancellation design.
 ### Gate B — third-party experimental binaries
 
 - all P0 work packages complete;
-- KLIB/DLL binding and version-skew diagnostics active;
+- embedded Kotlin metadata/resource-format and version-skew diagnostics active;
 - CLR importer prototype and committed C# provider/consumer tests;
 - exception, generic-nullability, array, and callable freeze decisions accepted;
 - public Kotlin ABI, compiler ABI, and C# export surfaces mechanically distinguishable;
@@ -842,8 +844,9 @@ arity, markers, and exception/cancellation design.
 
 ### Gate C — official experimental target discussion
 
-- dedicated .NET frontend session and logical Gradle/Common-metadata identity are present; KLIB
-  platform marking, profile-aware Gradle/KMP target, and publication model remain required;
+- dedicated .NET frontend session and logical Gradle/Common-metadata identity are present;
+  embedded KLIB platform marking and profile-aware self-describing-DLL publication remain
+  required;
 - supported runtime/tier matrix required in CI;
 - shared Kotlin semantic corpus and multi-module compatibility coverage at mature-target scale;
 - structured diagnostics and structured CIL/metadata validation;

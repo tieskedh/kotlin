@@ -173,19 +173,25 @@ landed shape as a compatibility constraint.
   than implementation class names or constructors, are the compiler/stdlib ABI. This follows the
   JVM/JS helper boundary for host-array iteration. The default bootstrap path still injects stdlib source into
   the same frontend/lowering run and `DotNetIlEmitter` partitions the lowered module into USER and
-  STDLIB ownership scopes. A separate consumer can now resolve Kotlin declarations from a metadata
-  `Kotlin.Stdlib.klib` and call implementations in its bound sibling `Kotlin.Stdlib.dll`, with no
-  injected implementation source. The KLIB manifest binds the complete unsigned assembly
-  identity, file, and selected library TFM; an arbitrary metadata KLIB never becomes a CLR
+  STDLIB ownership scopes. The accepted library-artifact endpoint is one self-describing DLL
+  (`docs/decisions/adr-self-describing-dotnet-library-dll.md`). Every produced user/stdlib DLL
+  embeds the complete packed KLIB as the private managed resource `Kotlin.Metadata`, marked
+  `managed-resource-klib-v1` and self-bound. A separate consumer still resolves Kotlin declarations
+  from the transitional sibling `Kotlin.Stdlib.klib` until the compiler and Gradle loaders become
+  DLL-first, then calls implementations in `Kotlin.Stdlib.dll`, with no injected implementation
+  source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
+  library TFM, and final DLL hash; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
   inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
-  bound profile-specific KLIB/DLL pair. It is never an executable-build side effect. JVM's embedded
-  class-file metadata is not the applicable lifecycle model because .NET currently has two
-  physical companion artifacts. Every assembled executable still receives both platform dlls;
+  self-describing profile-specific DLL plus transitional KLIB. It is never an executable-build
+  side effect. The artifact boundary follows JVM's single native library product while the
+  embedded payload reuses the common KLIB serialization used by JS/Wasm/Native. Every assembled
+  executable still receives both platform dlls;
   same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
-  must produce byte-identical packed KLIB, compiler-owned IL, and deterministic PE for each profile;
-  variants are not required to be byte-identical to one another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
+  must produce byte-identical embedded/sibling Kotlin metadata payloads, compiler-owned IL, and
+  deterministic PE for each profile; variants are not required to be byte-identical to one
+  another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
   Ordinary compilation prefers the complete selected-profile pair, then
   `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}` for either executable profile,
@@ -202,7 +208,7 @@ landed shape as a compatibility constraint.
   entries but reports every missing portable logical key or changed CLR owner/member binding in
   deterministic key order. Integration production compares all three generated variants together
   with the logical-identity scheme, physical-name grammar, and runtime-surface floor. This is the
-  structured KLIB/DLL binding audit; do not approximate it by diffing rendered IL text.
+  structured logical/physical binding audit; do not approximate it by diffing rendered IL text.
   The same integration test independently loads the assembled runtime/stdlib pairs in isolated
   CoreCLR contexts and compares their externally consumable reflection surfaces. Both executable
   variants must retain every portable public/protected type, base/interface edge, generic
@@ -247,7 +253,8 @@ landed shape as a compatibility constraint.
   profile was audited against the 2.0 reference assembly: 27 BCL types and 55 members, zero
   misses. Applications retain their executable profile. The POC
   `-Xdotnet-produce-library -d <directory>` mode now emits an ordinary source module as a bound
-  `<module>.klib`/`<module>.dll` pair under the selected profile, with no entry point or
+  self-describing `<module>.dll` plus a transitional `<module>.klib` under the selected profile,
+  with no entry point or
   runtimeconfig. `netstandard2.0` uses the portable modern PE writer; the runtime profiles use
   their corresponding assembler. Explicit CLR exports are callable across the resulting assembly
   edge. Kotlin cross-module calls now follow JS/Native's public `IdSignature` as their logical key;
@@ -264,8 +271,8 @@ landed shape as a compatibility constraint.
   expanded to its exact `size - 1` body because generic extension properties remain deferred. Do not add a generator
   target that emits an uncompilable broad corpus. The durable endpoint is compiling generated
   common sources plus narrow .NET actuals once the backend can compile the required generated
-  collection surface; the standalone producer already emits the bound KLIB/DLL pair from one
-  source compilation.
+  collection surface; the standalone producer already emits both metadata carriers from one
+  source compilation and one physical declaration index.
 - Callable ABI candidate (argumentation: `docs/decisions/draft-adr-erased-callable-abi.md`; probe
   series `callableabi_s2`, `captureabi_s3`, `kfunction_s1`, and `callableexact_s1`; follows the JVM split between logical generic
   function types and erased
