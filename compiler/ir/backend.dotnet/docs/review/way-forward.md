@@ -557,9 +557,11 @@ repository still has no built-in Kotlin/.NET target or compilation model. The co
 owns both friend controls, but a build association must derive assembly names, profile variants,
 artifacts, output paths, and task dependencies from one product-owned compilation relationship.
 The separate typed target-framework attribute now models exact-profile selection plus the two
-legal `netstandard2.0` fallback edges. Add the experimental .NET target/compilation model next,
-then make `associateWith` configure producer `InternalsVisibleTo` and consumer friend KLIB paths
-together before Gate A.
+legal `netstandard2.0` fallback edges. The CLI argument class and copy machinery are now generated
+from the shared KLIB-based argument description rather than maintained as a .NET-only parallel
+model. Add the experimental .NET target/compilation model next, let it own operational compiler
+inputs and the deliberately small public compiler-options subset, then make `associateWith`
+configure producer `InternalsVisibleTo` and consumer friend KLIB paths together before Gate A.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers

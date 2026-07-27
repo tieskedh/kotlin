@@ -51,6 +51,25 @@ class GenerateCompilerArgumentsCopyTest {
     }
 
     @Test
+    fun testDotNetCopyIncludesCommonKlibAndTargetArguments() {
+        val source = K2DotNetCompilerArguments().apply {
+            partialLinkageLogLevel = "warning"
+            dotNetTarget = "net10.0"
+            dotNetExports = arrayOf("sample.increment=Increment")
+            dotNetFriendAssemblies = arrayOf("Friend.Consumer")
+        }
+
+        val copy = source.copyOf()
+
+        assertEquals("warning", copy.partialLinkageLogLevel)
+        assertEquals("net10.0", copy.dotNetTarget)
+        assertContentEquals(source.dotNetExports, copy.dotNetExports)
+        assertContentEquals(source.dotNetFriendAssemblies, copy.dotNetFriendAssemblies)
+        Assertions.assertNotSame(source.dotNetExports, copy.dotNetExports)
+        Assertions.assertNotSame(source.dotNetFriendAssemblies, copy.dotNetFriendAssemblies)
+    }
+
+    @Test
     fun testCollectPropertiesDoesNotReturnTransient() {
         val errorProperty = CommonToolArguments::errors
         assertTrue(Modifier.isTransient(errorProperty.javaField!!.modifiers))
