@@ -217,14 +217,16 @@ marker attributes. That test exposed and fixed an invalid `[mscorlib]EditorBrows
 MemberRef: mscorlib-profile modules now use an explicit `[System]` reference only when needed,
 while portable libraries retain `[netstandard]`. The selected friend model is now implemented at
 the compiler boundary: producers emit structured `InternalsVisibleTo` identities and persist them
-in schema 4; consumers declare friend KLIB paths; dependency loading verifies producer authority
+in schema 4; consumers now declare friend DLL paths whose embedded metadata supplies the same
+logical library; dependency loading verifies producer authority
 for the actual unsigned output assembly before FIR grants internal visibility. Authorized and
 unauthorized separate-module execution paths are pinned. Ordinary `internal` remains CLR
 assembly-internal, while `@PublishedApi internal` types, functions, accessors, and constant fields
 are public marked compiler ABI. The source-session wiring also now registers the common FIR enum-
 entry service required to resolve declaration annotations on the distinct DotNet platform. The
 built-in Gradle target now closes the remaining P0-C association work: ordinary `associateWith`
-wiring supplies the producer's exact KLIB to the consumer as both dependency and friend input,
+wiring supplies the producer's exact self-describing DLL to the consumer as both dependency and
+friend input,
 authorizes the consumer's compilation-owned CLR identity in the producer, inherits the
 producer's declared dependencies, and infers producer-before-consumer task ordering. A real
 Framework Roslyn compiler/execution lane proves that an authorized C# assembly receives ordinary
@@ -560,10 +562,16 @@ Kotlin/.NET platform identity. The typed target-framework attribute models exact
 selection plus the two legal `netstandard2.0` fallback edges. The generated Gradle
 compiler-options surface remains common Kotlin options plus `moduleName`; operational inputs and
 raw export encodings remain deliberately excluded. The target-specific compilation associator
-derives producer `InternalsVisibleTo`, the consumer's exact bound friend KLIB, dependency
+derives producer `InternalsVisibleTo`, the consumer's exact bound friend DLL, dependency
 inheritance, and task ordering from the ordinary `associateWith` relationship. Model tests cover
 all three profiles, and the real-compiler integration lane compiles a test module that calls an
 ordinary internal declaration from its associated main module.
+
+The target's API and runtime variants now publish the profile-attributed self-describing DLL as
+their only artifact. The DLL is a declared task output, retaining normal Gradle producer ordering
+and configuration-cache behavior. The association lane and a separate producer/consumer project
+lane both delete the producer's sibling KLIB before consumer compilation, proving that Gradle
+dependency and friend wiring no longer rely on the transitional file.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
@@ -802,8 +810,9 @@ After P0:
 - restructure whole-file IL goldens toward declaration-level ABI assertions plus semantic boxes;
 - add standard `MODULE:` coverage and a target-owned test module;
 - complete the accepted self-describing-DLL migration: the CLI classpath and friend paths now
-  consume the private embedded KLIB and installed-stdlib discovery is DLL-first; make Gradle
-  dependency/friend/stdlib variants DLL-first, then remove the transitional sibling KLIB;
+  consume the private embedded KLIB, installed-stdlib discovery is DLL-first, and Gradle API,
+  runtime, project-dependency, association, and friend paths now use only the DLL; stop producing
+  and installing the transitional sibling KLIB after migrating the remaining direct fixtures;
 - decide signing and user-library/assembly versioning before publication.
 
 ## 5. Explicitly parked work
