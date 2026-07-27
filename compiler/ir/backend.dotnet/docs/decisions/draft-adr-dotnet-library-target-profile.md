@@ -158,6 +158,19 @@ The implementation now:
     otherwise exposed types. Public members already belong to the ordinary surface and private
     implementation details do not become ABI merely because the assembly has a friend.
 
+### Custom-attribute compatibility
+
+An ordinary CLR custom attribute is compatible when the platform variant retains the same
+decoded attribute type, constructor arguments, named field/property arguments, and multiplicity
+on the same exposed declaration. Named-argument record order and other semantically equivalent
+ECMA-335 blob encodings are not ABI.
+
+This deliberately avoids freezing an incidental encoding selected by ILAsm or by a future direct
+PE writer. Byte-identical payloads are required only for an explicitly documented compiler
+protocol whose ADR names that representation. The C# authoring contract currently pins the exact
+`InternalsVisibleTo`, `KotlinCompilerAbiAttribute`, and `EditorBrowsable(Never)` blobs. That
+bounded protocol rule does not turn every ordinary attribute blob into compiler ABI.
+
 The repository's opt-in stdlib producer and installer create all three profile variants under
 their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
 single `netstandard2.0` stdlib pair is discovered as fallback, compiled against, assembled, and
@@ -183,9 +196,10 @@ the surface whose availability depends on that authorization. The generic-defaul
 that both executable profiles preserve an internal generic hierarchy, its constructor and
 property accessors, an internal file-facade method, and an internal member on an exposed type;
 normalized attributes also participate in that comparison. A narrowed modern fixture proves that
-omission is rejected. Raw attribute-blob encoding and MethodImpl rows for interfaces not
-represented in the manifest remain part of the future structured metadata model and ABI-freeze
-audit.
+omission is rejected. General raw attribute-blob equality is intentionally not an ABI
+requirement; exact bytes are tested only for the compiler protocols named above. MethodImpl rows
+for interfaces not represented in the manifest remain part of the future structured metadata
+model and ABI-freeze audit.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.

@@ -1114,9 +1114,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
   modern DIMs. Normalized custom-attribute identities and constructor/named payloads on assemblies
   and exposed declarations must also retain the portable floor; `TargetFrameworkAttribute` is the
   deliberate profile-specific exception. The verifier is test data, not a compiler/assembler
-  sidecar, and a target-owned `@TestOnly` hook produces standalone runtime variants for it. Raw
-  attribute-blob encoding, MethodImpl rows, resources, and friend-only internals remain for the
-  structured metadata audit.
+  sidecar, and a target-owned `@TestOnly` hook produces standalone runtime variants for it.
+  Ordinary attributes are compared as decoded semantic multisets, not byte-identical blobs;
+  exact bytes are bounded to explicitly documented compiler protocols. Managed-resource rows,
+  manifest-addressable semantic MethodImpl obligations, and friend-dependent internal surface are
+  now audited. Non-manifest interface rows remain for the structured metadata audit.
 - `docs/decisions/adr-profile-aware-interface-default-implementations.md` is accepted,
   and the non-generic implementation is now present. Portable profiles move each Kotlin interface
   body to a marked public `__KotlinDefaultImpls` compiler-ABI helper, keep the CLR slot abstract, and
