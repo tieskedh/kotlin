@@ -393,6 +393,11 @@ both retained parent contracts. DLL-only Kotlin execution through both parent vi
 all four profile lanes, including a modern child over a portable parent. The closed child call
 remains Kotlin-frontend ambiguous, so this coalesces only the implementation obligation and does
 not merge logical declaration identity.
+The first real same-owner generated-TypeDef case is also closed. A source nested
+`__KotlinDefaultImpls` inside a default-bearing interface has exactly the owner/name/arity of the
+compiler compatibility helper. Publication rejects that producer atomically on all three target
+profiles, including `net10.0` where the helper remains compiler ABI, and emits neither artifact.
+This is distinct from a reserved-looking member on another physical owner, which remains legal.
 A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
 and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
 complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
@@ -445,7 +450,10 @@ The remaining P0-D implementation order is:
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish producer-declared nested foreign member signatures, incompatible substituted inherited
-   overload families, and the real same-owner clash matrix. The valid closed inherited family
+   overload families, and the remaining same-owner generated-member clash matrix. The generated
+   helper-TypeDef case is now pinned across every profile; method/accessor/constructor and
+   singleton-field collisions already have emitter gates, but remaining compiler-generated
+   member-name families still need adversarial publication coverage. The valid closed inherited family
    where `select(T)` and `select(String)` converge at `T = String` is now production-pinned: one
    C# body serves both distinct parent contracts without an invented manifest intersection.
    Consumer-owned base-list substitution
