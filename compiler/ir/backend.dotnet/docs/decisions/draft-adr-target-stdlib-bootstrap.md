@@ -173,8 +173,10 @@ the shared Kotlin archive writer, and metadata fragments are ordered by package 
 Focused pins compare the KLIB, textual IL, and DLL byte for byte across repeated builds of each
 profile. Different profiles are not expected to be byte-identical. Both assembler paths use
 `/det`, which gives identical IL a deterministic PE module identity.
-The packed KLIB records the resulting DLL's SHA-256, and consumers reject a sibling whose bytes do
-not match, so the two-file product cannot be recombined accidentally. Executable/test assembly
+The transitional sibling KLIB records the resulting DLL's SHA-256, and consumers reject a sibling
+whose bytes do not match, so the two-file migration product cannot be recombined accidentally. The
+self-bound KLIB inside the DLL has no recursive self-hash; containment and physical Assembly-row
+validation bind it to the implementation. Executable/test assembly
 remains outside this publication reproducibility contract. The direct PE writer described in
 `draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
 depending on the external assembler flag.
@@ -196,9 +198,10 @@ profile accepts only itself. A half-installed candidate is an error rather than 
 silently rebuild a different implementation. `-no-stdlib` remains the opt-out and, together with
 an explicit classpath, the bootstrap override.
 
-After DLL-first resolution lands, the same directories contain only profile-selected DLL assets
-and FIR reads `Kotlin.Metadata` from the selected DLL. Until then, absence of both files still
-selects the injected-source compatibility path. Installed-pair use no
+The CLI classpath and friend resolver now read `Kotlin.Metadata` from an explicitly supplied DLL.
+After installed-stdlib and Gradle DLL-first resolution land, the same directories contain only
+profile-selected DLL assets. Until then, absence of both installed files still selects the
+injected-source compatibility path. Installed-pair use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
 compiler-owned injected sources.
 

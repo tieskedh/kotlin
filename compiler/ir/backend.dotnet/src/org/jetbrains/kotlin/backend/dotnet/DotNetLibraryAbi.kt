@@ -281,7 +281,7 @@ data class DotNetPortablePhysicalAbiDifference(
     val platformDeclaration: DotNetPhysicalDeclaration?,
 )
 
-/** One metadata KLIB bound to its sibling CLR implementation and declaration index. */
+/** One Kotlin metadata carrier bound to its CLR implementation and declaration index. */
 data class DotNetExternalLibrary(
     val artifact: DotNetLibraryArtifact,
     val metadataFile: File,

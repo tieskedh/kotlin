@@ -129,9 +129,34 @@ dotnet_implementation_sha256=<DLL SHA-256>
 
 The embedded and sibling carriers must contain byte-identical Kotlin metadata entries and the same
 logical-to-physical declaration records. Their container/binding properties differ, and only the
-sibling carries the external DLL hash. The compiler next learns to read `Kotlin.Metadata` directly
-from a DLL; Gradle dependency and friend wiring then become DLL-first. The sibling KLIB is removed
-only after ordinary, friend, stdlib, cross-profile, and cross-module tests no longer consume it.
+sibling carries the external DLL hash. The CLI compiler reads `Kotlin.Metadata` directly from a
+DLL; Gradle dependency, friend, and installed-stdlib wiring become DLL-first next. The sibling KLIB
+is removed only after ordinary, friend, stdlib, cross-profile, and cross-module tests no longer
+consume it.
+
+### Migration state
+
+The CLI compiler now accepts a compiler-produced DLL directly on both the ordinary classpath and
+the friend path. A bounded, JVM-hosted PE/ECMA-335 reader:
+
+- locates the private embedded `Kotlin.Metadata` `ManifestResource` without loading target code or
+  starting a .NET process;
+- checks every PE, metadata-stream, table, heap, and resource range before use;
+- reads the physical `Assembly` row and requires the embedded manifest's name, version, culture,
+  and unsigned status to match the containing DLL;
+- requires the embedded carrier and `self` binding, and rejects a recursive implementation hash;
+  and
+- presents the packed payload to the unchanged shared KLIB deserializer through a
+  compilation-scoped temporary file that is deleted with the root compiler disposable.
+
+Temporary extraction is **Correct temporary implementation, but not a final design**. It isolates
+the container transition while preserving one Kotlin deserializer. The final DLL-backed
+Kotlin-library abstraction should expose the same KLIB components directly and may add bounded
+random access or caching; it must not introduce another metadata model.
+
+The legacy sibling KLIB remains accepted and hash-verified during migration. Installed-stdlib
+discovery and Gradle variants still select the pair, so producer output must continue writing it
+until those paths and their compatibility tests are DLL-first.
 
 Classifications:
 
@@ -153,6 +178,8 @@ Gradle, Maven, NuGet, MSBuild, Roslyn, reflection, and deployment can converge o
 DLL asset. Future signing covers executable and Kotlin metadata together. The compiler retains
 the common Kotlin metadata model instead of reconstructing Kotlin semantics from CLR signatures.
 
-The compiler needs a bounded ECMA-335 managed-resource reader and a DLL-backed Kotlin-library
-abstraction. Until those land, the sibling KLIB remains a migration input. Publication of only the
-DLL must not be enabled before the compiler and Gradle paths have moved.
+The bounded ECMA-335 reader and CLI DLL-first path have landed. A direct DLL-backed Kotlin-library
+abstraction remains desirable to remove temporary extraction, but it does not block proving the
+single-artifact contract. Publication of only the DLL must not be enabled before installed-stdlib
+and Gradle dependency/friend paths have moved and the transitional sibling inputs have been
+removed from the compatibility matrix.

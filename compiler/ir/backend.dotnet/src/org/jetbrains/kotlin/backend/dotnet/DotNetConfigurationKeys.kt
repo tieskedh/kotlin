@@ -84,7 +84,7 @@ data class DotNetLibraryArtifact(
     }
 }
 
-/** Kotlin compile-time metadata paired with the CLR assembly that owns its implementations. */
+/** Kotlin compile-time metadata carried by or paired with the CLR assembly that owns its implementations. */
 data class DotNetExternalStdlib(
     val metadataFile: File,
     val implementationFile: File,
