@@ -134,7 +134,7 @@ landed shape as a compatibility constraint.
   Framework reflection pins the MemberRef as well as the visibility flags, and modern execution
   pins resolution through the .NET contract facade.
 - Internal/friend/compiler ABI (decision:
-  `docs/decisions/draft-adr-friend-assemblies-and-compiler-abi.md`): ordinary Kotlin `internal`
+  `docs/decisions/adr-friend-assemblies-and-compiler-abi.md`): ordinary Kotlin `internal`
   declarations are genuine CLR assembly-internal declarations. A friend relationship is
   producer-authorized and consumer-declared: the producer emits `InternalsVisibleTo`, schema 4
   persists the structured unsigned/full-public-key identity, and the consumer supplies the bound
