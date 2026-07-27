@@ -8,20 +8,20 @@ object DotNetConfigurationKeys {
     val OUTPUT: CompilerConfigurationKey<File> = CompilerConfigurationKey.create("output .NET IL file")
     val ASSEMBLY_NAME: CompilerConfigurationKey<String> = CompilerConfigurationKey.create("output .NET assembly name")
     val PRODUCE_STDLIB: CompilerConfigurationKey<Boolean> =
-        CompilerConfigurationKey.create("produce the bootstrap Kotlin/.NET stdlib pair")
+        CompilerConfigurationKey.create("produce the bootstrap Kotlin/.NET stdlib assembly")
     val PRODUCE_LIBRARY: CompilerConfigurationKey<Boolean> =
-        CompilerConfigurationKey.create("produce a Kotlin/.NET library pair")
+        CompilerConfigurationKey.create("produce a Kotlin/.NET library assembly")
     val TARGET: CompilerConfigurationKey<DotNetTarget> = CompilerConfigurationKey.create("target .NET API/runtime profile")
     val EXPORTS: CompilerConfigurationKey<List<DotNetExport>> =
         CompilerConfigurationKey.create("explicit .NET exports")
     val PROPERTY_EXPORTS: CompilerConfigurationKey<List<DotNetPropertyExport>> =
         CompilerConfigurationKey.create("explicit .NET property exports")
     val EXTERNAL_STDLIB: CompilerConfigurationKey<DotNetExternalStdlib> =
-        CompilerConfigurationKey.create("external Kotlin/.NET stdlib artifact pair")
+        CompilerConfigurationKey.create("external Kotlin/.NET stdlib assembly")
     val EXTERNAL_LIBRARIES: CompilerConfigurationKey<List<DotNetExternalLibrary>> =
-        CompilerConfigurationKey.create("external Kotlin/.NET library artifact pairs")
+        CompilerConfigurationKey.create("external Kotlin/.NET library assemblies")
     val FRIEND_PATHS: CompilerConfigurationKey<List<String>> =
-        CompilerConfigurationKey.create("Kotlin/.NET friend metadata paths")
+        CompilerConfigurationKey.create("Kotlin/.NET friend assembly paths")
     val FRIEND_ASSEMBLIES: CompilerConfigurationKey<List<DotNetFriendAssemblyIdentity>> =
         CompilerConfigurationKey.create("producer-authorized CLR friend assembly identities")
 }
@@ -49,7 +49,6 @@ object DotNetStdlibArtifact {
     const val DISTRIBUTION_DIRECTORY_NAME = "dotnet"
     const val ASSEMBLY_NAME = DotNetPlatformAssemblyIdentity.STDLIB_ASSEMBLY_NAME
     const val ASSEMBLY_FILE_NAME = "$ASSEMBLY_NAME.dll"
-    const val METADATA_FILE_NAME = "$ASSEMBLY_NAME.klib"
     const val ASSEMBLY_VERSION = "1.0.0.0"
     const val ASSEMBLY_CULTURE = "neutral"
     const val ASSEMBLY_PUBLIC_KEY_TOKEN = "null"
@@ -58,7 +57,7 @@ object DotNetStdlibArtifact {
         kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(targetFramework)
 }
 
-/** The CLR identity of one Kotlin/.NET library and its transitional metadata-companion name. */
+/** The CLR identity of one self-describing Kotlin/.NET library. */
 data class DotNetLibraryArtifact(
     val assemblyName: String,
     val targetFramework: String,
@@ -68,7 +67,6 @@ data class DotNetLibraryArtifact(
 ) {
     val assemblyFileName: String = "$assemblyName.dll"
     val assemblyIlFileName: String = "$assemblyName.il"
-    val metadataFileName: String = "$assemblyName.klib"
     val assemblyVersionIl: String = assemblyVersion.replace('.', ':')
 
     companion object {
@@ -84,10 +82,9 @@ data class DotNetLibraryArtifact(
     }
 }
 
-/** Kotlin compile-time metadata carried by or paired with the CLR assembly that owns its implementations. */
+/** The self-describing Kotlin/.NET standard-library assembly selected for compilation. */
 data class DotNetExternalStdlib(
-    val metadataFile: File,
-    val implementationFile: File,
+    val assemblyFile: File,
     val targetFramework: String,
 )
 

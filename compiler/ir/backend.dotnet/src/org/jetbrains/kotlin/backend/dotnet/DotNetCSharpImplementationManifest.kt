@@ -35,7 +35,7 @@ import java.util.Base64
  * This is deliberately separate from [DotNetPhysicalDeclaration]. The latter supplements a KLIB
  * and therefore keeps the KLIB authoritative for logical declarations. This manifest must be
  * sufficient together with ordinary CLR metadata in the same DLL: a Roslyn tool must not need the
- * sibling KLIB to discover Kotlin's physical interface views or implementation obligations.
+ * private Kotlin metadata resource to discover physical interface views or implementation obligations.
  */
 data class DotNetCSharpImplementationManifest(
     val schemaVersion: Int,

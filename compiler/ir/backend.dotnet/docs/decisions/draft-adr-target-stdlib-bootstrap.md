@@ -6,9 +6,9 @@
 
 > **Artifact amendment (2026-07-27):**
 > [Self-describing DLL as the Kotlin/.NET library artifact](adr-self-describing-dotnet-library-dll.md)
-> supersedes this draft's two-file publication endpoint. The pair described below remains the
-> implemented migration shape: the DLL now embeds the authoritative KLIB payload, while the
-> sibling KLIB exists only for the old compiler/Gradle resolver and will be removed.
+> supersedes this draft's two-file publication endpoint. The migration is complete: the DLL embeds
+> the authoritative KLIB payload, and no standalone Kotlin/.NET KLIB is produced, installed,
+> resolved, or accepted.
 
 This is a repository-local decision record for the experimental .NET backend. The `dotnet` branch
 is a proof of concept; this document does not claim a public Kotlin or Kotlin/.NET commitment.
@@ -35,7 +35,7 @@ Kotlin.Stdlib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null
 ```
 
 All generated pieces use version `1.0.0.0` and no public-key token consistently so profile pairing,
-KLIB binding, and tests are deterministic. This is a pre-publication build/test identity, not a
+embedded-metadata binding, and tests are deterministic. This is a pre-publication build/test identity, not a
 published ABI major or a promise to preserve either the version or unsigned status. Before Gate B,
 the project must decide the first public runtime and stdlib assembly names, strong-name policy,
 AssemblyVersion compatibility policy, and package-version relationship as one publication design.
@@ -83,22 +83,22 @@ Kotlin-internal, metadata-public generic factory methods and public stdlib funct
 the implementation class names are not. This follows JVM's public-metadata iterator helper around
 a private `ArrayIterator` and JS's compiler-used internal array-iterator helpers.
 
-A separately compiled consumer currently uses a transitional paired artifact:
+A separately compiled consumer uses one self-describing artifact:
 
 ```text
-Kotlin.Stdlib.klib  -> temporary FIR/resolver input
-Kotlin.Stdlib.dll   -> canonical CLR artifact with the same KLIB embedded as Kotlin.Metadata
+Kotlin.Stdlib.dll -> CLR implementation plus private Kotlin.Metadata KLIB payload
 ```
 
-The sibling metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
+The embedded metadata KLIB uses the existing metadata-library reader. Its manifest binds the complete
 candidate identity (`dotnet_assembly_name=Kotlin.Stdlib`, version `1.0.0.0`, neutral culture,
 and null public-key token), `dotnet_assembly_file=Kotlin.Stdlib.dll`, and
 `dotnet_library_tfm=netstandard2.0`. This binding is what turns that one metadata dependency into a physical CLR
-reference; arbitrary KLIBs remain compile-time-only. The compiler requires the named sibling DLL
-and copies it beside an executable consumer. The metadata encoding is currently the common KLIB
-encoding because there is no durable .NET KLIB platform kind yet; the custom library-TFM binding
-records the portable CLR API contract without claiming that .NET Standard is an executable runtime.
-The embedded carrier records `dotnet_implementation_binding=self` instead of a recursive DLL hash.
+reference. The compiler validates those properties against the containing PE Assembly row and
+copies the DLL beside an executable consumer. A standalone KLIB with the Kotlin/.NET ABI marker is
+rejected. The metadata encoding is currently the common KLIB encoding because there is no durable
+.NET KLIB platform kind yet; the custom library-TFM binding records the portable CLR API contract
+without claiming that .NET Standard is an executable runtime. The carrier records
+`dotnet_implementation_binding=self` and contains no recursive DLL hash.
 
 ## Relationship to the stdlib generator
 
@@ -131,10 +131,9 @@ JVM does emit Kotlin metadata during ordinary code generation, but that metadata
 the same class-file product as the executable declarations. It does not rebuild `kotlin-stdlib`
 while compiling a user program.
 
-The current resolver still observes a split KLIB + DLL migration product, while the accepted final
-representation is one DLL containing Kotlin metadata. The producer remains an explicit library
-product, following the JS/Wasm and Native lifecycle. Emitting or refreshing either metadata
-carrier as a side effect of every executable compilation is rejected.
+The resolver observes one DLL containing Kotlin metadata. The producer remains an explicit
+library product, following the JS/Wasm and Native lifecycle. Emitting or refreshing that library
+artifact as a side effect of every executable compilation is rejected.
 
 ## Bootstrap production model
 
@@ -147,9 +146,8 @@ The POC adds an explicit compiler product route:
 This provisional build control accepts no user source files, owns the `Kotlin.Stdlib` module name,
 and cannot be combined with `-no-stdlib` or CLR export selectors. It is not a source annotation or
 a proposed end-user stdlib API. From one resolved frontend session it serializes all compiler-owned
-bootstrap declarations, lowers their executable implementations for the selected profile,
-assembles the corresponding DLL, and publishes the packed metadata KLIB only
-after the DLL succeeds:
+bootstrap declarations, lowers their executable implementations for the selected profile, packs
+the metadata as a private managed resource, and assembles the corresponding DLL:
 
 ```text
 compiler-owned stdlib source
@@ -158,25 +156,22 @@ compiler-owned stdlib source
        /              \
 Kotlin metadata       FIR -> IR -> stdlib-owned IL
        \              /
-        Kotlin.Stdlib.dll[Kotlin.Metadata] + transitional Kotlin.Stdlib.klib
+        Kotlin.Stdlib.dll[Kotlin.Metadata]
 ```
 
-Both carriers therefore originate from the same serialization result and physical declaration
-index. The embedded KLIB is assembled into the DLL as a private managed resource. The transitional
-sibling is written after assembly so it can hash the completed DLL.
+The resource and implementation originate from the same serialization result and physical
+declaration index. The packed KLIB is assembled into the DLL as a private managed resource.
 
 ### Reproducibility boundary
 
 For a fixed compiler and source corpus, repeated producer runs must emit an
 identical packed KLIB and identical textual IL. KLIB archive order and timestamps are normalized by
 the shared Kotlin archive writer, and metadata fragments are ordered by package and source name.
-Focused pins compare the KLIB, textual IL, and DLL byte for byte across repeated builds of each
-profile. Different profiles are not expected to be byte-identical. Both assembler paths use
+Focused pins extract and compare the embedded packed KLIB, textual IL, and DLL byte for byte
+across repeated builds of each profile. Different profiles are not expected to be byte-identical. Both assembler paths use
 `/det`, which gives identical IL a deterministic PE module identity.
-The transitional sibling KLIB records the resulting DLL's SHA-256, and consumers reject a sibling
-whose bytes do not match, so the two-file migration product cannot be recombined accidentally. The
-self-bound KLIB inside the DLL has no recursive self-hash; containment and physical Assembly-row
-validation bind it to the implementation. Executable/test assembly
+The self-bound KLIB inside the DLL has no recursive self-hash; containment and physical
+Assembly-row validation bind it to the implementation. Executable/test assembly
 remains outside this publication reproducibility contract. The direct PE writer described in
 `draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
 depending on the external assembler flag.
@@ -193,17 +188,14 @@ at:
 
 The embedded manifest binds each DLL to its declared TFM. The loader accepts only the explicit
 compatibility matrix: an executable profile accepts itself or `netstandard2.0`; the portable
-profile accepts only itself. A legacy sibling KLIB without the canonical DLL is an error rather
-than permission to silently rebuild a different implementation. The resolver ignores a sibling
-when the self-describing DLL is present, and focused tests install only that DLL. `-no-stdlib`
+profile accepts only itself. A standalone or legacy Kotlin/.NET KLIB is not a candidate. Focused
+tests install only the DLL. `-no-stdlib`
 remains the opt-out and, together with an explicit classpath, the bootstrap override.
 
 The CLI classpath, friend, installed-stdlib, and Gradle dependency resolvers now read
-`Kotlin.Metadata` from the selected DLL. Gradle variants no longer publish the sibling. Producer
-and installation tasks still write the transitional sibling until the remaining direct compiler
-fixtures migrate; after its removal, these directories contain only profile-selected DLL assets.
-Absence of both legacy metadata and the DLL still selects the injected-source compatibility path.
-Installed-DLL use no
+`Kotlin.Metadata` from the selected DLL. Producer, installation, and Gradle publication flows use
+only profile-selected DLL assets. Absence of the DLL still selects the injected-source
+compatibility path. Installed-DLL use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
 compiler-owned injected sources.
 
@@ -214,13 +206,13 @@ Repository production and installation are explicit opt-in tasks:
 ./gradlew :kotlin-compiler:installDotNetStdlib
 ```
 
-The aggregate producer depends on the assembled compiler distribution, runs that distribution's
-complete compiler classpath, and writes `Kotlin.Stdlib.{klib,dll,il}` under one
-`prepare/compiler/build/dotnet-stdlib/<profile>` directory per profile. Its three constituent
-tasks are `produceDotNetStdlibNet48`, `produceDotNetStdlibNetStandard20`, and
-`produceDotNetStdlibNet100`. Framework ILAsm writes `net48`; modern ILAsm writes
-`netstandard2.0` and `net10.0`. The install task copies only each bound KLIB/DLL pair into its
-corresponding Kotlin-home profile directory; IL remains a build diagnostic. Neither aggregate task
+The aggregate producer depends on the assembled compiler distribution and runs that distribution's
+complete compiler classpath. Its three constituent tasks are `produceDotNetStdlibNet48`,
+`produceDotNetStdlibNetStandard20`, and `produceDotNetStdlibNet100`. Framework ILAsm writes
+`net48`; modern ILAsm writes `netstandard2.0` and `net10.0`. The producer writes
+`Kotlin.Stdlib.dll` plus diagnostic `Kotlin.Stdlib.il` under each
+`prepare/compiler/build/dotnet-stdlib/<profile>` directory. The install task copies only each DLL
+into its corresponding Kotlin-home profile directory; IL remains a build diagnostic. Neither aggregate task
 participates in ordinary `dist` or `distKotlinc`, so ordinary builds do not acquire those host-tool
 requirements. `distKotlinc` is a whole-home `Sync` and therefore removes an earlier optional
 installation; invoking `installDotNetStdlib` afterward restores all three variants.
@@ -245,9 +237,10 @@ is retained beside the executable for deterministic inspection, like the program
 compilation does not yet constitute a distributable multi-assembly library build.
 
 This split emitter is temporary bootstrap compatibility, not the library build. The consumer half
-no longer depends on it: with `-no-stdlib` and the produced bound KLIB on its classpath, a user
-module resolves and calls the prebuilt DLL without injected implementations. Same-run production
-remains only until ordinary compilation can discover a distribution-owned target pair by default.
+no longer depends on it: with `-no-stdlib` and the produced DLL on its classpath, a user module
+resolves and calls the prebuilt assembly without injected implementations. Same-run production
+remains only until ordinary compilation can discover a distribution-owned target assembly by
+default.
 
 ## Rejected alternatives
 
@@ -261,11 +254,12 @@ prevents the implementation from exercising the same source and bridge pipeline 
 This avoids an extra assembly but duplicates physical type identity and makes library behavior a
 per-program compiler artifact.
 
-### Treat the CLR DLL alone as a Kotlin library
+### Treat a bare CLR DLL as a Kotlin library
 
 Producing a PE is not enough: CLR metadata does not describe Kotlin extension receivers, source
 visibility, nullability, expect/actual relationships, or other Kotlin declaration semantics. The
-accepted input is an explicitly bound Kotlin metadata KLIB plus DLL, not assembly reflection.
+accepted input is a self-describing DLL with authoritative embedded Kotlin metadata, not assembly
+reflection or a bare foreign DLL.
 
 ## Consequences
 
@@ -278,11 +272,11 @@ Benefits:
 
 Costs and limits:
 
-- the compatibility path still rebuilds the stdlib beside an executable when no installed pair is
+- the compatibility path still rebuilds the stdlib beside an executable when no installed DLL is
   available;
 - the emitter temporarily recognizes injected stdlib ownership;
 - the explicit producer flag is POC build control rather than a final distribution interface;
-- installing the discoverable target pair is opt-in rather than part of the normal distribution;
+- installing the discoverable target assembly is opt-in rather than part of the normal distribution;
 - the metadata-public implementation and facade names are compiler/stdlib contracts;
 - the current physical-member mapping covers only compiler-owned stdlib shapes; and
 - the standalone producer is still limited to the compiler-owned bootstrap stdlib.
@@ -304,22 +298,22 @@ nullable, empty, stdlib-produced, and user-produced Iterables and Lists. The Lis
 also proves indexed dispatch without calling `iterator()` and the `List is empty.` path. `last()`
 additionally exercises a mutable generic local, a loop, and repeated erased
 Iterator calls inside the stdlib assembly. A focused CLI integration pin compiles a consumer with
-`-no-stdlib`, resolves both receiver overloads from a metadata KLIB, and verifies the generic external DLL call
+`-no-stdlib`, resolves both receiver overloads from the DLL's embedded metadata, and verifies the generic external DLL call
 without a generated consumer-side CollectionsKt. A manual Framework executable exercised the same
 path against a real generated DLL and user-defined Iterable. Focused integration pins produce the
-`net48`, `netstandard2.0`, and `net10.0` variants, check each packed KLIB manifest and DLL, then
+`net48`, `netstandard2.0`, and `net10.0` variants, check each embedded packed-KLIB manifest and DLL, then
 consume `first()`, `last()`, `emptyList()`, and RandomAccess from each compatible profile in a
-separate compilation. The portable pin also installs the pair only under `netstandard2.0`, proves
+separate compilation. The portable pin also installs the DLL only under `netstandard2.0`, proves
 fallback discovery, assembles applications, and executes the same stdlib implementation on both
-Framework 4.8 and .NET 10. The stdlib KLIB participates in the same physical-declaration binder as any other
-Kotlin/.NET library; the separate stdlib record controls installation and packaging only. Each
-producer is also run twice; the packed KLIB and compiler-owned IL are
-byte-identical. Finally, each produced pair is installed into a temporary portable-profile Kotlin
+Framework 4.8 and .NET 10. The embedded stdlib KLIB participates in the same physical-declaration
+binder as any other Kotlin/.NET library; the separate stdlib record controls installation and
+packaging only. Each producer is also run twice; the packed KLIB and compiler-owned IL are
+byte-identical. Finally, each produced DLL is installed into a temporary portable-profile Kotlin
 home and consumed by an ordinary compilation with neither `-no-stdlib` nor a manual metadata
 classpath; the consumer does not regenerate the stdlib facade. The repository producer and install
-tasks are also exercised as products: the producer emits the expected KLIB/DLL/IL set, while
-installation copies exactly the byte-matching KLIB/DLL pair into the distribution and does not
-install the diagnostic IL.
+tasks are also exercised as products: the producer emits the expected DLL/IL set, while
+installation copies exactly the byte-matching DLL into the distribution and does not install the
+diagnostic IL or a standalone KLIB.
 
 ## Deferred work
 

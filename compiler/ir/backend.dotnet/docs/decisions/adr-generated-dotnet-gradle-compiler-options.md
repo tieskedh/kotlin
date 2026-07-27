@@ -26,7 +26,7 @@ modules, and product details are owned by the target, compilation, task, or bina
 .NET additionally has:
 
 - a target-framework profile that controls available BCL APIs and emitted metadata;
-- paired KLIB and DLL library output;
+- a self-describing DLL carrying private Kotlin metadata;
 - CLR assembly friendship through producer-emitted `InternalsVisibleTo`; and
 - explicit C# export selection.
 

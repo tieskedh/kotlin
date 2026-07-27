@@ -9,8 +9,8 @@ package org.jetbrains.kotlin.backend.dotnet
  * classes and top-level collection operations. The default bootstrap path still lets frontend
  * and lowering see those implementations in the same module as the program; scoped IL emission
  * then places them only in `Kotlin.Stdlib.dll`, never in the user assembly. A separate consumer
- * may instead resolve declarations from a bound metadata KLIB/CLR DLL pair emitted together by
- * the explicit bootstrap stdlib product route.
+ * may instead resolve declarations from the complete KLIB metadata embedded in the
+ * self-describing DLL emitted by the explicit bootstrap stdlib product route.
  */
 val DOTNET_STDLIB_SOURCES: Map<String, String> = mapOf(
     "DotNetStdlibIo.kt" to """@file:Suppress("UNUSED_PARAMETER")

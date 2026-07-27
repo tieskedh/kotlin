@@ -19,7 +19,6 @@ import org.jetbrains.kotlin.gradle.testbase.build
 import org.jetbrains.kotlin.gradle.testbase.project
 import org.jetbrains.kotlin.test.TestMetadata
 import org.junit.jupiter.api.DisplayName
-import kotlin.io.path.deleteExisting
 import kotlin.io.path.readText
 
 @DisplayName("Kotlin/.NET target")
@@ -28,7 +27,7 @@ class KotlinDotNetTargetIT : KGPBaseTest() {
     @GradleTestVersions(minVersion = TestVersions.Gradle.MAX_SUPPORTED)
     @MppGradlePluginTests
     @TestMetadata("dotnetSimple")
-    fun producesSelfDescribingDllAndUsesItForAssociatedCompilation(
+    fun producesOnlySelfDescribingDllAndUsesItForAssociatedCompilation(
         gradleVersion: GradleVersion,
     ) {
         project("dotnetSimple", gradleVersion) {
@@ -36,9 +35,8 @@ class KotlinDotNetTargetIT : KGPBaseTest() {
                 assertTasksExecuted(":compileKotlinDotnet")
             }
 
-            assertFileInProjectExists("build/classes/kotlin/dotnet/main/Sample.Library.klib")
+            assertFileInProjectNotExists("build/classes/kotlin/dotnet/main/Sample.Library.klib")
             assertFileInProjectExists("build/classes/kotlin/dotnet/main/Sample.Library.dll")
-            projectPath.resolve("build/classes/kotlin/dotnet/main/Sample.Library.klib").deleteExisting()
 
             build("compileTestKotlinDotnet", "-x", "compileKotlinDotnet") {
                 assertTasksExecuted(":compileTestKotlinDotnet")
@@ -46,7 +44,7 @@ class KotlinDotNetTargetIT : KGPBaseTest() {
             }
 
             assertFileInProjectNotExists("build/classes/kotlin/dotnet/main/Sample.Library.klib")
-            assertFileInProjectExists("build/classes/kotlin/dotnet/test/Sample.Library_test.klib")
+            assertFileInProjectNotExists("build/classes/kotlin/dotnet/test/Sample.Library_test.klib")
             assertFileInProjectExists("build/classes/kotlin/dotnet/test/Sample.Library_test.dll")
         }
     }
@@ -64,7 +62,7 @@ class KotlinDotNetTargetIT : KGPBaseTest() {
             }
 
             assertFileInProjectExists("producer/build/classes/kotlin/dotnet/main/Producer.Library.dll")
-            projectPath.resolve("producer/build/classes/kotlin/dotnet/main/Producer.Library.klib").deleteExisting()
+            assertFileInProjectNotExists("producer/build/classes/kotlin/dotnet/main/Producer.Library.klib")
 
             build(":consumer:compileKotlinDotnet", "-x", ":producer:compileKotlinDotnet") {
                 assertTasksExecuted(":consumer:compileKotlinDotnet")

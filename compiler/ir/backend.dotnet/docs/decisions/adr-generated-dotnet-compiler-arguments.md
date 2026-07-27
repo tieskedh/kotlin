@@ -26,7 +26,7 @@ Gradle compiler options are generated only for the deliberately selected public 
 .NET needs target-specific arguments for:
 
 - the `net48`, `netstandard2.0`, or `net10.0` target-framework profile;
-- paired KLIB/DLL library and standard-library products;
+- self-describing DLL library and standard-library products;
 - producer-emitted `InternalsVisibleTo` authorization;
 - CLR export facades; and
 - a CLR assembly name and physical output.
@@ -54,8 +54,9 @@ configurator descends from the common KLIB configurator because the target produ
 KLIB metadata.
 
 Unlike Native's separate library-compilation and binary-link stages, every current .NET product
-emits a CLR assembly. Library and standard-library modes also serialize a KLIB, and their DLL half
-links dependency IR into physical CLR metadata. However, the .NET frontend has not yet registered
+emits a CLR assembly. Library and standard-library modes also serialize a KLIB into the assembly's
+private `Kotlin.Metadata` resource, and the DLL links dependency IR into physical CLR metadata.
+However, the .NET frontend has not yet registered
 the common partial-linkage diagnostic names. Marking these invocations as a common second stage
 therefore asks the configurator to set warning levels for diagnostics that do not exist and makes
 every compilation fail. The generated argument model inherits the common partial-linkage options,

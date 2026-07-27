@@ -281,11 +281,10 @@ data class DotNetPortablePhysicalAbiDifference(
     val platformDeclaration: DotNetPhysicalDeclaration?,
 )
 
-/** One Kotlin metadata carrier bound to its CLR implementation and declaration index. */
+/** One self-describing Kotlin/.NET assembly and its decoded declaration index. */
 data class DotNetExternalLibrary(
     val artifact: DotNetLibraryArtifact,
-    val metadataFile: File,
-    val implementationFile: File,
+    val assemblyFile: File,
     val declarations: Map<String, DotNetPhysicalDeclaration>,
     val friendAssemblies: Set<DotNetFriendAssemblyIdentity>,
 )
@@ -350,11 +349,6 @@ object DotNetLibraryAbiCodec {
 
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
-
-    fun implementationSha256(file: File): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest(file.readBytes())
-            .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
 
     /** Version-1 digest algorithm used when a physical name is derived from logical identity. */
     fun logicalIdentityDigest(logicalIdentity: String): String =

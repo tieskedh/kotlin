@@ -611,7 +611,7 @@ internal class DotNetIlClassInfo(
         assemblyName?.let { "[$it]$localRef" } ?: localRef
     }
 
-    /** Assembly-independent owner path persisted in the paired KLIB declaration index. */
+    /** Assembly-independent owner path persisted in the DLL's Kotlin declaration index. */
     fun physicalPathComponents(): List<String> =
         enclosingClass?.physicalPathComponents().orEmpty() + ilClassName
 

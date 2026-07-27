@@ -91,8 +91,9 @@ internal val DotNetGenericInterfaceMemberView.physicalView: DotNetGenericInterfa
  * Every Kotlin-owned generic interface needs a canonical identity, including an invariant one:
  * use-site projections and stars can change its logical view without changing object identity.
  *
- * Ownership is deliberately established by the emitter (local declarations) or the bound KLIB
- * before this predicate is acted on. It must not be used to rewrite an imported CLR interface.
+ * Ownership is deliberately established by the emitter (local declarations) or the physical
+ * declaration index embedded in an external assembly before this predicate is acted on. It must
+ * not be used to rewrite an imported CLR interface.
  */
 internal val IrClass.isDotNetGenericInterfaceDeclaration: Boolean
     get() = isInterface && typeParameters.isNotEmpty()

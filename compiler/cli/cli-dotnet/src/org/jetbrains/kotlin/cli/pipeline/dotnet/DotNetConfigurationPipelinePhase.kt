@@ -267,7 +267,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
 
         configuration.perfManager?.apply {
             outputKind =
-                if (arguments.dotNetProduceStdlib || arguments.dotNetProduceLibrary) "KLIB + .NET library" else "IL"
+                if (arguments.dotNetProduceStdlib || arguments.dotNetProduceLibrary) ".NET library" else "IL"
             targetDescription = assemblyName
         }
     }
@@ -293,18 +293,8 @@ private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
     }
     for (targetFramework in targetFrameworks) {
         val directory = DotNetStdlibArtifact.distributionDirectory(kotlinLibDirectory, targetFramework)
-        val metadataFile = directory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
         val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
-        if (!metadataFile.exists() && !implementationFile.exists()) continue
-        if (!implementationFile.isFile) {
-            report(
-                COMPILER_ARGUMENTS_ERROR,
-                "Incomplete Kotlin/.NET $targetFramework stdlib installation in '$directory': " +
-                        "${DotNetStdlibArtifact.METADATA_FILE_NAME} is transitional metadata and cannot be used " +
-                        "without the canonical ${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME}.",
-            )
-            return true
-        }
+        if (!implementationFile.isFile) continue
         add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(implementationFile))
         return true
     }

@@ -112,4 +112,4 @@ Classifications:
 Common metadata compilation can name .NET without masquerading as another backend. Gradle module
 metadata can distinguish .NET artifacts before the built-in target is complete. The separate
 profile attribute now owns compatibility; the next integration slice is a built-in target whose
-tasks invoke the real .NET compiler and own the KLIB/DLL artifact pair.
+tasks invoke the real .NET compiler and own the self-describing DLL artifact.

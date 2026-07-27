@@ -120,7 +120,7 @@ The canonical `contains` MethodImpl uses the common `SpecialBridgeMethods` ident
 references, nullable primitives, nullable references, and an open `T`; an unrelated user
 `@UnsafeVariance` member is separately pinned to retain ordinary cast failure. List reuses that
 false barrier and the common `-1` policy for wrong-shaped `indexOf`/`lastIndexOf` arguments.
-Same-module IL/box, KLIB/DLL consumption, and raw CLR calls cover the Collection, ListIterator, and
+Same-module IL/box, cross-DLL consumption, and raw CLR calls cover the Collection, ListIterator, and
 List views, including nested canonical results and List's exact Collection super-view. Generated
 C# helper facades and minimal per-operation capability types remain pending, so this checkpoint
 validates the identity/execution representation rather than finalizing the public interop surface.
@@ -738,7 +738,7 @@ is currently supported. A bodyless group with one resolved signature receives th
 a selected portable default is covered by the profile-aware promotion mandated by the
 default-interface ADR, including a resolver promotion for incomparable generic providers. Any
 remaining group that needs a nested owner-relative constraint adapter or incompatible
-parameter/constraint adaptation is rejected before the KLIB/DLL pair is published.
+parameter/constraint adaptation is rejected before the self-describing DLL is published.
 Silently omitting such a group is not a temporary representation: it would publish a Kotlin-valid
 but C#-ambiguous and cross-module-incomplete ABI.
 

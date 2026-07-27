@@ -359,7 +359,7 @@ mechanism. Its schema-7 DLL manifest is implemented: it records the canonical
 declaration keys. It also records profile, canonical, declared, and exact owners where those split
 views exist, member and property groupings, strongly typed authoring views, MethodDef locators,
 helper/DIM obligations, and logical contributor mappings for derived
-intersection slots without requiring the sibling KLIB. A no-KLIB
+intersection slots without parsing the private Kotlin metadata resource. A DLL-only
 integration test reads the actual assembly metadata, generates a partial C# implementation for a
 property, generic method, exact-only unsafe input, and default, then executes Kotlin verification
 for `net48`, `netstandard2.0`, and `net10.0`. Ordinary non-generic interfaces use one canonical
@@ -390,7 +390,7 @@ different physical results, so publication rejects the pair atomically. Same-nam
 two parent interfaces are now also rejected when their distinct Kotlin callable types both erase
 to CLR `Function1` and no Kotlin-selected intersection slot covers them. The same gate now follows
 consumer-owned intermediate interfaces into a separately compiled producer and refuses the
-consumer KLIB/DLL pair, closing the direct/transitive cross-module direction.
+consumer DLL, closing the direct/transitive cross-module direction.
 A valid consumer-substitution direction is now distinct from that rejection. A generic Kotlin
 child inherits `select(T)` and `select(String)` without a producer-side intersection; when a C#
 partial closes `T = String`, the production generator binds one `Select(string)` source body to
@@ -570,8 +570,8 @@ ordinary internal declaration from its associated main module.
 The target's API and runtime variants now publish the profile-attributed self-describing DLL as
 their only artifact. The DLL is a declared task output, retaining normal Gradle producer ordering
 and configuration-cache behavior. The association lane and a separate producer/consumer project
-lane both delete the producer's sibling KLIB before consumer compilation, proving that Gradle
-dependency and friend wiring no longer rely on the transitional file.
+lane both compile from the producer DLL while excluding its task, proving that Gradle dependency
+and friend wiring rely on the declared self-describing artifact.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
@@ -700,8 +700,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 50
-library-integration tests; the current audited result is 851/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 49
+library-integration tests; the current audited result is 850/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -775,7 +775,7 @@ body.
 A second portable exception-signature lane now returns each broad logical category, stores and
 mutates all four through public properties, and returns a nested generic runtime-exception value.
 Separate net48 and net10 consumers preserve classifier results and exact object identity across the
-producer KLIB/DLL boundary; the IL assertion also pins four `System.Exception` property carriers
+producer DLL boundary; the IL assertion also pins four `System.Exception` property carriers
 and four grammar-v2 setter names. This closes Kotlin-producer return/property coverage without
 claiming the still-undecided narrow or foreign C# admission policy.
 
@@ -809,10 +809,10 @@ After P0:
 - add export null guards or explicitly record a different boundary contract;
 - restructure whole-file IL goldens toward declaration-level ABI assertions plus semantic boxes;
 - add standard `MODULE:` coverage and a target-owned test module;
-- complete the accepted self-describing-DLL migration: the CLI classpath and friend paths now
-  consume the private embedded KLIB, installed-stdlib discovery is DLL-first, and Gradle API,
-  runtime, project-dependency, association, and friend paths now use only the DLL; stop producing
-  and installing the transitional sibling KLIB after migrating the remaining direct fixtures;
+- replace temporary extraction of the private `Kotlin.Metadata` resource with a bounded
+  DLL-backed Kotlin-library view while retaining the shared KLIB component model; the canonical
+  compiler, installation, Gradle, project-dependency, association, and friend artifact is already
+  the self-describing DLL, and standalone Kotlin/.NET KLIBs are rejected;
 - decide signing and user-library/assembly versioning before publication.
 
 ## 5. Explicitly parked work
