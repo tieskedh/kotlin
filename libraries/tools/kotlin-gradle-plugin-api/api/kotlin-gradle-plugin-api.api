@@ -279,6 +279,10 @@ public abstract interface class org/jetbrains/kotlin/gradle/dsl/KotlinDependenci
 	public abstract fun platform (Ljava/lang/Object;)V
 }
 
+public abstract interface class org/jetbrains/kotlin/gradle/dsl/KotlinDotNetCompilerOptions : org/jetbrains/kotlin/gradle/dsl/KotlinCommonCompilerOptions {
+	public abstract fun getModuleName ()Lorg/gradle/api/provider/Property;
+}
+
 public abstract interface annotation class org/jetbrains/kotlin/gradle/dsl/KotlinGradlePluginDsl : java/lang/annotation/Annotation {
 }
 

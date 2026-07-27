@@ -55,7 +55,12 @@ private const val COMMON_COMPILER_OPTIONS_KDOC = "Common compiler options for al
 private const val JVM_COMPILER_OPTIONS_KDOC = "Compiler options for Kotlin/JVM."
 private const val JS_COMPILER_OPTIONS_KDOC = "Compiler options for Kotlin/JS."
 private const val NATIVE_COMPILER_OPTIONS_KDOC = "Compiler options for Kotlin Native."
+private const val DOTNET_COMPILER_OPTIONS_KDOC = "Compiler options for Kotlin/.NET."
 private const val MULTIPLATFORM_COMPILER_OPTION_KDOC = "Compiler options for the Kotlin common platform."
+private const val DOTNET_EXPERIMENTAL_ANNOTATION =
+    "@org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi"
+private const val DOTNET_EXPERIMENTAL_OPT_IN =
+    "@kotlin.OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)"
 
 fun generateKotlinGradleOptions(withPrinterToFile: (targetFile: File, Printer.() -> Unit) -> Unit) {
     val apiSrcDir = File(GRADLE_API_SRC_DIR)
@@ -115,6 +120,19 @@ fun generateKotlinGradleOptions(withPrinterToFile: (targetFile: File, Printer.()
     generateKotlinNativeOptionsImpl(
         srcDir,
         nativeOptions,
+        commonCompilerOptionsImpl.baseImplName,
+        commonCompilerOptionsImpl.helperName,
+        withPrinterToFile
+    )
+
+    val dotNetOptions = generateKotlinDotNetOptions(
+        apiSrcDir,
+        commonCompilerOptions,
+        withPrinterToFile
+    )
+    generateKotlinDotNetOptionsImpl(
+        srcDir,
+        dotNetOptions,
         commonCompilerOptionsImpl.baseImplName,
         commonCompilerOptionsImpl.helperName,
         withPrinterToFile
@@ -457,6 +475,63 @@ private fun generateKotlinNativeOptionsImpl(
     }
 }
 
+private fun generateKotlinDotNetOptions(
+    apiSrcDir: File,
+    commonCompilerOptions: GeneratedOptions,
+    withPrinterToFile: (targetFile: File, Printer.() -> Unit) -> Unit,
+): GeneratedOptions {
+    val dotNetInterfaceFqName = FqName("$OPTIONS_PACKAGE_PREFIX.KotlinDotNetCompilerOptions")
+    with(actualDotNetArguments) {
+        val dotNetOptions = gradleOptions()
+        withPrinterToFile(fileFromFqName(apiSrcDir, dotNetInterfaceFqName)) {
+            generateInterface(
+                dotNetInterfaceFqName,
+                dotNetOptions,
+                parentType = commonCompilerOptions.optionsName,
+                interfaceKDoc = DOTNET_COMPILER_OPTIONS_KDOC,
+                declarationAnnotations = listOf(DOTNET_EXPERIMENTAL_ANNOTATION),
+            )
+        }
+
+        println("\n### Attributes specific for .NET\n")
+        generateMarkdown(dotNetOptions)
+        return GeneratedOptions(dotNetInterfaceFqName, null, dotNetOptions, this)
+    }
+}
+
+private fun generateKotlinDotNetOptionsImpl(
+    srcDir: File,
+    dotNetOptions: GeneratedOptions,
+    commonCompilerImpl: FqName,
+    commonCompilerHelper: FqName,
+    withPrinterToFile: (targetFile: File, Printer.() -> Unit) -> Unit,
+) {
+    val dotNetInterfaceFqName: FqName = dotNetOptions.optionsName
+    val dotNetImplFqName = FqName("${dotNetInterfaceFqName.asString()}$IMPLEMENTATION_SUFFIX")
+    withPrinterToFile(fileFromFqName(srcDir, dotNetImplFqName)) {
+        generateImpl(
+            dotNetImplFqName,
+            commonCompilerImpl,
+            dotNetOptions,
+            declarationAnnotations = listOf(DOTNET_EXPERIMENTAL_OPT_IN),
+        )
+    }
+
+    val k2DotNetCompilerArgumentsFqName = FqName(K2DotNetCompilerArguments::class.qualifiedName!!)
+    val dotNetCompilerOptionsHelperFqName = FqName(
+        "${dotNetInterfaceFqName.asString()}$IMPLEMENTATION_HELPERS_SUFFIX"
+    )
+    withPrinterToFile(fileFromFqName(srcDir, dotNetCompilerOptionsHelperFqName)) {
+        generateCompilerOptionsHelper(
+            dotNetCompilerOptionsHelperFqName,
+            commonCompilerHelper,
+            k2DotNetCompilerArgumentsFqName,
+            dotNetOptions,
+            declarationAnnotations = listOf(DOTNET_EXPERIMENTAL_OPT_IN),
+        )
+    }
+}
+
 private fun generateMultiplatformCommonOptions(
     apiSrcDir: File,
     commonCompilerOptions: GeneratedOptions,
@@ -554,9 +629,11 @@ private fun Printer.generateInterface(
     properties: List<KotlinCompilerArgument>,
     parentType: FqName? = null,
     interfaceKDoc: String? = null,
+    declarationAnnotations: List<String> = emptyList(),
 ) {
     val afterType = parentType?.let { " : $it" }
-    generateDeclaration("interface", type, afterType = afterType, declarationKDoc = interfaceKDoc) {
+    val modifiers = (declarationAnnotations + "interface").joinToString("\n")
+    generateDeclaration(modifiers, type, afterType = afterType, declarationKDoc = interfaceKDoc) {
         for (property in properties) {
             println()
             generateDoc(property)
@@ -616,10 +693,11 @@ private fun Printer.generateImpl(
     type: FqName,
     parentImplFqName: FqName?,
     parentGeneratedOptions: GeneratedOptions,
+    declarationAnnotations: List<String> = emptyList(),
 ) {
     val parentType: FqName = parentGeneratedOptions.optionsName
     val properties: List<KotlinCompilerArgument> = parentGeneratedOptions.properties
-    val modifiers = "internal abstract class"
+    val modifiers = (declarationAnnotations + "internal abstract class").joinToString("\n")
     val afterType = if (parentImplFqName != null) {
         ": $parentImplFqName(objectFactory), $parentType"
     } else {
@@ -643,8 +721,9 @@ private fun Printer.generateCompilerOptionsHelper(
     parentHelperName: FqName?,
     argsType: FqName,
     options: GeneratedOptions,
+    declarationAnnotations: List<String> = emptyList(),
 ) {
-    val modifiers = "internal object"
+    val modifiers = (declarationAnnotations + "internal object").joinToString("\n")
     val type: FqName = options.optionsName
     val properties: List<KotlinCompilerArgument> = options.properties
 
@@ -1179,6 +1258,12 @@ private val additionalMetadata = mapOf(
         ),
     ),
     CompilerArgumentsLevelNames.nativeArguments to mapOf(
+        "module-name" to GradleOption(
+            value = DefaultValue.STRING_NULL_DEFAULT,
+            gradleInputType = GradleInputTypes.INPUT
+        )
+    ),
+    CompilerArgumentsLevelNames.dotNetArguments to mapOf(
         "module-name" to GradleOption(
             value = DefaultValue.STRING_NULL_DEFAULT,
             gradleInputType = GradleInputTypes.INPUT
