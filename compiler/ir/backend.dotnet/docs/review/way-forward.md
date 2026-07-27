@@ -556,7 +556,8 @@ and Gradle module metadata now recognize one distinct Kotlin/.NET platform ident
 repository still has no built-in Kotlin/.NET target or compilation model. The compiler already
 owns both friend controls, but a build association must derive assembly names, profile variants,
 artifacts, output paths, and task dependencies from one product-owned compilation relationship.
-Add the separate target-framework attribute and experimental .NET target/compilation model first,
+The separate typed target-framework attribute now models exact-profile selection plus the two
+legal `netstandard2.0` fallback edges. Add the experimental .NET target/compilation model next,
 then make `associateWith` configure producer `InternalsVisibleTo` and consumer friend KLIB paths
 together before Gate A.
 
