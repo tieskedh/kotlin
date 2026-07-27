@@ -573,6 +573,15 @@ and configuration-cache behavior. The association lane and a separate producer/c
 lane both compile from the producer DLL while excluding its task, proving that Gradle dependency
 and friend wiring rely on the declared self-describing artifact.
 
+The compiler now retains that DLL identity through frontend loading as well. The target-owned
+ECMA-335 reader locates and authenticates the private resource; a shared packed-metadata KLIB
+loader validates canonical entries and bounded expansion and creates the ordinary
+`KotlinLibrary`/`KlibMetadataComponent` view in memory. `KotlinLibrary.path`, dependency module
+data, friend paths, and diagnostics therefore name the DLL directly, with no temporary KLIB or
+container-specific metadata model in dependency loading. Common unit coverage pins archive
+validation and component behavior; DLL integration coverage pins malformed-resource diagnostics
+and real cross-module use.
+
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
 property accessor bodies, helper-owned default-argument decoding followed by virtual override
@@ -809,10 +818,6 @@ After P0:
 - add export null guards or explicitly record a different boundary contract;
 - restructure whole-file IL goldens toward declaration-level ABI assertions plus semantic boxes;
 - add standard `MODULE:` coverage and a target-owned test module;
-- replace temporary extraction of the private `Kotlin.Metadata` resource with a bounded
-  DLL-backed Kotlin-library view while retaining the shared KLIB component model; the canonical
-  compiler, installation, Gradle, project-dependency, association, and friend artifact is already
-  the self-describing DLL, and standalone Kotlin/.NET KLIBs are rejected;
 - decide signing and user-library/assembly versioning before publication.
 
 ## 5. Explicitly parked work

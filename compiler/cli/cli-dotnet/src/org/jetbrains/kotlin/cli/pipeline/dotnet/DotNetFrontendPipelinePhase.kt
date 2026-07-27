@@ -1,7 +1,5 @@
 package org.jetbrains.kotlin.cli.pipeline.dotnet
 
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.util.Disposer
 import org.jetbrains.kotlin.CoreEnvironmentDeprecation
 import org.jetbrains.kotlin.KtPsiSourceFile
 import org.jetbrains.kotlin.KtSourceFile
@@ -51,14 +49,13 @@ import org.jetbrains.kotlin.fir.pipeline.buildFirFromKtFiles
 import org.jetbrains.kotlin.fir.pipeline.buildFirViaLightTree
 import org.jetbrains.kotlin.fir.pipeline.resolveAndCheckFir
 import org.jetbrains.kotlin.fir.pipeline.runPlatformCheckers
+import org.jetbrains.kotlin.library.KLIB_PROPERTY_UNIQUE_NAME
 import org.jetbrains.kotlin.library.KotlinLibrary
-import org.jetbrains.kotlin.library.uniqueName
+import org.jetbrains.kotlin.library.loader.loadPackedMetadataKlib
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.util.PhaseType
 import org.jetbrains.kotlin.util.PotentiallyIncorrectPhaseTimeMeasurement
 import java.io.File
-import java.io.IOException
-import java.nio.file.Files
 
 object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact, DotNetFrontendPipelineArtifact>(
     name = "DotNetFrontendPipelinePhase",
@@ -69,7 +66,7 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
         val diagnosticsReporter = configuration.diagnosticsCollector
         val rootModuleName = Name.special("<${configuration.moduleName!!}>")
         val isLightTree = configuration.getBoolean(CommonConfigurationKeys.USE_LIGHT_TREE)
-        val preparedLibraries = configuration.prepareDotNetDllLibraries(rootDisposable)
+        val preparedLibraries = configuration.prepareDotNetDllLibraries()
         @OptIn(CoreEnvironmentDeprecation::class)
         val environment = KotlinCoreEnvironment.createForProduction(
             rootDisposable,
@@ -85,16 +82,17 @@ object DotNetFrontendPipelinePhase : PipelinePhase<ConfigurationPipelineArtifact
 
         val projectEnvironment = environment.toVfsBasedProjectEnvironment()
         val librariesScope = projectEnvironment.getSearchScopeForProjectLibraries()
-        val libraryPaths = configuration.contentRoots.mapNotNull { (it as? JvmClasspathRoot)?.file?.path }
+        val ordinaryKlibs = loadMetadataKlibs(
+            libraryPaths = preparedLibraries.ordinaryLibraryPaths,
+            configuration = configuration,
+        ).all
+        val klibs = preparedLibraries.librariesInClasspathOrder(ordinaryKlibs)
+        val libraryPaths = klibs.map { library -> library.path.toString() }
         val libraryList = DependencyListForCliModule.build(rootModuleName) {
             dependencies(libraryPaths)
             friendDependencies(preparedLibraries.resolvedFriendPaths)
         }
-        val klibs: List<KotlinLibrary> = loadMetadataKlibs(
-            libraryPaths = libraryPaths,
-            configuration = configuration,
-        ).all
-        configuration.recordExternalDotNetLibraries(klibs, preparedLibraries.embeddedSourceByMetadataFile)
+        configuration.recordExternalDotNetLibraries(klibs, preparedLibraries.embeddedSourceByLibrary)
         configuration.recordExternalDotNetStdlib()
         configuration.validateDotNetFriendDependencies()
         val extensionRegistrars = configuration.getCompilerExtensions(FirExtensionRegistrar)
@@ -168,27 +166,42 @@ private data class DotNetEmbeddedMetadataSource(
 )
 
 private data class PreparedDotNetLibraries(
-    val embeddedSourceByMetadataFile: Map<File, DotNetEmbeddedMetadataSource>,
+    val classpathOrder: List<File>,
+    val ordinaryLibraryPaths: List<String>,
+    val embeddedLibraryByAssembly: Map<File, KotlinLibrary>,
+    val embeddedSourceByLibrary: Map<KotlinLibrary, DotNetEmbeddedMetadataSource>,
     val resolvedFriendPaths: List<String>,
-)
+) {
+    fun librariesInClasspathOrder(ordinaryLibraries: List<KotlinLibrary>): List<KotlinLibrary> {
+        val libraryByPath = ordinaryLibraries.associateBy { library -> library.path.toFile().canonicalFile } +
+                embeddedLibraryByAssembly
+        val seen = hashSetOf<KotlinLibrary>()
+        return classpathOrder.mapNotNull(libraryByPath::get).filter(seen::add)
+    }
+}
 
 /**
- * Presents the complete KLIB embedded in a Kotlin-produced DLL to the shared KLIB loader.
+ * Presents the metadata KLIB embedded in a Kotlin-produced DLL through the shared KotlinLibrary
+ * component contract.
  *
- * Extraction is a JVM-hosted implementation detail scoped to one compilation. The published
- * dependency remains the CLR DLL, while Kotlin declaration identity and deserialization continue
- * to use the common KLIB machinery without a second metadata model.
+ * The JVM-hosted compiler reads the private resource without loading target code. The physical
+ * library path remains the CLR DLL; no temporary KLIB path or second artifact identity is created.
  */
-private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLibraries(
-    rootDisposable: Disposable,
-): PreparedDotNetLibraries {
-    val extractedByAssembly = linkedMapOf<File, File>()
-    val sourceByMetadata = linkedMapOf<File, DotNetEmbeddedMetadataSource>()
-    val temporaryFiles = mutableListOf<java.nio.file.Path>()
+private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLibraries(): PreparedDotNetLibraries {
+    val embeddedLibraryByAssembly = linkedMapOf<File, KotlinLibrary>()
+    val sourceByLibrary = linkedMapOf<KotlinLibrary, DotNetEmbeddedMetadataSource>()
+    val originalContentRoots = contentRoots
+    val classpathOrder = originalContentRoots.mapNotNull { root ->
+        (root as? JvmClasspathRoot)?.file?.canonicalFile
+    }
+    val ordinaryLibraryPaths = originalContentRoots.mapNotNull { root ->
+        val classpathRoot = root as? JvmClasspathRoot ?: return@mapNotNull null
+        classpathRoot.file.path.takeUnless { classpathRoot.file.extension.equals("dll", ignoreCase = true) }
+    }
 
-    fun extract(assemblyFile: File): File? {
+    fun load(assemblyFile: File): KotlinLibrary? {
         val canonicalAssembly = assemblyFile.canonicalFile
-        extractedByAssembly[canonicalAssembly]?.let { return it }
+        embeddedLibraryByAssembly[canonicalAssembly]?.let { return it }
         val resource = try {
             DotNetManagedResourceReader.read(canonicalAssembly, DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME)
         } catch (exception: DotNetBadImageFormatException) {
@@ -211,45 +224,42 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.prepareDotNetDllLi
             )
             return null
         }
-        val metadataPath = try {
-            Files.createTempFile("kotlin-dotnet-metadata-", ".klib").also { path ->
-                temporaryFiles.add(path)
-                Files.write(path, resource.content)
-            }
-        } catch (exception: IOException) {
+        val library = try {
+            loadPackedMetadataKlib(canonicalAssembly.toPath(), resource.content)
+        } catch (exception: IllegalArgumentException) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
-                "Could not prepare Kotlin metadata from managed assembly '${assemblyFile.path}': ${exception.message}",
+                "Managed assembly '${assemblyFile.path}' has invalid private " +
+                        "'${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}' Kotlin metadata: " +
+                        exception.message,
             )
             return null
         }
-        val metadataFile = metadataPath.toFile().canonicalFile
-        extractedByAssembly[canonicalAssembly] = metadataFile
-        sourceByMetadata[metadataFile] = DotNetEmbeddedMetadataSource(canonicalAssembly, resource.assemblyIdentity)
-        return metadataFile
+        embeddedLibraryByAssembly[canonicalAssembly] = library
+        sourceByLibrary[library] = DotNetEmbeddedMetadataSource(canonicalAssembly, resource.assemblyIdentity)
+        return library
     }
 
-    contentRoots = contentRoots.mapNotNull { root ->
-        val classpathRoot = root as? JvmClasspathRoot ?: return@mapNotNull root
-        if (!classpathRoot.file.extension.equals("dll", ignoreCase = true)) return@mapNotNull root
-        extract(classpathRoot.file)?.let { metadataFile ->
-            JvmClasspathRoot(metadataFile, classpathRoot.isSdkRoot)
-        }
+    contentRoots = originalContentRoots.filterNot { root ->
+        val classpathRoot = root as? JvmClasspathRoot ?: return@filterNot false
+        classpathRoot.file.extension.equals("dll", ignoreCase = true)
     }
+    classpathOrder.filter { file -> file.extension.equals("dll", ignoreCase = true) }.forEach(::load)
     val resolvedFriendPaths = dotNetFriendPaths.map { friendPath ->
         val friendFile = File(friendPath)
         if (!friendFile.extension.equals("dll", ignoreCase = true)) {
             friendPath
         } else {
-            extractedByAssembly[friendFile.canonicalFile]?.path ?: friendPath
+            embeddedLibraryByAssembly[friendFile.canonicalFile]?.path?.toString() ?: friendPath
         }
     }
-    if (temporaryFiles.isNotEmpty()) {
-        Disposer.register(rootDisposable, Disposable {
-            temporaryFiles.forEach { path -> runCatching { Files.deleteIfExists(path) } }
-        })
-    }
-    return PreparedDotNetLibraries(sourceByMetadata, resolvedFriendPaths)
+    return PreparedDotNetLibraries(
+        classpathOrder,
+        ordinaryLibraryPaths,
+        embeddedLibraryByAssembly,
+        sourceByLibrary,
+        resolvedFriendPaths,
+    )
 }
 
 /** Selects the validated Kotlin/.NET stdlib from the complete external-library set. */
@@ -296,21 +306,9 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
  */
 private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotNetLibraries(
     klibs: List<KotlinLibrary>,
-    embeddedSourceByMetadataFile: Map<File, DotNetEmbeddedMetadataSource>,
+    embeddedSourceByLibrary: Map<KotlinLibrary, DotNetEmbeddedMetadataSource>,
 ) {
-    val klibByMetadataFile = klibs.associateBy { library -> library.path.toFile().canonicalFile }
-    for (entry in embeddedSourceByMetadataFile) {
-        val metadataFile = entry.key
-        val embeddedSource = entry.value
-        val library = klibByMetadataFile[metadataFile]
-        if (library == null) {
-            report(
-                COMPILER_ARGUMENTS_ERROR,
-                "Embedded '${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}' in " +
-                        "'${embeddedSource.assemblyFile.path}' is not a loadable Kotlin library.",
-            )
-            return
-        }
+    for ([library, embeddedSource] in embeddedSourceByLibrary) {
         if (library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) == null) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
@@ -322,7 +320,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     }
     val standaloneDotNetKlib = klibs.firstOrNull { library ->
         library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) != null &&
-                library.path.toFile().canonicalFile !in embeddedSourceByMetadataFile
+                library !in embeddedSourceByLibrary
     }
     if (standaloneDotNetKlib != null) {
         report(
@@ -332,15 +330,14 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         )
         return
     }
-    val candidates = embeddedSourceByMetadataFile.keys.mapNotNull(klibByMetadataFile::get)
+    val candidates = klibs.filter { library -> library in embeddedSourceByLibrary }
     if (candidates.isEmpty()) return
 
     val libraries = mutableListOf<DotNetExternalLibrary>()
     val assemblyNames = hashSetOf<String>()
     val logicalKeys = hashSetOf<String>()
     for (library in candidates) {
-        val metadataKlibFile = library.path.toFile().canonicalFile
-        val embeddedSource = checkNotNull(embeddedSourceByMetadataFile[metadataKlibFile])
+        val embeddedSource = checkNotNull(embeddedSourceByLibrary[library])
         val displayPath = embeddedSource.assemblyFile.path
         val properties = library.manifestProperties
         val abiVersion = properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY)
@@ -467,7 +464,8 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         val publicKeyToken = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY) ?: return
         val assemblyFileName = required(DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY) ?: return
         val targetFramework = required(DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY) ?: return
-        val identityIsSupported = assemblyName == library.uniqueName &&
+        val uniqueName = required(KLIB_PROPERTY_UNIQUE_NAME) ?: return
+        val identityIsSupported = assemblyName == uniqueName &&
                 assemblyFileName == "$assemblyName.dll" &&
                 java.io.File(assemblyFileName).name == assemblyFileName &&
                 assemblyVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+")) &&

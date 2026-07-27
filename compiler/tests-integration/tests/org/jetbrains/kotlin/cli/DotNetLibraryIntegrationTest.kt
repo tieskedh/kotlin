@@ -9291,6 +9291,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("Malformed.Library.dll' is invalid: DOS header is outside the PE file" in malformedDiagnostics) {
             malformedDiagnostics
         }
+
+        val malformedMetadataDll = produceLibraryWithTransformedMetadataCarrier(
+            assemblyName = "Malformed.Embedded.Metadata",
+            transform = { byteArrayOf(0x50, 0x4b, 0x03, 0x04) },
+        )
+        val malformedMetadataDiagnostics = compileAgainstRejectedDll(malformedMetadataDll)
+        assertTrue(
+            "has invalid private '${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}' Kotlin metadata" in
+                    malformedMetadataDiagnostics
+        ) {
+            malformedMetadataDiagnostics
+        }
+        assertTrue("archive has no valid end-of-central-directory record" in malformedMetadataDiagnostics) {
+            malformedMetadataDiagnostics
+        }
     }
 
     @Test
@@ -14981,6 +14996,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     private fun produceLibraryWithRewrittenMetadata(
         assemblyName: String,
         propertyOverrides: Map<String, String>,
+    ): File = produceLibraryWithTransformedMetadataCarrier(assemblyName) { carrier ->
+        carrier.rewriteKlibManifest(propertyOverrides)
+    }
+
+    private fun produceLibraryWithTransformedMetadataCarrier(
+        assemblyName: String,
+        transform: (ByteArray) -> ByteArray,
     ): File {
         val directory = File(tmpdir, assemblyName).apply { mkdirs() }
         val source = directory.resolve("library.kt").apply {
@@ -14995,7 +15017,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, directory.path,
         )
         val original = directory.resolve("$assemblyName.dll")
-        val rewrittenMetadata = original.readKlibCarrier().rewriteKlibManifest(propertyOverrides)
+        val rewrittenMetadata = transform(original.readKlibCarrier())
         val csharpManifest = checkNotNull(
             DotNetManagedResourceReader.read(
                 original,
