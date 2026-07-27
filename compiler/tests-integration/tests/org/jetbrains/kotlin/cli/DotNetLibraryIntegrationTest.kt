@@ -901,6 +901,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 public fun <R : @UnsafeVariance T> retainBoth(value: R): R
             }
 
+            public interface SubstitutedLeft<T> {
+                public fun select(value: T): Int
+            }
+
+            public interface SubstitutedRight {
+                public fun select(value: String): Int
+            }
+
             public interface OrdinaryParent {
                 public val displayName: String
                 public fun fallbackName(): String = displayName
@@ -1127,6 +1135,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             public interface ResolvedOwnerBound<out T> :
                 OwnerBoundLeft<T>, OwnerBoundRight<T>
 
+            public interface SubstitutedPair<T> :
+                SubstitutedLeft<T>, SubstitutedRight
+
             public fun verifyOrdinary(value: OrdinaryShape): Int {
                 if (value.displayName != "ordinary") return 1
                 if (value.count != 3) return 2
@@ -1345,6 +1356,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 if (left.retainBoth(Marker) !== Marker) return 2
                 return if (right.retainBoth(Marker) === Marker) 0 else 3
             }
+
+            public fun verifySubstitutedPair(value: SubstitutedPair<String>): Int {
+                val left: SubstitutedLeft<String> = value
+                val right: SubstitutedRight = value
+                if (left.select("left") != 4) return 1
+                return if (right.select("right") == 5) 0 else 2
+            }
         """.trimIndent()
 
         data class ManifestScenario(
@@ -1540,6 +1558,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val ownerBoundRightContract = parentManifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OwnerBoundRight"
             }
+            val substitutedLeftContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.SubstitutedLeft"
+                }
+            val substitutedRightContract =
+                parentManifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.SubstitutedRight"
+                }
             val ordinaryContract = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.OrdinaryShape"
             }
@@ -1789,6 +1817,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val resolvedOwnerBound = manifest.interfaces.single { interfaceContract ->
                 interfaceContract.canonicalOwnerPath.last() == "manifest.ResolvedOwnerBound"
             }
+            val substitutedPairContract =
+                manifest.interfaces.single { interfaceContract ->
+                    interfaceContract.canonicalOwnerPath.last() ==
+                            "manifest.SubstitutedPair"
+                }
             assertTrue(contract.sourceAuthoringSupported, contract.unsupportedReasons.joinToString())
             assertTrue(markerContract.sourceAuthoringSupported)
             assertTrue(ordinaryParentContract.sourceAuthoringSupported)
@@ -1808,6 +1841,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(ownerBoundContract.sourceAuthoringSupported)
             assertTrue(ownerBoundLeftContract.sourceAuthoringSupported)
             assertTrue(ownerBoundRightContract.sourceAuthoringSupported)
+            assertTrue(substitutedLeftContract.sourceAuthoringSupported)
+            assertTrue(substitutedRightContract.sourceAuthoringSupported)
             assertTrue(ordinaryContract.sourceAuthoringSupported)
             assertTrue(reabstractedContract.sourceAuthoringSupported)
             assertTrue(genericReabstractedContract.sourceAuthoringSupported)
@@ -1840,6 +1875,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(mutableRightContract.sourceAuthoringSupported)
             assertTrue(resolvedMutable.sourceAuthoringSupported)
             assertTrue(resolvedOwnerBound.sourceAuthoringSupported)
+            assertTrue(substitutedPairContract.sourceAuthoringSupported)
+            assertTrue(substitutedPairContract.intersections.isEmpty()) {
+                "The producer must not invent an open-declaration intersection for " +
+                        "a collision created only by the consumer's T = String substitution"
+            }
             val intersection = resolvedIntersection.intersections.single()
             assertEquals("overlap", intersection.sourceName)
             assertEquals(DotNetCSharpMemberKind.METHOD, intersection.kind)
@@ -2225,8 +2265,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 genericDefaultMutablePropertyHelperNames.size,
                 genericDefaultMutablePropertyHelperNames.toSet().size,
             )
-            assertEquals(if (externalParent) 18 else 43, manifest.interfaces.size)
-            assertEquals(if (externalParent) 25 else 43, parentManifest.interfaces.size)
+            assertEquals(if (externalParent) 19 else 46, manifest.interfaces.size)
+            assertEquals(if (externalParent) 27 else 46, parentManifest.interfaces.size)
             if (scenario.name in setOf("net48", "netstandard2.0", "net10.0")) {
                 contractsByProfile[scenario.name] =
                     listOf(
@@ -2234,6 +2274,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         ownerBoundContract,
                         ownerBoundLeftContract,
                         ownerBoundRightContract,
+                        substitutedLeftContract,
+                        substitutedRightContract,
+                        substitutedPairContract,
                         ordinaryParentContract,
                         ordinaryContract,
                         reabstractableContract,
@@ -2924,6 +2967,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         }
                     }
 
+                    public sealed partial class SubstitutedPairBaseListProbe :
+                        manifest.SubstitutedPair<string>
+                    {
+                        public int Select(string value)
+                        {
+                            return value.Length;
+                        }
+                    }
+
                     public sealed partial class BarrierBaseListProbe :
                         manifest.BarrierShape<string>
                     {
@@ -3115,6 +3167,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 throw new System.Exception(
                                     "Generated owner-bound intersection failed: " +
                                     ownerBoundIntersectionResult);
+                            int substitutedPairResult =
+                                manifest.apiKt.verifySubstitutedPair(
+                                    new SubstitutedPairBaseListProbe());
+                            if (substitutedPairResult != 0)
+                                throw new System.Exception(
+                                    "Generated substituted inherited overload family failed: " +
+                                    substitutedPairResult);
                             int barrierResult =
                                 manifest.apiKt.verifyBarrier(new BarrierBaseListProbe());
                             if (barrierResult != 0)
