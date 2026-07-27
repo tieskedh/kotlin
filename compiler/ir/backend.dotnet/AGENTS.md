@@ -1632,7 +1632,16 @@ landed shape as a compatibility constraint.
   `csharp-authoring` parses the authoritative DLL manifest with explicit limits and diagnoses
   missing `partial`, inaccessible friendship, conflicting explicit ABI members, unsupported
   substitutions, malformed manifests, and schema/version mismatch. Generated canonical/exact
-  views remain compiler ABI rather than user-authored API. Nested reference-class and record-class
+  views remain compiler ABI rather than user-authored API. Base-list substitution validation is
+  recursive, following the complete Roslyn type tree. Nested named constructions, type parameters,
+  nullable value types, and single-dimensional zero-based CLR vectors are preserved exactly when
+  every child is representable. Nested `dynamic`, pointers/function pointers, unresolved or
+  unbound types, and rectangular/non-vector arrays are `KDNCS004`; never erase one of those leaves
+  to `object` or reinterpret a rectangular CLR array as nested Kotlin `Array`. C# nullable-reference
+  annotations remain foreign flow metadata rather than Kotlin declaration nullability. The
+  production fixture executes `List<Nullable<int>[]>` through the erased canonical slot with both
+  list and vector identity intact, and hostile nested-dynamic and rectangular-array substitutions
+  each produce one diagnostic. Nested reference-class and record-class
   implementors are generated inside a reconstructed partial containing-type chain; every
   container must be partial, and file-local types cannot participate across the generated syntax
   tree. C# struct and record-struct implementors are an accepted deferred shape: `KDNCS010`

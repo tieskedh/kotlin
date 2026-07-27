@@ -437,8 +437,13 @@ The remaining P0-D implementation order is:
 
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-2. Finish nested foreign-signature shapes plus more general substituted inherited overload
-   families and the real same-owner clash matrix. The DLL manifest now covers inherited
+2. Finish producer-declared nested foreign member signatures, more general substituted inherited
+   overload families, and the real same-owner clash matrix. Consumer-owned base-list substitution
+   is now recursively validated: nested named constructions, nullable value types, type
+   parameters, and CLR SZARRAY vectors are preserved structurally, while nested `dynamic`,
+   pointers/function pointers, unresolved/unbound types, and rectangular/non-vector arrays fail
+   with `KDNCS004`. A production `List<Nullable<int>[]>` implementation executes through the
+   canonical erased adapter without losing list or vector identity. The DLL manifest now covers inherited
    mutable-property obligations and friend-accessible internal interfaces. The first production
    `netstandard2.0` Roslyn analyzer/generator slice is now implemented: the real canonical or
    declared C# base list is the only opt-in, its bounded reader consumes the authoritative DLL
