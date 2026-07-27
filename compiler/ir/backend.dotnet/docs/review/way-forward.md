@@ -268,8 +268,12 @@ framework attribute. The verifier now also reads raw ManifestResource rows: a po
 resource must remain present, public, and embedded, while the C# authoring manifest retains its
 schema, assembly identity, logical-identity scheme, and portable logical declarations across
 profile-specific physical slot records. A copied platform PE with one rewritten logical
-declaration and a recomputed envelope digest is rejected as a negative oracle. Raw attribute-blob
-encoding and friend-only internal surface remain open for the general portable-superset model.
+declaration and a recomputed envelope digest is rejected as a negative oracle. Assemblies which
+declare `InternalsVisibleTo` now contribute a second, non-duplicated surface containing internal
+types and their non-private members plus friend-dependent members of exposed types. Both
+executable variants must retain that portable surface, and a narrowed modern fixture is rejected.
+Private declarations remain implementation details. Raw attribute-blob encoding remains open for
+the general portable-superset model.
 Manifest-addressable MethodImpl obligations are now compared semantically rather than by raw row:
 the verifier resolves complete producer-recorded locators, keys each public/protected concrete
 interface-map obligation by Kotlin logical identity, physical view, and constructed CLR signature,
@@ -499,10 +503,10 @@ The remaining P0-D implementation order is:
    and generic Kotlin contracts. The authoring-specific raw
    MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. The
    structured portable-superset verifier also closes the managed-resource row, C# manifest
-   logical-contract comparison, and manifest-addressable semantic MethodImpl obligations without
-   requiring byte-identical profile payloads. Close the remaining general attribute-blob,
-   non-manifest interface-row, and internal-surface comparison in the structured metadata work
-   rather than with IL substring tests.
+   logical-contract comparison, manifest-addressable semantic MethodImpl obligations, and
+   friend-dependent internal surface without requiring byte-identical profile payloads. Close
+   the remaining general attribute-blob and non-manifest interface-row comparisons in the
+   structured metadata work rather than with IL substring tests.
 
 There is no remaining implicit-intersection representation or production-adapter migration on the
 critical path. The next backend implementation item is the foreign boundary and structured
