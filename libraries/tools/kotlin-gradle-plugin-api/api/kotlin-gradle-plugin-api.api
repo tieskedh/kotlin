@@ -1143,6 +1143,7 @@ public final class org/jetbrains/kotlin/gradle/plugin/KotlinPlatformType : java/
 	public static final field Companion Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType$Companion;
 	public static final field androidJvm Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType;
 	public static final field common Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType;
+	public static final field dotnet Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType;
 	public static final field js Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType;
 	public static final field jvm Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType;
 	public static final field native Lorg/jetbrains/kotlin/gradle/plugin/KotlinPlatformType;

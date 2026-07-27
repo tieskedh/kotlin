@@ -73,7 +73,9 @@ fun <T : DecoratedExternalKotlinTarget> KotlinMultiplatformExtension.createExter
         KotlinPlatformType.wasm,
         KotlinPlatformType.js
             -> project.objects.newInstance<KotlinJsCompilerOptionsDefault>()
-        KotlinPlatformType.common -> project.objects.newInstance<KotlinCommonCompilerOptionsDefault>()
+        KotlinPlatformType.common,
+        KotlinPlatformType.dotnet,
+            -> project.objects.newInstance<KotlinCommonCompilerOptionsDefault>()
         KotlinPlatformType.native -> project.objects.newInstance<KotlinNativeCompilerOptionsDefault>()
     }
 

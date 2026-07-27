@@ -38,6 +38,7 @@ internal val KotlinMetadataCompilationTargetPlatformConfiguration = KotlinProjec
                         }
                     }
                     KotlinPlatformType.native -> "Native"
+                    KotlinPlatformType.dotnet -> "DotNet"
                     else -> null
                 }
             }.distinct()

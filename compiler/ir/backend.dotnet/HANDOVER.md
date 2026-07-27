@@ -1326,8 +1326,8 @@ session state, process, and a curated task menu. Keep both files updated as you 
   separate net48 and net10 consumers. The expanded integration class is 36/0/0/0; this enforces,
   rather than changes, the accepted interface-default ADR's generic-parameter mapping rule.
 - `:compiler:backend.dotnet:dotNetTest` is now the build-owned strict commit gate. It combines the
-  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 44 library-integration tests,
-  enables required-toolchain behavior in both owner projects, and currently records 845/0/0/0
+  780 FIR/IL/semantic tests with all 21 generated CLI tests and all 48 library-integration tests,
+  enables required-toolchain behavior in both owner projects, and currently records 849/0/0/0
   across 16 JUnit XML suites. The tests-integration child is privately named `dn`: Gradle embeds
   the task name in test temporary roots, and even the ordinary four-character `test`/`dnet` shape
   can reach exactly 260 characters for the longest CLR4 execution path when the random suffix has
@@ -1789,6 +1789,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   lanes exercise an object property named `INSTANCE`, an inner property named ``this$0``, the
   reserved-suffix case, and independent singleton/outer-field behavior. The accepted private-field
   disambiguation ADR records the six-step target/CLR/Common/.NET/alignment/core-team decision.
+- Kotlin/.NET now has its own logical metadata and Gradle platform identity:
+  metadata `-Xtarget-platform=DotNet` resolves the existing `DotNetPlatform`, while Gradle module
+  metadata uses `KotlinPlatformType.dotnet`. It neither impersonates JVM/Common nor gains
+  compatibility with another leaf platform; the ordinary Common metadata fallback remains
+  available. This deliberately does not yet create a built-in Gradle target or compilation.
+  `net48`, `netstandard2.0`, and `net10.0` remain a second target-framework axis whose explicit
+  Gradle attribute and exact-over-portable compatibility rule are the next slice. The accepted
+  platform-identity ADR records the six-step decision and the temporary neutral compiler-options
+  carrier used only by generic external-target plumbing.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
@@ -1800,7 +1809,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
   inherited parent Property implementations even though the child DIM has MethodImpl mappings;
   generated adapters satisfy that C# source check by dispatching virtually through the selected
   child DIM, never through the compatibility helper or a copied body. The fresh strict gate is
-  848/0/0/0 across 16 XML suites.
+  849/0/0/0 across 16 XML suites.
 - The DLL-only conflict matrix now covers a mutable default property whose Kotlin child selects
   the left qualified-super getter and the right qualified-super setter. Getter and setter keep
   separate logical override edges, helpers, and bodies even though CLR metadata groups them in one
@@ -1873,7 +1882,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 848 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 849 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -1905,12 +1914,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    resource before freezing the schema or package. Continue the foreign provider/implementor
    collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
    structured metadata work; do not substitute IL substring checks.
-2. **Introduce the experimental Gradle target model, then wire friend association.** Compiler/FIR
-   producer authorization and consumer declaration are implemented. The repository has no
-   Kotlin/.NET target or compilation model yet, so do not inject provisional flags into JVM or
-   metadata tasks. The new model must first own profile variants, assembly identity, artifacts,
-   outputs, and task dependencies; `associateWith` can then configure both producer
-   `InternalsVisibleTo` and consumer friend KLIB paths from one relationship.
+2. **Complete the experimental Gradle target model, then wire friend association.** Compiler/FIR
+   producer authorization and consumer declaration are implemented, and Gradle/Common metadata
+   now recognize one logical Kotlin/.NET platform identity. There is still no built-in
+   Kotlin/.NET target or compilation. Add the separate profile attribute and compatibility rules,
+   then make the target own assembly identity, artifacts, outputs, and task dependencies;
+   `associateWith` can then configure both producer `InternalsVisibleTo` and consumer friend KLIB
+   paths from one relationship.
 3. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
    host-capability-aware producer/install tasks already exist and must remain outside unconditional
    cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then

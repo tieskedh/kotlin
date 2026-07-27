@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 68 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 69 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 848 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 849 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2459,6 +2459,14 @@ landed shape as a compatibility constraint.
 
 ## Target selection (`-Xdotnet-target`)
 
+- Kotlin/.NET has one logical compiler/Gradle platform identity independent of its framework
+  profile. Metadata compilation uses `-Xtarget-platform=DotNet` and Gradle module metadata uses
+  `KotlinPlatformType.dotnet`. Do not map it to JVM or Common and do not add cross-platform
+  compatibility; the existing Common metadata fallback applies as it does for every leaf target.
+  The built-in Gradle target is not implemented yet. Its profile selection must be a separate
+  attribute so `net48` and `net10.0` can consume `netstandard2.0` without confusing target-framework
+  compatibility with Kotlin platform compatibility. See
+  `docs/decisions/adr-gradle-dotnet-platform-identity.md`.
 - `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API
   profile, carried as the `DotNetTarget` enum in `DotNetConfigurationKeys.TARGET`. Product kind is
   independent: `net48` and `net10.0` produce applications or libraries; `netstandard2.0` is
