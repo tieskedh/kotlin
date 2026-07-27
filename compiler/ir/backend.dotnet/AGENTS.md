@@ -215,7 +215,15 @@ landed shape as a compatibility constraint.
   every portable logical declaration while profile-specific slot records may differ. It is
   isolated C# test data, not a compiler sidecar. A negative fixture rewrites one embedded logical
   declaration and its envelope digest in a copied platform PE; the verifier must report the
-  missing portable declaration. Raw attribute-blob encoding, general MethodImpl rows, and
+  missing portable declaration. Manifest-addressable MethodImpl obligations are compared by the
+  existing Kotlin logical identity, physical view, and normalized CLR signature. The verifier
+  resolves exact manifest locators and accepts explicit mappings, natural class implementations,
+  selected DIMs, or recorded interface promotions; it never requires identical raw rows. Public
+  concrete mappings form the cross-profile floor, while non-public implementation maps are
+  validated only within their own variant. A generic default fixture and a corrupted name-only
+  locator pin both rules. The fixture includes a mutable property: every physical accessor which
+  owns its Property row, including a modern typed DIM, must retain CLR `specialname`. Raw
+  attribute-blob encoding, non-manifest interface rows, and
   friend-only internal surface remain outside this bounded portable-superset audit. The C#
   authoring matrix separately audits its exact
   `InternalsVisibleTo` blob, friend TypeDef visibility, and promotion MethodImpl signatures.

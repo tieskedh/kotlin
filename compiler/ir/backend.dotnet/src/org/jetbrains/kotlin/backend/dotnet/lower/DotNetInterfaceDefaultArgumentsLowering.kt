@@ -482,6 +482,7 @@ internal class DotNetInterfaceDefaultArgumentsLowering(
             modality = Modality.OPEN
             returnType = source.returnType
         }.apply sibling@{
+            correspondingPropertySymbol = source.correspondingPropertySymbol
             overriddenSymbols = listOf(source.symbol)
             parameters += createDispatchReceiverParameterWithClassParent()
             val siblingTypeParameters = copyTypeParametersFrom(source)
