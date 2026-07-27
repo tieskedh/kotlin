@@ -1367,6 +1367,35 @@ public abstract interface class org/jetbrains/kotlin/gradle/plugin/attributes/Kl
 public final class org/jetbrains/kotlin/gradle/plugin/attributes/KlibPackaging$Companion {
 }
 
+public final class org/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework : java/lang/Enum, java/io/Serializable, org/gradle/api/Named {
+	public static final field ATTRIBUTE Lorg/gradle/api/attributes/Attribute;
+	public static final field Companion Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework$Companion;
+	public static final field NET10_0 Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+	public static final field NET48 Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+	public static final field NETSTANDARD_2_0 Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+	public fun getName ()Ljava/lang/String;
+	public final fun getTargetFrameworkMoniker ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+	public static fun values ()[Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+}
+
+public final class org/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework$Companion {
+	public final fun setupAttributesMatchingStrategy (Lorg/gradle/api/attributes/AttributesSchema;)V
+}
+
+public final class org/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework$CompatibilityRule : org/gradle/api/attributes/AttributeCompatibilityRule {
+	public fun <init> ()V
+	public synthetic fun execute (Ljava/lang/Object;)V
+	public fun execute (Lorg/gradle/api/attributes/CompatibilityCheckDetails;)V
+}
+
+public final class org/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework$DisambiguationRule : org/gradle/api/attributes/AttributeDisambiguationRule {
+	public fun <init> ()V
+	public synthetic fun execute (Ljava/lang/Object;)V
+	public fun execute (Lorg/gradle/api/attributes/MultipleCandidatesDetails;)V
+}
+
 public abstract interface class org/jetbrains/kotlin/gradle/plugin/diagnostics/KotlinCompilerDiagnosticAdditionalData : org/gradle/api/problems/AdditionalData {
 	public abstract fun getSeverity ()Lorg/gradle/api/provider/Property;
 }
