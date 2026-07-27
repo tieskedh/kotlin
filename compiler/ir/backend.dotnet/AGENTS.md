@@ -222,11 +222,16 @@ landed shape as a compatibility constraint.
   concrete mappings form the cross-profile floor, while non-public implementation maps are
   validated only within their own variant. A generic default fixture and a corrupted name-only
   locator pin both rules. The fixture includes a mutable property: every physical accessor which
-  owns its Property row, including a modern typed DIM, must retain CLR `specialname`. Raw
-  attribute-blob encoding, non-manifest interface rows, and
-  friend-only internal surface remain outside this bounded portable-superset audit. The C#
-  authoring matrix separately audits its exact
-  `InternalsVisibleTo` blob, friend TypeDef visibility, and promotion MethodImpl signatures.
+  owns its Property row, including a modern typed DIM, must retain CLR `specialname`. For an
+  assembly which declares `InternalsVisibleTo`, the verifier also treats its additional
+  friend-accessible CLR surface as a profile contract: internal types and their non-private
+  members, plus internal or private-protected members on otherwise exposed types, must retain
+  their shape in each executable variant. Public surface is not duplicated in that comparison,
+  private declarations stay outside it, and a narrowed modern fixture proves that a missing
+  portable internal is rejected. Raw attribute-blob encoding and non-manifest interface rows
+  remain outside this bounded portable-superset audit. The C# authoring matrix separately audits
+  its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and promotion MethodImpl
+  signatures.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
   and no `mscorlib` MemberRefs. The complete
