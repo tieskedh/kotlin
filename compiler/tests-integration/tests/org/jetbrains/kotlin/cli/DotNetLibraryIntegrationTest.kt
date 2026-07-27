@@ -9123,6 +9123,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 }
 
                 public class ProfileDefaultImpl<T> : ProfileDefault<T>
+
+                internal open class ProfileFriendBase
+
+                internal class ProfileFriendBox<T>(
+                    internal val value: T,
+                ) : ProfileFriendBase()
+
+                internal fun friendValue(value: Int): Int = ProfileFriendBox(value).value
+
+                public class ProfilePublicFriendBox {
+                    internal fun friendMember(value: Int): Int = value
+                }
                 """.trimIndent()
             )
         }
@@ -9135,6 +9147,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
                     K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
                     K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.MethodImpl",
+                    "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=Portable.Friend",
                     K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
                 )
                 outputDirectory.resolve("Portable.MethodImpl.dll").also { assembly ->
@@ -9168,6 +9181,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ) {
             modernMethodImplIl
         }
+        val narrowedFriendDirectory = File(tmpdir, "portable-methodimpl-net10.0-narrowed-friend")
+        val narrowedFriendSource = narrowedFriendDirectory.resolve("portable-methodimpl.kt").apply {
+            parentFile.mkdirs()
+            writeText(
+                methodImplSource.readText().substringBefore(
+                    "\n\ninternal open class ProfileFriendBase",
+                ) + "\n\npublic class ProfilePublicFriendBox"
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            narrowedFriendSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.MethodImpl",
+            "${K2DotNetCompilerArguments::dotNetFriendAssemblies.cliArgument}=Portable.Friend",
+            K2DotNetCompilerArguments::destination.cliArgument, narrowedFriendDirectory.path,
+        )
+        val narrowedFriendAssembly =
+            narrowedFriendDirectory.resolve("Portable.MethodImpl.dll").also { assembly ->
+                assertTrue(assembly.isFile)
+            }
         val surfaceVerifierSource = File(
             "compiler/testData/codegen/dotnet/portableSurfaceVerifier.cs"
         ).absoluteFile
@@ -9265,7 +9300,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "$target is not an externally consumable CLR metadata superset of netstandard2.0:\n" +
                         comparisonOutput,
             )
-            assertTrue(Regex("OK [1-9][0-9]* SLOTS [0-9]+").matches(comparisonOutput.trim())) {
+            assertTrue(
+                Regex("OK [1-9][0-9]* SLOTS [0-9]+ FRIENDS 0")
+                    .matches(comparisonOutput.trim())
+            ) {
                 comparisonOutput
             }
 
@@ -9285,7 +9323,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 methodImplComparison.waitFor(),
                 "$target did not preserve portable semantic slot satisfaction:\n$methodImplOutput",
             )
-            assertTrue(Regex("OK [1-9][0-9]* SLOTS [1-9][0-9]*").matches(methodImplOutput.trim())) {
+            assertTrue(
+                Regex("OK [1-9][0-9]* SLOTS [1-9][0-9]* FRIENDS [1-9][0-9]*")
+                    .matches(methodImplOutput.trim())
+            ) {
                 methodImplOutput
             }
         }
@@ -9339,6 +9380,23 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             corruptedMethodImplOutput
         }
 
+        val narrowedFriendComparison = ProcessBuilder(
+            checkNotNull(csharpToolchain).dotNetHost.path,
+            "exec",
+            surfaceVerifier.path,
+            runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
+            runtimeAssemblies.getValue(DotNetTarget.NET10_0).path,
+            methodImplLibraries.getValue("netstandard2.0").path,
+            narrowedFriendAssembly.path,
+        ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
+        val narrowedFriendOutput =
+            narrowedFriendComparison.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(narrowedFriendComparison.waitFor() != 0) {
+            "The friend-surface audit accepted missing portable internals"
+        }
+        assertTrue("FRIEND MISSING" in narrowedFriendOutput) { narrowedFriendOutput }
+        assertTrue("ProfileFriendBox" in narrowedFriendOutput) { narrowedFriendOutput }
+        assertTrue("friendMember" in narrowedFriendOutput) { narrowedFriendOutput }
     }
 
     @Test

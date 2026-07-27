@@ -179,6 +179,10 @@ internal static class Program
             };
             Dictionary<string, SurfaceItem> portable = Capture(portableAssemblies);
             Dictionary<string, SurfaceItem> platform = Capture(platformAssemblies);
+            Dictionary<string, SurfaceItem> portableFriendSurface =
+                CaptureFriendSurface(portableAssemblies);
+            Dictionary<string, SurfaceItem> platformFriendSurface =
+                CaptureFriendSurface(platformAssemblies);
             Dictionary<string, ResourceItem> portableResources =
                 CaptureResources(args[0], args[2]);
             Dictionary<string, ResourceItem> platformResources =
@@ -190,6 +194,9 @@ internal static class Program
                     "The portable pair has no embedded C# implementation manifest.");
 
             List<string> differences = Compare(portable, platform);
+            differences.AddRange(
+                Compare(portableFriendSurface, platformFriendSurface)
+                    .Select(difference => "FRIEND " + difference));
             differences.AddRange(CompareResources(portableResources, platformResources));
             HashSet<string> portableSatisfactions =
                 CaptureSlotSatisfactions(
@@ -217,10 +224,13 @@ internal static class Program
                 "OK " + (
                     portable.Count +
                     portableResources.Count +
-                    portableSatisfactions.Count)
+                    portableSatisfactions.Count +
+                    portableFriendSurface.Count)
                     .ToString(CultureInfo.InvariantCulture) +
                 " SLOTS " +
-                portableSatisfactions.Count.ToString(CultureInfo.InvariantCulture));
+                portableSatisfactions.Count.ToString(CultureInfo.InvariantCulture) +
+                " FRIENDS " +
+                portableFriendSurface.Count.ToString(CultureInfo.InvariantCulture));
             return 0;
         }
         catch (Exception failure)
@@ -235,7 +245,86 @@ internal static class Program
         }
     }
 
-    private static Dictionary<string, SurfaceItem> Capture(params Assembly[] assemblies)
+    private static Dictionary<string, SurfaceItem> Capture(params Assembly[] assemblies) =>
+        CaptureSurface(assemblies, TypeAccess, MethodAccess, FieldAccess);
+
+    private static Dictionary<string, SurfaceItem> CaptureFriendSurface(
+        params Assembly[] assemblies)
+    {
+        var result = new Dictionary<string, SurfaceItem>(StringComparer.Ordinal);
+        foreach (Assembly assembly in assemblies
+            .Where(HasFriendAuthorization)
+            .OrderBy(value => value.GetName().Name, StringComparer.Ordinal))
+        {
+            foreach (Type type in assembly.GetTypes().OrderBy(TypeIdentity, StringComparer.Ordinal))
+            {
+                if (FriendTypeAccess(type) == 0)
+                    continue;
+                bool friendDependentType = TypeAccess(type) == 0;
+                string owner = TypeIdentity(type);
+                if (friendDependentType)
+                {
+                    TypeAttributes typeShape = type.Attributes & ~TypeAttributes.VisibilityMask;
+                    string typeKey =
+                        "TYPE|" + owner + "|" +
+                        ((int)typeShape).ToString(CultureInfo.InvariantCulture);
+                    Add(result, new SurfaceItem(
+                        typeKey,
+                        access: 1,
+                        isMethod: false,
+                        isAbstract: false,
+                        isFinal: false));
+                    AddAttributes(result, typeKey, type.CustomAttributes, access: 1);
+                    if (type.BaseType != null)
+                        AddFact(
+                            result,
+                            "BASE|" + owner + "|" + TypeIdentity(type.BaseType),
+                            access: 1);
+                    foreach (Type implemented in type.GetInterfaces()
+                        .OrderBy(TypeIdentity, StringComparer.Ordinal))
+                        AddFact(
+                            result,
+                            "INTERFACE|" + owner + "|" + TypeIdentity(implemented),
+                            access: 1);
+                    AddGenericParameters(
+                        result,
+                        "TYPE_PARAMETER|" + owner,
+                        type.GetGenericArguments(),
+                        access: 1);
+                }
+
+                int FriendMemberAccess(MethodBase member) =>
+                    FriendMethodAccess(member) != 0 &&
+                    (friendDependentType || MethodAccess(member) == 0)
+                        ? 1
+                        : 0;
+                int FriendMemberFieldAccess(FieldInfo field) =>
+                    FriendFieldAccess(field) != 0 &&
+                    (friendDependentType || FieldAccess(field) == 0)
+                        ? 1
+                        : 0;
+                const BindingFlags declaredMembers = BindingFlags.Public | BindingFlags.NonPublic |
+                    BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
+                foreach (ConstructorInfo constructor in type.GetConstructors(declaredMembers))
+                    AddMethod(result, owner, constructor, FriendMemberAccess);
+                foreach (MethodInfo method in type.GetMethods(declaredMembers))
+                    AddMethod(result, owner, method, FriendMemberAccess);
+                foreach (FieldInfo field in type.GetFields(declaredMembers))
+                    AddField(result, owner, field, FriendMemberFieldAccess);
+                foreach (PropertyInfo property in type.GetProperties(declaredMembers))
+                    AddProperty(result, owner, property, FriendMemberAccess);
+                foreach (EventInfo eventInfo in type.GetEvents(declaredMembers))
+                    AddEvent(result, owner, eventInfo, FriendMemberAccess);
+            }
+        }
+        return result;
+    }
+
+    private static Dictionary<string, SurfaceItem> CaptureSurface(
+        Assembly[] assemblies,
+        Func<Type, int> typeAccessOf,
+        Func<MethodBase, int> methodAccessOf,
+        Func<FieldInfo, int> fieldAccessOf)
     {
         var result = new Dictionary<string, SurfaceItem>(StringComparer.Ordinal);
         foreach (Assembly assembly in assemblies.OrderBy(value => value.GetName().Name, StringComparer.Ordinal))
@@ -249,7 +338,7 @@ internal static class Program
                 access: 3);
             foreach (Type type in assembly.GetTypes().OrderBy(TypeIdentity, StringComparer.Ordinal))
             {
-                int typeAccess = TypeAccess(type);
+                int typeAccess = typeAccessOf(type);
                 if (typeAccess == 0)
                     continue;
 
@@ -274,15 +363,15 @@ internal static class Program
                 const BindingFlags declaredMembers = BindingFlags.Public | BindingFlags.NonPublic |
                     BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
                 foreach (ConstructorInfo constructor in type.GetConstructors(declaredMembers))
-                    AddMethod(result, owner, constructor);
+                    AddMethod(result, owner, constructor, methodAccessOf);
                 foreach (MethodInfo method in type.GetMethods(declaredMembers))
-                    AddMethod(result, owner, method);
+                    AddMethod(result, owner, method, methodAccessOf);
                 foreach (FieldInfo field in type.GetFields(declaredMembers))
-                    AddField(result, owner, field);
+                    AddField(result, owner, field, fieldAccessOf);
                 foreach (PropertyInfo property in type.GetProperties(declaredMembers))
-                    AddProperty(result, owner, property);
+                    AddProperty(result, owner, property, methodAccessOf);
                 foreach (EventInfo eventInfo in type.GetEvents(declaredMembers))
-                    AddEvent(result, owner, eventInfo);
+                    AddEvent(result, owner, eventInfo, methodAccessOf);
             }
         }
         return result;
@@ -913,9 +1002,13 @@ internal static class Program
         return differences;
     }
 
-    private static void AddMethod(Dictionary<string, SurfaceItem> surface, string owner, MethodBase method)
+    private static void AddMethod(
+        Dictionary<string, SurfaceItem> surface,
+        string owner,
+        MethodBase method,
+        Func<MethodBase, int> accessOf)
     {
-        int access = MethodAccess(method);
+        int access = accessOf(method);
         if (access == 0)
             return;
 
@@ -951,9 +1044,13 @@ internal static class Program
         }
     }
 
-    private static void AddField(Dictionary<string, SurfaceItem> surface, string owner, FieldInfo field)
+    private static void AddField(
+        Dictionary<string, SurfaceItem> surface,
+        string owner,
+        FieldInfo field,
+        Func<FieldInfo, int> accessOf)
     {
-        int access = FieldAccess(field);
+        int access = accessOf(field);
         if (access == 0)
             return;
         FieldAttributes shape = field.Attributes & ~FieldAttributes.FieldAccessMask;
@@ -965,11 +1062,15 @@ internal static class Program
         AddAttributes(surface, key, field.CustomAttributes, access);
     }
 
-    private static void AddProperty(Dictionary<string, SurfaceItem> surface, string owner, PropertyInfo property)
+    private static void AddProperty(
+        Dictionary<string, SurfaceItem> surface,
+        string owner,
+        PropertyInfo property,
+        Func<MethodBase, int> accessOf)
     {
         int access = new[] { property.GetMethod, property.SetMethod }
             .Where(method => method != null)
-            .Select(MethodAccess)
+            .Select(method => accessOf(method))
             .DefaultIfEmpty(0)
             .Max();
         if (access == 0)
@@ -982,11 +1083,15 @@ internal static class Program
         AddAttributes(surface, key, property.CustomAttributes, access);
     }
 
-    private static void AddEvent(Dictionary<string, SurfaceItem> surface, string owner, EventInfo eventInfo)
+    private static void AddEvent(
+        Dictionary<string, SurfaceItem> surface,
+        string owner,
+        EventInfo eventInfo,
+        Func<MethodBase, int> accessOf)
     {
         int access = new[] { eventInfo.AddMethod, eventInfo.RemoveMethod, eventInfo.RaiseMethod }
             .Where(method => method != null)
-            .Select(MethodAccess)
+            .Select(method => accessOf(method))
             .DefaultIfEmpty(0)
             .Max();
         if (access == 0)
@@ -1134,6 +1239,13 @@ internal static class Program
     private static string NamedTypeIdentity(Type type) =>
         type.Assembly.GetName().Name + ":" + type.FullName;
 
+    private static bool HasFriendAuthorization(Assembly assembly) =>
+        assembly.CustomAttributes.Any(attribute =>
+            string.Equals(
+                attribute.AttributeType.FullName,
+                "System.Runtime.CompilerServices.InternalsVisibleToAttribute",
+                StringComparison.Ordinal));
+
     private static int TypeAccess(Type type)
     {
         int ownAccess;
@@ -1150,6 +1262,20 @@ internal static class Program
         return Math.Min(ownAccess, TypeAccess(type.DeclaringType));
     }
 
+    private static int FriendTypeAccess(Type type)
+    {
+        int ownAccess;
+        if (!type.IsNested)
+            ownAccess = 1;
+        else if (type.IsNestedPrivate)
+            ownAccess = 0;
+        else
+            ownAccess = 1;
+        if (ownAccess == 0 || type.DeclaringType == null)
+            return ownAccess;
+        return Math.Min(ownAccess, FriendTypeAccess(type.DeclaringType));
+    }
+
     private static int MethodAccess(MethodBase method)
     {
         if (method.IsPublic)
@@ -1159,6 +1285,12 @@ internal static class Program
         return 0;
     }
 
+    private static int FriendMethodAccess(MethodBase method) =>
+        method.IsPrivate ||
+        (method.Attributes & MethodAttributes.MemberAccessMask) == MethodAttributes.PrivateScope
+            ? 0
+            : 1;
+
     private static int FieldAccess(FieldInfo field)
     {
         if (field.IsPublic)
@@ -1167,6 +1299,12 @@ internal static class Program
             return 2;
         return 0;
     }
+
+    private static int FriendFieldAccess(FieldInfo field) =>
+        field.IsPrivate ||
+        (field.Attributes & FieldAttributes.FieldAccessMask) == FieldAttributes.PrivateScope
+            ? 0
+            : 1;
 
     private static void AddFact(Dictionary<string, SurfaceItem> surface, string key, int access) =>
         Add(surface, new SurfaceItem(key, access, isMethod: false, isAbstract: false, isFinal: false));
