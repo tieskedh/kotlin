@@ -1863,9 +1863,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The final migration slice removes sibling-KLIB writing and installation, rejects standalone
   Kotlin/.NET KLIB dependencies, and reduces the external-library model to one `assemblyFile`.
   Compiler products now consist of the self-describing DLL plus optional diagnostic IL.
-  Temporary extraction of `Kotlin.Metadata` into the shared KLIB reader remains explicitly
-  transitional internal machinery, not a second artifact. The fresh strict gate is 850/0/0/0
-  across 16 XML suites (780 FIR/IL/box, 21 generated CLI, and 49 library integration tests).
+  The follow-up direct-loader slice now keeps the containing DLL as `KotlinLibrary.path`.
+  Target-owned PE code locates and authenticates `Kotlin.Metadata`; common KLIB infrastructure
+  validates the packed metadata archive and exposes its module/package components directly from
+  memory. There is no temporary KLIB file or synthetic dependency path. Six common loader tests
+  cover physical-path retention, metadata access, valid central-directory reordering, duplicate
+  entries, traversal, missing components, and a truncated central directory; the DLL diagnostic
+  lane also rejects a malformed carrier. The fresh strict gate is 850/0/0/0 across 16 XML suites
+  (780 FIR/IL/box, 21 generated CLI, and 49 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
