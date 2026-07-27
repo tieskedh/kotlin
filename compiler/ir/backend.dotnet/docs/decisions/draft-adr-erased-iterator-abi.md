@@ -196,7 +196,7 @@ The IL pins require canonical and closed declared interfaces on the same objects
 families, the guarded typed call and erased fallback, and typed primitive/open-generic returns.
 The box harness inspects retained `Kotlin.Stdlib.il`, assembles the new runtime interface metadata,
 and executes the result on CoreCLR. The cross-library integration suite separately validates the
-paired stdlib KLIB/DLL product and consumers.
+self-describing stdlib DLL and consumers.
 
 ## Deferred decisions
 

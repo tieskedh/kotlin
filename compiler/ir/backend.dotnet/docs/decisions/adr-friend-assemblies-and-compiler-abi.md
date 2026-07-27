@@ -55,9 +55,9 @@ name the same output identity, and self-authorization is invalid.
 The built-in Gradle association therefore derives both sides from compilation-owned module names:
 
 - the producer receives the associated consumer identity;
-- the consumer receives the producer's exact generated KLIB as both a dependency and a friend;
+- the consumer receives the producer's exact generated DLL as both a dependency and a friend;
 - the producer task is an inferred dependency of the consumer task; and
-- the compiler validates the KLIB/DLL content binding and producer authorization before FIR grants
+- the compiler validates the DLL's embedded Kotlin metadata and producer authorization before FIR grants
   internal visibility.
 
 ## 5. Alignment with compiler architecture
@@ -81,7 +81,7 @@ Classifications:
 
 - shared Kotlin friend-dependency semantics:
   **Correct direction**;
-- target-specific associator and exact-KLIB friend resolver:
+- target-specific associator and exact-DLL friend resolver:
   **Correct direction**;
 - producer-emitted `InternalsVisibleTo`:
   **Reasonable platform-specific divergence**;
@@ -190,7 +190,7 @@ and marker policy must be audited before ABI freeze.
 
 - manifest encode/decode and deterministic ordering of unsigned and signed identities;
 - successful IL assembly with a long full-key custom-attribute payload;
-- authorized Kotlin friend source access and execution across a KLIB/DLL boundary;
+- authorized Kotlin friend source access and execution across a self-describing DLL boundary;
 - rejection before FIR/codegen when the producer does not authorize the output identity;
 - rejection by FIR when the producer authorizes the name but the dependency is not declared as a
   consumer friend;
@@ -200,4 +200,4 @@ and marker policy must be audited before ABI freeze.
   and attributes, with a negative executable-profile variant that omits portable internals;
 - Gradle model tests proving that association wires producer authorization and producer-task
   dependencies, plus an integration build in which the associated test compilation resolves and
-  calls an ordinary internal producer declaration through the exact KLIB/DLL pair.
+  calls an ordinary internal producer declaration through the exact producer DLL.

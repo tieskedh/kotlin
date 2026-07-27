@@ -97,7 +97,7 @@ Target variants may emit different method bodies or use profile-specific impleme
 but public Kotlin metadata, overload resolution, mutation behavior, and wrapper identity do not
 change.
 
-Array-bearing physical signatures are profile-bound in the KLIB/DLL declaration index. A stale
+Array-bearing physical signatures are profile-bound in the declaration index embedded in the DLL. A stale
 module that used the old raw-vector mapping is rejected by the prototype schema rather than adapted.
 
 ## Ownership

@@ -76,7 +76,7 @@ val actualDotNetArguments by compilerArgumentsLevel(CompilerArgumentsLevelNames.
 
     compilerArgument {
         name = "no-stdlib"
-        description = "Don't automatically add the bundled Kotlin stdlib metadata to the classpath.".asReleaseDependent()
+        description = "Don't automatically add the bundled Kotlin/.NET stdlib DLL to the classpath.".asReleaseDependent()
         valueType = BooleanType.defaultFalse
 
         lifecycle(introducedVersion = KotlinReleaseVersion.v2_5_0)
@@ -86,7 +86,7 @@ val actualDotNetArguments by compilerArgumentsLevel(CompilerArgumentsLevelNames.
         name = "Xdotnet-produce-stdlib"
         compilerName = "dotNetProduceStdlib"
         description = (
-                "Produce the experimental Kotlin.Stdlib.klib/Kotlin.Stdlib.dll pair in the -d directory. " +
+                "Produce the experimental self-describing Kotlin.Stdlib.dll in the -d directory. " +
                         "The library uses the selected net48, netstandard2.0, or net10.0 target profile. " +
                         "This build mode accepts no user source files."
                 ).asReleaseDependent()
@@ -99,7 +99,7 @@ val actualDotNetArguments by compilerArgumentsLevel(CompilerArgumentsLevelNames.
         name = "Xdotnet-produce-library"
         compilerName = "dotNetProduceLibrary"
         description = (
-                "Produce an experimental <module>.klib/<module>.dll library pair in the -d directory. " +
+                "Produce an experimental self-describing <module>.dll library in the -d directory. " +
                         "The library uses the selected target profile and has no entry point."
                 ).asReleaseDependent()
         valueType = BooleanType.defaultFalse
