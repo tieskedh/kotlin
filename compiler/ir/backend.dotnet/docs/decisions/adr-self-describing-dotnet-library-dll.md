@@ -132,17 +132,23 @@ the friend path. A bounded, JVM-hosted PE/ECMA-335 reader:
 - locates the private embedded `Kotlin.Metadata` `ManifestResource` without loading target code or
   starting a .NET process;
 - checks every PE, metadata-stream, table, heap, and resource range before use;
+- passes the resource bytes to the shared metadata-KLIB loader, which validates canonical ZIP
+  entry names, duplicates, required components, CRCs, and a bounded expansion budget;
+- constructs an ordinary `KotlinLibrary` whose `path` is the containing DLL and whose metadata
+  component serves the retained KLIB module header and package fragments directly from memory;
 - reads the physical `Assembly` row and requires the embedded manifest's name, version, culture,
   and unsigned status to match the containing DLL;
-- requires the embedded carrier and `self` binding, and rejects a recursive implementation hash;
-  and
-- presents the packed payload to the unchanged shared KLIB deserializer through a
-  compilation-scoped temporary file that is deleted with the root compiler disposable.
+- requires the embedded carrier and `self` binding, and rejects a recursive implementation hash.
 
-Temporary extraction is **Correct temporary implementation, but not a final design**. It isolates
-the container transition while preserving one Kotlin deserializer. The final DLL-backed
-Kotlin-library abstraction should expose the same KLIB components directly and may add bounded
-random access or caching; it must not introduce another metadata model.
+This split follows the other KLIB targets at the semantic boundary: FIR consumes the same
+`KotlinLibrary` and `KlibMetadataComponent` contracts. The CLR-specific code is limited to locating
+and authenticating the resource in PE metadata. The reusable byte-array loader belongs to common
+KLIB infrastructure because packed metadata is not a CLR concept. No temporary file participates
+in dependency loading, and no synthetic KLIB path, second declaration model, or .NET runtime
+process is introduced.
+
+All target profiles use this JVM-hosted loading path. `net48`, `netstandard2.0`, and `net10.0`
+differ in emitted CLR capabilities, not in the meaning or deserialization of Kotlin declarations.
 
 The migration is complete. The compiler producer writes only the DLL (plus diagnostic IL where
 requested), installed-stdlib tasks copy only the DLL, and Gradle API/runtime variants publish only
@@ -159,8 +165,8 @@ Classifications:
   **Correct temporary implementation, but not necessarily a final encoding**;
 - reuse of Kotlin KLIB metadata and `DotNetIrMangler` identities: **Correct direction**;
 - separate public C# authoring manifest: **Reasonable platform-specific divergence**;
-- temporary extraction of the private resource for the shared KLIB loader:
-  **Correct temporary implementation, but not a final design**;
+- common packed-metadata loader plus a DLL-backed `KotlinLibrary` path:
+  **Correct direction**;
 - independently publishing or resolving sibling KLIB and DLL artifacts:
   **Architecturally wrong and should be changed**;
 - accepting a standalone Kotlin/.NET KLIB as a compiler dependency:
@@ -174,7 +180,6 @@ Gradle, Maven, NuGet, MSBuild, Roslyn, reflection, and deployment can converge o
 DLL asset. Future signing covers executable and Kotlin metadata together. The compiler retains
 the common Kotlin metadata model instead of reconstructing Kotlin semantics from CLR signatures.
 
-The bounded ECMA-335 reader, CLI DLL-only path, installed-stdlib DLL selection, compiler
-producer/installation flow, and Gradle DLL-only variant publication have landed. A direct
-DLL-backed Kotlin-library abstraction remains desirable to remove temporary extraction, but it
-does not block the single-artifact contract.
+The bounded ECMA-335 reader, direct DLL-backed Kotlin-library view, CLI DLL-only path,
+installed-stdlib DLL selection, compiler producer/installation flow, and Gradle DLL-only variant
+publication have landed.
