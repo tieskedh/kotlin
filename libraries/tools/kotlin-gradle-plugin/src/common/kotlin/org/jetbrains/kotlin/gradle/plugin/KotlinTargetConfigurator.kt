@@ -11,12 +11,14 @@ import org.gradle.api.artifacts.Configuration
 import org.gradle.api.attributes.*
 import org.gradle.api.attributes.java.TargetJvmEnvironment
 import org.jetbrains.kotlin.gradle.plugin.PropertiesProvider.Companion.kotlinPropertiesProvider
+import org.jetbrains.kotlin.gradle.plugin.attributes.KotlinDotNetTargetFramework
 import org.jetbrains.kotlin.gradle.plugin.mpp.*
 import org.jetbrains.kotlin.gradle.plugin.mpp.compilationImpl.runKotlinCompilationSideEffects
 import org.jetbrains.kotlin.gradle.targets.js.KotlinJsCompilerAttribute
 import org.jetbrains.kotlin.gradle.targets.js.KotlinWasmTargetAttribute
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrTarget
 import org.jetbrains.kotlin.gradle.targets.js.toAttribute
+import org.jetbrains.kotlin.gradle.targets.dotnet.KotlinDotNetTarget
 import org.jetbrains.kotlin.gradle.targets.runKotlinTargetSideEffects
 import org.jetbrains.kotlin.gradle.utils.*
 
@@ -93,6 +95,9 @@ internal fun <T : HasAttributes> T.setUsesPlatformOf(target: KotlinTarget): T {
 
     if (target is KotlinNativeTarget) {
         attributes.attribute(KotlinNativeTarget.konanTargetAttribute, target.konanTarget.name)
+    }
+    if (target is KotlinDotNetTarget) {
+        attributes.attribute(KotlinDotNetTargetFramework.ATTRIBUTE, target.targetFramework)
     }
     return this
 }

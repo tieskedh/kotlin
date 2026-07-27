@@ -179,6 +179,18 @@ internal open class GradleCompilerRunner(
         return runCompilerAsync(KotlinCompilerClass.METADATA, args, environment)
     }
 
+    /**
+     * Compiler might be executed asynchronously. Do not do anything requiring end of compilation after this function is called.
+     * @see [GradleKotlinCompilerWork]
+     */
+    fun runDotNetCompilerAsync(
+        args: K2DotNetCompilerArguments,
+        environment: GradleCompilerEnvironment,
+        taskOutputsBackup: TaskOutputsBackup?,
+    ): WorkQueue? {
+        return runCompilerAsync(KotlinCompilerClass.DOTNET, args, environment, taskOutputsBackup)
+    }
+
     private fun runCompilerAsync(
         compilerClassName: String,
         compilerArgs: CommonCompilerArguments,
