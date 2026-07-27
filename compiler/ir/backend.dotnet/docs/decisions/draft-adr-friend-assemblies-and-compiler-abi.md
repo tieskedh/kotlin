@@ -2,12 +2,13 @@
 
 ## Status
 
-Selected pre-ABI design, implemented for unsigned assemblies. Strong-name consumption remains
-incomplete. Gradle association is intentionally blocked on a real Kotlin/.NET target and
-compilation model; this repository currently has only the compiler CLI and must not approximate
-association by injecting raw flags into another target's tasks. Nothing has shipped, so the
-manifest schema and emitted metadata may still be replaced atomically if those implementations
-expose a flaw.
+Selected pre-ABI design, implemented for unsigned assemblies. Cross-profile production now
+mechanically retains friend-dependent CLR surface in both executable variants. Strong-name
+consumption remains incomplete. Gradle association is intentionally blocked on a real
+Kotlin/.NET target and compilation model; this repository currently has only the compiler CLI
+and must not approximate association by injecting raw flags into another target's tasks. Nothing
+has shipped, so the manifest schema and emitted metadata may still be replaced atomically if
+those implementations expose a flaw.
 
 ## Semantic invariant
 
@@ -114,5 +115,7 @@ and marker policy must be audited before ABI freeze.
   consumer friend;
 - ordinary C# negative access, trusted-friend C# positive access, and reflection inspection;
 - `@PublishedApi internal` type/member/field accessibility and marker inspection;
+- cross-profile retention of friend-dependent internal types, members, hierarchy, generic shape,
+  and attributes, with a negative executable-profile variant that omits portable internals;
 - Gradle association tests once the .NET target and compilation model exist; no provisional task-
   local flag convention is accepted as a substitute.
