@@ -2397,6 +2397,24 @@ public class org/jetbrains/kotlin/gradle/scripting/ScriptingExtension {
 public abstract interface annotation class org/jetbrains/kotlin/gradle/swiftexport/ExperimentalSwiftExportDsl : java/lang/annotation/Annotation {
 }
 
+public class org/jetbrains/kotlin/gradle/targets/dotnet/KotlinDotNetCompilation : org/jetbrains/kotlin/gradle/plugin/mpp/AbstractKotlinCompilationToRunnableFiles {
+	public fun getCompileTaskProvider ()Lorg/gradle/api/tasks/TaskProvider;
+	public fun getCompilerOptions ()Lorg/jetbrains/kotlin/gradle/plugin/HasCompilerOptions;
+	public fun getProcessResourcesTaskName ()Ljava/lang/String;
+	public synthetic fun getTarget ()Lorg/jetbrains/kotlin/gradle/plugin/KotlinTarget;
+	public fun getTarget ()Lorg/jetbrains/kotlin/gradle/targets/dotnet/KotlinDotNetTarget;
+	public final fun getTargetFramework ()Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+}
+
+public abstract class org/jetbrains/kotlin/gradle/targets/dotnet/KotlinDotNetTarget : org/jetbrains/kotlin/gradle/plugin/mpp/KotlinOnlyTarget, org/jetbrains/kotlin/gradle/dsl/HasConfigurableKotlinCompilerOptions {
+	public fun compilerOptions (Lkotlin/jvm/functions/Function1;)V
+	public fun compilerOptions (Lorg/gradle/api/Action;)V
+	public fun getArtifactsTaskName ()Ljava/lang/String;
+	public synthetic fun getCompilerOptions ()Lorg/jetbrains/kotlin/gradle/dsl/KotlinCommonCompilerOptions;
+	public fun getCompilerOptions ()Lorg/jetbrains/kotlin/gradle/dsl/KotlinDotNetCompilerOptions;
+	public final fun getTargetFramework ()Lorg/jetbrains/kotlin/gradle/plugin/attributes/KotlinDotNetTargetFramework;
+}
+
 public abstract interface class org/jetbrains/kotlin/gradle/targets/js/AbstractEnv {
 	public abstract fun getAllowInsecureProtocol ()Z
 	public abstract fun getDir ()Ljava/io/File;
@@ -6177,7 +6195,19 @@ public final class org/jetbrains/kotlin/gradle/tasks/KotlinCompilerPluginData$In
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract class org/jetbrains/kotlin/gradle/tasks/KotlinNativeCompile : org/jetbrains/kotlin/gradle/tasks/AbstractKotlinNativeCompile, org/jetbrains/kotlin/gradle/dsl/KotlinNativeCompileTask, org/jetbrains/kotlin/gradle/internal/UsesClassLoadersCachingBuildService, org/jetbrains/kotlin/gradle/plugin/diagnostics/UsesKotlinToolingDiagnostics, org/jetbrains/kotlin/gradle/plugin/statistics/UsesBuildFusService, org/jetbrains/kotlin/gradle/report/UsesBuildMetricsService, org/jetbrains/kotlin/gradle/targets/native/UsesKonanPropertiesBuildService, org/jetbrains/kotlin/gradle/targets/native/toolchain/UsesKotlinNativeBundleBuildService, org/jetbrains/kotlin/gradle/tasks/K2MultiplatformCompilationTask {
+public abstract class org/jetbrains/kotlin/gradle/tasks/KotlinDotNetCompile : org/jetbrains/kotlin/gradle/tasks/AbstractKotlinCompile, org/jetbrains/kotlin/gradle/tasks/K2MultiplatformCompilationTask, org/jetbrains/kotlin/gradle/tasks/KotlinCompilationTask {
+	public fun <init> (Lorg/jetbrains/kotlin/gradle/dsl/KotlinDotNetCompilerOptions;Lorg/gradle/workers/WorkerExecutor;Lorg/gradle/api/model/ObjectFactory;)V
+	public synthetic fun callCompilerAsync$kotlin_gradle_plugin_common (Lorg/jetbrains/kotlin/cli/common/arguments/CommonCompilerArguments;Lorg/gradle/work/InputChanges;Lorg/jetbrains/kotlin/gradle/tasks/TaskOutputsBackup;)V
+	public fun compilerOptions (Lkotlin/jvm/functions/Function1;)V
+	public fun compilerOptions (Lorg/gradle/api/Action;)V
+	public synthetic fun createCompilerArguments (Lorg/jetbrains/kotlin/gradle/plugin/KotlinCompilerArgumentsProducer$CreateCompilerArgumentsContext;)Lorg/jetbrains/kotlin/cli/common/arguments/CommonToolArguments;
+	public fun createCompilerArguments (Lorg/jetbrains/kotlin/gradle/plugin/KotlinCompilerArgumentsProducer$CreateCompilerArgumentsContext;)Lorg/jetbrains/kotlin/cli/common/arguments/K2DotNetCompilerArguments;
+	public synthetic fun getCompilerOptions ()Lorg/jetbrains/kotlin/gradle/dsl/KotlinCommonCompilerOptions;
+	public fun getCompilerOptions ()Lorg/jetbrains/kotlin/gradle/dsl/KotlinDotNetCompilerOptions;
+	public abstract fun getTargetFramework ()Lorg/gradle/api/provider/Property;
+}
+
+public abstract class org/jetbrains/kotlin/gradle/tasks/KotlinNativeCompile : org/jetbrains/kotlin/gradle/tasks/AbstractKotlinNativeCompile, org/jetbrains/kotlin/gradle/dsl/KotlinNativeCompileTask, org/jetbrains/kotlin/gradle/internal/UsesClassLoadersCachingBuildService, org/jetbrains/kotlin/gradle/plugin/statistics/UsesBuildFusService, org/jetbrains/kotlin/gradle/report/UsesBuildMetricsService, org/jetbrains/kotlin/gradle/targets/native/UsesKonanPropertiesBuildService, org/jetbrains/kotlin/gradle/targets/native/toolchain/UsesKotlinNativeBundleBuildService, org/jetbrains/kotlin/gradle/tasks/K2MultiplatformCompilationTask {
 	public final fun compile ()V
 	public fun compilerOptions (Lkotlin/jvm/functions/Function1;)V
 	public fun compilerOptions (Lorg/gradle/api/Action;)V
@@ -6515,4 +6545,3 @@ public final class org/jetbrains/kotlin/gradle/utils/processes/ProcessLaunchOpti
 	public final fun processLaunchOptions (Lorg/gradle/api/model/ObjectFactory;Lkotlin/jvm/functions/Function1;)Lorg/jetbrains/kotlin/gradle/utils/processes/ProcessLaunchOptions;
 	public static synthetic fun processLaunchOptions$default (Lorg/jetbrains/kotlin/gradle/utils/processes/ProcessLaunchOptions$Companion;Lorg/gradle/api/model/ObjectFactory;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lorg/jetbrains/kotlin/gradle/utils/processes/ProcessLaunchOptions;
 }
-

@@ -20,6 +20,7 @@ internal object KotlinCompilationCompilerOptionsFromTargetConfigurator : KotlinC
         when (@Suppress("DEPRECATION") val compilationCompilerOptions = compilation.compilerOptions.options) {
             is KotlinJvmCompilerOptions -> compilation.useTargetJvmCompilerOptionsAsConvention(compilationCompilerOptions)
             is KotlinJsCompilerOptions -> compilation.useTargetJsCompilerOptionsAsConvention(compilationCompilerOptions)
+            is KotlinDotNetCompilerOptions -> compilation.useTargetDotNetCompilerOptionsAsConvention(compilationCompilerOptions)
             is KotlinNativeCompilerOptions -> {
                 if (compilation.target is KotlinMetadataTarget) {
                     // Shared native compilation, for example, 'appleMain'
@@ -94,6 +95,28 @@ internal object KotlinCompilationCompilerOptionsFromTargetConfigurator : KotlinC
             moduleNameForCompilation(
                 compilationName,
                 targetCompilerOptions.moduleName
+            )
+        )
+    }
+
+    private fun DecoratedKotlinCompilation<*>.useTargetDotNetCompilerOptionsAsConvention(
+        dotNetCompilerOptions: KotlinDotNetCompilerOptions,
+    ) {
+        val targetCompilerOptions = requireTargetCompilerOptionsType<KotlinDotNetCompilerOptions>()
+
+        KotlinDotNetCompilerOptionsHelper.syncOptionsAsConvention(
+            targetCompilerOptions,
+            dotNetCompilerOptions,
+        )
+
+        dotNetCompilerOptions.moduleName.convention(
+            moduleNameForCompilation(
+                compilationName,
+                targetCompilerOptions.moduleName,
+            ).orElse(
+                project.moduleName(
+                    moduleNameForCompilation(project.baseModuleName()),
+                )
             )
         )
     }

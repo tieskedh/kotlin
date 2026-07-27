@@ -28,6 +28,9 @@ import org.jetbrains.kotlin.gradle.plugin.hierarchy.redundantDependsOnEdgesTrack
 import org.jetbrains.kotlin.gradle.plugin.mpp.*
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.swiftimport.swiftPMImportIdeModelProvider
 import org.jetbrains.kotlin.gradle.targets.android.internal.InternalKotlinTargetPreset
+import org.jetbrains.kotlin.gradle.plugin.attributes.KotlinDotNetTargetFramework
+import org.jetbrains.kotlin.gradle.targets.dotnet.KotlinDotNetTarget
+import org.jetbrains.kotlin.gradle.targets.dotnet.KotlinDotNetTargetPreset
 import org.jetbrains.kotlin.gradle.targets.js.dsl.KotlinJsTargetDsl
 import org.jetbrains.kotlin.gradle.targets.js.dsl.KotlinWasmJsTargetDsl
 import org.jetbrains.kotlin.gradle.targets.js.dsl.KotlinWasmWasiTargetDsl
@@ -65,6 +68,7 @@ internal constructor(
     KotlinTargetContainerWithPresetFunctions by presetFunctions,
     KotlinTargetContainerWithJsPresetFunctions,
     KotlinTargetContainerWithWasmPresetFunctions,
+    KotlinTargetContainerWithDotNetPresetFunctions,
     KotlinHierarchyDsl,
     KotlinPublishingDsl,
     HasConfigurableKotlinCompilerOptions<KotlinCommonCompilerOptions>,
@@ -125,6 +129,21 @@ internal constructor(
             presetFunctions.presets.getByName("wasmWasi") as KotlinWasmTargetPreset,
             project,
             configure
+        )
+
+    @ExperimentalKotlinGradlePluginApi
+    override fun dotnet(
+        targetFramework: KotlinDotNetTargetFramework,
+        name: String,
+        configure: KotlinDotNetTarget.() -> Unit,
+    ): KotlinDotNetTarget =
+        presetFunctions.configureOrCreate(
+            name,
+            presetFunctions.presets.getByName(
+                KotlinDotNetTargetPreset.presetName(targetFramework)
+            ) as KotlinDotNetTargetPreset,
+            project,
+            configure,
         )
 
     fun dependencies(configure: Action<KotlinDependencies>) = dependencies { configure.execute(this) }

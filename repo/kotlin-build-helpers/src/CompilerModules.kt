@@ -79,6 +79,7 @@ object CompilerModules {
         ":compiler:fir:raw-fir:psi2fir",
         ":compiler:fir:raw-fir:light-tree2fir",
         ":compiler:fir:checkers",
+        ":compiler:fir:checkers:checkers.dotnet",
         ":compiler:fir:checkers:checkers.jvm",
         ":compiler:fir:checkers:checkers.js",
         ":compiler:fir:checkers:checkers.native",

@@ -10,6 +10,8 @@ import org.jetbrains.kotlin.gradle.plugin.KotlinProjectSetupAction
 import org.jetbrains.kotlin.gradle.targets.js.KotlinWasmTargetType
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrTargetPreset
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinWasmTargetPreset
+import org.jetbrains.kotlin.gradle.plugin.attributes.KotlinDotNetTargetFramework
+import org.jetbrains.kotlin.gradle.targets.dotnet.KotlinDotNetTargetPreset
 import org.jetbrains.kotlin.konan.target.HostManager
 import org.jetbrains.kotlin.konan.target.KonanTarget.*
 import org.jetbrains.kotlin.konan.target.presetName
@@ -23,6 +25,9 @@ internal val KotlinMultiplatformTargetPresetAction = KotlinProjectSetupAction {
         add(KotlinWasmTargetPreset(project, KotlinWasmTargetType.WASI))
         add(project.objects.newInstance(KotlinAndroidTargetPreset::class.java, project))
         add(KotlinJvmWithJavaTargetPreset(project))
+        KotlinDotNetTargetFramework.values().forEach { targetFramework ->
+            add(KotlinDotNetTargetPreset(project, targetFramework))
+        }
 
         // Note: modifying these sets should also be reflected in the DSL code generator, see 'presetEntries.kt'
         val nativeTargetsWithHostTests = setOf(LINUX_X64, MACOS_X64, MACOS_ARM64, MINGW_X64)
