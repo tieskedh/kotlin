@@ -97,7 +97,8 @@ Classifications:
 ## Consequences
 
 Compiler argument metadata, defaults, copying, freezing, and common KLIB inheritance now follow
-the same source of truth as mature targets. The next Gradle slice can define target-owned
-operational inputs and a small generated public compiler-options interface without duplicating
-CLI argument definitions. Full common partial-linkage diagnostics remain a recorded prerequisite
-before the backend may identify its CLR-emission invocations as common second-stage compilations.
+the same source of truth as mature targets. The sibling generated-Gradle-options ADR selects
+common options plus `moduleName` for the public compiler-options interface while keeping
+operational inputs target-owned. Full common partial-linkage diagnostics remain a recorded
+prerequisite before the backend may identify its CLR-emission invocations as common second-stage
+compilations.

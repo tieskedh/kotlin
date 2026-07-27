@@ -1812,6 +1812,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   compiler options; the target/compilation model must first establish their ownership. The
   accepted generated-arguments ADR records the six-step decision and the temporary
   partial-linkage boundary.
+- The experimental Gradle compiler-options layer is also generated from that argument source of
+  truth. `KotlinDotNetCompilerOptions` extends common Kotlin options and adds only `moduleName`;
+  generated default/helper classes fill both common and .NET compiler arguments, with focused KGP
+  coverage. Profile, output, product, dependency, stdlib, and friend values stay owned by the
+  upcoming target/task/association model. Raw export selector strings remain CLI/free arguments
+  until a dedicated typed export DSL can own their naming and overload rules. The accepted
+  generated-options ADR records this six-step boundary.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
