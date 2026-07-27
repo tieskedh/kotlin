@@ -491,23 +491,66 @@ internal static class AuthoringContractDiscovery
             reason = "open unbound generic interfaces do not preserve an authoring substitution";
             return false;
         }
-        foreach (ITypeSymbol argument in interfaceType.TypeArguments)
+        for (int index = 0; index < interfaceType.TypeArguments.Length; index++)
         {
-            if (argument.TypeKind == TypeKind.Error)
+            if (!HasSupportedSubstitutionType(
+                    interfaceType.TypeArguments[index],
+                    $"type argument {index}",
+                    out reason))
+                return false;
+        }
+        reason = "";
+        return true;
+    }
+
+    private static bool HasSupportedSubstitutionType(
+        ITypeSymbol type,
+        string path,
+        out string reason)
+    {
+        if (type.TypeKind == TypeKind.Error)
+        {
+            reason = $"{path} could not be resolved";
+            return false;
+        }
+        if (type.TypeKind == TypeKind.Dynamic)
+        {
+            reason = $"{path} is dynamic, which is not a stable CLR interface substitution";
+            return false;
+        }
+        if (type is IPointerTypeSymbol ||
+            type is IFunctionPointerTypeSymbol)
+        {
+            reason = $"{path} is a pointer or function pointer outside Kotlin's interface ABI";
+            return false;
+        }
+        if (type is IArrayTypeSymbol array)
+        {
+            if (array.Rank != 1 || !array.IsSZArray)
             {
-                reason = "one or more type arguments could not be resolved";
+                reason =
+                    $"{path} is a rectangular or non-vector CLR array with no Kotlin Array identity";
                 return false;
             }
-            if (argument.TypeKind == TypeKind.Dynamic)
+            return HasSupportedSubstitutionType(
+                array.ElementType,
+                path + " array element",
+                out reason);
+        }
+        if (type is INamedTypeSymbol named)
+        {
+            if (named.IsUnboundGenericType)
             {
-                reason = "dynamic is not a stable CLR interface substitution";
+                reason = $"{path} is an open unbound generic construction";
                 return false;
             }
-            if (argument is IPointerTypeSymbol ||
-                argument is IFunctionPointerTypeSymbol)
+            for (int index = 0; index < named.TypeArguments.Length; index++)
             {
-                reason = "pointer and function-pointer arguments are outside Kotlin's interface ABI";
-                return false;
+                if (!HasSupportedSubstitutionType(
+                        named.TypeArguments[index],
+                        $"{path} nested type argument {index}",
+                        out reason))
+                    return false;
             }
         }
         reason = "";

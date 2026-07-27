@@ -135,6 +135,54 @@ declaration; it never repeats or replaces the class base. The DLL-only matrix ex
 whose existing base constructor and state remain intact while independent ordinary and generic
 Kotlin contracts both dispatch through their generated adapters.
 
+#### Base-list substitutions are validated recursively
+
+The other Kotlin targets translate the complete foreign-facing type tree rather than validating
+only its outer classifier:
+
+- JVM type mapping recursively maps array elements, generic arguments, and nested owners under the
+  applicable `TypeMappingMode`;
+- JS TypeScript export recursively translates `Array` elements, function components, and class
+  type arguments. JS `dynamic` maps to its JS export model because dynamic typing is a deliberate
+  JS language facility, not a general Kotlin interop rule;
+- Wasm export likewise recurses through function and external-class type arguments and produces an
+  error/unknown export type for a shape outside that boundary; and
+- Native Swift export recursively translates function components and supported nominal types,
+  propagating `SirUnsupportedType` when a nested shape cannot be represented.
+
+The CLR-specific difference is its richer constructed type metadata. A closed generic argument
+may itself contain named generic constructions, nullable value types, type parameters, and
+single-dimensional zero-based arrays. Those are stable CLR TypeSpecs and may be preserved
+structurally. C# nullable-reference annotations are flow-contract metadata rather than a distinct
+CLR type identity; the generator does not turn them into Kotlin nullability declarations.
+
+Other CLR shapes do not have an admitted Kotlin Common interpretation:
+
+- C# `dynamic` is physically `System.Object` plus C#-specific dynamic metadata, not Kotlin
+  `Any?`;
+- pointer and function-pointer types are outside the Kotlin-owned interface ABI;
+- unresolved or open-unbound constructions have no stable substitution; and
+- a CLR rectangular or non-vector array is not Kotlin `Array<Array<...>>` and must not be
+  flattened into one.
+
+The Kotlin invariant is that a legal nested substitution keeps its exact structure through every
+canonical/declared/exact adapter. In particular, a vector such as `Nullable<int>[]` is a natural
+generic `Array<Int?>` carrier; it is not a specialized primitive-array wrapper and is not erased
+to `object[]`. An unsupported leaf rejects the complete authoring substitution with `KDNCS004`;
+the generator never repairs it by widening that leaf to `object`.
+
+The selected core-team-style rule is therefore to recurse through the complete Roslyn type symbol,
+admit named constructions and CLR SZARRAY vectors whose children are all representable, and reject
+the first unsupported nested shape with a positional diagnostic. This matches the other backends'
+structural translation rule while making the strong CLR-specific decision not to invent Kotlin
+meanings for `dynamic`, pointers, or rectangular arrays.
+
+Rejecting rectangular arrays and pointer-bearing substitutions is a **Correct temporary
+implementation, but not a final importer design**. A future CLR importer may expose deliberate
+platform-specific Kotlin types for them. Source authoring may admit those shapes only after that
+logical type and its adapter/identity rules exist; it must never reach support by pretending they
+are Kotlin `Array` or `Any?`.
+
 Generated partial declarations add the canonical and exact physical views, explicit adapters,
 barriers, and profile-specific forwarding required by the manifest. Those generated physical
 interfaces are compiler ABI, not interfaces the C# author is expected to name in a base list or
@@ -493,6 +541,10 @@ defaults invoke the one helper identity with the owner and method substitutions;
 promoted DIMs remain method-free. DLL-only execution covers open reference substitutions,
 closed value substitutions and boxing, exact-only inputs, generic methods, unsafe cast failure,
 identity-preserving widening, and the erased owner-relative boundary on every profile.
+Substitution admission now walks the complete Roslyn type tree. A nested
+`List<Nullable<int>[]>` construction executes through the erased canonical adapter while retaining
+the source list and vector identities. A nested `dynamic` leaf and a CLR rectangular array each
+produce exactly one `KDNCS004`; neither is widened or reinterpreted as a Kotlin type.
 
 Special-barrier emission is production-owned as well. A policy applies only to the recorded erased
 slot: the generated adapter checks the declared typed shape before casting and returns the recorded

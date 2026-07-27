@@ -4181,6 +4181,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     }
                 }
 
+                public sealed partial class ValidNestedSubstitution :
+                    diagnostics.Shape<
+                        System.Collections.Generic.List<int?[]>>
+                {
+                    public System.Collections.Generic.List<int?[]> Last {
+                        get;
+                        private set;
+                    } = new System.Collections.Generic.List<int?[]>();
+
+                    public void Accept(
+                        System.Collections.Generic.List<int?[]> value)
+                    {
+                        Last = value;
+                    }
+                }
+
                 public partial record class RecordContainer
                 {
                     public sealed partial record class Nested :
@@ -4267,6 +4283,21 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             return 11;
                         if (new collision.A.B().Compute(38) != 42)
                             return 12;
+                        var nestedValue =
+                            new System.Collections.Generic.List<int?[]> {
+                                new int?[] { 1, null, 3 }
+                            };
+                        var nestedSubstitution =
+                            new ValidNestedSubstitution();
+                        ((diagnostics.Shape)nestedSubstitution)
+                            .Accept(nestedValue);
+                        if (!object.ReferenceEquals(
+                                nestedSubstitution.Last,
+                                nestedValue))
+                            return 13;
+                        if (nestedSubstitution.Last[0][1] != null ||
+                            nestedSubstitution.Last[0][2] != 3)
+                            return 14;
                         return 0;
                     }
                 }
@@ -4408,6 +4439,48 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(unsupportedSubstitution.exitCode != 0)
         assertTrue("KDNCS004" in unsupportedSubstitution.output) {
             unsupportedSubstitution.output
+        }
+
+        val unsupportedNestedDynamic = compileDiagnostic(
+            "UnsupportedNestedDynamic",
+            """
+            public sealed partial class UnsupportedNestedDynamic :
+                diagnostics.Shape<
+                    System.Collections.Generic.List<dynamic>>
+            {
+                public void Accept(
+                    System.Collections.Generic.List<dynamic> value) {}
+            }
+            """.trimIndent(),
+        )
+        assertTrue(unsupportedNestedDynamic.exitCode != 0)
+        assertEquals(
+            1,
+            Regex("KDNCS004").findAll(unsupportedNestedDynamic.output).count(),
+            unsupportedNestedDynamic.output,
+        )
+        assertTrue("nested type argument 0 is dynamic" in unsupportedNestedDynamic.output) {
+            unsupportedNestedDynamic.output
+        }
+
+        val unsupportedRectangularArray = compileDiagnostic(
+            "UnsupportedRectangularArray",
+            """
+            public sealed partial class UnsupportedRectangularArray :
+                diagnostics.Shape<int[,]>
+            {
+                public void Accept(int[,] value) {}
+            }
+            """.trimIndent(),
+        )
+        assertTrue(unsupportedRectangularArray.exitCode != 0)
+        assertEquals(
+            1,
+            Regex("KDNCS004").findAll(unsupportedRectangularArray.output).count(),
+            unsupportedRectangularArray.output,
+        )
+        assertTrue("rectangular or non-vector CLR array" in unsupportedRectangularArray.output) {
+            unsupportedRectangularArray.output
         }
 
         val missingSourceMember = compileDiagnostic(
