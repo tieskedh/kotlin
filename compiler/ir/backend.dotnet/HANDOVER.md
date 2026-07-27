@@ -1795,9 +1795,12 @@ session state, process, and a curated task menu. Keep both files updated as you 
   compatibility with another leaf platform; the ordinary Common metadata fallback remains
   available. This deliberately does not yet create a built-in Gradle target or compilation.
   `net48`, `netstandard2.0`, and `net10.0` remain a second target-framework axis whose explicit
-  Gradle attribute and exact-over-portable compatibility rule are the next slice. The accepted
-  platform-identity ADR records the six-step decision and the temporary neutral compiler-options
-  carrier used only by generic external-target plumbing.
+  typed Gradle attribute is now registered globally for MPP. Exact variants win; `net48` and
+  `net10.0` may fall back only to `netstandard2.0`; the runtime profiles never consume one another;
+  and a consumer with no profile remains ambiguous. The public experimental enum exposes canonical
+  TFMs independently of Kotlin enum-entry names. The accepted platform-identity and
+  target-framework-attribute ADRs record the six-step decisions. The built-in target must next put
+  both the platform and framework attributes on all of its profile-specific configurations.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
@@ -1916,11 +1919,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
    structured metadata work; do not substitute IL substring checks.
 2. **Complete the experimental Gradle target model, then wire friend association.** Compiler/FIR
    producer authorization and consumer declaration are implemented, and Gradle/Common metadata
-   now recognize one logical Kotlin/.NET platform identity. There is still no built-in
-   Kotlin/.NET target or compilation. Add the separate profile attribute and compatibility rules,
-   then make the target own assembly identity, artifacts, outputs, and task dependencies;
-   `associateWith` can then configure both producer `InternalsVisibleTo` and consumer friend KLIB
-   paths from one relationship.
+   now recognize one logical Kotlin/.NET platform identity. The separate typed framework attribute
+   and its exact-over-portable compatibility rules are registered, but there is still no built-in
+   Kotlin/.NET target or compilation. Make the target own assembly identity, artifacts, outputs,
+   task dependencies, and both profile/platform attributes; `associateWith` can then configure
+   both producer `InternalsVisibleTo` and consumer friend KLIB paths from one relationship.
 3. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
    host-capability-aware producer/install tasks already exist and must remain outside unconditional
    cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then

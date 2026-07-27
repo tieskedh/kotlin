@@ -2463,10 +2463,13 @@ landed shape as a compatibility constraint.
   profile. Metadata compilation uses `-Xtarget-platform=DotNet` and Gradle module metadata uses
   `KotlinPlatformType.dotnet`. Do not map it to JVM or Common and do not add cross-platform
   compatibility; the existing Common metadata fallback applies as it does for every leaf target.
-  The built-in Gradle target is not implemented yet. Its profile selection must be a separate
-  attribute so `net48` and `net10.0` can consume `netstandard2.0` without confusing target-framework
-  compatibility with Kotlin platform compatibility. See
-  `docs/decisions/adr-gradle-dotnet-platform-identity.md`.
+  Profile selection uses the separate typed
+  `org.jetbrains.kotlin.dotnet.targetFramework` attribute. Exact variants win; `net48` and
+  `net10.0` may consume `netstandard2.0`, while `net48` and `net10.0` never consume one another and
+  a consumer with no profile remains ambiguous. The built-in Gradle target is not implemented yet
+  and must apply this attribute to every profile-specific resolvable and consumable configuration.
+  See `docs/decisions/adr-gradle-dotnet-platform-identity.md` and
+  `docs/decisions/adr-gradle-dotnet-target-framework-attribute.md`.
 - `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API
   profile, carried as the `DotNetTarget` enum in `DotNetConfigurationKeys.TARGET`. Product kind is
   independent: `net48` and `net10.0` produce applications or libraries; `netstandard2.0` is
