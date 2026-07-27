@@ -103,13 +103,13 @@ Classifications:
 - neutral options in generic external-target plumbing: **Correct temporary implementation, but
   not a final design**;
 - separate profile compatibility attribute and exact-over-portable disambiguation:
-  **Deferred problem that must be recorded before the ABI becomes stable**;
+  **Correct direction**, implemented by the accepted target-framework-attribute ADR;
 - treating profiles as platform types, or treating .NET as JVM/Common: **Architecturally wrong and
   should be changed**.
 
 ## Consequences
 
 Common metadata compilation can name .NET without masquerading as another backend. Gradle module
-metadata can distinguish .NET artifacts before the built-in target is complete. The next target
-integration slice must add the profile attribute and compatibility tests, followed by a built-in
-target whose tasks invoke the real .NET compiler and own the KLIB/DLL artifact pair.
+metadata can distinguish .NET artifacts before the built-in target is complete. The separate
+profile attribute now owns compatibility; the next integration slice is a built-in target whose
+tasks invoke the real .NET compiler and own the KLIB/DLL artifact pair.
