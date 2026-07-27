@@ -692,8 +692,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 49
-library-integration tests; the current audited result is 850/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 50
+library-integration tests; the current audited result is 851/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -802,7 +802,7 @@ After P0:
 - restructure whole-file IL goldens toward declaration-level ABI assertions plus semantic boxes;
 - add standard `MODULE:` coverage and a target-owned test module;
 - complete the accepted self-describing-DLL migration: the CLI classpath and friend paths now
-  consume the private embedded KLIB; make installed-stdlib discovery and Gradle
+  consume the private embedded KLIB and installed-stdlib discovery is DLL-first; make Gradle
   dependency/friend/stdlib variants DLL-first, then remove the transitional sibling KLIB;
 - decide signing and user-library/assembly versioning before publication.
 

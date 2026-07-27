@@ -284,7 +284,7 @@ private fun LanguageVersionSettings.withAllowKotlinPackage(value: Boolean): Lang
     }
 }
 
-/** Adds the best compatible installed stdlib pair for the selected target profile. */
+/** Adds the best compatible self-describing stdlib DLL for the selected target profile. */
 private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
     val kotlinLibDirectory = kotlinPaths?.libPath ?: return false
     val targetFrameworks = buildList {
@@ -296,16 +296,16 @@ private fun CompilerConfiguration.addInstalledDotNetStdlib(): Boolean {
         val metadataFile = directory.resolve(DotNetStdlibArtifact.METADATA_FILE_NAME)
         val implementationFile = directory.resolve(DotNetStdlibArtifact.ASSEMBLY_FILE_NAME)
         if (!metadataFile.exists() && !implementationFile.exists()) continue
-        if (!metadataFile.isFile || !implementationFile.isFile) {
+        if (!implementationFile.isFile) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
                 "Incomplete Kotlin/.NET $targetFramework stdlib installation in '$directory': " +
-                        "both ${DotNetStdlibArtifact.METADATA_FILE_NAME} and " +
-                        "${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME} are required.",
+                        "${DotNetStdlibArtifact.METADATA_FILE_NAME} is transitional metadata and cannot be used " +
+                        "without the canonical ${DotNetStdlibArtifact.ASSEMBLY_FILE_NAME}.",
             )
             return true
         }
-        add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(metadataFile))
+        add(CLIConfigurationKeys.CONTENT_ROOTS, JvmClasspathRoot(implementationFile))
         return true
     }
     return false

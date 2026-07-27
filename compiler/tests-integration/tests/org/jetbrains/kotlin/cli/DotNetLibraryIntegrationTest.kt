@@ -10153,6 +10153,34 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testInstalledStdlibRejectsLegacyKlibWithoutDll() {
+        val kotlinHome = File(tmpdir, "legacy-klib-only-home")
+        val installedDirectory = kotlinHome.resolve("lib/dotnet/net48").apply { mkdirs() }
+        installedDirectory.resolve("Kotlin.Stdlib.klib").writeBytes(byteArrayOf(0))
+        val source = File(tmpdir, "legacy-klib-only-consumer.kt").apply {
+            writeText("package consumer\n\npublic fun answer(): Int = 42")
+        }
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::kotlinHome.cliArgument, kotlinHome.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
+                K2DotNetCompilerArguments::moduleName.cliArgument, "LegacyKlibOnlyConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "LegacyKlibOnlyConsumer.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        assertTrue(
+            "Kotlin.Stdlib.klib is transitional metadata and cannot be used without the canonical " +
+                    "Kotlin.Stdlib.dll" in diagnostics
+        ) {
+            diagnostics
+        }
+    }
+
+    @Test
     fun testPortableStdlibPairExecutesOnBothRuntimeProfiles() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
@@ -13419,8 +13447,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     ) {
         val kotlinHome = File(tmpdir, "kotlin-home-$target-$installedProfile")
         val installedDirectory = kotlinHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
-        pairDirectory.resolve("Kotlin.Stdlib.klib").copyTo(installedDirectory.resolve("Kotlin.Stdlib.klib"))
         pairDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
+        assertFalse(installedDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
+            "Installed stdlib discovery must be proven from the self-describing DLL alone"
+        }
         val consumerSource = File(tmpdir, "installed-consumer-$target.kt").apply {
             writeText(
                 """
