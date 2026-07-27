@@ -152,8 +152,12 @@ The implementation now:
 11. resolves manifest slot locators with complete CLR signatures and compares concrete semantic
     interface-map obligations for externally consumable types. A platform variant may discharge
     an obligation with an explicit MethodImpl, a natural class implementation, a selected DIM, or
-    a recorded interface promotion; raw MethodImpl row equality is deliberately not required.
-12. when a producer grants CLR friendship, compares the additional friend-dependent surface:
+    a recorded interface promotion; raw MethodImpl row equality is deliberately not required; and
+12. independently compares effective concrete interface-slot satisfaction for cross-module
+    public/compiler-ABI and authorized friend types whose slots are outside the C# authoring
+    manifest. The key is the real implementing CLR type plus complete constructed interface
+    signature, never a generated target-method name or second Kotlin identity; and
+13. when a producer grants CLR friendship, compares the additional friend-dependent surface:
     internal types with every non-private member and internal or private-protected members on
     otherwise exposed types. Public members already belong to the ordinary surface and private
     implementation details do not become ABI merely because the assembly has a friend.
@@ -191,15 +195,19 @@ default fixture proves that helper-backed class forwarders and a modern typed DI
 interface adapter satisfy the same method, generic-method, and mutable-property slots. The modern
 property DIMs must also retain the portable accessors' `specialname` metadata. A copied modern PE with a same-length
 manifest method-name corruption and recomputed envelope digest proves that name-only matching is
-rejected. For assemblies carrying `InternalsVisibleTo`, the verifier additionally compares only
+rejected. The verifier separately records non-manifest physical slots by their actual constructed
+CLR signatures and effective interface maps. A metadata-public generic compiler-ABI fixture proves
+that this coverage does not expand the C# source-authoring manifest, while a reassembled modern PE
+with one required `.override` removed is rejected by the CLR loader/verifier. For assemblies
+carrying `InternalsVisibleTo`, the verifier additionally compares only
 the surface whose availability depends on that authorization. The generic-default fixture proves
 that both executable profiles preserve an internal generic hierarchy, its constructor and
 property accessors, an internal file-facade method, and an internal member on an exposed type;
 normalized attributes also participate in that comparison. A narrowed modern fixture proves that
 omission is rejected. General raw attribute-blob equality is intentionally not an ABI
-requirement; exact bytes are tested only for the compiler protocols named above. MethodImpl rows
-for interfaces not represented in the manifest remain part of the future structured metadata
-model and ABI-freeze audit.
+requirement; exact bytes are tested only for the compiler protocols named above. The separation
+between Kotlin/KLIB identity, C# authoring contracts, and physical CLR slot auditing is fixed by
+[`adr-semantic-interface-mapping-audit.md`](adr-semantic-interface-mapping-audit.md).
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.

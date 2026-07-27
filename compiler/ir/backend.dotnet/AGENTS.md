@@ -233,8 +233,14 @@ landed shape as a compatibility constraint.
   ECMA-335 blob encodings are not required to be byte-identical across profiles or PE writers.
   Exact blob bytes are frozen only by an explicitly documented compiler protocol whose ADR names
   that representation. The C# authoring matrix does so for `InternalsVisibleTo`,
-  `KotlinCompilerAbiAttribute`, and `EditorBrowsable(Never)`. Non-manifest interface rows remain
-  outside this bounded portable-superset audit.
+  `KotlinCompilerAbiAttribute`, and `EditorBrowsable(Never)`. Non-manifest public/compiler-ABI and
+  authorized friend interface obligations are independently compared by the real implementing CLR
+  type plus complete constructed slot signature and effective interface map. The target MethodDef
+  is deliberately excluded so a portable class forwarder and selected modern DIM remain equivalent.
+  This physical locator is not a second Kotlin identity. A metadata-public generic fixture stays
+  absent from the C# authoring manifest but participates in the audit, and a reassembled modern PE
+  missing its canonical `.override` is rejected. See
+  `docs/decisions/adr-semantic-interface-mapping-audit.md`.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
   and no `mscorlib` MemberRefs. The complete

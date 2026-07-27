@@ -285,9 +285,12 @@ type names ABI. A generic default fixture proves portable class forwarders equiv
 typed DIM plus erased interface adapter for ordinary, method-generic, and mutable-property
 members. It also caught and corrected modern DIM accessors which lost CLR `specialname`; the
 portable and modern Property rows now retain the same accessor shape. A corrupted same-length slot
-name proves that a name-only locator is rejected. MethodImpl rows for interfaces not yet represented by the DLL
-manifest remain explicitly outside this bounded audit instead of acquiring synthetic tooling
-identities. The C# source-authoring
+name proves that a name-only locator is rejected. Non-manifest public/compiler-ABI and authorized
+friend obligations now form a second physical floor keyed by the real implementing CLR type and
+complete constructed interface signature. The effective target is excluded, preserving the
+portable-forwarder-to-modern-DIM transition without synthetic tooling identities. A
+metadata-public generic fixture remains absent from the C# authoring manifest but participates in
+this audit; a reassembled modern PE missing its canonical `.override` is rejected. The C# source-authoring
 slice now independently pins its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and
 promotion MethodImpl signatures through a metadata-only reader. It also pins the public
 compiler-ABI marker and `EditorBrowsable(Never)` blobs while proving ordinary internal source API
@@ -506,9 +509,10 @@ The remaining P0-D implementation order is:
    MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. The
    structured portable-superset verifier also closes the managed-resource row, C# manifest
    logical-contract comparison, manifest-addressable semantic MethodImpl obligations, and
-   friend-dependent internal surface without requiring byte-identical profile payloads. Close
-   the remaining non-manifest interface-row comparison in the structured metadata work rather
-   than with IL substring tests. General attribute-blob equality is intentionally not required:
+   friend-dependent internal surface without requiring byte-identical profile payloads. It now
+   also closes non-manifest public/compiler-ABI and authorized friend slot satisfaction through
+   effective CLR interface maps, with a hostile reassembled PE rather than an IL substring
+   oracle. General attribute-blob equality is intentionally not required:
    ordinary attributes retain decoded identity, arguments, and multiplicity, while only
    explicitly documented compiler protocols freeze raw bytes.
 

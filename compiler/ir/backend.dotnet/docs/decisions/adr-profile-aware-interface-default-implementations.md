@@ -288,8 +288,11 @@ The selected target must remain concrete and unambiguous. Raw row identity and r
 ABI: a correct `net10.0` variant normally removes a portable class forwarder when a selected DIM
 is effective. Non-public implementation types are still checked locally for resolvable concrete
 interface maps, but their physical type names are not promoted into cross-profile ABI identities.
-Interfaces not yet represented by the DLL manifest remain outside this bounded audit rather than
-receiving a second tooling-only identity namespace.
+Mappings outside the C# authoring manifest are compared separately by the implementing CLR type
+and complete constructed interface signature. This is a physical slot locator, not a second
+Kotlin identity namespace; Kotlin logical identity remains in KLIB and
+`DotNetPhysicalDeclaration`. See
+[`adr-semantic-interface-mapping-audit.md`](adr-semantic-interface-mapping-audit.md).
 
 Physical provider selection is set-based and uses only the most-specific DIM providers for the
 selected logical Kotlin default:
