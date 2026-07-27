@@ -618,6 +618,13 @@ landed shape as a compatibility constraint.
   The check is producer/consumer neutral: a separately compiled producer may own both root
   interfaces while consumer-owned intermediate branches carry them into the rejected derived
   declaration; failed publication emits neither consumer artifact.
+  Consumer substitution is a separate rule. If closing a generic child makes two otherwise
+  distinct inherited source signatures identical, one C# source body may satisfy both CLR slots
+  when Kotlin permits one implementation and Roslyn reports matching effective signatures.
+  The parent `IdSignature`s remain distinct and the producer must not invent an open-declaration
+  intersection. The DLL-only production-generator matrix closes `T = String` through both parent
+  Kotlin views on every profile combination. Incompatible returns, constraints, ref kinds, or
+  selected defaults must not be merged by source name.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and

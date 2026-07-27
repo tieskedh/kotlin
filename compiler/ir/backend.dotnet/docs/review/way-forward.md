@@ -386,6 +386,13 @@ two parent interfaces are now also rejected when their distinct Kotlin callable 
 to CLR `Function1` and no Kotlin-selected intersection slot covers them. The same gate now follows
 consumer-owned intermediate interfaces into a separately compiled producer and refuses the
 consumer KLIB/DLL pair, closing the direct/transitive cross-module direction.
+A valid consumer-substitution direction is now distinct from that rejection. A generic Kotlin
+child inherits `select(T)` and `select(String)` without a producer-side intersection; when a C#
+partial closes `T = String`, the production generator binds one `Select(string)` source body to
+both retained parent contracts. DLL-only Kotlin execution through both parent views succeeds on
+all four profile lanes, including a modern child over a portable parent. The closed child call
+remains Kotlin-frontend ambiguous, so this coalesces only the implementation obligation and does
+not merge logical declaration identity.
 A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
 and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
 complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
@@ -437,8 +444,11 @@ The remaining P0-D implementation order is:
 
 1. Keep nested/general owner-relative constraint adapters deferred until a sound reified-carrier
    conversion exists; whole-declaration rejection is correct in the meantime.
-2. Finish producer-declared nested foreign member signatures, more general substituted inherited
-   overload families, and the real same-owner clash matrix. Consumer-owned base-list substitution
+2. Finish producer-declared nested foreign member signatures, incompatible substituted inherited
+   overload families, and the real same-owner clash matrix. The valid closed inherited family
+   where `select(T)` and `select(String)` converge at `T = String` is now production-pinned: one
+   C# body serves both distinct parent contracts without an invented manifest intersection.
+   Consumer-owned base-list substitution
    is now recursively validated: nested named constructions, nullable value types, type
    parameters, and CLR SZARRAY vectors are preserved structurally, while nested `dynamic`,
    pointers/function pointers, unresolved/unbound types, and rectangular/non-vector arrays fail

@@ -183,6 +183,52 @@ platform-specific Kotlin types for them. Source authoring may admit those shapes
 logical type and its adapter/identity rules exist; it must never reach support by pretending they
 are Kotlin `Array` or `Any?`.
 
+#### Inherited source obligations are unified after consumer substitution
+
+**1. Other-target rule.** The mature backends start from Kotlin's override graph and then compare
+the target signatures after generic substitution. JVM bridge lowering may let one implementation
+and its generated bridges satisfy several substituted JVM methods. JS bridge construction derives
+the required substituted bridge signatures and delegates them to the selected implementation.
+Native and Wasm likewise retain the distinct overridden declaration identities while their
+vtable/interface-table entries may select one implementation. None asks the foreign author to
+provide two semantic bodies merely because two inherited declarations have distinct owners.
+
+**2. CLR-specific difference.** CLR interface slots remain distinct by declaring TypeDef and
+MethodDef even when closing a generic parent makes their method signatures equal. A single class
+method can nevertheless implement several inherited interface slots with the same closed
+signature; C# performs that natural mapping without requiring duplicate declarations. Where the
+physical signatures differ, generated explicit implementations and `MethodImpl` mappings remain
+available. This rule is the same on `net48`, `netstandard2.0`, and `net10.0`; DIM placement may
+change the selected default body on `net10.0`, but does not change how an authored abstract body
+satisfies coincident closed slots.
+
+**3. Kotlin Common invariant.** If Kotlin override resolution permits one declaration to implement
+both inherited members after a legal substitution, calls through either parent view must reach
+that one body. The parents' logical `IdSignature`s must remain distinct for metadata, qualified
+selection, and future evolution. Signature coincidence is an implementation relationship, not
+permission to merge declarations.
+
+**4. .NET validity rule.** Tooling may reuse one source method only when Roslyn reports an
+identical effective name, generic arity, parameter/ref-kind shape, compatible generic
+constraints, and one return contract after the complete consumer substitution. Return-only
+overloads, incompatible constraints, conflicting property shapes, and competing selected
+defaults are not legal coalescing cases. They require an already recorded Kotlin intersection or
+override decision, distinct generated adapters where representable, or a source-authoring
+diagnostic.
+
+**5. Selected architecture.** The manifest continues to expose every contributing Kotlin member
+under its existing logical identity. After substitution, the generator may resolve several
+coincident obligations to the same user-authored body and emits each required canonical,
+declared/exact, or parent-owned physical adapter to that body. It never invents a combined logical
+member and never copies the body.
+
+**6. Core-team choice.** Accept a closed inherited family when Kotlin permits one effective
+override and the CLR can represent all of its slots from one body; otherwise reject it before C#
+emission with a precise diagnostic. Blanket rejection would transgress Kotlin Common, while
+blind name-based merging would discard Kotlin identity and override semantics. This is
+**Correct direction** and must be covered by DLL-only execution through every contributing parent
+view.
+
 Generated partial declarations add the canonical and exact physical views, explicit adapters,
 barriers, and profile-specific forwarding required by the manifest. Those generated physical
 interfaces are compiler ABI, not interfaces the C# author is expected to name in a base list or
