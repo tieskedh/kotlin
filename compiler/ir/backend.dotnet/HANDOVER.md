@@ -1853,6 +1853,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Portable erased setters now convert `object` to the helper's constructed value parameter before
   the call. Child, exact, declared, both parents, and widened erased views execute across all four
   lanes, and a wrong-shaped widened write throws before mutating either parent state.
+- The accepted self-describing-DLL migration has advanced through embedded metadata
+  (`27ccc7bb8`), direct CLI DLL loading (`24fd9fc1f`), and installed-stdlib DLL selection
+  (`64b034731`). The current Gradle continuation publishes one profile-attributed DLL from API and
+  runtime variants and uses that DLL for project dependencies, `associateWith` dependencies, and
+  friend paths. The DLL is a declared compile-task output, so task ordering and configuration
+  cache behavior follow the ordinary KGP provider model. Both an associated compilation and a
+  separate project dependency compile after the producer sibling KLIB is deleted and the producer
+  task is excluded. The compile task still emits the sibling only for the remaining direct
+  compiler/installation migration; it is no longer a Gradle artifact.
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1935,13 +1944,11 @@ session state, process, and a curated task menu. Keep both files updated as you 
    resource before freezing the schema or package. Continue the foreign provider/implementor
    collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
    structured metadata work; do not substitute IL substring checks.
-2. **Complete the experimental Gradle target model, then wire friend association.** Compiler/FIR
-   producer authorization and consumer declaration are implemented, and Gradle/Common metadata
-   now recognize one logical Kotlin/.NET platform identity. The separate typed framework attribute
-   and its exact-over-portable compatibility rules are registered, but there is still no built-in
-   Kotlin/.NET target or compilation. Make the target own assembly identity, artifacts, outputs,
-   task dependencies, and both profile/platform attributes; `associateWith` can then configure
-   both producer `InternalsVisibleTo` and consumer friend KLIB paths from one relationship.
+2. **Finish retiring the sibling KLIB.** The CLI, installed stdlib, Gradle variants, project
+   dependencies, compilation association, and friend paths are DLL-first. Migrate the remaining
+   direct compiler fixtures and producer/install tasks to inspect or copy `Kotlin.Metadata` from
+   the DLL, stop writing the sibling, and then remove the legacy sibling-only loader path. Nothing
+   has shipped, so do not preserve a dual-artifact compatibility mode.
 3. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
    host-capability-aware producer/install tasks already exist and must remain outside unconditional
    cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then
