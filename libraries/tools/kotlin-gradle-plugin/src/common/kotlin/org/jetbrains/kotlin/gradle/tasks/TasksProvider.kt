@@ -153,4 +153,19 @@ internal open class KotlinTasksProvider {
             configuration.execute(it)
         }
     }
+
+    fun registerKotlinDotNetTask(
+        project: Project,
+        taskName: String,
+        compilerOptions: KotlinDotNetCompilerOptions,
+        configuration: KotlinDotNetCompileConfig,
+    ): TaskProvider<out KotlinDotNetCompile> {
+        return project.registerTask(
+            taskName,
+            KotlinDotNetCompile::class.java,
+            constructorArgs = listOf(compilerOptions),
+        ).also {
+            configuration.execute(it)
+        }
+    }
 }

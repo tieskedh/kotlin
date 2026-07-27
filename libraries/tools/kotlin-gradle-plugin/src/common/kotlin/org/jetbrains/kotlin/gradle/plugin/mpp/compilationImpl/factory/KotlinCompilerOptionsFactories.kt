@@ -14,6 +14,7 @@ import org.jetbrains.kotlin.gradle.utils.KotlinJsCompilerOptionsDefault
 import org.jetbrains.kotlin.gradle.utils.KotlinJvmCompilerOptionsDefault
 import org.jetbrains.kotlin.gradle.utils.KotlinMultiplatformCommonCompilerOptionsDefault
 import org.jetbrains.kotlin.gradle.utils.moduleName
+import org.jetbrains.kotlin.gradle.utils.newInstance
 
 internal object KotlinMultiplatformCommonCompilerOptionsFactory : KotlinCompilationImplFactory.KotlinCompilerOptionsFactory {
     override fun create(target: KotlinTarget, compilationName: String): KotlinCompilationImplFactory.KotlinCompilerOptionsFactory.Options {
@@ -59,6 +60,32 @@ internal object KotlinNativeCompilerOptionsFactory : KotlinCompilationImplFactor
                 level = DeprecationLevel.ERROR,
             )
             override val options get() = compilerOptions.options
+        }
+
+        return KotlinCompilationImplFactory.KotlinCompilerOptionsFactory.Options(compilerOptions, kotlinOptions)
+    }
+}
+
+internal object KotlinDotNetCompilerOptionsFactory : KotlinCompilationImplFactory.KotlinCompilerOptionsFactory {
+    override fun create(
+        target: KotlinTarget,
+        compilationName: String,
+    ): KotlinCompilationImplFactory.KotlinCompilerOptionsFactory.Options {
+        @Suppress("TYPEALIAS_EXPANSION_DEPRECATION_ERROR")
+        val compilerOptions = object : DeprecatedHasCompilerOptions<KotlinDotNetCompilerOptions> {
+            override val options: KotlinDotNetCompilerOptions = target.project.objects
+                .newInstance<KotlinDotNetCompilerOptionsDefault>()
+        }
+
+        @Suppress("DEPRECATION_ERROR")
+        val kotlinOptions = object : KotlinCommonOptions {
+            @OptIn(org.jetbrains.kotlin.gradle.InternalKotlinGradlePluginApi::class)
+            @Deprecated(
+                message = KOTLIN_OPTIONS_DEPRECATION_MESSAGE,
+                level = DeprecationLevel.ERROR,
+            )
+            override val options: KotlinDotNetCompilerOptions
+                get() = compilerOptions.options
         }
 
         return KotlinCompilationImplFactory.KotlinCompilerOptionsFactory.Options(compilerOptions, kotlinOptions)
@@ -116,5 +143,3 @@ internal object KotlinJvmCompilerOptionsFactory : KotlinCompilationImplFactory.K
         return KotlinCompilationImplFactory.KotlinCompilerOptionsFactory.Options(compilerOptions, kotlinOptions)
     }
 }
-
-
