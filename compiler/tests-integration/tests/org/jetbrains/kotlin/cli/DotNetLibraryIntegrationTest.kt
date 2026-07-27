@@ -10149,28 +10149,55 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         fun assertPublicationFails(
             moduleName: String,
             sourceText: String,
+            targetProfiles: List<String?>,
             vararg expectedDiagnostics: String,
         ) {
-            val source = File(tmpdir, "$moduleName.kt").apply { writeText(sourceText.trimIndent()) }
-            val outputDirectory = File(tmpdir, moduleName)
-            val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
-                K2DotNetCompiler(),
-                listOf(
-                    source.path,
-                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
-                    K2DotNetCompilerArguments::moduleName.cliArgument, moduleName,
-                    K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+            for (targetProfile in targetProfiles) {
+                val profileSuffix =
+                    targetProfile?.replace(Regex("[^A-Za-z0-9]"), "_")
+                val effectiveModuleName =
+                    if (profileSuffix == null) moduleName else "$moduleName.$profileSuffix"
+                val source = File(tmpdir, "$effectiveModuleName.kt").apply {
+                    writeText(sourceText.trimIndent())
+                }
+                val outputDirectory = File(tmpdir, effectiveModuleName)
+                val arguments = buildList {
+                    add(source.path)
+                    add(K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument)
+                    add(K2DotNetCompilerArguments::moduleName.cliArgument)
+                    add(effectiveModuleName)
+                    if (targetProfile != null) {
+                        add(K2DotNetCompilerArguments::dotNetTarget.cliArgument)
+                        add(targetProfile)
+                    }
+                    add(K2DotNetCompilerArguments::destination.cliArgument)
+                    add(outputDirectory.path)
+                }
+                val [output, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+                    K2DotNetCompiler(),
+                    arguments,
                 )
-            )
 
-            assertEquals(ExitCode.COMPILATION_ERROR, exitCode, output)
-            assertTrue("is not supported by the .NET backend and was skipped" in output) { output }
-            expectedDiagnostics.forEach { diagnostic ->
-                assertTrue(diagnostic in output) { "Missing '$diagnostic':\n$output" }
+                assertEquals(ExitCode.COMPILATION_ERROR, exitCode, output)
+                assertTrue("is not supported by the .NET backend and was skipped" in output) { output }
+                expectedDiagnostics.forEach { diagnostic ->
+                    assertTrue(diagnostic in output) { "Missing '$diagnostic':\n$output" }
+                }
+                assertTrue(!outputDirectory.resolve("$effectiveModuleName.klib").exists())
+                assertTrue(!outputDirectory.resolve("$effectiveModuleName.dll").exists())
             }
-            assertTrue(!outputDirectory.resolve("$moduleName.klib").exists())
-            assertTrue(!outputDirectory.resolve("$moduleName.dll").exists())
         }
+
+        fun assertPublicationFails(
+            moduleName: String,
+            sourceText: String,
+            vararg expectedDiagnostics: String,
+        ) = assertPublicationFails(
+            moduleName,
+            sourceText,
+            listOf(null),
+            *expectedDiagnostics,
+        )
 
         assertPublicationFails(
             "Unsupported.Library",
@@ -10254,6 +10281,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "members 'apply' and 'apply'",
             "clash on its declared CLR capability",
             "both map to 'apply(class [Kotlin.Runtime]'Kotlin.Function1')'",
+        )
+        assertPublicationFails(
+            "Generic.Interface.DefaultHelperTypeClash",
+            """
+            package sample
+
+            public interface DefaultHelperTypeClash {
+                public fun selected(): String = "default"
+                public class __KotlinDefaultImpls
+            }
+            """,
+            listOf("net48", "netstandard2.0", "net10.0"),
+            "maps to a duplicate canonical, declared, or exact IL type",
         )
         assertPublicationFails(
             "Generic.Interface.ReturnOnlyPhysicalClash",

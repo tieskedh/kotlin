@@ -1766,6 +1766,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   remain Kotlin-frontend ambiguous, which correctly proves that implementation coalescing did not
   merge declaration identity. The accepted source-authoring ADR records the six-step
   other-target/CLR/Common/.NET/core-team decision.
+- The first real same-owner generated-TypeDef collision is now cross-profile pinned. A Kotlin
+  interface with a default and a source nested `__KotlinDefaultImpls` would give both declarations
+  the same enclosing CLR owner, name, and arity. The existing registration gate rejects the
+  complete producer on `net48`, `netstandard2.0`, and `net10.0` and leaves neither KLIB nor DLL.
+  The variant-interface ADR records why the C#-nameable helper cannot copy JVM's unnameable-name
+  escape, why the helper remains present on modern .NET, and why actual collision rejection is
+  final even though emitter-time diagnostic placement is temporary.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
