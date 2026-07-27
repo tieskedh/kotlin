@@ -1773,6 +1773,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   The variant-interface ADR records why the C#-nameable helper cannot copy JVM's unnameable-name
   escape, why the helper remains present on modern .NET, and why actual collision rejection is
   final even though emitter-time diagnostic placement is temporary.
+- Same-owner masked-dispatcher collisions now follow the JVM's explicit regression family. A
+  source backtick `select$default(Int, Int)` colliding with an ordinary member dispatcher rejects
+  its class; the same source shape on a file facade rejects both colliding top-level callables;
+  and a source `copy$default(Int, Int)` colliding with a generated data-class dispatcher rejects
+  the data class. Each case is publication-tested on all three profiles with no KLIB or DLL left
+  behind. The default-export ADR records the common lowering, CLR method-identity, Kotlin default
+  evaluation, and future FIR-diagnostic rules.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.

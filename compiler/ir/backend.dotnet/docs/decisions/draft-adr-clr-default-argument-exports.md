@@ -57,6 +57,45 @@ For an overloaded Kotlin name, the explicit expanded-parameter selector first ch
 declaration; only that declaration's trailing default suffix generates shorter CLR overloads.
 Selector types are not CLR optional-argument metadata and do not change masked dispatch.
 
+### Generated `$default` identities are collision-checked
+
+**1. Other-target rule.** JVM, JS, Native, Wasm, and .NET all build default stubs from the common
+`DefaultArgumentStubGenerator`; JVM, Native, Wasm, and .NET use a masked dispatcher shape. JVM
+spells the method `<name>$default` and has dedicated
+`CONFLICTING_JVM_DECLARATIONS` tests where a backtick-named source function occupies exactly that
+generated signature, including `copy$default`. JS/Native/Wasm use their own mangled physical
+identities, but likewise keep the generated stub distinct from the source declaration.
+
+**2. CLR-specific difference.** `$` is legal in a quoted CLR metadata identifier, while Kotlin can
+deliberately declare the same spelling with backticks. CLR method identity on one TypeDef is
+determined by name, generic arity, and parameter signature for this ABI; staticness, visibility,
+and return type are not disambiguation mechanisms. A class member dispatcher and a top-level
+dispatcher on its file facade therefore each have a real same-owner collision when a source
+function supplies the same final shape.
+
+**3. Kotlin Common invariant.** The dispatcher is callee-owned compiler ABI. It evaluates the
+selected Kotlin default expressions on every call, in declaration order, and is the target of
+cross-module omitted-argument calls. A separately declared backtick-named function is an unrelated
+Kotlin declaration. Neither may be merged, dropped, or redirected to the other.
+
+**4. .NET validity rule.** The same masked dispatcher representation is used on `net48`,
+`netstandard2.0`, and `net10.0`; modern CLR metadata provides no additional legal duplicate-method
+shape. A profile-specific rename would only create divergent ABI without a runtime benefit.
+
+**5. Selected architecture.** Compare source and generated functions after lowering by complete
+physical owner and method identity. An actual duplicate rejects the complete class, or every
+colliding callable on a file facade, and library publication emits neither KLIB nor DLL. A
+same-spelled declaration on another TypeDef remains legal. The compiler never chooses a winner or
+renames the dispatcher according to declaration order.
+
+**6. Core-team choice.** Follow the JVM diagnostic precedent and keep one deterministic
+`$default` identity plus an explicit clash gate. The current emitter-time report is a **Correct
+temporary implementation, but not a final design**; a target FIR/platform diagnostic should
+eventually report both source declarations. Atomic rejection and preservation of the common
+masked-dispatch semantics are final. Changing the suffix before ABI freeze would not remove the
+need for this rule because Kotlin backtick identifiers can deliberately occupy any chosen
+metadata spelling.
+
 ## Why not CLR optional constants now?
 
 [C# named and optional argument rules](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/named-and-optional-arguments)

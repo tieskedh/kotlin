@@ -631,6 +631,12 @@ landed shape as a compatibility constraint.
   complete producer before KLIB/DLL publication; do not rename the helper according to encounter
   order. The current emitter-time report is temporary diagnostic placement, not permission to
   emit a partial interface. Reserved-looking names at another owner or arity stay legal.
+  Masked `$default` dispatchers follow the same physical-owner rule. Kotlin backtick functions
+  can deliberately occupy a generated dispatcher identity on a class or file facade; data-class
+  `copy$default` is the compiler-generated-source-member variant. All three cases reject
+  publication on `net48`, `netstandard2.0`, and `net10.0`. Never drop or encounter-order-rename
+  the dispatcher: cross-module omitted-argument calls require its recorded identity and
+  callee-owned default evaluation. This follows the JVM `CONFLICTING_JVM_DECLARATIONS` precedent.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
