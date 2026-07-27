@@ -178,8 +178,11 @@ landed shape as a compatibility constraint.
   embeds the complete packed KLIB as the private managed resource `Kotlin.Metadata`, marked
   `managed-resource-klib-v1` and self-bound. The CLI classpath and friend resolver now consume that
   resource directly from a DLL through a bounded JVM-hosted ECMA-335 reader, validate its manifest
-  against the physical Assembly row, and reuse the shared KLIB deserializer through a
-  compilation-scoped temporary extraction. The compiler producer, installed-stdlib resolver,
+  against the physical Assembly row, and expose its packed metadata through the shared
+  `KotlinLibrary`/`KlibMetadataComponent` contract with the containing DLL as `KotlinLibrary.path`.
+  Canonical archive entries and bounded expansion are validated in common KLIB infrastructure;
+  no temporary KLIB file participates in dependency loading and no second artifact path exists.
+  The compiler producer, installed-stdlib resolver,
   Gradle variants, project dependencies, association, and friend paths all use only the DLL.
   Standalone Kotlin/.NET KLIBs are rejected. Consumers call implementations in the selected DLL,
   with no injected implementation source. The embedded manifest binds the complete unsigned
@@ -192,7 +195,7 @@ landed shape as a compatibility constraint.
   embedded payload reuses the common KLIB serialization used by JS/Wasm/Native. Every assembled
   executable still receives both platform dlls;
   same-run stdlib production remains bootstrap compatibility machinery. Repeated standalone builds
-  must produce byte-identical embedded/sibling Kotlin metadata payloads, compiler-owned IL, and
+  must produce byte-identical embedded Kotlin metadata payloads, compiler-owned IL, and
   deterministic PE for each profile; variants are not required to be byte-identical to one
   another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
