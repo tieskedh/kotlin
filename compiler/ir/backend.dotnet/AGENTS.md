@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 71 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 70 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 851 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 850 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -179,17 +179,15 @@ landed shape as a compatibility constraint.
   `managed-resource-klib-v1` and self-bound. The CLI classpath and friend resolver now consume that
   resource directly from a DLL through a bounded JVM-hosted ECMA-335 reader, validate its manifest
   against the physical Assembly row, and reuse the shared KLIB deserializer through a
-  compilation-scoped temporary extraction. The transitional sibling input remains accepted only
-  while direct compiler fixtures and producer/install flows migrate; Gradle publishes and selects
-  only the DLL. Installed-stdlib discovery is already DLL-first:
-  it selects the best compatible profile DLL, rejects a legacy KLIB without that DLL, and is tested
-  with no installed sibling. Consumers call implementations in the selected DLL, with no injected
-  implementation source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
-  library TFM, and final DLL hash; an arbitrary metadata KLIB never becomes a CLR
+  compilation-scoped temporary extraction. The compiler producer, installed-stdlib resolver,
+  Gradle variants, project dependencies, association, and friend paths all use only the DLL.
+  Standalone Kotlin/.NET KLIBs are rejected. Consumers call implementations in the selected DLL,
+  with no injected implementation source. The embedded manifest binds the complete unsigned
+  assembly identity, file, selected library TFM, and self implementation; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
   inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
-  self-describing profile-specific DLL plus transitional KLIB. It is never an executable-build
+  self-describing profile-specific DLL. It is never an executable-build
   side effect. The artifact boundary follows JVM's single native library product while the
   embedded payload reuses the common KLIB serialization used by JS/Wasm/Native. Every assembled
   executable still receives both platform dlls;
@@ -198,12 +196,12 @@ landed shape as a compatibility constraint.
   deterministic PE for each profile; variants are not required to be byte-identical to one
   another. Once a distribution-owned default pair is populated in Kotlin home, same-run production
   must disappear without moving ordinary implementations back into `Kotlin.Runtime`.
-  Ordinary compilation prefers the complete selected-profile pair, then
-  `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}` for either executable profile,
-  and rejects a half-installed candidate; absence still falls back to injected sources. Repository production is deliberately
+  Ordinary compilation prefers the selected-profile DLL, then
+  `<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll` for either executable profile;
+  absence still falls back to injected sources. Repository production is deliberately
   opt-in: `:kotlin-compiler:produceDotNetStdlib` runs the compiler from the assembled distribution
   and writes all three bound variants plus diagnostic IL under `prepare/compiler/build/dotnet-stdlib/<profile>`, while
-  `:kotlin-compiler:installDotNetStdlib` installs each KLIB/DLL pair into its Kotlin-home profile
+  `:kotlin-compiler:installDotNetStdlib` installs each DLL into its Kotlin-home profile
   directory. Neither task is a dependency of ordinary `dist`/`distKotlinc`, so a normal build does
   not acquire either ILAsm requirement. Because `distKotlinc` is a whole-home `Sync`, a later
   standalone invocation intentionally removes the optional variants; run the install task afterward
@@ -265,7 +263,7 @@ landed shape as a compatibility constraint.
   edge. Kotlin cross-module calls now follow JS/Native's public `IdSignature` as their logical key;
   a versioned POC KLIB index adds only the CLR owner path, method name, and dispatch shape needed
   to bind that declaration to its owning assembly. Signatures remain metadata-derived, arbitrary
-  metadata KLIBs remain compile-time-only, and consumers never reconstruct a facade from a source
+  standalone metadata KLIBs are not Kotlin/.NET dependencies, and consumers never reconstruct a facade from a source
   filename. Executables copy directly referenced implementation DLLs beside their output. The
   manifest-property encoding is provisional pending a real KLIB component and signature-version
   compatibility policy. .NET Standard is a library target, never an executable runtime. See
@@ -640,7 +638,7 @@ landed shape as a compatibility constraint.
   Real generated-TypeDef collisions are owner-relative. A source nested
   `__KotlinDefaultImpls` inside an interface with a default body collides with the compiler helper
   on every profile, including `net10.0` where the compatibility helper remains ABI. Reject the
-  complete producer before KLIB/DLL publication; do not rename the helper according to encounter
+  complete producer before DLL publication; do not rename the helper according to encounter
   order. The current emitter-time report is temporary diagnostic placement, not permission to
   emit a partial interface. Reserved-looking names at another owner or arity stay legal.
   Masked `$default` dispatchers follow the same physical-owner rule. Kotlin backtick functions
@@ -664,7 +662,7 @@ landed shape as a compatibility constraint.
   LastIndexOf; this policy does not apply to arbitrary user `@UnsafeVariance` members. Nested
   ListIterator/List returns remain canonical because capability presence is not universal. Pins:
   `ilText/lists.kt`, `box/lists.kt`, and
-  `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary` (separate KLIB/DLL
+  `DotNetLibraryIntegrationTest.testGenericInterfacesAcrossLibraryBoundary` (separate DLL
   consumer plus raw CLR calls).
 - Bottom-type carrier: both `Nothing` and `Nothing?` map physically to the public sealed,
   private-constructor reference class `[Kotlin.Runtime]Kotlin.Nothing`, the CLR counterpart of
@@ -1454,8 +1452,7 @@ landed shape as a compatibility constraint.
   accessor colliding on the declared view, a distinct inherited method and inherited property
   accessor colliding on that view, a user TypeDef occupying a generated exact name, and a nested
   owner-relative generic-method intersection; all six produce
-  diagnostics and no KLIB/DLL
-  pair. The inherited gate follows the emitted physical
+  diagnostics and no library DLL. The inherited gate follows the emitted physical
   capability graph and exempts a genuine Kotlin override. An inherited-only pair is rejected when
   it is a distinct Kotlin member or when no selected derived slot covers both same-name contributor
   families. Merged property fake overrides are checked against atomic accessor selection on each
@@ -1654,7 +1651,7 @@ landed shape as a compatibility constraint.
   C# SOURCE AUTHORING follows
   `docs/decisions/adr-csharp-interface-source-authoring.md`. Every compiler-produced Kotlin library
   DLL carries a versioned implementation manifest whose records plus ordinary CLR metadata are
-  sufficient without the sibling KLIB. The supported convenience is a Roslyn generator/analyzer
+  sufficient without parsing the private Kotlin metadata resource. The supported convenience is a Roslyn generator/analyzer
   for a user-authored partial C# type, not a universal CLR implementation mechanism. The C# author
   opts in with the real base list (`partial class C<T> : Shape<T>`): canonical for a non-generic
   Kotlin interface and the declared Kotlin view for a split generic interface. Attributes,
@@ -1728,7 +1725,7 @@ landed shape as a compatibility constraint.
   remains `KDNCS009` guidance only. Schema 7
   explicitly names the existing `kotlin-public-id-signature-legacy-v1` scheme; every interface
   and member key is the ordinary `PublicIdSignatureComputer(DotNetIrMangler)` identity used by
-  the KLIB/DLL index. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
+  the physical index embedded in the DLL. Runtime, Roslyn, and tooling-specific declaration-key namespaces are
   rejected. It records direct public interfaces, canonical/declared/exact owner paths where split
   generic views exist, typed authoring views, read-only/mutable property and generic-method associations,
   exact-only inputs, and portable-helper versus `net10.0` DIM obligations. One parent from the
@@ -2498,8 +2495,7 @@ landed shape as a compatibility constraint.
   a consumer with no profile remains ambiguous. The built-in Gradle target applies this attribute
   to every profile-specific resolvable and consumable configuration. Its API and runtime variants
   publish only the self-describing DLL; project dependencies and `associateWith` dependency/friend
-  paths likewise pass that DLL. The compile task still emits a sibling KLIB only as a transitional
-  non-variant output while remaining direct compiler fixtures migrate.
+  paths likewise pass that DLL. Compiler tasks emit no standalone Kotlin/.NET KLIB.
   See `docs/decisions/adr-gradle-dotnet-platform-identity.md` and
   `docs/decisions/adr-gradle-dotnet-target-framework-attribute.md`.
 - `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API

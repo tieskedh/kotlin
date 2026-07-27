@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultImplementation
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
+import org.jetbrains.kotlin.backend.dotnet.DotNetManagedResourceReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
@@ -56,11 +57,15 @@ import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64
 import java.util.Properties
-import java.util.zip.ZipFile
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     @Test
@@ -1408,7 +1413,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     K2DotNetCompilerArguments::moduleName.cliArgument, parentModuleName,
                     K2DotNetCompilerArguments::destination.cliArgument, profileDirectory.path,
                 )
-                profileDirectory.resolve("$parentModuleName.klib")
+                profileDirectory.resolve("$parentModuleName.dll")
             } else {
                 null
             }
@@ -1449,14 +1454,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             val producerAssembly = profileDirectory.resolve("$moduleName.dll")
             val producerKlib = profileDirectory.resolve("$moduleName.klib")
-            assertTrue(producerAssembly.isFile && producerKlib.isFile)
-            assertTrue(producerKlib.delete()) { "The no-KLIB manifest test could not remove $producerKlib" }
+            assertTrue(producerAssembly.isFile)
+            assertFalse(producerKlib.exists()) { "The DLL-only producer wrote $producerKlib" }
             val parentAssembly = parentMetadata?.let { metadata ->
                 assertTrue(metadata.isFile)
-                assertTrue(metadata.delete()) { "The no-KLIB manifest test could not remove $metadata" }
-                profileDirectory.resolve("$parentModuleName.dll").also { assembly ->
-                    assertTrue(assembly.isFile)
-                }
+                assertFalse(profileDirectory.resolve("$parentModuleName.klib").exists())
+                metadata
             }
 
             val manifest = readCSharpImplementationManifestFromDll(
@@ -5112,7 +5115,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Cross.Library.klib")
+        val metadataLibrary = libraryDirectory.resolve("Cross.Library.dll")
         val libraryIl = libraryDirectory.resolve("Cross.Library.il").readText()
         assertTrue(
             "implements [Kotlin.Runtime]'Kotlin.Collections.Iterator', " +
@@ -5916,7 +5919,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Wide.Generic.klib")
+        val metadataLibrary = libraryDirectory.resolve("Wide.Generic.dll")
         val libraryAssembly = libraryDirectory.resolve("Wide.Generic.dll")
         val libraryIl = libraryDirectory.resolve("Wide.Generic.il").readText()
         assertTrue("'wide.Wide`65'" in libraryIl) { libraryIl }
@@ -6828,7 +6831,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
         )
 
-        val metadataLibrary = producerDirectory.resolve("Canonical.Provider.klib")
+        val metadataLibrary = producerDirectory.resolve("Canonical.Provider.dll")
         val declarations = DotNetLibraryAbiCodec.decode(metadataLibrary.readKlibManifest()).values
         val sourceSlot = declarations.filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .single { declaration ->
@@ -6974,7 +6977,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, reservedNameProbeDirectory.path,
         )
         val reservedCanonicalMethodName = DotNetLibraryAbiCodec.decode(
-            reservedNameProbeDirectory.resolve("Foreign.Barriers.klib").readKlibManifest()
+            reservedNameProbeDirectory.resolve("Foreign.Barriers.dll").readKlibManifest()
         ).values.filterIsInstance<DotNetPhysicalDeclaration.Function>().single { declaration ->
             declaration.ownerPath.last() == "barriers.ReservedMember" &&
                     declaration.methodName.startsWith("read__KotlinErased__")
@@ -7061,7 +7064,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
         )
 
-        val producerMetadata = producerDirectory.resolve("Foreign.Barriers.klib")
+        val producerMetadata = producerDirectory.resolve("Foreign.Barriers.dll")
         val declarations = DotNetLibraryAbiCodec.decode(producerMetadata.readKlibManifest()).values
         val unsafeClass = declarations.filterIsInstance<DotNetPhysicalDeclaration.Class>()
             .single { declaration -> declaration.ownerPath.last() == "barriers.UnsafeSink" }
@@ -7306,7 +7309,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.GenericDefaults",
             K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
         )
-        val portableMetadata = portableDirectory.resolve("Portable.GenericDefaults.klib")
+        val portableMetadata = portableDirectory.resolve("Portable.GenericDefaults.dll")
         val portableIl = portableDirectory.resolve("Portable.GenericDefaults.il").readText()
         assertTrue("abstract virtual instance object 'value__KotlinErased__" in portableIl) { portableIl }
         assertTrue("/'__KotlinDefaultImpls'::'value'" in portableIl) { portableIl }
@@ -7340,7 +7343,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::moduleName.cliArgument, "Promoted.GenericDefaults",
             K2DotNetCompilerArguments::destination.cliArgument, promotedDirectory.path,
         )
-        val promotedMetadata = promotedDirectory.resolve("Promoted.GenericDefaults.klib")
+        val promotedMetadata = promotedDirectory.resolve("Promoted.GenericDefaults.dll")
         val promotedDeclarations = DotNetLibraryAbiCodec.decode(promotedMetadata.readKlibManifest())
         val promotions = promotedDeclarations.values
             .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
@@ -7430,7 +7433,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, closedImplementationDirectory.path,
         )
         val closedImplementationMetadata =
-            closedImplementationDirectory.resolve("Closed.GenericDefaults.klib")
+            closedImplementationDirectory.resolve("Closed.GenericDefaults.dll")
         val consumerDirectory = File(tmpdir, "generic-interface-default-consumer").apply { mkdirs() }
         val consumerSource = consumerDirectory.resolve("main.kt").apply {
             writeText(
@@ -7811,7 +7814,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
         )
 
-        val portableMetadata = portableDirectory.resolve("Portable.Defaults.klib")
+        val portableMetadata = portableDirectory.resolve("Portable.Defaults.dll")
         val portableManifest = portableMetadata.readKlibManifest()
         val portableDeclarations = DotNetLibraryAbiCodec.decode(portableManifest)
         val portableDefault = portableDeclarations.values
@@ -7884,7 +7887,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, derivedDirectory.path,
         )
 
-        val derivedMetadata = derivedDirectory.resolve("Promoted.Defaults.klib")
+        val derivedMetadata = derivedDirectory.resolve("Promoted.Defaults.dll")
         val derivedManifest = derivedMetadata.readKlibManifest()
         val derivedDeclarations = DotNetLibraryAbiCodec.decode(derivedManifest)
         val promotion = derivedDeclarations.values
@@ -8149,7 +8152,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, portableDirectory.path,
         )
 
-        val portableMetadata = portableDirectory.resolve("Portable.Features.klib")
+        val portableMetadata = portableDirectory.resolve("Portable.Features.dll")
         val portableDeclarations = DotNetLibraryAbiCodec.decode(portableMetadata.readKlibManifest())
         assertTrue(
             portableDeclarations.keys.none { "__KotlinDefaultImpls" in it || "\$default" in it },
@@ -8188,7 +8191,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, derivedDirectory.path,
         )
 
-        val derivedMetadata = derivedDirectory.resolve("Promoted.Features.klib")
+        val derivedMetadata = derivedDirectory.resolve("Promoted.Features.dll")
         val promotions = DotNetLibraryAbiCodec.decode(derivedMetadata.readKlibManifest()).values
             .filterIsInstance<DotNetPhysicalDeclaration.InterfaceDefaultPromotion>()
         assertEquals(3, promotions.size, promotions.joinToString())
@@ -8316,7 +8319,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::moduleName.cliArgument, "Generic.Defaults",
             K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
         )
-        val producerMetadata = producerDirectory.resolve("Generic.Defaults.klib")
+        val producerMetadata = producerDirectory.resolve("Generic.Defaults.dll")
         val chooseDeclaration = DotNetLibraryAbiCodec.decode(producerMetadata.readKlibManifest()).values
             .filterIsInstance<DotNetPhysicalDeclaration.Function>()
             .single { it.defaultArgumentDispatcher != null }
@@ -8427,7 +8430,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
         )
 
-        val manifest = outputDirectory.resolve("Companion.Metadata.Library.klib").readKlibManifest()
+        val manifest = outputDirectory.resolve("Companion.Metadata.Library.dll").readKlibManifest()
         assertTrue(manifest.getProperty(KLIB_PROPERTY_METADATA_FLAGS)?.toIntOrNull() != null)
         assertEquals("true", manifest.getProperty(KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION))
         assertTrue(
@@ -8514,7 +8517,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerSource.path,
             "-Xcompanion-blocks-and-extensions",
             K2DotNetCompilerArguments::classpath.cliArgument,
-            producerDirectory.resolve("Companion.Extension.Library.klib").path,
+            producerDirectory.resolve("Companion.Extension.Library.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "CompanionExtensionConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
@@ -8703,7 +8706,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerSource.path,
             "-Xcompanion-blocks",
             K2DotNetCompilerArguments::classpath.cliArgument,
-            producerDirectory.resolve("Companion.Holder.Library.klib").path,
+            producerDirectory.resolve("Companion.Holder.Library.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "CompanionHolderConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
@@ -8905,7 +8908,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerSource.path,
             "-Xcompanion-blocks",
             K2DotNetCompilerArguments::classpath.cliArgument,
-            producerDirectory.resolve("Companion.Initialization.Library.klib").path,
+            producerDirectory.resolve("Companion.Initialization.Library.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "CompanionInitializationConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
@@ -8931,7 +8934,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testProducesPortableUserLibraryPair() {
+    fun testProducesPortableSelfDescribingUserLibrary() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
         requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
@@ -8948,7 +8951,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """.trimIndent()
             )
         }
-        val outputDirectory = File(tmpdir, "sample-library")
+        val outputDirectory = File(tmpdir, "sample-library").apply {
+            mkdirs()
+            resolve("Sample.Library.klib").writeText("obsolete sibling")
+            resolve(".Sample.Library.klib.tmp").mkdirs()
+        }
         compileInProcess(
             K2DotNetCompiler(),
             source.path,
@@ -8959,11 +8966,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
         )
 
-        val metadataLibrary = outputDirectory.resolve("Sample.Library.klib")
         val implementationLibrary = outputDirectory.resolve("Sample.Library.dll")
-        assertTrue(metadataLibrary.isFile) { "Expected packed metadata KLIB at $metadataLibrary" }
-        assertTrue(implementationLibrary.isFile) { "Expected CLR implementation at $implementationLibrary" }
-        val manifest = metadataLibrary.readKlibManifest()
+        assertTrue(implementationLibrary.isFile) { "Expected self-describing CLR library at $implementationLibrary" }
+        assertFalse(outputDirectory.resolve("Sample.Library.klib").exists()) {
+            "The library producer must remove an obsolete sibling KLIB"
+        }
+        assertFalse(outputDirectory.resolve(".Sample.Library.klib.tmp").exists()) {
+            "The library producer must remove an obsolete temporary sibling KLIB"
+        }
+        val manifest = implementationLibrary.readKlibManifest()
         assertTrue(manifest.getProperty("unique_name") == "Sample.Library")
         assertTrue(manifest.getProperty("dotnet_assembly_name") == "Sample.Library")
         assertTrue(manifest.getProperty("dotnet_assembly_version") == "1.0.0.0")
@@ -8972,11 +8983,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(DotNetLibraryAbiCodec.ABI_VERSION, manifest.getProperty("dotnet_abi_version"))
         assertEquals("", manifest.getProperty(DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY))
         assertEquals(
-            DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
+            DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
             manifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
         )
         assertEquals(
-            DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
+            DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
             manifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
         )
         assertTrue(
@@ -8991,10 +9002,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             manifest.getProperty(DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY) ==
                     DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString()
         )
-        assertEquals(
-            DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
-            manifest.getProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY),
-        )
+        assertFalse(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY in manifest.stringPropertyNames())
         assertTrue(manifest.stringPropertyNames().any { it.startsWith("dotnet_decl_") })
 
         val embeddedMetadata = outputDirectory.resolve("Sample.Library.embedded.klib").apply {
@@ -9007,28 +9015,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             )
         }
         val embeddedManifest = embeddedMetadata.readKlibManifest()
-        assertEquals("Sample.Library", embeddedManifest.getProperty("unique_name"))
-        assertEquals(
-            DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
-            embeddedManifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
-        )
-        assertEquals(
-            DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
-            embeddedManifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
-        )
-        assertFalse(
-            DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY in embeddedManifest.stringPropertyNames()
-        ) {
-            "Self-bound metadata must not contain a recursive DLL hash"
-        }
-        val siblingPayload = metadataLibrary.readKlibPayloadEntries()
+        assertEquals(manifest, embeddedManifest)
+        val compilerPayload = implementationLibrary.readKlibPayloadEntries()
         val embeddedPayload = embeddedMetadata.readKlibPayloadEntries()
-        assertEquals(siblingPayload.keys, embeddedPayload.keys)
-        for (entryName in siblingPayload.keys) {
+        assertEquals(compilerPayload.keys, embeddedPayload.keys)
+        for (entryName in compilerPayload.keys) {
             assertArrayEquals(
-                siblingPayload.getValue(entryName),
+                compilerPayload.getValue(entryName),
                 embeddedPayload.getValue(entryName),
-                "Embedded and sibling Kotlin metadata differ at $entryName",
+                "JVM and Framework resource readers differ at $entryName",
             )
         }
 
@@ -9106,7 +9101,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         compileInProcess(
             K2DotNetCompiler(),
             kotlinConsumerSource.path,
-            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, implementationLibrary.path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "KotlinConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, kotlinConsumerAssembly.path,
@@ -9140,7 +9135,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         compileInProcess(
             K2DotNetCompiler(),
             unrelatedConsumerSource.path,
-            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, implementationLibrary.path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "UnrelatedConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, unrelatedConsumerAssembly.path,
@@ -9328,7 +9323,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::moduleName.cliArgument, assemblyName,
                 K2DotNetCompilerArguments::destination.cliArgument, directory.path,
             )
-            val metadata = directory.resolve("$assemblyName.klib")
+            val metadata = directory.resolve("$assemblyName.dll")
             assertEquals(target, metadata.readKlibManifest().getProperty("dotnet_library_tfm"))
             val il = directory.resolve("$assemblyName.il").readText()
             assertTrue("System.Runtime.Versioning.TargetFrameworkAttribute" in il) { il }
@@ -9431,22 +9426,22 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             runtimeManifestBootstrap.resolve("Kotlin.Runtime.dll"),
         )
         val pairDirectories = listOf("netstandard2.0", "net48", "net10.0").associateWith { target ->
-            produceBoundStdlibPair(target, "portable-abi-superset")
+            produceSelfDescribingStdlib(target, "portable-abi-superset")
         }
         for (entry in pairDirectories) {
             val target = entry.key
-            val pairDirectory = entry.value
-            val siblingMetadata = pairDirectory.resolve("Kotlin.Stdlib.klib")
+            val stdlibDirectory = entry.value
+            val compilerMetadata = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
             val embeddedMetadata = File(tmpdir, "embedded-stdlib-$target.klib").apply {
                 writeBytes(
                     readFrameworkManagedResource(
                         checkNotNull(frameworkHost),
-                        pairDirectory.resolve("Kotlin.Stdlib.dll"),
+                        stdlibDirectory.resolve("Kotlin.Stdlib.dll"),
                         DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME,
                     )
                 )
             }
-            val siblingManifest = siblingMetadata.readKlibManifest()
+            val compilerManifest = compilerMetadata.readKlibManifest()
             val embeddedManifest = embeddedMetadata.readKlibManifest()
             assertEquals(target, embeddedManifest.getProperty("dotnet_library_tfm"))
             assertEquals(
@@ -9457,26 +9452,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
                 embeddedManifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
             )
-            val siblingDeclarations = siblingManifest.stringPropertyNames()
+            val compilerDeclarations = compilerManifest.stringPropertyNames()
                 .filter { property -> property.startsWith(DotNetLibraryAbiCodec.DECLARATION_PROPERTY_PREFIX) }
-                .associateWith(siblingManifest::getProperty)
+                .associateWith(compilerManifest::getProperty)
             val embeddedDeclarations = embeddedManifest.stringPropertyNames()
                 .filter { property -> property.startsWith(DotNetLibraryAbiCodec.DECLARATION_PROPERTY_PREFIX) }
                 .associateWith(embeddedManifest::getProperty)
-            assertEquals(siblingDeclarations, embeddedDeclarations)
-            val siblingPayload = siblingMetadata.readKlibPayloadEntries()
+            assertEquals(compilerDeclarations, embeddedDeclarations)
+            val compilerPayload = compilerMetadata.readKlibPayloadEntries()
             val embeddedPayload = embeddedMetadata.readKlibPayloadEntries()
-            assertEquals(siblingPayload.keys, embeddedPayload.keys)
-            for (entryName in siblingPayload.keys) {
+            assertEquals(compilerPayload.keys, embeddedPayload.keys)
+            for (entryName in compilerPayload.keys) {
                 assertArrayEquals(
-                    siblingPayload.getValue(entryName),
+                    compilerPayload.getValue(entryName),
                     embeddedPayload.getValue(entryName),
-                    "$target embedded and sibling Kotlin metadata differ at $entryName",
+                    "$target JVM and Framework resource readers differ at $entryName",
                 )
             }
             assertTrue(
                 ".mresource private ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME}" in
-                        pairDirectory.resolve("Kotlin.Stdlib.il").readText()
+                        stdlibDirectory.resolve("Kotlin.Stdlib.il").readText()
             )
         }
         val runtimeAssemblies = DotNetTarget.entries.associateWith { target ->
@@ -9647,7 +9642,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             """.trimIndent()
         )
         val manifests = pairDirectories.mapValues { entry ->
-            entry.value.resolve("Kotlin.Stdlib.klib").readKlibManifest()
+            entry.value.resolve("Kotlin.Stdlib.dll").readKlibManifest()
         }
         val portableManifest = manifests.getValue("netstandard2.0")
         val portableDeclarations = DotNetLibraryAbiCodec.decode(portableManifest)
@@ -9922,7 +9917,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             consumerSource.path,
             K2DotNetCompilerArguments::classpath.cliArgument,
-            libraryDirectory.resolve("CrossVararg.Library.klib").path,
+            libraryDirectory.resolve("CrossVararg.Library.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "CrossVarargConsumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
@@ -9981,7 +9976,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
         )
 
-        val producerMetadata = producerDirectory.resolve("Friend.Producer.klib")
+        val producerMetadata = producerDirectory.resolve("Friend.Producer.dll")
         val dllOnlyFriendDirectory = producerDirectory.resolve("dll-only").apply { mkdirs() }
         val dllOnlyProducer = producerDirectory.resolve("Friend.Producer.dll").copyTo(
             dllOnlyFriendDirectory.resolve("Friend.Producer.dll"),
@@ -10141,57 +10136,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testProducesNet10StdlibPair() {
+    fun testProducesNet10StdlibDll() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
-        produceAndConsumeBoundStdlibPair("net10.0")
+        produceAndConsumeSelfDescribingStdlib("net10.0")
     }
 
     @Test
-    fun testProducesNet48StdlibPair() {
+    fun testProducesNet48StdlibDll() {
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
-        produceAndConsumeBoundStdlibPair("net48")
+        produceAndConsumeSelfDescribingStdlib("net48")
     }
 
     @Test
-    fun testInstalledStdlibRejectsLegacyKlibWithoutDll() {
-        val kotlinHome = File(tmpdir, "legacy-klib-only-home")
-        val installedDirectory = kotlinHome.resolve("lib/dotnet/net48").apply { mkdirs() }
-        installedDirectory.resolve("Kotlin.Stdlib.klib").writeBytes(byteArrayOf(0))
-        val source = File(tmpdir, "legacy-klib-only-consumer.kt").apply {
-            writeText("package consumer\n\npublic fun answer(): Int = 42")
-        }
-        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
-            K2DotNetCompiler(),
-            listOf(
-                source.path,
-                K2DotNetCompilerArguments::kotlinHome.cliArgument, kotlinHome.path,
-                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
-                K2DotNetCompilerArguments::moduleName.cliArgument, "LegacyKlibOnlyConsumer",
-                K2DotNetCompilerArguments::destination.cliArgument,
-                File(tmpdir, "LegacyKlibOnlyConsumer.il").path,
-            )
-        )
-        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
-        assertTrue(
-            "Kotlin.Stdlib.klib is transitional metadata and cannot be used without the canonical " +
-                    "Kotlin.Stdlib.dll" in diagnostics
-        ) {
-            diagnostics
-        }
-    }
-
-    @Test
-    fun testPortableStdlibPairExecutesOnBothRuntimeProfiles() {
+    fun testPortableStdlibDllExecutesOnBothRuntimeProfiles() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         requireOrAssumeToolchain(DotNetIlAssembler.findFrameworkIlasm() != null, ".NET Framework ilasm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
-        val pairDirectory = produceBoundStdlibPair("netstandard2.0", "shared")
-        consumeBoundStdlibPair(pairDirectory, "net48")
-        consumeBoundStdlibPair(pairDirectory, "net10.0")
-        consumeInstalledStdlibPair(pairDirectory, "net48", installedProfile = "netstandard2.0")
-        consumeInstalledStdlibPair(pairDirectory, "net10.0", installedProfile = "netstandard2.0")
-        executeBoundStdlibPair(pairDirectory, "net48", dotnetHost = null)
-        executeBoundStdlibPair(pairDirectory, "net10.0", dotnetHost)
+        val stdlibDirectory = produceSelfDescribingStdlib("netstandard2.0", "shared")
+        consumeSelfDescribingStdlib(stdlibDirectory, "net48")
+        consumeSelfDescribingStdlib(stdlibDirectory, "net10.0")
+        consumeInstalledStdlib(stdlibDirectory, "net48", installedProfile = "netstandard2.0")
+        consumeInstalledStdlib(stdlibDirectory, "net10.0", installedProfile = "netstandard2.0")
+        executeSelfDescribingStdlib(stdlibDirectory, "net48", dotnetHost = null)
+        executeSelfDescribingStdlib(stdlibDirectory, "net10.0", dotnetHost)
     }
 
     @Test
@@ -10204,8 +10171,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
         requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
 
-        val stdlibPair = produceBoundStdlibPair("net48", "assembler-matrix")
-        val frameworkStdlib = stdlibPair.resolve("Kotlin.Stdlib.dll")
+        val stdlibDirectory = produceSelfDescribingStdlib("net48", "assembler-matrix")
+        val frameworkStdlib = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
         val modernStdlib = File(tmpdir, "assembler-matrix-modern/Kotlin.Stdlib.dll")
         val stdlibManagedResources = mapOf(
             DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
@@ -10224,7 +10191,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(
             DotNetIlAssembler.assembleWithExplicitIlasm(
                 checkNotNull(modernIlasm),
-                stdlibPair.resolve("Kotlin.Stdlib.il"),
+                stdlibDirectory.resolve("Kotlin.Stdlib.il"),
                 modernStdlib,
                 dll = true,
                 messageCollector = MessageCollector.NONE,
@@ -10249,7 +10216,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             applicationSource.path,
             K2DotNetCompilerArguments::noStdlib.cliArgument,
-            K2DotNetCompilerArguments::classpath.cliArgument, stdlibPair.resolve("Kotlin.Stdlib.klib").path,
+            K2DotNetCompilerArguments::classpath.cliArgument, stdlibDirectory.resolve("Kotlin.Stdlib.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net48",
             K2DotNetCompilerArguments::moduleName.cliArgument, "AssemblerMatrix",
             K2DotNetCompilerArguments::destination.cliArgument, frameworkApplication.path,
@@ -10346,7 +10313,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         requireOrAssumeToolchain(modernIlasm != null, "Modern ILAsm is not available")
         val dotnetHost = modernDotNetHostOrSkip()
 
-        val stdlibPair = produceBoundStdlibPair("net10.0", "n10-boundary")
+        val stdlibDirectory = produceSelfDescribingStdlib("net10.0", "n10-boundary")
         val applicationDirectory = File(tmpdir, "n10-a").apply { mkdirs() }
         val applicationSource = applicationDirectory.resolve("main.kt").apply {
             writeText(
@@ -10370,7 +10337,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             applicationSource.path,
             K2DotNetCompilerArguments::noStdlib.cliArgument,
-            K2DotNetCompilerArguments::classpath.cliArgument, stdlibPair.resolve("Kotlin.Stdlib.klib").path,
+            K2DotNetCompilerArguments::classpath.cliArgument, stdlibDirectory.resolve("Kotlin.Stdlib.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "Net10Boundary",
             K2DotNetCompilerArguments::destination.cliArgument, modernApplication.path,
@@ -10707,7 +10674,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, inheritedProducerDirectory.path,
         )
         val inheritedProducerMetadata =
-            inheritedProducerDirectory.resolve("Inherited.Callable.Producer.klib")
+            inheritedProducerDirectory.resolve("Inherited.Callable.Producer.dll")
         assertTrue(inheritedProducerMetadata.isFile)
 
         val inheritedConsumerSource = File(tmpdir, "inherited-callable-overload-consumer.kt").apply {
@@ -11192,7 +11159,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("PrimitiveArray.Library.klib")
+        val metadataLibrary = libraryDirectory.resolve("PrimitiveArray.Library.dll")
         val libraryIl = libraryDirectory.resolve("PrimitiveArray.Library.il").readText()
         assertTrue(
             "'measure'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values')" in libraryIl
@@ -11504,7 +11471,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("OpenNullable.Library.klib")
+        val metadataLibrary = libraryDirectory.resolve("OpenNullable.Library.dll")
         val libraryIl = libraryDirectory.resolve("OpenNullable.Library.il").readText()
         assertTrue(".field private object 'value'" in libraryIl) { libraryIl }
         assertTrue("static object 'echoNullable'<'T'>(object 'value')" in libraryIl) { libraryIl }
@@ -11736,7 +11703,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Covariance.Library.klib")
+        val metadataLibrary = libraryDirectory.resolve("Covariance.Library.dll")
         for (target in listOf("net48", "net10.0")) {
             val consumerDirectory = libraryDirectory.resolve("consumer-${target.replace('.', '-')}").apply { mkdirs() }
             val consumerSource = consumerDirectory.resolve("consumer.kt").apply {
@@ -12020,7 +11987,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::moduleName.cliArgument, "Covariance.Refined",
             K2DotNetCompilerArguments::destination.cliArgument, refinedDirectory.path,
         )
-        val refinedMetadata = refinedDirectory.resolve("Covariance.Refined.klib")
+        val refinedMetadata = refinedDirectory.resolve("Covariance.Refined.dll")
         val refinedBridgeRecords = DotNetLibraryAbiCodec.decode(refinedMetadata.readKlibManifest()).values
             .filterIsInstance<DotNetPhysicalDeclaration.CovariantReturnBridge>()
         assertEquals(1, refinedBridgeRecords.size, refinedBridgeRecords.joinToString("\n"))
@@ -12172,7 +12139,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Exception.Library.klib")
+        val metadataLibrary = libraryDirectory.resolve("Exception.Library.dll")
         val libraryIl = libraryDirectory.resolve("Exception.Library.il").readText()
         assertTrue(
             Regex(
@@ -12400,7 +12367,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Exception.Overloads.klib")
+        val metadataLibrary = libraryDirectory.resolve("Exception.Overloads.dll")
         val libraryIl = libraryDirectory.resolve("Exception.Overloads.il").readText()
         assertTrue(
             Regex("\\.method [^\\n]*'classify__KotlinException__[0-9a-f]{32}'")
@@ -12558,7 +12525,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Exception.Signatures.klib")
+        val metadataLibrary = libraryDirectory.resolve("Exception.Signatures.dll")
         val libraryIl = libraryDirectory.resolve("Exception.Signatures.il").readText()
         assertEquals(
             4,
@@ -12700,7 +12667,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Exception.ArrayCallable.klib")
+        val metadataLibrary = libraryDirectory.resolve("Exception.ArrayCallable.dll")
         val libraryIl = libraryDirectory.resolve("Exception.ArrayCallable.il").readText()
         assertEquals(
             2,
@@ -12841,7 +12808,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompilerArguments::destination.cliArgument, libraryDirectory.path,
         )
 
-        val metadataLibrary = libraryDirectory.resolve("Exception.Cancellation.klib")
+        val metadataLibrary = libraryDirectory.resolve("Exception.Cancellation.dll")
         val libraryIl = libraryDirectory.resolve("Exception.Cancellation.il").readText()
         assertTrue("[netstandard]System.OperationCanceledException" in libraryIl) { libraryIl }
         assertTrue("catch [netstandard]System.OperationCanceledException" in libraryIl) { libraryIl }
@@ -13269,50 +13236,56 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
     }
 
-    private fun produceAndConsumeBoundStdlibPair(target: String) {
-        val firstPairDirectory = produceBoundStdlibPair(target, "first")
-        val secondPairDirectory = produceBoundStdlibPair(target, "second")
+    private fun produceAndConsumeSelfDescribingStdlib(target: String) {
+        val firstDirectory = produceSelfDescribingStdlib(target, "first")
+        val secondDirectory = produceSelfDescribingStdlib(target, "second")
         assertArrayEquals(
-            firstPairDirectory.resolve("Kotlin.Stdlib.klib").readBytes(),
-            secondPairDirectory.resolve("Kotlin.Stdlib.klib").readBytes(),
+            firstDirectory.resolve("Kotlin.Stdlib.dll").readKlibCarrier(),
+            secondDirectory.resolve("Kotlin.Stdlib.dll").readKlibCarrier(),
             "Packed stdlib metadata must be reproducible for target $target",
         )
         assertArrayEquals(
-            firstPairDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
-            secondPairDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
+            firstDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
+            secondDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
             "Compiler-owned stdlib IL must be reproducible for target $target",
         )
         assertArrayEquals(
-            firstPairDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
-            secondPairDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            firstDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            secondDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
             "Deterministic ILAsm output must be reproducible for target $target",
         )
-        consumeBoundStdlibPair(firstPairDirectory, target)
-        consumeInstalledStdlibPair(firstPairDirectory, target)
+        consumeSelfDescribingStdlib(firstDirectory, target)
+        consumeInstalledStdlib(firstDirectory, target)
     }
 
-    private fun produceBoundStdlibPair(target: String, run: String): File {
-        val pairDirectory = File(tmpdir, "produced-$target-stdlib-pair-$run")
+    private fun produceSelfDescribingStdlib(target: String, run: String): File {
+        val stdlibDirectory = File(tmpdir, "produced-$target-stdlib-$run")
         compileInProcess(
             K2DotNetCompiler(),
             K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
-            K2DotNetCompilerArguments::destination.cliArgument, pairDirectory.path,
+            K2DotNetCompilerArguments::destination.cliArgument, stdlibDirectory.path,
         )
 
-        val metadataLibrary = pairDirectory.resolve("Kotlin.Stdlib.klib")
-        val implementationLibrary = pairDirectory.resolve("Kotlin.Stdlib.dll")
-        assertTrue(metadataLibrary.isFile) { "Expected packed metadata KLIB at $metadataLibrary" }
-        assertTrue(implementationLibrary.isFile) { "Expected CLR implementation at $implementationLibrary" }
-        val manifest = metadataLibrary.readKlibManifest()
+        val implementationLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+        assertTrue(implementationLibrary.isFile) { "Expected self-describing CLR library at $implementationLibrary" }
+        assertFalse(stdlibDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
+            "The stdlib producer must not write a sibling KLIB"
+        }
+        val manifest = implementationLibrary.readKlibManifest()
         assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
         assertEquals(target, manifest.getProperty("dotnet_library_tfm"))
         assertEquals(
-            DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
-            manifest.getProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY),
+            DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
+            manifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
         )
-        val il = pairDirectory.resolve("Kotlin.Stdlib.il").readText()
+        assertEquals(
+            DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
+            manifest.getProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY),
+        )
+        assertFalse(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY in manifest.stringPropertyNames())
+        val il = stdlibDirectory.resolve("Kotlin.Stdlib.il").readText()
         val coreLibraryReference = if (target == "netstandard2.0") "[netstandard]" else "[mscorlib]"
         val coreLibraryAssembly = if (target == "netstandard2.0") "netstandard" else "mscorlib"
         assertTrue(".assembly extern $coreLibraryAssembly" in il)
@@ -13380,12 +13353,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ".method public hidebysig static class [Kotlin.Runtime]'Kotlin.Collections.List' " +
                     "'emptyList'<'T'>()" in il
         )
-        return pairDirectory
+        return stdlibDirectory
     }
 
-    private fun consumeBoundStdlibPair(pairDirectory: File, target: String) {
-        val metadataLibrary = pairDirectory.resolve("Kotlin.Stdlib.klib")
-        val consumerSource = pairDirectory.resolve("consumer.kt").apply {
+    private fun consumeSelfDescribingStdlib(stdlibDirectory: File, target: String) {
+        val metadataLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
+        val consumerSource = stdlibDirectory.resolve("consumer.kt").apply {
             writeText(
                 """
                 package consumer
@@ -13412,7 +13385,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """.trimIndent()
             )
         }
-        val outputFile = pairDirectory.resolve("consumer.il")
+        val outputFile = stdlibDirectory.resolve("consumer.il")
         compileInProcess(
             K2DotNetCompiler(),
             consumerSource.path,
@@ -13440,14 +13413,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("isinst class [Kotlin.Stdlib]'Kotlin.Collections.RandomAccess'" in il)
     }
 
-    private fun consumeInstalledStdlibPair(
-        pairDirectory: File,
+    private fun consumeInstalledStdlib(
+        stdlibDirectory: File,
         target: String,
         installedProfile: String = target,
     ) {
         val kotlinHome = File(tmpdir, "kotlin-home-$target-$installedProfile")
         val installedDirectory = kotlinHome.resolve("lib/dotnet/$installedProfile").apply { mkdirs() }
-        pairDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
+        stdlibDirectory.resolve("Kotlin.Stdlib.dll").copyTo(installedDirectory.resolve("Kotlin.Stdlib.dll"))
         assertFalse(installedDirectory.resolve("Kotlin.Stdlib.klib").exists()) {
             "Installed stdlib discovery must be proven from the self-describing DLL alone"
         }
@@ -13513,7 +13486,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue("only the Kotlin standard library is allowed to use the 'kotlin' package" in diagnostics) { diagnostics }
     }
 
-    private fun executeBoundStdlibPair(pairDirectory: File, target: String, dotnetHost: File?) {
+    private fun executeSelfDescribingStdlib(stdlibDirectory: File, target: String, dotnetHost: File?) {
         val directory = File(tmpdir, "portable-stdlib-execution-$target").apply { mkdirs() }
         val source = directory.resolve("main.kt").apply {
             writeText(
@@ -13530,7 +13503,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             source.path,
             K2DotNetCompilerArguments::noStdlib.cliArgument,
-            K2DotNetCompilerArguments::classpath.cliArgument, pairDirectory.resolve("Kotlin.Stdlib.klib").path,
+            K2DotNetCompilerArguments::classpath.cliArgument, stdlibDirectory.resolve("Kotlin.Stdlib.dll").path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
             K2DotNetCompilerArguments::moduleName.cliArgument, "PortableStdlib",
             K2DotNetCompilerArguments::destination.cliArgument, output.path,
@@ -13553,150 +13526,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
-    fun testConsumesExternalStdlibMetadataPair() {
-        val pairDirectory = File(tmpdir, "dotnet-stdlib-pair").apply { mkdirs() }
-        val metadataSource = File(pairDirectory, "stdlib.kt").apply {
-            writeText(
-                """
-                package kotlin.collections
-
-                public fun <T> Iterable<T>.first(): T = iterator().next()
-                """.trimIndent()
-            )
-        }
-        val metadataLibrary = File(pairDirectory, "Kotlin.Stdlib.klib")
-        compileInProcess(
-            KotlinMetadataCompiler(),
-            metadataSource.path,
-            K2MetadataCompilerArguments::allowKotlinPackage.cliArgument,
-            K2MetadataCompilerArguments::moduleName.cliArgument, "Kotlin.Stdlib",
-            K2MetadataCompilerArguments::destination.cliArgument, metadataLibrary.path,
-        )
-        val physicalDeclarations = DotNetLibraryAbiCodec.encode(
-            mapOf(
-                "F:kotlin.collections/first|-4901127747075485546[0]" to DotNetPhysicalDeclaration.Function(
-                    ownerPath = listOf("Kotlin.Collections.CollectionsKt"),
-                    methodName = "first",
-                    isInstance = false,
-                )
-            )
-        )
-        // IL-only compilation checks that the bound physical companion exists; executable tests
-        // separately validate the real generated stdlib assembly.
-        val implementationLibrary = File(pairDirectory, "Kotlin.Stdlib.dll").apply {
-            writeBytes(byteArrayOf(0))
-        }
-        val dotNetManifestProperties = linkedMapOf(
-            DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to DotNetLibraryAbiCodec.ABI_VERSION,
-            DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY to DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
-            DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY to
-                    DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION,
-            DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to
-                    DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
-            DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to
-                    DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
-            DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
-            DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY to
-                    DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
-            DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY to
-                    DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
-            "dotnet_assembly_name" to "Kotlin.Stdlib",
-            "dotnet_assembly_version" to "1.0.0.0",
-            "dotnet_assembly_culture" to "neutral",
-            "dotnet_assembly_public_key_token" to "null",
-            "dotnet_assembly_file" to "Kotlin.Stdlib.dll",
-            "dotnet_library_tfm" to "netstandard2.0",
-        ).apply { putAll(physicalDeclarations) }
-        File(metadataLibrary, "default/manifest").appendText(
-            dotNetManifestProperties.entries.joinToString(prefix = "\n", separator = "\n", postfix = "\n") { (key, value) ->
-                "$key=$value"
-            }
-        )
-
-        val consumerSource = File(pairDirectory, "consumer.kt").apply {
-            writeText(
-                """
-                package consumer
-
-                public fun <T> consume(values: Iterable<T>): T = values.first()
-                """.trimIndent()
-            )
-        }
-        val outputFile = File(pairDirectory, "consumer.il")
-        compileInProcess(
-            K2DotNetCompiler(),
-            consumerSource.path,
-            K2DotNetCompilerArguments::noStdlib.cliArgument,
-            K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
-            K2DotNetCompilerArguments::moduleName.cliArgument, "Consumer",
-            K2DotNetCompilerArguments::destination.cliArgument, outputFile.path,
-        )
-
-        val il = outputFile.readText()
-        assertTrue(
-            "call !!0 [Kotlin.Stdlib]'Kotlin.Collections.CollectionsKt'::'first'<!!0>" in il,
-        ) { "Expected a generic call through the external stdlib assembly:\n$il" }
-        assertTrue(".class public abstract sealed auto ansi beforefieldinit 'Kotlin.Collections.CollectionsKt'" !in il) {
-            "The external stdlib implementation must not be regenerated in the consumer:\n$il"
-        }
-    }
-
-    @Test
-    fun testRejectsStaleDotNetLibraryAbiSchema() {
-        val metadataLibrary = createBoundMetadataLibrary(
-            assemblyName = "Stale.Schema",
-            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "2"),
-        )
-        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
-        assertTrue("uses unsupported CLR ABI index version '2'" in diagnostics) { diagnostics }
-    }
-
-    @Test
-    fun testRejectsMismatchedDotNetLibraryProfile() {
-        val metadataLibrary = createBoundMetadataLibrary(
-            assemblyName = "Wrong.Profile",
-            propertyOverrides = mapOf(
-                DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to "net10.0"
-            ),
-        )
-        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
-        assertTrue("is not compatible with Kotlin/.NET target 'net48'" in diagnostics) {
-            diagnostics
-        }
-    }
-
-    @Test
-    fun testRejectsMismatchedDotNetImplementationAssembly() {
-        val metadataLibrary = createBoundMetadataLibrary(
-            assemblyName = "Wrong.Implementation",
-            propertyOverrides = emptyMap(),
-        )
-        metadataLibrary.parentFile.resolve("Wrong.Implementation.dll").writeBytes(byteArrayOf(1))
-        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
-        assertTrue("but its SHA-256 is" in diagnostics && "instead of" in diagnostics) { diagnostics }
-    }
-
-    @Test
-    fun testRejectsUnsupportedRuntimeSurfaceLevel() {
-        val unsupportedLevel = DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL + 1
-        val metadataLibrary = createBoundMetadataLibrary(
-            assemblyName = "Future.Runtime.Surface",
-            propertyOverrides = mapOf(
-                DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to unsupportedLevel.toString()
-            ),
-        )
-        val diagnostics = compileAgainstRejectedLibrary(metadataLibrary)
-        assertTrue("requires unsupported Kotlin.Runtime surface level '$unsupportedLevel'" in diagnostics) {
-            diagnostics
-        }
-    }
-
-    private fun createBoundMetadataLibrary(
-        assemblyName: String,
-        propertyOverrides: Map<String, String>,
-    ): File {
-        val directory = File(tmpdir, assemblyName).apply { mkdirs() }
-        val source = directory.resolve("library.kt").apply {
+    fun testRejectsStandaloneDotNetMetadataKlib() {
+        val directory = File(tmpdir, "standalone-dotnet-klib").apply { mkdirs() }
+        val metadataSource = File(directory, "library.kt").apply {
             writeText(
                 """
                 package fixture
@@ -13705,47 +13537,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 """.trimIndent()
             )
         }
-        val metadataLibrary = directory.resolve("$assemblyName.klib")
+        val metadataLibrary = File(directory, "Standalone.Library.klib")
         compileInProcess(
             KotlinMetadataCompiler(),
-            source.path,
-            K2MetadataCompilerArguments::moduleName.cliArgument, assemblyName,
+            metadataSource.path,
+            K2MetadataCompilerArguments::moduleName.cliArgument, "Standalone.Library",
             K2MetadataCompilerArguments::destination.cliArgument, metadataLibrary.path,
         )
-        val implementationLibrary = directory.resolve("$assemblyName.dll").apply {
-            writeBytes(byteArrayOf(0))
-        }
-        val properties = linkedMapOf(
-            DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to DotNetLibraryAbiCodec.ABI_VERSION,
-            DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY to DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME,
-            DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION_PROPERTY to
-                    DotNetLibraryAbiCodec.PHYSICAL_NAME_GRAMMAR_VERSION,
-            DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to
-                    DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
-            DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to
-                    DotNetLibraryAbiCodec.implementationSha256(implementationLibrary),
-            DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
-            DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY to
-                    DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
-            DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY to
-                    DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
-            DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to assemblyName,
-            DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to "1.0.0.0",
-            DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to "neutral",
-            DotNetLibraryArtifact.METADATA_ASSEMBLY_PUBLIC_KEY_TOKEN_PROPERTY to "null",
-            DotNetLibraryArtifact.METADATA_ASSEMBLY_FILE_PROPERTY to "$assemblyName.dll",
-            DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY to "netstandard2.0",
-        ).apply { putAll(propertyOverrides) }
         File(metadataLibrary, "default/manifest").appendText(
-            properties.entries.joinToString(prefix = "\n", separator = "\n", postfix = "\n") { (key, value) ->
-                "$key=$value"
-            }
+            "\n${DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY}=${DotNetLibraryAbiCodec.ABI_VERSION}\n"
         )
-        return metadataLibrary
-    }
 
-    private fun compileAgainstRejectedLibrary(metadataLibrary: File): String {
-        val source = File(tmpdir, "rejected-library-consumer-${metadataLibrary.nameWithoutExtension}.kt").apply {
+        val source = File(directory, "consumer.kt").apply {
             writeText("package consumer\n\npublic fun answer(): Int = 42")
         }
         val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
@@ -13754,12 +13557,69 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 source.path,
                 K2DotNetCompilerArguments::noStdlib.cliArgument,
                 K2DotNetCompilerArguments::classpath.cliArgument, metadataLibrary.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "StandaloneConsumer",
                 K2DotNetCompilerArguments::destination.cliArgument,
-                File(tmpdir, "rejected-library-consumer-${metadataLibrary.nameWithoutExtension}.il").path,
+                File(directory, "consumer.il").path,
             )
         )
         assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
-        return diagnostics
+        assertTrue("standalone Kotlin/.NET metadata KLIB" in diagnostics) { diagnostics }
+        assertTrue("supply its self-describing CLR DLL instead" in diagnostics) { diagnostics }
+    }
+
+    @Test
+    fun testRejectsStaleEmbeddedDotNetLibraryAbiSchema() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val library = produceLibraryWithRewrittenMetadata(
+            assemblyName = "Stale.Embedded.Schema",
+            propertyOverrides = mapOf(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY to "99"),
+        )
+        val diagnostics = compileAgainstRejectedDll(library)
+        assertTrue("uses unsupported CLR ABI index version '99'" in diagnostics) { diagnostics }
+    }
+
+    @Test
+    fun testRejectsUnsupportedEmbeddedRuntimeSurfaceLevel() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val unsupportedLevel = DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL + 1
+        val library = produceLibraryWithRewrittenMetadata(
+            assemblyName = "Future.Embedded.Runtime.Surface",
+            propertyOverrides = mapOf(
+                DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to unsupportedLevel.toString()
+            ),
+        )
+        val diagnostics = compileAgainstRejectedDll(library)
+        assertTrue("requires unsupported Kotlin.Runtime surface level '$unsupportedLevel'" in diagnostics) {
+            diagnostics
+        }
+    }
+
+    @Test
+    fun testRejectsNonSelfBoundEmbeddedMetadata() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val library = produceLibraryWithRewrittenMetadata(
+            assemblyName = "Invalid.Embedded.Binding",
+            propertyOverrides = mapOf(
+                DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY to "external"
+            ),
+        )
+        val diagnostics = compileAgainstRejectedDll(library)
+        assertTrue("declares implementation binding 'external'" in diagnostics) { diagnostics }
+        assertTrue("physical carrier requires 'self'" in diagnostics) { diagnostics }
+    }
+
+    @Test
+    fun testRejectsRecursiveHashInSelfBoundMetadata() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val library = produceLibraryWithRewrittenMetadata(
+            assemblyName = "Invalid.Embedded.Recursive.Hash",
+            propertyOverrides = mapOf(
+                DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY to "0".repeat(64)
+            ),
+        )
+        val diagnostics = compileAgainstRejectedDll(library)
+        assertTrue("must not declare the recursive" in diagnostics) { diagnostics }
+        assertTrue(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY in diagnostics) { diagnostics }
     }
 
     private data class CSharpCompilerResult(val exitCode: Int, val output: String)
@@ -15118,6 +14978,100 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         output.writeBytes(image)
     }
 
+    private fun produceLibraryWithRewrittenMetadata(
+        assemblyName: String,
+        propertyOverrides: Map<String, String>,
+    ): File {
+        val directory = File(tmpdir, assemblyName).apply { mkdirs() }
+        val source = directory.resolve("library.kt").apply {
+            writeText("package fixture\n\npublic fun published(): Int = 1")
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            source.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, assemblyName,
+            K2DotNetCompilerArguments::destination.cliArgument, directory.path,
+        )
+        val original = directory.resolve("$assemblyName.dll")
+        val rewrittenMetadata = original.readKlibCarrier().rewriteKlibManifest(propertyOverrides)
+        val csharpManifest = checkNotNull(
+            DotNetManagedResourceReader.read(
+                original,
+                DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+            )
+        ).content
+        val rewritten = directory.resolve("$assemblyName-rewritten.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                directory.resolve("$assemblyName.il"),
+                rewritten,
+                DotNetTarget.NETSTANDARD_2_0,
+                MessageCollector.NONE,
+                mapOf(
+                    DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to csharpManifest,
+                    DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME to rewrittenMetadata,
+                ),
+            )
+        )
+        return rewritten
+    }
+
+    private fun ByteArray.rewriteKlibManifest(
+        propertyOverrides: Map<String, String>,
+    ): ByteArray {
+        val outputBytes = ByteArrayOutputStream()
+        var foundManifest = false
+        ZipInputStream(ByteArrayInputStream(this)).use { input ->
+            ZipOutputStream(outputBytes).use { output ->
+                while (true) {
+                    val inputEntry = input.nextEntry ?: break
+                    val payload = input.readBytes()
+                    val outputPayload = if (inputEntry.name == "default/manifest") {
+                        foundManifest = true
+                        val properties = Properties().apply {
+                            load(ByteArrayInputStream(payload))
+                            for (entry in propertyOverrides) {
+                                setProperty(entry.key, entry.value)
+                            }
+                        }
+                        ByteArrayOutputStream().use { manifestBytes ->
+                            properties.store(manifestBytes, null)
+                            manifestBytes.toByteArray()
+                        }
+                    } else {
+                        payload
+                    }
+                    output.putNextEntry(ZipEntry(inputEntry.name))
+                    output.write(outputPayload)
+                    output.closeEntry()
+                }
+            }
+        }
+        assertTrue(foundManifest) { "Embedded KLIB has no default/manifest" }
+        return outputBytes.toByteArray()
+    }
+
+    private fun compileAgainstRejectedDll(library: File): String {
+        val source = File(tmpdir, "rejected-${library.nameWithoutExtension}.kt").apply {
+            writeText("package consumer\n\npublic fun answer(): Int = 42")
+        }
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, library.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "RejectedConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "rejected-${library.nameWithoutExtension}.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        return diagnostics
+    }
+
     private fun requireOrAssumeToolchain(condition: Boolean, message: String) {
         if (dotNetToolchainIsRequired()) {
             assertTrue(condition) { "$message (KOTLIN_DOTNET_REQUIRE_TOOLCHAIN is enabled)" }
@@ -15131,16 +15085,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             value == "1" || value.equals("true", ignoreCase = true)
         } == true
 
-    private fun File.readKlibManifest(): Properties = ZipFile(this).use { archive ->
-        Properties().apply {
-            load(archive.getInputStream(archive.getEntry("default/manifest")))
+    private fun File.readKlibManifest(): Properties {
+        ZipInputStream(ByteArrayInputStream(readKlibCarrier())).use { archive ->
+            while (true) {
+                val entry = archive.nextEntry ?: error("KLIB in '$path' has no default/manifest")
+                if (entry.name == "default/manifest") {
+                    return Properties().apply { load(archive) }
+                }
+            }
         }
     }
 
-    private fun File.readKlibPayloadEntries(): Map<String, ByteArray> = ZipFile(this).use { archive ->
-        archive.entries().asSequence()
-            .filterNot { entry -> entry.isDirectory || entry.name == "default/manifest" }
-            .associate { entry -> entry.name to archive.getInputStream(entry).use { it.readBytes() } }
+    private fun File.readKlibPayloadEntries(): Map<String, ByteArray> = buildMap {
+        ZipInputStream(ByteArrayInputStream(readKlibCarrier())).use { archive ->
+            while (true) {
+                val entry = archive.nextEntry ?: break
+                if (!entry.isDirectory && entry.name != "default/manifest") {
+                    put(entry.name, archive.readBytes())
+                }
+            }
+        }
+    }
+
+    private fun File.readKlibCarrier(): ByteArray {
+        if (!extension.equals("dll", ignoreCase = true)) return readBytes()
+        val resource = checkNotNull(
+            DotNetManagedResourceReader.read(this, DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME)
+        ) { "Assembly '$path' has no ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME} resource" }
+        assertTrue(resource.isPrivate) {
+            "Assembly '$path' exposes ${DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME} publicly"
+        }
+        return resource.content
     }
 
     private fun runDotNet(

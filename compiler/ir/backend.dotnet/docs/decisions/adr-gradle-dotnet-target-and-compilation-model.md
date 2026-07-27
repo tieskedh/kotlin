@@ -9,9 +9,7 @@
 
 Kotlin/.NET has a distinct logical Kotlin platform identity and a separate target-framework
 attribute, but no built-in Gradle target yet. The target must invoke the real .NET compiler,
-preserve common multiplatform behavior, and eventually publish the self-describing DLL from one
-compilation. The sibling KLIB/DLL output remains a compiler-resolver migration shape, not the
-publication endpoint.
+preserve common multiplatform behavior, and publish the self-describing DLL from one compilation.
 
 The target-framework choice must be immutable for a target and all of its compilations. Changing
 the profile only at task execution would let dependency resolution select one profile while the
@@ -45,10 +43,10 @@ The profiles can require different generated IL, notably for default interface m
 preserving the same Kotlin semantics. They do not require Native's host manager, cinterop model,
 native linker, compilation caches, or per-architecture binary model.
 
-A .NET library compilation currently writes two related physical outputs while legacy compiler
-flows migrate: the sibling KLIB is transitional, while the DLL is the CLR runtime/tooling artifact
-and embeds the same KLIB payload. Gradle outgoing variants publish the self-describing DLL alone
-under the profile attribute and producer identity.
+A .NET library compilation writes one self-describing DLL. The DLL is simultaneously the CLR
+runtime/tooling artifact and the Kotlin library dependency because it embeds the authoritative
+KLIB payload. Gradle outgoing variants publish that DLL under the profile attribute and producer
+identity.
 
 ## 3. Kotlin Common invariant
 
@@ -77,7 +75,7 @@ The compile task passes:
 - the compilation-owned module name;
 - self-describing DLL dependencies and friend paths;
 - common compiler options, plugin options, and source structure; and
-- one output directory that temporarily contains the DLL plus its legacy sibling KLIB.
+- one output directory containing the DLL and optional diagnostic IL.
 
 The DLL is a declared compile-task output and the target's API and runtime artifact. This follows
 KGP's normal task-output/provider model, so project dependency resolution retains producer task
@@ -92,7 +90,7 @@ the Build Tools API path, and compiler-reference-index generation disabled. Rout
 the JVM or metadata daemon target would misidentify the compiler. Native-style external toolchain
 execution is also inapplicable because the .NET compiler is already a Kotlin CLI compiler.
 
-The compiler distribution already owns profile-specific Kotlin/.NET stdlib pairs and a bootstrap
+The compiler distribution already owns profile-specific Kotlin/.NET stdlib assemblies and a bootstrap
 fallback, but the Gradle `kotlin-stdlib` module does not yet publish .NET variants. The compile-task
 integration test therefore disables KGP's default Maven stdlib dependency and exercises the
 compiler-owned bootstrap. This is not the final dependency model: silently filtering the ordinary
@@ -137,8 +135,8 @@ Classifications:
   **Correct direction**;
 - one typed `dotnet(profile, name, configure)` entry point:
   **Reasonable platform-specific divergence**;
-- transitional paired output owned by one compilation:
-  **Correct temporary implementation, but not a final design**;
+- one self-describing library output owned by one compilation:
+  **Correct direction**;
 - one self-describing DLL outgoing artifact:
   **Reasonable platform-specific divergence**;
 - shipping the .NET FIR checker in the embeddable compiler's frontend-module closure:
@@ -161,9 +159,9 @@ Each `.NET` Gradle target is profile-coherent before dependency resolution or co
 The target follows mature Kotlin Gradle architecture without pretending that a target framework is
 a machine architecture.
 
-DLL-first publication and friend association are implemented. Functional model tests cover all
-three profiles and a real-compiler integration lane deletes the sibling KLIB before compiling both
-an associated compilation and a separate project dependency. Executable products, test execution,
+DLL-only publication and friend association are implemented. Functional model tests cover all
+three profiles and a real-compiler integration lane compiles both an associated compilation and a
+separate project dependency from the producer DLL while excluding the producer task. Executable products, test execution,
 profile-aware stdlib Gradle variants, incremental compilation, daemon support, and Build Tools API
 support remain separate work packages. None may introduce a second owner for the target framework
 or select embedded Kotlin metadata independently from its containing DLL.

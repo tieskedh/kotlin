@@ -19,7 +19,7 @@ class DotNetCliPipeline(override val defaultPerformanceManager: PerformanceManag
                     DotNetLibraryMetadataSerializationPipelinePhase then
                     DotNetFir2IrPipelinePhase then
                     DotNetBackendPipelinePhase then
-                    DotNetLibraryMetadataPackagingPipelinePhase
+                    DotNetLibraryMetadataFinalizationPipelinePhase
         } else {
             DotNetConfigurationPipelinePhase then
                     DotNetFrontendPipelinePhase then

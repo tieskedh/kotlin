@@ -276,24 +276,23 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     ) {
         report(
             COMPILER_ARGUMENTS_ERROR,
-            "Kotlin/.NET library '${library.metadataFile.path}' does not declare the supported " +
+            "Kotlin/.NET library '${library.assemblyFile.path}' does not declare the supported " +
                     "'${DotNetStdlibArtifact.ASSEMBLY_NAME}' standard-library identity.",
         )
         return
     }
     dotNetExternalStdlib = DotNetExternalStdlib(
-        library.metadataFile,
-        library.implementationFile,
+        library.assemblyFile,
         artifact.targetFramework,
     )
 }
 
 /**
- * Loads every KLIB explicitly produced as a bound Kotlin/.NET library, including stdlib.
+ * Loads every self-describing Kotlin/.NET DLL, including stdlib.
  *
- * A transitional sibling KLIB is authenticated by the final DLL hash. An embedded KLIB is
- * authenticated by its private resource location and by matching its declared identity against
- * the containing PE's Assembly row.
+ * The embedded KLIB is authenticated by its private resource location and by matching its
+ * declared identity against the containing PE's Assembly row. A standalone KLIB with a .NET ABI
+ * marker is rejected: it is not a physical Kotlin/.NET library artifact.
  */
 private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotNetLibraries(
     klibs: List<KotlinLibrary>,
@@ -321,9 +320,19 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             return
         }
     }
-    val candidates = klibs.filter { library ->
-        library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) != null
+    val standaloneDotNetKlib = klibs.firstOrNull { library ->
+        library.manifestProperties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY) != null &&
+                library.path.toFile().canonicalFile !in embeddedSourceByMetadataFile
     }
+    if (standaloneDotNetKlib != null) {
+        report(
+            COMPILER_ARGUMENTS_ERROR,
+            "Standalone Kotlin/.NET metadata KLIB '${standaloneDotNetKlib.path}' is not supported; " +
+                    "supply its self-describing CLR DLL instead.",
+        )
+        return
+    }
+    val candidates = embeddedSourceByMetadataFile.keys.mapNotNull(klibByMetadataFile::get)
     if (candidates.isEmpty()) return
 
     val libraries = mutableListOf<DotNetExternalLibrary>()
@@ -331,8 +340,8 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
     val logicalKeys = hashSetOf<String>()
     for (library in candidates) {
         val metadataKlibFile = library.path.toFile().canonicalFile
-        val embeddedSource = embeddedSourceByMetadataFile[metadataKlibFile]
-        val displayPath = embeddedSource?.assemblyFile?.path ?: library.path.toString()
+        val embeddedSource = checkNotNull(embeddedSourceByMetadataFile[metadataKlibFile])
+        val displayPath = embeddedSource.assemblyFile.path
         val properties = library.manifestProperties
         val abiVersion = properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY)
         if (abiVersion != DotNetLibraryAbiCodec.ABI_VERSION) {
@@ -395,11 +404,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             return
         }
         val containerFormat = required(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY) ?: return
-        val expectedContainerFormat = if (embeddedSource == null) {
-            DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT
-        } else {
-            DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT
-        }
+        val expectedContainerFormat = DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT
         if (containerFormat != expectedContainerFormat) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
@@ -410,11 +415,7 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         }
         val implementationBinding =
             required(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY) ?: return
-        val expectedImplementationBinding = if (embeddedSource == null) {
-            DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING
-        } else {
-            DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING
-        }
+        val expectedImplementationBinding = DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING
         if (implementationBinding != expectedImplementationBinding) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
@@ -424,22 +425,11 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             return
         }
         val expectedImplementationHash = properties.getProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY)
-        if (embeddedSource != null && expectedImplementationHash != null) {
+        if (expectedImplementationHash != null) {
             report(
                 COMPILER_ARGUMENTS_ERROR,
                 "Self-bound Kotlin/.NET library '$displayPath' must not declare the recursive " +
                         "'${DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY}' property.",
-            )
-            return
-        }
-        if (
-            embeddedSource == null &&
-            (expectedImplementationHash == null || !expectedImplementationHash.matches(Regex("[0-9a-f]{64}")))
-        ) {
-            report(
-                COMPILER_ARGUMENTS_ERROR,
-                "Kotlin/.NET library '$displayPath' has invalid implementation SHA-256 " +
-                        "'${expectedImplementationHash ?: "<missing>"}'.",
             )
             return
         }
@@ -520,54 +510,27 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
             )
             return
         }
-        val metadataFile: File
-        val implementationFile: File
-        if (embeddedSource != null) {
-            val physicalIdentity = embeddedSource.assemblyIdentity
-            if (
-                physicalIdentity.name != assemblyName ||
-                physicalIdentity.version != assemblyVersion ||
-                physicalIdentity.culture != assemblyCulture ||
-                physicalIdentity.hasPublicKey
-            ) {
-                report(
-                    COMPILER_ARGUMENTS_ERROR,
-                    "Embedded Kotlin metadata in '${embeddedSource.assemblyFile.path}' declares CLR assembly " +
-                            "'$assemblyName, Version=$assemblyVersion, Culture=$assemblyCulture, " +
-                            "PublicKeyToken=$publicKeyToken', but the containing PE declares " +
-                            "'${physicalIdentity.name}, Version=${physicalIdentity.version}, " +
-                            "Culture=${physicalIdentity.culture}, " +
-                            "PublicKeyToken=${if (physicalIdentity.hasPublicKey) "<signed>" else "null"}'.",
-                )
-                return
-            }
-            metadataFile = embeddedSource.assemblyFile
-            implementationFile = embeddedSource.assemblyFile
-        } else {
-            metadataFile = metadataKlibFile
-            implementationFile = metadataFile.parentFile.resolve(assemblyFileName)
-            if (!implementationFile.isFile) {
-                report(
-                    COMPILER_ARGUMENTS_ERROR,
-                    "Kotlin/.NET metadata '${metadataFile.path}' is bound to missing CLR assembly " +
-                            "'${implementationFile.path}'.",
-                )
-                return
-            }
-            val actualImplementationHash = DotNetLibraryAbiCodec.implementationSha256(implementationFile)
-            if (actualImplementationHash != checkNotNull(expectedImplementationHash)) {
-                report(
-                    COMPILER_ARGUMENTS_ERROR,
-                    "Kotlin/.NET metadata '${metadataFile.path}' is bound to '${implementationFile.path}', but its " +
-                            "SHA-256 is $actualImplementationHash instead of $expectedImplementationHash.",
-                )
-                return
-            }
+        val physicalIdentity = embeddedSource.assemblyIdentity
+        if (
+            physicalIdentity.name != assemblyName ||
+            physicalIdentity.version != assemblyVersion ||
+            physicalIdentity.culture != assemblyCulture ||
+            physicalIdentity.hasPublicKey
+        ) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Embedded Kotlin metadata in '${embeddedSource.assemblyFile.path}' declares CLR assembly " +
+                        "'$assemblyName, Version=$assemblyVersion, Culture=$assemblyCulture, " +
+                        "PublicKeyToken=$publicKeyToken', but the containing PE declares " +
+                        "'${physicalIdentity.name}, Version=${physicalIdentity.version}, " +
+                        "Culture=${physicalIdentity.culture}, " +
+                        "PublicKeyToken=${if (physicalIdentity.hasPublicKey) "<signed>" else "null"}'.",
+            )
+            return
         }
         libraries += DotNetExternalLibrary(
             DotNetLibraryArtifact(assemblyName, targetFramework, assemblyVersion, assemblyCulture, publicKeyToken),
-            metadataFile,
-            implementationFile,
+            embeddedSource.assemblyFile,
             declarations,
             friendAssemblies,
         )
@@ -576,14 +539,14 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
 }
 
 /**
- * Verifies both halves of a friend relationship before FIR grants internal source visibility.
- * A path alone is never authority: the bound producer metadata must name this unsigned output
- * assembly, mirroring the InternalsVisibleTo row in its CLR implementation.
+ * Verifies both sides of a friend relationship before FIR grants internal source visibility.
+ * A path alone is never authority: the producer metadata embedded in the assembly must name this
+ * unsigned output assembly, mirroring the InternalsVisibleTo row in the same CLR implementation.
  */
 private fun org.jetbrains.kotlin.config.CompilerConfiguration.validateDotNetFriendDependencies() {
     if (dotNetFriendPaths.isEmpty()) return
     val consumerAssemblyName = checkNotNull(dotNetAssemblyName)
-    val librariesByPath = dotNetExternalLibraries.associateBy { it.metadataFile.canonicalFile }
+    val librariesByPath = dotNetExternalLibraries.associateBy { it.assemblyFile.canonicalFile }
     for (friendPath in dotNetFriendPaths) {
         val canonicalPath = File(friendPath).canonicalFile
         val library = librariesByPath[canonicalPath]

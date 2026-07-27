@@ -1859,9 +1859,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   runtime variants and uses that DLL for project dependencies, `associateWith` dependencies, and
   friend paths. The DLL is a declared compile-task output, so task ordering and configuration
   cache behavior follow the ordinary KGP provider model. Both an associated compilation and a
-  separate project dependency compile after the producer sibling KLIB is deleted and the producer
-  task is excluded. The compile task still emits the sibling only for the remaining direct
-  compiler/installation migration; it is no longer a Gradle artifact.
+  separate project dependency compile from the producer DLL while the producer task is excluded.
+  The final migration slice removes sibling-KLIB writing and installation, rejects standalone
+  Kotlin/.NET KLIB dependencies, and reduces the external-library model to one `assemblyFile`.
+  Compiler products now consist of the self-describing DLL plus optional diagnostic IL.
+  Temporary extraction of `Kotlin.Metadata` into the shared KLIB reader remains explicitly
+  transitional internal machinery, not a second artifact. The fresh strict gate is 850/0/0/0
+  across 16 XML suites (780 FIR/IL/box, 21 generated CLI, and 49 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1912,7 +1916,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 851 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 850 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -1944,21 +1948,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
    resource before freezing the schema or package. Continue the foreign provider/implementor
    collision matrix in parallel with that contract. Keep raw metadata-table auditing with the
    structured metadata work; do not substitute IL substring checks.
-2. **Finish retiring the sibling KLIB.** The CLI, installed stdlib, Gradle variants, project
-   dependencies, compilation association, and friend paths are DLL-first. Migrate the remaining
-   direct compiler fixtures and producer/install tasks to inspect or copy `Kotlin.Metadata` from
-   the DLL, stop writing the sibling, and then remove the legacy sibling-only loader path. Nothing
-   has shipped, so do not preserve a dual-artifact compatibility mode.
-3. **Retire same-run stdlib bootstrapping in favor of the installed profile pair.** The opt-in,
+2. **Retire same-run stdlib bootstrapping in favor of the installed profile DLL.** The opt-in,
    host-capability-aware producer/install tasks already exist and must remain outside unconditional
    cross-platform `distKotlinc`. Make distribution/test flows consume those installed assets, then
    compile generated common stdlib sources plus narrow .NET actuals through the ordinary library
    producer instead of expanding the handwritten bootstrap corpus.
-4. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
+3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
    of Kotlin-owned stdlib bootstrapping.
-5. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
+4. **Move resolution-only stubs behind the real stdlib boundary incrementally.** A declaration
    should become emitted Kotlin code only when its implementation is supported and tested; keep
    platform operations in the intrinsic registry where the mature JVM stdlib does so.
 

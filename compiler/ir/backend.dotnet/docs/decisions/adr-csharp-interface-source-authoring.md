@@ -12,10 +12,11 @@ profile-dependent default-body placement. Those physical types are one Kotlin de
 one logical contract. A handwritten C# implementation must currently discover every physical
 slot and keep its typed and erased behavior coordinated.
 
-The sibling KLIB contains Kotlin logical metadata, but ordinary C# builds and Roslyn source
-generators consume DLL references. Requiring a KLIB-aware MSBuild integration merely to implement
-an interface would make the C# path nonstandard and would couple source generation to an internal
-compiler artifact. Copying Kotlin default bodies into generated C# would create independent
+The private `Kotlin.Metadata` resource contains Kotlin logical metadata, but ordinary C# builds and
+Roslyn source generators should consume the deliberately exported authoring contract rather than
+the compiler's full KLIB model. Requiring KLIB-aware MSBuild integration merely to implement an
+interface would make the C# path nonstandard and would couple source generation to an internal
+compiler encoding. Copying Kotlin default bodies into generated C# would create independent
 semantic bodies and violate the interface-default ABI.
 
 The tooling also has a hard scope boundary. A Roslyn generator can add another declaration of a
@@ -27,8 +28,8 @@ user-authored partial C# type. It cannot retrofit a precompiled CLR type, a type
 ### 1. The DLL owns a versioned implementation manifest
 
 Every compiler-produced Kotlin library DLL carries a versioned C# implementation manifest. The
-manifest and the ordinary CLR metadata in that same DLL are sufficient for tooling; the sibling
-KLIB is not an input to the supported C# source-authoring path.
+manifest and the ordinary CLR metadata in that same DLL are sufficient for tooling; the private
+Kotlin metadata resource is not an input to the supported C# source-authoring path.
 
 “Self-contained” applies to the DLL contract, not to unnecessary duplication. Method signatures,
 generic constraints, visibility, and Property rows remain authoritative CLR metadata. The
@@ -59,7 +60,7 @@ core-facade set (`mscorlib`, `netstandard`, `System.Runtime`, and `System.Privat
 
 Schema 7 names `kotlin-public-id-signature-legacy-v1` as its logical-identity scheme. Interface
 and member records use the same public `IdSignature` rendered by
-`PublicIdSignatureComputer(DotNetIrMangler)` for the KLIB/DLL physical index. A manifest must not
+`PublicIdSignatureComputer(DotNetIrMangler)` for the DLL's physical index. A manifest must not
 introduce a runtime-, Roslyn-, or tooling-owned declaration identity. The `X:` key of a derived
 intersection record is a deterministic identity for that physical composition record, not a
 second identity for any contributing Kotlin declaration.
@@ -449,7 +450,7 @@ the normal analyzer rule against arbitrary file I/O.
 
 ## Alternatives rejected
 
-- **Read the sibling KLIB from MSBuild.** This makes ordinary C# authoring depend on Kotlin
+- **Read the private KLIB payload from MSBuild.** This makes ordinary C# authoring depend on Kotlin
   packaging and still leaves DLL-only references incomplete.
 - **Infer view and helper names.** Physical names are compiler ABI and may be disambiguated;
   inference creates version and collision debt.
@@ -492,7 +493,7 @@ covering:
 
 The initial prototype covers direct canonical/declared/exact views, read-only and mutable
 properties, a generic method, an exact-only unsafe input, a portable helper default, and the
-corresponding `net10.0` DIM. It removes the sibling KLIB before extracting the actual DLL metadata,
+corresponding `net10.0` DIM. It reads only the actual DLL metadata and public authoring manifest,
 generates a partial C# implementation, compiles it with Roslyn, and executes Kotlin-authored
 verification through typed and widened views for `net48`, `netstandard2.0`, and `net10.0`.
 Schema 7 composes Kotlin parents from their own manifest contracts and the ordinary CLR interface

@@ -51,17 +51,17 @@ Kotlin-owned platform artifacts are multi-targeted:
 
 ```text
 <kotlin-home>/lib/dotnet/net48/Kotlin.Runtime.dll
-<kotlin-home>/lib/dotnet/net48/Kotlin.Stdlib.{klib,dll}
+<kotlin-home>/lib/dotnet/net48/Kotlin.Stdlib.dll
 <kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Runtime.dll
-<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.{klib,dll}
+<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll
 <kotlin-home>/lib/dotnet/net10.0/Kotlin.Runtime.dll
-<kotlin-home>/lib/dotnet/net10.0/Kotlin.Stdlib.{klib,dll}
+<kotlin-home>/lib/dotnet/net10.0/Kotlin.Stdlib.dll
 ```
 
 The variants share Kotlin logical identities and source contracts but may have different physical
-implementation and interface-body placement. Each KLIB/DLL binding records its exact profile;
-resolution rejects incompatible variants. Packaging may later use a variant map instead of one
-KLIB per profile, but it must preserve this selection and binding rule.
+implementation and interface-body placement. Each self-describing DLL records its exact profile
+in embedded Kotlin metadata; resolution rejects incompatible variants. Packaging may later use a
+variant map, but it must preserve this selection and binding rule.
 
 An application deploys exactly one `Kotlin.Runtime` and one `Kotlin.Stdlib` variant. The `net48`
 and `net10.0` variants must each be a binary superset of the `netstandard2.0` platform surface so a
@@ -129,16 +129,17 @@ The implementation now:
    AssemblyRef and `.NETStandard,Version=v2.0` `TargetFrameworkAttribute`;
 3. exposes only `net48`, `netstandard2.0`, and `net10.0` as explicit profile values and rejects an
    executable product under `netstandard2.0` before frontend/code generation;
-4. binds every produced KLIB to its selected profile with `dotnet_library_tfm` and rejects an
+4. binds every produced DLL to its selected profile with `dotnet_library_tfm` in its private
+   Kotlin metadata and rejects an
    incompatible dependency before FIR analysis;
 5. discovers an installed exact-profile stdlib first, then the portable `netstandard2.0` variant
    for either executable profile;
 6. selects the profile before IR lowerings and carries it through user IL, runtime/stdlib
    generation, assembly metadata, assembly writing, deployment, and packaging;
-7. provides `-Xdotnet-produce-library`, which emits `<module>.klib`, `<module>.il`, and
-   `<module>.dll` for ordinary Kotlin sources with no entry point or runtimeconfig; and
-8. writes a versioned declaration-binding index into an ordinary produced KLIB and uses it to
-   resolve Kotlin calls and types to the paired CLR assembly; and
+7. provides `-Xdotnet-produce-library`, which emits `<module>.dll` plus diagnostic `<module>.il`
+   for ordinary Kotlin sources with no entry point or runtimeconfig; and
+8. writes a versioned declaration-binding index into the DLL's private packed-KLIB resource and
+   uses it to resolve Kotlin calls and types to that CLR assembly; and
 9. mechanically compares the externally consumable CLR reflection surface of the assembled
    `Kotlin.Runtime` and `Kotlin.Stdlib` variants, requiring each executable profile to retain every
    portable public/protected type, base/interface edge, generic constraint, method, field,
@@ -177,7 +178,7 @@ bounded protocol rule does not turn every ordinary attribute blob into compiler 
 
 The repository's opt-in stdlib producer and installer create all three profile variants under
 their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
-single `netstandard2.0` stdlib pair is discovered as fallback, compiled against, assembled, and
+single `netstandard2.0` stdlib DLL is discovered as fallback, compiled against, assembled, and
 executed by both `net48` and `net10.0` applications.
 
 The surface comparison runs as isolated test tooling under CoreCLR, loading each profile pair in
@@ -209,28 +210,28 @@ requirement; exact bytes are tested only for the compiler protocols named above.
 between Kotlin/KLIB identity, C# authoring contracts, and physical CLR slot auditing is fixed by
 [`adr-semantic-interface-mapping-audit.md`](adr-semantic-interface-mapping-audit.md).
 
-The user-library pair uses the module name as its unsigned CLR assembly identity at version
-`1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
+The user-library DLL uses the module name as its unsigned CLR assembly identity at version
+`1.0.0.0`. Its embedded KLIB carries the same assembly name, version, filename, and library TFM.
 The current version and unsigned form are deterministic prototype binding inputs, not a public ABI
 freeze. Before Gate B, platform assemblies and general user-library production need an explicit
 first-publication policy for naming, strong names, AssemblyVersion compatibility, and package
 versions. After publication, changing those CLR identity components requires an explicit ABI
 transition; before publication, architecture may still require breaking them together with the
-KLIB schema and all producers and consumers.
+embedded metadata schema and all producers and consumers.
 CLR consumers can use the existing explicit export boundary from that DLL. Kotlin consumers do
 not need a second selector language. Following JS/Native linking, the logical key is Kotlin's
-public `IdSignature`. Because this POC KLIB contains declaration metadata while the executable
-implementation is already in a sibling CLR DLL, the CLR-specific index adds only the facts not
-carried by that logical signature: physical owner-type path, method name, and static/instance
-dispatch. Parameter and return signatures are still derived from Kotlin metadata.
+public `IdSignature`. The private packed KLIB contains declaration metadata in the executable CLR
+DLL, and the CLR-specific index adds only the facts not carried by that logical signature:
+physical owner-type path, method name, and static/instance dispatch. Parameter and return
+signatures are still derived from Kotlin metadata.
 
 The producer indexes only declarations that survive backend emission. The loader recognizes only
-KLIBs with the explicit index ABI marker, validates their complete unsigned sibling-assembly and
-target-profile binding, and requires the named sibling DLL. Arbitrary metadata KLIBs remain
-compile-time-only. A consumer never reconstructs a facade from a source filename; it uses the
-producer-recorded owner. Executable consumers copy referenced sibling DLLs next to their output.
-The current manifest-property encoding is a bounded POC schema, not a public annotation or final
-KLIB component design.
+self-describing DLLs whose private metadata has the explicit index ABI marker, validates the
+embedded unsigned assembly identity and target-profile binding against the containing PE, and
+rejects standalone Kotlin/.NET KLIBs. A consumer never reconstructs a facade from a source
+filename; it uses the producer-recorded owner. Executable consumers copy referenced DLLs next to
+their output. The current manifest-property encoding is a bounded POC schema, not a public
+annotation or final KLIB component design.
 
 `netstandard2.0` PE production uses modern ILAsm independently of consumer runtime. Framework ILAsm
 accepts the same source but injects an `mscorlib` AssemblyRef into the resulting PE; it therefore
