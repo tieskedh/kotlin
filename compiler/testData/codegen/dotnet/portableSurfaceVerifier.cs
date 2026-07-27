@@ -154,6 +154,18 @@ internal static class Program
             ")";
     }
 
+    private sealed class SlotSatisfactions
+    {
+        internal SlotSatisfactions()
+        {
+            Manifest = new HashSet<string>(StringComparer.Ordinal);
+            Physical = new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        internal HashSet<string> Manifest { get; }
+        internal HashSet<string> Physical { get; }
+    }
+
     private static int Main(string[] args)
     {
         if (args.Length != 4)
@@ -198,13 +210,13 @@ internal static class Program
                 Compare(portableFriendSurface, platformFriendSurface)
                     .Select(difference => "FRIEND " + difference));
             differences.AddRange(CompareResources(portableResources, platformResources));
-            HashSet<string> portableSatisfactions =
+            SlotSatisfactions portableSatisfactions =
                 CaptureSlotSatisfactions(
                     portableAssemblies,
                     portableResources,
                     differences,
                     "PORTABLE");
-            HashSet<string> platformSatisfactions =
+            SlotSatisfactions platformSatisfactions =
                 CaptureSlotSatisfactions(
                     platformAssemblies,
                     platformResources,
@@ -212,7 +224,13 @@ internal static class Program
                     "PLATFORM");
             differences.AddRange(CompareSlotContracts(portableResources, platformResources));
             differences.AddRange(
-                CompareSlotSatisfactions(portableSatisfactions, platformSatisfactions));
+                CompareSlotSatisfactions(
+                    portableSatisfactions.Manifest,
+                    platformSatisfactions.Manifest));
+            differences.AddRange(
+                ComparePhysicalSlotSatisfactions(
+                    portableSatisfactions.Physical,
+                    platformSatisfactions.Physical));
             if (differences.Count != 0)
             {
                 foreach (string difference in differences)
@@ -224,11 +242,14 @@ internal static class Program
                 "OK " + (
                     portable.Count +
                     portableResources.Count +
-                    portableSatisfactions.Count +
+                    portableSatisfactions.Manifest.Count +
+                    portableSatisfactions.Physical.Count +
                     portableFriendSurface.Count)
                     .ToString(CultureInfo.InvariantCulture) +
                 " SLOTS " +
-                portableSatisfactions.Count.ToString(CultureInfo.InvariantCulture) +
+                portableSatisfactions.Manifest.Count.ToString(CultureInfo.InvariantCulture) +
+                " INTERFACES " +
+                portableSatisfactions.Physical.Count.ToString(CultureInfo.InvariantCulture) +
                 " FRIENDS " +
                 portableFriendSurface.Count.ToString(CultureInfo.InvariantCulture));
             return 0;
@@ -694,7 +715,7 @@ internal static class Program
         return differences;
     }
 
-    private static HashSet<string> CaptureSlotSatisfactions(
+    private static SlotSatisfactions CaptureSlotSatisfactions(
         Assembly[] assemblies,
         Dictionary<string, ResourceItem> resources,
         List<string> differences,
@@ -702,7 +723,7 @@ internal static class Program
     {
         Dictionary<string, CSharpManifestSlot> slotsByMethod =
             ResolveManifestSlots(assemblies, resources, differences, side);
-        var result = new HashSet<string>(StringComparer.Ordinal);
+        var result = new SlotSatisfactions();
         foreach (Assembly assembly in assemblies.OrderBy(
             value => value.GetName().Name,
             StringComparer.Ordinal))
@@ -712,6 +733,9 @@ internal static class Program
                 if (type.IsInterface)
                     continue;
                 bool externallyConsumable = TypeAccess(type) != 0;
+                bool friendConsumable =
+                    HasFriendAuthorization(assembly) &&
+                    FriendTypeAccess(type) != 0;
                 foreach (Type implemented in type.GetInterfaces()
                     .OrderBy(TypeIdentity, StringComparer.Ordinal))
                 {
@@ -732,32 +756,68 @@ internal static class Program
                     for (int index = 0; index < mapping.InterfaceMethods.Length; index++)
                     {
                         MethodInfo declaration = mapping.InterfaceMethods[index];
-                        if (!slotsByMethod.TryGetValue(
-                                MethodDefinitionKey(declaration),
-                                out CSharpManifestSlot slot) ||
-                            slot.Role == "HELPER")
-                            continue;
+                        slotsByMethod.TryGetValue(
+                            MethodDefinitionKey(declaration),
+                            out CSharpManifestSlot slot);
+                        if (slot != null && slot.Role == "HELPER")
+                            slot = null;
                         MethodInfo target = mapping.TargetMethods[index];
                         string signature = ConstructedMethodShape(declaration);
-                        string key =
-                            TypeIdentity(type) + "|" + slot.SemanticKey + "|" + signature;
+                        string semanticKey = slot == null
+                            ? null
+                            : TypeIdentity(type) + "|" + slot.SemanticKey + "|" + signature;
+                        string physicalScope = PhysicalSlotScope(
+                            type,
+                            implemented,
+                            externallyConsumable,
+                            friendConsumable);
+                        string physicalKey =
+                            physicalScope != null &&
+                            (slot == null || !externallyConsumable)
+                                ? physicalScope + "|" + TypeIdentity(type) + "|" + signature
+                                : null;
                         if (target == null || target.IsAbstract)
                         {
                             if (!type.IsAbstract)
                                 differences.Add(
-                                    "MISSING SLOT SATISFIER|" + side + "|" + key);
+                                    (semanticKey == null
+                                        ? "MISSING PHYSICAL SLOT SATISFIER|"
+                                        : "MISSING SLOT SATISFIER|") +
+                                    side + "|" + (semanticKey ?? physicalKey ??
+                                        TypeIdentity(type) + "|" + signature));
                             continue;
                         }
-                        if (!externallyConsumable)
-                            continue;
-                        if (!result.Add(key))
+                        if (semanticKey != null &&
+                            externallyConsumable &&
+                            !result.Manifest.Add(semanticKey))
                             differences.Add(
-                                "AMBIGUOUS SLOT SATISFIER|" + side + "|" + key);
+                                "AMBIGUOUS SLOT SATISFIER|" + side + "|" + semanticKey);
+                        if (physicalKey != null)
+                            result.Physical.Add(physicalKey);
                     }
                 }
             }
         }
         return result;
+    }
+
+    private static string PhysicalSlotScope(
+        Type implementingType,
+        Type implementedInterface,
+        bool externallyConsumable,
+        bool friendConsumable)
+    {
+        if (externallyConsumable && TypeAccess(implementedInterface) != 0)
+            return "PUBLIC";
+        if (!friendConsumable)
+            return null;
+        if (TypeAccess(implementedInterface) != 0)
+            return "FRIEND";
+        if (implementedInterface.Assembly == implementingType.Assembly &&
+            HasFriendAuthorization(implementedInterface.Assembly) &&
+            FriendTypeAccess(implementedInterface) != 0)
+            return "FRIEND";
+        return null;
     }
 
     private static Dictionary<string, CSharpManifestSlot> ResolveManifestSlots(
@@ -976,6 +1036,19 @@ internal static class Program
         {
             if (!platform.Contains(required))
                 differences.Add("MISSING SLOT SATISFACTION|" + required);
+        }
+        return differences;
+    }
+
+    private static List<string> ComparePhysicalSlotSatisfactions(
+        HashSet<string> portable,
+        HashSet<string> platform)
+    {
+        var differences = new List<string>();
+        foreach (string required in portable.OrderBy(value => value, StringComparer.Ordinal))
+        {
+            if (!platform.Contains(required))
+                differences.Add("MISSING PHYSICAL SLOT SATISFACTION|" + required);
         }
         return differences;
     }
