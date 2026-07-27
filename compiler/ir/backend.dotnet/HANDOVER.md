@@ -1662,6 +1662,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   independent handwritten
   manifest-sufficiency fixture remains the full-schema oracle while production adapter families
   execute in the generator matrix.
+- C# base-list substitutions are now validated recursively instead of checking only direct type
+  arguments. Stable nested named constructions, type parameters, nullable value types, and CLR
+  SZARRAY vectors are preserved structurally; nested `dynamic`, pointers/function pointers,
+  unresolved/unbound types, and rectangular/non-vector arrays fail with `KDNCS004`. This follows
+  the other exporters' recursive type translation without pretending that C# dynamic or CLR
+  rectangular arrays have Kotlin Common identities. The production fixture executes
+  `List<Nullable<int>[]>` through the canonical erased adapter while retaining both list and
+  vector identity; hostile nested-dynamic and rectangular-array cases each diagnose once.
 - The production emitter now owns ordinary non-generic interface adapters. It resolves canonical
   MethodDef and Property locators through Roslyn symbols, binds one Kotlin-named or PascalCase C#
   source body, and emits explicit interface members without copying state or behavior. MethodDef
