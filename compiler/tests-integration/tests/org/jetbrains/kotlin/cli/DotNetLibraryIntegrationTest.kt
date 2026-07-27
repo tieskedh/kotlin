@@ -9157,6 +9157,145 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             unrelatedConsumerDirectory,
             "Consumer with an unused Kotlin/.NET classpath library failed",
         )
+
+        val dllOnlyDependencyDirectory = outputDirectory.resolve("dll-only-dependency").apply { mkdirs() }
+        val dllOnlyLibrary = implementationLibrary.copyTo(
+            dllOnlyDependencyDirectory.resolve(implementationLibrary.name),
+        )
+        assertFalse(dllOnlyDependencyDirectory.resolve("Sample.Library.klib").exists()) {
+            "The DLL-only dependency fixture must not expose a sibling KLIB"
+        }
+        val dllOnlyConsumerDirectory = outputDirectory.resolve("dll-only-consumer").apply { mkdirs() }
+        val dllOnlyConsumerAssembly = dllOnlyConsumerDirectory.resolve("DllOnlyConsumer.dll")
+        compileInProcess(
+            K2DotNetCompiler(),
+            kotlinConsumerSource.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, dllOnlyLibrary.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "DllOnlyConsumer",
+            K2DotNetCompilerArguments::destination.cliArgument, dllOnlyConsumerAssembly.path,
+        )
+        assertFalse(dllOnlyDependencyDirectory.resolve("Sample.Library.klib").exists()) {
+            "DLL-first compilation must not materialize a published sibling KLIB"
+        }
+        val dllOnlyConsumerIl = dllOnlyConsumerDirectory.resolve("DllOnlyConsumer.il").readText()
+        assertTrue(".assembly extern 'Sample.Library'" in dllOnlyConsumerIl) { dllOnlyConsumerIl }
+        assertTrue("[Sample.Library]" in dllOnlyConsumerIl) { dllOnlyConsumerIl }
+        runDotNet(
+            dotnetHost,
+            dllOnlyConsumerAssembly,
+            dllOnlyConsumerDirectory,
+            "DLL-only Kotlin cross-module library consumer failed",
+        )
+
+        val mismatchedIdentityIl = outputDirectory.resolve("MismatchedIdentity.il").apply {
+            val mismatchedText = il.replaceFirst(
+                ".assembly 'Sample.Library'",
+                ".assembly 'Physical.Mismatch'",
+            )
+            assertTrue(il != mismatchedText) { "Expected to rewrite the physical Assembly declaration" }
+            writeText(mismatchedText)
+        }
+        val mismatchedIdentityDll = outputDirectory.resolve("MismatchedIdentity.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                mismatchedIdentityIl,
+                mismatchedIdentityDll,
+                DotNetTarget.NETSTANDARD_2_0,
+                MessageCollector.NONE,
+                mapOf(
+                    DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
+                            readFrameworkManagedResource(
+                                checkNotNull(frameworkHost),
+                                implementationLibrary,
+                                DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME,
+                            ),
+                    DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME to embeddedMetadata.readBytes(),
+                ),
+            )
+        )
+        val identityDiagnosticSource = outputDirectory.resolve("identity-diagnostic.kt").apply {
+            writeText("package consumer\n\npublic fun answer(): Int = 42")
+        }
+        val [identityDiagnostics, identityExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                identityDiagnosticSource.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, mismatchedIdentityDll.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "IdentityDiagnosticConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                outputDirectory.resolve("IdentityDiagnosticConsumer.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, identityExitCode, identityDiagnostics)
+        assertTrue(
+            "declares CLR assembly 'Sample.Library, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null'" in
+                    identityDiagnostics &&
+                    "containing PE declares 'Physical.Mismatch, Version=1.0.0.0, Culture=neutral, " +
+                    "PublicKeyToken=null'" in identityDiagnostics
+        ) {
+            identityDiagnostics
+        }
+    }
+
+    @Test
+    fun testDllClasspathRejectsMissingOrMalformedKotlinMetadata() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        val source = File(tmpdir, "dll-metadata-diagnostic.kt").apply {
+            writeText("package consumer\n\npublic fun answer(): Int = 42")
+        }
+        val foreignIl = File(tmpdir, "Foreign.Library.il").apply {
+            writeText(
+                """
+                .assembly Foreign.Library {}
+                .module Foreign.Library.dll
+                """.trimIndent()
+            )
+        }
+        val foreignDll = File(tmpdir, "Foreign.Library.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                foreignIl,
+                foreignDll,
+                DotNetTarget.NETSTANDARD_2_0,
+                MessageCollector.NONE,
+            )
+        )
+        val [missingResourceDiagnostics, missingResourceExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, foreignDll.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "MissingMetadataConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "MissingMetadataConsumer.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, missingResourceExitCode, missingResourceDiagnostics)
+        assertTrue("has no private 'Kotlin.Metadata' Kotlin metadata resource" in missingResourceDiagnostics) {
+            missingResourceDiagnostics
+        }
+
+        val malformedDll = File(tmpdir, "Malformed.Library.dll").apply {
+            writeBytes(byteArrayOf(0x4d, 0x5a))
+        }
+        val [malformedDiagnostics, malformedExitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                source.path,
+                K2DotNetCompilerArguments::noStdlib.cliArgument,
+                K2DotNetCompilerArguments::classpath.cliArgument, malformedDll.path,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "MalformedMetadataConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument,
+                File(tmpdir, "MalformedMetadataConsumer.il").path,
+            )
+        )
+        assertEquals(ExitCode.COMPILATION_ERROR, malformedExitCode, malformedDiagnostics)
+        assertTrue("Malformed.Library.dll' is invalid: DOS header is outside the PE file" in malformedDiagnostics) {
+            malformedDiagnostics
+        }
     }
 
     @Test
@@ -9843,6 +9982,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         )
 
         val producerMetadata = producerDirectory.resolve("Friend.Producer.klib")
+        val dllOnlyFriendDirectory = producerDirectory.resolve("dll-only").apply { mkdirs() }
+        val dllOnlyProducer = producerDirectory.resolve("Friend.Producer.dll").copyTo(
+            dllOnlyFriendDirectory.resolve("Friend.Producer.dll"),
+        )
+        assertFalse(dllOnlyFriendDirectory.resolve("Friend.Producer.klib").exists()) {
+            "The DLL-only friend fixture must not expose a sibling KLIB"
+        }
         val producerIl = producerDirectory.resolve("Friend.Producer.il").readText()
         val producerManifest = producerMetadata.readKlibManifest()
         assertEquals(
@@ -9889,8 +10035,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         compileInProcess(
             K2DotNetCompiler(),
             consumerSource.path,
-            K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
-            K2DotNetCompilerArguments::friendPaths.cliArgument, producerMetadata.path,
+            K2DotNetCompilerArguments::classpath.cliArgument, dllOnlyProducer.path,
+            K2DotNetCompilerArguments::friendPaths.cliArgument, dllOnlyProducer.path,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
             K2DotNetCompilerArguments::moduleName.cliArgument, "Friend.Consumer",
             K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
@@ -9958,8 +10104,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             listOf(
                 unauthorizedSource.path,
-                K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
-                K2DotNetCompilerArguments::friendPaths.cliArgument, producerMetadata.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, dllOnlyProducer.path,
+                K2DotNetCompilerArguments::friendPaths.cliArgument, dllOnlyProducer.path,
                 K2DotNetCompilerArguments::moduleName.cliArgument, "Unauthorized.Consumer",
                 K2DotNetCompilerArguments::destination.cliArgument,
                 File(tmpdir, "Unauthorized.Consumer.il").path,
@@ -9985,7 +10131,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             K2DotNetCompiler(),
             listOf(
                 nonFriendSource.path,
-                K2DotNetCompilerArguments::classpath.cliArgument, producerMetadata.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, dllOnlyProducer.path,
                 K2DotNetCompilerArguments::moduleName.cliArgument, "Friend.Consumer",
                 K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "NonFriend.il").path,
             )

@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 69 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 70 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 849 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 850 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -176,10 +176,12 @@ landed shape as a compatibility constraint.
   STDLIB ownership scopes. The accepted library-artifact endpoint is one self-describing DLL
   (`docs/decisions/adr-self-describing-dotnet-library-dll.md`). Every produced user/stdlib DLL
   embeds the complete packed KLIB as the private managed resource `Kotlin.Metadata`, marked
-  `managed-resource-klib-v1` and self-bound. A separate consumer still resolves Kotlin declarations
-  from the transitional sibling `Kotlin.Stdlib.klib` until the compiler and Gradle loaders become
-  DLL-first, then calls implementations in `Kotlin.Stdlib.dll`, with no injected implementation
-  source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
+  `managed-resource-klib-v1` and self-bound. The CLI classpath and friend resolver now consume that
+  resource directly from a DLL through a bounded JVM-hosted ECMA-335 reader, validate its manifest
+  against the physical Assembly row, and reuse the shared KLIB deserializer through a
+  compilation-scoped temporary extraction. The transitional sibling input remains accepted while
+  Gradle and installed-stdlib discovery still select pairs. Consumers call implementations in the
+  selected DLL, with no injected implementation source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
   library TFM, and final DLL hash; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
@@ -259,7 +261,7 @@ landed shape as a compatibility constraint.
   their corresponding assembler. Explicit CLR exports are callable across the resulting assembly
   edge. Kotlin cross-module calls now follow JS/Native's public `IdSignature` as their logical key;
   a versioned POC KLIB index adds only the CLR owner path, method name, and dispatch shape needed
-  to bind that declaration to its sibling assembly. Signatures remain metadata-derived, arbitrary
+  to bind that declaration to its owning assembly. Signatures remain metadata-derived, arbitrary
   metadata KLIBs remain compile-time-only, and consumers never reconstruct a facade from a source
   filename. Executables copy directly referenced implementation DLLs beside their output. The
   manifest-property encoding is provisional pending a real KLIB component and signature-version
