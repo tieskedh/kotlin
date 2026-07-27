@@ -28,12 +28,14 @@ class KotlinDotNetTargetIT : KGPBaseTest() {
         gradleVersion: GradleVersion,
     ) {
         project("dotnetSimple", gradleVersion) {
-            build("compileKotlinDotnet") {
-                assertTasksExecuted(":compileKotlinDotnet")
+            build("compileTestKotlinDotnet") {
+                assertTasksExecuted(":compileKotlinDotnet", ":compileTestKotlinDotnet")
             }
 
             assertFileInProjectExists("build/classes/kotlin/dotnet/main/Sample.Library.klib")
             assertFileInProjectExists("build/classes/kotlin/dotnet/main/Sample.Library.dll")
+            assertFileInProjectExists("build/classes/kotlin/dotnet/test/Sample.Library_test.klib")
+            assertFileInProjectExists("build/classes/kotlin/dotnet/test/Sample.Library_test.dll")
         }
     }
 }
