@@ -177,6 +177,42 @@ reaches the original implementation while typed/class dispatch reaches the looka
 same-owner duplicate remains subject to the ordinary atomic collision gate; a blanket source-name
 ban is neither required nor desirable.
 
+### Generated helper TypeDefs obey the same-owner collision rule
+
+**1. Other-target rule.** JVM gives interface compatibility bodies a compiler-owned
+`$DefaultImpls` class and runs the final class/method signatures through its platform clash
+machinery. JS, Native, and Wasm normally avoid source-name collisions through their target
+manglers and `IdSignature`-keyed generated declarations, but still require one unique physical
+identity for each generated artifact. No backend may silently discard either a source
+declaration or compiler ABI when their final target identities coincide.
+
+**2. CLR-specific difference.** A nested CLR TypeDef is identified by its enclosing TypeDef,
+metadata name, and generic arity. Two nested types named `__KotlinDefaultImpls` at the same arity
+cannot coexist. Unlike JVM's `$` spelling, the helper must remain nameable from generated C#
+because portable source implementations call it directly. A deliberately unnameable metadata
+identifier would solve the producer collision by breaking the supported Roslyn authoring path.
+
+**3. Kotlin Common invariant.** A user nested class and an interface default declaration are
+independent Kotlin declarations. The backend may not merge them, replace one with the other,
+change ordinary dispatch, or publish KLIB metadata whose required helper is absent.
+
+**4. .NET validity rule.** The helper remains compiler ABI on `net48`, `netstandard2.0`, and
+`net10.0`, even though only the modern profile also owns a DIM body. Therefore the same physical
+collision exists on every profile and has no profile-specific representation escape.
+
+**5. Selected architecture.** Compare complete owner-relative TypeDef identities after generated
+helpers and source declarations exist. A real duplicate rejects the complete owning interface
+and prevents both the KLIB and DLL from being published. A merely reserved-looking name at a
+different owner or arity remains legal. The public helper identity is never silently renamed in
+response to declaration order because doing so would make cross-module ABI unstable.
+
+**6. Core-team choice.** Keep the actual same-owner rejection and later move its report to a
+target FIR/platform diagnostic. The emitter-time whole-declaration gate is a **Correct temporary
+implementation, but not a final design**; atomic rejection and deterministic helper identity are
+the final constraints. A future helper-name grammar may add a logical-identity digest before ABI
+freeze, but it must still retain an explicit collision check rather than assuming a digest makes
+duplicates impossible.
+
 A separately compiled 65-parameter interface now validates that the canonical/declared/exact
 representation has no 32- or 64-bit capability-mask limit. A portable producer and Kotlin/C#
 consumers on both application profiles execute same-object widening, high-index typed reads through

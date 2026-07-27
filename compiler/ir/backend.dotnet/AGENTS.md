@@ -625,6 +625,12 @@ landed shape as a compatibility constraint.
   intersection. The DLL-only production-generator matrix closes `T = String` through both parent
   Kotlin views on every profile combination. Incompatible returns, constraints, ref kinds, or
   selected defaults must not be merged by source name.
+  Real generated-TypeDef collisions are owner-relative. A source nested
+  `__KotlinDefaultImpls` inside an interface with a default body collides with the compiler helper
+  on every profile, including `net10.0` where the compatibility helper remains ABI. Reject the
+  complete producer before KLIB/DLL publication; do not rename the helper according to encounter
+  order. The current emitter-time report is temporary diagnostic placement, not permission to
+  emit a partial interface. Reserved-looking names at another owner or arity stay legal.
 - Read-only List ABI candidate: source `List<out E>` extends the corresponding Collection views.
   Canonical `[Kotlin.Runtime]Kotlin.Collections.List` owns object-shaped `Get`,
   `IndexOfErased(object)`, `LastIndexOfErased(object)`, canonical nested `GetListIterator` and
