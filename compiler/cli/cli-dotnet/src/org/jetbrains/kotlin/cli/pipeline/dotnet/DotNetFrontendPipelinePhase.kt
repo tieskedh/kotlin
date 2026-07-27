@@ -8,6 +8,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetExternalStdlib
 import org.jetbrains.kotlin.backend.dotnet.DotNetExternalLibrary
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
+import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetPlatformAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetStdlibArtifact
 import org.jetbrains.kotlin.backend.dotnet.dotNetExternalStdlib
@@ -181,6 +182,10 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
         DotNetLibraryAbiCodec.RUNTIME_SURFACE_LEVEL_PROPERTY to
                 DotNetLibraryAbiCodec.CURRENT_RUNTIME_SURFACE_LEVEL.toString(),
         DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY to "",
+        DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY to
+                DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
+        DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY to
+                DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_NAME_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_NAME,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_VERSION_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_VERSION,
         DotNetLibraryArtifact.METADATA_ASSEMBLY_CULTURE_PROPERTY to DotNetStdlibArtifact.ASSEMBLY_CULTURE,
@@ -285,6 +290,25 @@ private fun org.jetbrains.kotlin.config.CompilerConfiguration.recordExternalDotN
                 COMPILER_ARGUMENTS_ERROR,
                 "Kotlin/.NET metadata library '${library.path}' has invalid CLR friend identities: " +
                         exception.message,
+            )
+            return
+        }
+        val containerFormat = required(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY) ?: return
+        if (containerFormat != DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' uses unsupported external container format " +
+                        "'$containerFormat'.",
+            )
+            return
+        }
+        val implementationBinding =
+            required(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY) ?: return
+        if (implementationBinding != DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING) {
+            report(
+                COMPILER_ARGUMENTS_ERROR,
+                "Kotlin/.NET metadata library '${library.path}' uses unsupported external implementation binding " +
+                        "'$implementationBinding'.",
             )
             return
         }

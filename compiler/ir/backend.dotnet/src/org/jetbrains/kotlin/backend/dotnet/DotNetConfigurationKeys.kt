@@ -58,7 +58,7 @@ object DotNetStdlibArtifact {
         kotlinLibDirectory.resolve(DISTRIBUTION_DIRECTORY_NAME).resolve(targetFramework)
 }
 
-/** The two-file product and CLR identity of one Kotlin/.NET library. */
+/** The CLR identity of one Kotlin/.NET library and its transitional metadata-companion name. */
 data class DotNetLibraryArtifact(
     val assemblyName: String,
     val targetFramework: String,

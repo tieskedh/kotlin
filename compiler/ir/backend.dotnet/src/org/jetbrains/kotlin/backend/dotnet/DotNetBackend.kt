@@ -18,6 +18,7 @@ object DotNetBackend {
         irBuiltIns: IrBuiltIns,
         symbolTable: SymbolTable,
         configuration: CompilerConfiguration,
+        kotlinMetadataResourceFactory: ((Map<String, DotNetPhysicalDeclaration>) -> ByteArray)? = null,
     ): DotNetBackendOutput {
         // The .NET backend has no IrDiagnosticReporter-based reporting yet; it deliberately talks
         // to the message collector directly, like DotNetIlEmitter and DotNetIlAssembler.
@@ -170,6 +171,7 @@ object DotNetBackend {
                 objectInstanceFields = context.objectInstanceFields,
                 cSharpWrongShapePolicies = cSharpWrongShapePolicies,
                 cSharpImplementationManifestTarget = target,
+                hasKotlinMetadataResource = producesStdlib && kotlinMetadataResourceFactory != null,
             ).emit(irModuleFragment) ?: return result(ilTarget)
         } else {
             null
@@ -193,7 +195,10 @@ object DotNetBackend {
                     stdlibIlText,
                     target,
                     messageCollector,
-                    stdlibEmission.managedResources,
+                    stdlibEmission.managedResources.withKotlinMetadata(
+                        stdlibEmission.declarations,
+                        kotlinMetadataResourceFactory,
+                    ),
                 )
                     ?: output.resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME),
                 stdlibEmission.declarations,
@@ -235,6 +240,7 @@ object DotNetBackend {
             interfaceDefaultClassForwarders = context.interfaceDefaultClassForwarders,
             cSharpWrongShapePolicies = cSharpWrongShapePolicies,
             cSharpImplementationManifestTarget = target.takeIf { producesLibrary },
+            hasKotlinMetadataResource = producesLibrary && kotlinMetadataResourceFactory != null,
         )
         val emission = emitter.emit(irModuleFragment)
         if (emission == null) {
@@ -314,7 +320,10 @@ object DotNetBackend {
                 assemblyOutput,
                 target,
                 messageCollector,
-                emission.managedResources,
+                emission.managedResources.withKotlinMetadata(
+                    emission.declarations,
+                    kotlinMetadataResourceFactory,
+                ),
             )
             return result(assemblyOutput, emission.declarations)
         }
@@ -362,6 +371,19 @@ object DotNetBackend {
         (parentFile ?: File(".")).resolve("$nameWithoutExtension.runtimeconfig.json")
 
     private val UTF8_BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+
+    private fun Map<String, ByteArray>.withKotlinMetadata(
+        declarations: Map<String, DotNetPhysicalDeclaration>,
+        resourceFactory: ((Map<String, DotNetPhysicalDeclaration>) -> ByteArray)?,
+    ): Map<String, ByteArray> {
+        if (resourceFactory == null) return this
+        check(DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME !in this) {
+            "The Kotlin metadata resource name collides with another managed resource"
+        }
+        val metadataResource =
+            DotNetKotlinMetadataResource.MANAGED_RESOURCE_NAME to resourceFactory(declarations)
+        return this + metadataResource
+    }
 }
 
 data class DotNetBackendOutput(
