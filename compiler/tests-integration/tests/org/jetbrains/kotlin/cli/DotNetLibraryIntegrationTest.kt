@@ -10208,6 +10208,48 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             """,
         )
         assertPublicationFails(
+            "Default.Dispatcher.Member.Clash",
+            """
+            package sample
+
+            public class MemberDefaultDispatcherClash {
+                public fun select(value: Int = 1): Int = value
+                public fun `select${'$'}default`(value: Int, mask: Int): Int =
+                    value + mask
+            }
+            """,
+            listOf("net48", "netstandard2.0", "net10.0"),
+            "both map to the same IL method 'select${'$'}default(int32, int32)'",
+        )
+        assertPublicationFails(
+            "Default.Dispatcher.Facade.Clash",
+            """
+            package sample
+
+            public fun select(value: Int = 1): Int = value
+            public fun `select${'$'}default`(value: Int, mask: Int): Int =
+                value + mask
+            """,
+            listOf("net48", "netstandard2.0", "net10.0"),
+            "both map to the same IL method 'select${'$'}default(int32, int32)'",
+        )
+        assertPublicationFails(
+            "Default.Dispatcher.Data.Copy.Clash",
+            """
+            package sample
+
+            public data class CopyDefaultDispatcherClash(public val value: Int) {
+                public fun `copy${'$'}default`(
+                    value: Int,
+                    mask: Int,
+                ): CopyDefaultDispatcherClash =
+                    CopyDefaultDispatcherClash(value + mask)
+            }
+            """,
+            listOf("net48", "netstandard2.0", "net10.0"),
+            "both map to the same IL method 'copy${'$'}default(int32, int32)'",
+        )
+        assertPublicationFails(
             "Generic.Interface.Clashes",
             """
             package sample

@@ -398,6 +398,11 @@ The first real same-owner generated-TypeDef case is also closed. A source nested
 compiler compatibility helper. Publication rejects that producer atomically on all three target
 profiles, including `net10.0` where the helper remains compiler ABI, and emits neither artifact.
 This is distinct from a reserved-looking member on another physical owner, which remains legal.
+Generated masked-dispatcher method identities are now closed as a separate family. Source
+backtick functions colliding with an ordinary member `$default`, a file-facade `$default`, or a
+data-class `copy$default` all fail publication on every profile. The compiler retains neither an
+arbitrary winner nor a partial library, matching JVM's `CONFLICTING_JVM_DECLARATIONS` precedent
+while preserving Kotlin's callee-owned default evaluation.
 A separate 65-parameter portable producer now crosses both common fixed-mask boundaries. Kotlin
 and C# consumers on net48 and net10 verify declared/exact variance metadata, implementation of the
 complete exact capability, same-object widening, high-index canonical fallback, and wrong-shape
@@ -451,9 +456,10 @@ The remaining P0-D implementation order is:
    conversion exists; whole-declaration rejection is correct in the meantime.
 2. Finish producer-declared nested foreign member signatures, incompatible substituted inherited
    overload families, and the remaining same-owner generated-member clash matrix. The generated
-   helper-TypeDef case is now pinned across every profile; method/accessor/constructor and
-   singleton-field collisions already have emitter gates, but remaining compiler-generated
-   member-name families still need adversarial publication coverage. The valid closed inherited family
+   helper-TypeDef and member/facade/data-class `$default` cases are now pinned across every
+   profile; method/accessor/constructor and singleton-field collisions already have emitter gates,
+   but remaining compiler-generated member-name families still need adversarial publication
+   coverage. The valid closed inherited family
    where `select(T)` and `select(String)` converge at `T = String` is now production-pinned: one
    C# body serves both distinct parent contracts without an invented manifest intersection.
    Consumer-owned base-list substitution
