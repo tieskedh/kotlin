@@ -6,14 +6,14 @@
 package org.jetbrains.kotlin.gradle.tasks
 
 import org.gradle.api.file.FileCollection
-import org.gradle.api.file.RegularFile
+import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
-import org.gradle.api.provider.Provider
 import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputFile
 import org.gradle.work.InputChanges
 import org.gradle.workers.WorkerExecutor
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
@@ -47,6 +47,11 @@ abstract class KotlinDotNetCompile @Inject constructor(
     init {
         compilerOptions.verbose.convention(logger.isDebugEnabled)
         authorizedFriendAssemblies.convention(emptySet())
+        assemblyOutputFile.convention(
+            compilerOptions.moduleName.flatMap { moduleName ->
+                destinationDirectory.file("$moduleName.dll")
+            }
+        )
     }
 
     @get:Input
@@ -55,15 +60,8 @@ abstract class KotlinDotNetCompile @Inject constructor(
     @get:Input
     internal abstract val authorizedFriendAssemblies: SetProperty<String>
 
-    @get:Internal
-    internal val klibOutputFile: Provider<RegularFile> = compilerOptions.moduleName.flatMap { moduleName ->
-        destinationDirectory.map { outputDirectory -> outputDirectory.file("$moduleName.klib") }
-    }
-
-    @get:Internal
-    internal val assemblyOutputFile: Provider<RegularFile> = compilerOptions.moduleName.flatMap { moduleName ->
-        destinationDirectory.map { outputDirectory -> outputDirectory.file("$moduleName.dll") }
-    }
+    @get:OutputFile
+    internal abstract val assemblyOutputFile: RegularFileProperty
 
     @get:Internal
     internal var executionTimeFreeCompilerArgs: List<String>? = null

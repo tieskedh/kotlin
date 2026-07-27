@@ -30,9 +30,10 @@ CLR assembly accessibility is enforced by the runtime and ordinary .NET tooling.
 friend path can grant Kotlin source visibility, but it cannot make an `assembly` member callable.
 The producer must also emit `InternalsVisibleTo` for the consumer's actual CLR assembly identity.
 
-The Kotlin/.NET dependency is also a content-bound KLIB/DLL pair. Friend visibility is granted
-from the exact metadata KLIB, while the sibling DLL owns the physical internal declarations. An
-output directory is not a friend identity and must not replace the exact KLIB path.
+The Kotlin/.NET dependency is one self-describing DLL. Friend visibility is granted from the
+private `Kotlin.Metadata` resource in that exact DLL, which also owns the physical internal
+declarations. An output directory is not a friend identity and must not replace the exact assembly
+path.
 
 ## 3. Kotlin Common invariant
 
@@ -117,19 +118,18 @@ An associated or explicitly declared friend compilation is a two-sided relations
 
 - the producer records a structured CLR friend identity and emits one
   `System.Runtime.CompilerServices.InternalsVisibleToAttribute` for it;
-- the consumer records the producer KLIB as a friend dependency, not merely as an ordinary
+- the consumer records the producer DLL as a friend dependency, not merely as an ordinary
   classpath dependency;
-- before FIR sessions are created, the .NET pipeline resolves that friend path to the bound
-  KLIB/DLL pair and verifies that the producer manifest authorizes the actual output assembly
-  identity;
+- before FIR sessions are created, the .NET pipeline reads the DLL's embedded KLIB and verifies
+  that the producer manifest authorizes the actual containing assembly identity;
 - only after that check does FIR grant Kotlin internal source visibility.
 
 Manifest schema 4 stores the deterministic producer-authorized identity set in
 `dotnet_friend_assembly_identities`. The low-level CLI spellings are
-`-Xdotnet-friend-assembly=<identity>` on the producer and `-Xfriend-paths=<KLIB>` on the consumer.
+`-Xdotnet-friend-assembly=<identity>` on the producer and `-Xfriend-paths=<DLL>` on the consumer.
 They are implementation controls, not public Gradle compiler options. The built-in .NET Gradle
 target exposes the relationship through ordinary compilation association and derives producer
-authorization, the consumer's exact friend KLIB, dependency inheritance, and task ordering from
+authorization, the consumer's exact friend DLL, dependency inheritance, and task ordering from
 that single relationship. The target and compilation model independently own assembly naming,
 profile variants, artifacts, compilation outputs, and task dependencies; friend authorization
 does not define those concepts indirectly.
