@@ -51,6 +51,10 @@ val kotlinCompilerArguments = compilerArguments {
                     name = CompilerArgumentsLevelNames.nativeArguments,
                     mergeWith = setOf(actualNativeArguments, removedNativeArguments)
                 ) {}
+                subLevel(
+                    name = CompilerArgumentsLevelNames.dotNetArguments,
+                    mergeWith = setOf(actualDotNetArguments)
+                ) {}
             }
             subLevel(
                 name = CompilerArgumentsLevelNames.metadataArguments,

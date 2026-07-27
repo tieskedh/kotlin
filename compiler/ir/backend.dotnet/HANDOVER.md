@@ -1801,6 +1801,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   TFMs independently of Kotlin enum-entry names. The accepted platform-identity and
   target-framework-attribute ADRs record the six-step decisions. The built-in target must next put
   both the platform and framework attributes on all of its profile-specific configurations.
+- The .NET CLI argument model is now generated from the shared `compiler/arguments` description
+  instead of maintaining a handwritten `K2DotNetCompilerArguments`. It inherits common KLIB
+  arguments, generated freezing/copy behavior, and serialized argument metadata like JS, Wasm,
+  and Native, while CLR-only target/profile, product, friend, export, assembly, output, and
+  classpath flags remain in the .NET leaf. The frontend does not yet register common
+  partial-linkage diagnostic names, so the common KLIB configurator deliberately reports no
+  second-stage invocation until that contract exists; enabling it earlier fails all compilations
+  during warning-level setup. This plumbing does not make operational task inputs public Gradle
+  compiler options; the target/compilation model must first establish their ownership. The
+  accepted generated-arguments ADR records the six-step decision and the temporary
+  partial-linkage boundary.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.

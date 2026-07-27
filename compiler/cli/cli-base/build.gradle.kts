@@ -112,6 +112,7 @@ generatedSourcesTask(
             "wasmArguments",
             "jsArguments",
             "nativeArguments",
+            "dotNetArguments",
             "metadataArguments",
             "commonJsAndWasmArguments",
             "legacyWasmArguments",

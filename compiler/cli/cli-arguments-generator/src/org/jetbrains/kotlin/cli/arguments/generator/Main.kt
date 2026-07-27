@@ -125,6 +125,12 @@ val levelToClassNameMap = listOf(
         originFileName = "NativeCompilerArguments",
     ),
     ArgumentsInfo(
+        levelName = CompilerArgumentsLevelNames.dotNetArguments,
+        className = "K2DotNetCompilerArguments",
+        levelIsFinal = true,
+        originFileName = "DotNetCompilerArguments",
+    ),
+    ArgumentsInfo(
         levelName = CompilerArgumentsLevelNames.metadataArguments,
         className = "K2MetadataCompilerArguments",
         levelIsFinal = true,
@@ -603,4 +609,3 @@ private const val removedCompilerArgumentsSpecialLevelName = "removedCompilerArg
 
 private val KotlinCompilerArgument.isAlreadyRemoved: Boolean
     get() = releaseVersionsMetadata.removedVersion.let { it != null && it.toKotlinVersion() <= kotlin.KotlinVersion.CURRENT }
-
