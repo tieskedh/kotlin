@@ -2459,6 +2459,16 @@ landed shape as a compatibility constraint.
 
 ## Target selection (`-Xdotnet-target`)
 
+- `K2DotNetCompilerArguments` is generated from the shared `compiler/arguments` description and
+  descends from `CommonKlibBasedCompilerArguments`; its configurator likewise descends from the
+  common KLIB configurator. Do not restore a handwritten argument class or duplicate common
+  KLIB/freezing/copy behavior in the .NET backend. Every current .NET invocation emits a CLR
+  assembly, but the frontend has not registered the common partial-linkage diagnostic names, so
+  `isSecondStage` must remain false until that diagnostic contract is implemented; setting it
+  prematurely makes every compilation fail during warning-level configuration. Operational
+  options such as destination, product kind, classpath, and friend authorization remain
+  compiler/task inputs rather than automatically becoming public Gradle compiler options. See
+  `docs/decisions/adr-generated-dotnet-compiler-arguments.md`.
 - Kotlin/.NET has one logical compiler/Gradle platform identity independent of its framework
   profile. Metadata compilation uses `-Xtarget-platform=DotNet` and Gradle module metadata uses
   `KotlinPlatformType.dotnet`. Do not map it to JVM or Common and do not add cross-platform
