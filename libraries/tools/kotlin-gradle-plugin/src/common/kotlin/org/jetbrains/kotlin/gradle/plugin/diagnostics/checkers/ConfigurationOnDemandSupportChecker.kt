@@ -47,6 +47,7 @@ internal object ConfigurationOnDemandSupportChecker : KotlinGradleProjectChecker
             KotlinPlatformType.jvm,
             KotlinPlatformType.androidJvm,
             KotlinPlatformType.native,
+            KotlinPlatformType.dotnet,
                 -> true
         }
     }

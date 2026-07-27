@@ -56,6 +56,14 @@ enum class MetadataTargetPlatform(
         )
     ),
 
+    @SerialName("DotNet")
+    DOTNET(
+        targetName = "DotNet",
+        releaseVersionsMetadata = KotlinReleaseVersionLifecycle(
+            introducedVersion = KotlinReleaseVersion.v2_5_0,
+        )
+    ),
+
     ;
 
     override val stringRepresentation: String

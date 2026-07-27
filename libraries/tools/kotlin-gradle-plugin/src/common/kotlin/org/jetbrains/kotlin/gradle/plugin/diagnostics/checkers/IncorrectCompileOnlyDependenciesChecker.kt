@@ -94,6 +94,7 @@ internal object IncorrectCompileOnlyDependenciesChecker : KotlinGradleProjectChe
         return when (target) {
             KotlinPlatformType.jvm,
             KotlinPlatformType.androidJvm,
+            KotlinPlatformType.dotnet,
                 -> true
 
             // Technically, compileOnly dependencies should also be forbidden for

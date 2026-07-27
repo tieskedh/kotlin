@@ -34,7 +34,7 @@ fun <T : DecoratedExternalKotlinCompilation> DecoratedExternalKotlinTarget.creat
 ): T {
     val compilationImplFactory = KotlinCompilationImplFactory(
         compilerOptionsFactory = when (platformType) {
-            KotlinPlatformType.common -> KotlinMultiplatformCommonCompilerOptionsFactory
+            KotlinPlatformType.common, KotlinPlatformType.dotnet -> KotlinMultiplatformCommonCompilerOptionsFactory
             KotlinPlatformType.jvm -> KotlinJvmCompilerOptionsFactory
             KotlinPlatformType.androidJvm -> KotlinJvmCompilerOptionsFactory
             KotlinPlatformType.js -> KotlinJsCompilerOptionsFactory
