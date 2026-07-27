@@ -8,10 +8,12 @@ package org.jetbrains.kotlin.gradle.plugin.mpp.compilationImpl
 import org.jetbrains.kotlin.gradle.plugin.Kotlin2JvmSourceSetProcessor
 import org.jetbrains.kotlin.gradle.plugin.KotlinCommonSourceSetProcessor
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilationInfo
+import org.jetbrains.kotlin.gradle.plugin.KotlinDotNetSourceSetProcessor
 import org.jetbrains.kotlin.gradle.plugin.KotlinJsIrSourceSetProcessor
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinCommonCompilation
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJvmCompilation
 import org.jetbrains.kotlin.gradle.targets.js.ir.KotlinJsIrCompilation
+import org.jetbrains.kotlin.gradle.targets.dotnet.KotlinDotNetCompilation
 import org.jetbrains.kotlin.gradle.tasks.KotlinTasksProvider
 
 internal val KotlinCompilationProcessorSideEffect = KotlinCompilationSideEffect { compilation ->
@@ -19,6 +21,7 @@ internal val KotlinCompilationProcessorSideEffect = KotlinCompilationSideEffect 
         is KotlinCommonCompilation -> KotlinCommonSourceSetProcessor(KotlinCompilationInfo(compilation), KotlinTasksProvider())
         is KotlinJvmCompilation -> Kotlin2JvmSourceSetProcessor(KotlinTasksProvider(), KotlinCompilationInfo(compilation))
         is KotlinJsIrCompilation -> KotlinJsIrSourceSetProcessor(KotlinTasksProvider(), KotlinCompilationInfo(compilation))
+        is KotlinDotNetCompilation -> KotlinDotNetSourceSetProcessor(KotlinCompilationInfo(compilation), KotlinTasksProvider())
         else -> null
     }
     processor?.run()

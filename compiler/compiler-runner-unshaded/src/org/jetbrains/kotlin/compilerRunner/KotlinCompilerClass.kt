@@ -10,4 +10,5 @@ object KotlinCompilerClass {
     const val JS = "org.jetbrains.kotlin.cli.js.K2JSCompiler"
     const val WASM = "org.jetbrains.kotlin.cli.js.KotlinWasmCompiler"
     const val METADATA = "org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler"
+    const val DOTNET = "org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler"
 }
