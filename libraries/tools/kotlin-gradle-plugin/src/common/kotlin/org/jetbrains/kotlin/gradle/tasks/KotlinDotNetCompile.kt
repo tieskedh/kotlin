@@ -6,8 +6,11 @@
 package org.jetbrains.kotlin.gradle.tasks
 
 import org.gradle.api.file.FileCollection
+import org.gradle.api.file.RegularFile
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
@@ -43,10 +46,24 @@ abstract class KotlinDotNetCompile @Inject constructor(
 
     init {
         compilerOptions.verbose.convention(logger.isDebugEnabled)
+        authorizedFriendAssemblies.convention(emptySet())
     }
 
     @get:Input
     abstract val targetFramework: Property<KotlinDotNetTargetFramework>
+
+    @get:Input
+    internal abstract val authorizedFriendAssemblies: SetProperty<String>
+
+    @get:Internal
+    internal val klibOutputFile: Provider<RegularFile> = compilerOptions.moduleName.flatMap { moduleName ->
+        destinationDirectory.map { outputDirectory -> outputDirectory.file("$moduleName.klib") }
+    }
+
+    @get:Internal
+    internal val assemblyOutputFile: Provider<RegularFile> = compilerOptions.moduleName.flatMap { moduleName ->
+        destinationDirectory.map { outputDirectory -> outputDirectory.file("$moduleName.dll") }
+    }
 
     @get:Internal
     internal var executionTimeFreeCompilerArgs: List<String>? = null
@@ -56,6 +73,7 @@ abstract class KotlinDotNetCompile @Inject constructor(
             args.multiPlatform = multiPlatformEnabled.get()
             args.dotNetTarget = targetFramework.get().targetFrameworkMoniker
             args.dotNetProduceLibrary = true
+            args.dotNetFriendAssemblies = authorizedFriendAssemblies.get().sorted().toTypedArray()
             args.destination = destinationDirectory.get().asFile.normalize().absolutePath
 
             args.pluginOptions = (pluginOptions.toSingleCompilerPluginOptions() + kotlinPluginData?.orNull?.options)

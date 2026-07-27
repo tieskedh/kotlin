@@ -20,6 +20,8 @@ internal class KotlinDotNetCompilationFactory(
     private val compilationImplFactory = KotlinCompilationImplFactory(
         compilerOptionsFactory = KotlinDotNetCompilerOptionsFactory,
         compilationDependencyConfigurationsFactory = DefaultKotlinCompilationDependencyConfigurationsFactory.WithRuntime(),
+        compilationAssociator = KotlinDotNetCompilationAssociator,
+        compilationFriendPathsResolver = KotlinDotNetCompilationFriendPathsResolver,
     )
 
     override fun create(name: String): KotlinDotNetCompilation = target.project.objects.newInstance(

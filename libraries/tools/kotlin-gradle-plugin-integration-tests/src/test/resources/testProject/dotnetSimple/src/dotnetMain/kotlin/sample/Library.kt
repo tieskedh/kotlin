@@ -1,3 +1,5 @@
 package sample
 
-fun answer(): Int = 42
+internal fun internalAnswer(): Int = 42
+
+fun answer(): Int = internalAnswer()

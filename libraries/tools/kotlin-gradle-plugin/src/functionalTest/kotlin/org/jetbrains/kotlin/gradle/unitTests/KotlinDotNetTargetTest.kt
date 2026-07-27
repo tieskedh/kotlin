@@ -51,20 +51,26 @@ class KotlinDotNetTargetTest {
             assertEquals("dotnetProject", mainCompilation.compilerOptions.options.moduleName.get())
             assertEquals("dotnetProject_test", testCompilation.compilerOptions.options.moduleName.get())
 
-            val task = mainCompilation.compileTaskProvider.get()
-            assertTrue(KotlinDotNetCompile::class.java.isAssignableFrom(task.javaClass))
-            assertEquals(targetFramework, task.targetFramework.get())
-            assertEquals(KotlinCompilerExecutionStrategy.IN_PROCESS, task.compilerExecutionStrategy.get())
-            assertFalse(task.runViaBuildToolsApi.get())
-            assertFalse(task.generateCompilerRefIndex.get())
+            val mainTask = mainCompilation.compileTaskProvider.get()
+            val testTask = testCompilation.compileTaskProvider.get()
+            assertTrue(KotlinDotNetCompile::class.java.isAssignableFrom(mainTask.javaClass))
+            assertEquals(targetFramework, mainTask.targetFramework.get())
+            assertEquals(KotlinCompilerExecutionStrategy.IN_PROCESS, mainTask.compilerExecutionStrategy.get())
+            assertFalse(mainTask.runViaBuildToolsApi.get())
+            assertFalse(mainTask.generateCompilerRefIndex.get())
 
-            val arguments = task.createCompilerArguments(lenient)
-            assertEquals(targetFramework.targetFrameworkMoniker, arguments.dotNetTarget)
-            assertEquals("dotnetProject", arguments.moduleName)
-            assertTrue(arguments.dotNetProduceLibrary)
+            val mainArguments = mainTask.createCompilerArguments(lenient)
+            assertEquals(targetFramework.targetFrameworkMoniker, mainArguments.dotNetTarget)
+            assertEquals("dotnetProject", mainArguments.moduleName)
+            assertEquals(listOf("dotnetProject_test"), mainArguments.dotNetFriendAssemblies.toList())
+            assertTrue(mainArguments.dotNetProduceLibrary)
             assertTrue(
-                File(arguments.destination!!).toPath().endsWith(Paths.get(target.name, "main"))
+                File(mainArguments.destination!!).toPath().endsWith(Paths.get(target.name, "main"))
             )
+
+            assertTrue(mainTask in testTask.taskDependencies.getDependencies(testTask))
+            assertTrue(mainTask in testTask.friendPaths.buildDependencies.getDependencies(testTask))
+            assertTrue(mainTask in testTask.libraries.buildDependencies.getDependencies(testTask))
         }
     }
 

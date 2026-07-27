@@ -223,7 +223,10 @@ unauthorized separate-module execution paths are pinned. Ordinary `internal` rem
 assembly-internal, while `@PublishedApi internal` types, functions, accessors, and constant fields
 are public marked compiler ABI. The source-session wiring also now registers the common FIR enum-
 entry service required to resolve declaration annotations on the distinct DotNet platform. The
-remaining P0-C integration work is a structured Gradle association that wires both sides. A real
+built-in Gradle target now closes the remaining P0-C association work: ordinary `associateWith`
+wiring supplies the producer's exact KLIB to the consumer as both dependency and friend input,
+authorizes the consumer's compilation-owned CLR identity in the producer, inherits the
+producer's declared dependencies, and infers producer-before-consumer task ordering. A real
 Framework Roslyn compiler/execution lane proves that an authorized C# assembly receives ordinary
 CLR friend access; the existing negative C# lane proves that an untrusted assembly does not.
 Signed output consumption is deferred but its full-key identity and long custom-attribute
@@ -551,19 +554,16 @@ metadata audit.
 Nested/general owner-relative carriers may remain rejected until their conversion can be proved
 rather than guessed.
 
-The outstanding P0-C Gradle friend association cannot be wired responsibly yet. Common metadata
-and Gradle module metadata now recognize one distinct Kotlin/.NET platform identity, but this
-repository still has no built-in Kotlin/.NET target or compilation model. The compiler already
-owns both friend controls, but a build association must derive assembly names, profile variants,
-artifacts, output paths, and task dependencies from one product-owned compilation relationship.
-The separate typed target-framework attribute now models exact-profile selection plus the two
-legal `netstandard2.0` fallback edges. The CLI argument class and copy machinery are now generated
-from the shared KLIB-based argument description rather than maintained as a .NET-only parallel
-model. Its experimental Gradle compiler-options surface is generated as common Kotlin options plus
-`moduleName`; operational inputs and raw export encodings are deliberately excluded. Add the
-experimental .NET target/compilation model next, let it own those operational inputs, then make
-`associateWith` configure producer `InternalsVisibleTo` and consumer friend KLIB paths together
-before Gate A.
+P0-C Gradle friend association is now implemented through the built-in experimental Kotlin/.NET
+target and compilation model. Common metadata and Gradle module metadata recognize one distinct
+Kotlin/.NET platform identity. The typed target-framework attribute models exact-profile
+selection plus the two legal `netstandard2.0` fallback edges. The generated Gradle
+compiler-options surface remains common Kotlin options plus `moduleName`; operational inputs and
+raw export encodings remain deliberately excluded. The target-specific compilation associator
+derives producer `InternalsVisibleTo`, the consumer's exact bound friend KLIB, dependency
+inheritance, and task ordering from the ordinary `associateWith` relationship. Model tests cover
+all three profiles, and the real-compiler integration lane compiles a test module that calls an
+ordinary internal declaration from its associated main module.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
