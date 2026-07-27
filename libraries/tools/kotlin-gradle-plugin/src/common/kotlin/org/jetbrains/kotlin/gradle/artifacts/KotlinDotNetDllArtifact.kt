@@ -18,7 +18,7 @@ import org.jetbrains.kotlin.gradle.utils.registerArtifact
  * Publishes the self-describing CLR assembly directly.
  *
  * Kotlin metadata is the private Kotlin.Metadata resource inside this DLL, so a Gradle variant
- * must not publish or require the transitional sibling KLIB as a second artifact identity.
+ * must not publish or require a standalone KLIB as a second artifact identity.
  */
 internal val KotlinDotNetDllArtifact = KotlinTargetArtifact { target, apiElements, runtimeElements ->
     if (target !is KotlinDotNetTarget) return@KotlinTargetArtifact

@@ -49,7 +49,7 @@ class K2DotNetCompilerArguments : CommonKlibBasedCompilerArguments() {
 
     @Argument(
         value = "-Xdotnet-produce-library",
-        description = "Produce an experimental <module>.klib/<module>.dll library pair in the -d directory. The library uses the selected target profile and has no entry point.",
+        description = "Produce an experimental self-describing <module>.dll library in the -d directory. The library uses the selected target profile and has no entry point.",
     )
     var dotNetProduceLibrary: Boolean = false
         set(value) {
@@ -59,7 +59,7 @@ class K2DotNetCompilerArguments : CommonKlibBasedCompilerArguments() {
 
     @Argument(
         value = "-Xdotnet-produce-stdlib",
-        description = "Produce the experimental Kotlin.Stdlib.klib/Kotlin.Stdlib.dll pair in the -d directory. The library uses the selected net48, netstandard2.0, or net10.0 target profile. This build mode accepts no user source files.",
+        description = "Produce the experimental self-describing Kotlin.Stdlib.dll in the -d directory. The library uses the selected net48, netstandard2.0, or net10.0 target profile. This build mode accepts no user source files.",
     )
     var dotNetProduceStdlib: Boolean = false
         set(value) {
@@ -125,7 +125,7 @@ class K2DotNetCompilerArguments : CommonKlibBasedCompilerArguments() {
 
     @Argument(
         value = "-no-stdlib",
-        description = "Don't automatically add the bundled Kotlin stdlib metadata to the classpath.",
+        description = "Don't automatically add the bundled Kotlin/.NET stdlib DLL to the classpath.",
     )
     var noStdlib: Boolean = false
         set(value) {

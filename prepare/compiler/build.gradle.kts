@@ -460,7 +460,7 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
     val outputDirectory = dotNetStdlibOutputDirectories.getValue(targetFramework)
     tasks.register<JavaExec>("produceDotNetStdlib$taskSuffix") {
         group = "distribution"
-        description = "Produces the experimental $targetFramework Kotlin/.NET stdlib KLIB/DLL pair."
+        description = "Produces the experimental $targetFramework self-describing Kotlin/.NET stdlib DLL."
         dependsOn(distKotlinc)
 
         classpath = fileTree(File("$distDir/kotlinc/lib")) {
@@ -476,7 +476,6 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
         )
 
         outputs.files(
-            outputDirectory.map { it.file("Kotlin.Stdlib.klib") },
             outputDirectory.map { it.file("Kotlin.Stdlib.dll") },
             outputDirectory.map { it.file("Kotlin.Stdlib.il") },
         )
@@ -499,7 +498,7 @@ val installDotNetStdlib = tasks.register<Sync>("installDotNetStdlib") {
     dependsOn(produceDotNetStdlib)
     dotNetStdlibOutputDirectories.forEach { (targetFramework, outputDirectory) ->
         from(outputDirectory) {
-            include("Kotlin.Stdlib.klib", "Kotlin.Stdlib.dll")
+            include("Kotlin.Stdlib.dll")
             into(targetFramework)
         }
     }

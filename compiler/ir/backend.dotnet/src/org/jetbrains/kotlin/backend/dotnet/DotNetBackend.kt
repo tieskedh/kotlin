@@ -109,7 +109,7 @@ object DotNetBackend {
             messageCollector.report(
                 CompilerMessageSeverity.ERROR,
                 "Output assembly '$assemblyName' collides with external Kotlin/.NET library " +
-                        "'${collidingExternalLibrary.metadataFile.path}'."
+                        "'${collidingExternalLibrary.assemblyFile.path}'."
             )
             if (emitsExecutable) binaryOutput.delete()
             ilTarget.delete()
@@ -263,17 +263,16 @@ object DotNetBackend {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
                     "The generated module requires '${DotNetStdlibLibrary.ASSEMBLY_NAME}', but neither " +
-                            "injected implementation source nor a bound metadata-KLIB/CLR-DLL pair was supplied. " +
-                            "Compile without -no-stdlib or add the target stdlib metadata KLIB to the classpath."
+                            "injected implementation source nor a self-describing CLR DLL was supplied. " +
+                            "Compile without -no-stdlib or add the target stdlib DLL to the classpath."
                 )
                 ilTarget.delete()
                 return result(ilTarget)
             }
-            if (!externalStdlib.implementationFile.isFile) {
+            if (!externalStdlib.assemblyFile.isFile) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
-                    "The Kotlin/.NET stdlib metadata '${externalStdlib.metadataFile.path}' is bound to " +
-                            "missing CLR assembly '${externalStdlib.implementationFile.path}'."
+                    "The Kotlin/.NET standard-library assembly '${externalStdlib.assemblyFile.path}' is missing."
                 )
                 ilTarget.delete()
                 return result(ilTarget)
@@ -281,8 +280,8 @@ object DotNetBackend {
             if (emitsExecutable) {
                 val packagedStdlib = (binaryOutput.parentFile ?: File("."))
                     .resolve(DotNetStdlibLibrary.ASSEMBLY_FILE_NAME)
-                if (externalStdlib.implementationFile.canonicalFile != packagedStdlib.canonicalFile) {
-                    externalStdlib.implementationFile.copyTo(packagedStdlib, overwrite = true)
+                if (externalStdlib.assemblyFile.canonicalFile != packagedStdlib.canonicalFile) {
+                    externalStdlib.assemblyFile.copyTo(packagedStdlib, overwrite = true)
                 }
             }
         }
@@ -292,11 +291,10 @@ object DotNetBackend {
             // validated a second time as an arbitrary user library here.
             if (DotNetPlatformAssemblyIdentity.isStdlib(library.artifact.assemblyName)) continue
             if (!referencesAssembly(library.artifact.assemblyName)) continue
-            if (!library.implementationFile.isFile) {
+            if (!library.assemblyFile.isFile) {
                 messageCollector.report(
                     CompilerMessageSeverity.ERROR,
-                    "The Kotlin/.NET metadata '${library.metadataFile.path}' is bound to missing CLR assembly " +
-                            "'${library.implementationFile.path}'."
+                    "The Kotlin/.NET library assembly '${library.assemblyFile.path}' is missing."
                 )
                 ilTarget.delete()
                 return result(ilTarget)
@@ -304,8 +302,8 @@ object DotNetBackend {
             if (emitsExecutable) {
                 val packagedLibrary = (binaryOutput.parentFile ?: File("."))
                     .resolve(library.artifact.assemblyFileName)
-                if (library.implementationFile.canonicalFile != packagedLibrary.canonicalFile) {
-                    library.implementationFile.copyTo(packagedLibrary, overwrite = true)
+                if (library.assemblyFile.canonicalFile != packagedLibrary.canonicalFile) {
+                    library.assemblyFile.copyTo(packagedLibrary, overwrite = true)
                 }
             }
         }

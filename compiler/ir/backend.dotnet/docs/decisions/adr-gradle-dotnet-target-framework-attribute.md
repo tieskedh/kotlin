@@ -57,8 +57,8 @@ a build-model error. Gradle should retain ambiguity until the future built-in ta
 attribute.
 
 The attribute applies to the canonical self-describing DLL. Kotlin metadata is selected
-atomically because it is a private managed resource in that DLL; Gradle must not expose the
-transitional sibling KLIB as another independently selectable artifact.
+atomically because it is a private managed resource in that DLL; Gradle must not expose a
+standalone KLIB as another independently selectable artifact.
 
 ## 5. Alignment with compiler architecture
 

@@ -41,13 +41,11 @@ import org.jetbrains.kotlin.library.metadata.metadataFlags
 import org.jetbrains.kotlin.library.writer.KlibWriter
 import org.jetbrains.kotlin.library.writer.includeMetadata
 import org.jetbrains.kotlin.util.metadataVersion
-import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
 import kotlin.io.path.absolute
 
-/** Serializes the Kotlin declarations paired with one portable CLR implementation assembly. */
+/** Serializes the Kotlin declarations embedded in one profile-specific CLR implementation assembly. */
 object DotNetLibraryMetadataSerializationPipelinePhase :
     PipelinePhase<DotNetFrontendPipelineArtifact, DotNetFrontendPipelineArtifact>(
         name = "DotNetLibraryMetadataSerializationPipelinePhase",
@@ -60,7 +58,8 @@ object DotNetLibraryMetadataSerializationPipelinePhase :
         val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
         val outputDirectory = configuration.dotNetOutput!!
         outputDirectory.mkdirs()
-        outputDirectory.resolve(artifact.metadataFileName).deleteRecursively()
+        outputDirectory.resolve("${artifact.assemblyName}.klib").deleteRecursively()
+        outputDirectory.resolve(".${artifact.assemblyName}.klib.tmp").deleteRecursively()
 
         val metadataVersion = configuration.metadataVersion()
         val fragments = mutableMapOf<String, MutableList<SerializedFirFile>>()
@@ -124,9 +123,8 @@ object DotNetLibraryMetadataSerializationPipelinePhase :
 }
 
 /**
- * Produces both metadata carriers from one serialization result and one physical declaration
- * index. The embedded carrier is self-bound; the transitional sibling additionally binds the
- * final DLL by SHA-256 after assembly.
+ * Produces the private metadata resource from one serialization result and one physical
+ * declaration index. The complete packed KLIB is self-bound to its containing DLL.
  */
 internal object DotNetLibraryMetadataPackager {
     fun createEmbeddedResource(
@@ -144,34 +142,14 @@ internal object DotNetLibraryMetadataPackager {
                 artifact = artifact,
                 metadata = metadata,
                 declarations = declarations,
-                containerFormat = DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
-                implementationBinding = DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
-                implementationSha256 = null,
             )
+            loadSizeInfo(temporaryFile.absolute())?.flatten()?.let { stats ->
+                configuration.perfManager?.registerKlibElementStats(stats)
+            }
             Files.readAllBytes(temporaryFile)
         } finally {
             Files.deleteIfExists(temporaryFile)
         }
-    }
-
-    fun writeSibling(
-        output: Path,
-        configuration: CompilerConfiguration,
-        artifact: DotNetLibraryArtifact,
-        metadata: SerializedMetadata,
-        declarations: Map<String, DotNetPhysicalDeclaration>,
-        implementationFile: java.io.File,
-    ) {
-        writeKlib(
-            output = output,
-            configuration = configuration,
-            artifact = artifact,
-            metadata = metadata,
-            declarations = declarations,
-            containerFormat = DotNetKotlinMetadataResource.SIBLING_KLIB_FORMAT,
-            implementationBinding = DotNetKotlinMetadataResource.SIBLING_SHA256_IMPLEMENTATION_BINDING,
-            implementationSha256 = DotNetLibraryAbiCodec.implementationSha256(implementationFile),
-        )
     }
 
     private fun writeKlib(
@@ -180,9 +158,6 @@ internal object DotNetLibraryMetadataPackager {
         artifact: DotNetLibraryArtifact,
         metadata: SerializedMetadata,
         declarations: Map<String, DotNetPhysicalDeclaration>,
-        containerFormat: String,
-        implementationBinding: String,
-        implementationSha256: String?,
     ) {
         val versions = KotlinLibraryVersioning(
             abiVersion = KotlinAbiVersion.CURRENT,
@@ -212,8 +187,14 @@ internal object DotNetLibraryMetadataPackager {
                         DotNetLibraryArtifact.METADATA_LIBRARY_TARGET_FRAMEWORK_PROPERTY,
                         artifact.targetFramework,
                     )
-                    setProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY, containerFormat)
-                    setProperty(DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY, implementationBinding)
+                    setProperty(
+                        DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY,
+                        DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
+                    )
+                    setProperty(
+                        DotNetKotlinMetadataResource.IMPLEMENTATION_BINDING_PROPERTY,
+                        DotNetKotlinMetadataResource.SELF_IMPLEMENTATION_BINDING,
+                    )
                     setProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY, DotNetLibraryAbiCodec.ABI_VERSION)
                     setProperty(
                         DotNetLibraryAbiCodec.LOGICAL_IDENTITY_SCHEME_PROPERTY,
@@ -231,9 +212,6 @@ internal object DotNetLibraryMetadataPackager {
                         DotNetLibraryAbiCodec.FRIEND_ASSEMBLIES_PROPERTY,
                         DotNetLibraryAbiCodec.encodeFriendAssemblies(configuration.dotNetFriendAssemblies),
                     )
-                    implementationSha256?.let { hash ->
-                        setProperty(DotNetLibraryAbiCodec.IMPLEMENTATION_SHA256_PROPERTY, hash)
-                    }
                     for (entry in DotNetLibraryAbiCodec.encode(declarations)) {
                         setProperty(entry.key, entry.value)
                     }
@@ -244,47 +222,22 @@ internal object DotNetLibraryMetadataPackager {
     }
 }
 
-/** Writes the transitional bound metadata companion after the CLR assembly was produced. */
-object DotNetLibraryMetadataPackagingPipelinePhase :
+/** Closes KLIB performance accounting and removes obsolete sidecars after DLL production. */
+object DotNetLibraryMetadataFinalizationPipelinePhase :
     PipelinePhase<DotNetBackendPipelineArtifact, DotNetBackendPipelineArtifact>(
-        name = "DotNetLibraryMetadataPackagingPipelinePhase",
+        name = "DotNetLibraryMetadataFinalizationPipelinePhase",
         postActions = setOf(PerformanceNotifications.KlibWritingFinished, CheckCompilationErrors.CheckDiagnosticCollector),
     ) {
     override fun executePhase(input: DotNetBackendPipelineArtifact): DotNetBackendPipelineArtifact {
         val configuration = input.configuration
         check(configuration.dotNetProducesStdlib.xor(configuration.dotNetProducesLibrary))
         val artifact = checkNotNull(configuration.dotNetProducedLibraryArtifact)
-        val metadata = checkNotNull(input.libraryMetadata)
         val implementationFile = input.output
         if (!implementationFile.isFile || implementationFile.name != artifact.assemblyFileName) return input
 
         val outputDirectory = configuration.dotNetOutput!!
-        val finalFile = outputDirectory.resolve(artifact.metadataFileName)
-        val temporaryFile = outputDirectory.resolve(".${artifact.metadataFileName}.tmp")
-        temporaryFile.deleteRecursively()
-        DotNetLibraryMetadataPackager.writeSibling(
-            output = temporaryFile.toPath(),
-            configuration = configuration,
-            artifact = artifact,
-            metadata = metadata,
-            declarations = input.declarations,
-            implementationFile = implementationFile,
-        )
-
-        finalFile.deleteRecursively()
-        try {
-            Files.move(
-                temporaryFile.toPath(),
-                finalFile.toPath(),
-                StandardCopyOption.ATOMIC_MOVE,
-                StandardCopyOption.REPLACE_EXISTING,
-            )
-        } catch (_: AtomicMoveNotSupportedException) {
-            Files.move(temporaryFile.toPath(), finalFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        }
-        loadSizeInfo(finalFile.toPath().absolute())?.flatten()?.let { stats ->
-            configuration.perfManager?.registerKlibElementStats(stats)
-        }
+        outputDirectory.resolve("${artifact.assemblyName}.klib").deleteRecursively()
+        outputDirectory.resolve(".${artifact.assemblyName}.klib.tmp").deleteRecursively()
         return input
     }
 }
