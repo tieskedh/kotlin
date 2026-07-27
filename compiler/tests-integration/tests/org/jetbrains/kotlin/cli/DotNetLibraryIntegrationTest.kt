@@ -9076,18 +9076,97 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "Modern Roslyn and the net10 reference pack are not available",
         )
 
+        val runtimeManifestBootstrap = File(tmpdir, "portable-surface-runtime-manifest-bootstrap")
+            .apply { mkdirs() }
+        val runtimeManifestBootstrapSource = runtimeManifestBootstrap.resolve("bootstrap.kt").apply {
+            writeText("fun main() {}")
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            runtimeManifestBootstrapSource.path,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "PortableSurfaceRuntimeBootstrap",
+            K2DotNetCompilerArguments::destination.cliArgument,
+            runtimeManifestBootstrap.resolve("PortableSurfaceRuntimeBootstrap.dll").path,
+        )
+        val runtimeCSharpManifest = readCSharpImplementationManifestEnvelope(
+            runtimeManifestBootstrap.resolve("Kotlin.Runtime.dll"),
+        )
         val pairDirectories = listOf("netstandard2.0", "net48", "net10.0").associateWith { target ->
             produceBoundStdlibPair(target, "portable-abi-superset")
         }
         val runtimeAssemblies = DotNetTarget.entries.associateWith { target ->
             val outputDirectory = File(tmpdir, "portable-surface-runtime-${target.flagValue}")
-            val runtime = DotNetIlAssembler.assembleRuntimeForTests(
+            val runtime = DotNetIlAssembler.assembleRuntimeWithManifestForTests(
                 outputDirectory,
                 target,
+                runtimeCSharpManifest.copy(targetProfile = target.flagValue),
                 MessageCollector.NONE,
             )
             assertTrue(runtime?.isFile == true) { "Failed to produce ${target.flagValue} Kotlin.Runtime.dll" }
             checkNotNull(runtime)
+        }
+        val methodImplSource = File(tmpdir, "portable-methodimpl.kt").apply {
+            writeText(
+                """
+                package portablemethodimpl
+
+                public interface ProfileDefault<T> {
+                    public fun transform(value: T): T = value
+                    public fun <R> echo(value: R): R = value
+
+                    public var code: Int
+                        get() = 42
+                        set(value) {
+                            if (value == 0) return
+                        }
+                }
+
+                public class ProfileDefaultImpl<T> : ProfileDefault<T>
+                """.trimIndent()
+            )
+        }
+        val methodImplLibraries = listOf("netstandard2.0", "net48", "net10.0")
+            .associateWith { target ->
+                val outputDirectory = File(tmpdir, "portable-methodimpl-$target")
+                compileInProcess(
+                    K2DotNetCompiler(),
+                    methodImplSource.path,
+                    K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+                    K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                    K2DotNetCompilerArguments::moduleName.cliArgument, "Portable.MethodImpl",
+                    K2DotNetCompilerArguments::destination.cliArgument, outputDirectory.path,
+                )
+                outputDirectory.resolve("Portable.MethodImpl.dll").also { assembly ->
+                    assertTrue(assembly.isFile) { "Missing MethodImpl fixture for $target" }
+                }
+            }
+        for (portableTarget in listOf("netstandard2.0", "net48")) {
+            val assembly = methodImplLibraries.getValue(portableTarget)
+            val il = checkNotNull(assembly.parentFile)
+                .resolve("Portable.MethodImpl.il")
+                .readText()
+            assertTrue("<GenericInterfaceDefaultForwarderTarget-" in il) { il }
+        }
+        val modernMethodImplAssembly = methodImplLibraries.getValue("net10.0")
+        val modernMethodImplIl = checkNotNull(modernMethodImplAssembly.parentFile)
+            .resolve("Portable.MethodImpl.il")
+            .readText()
+        assertTrue("<GenericInterfaceDefaultForwarderTarget-" !in modernMethodImplIl) {
+            modernMethodImplIl
+        }
+        assertTrue("<GenericInterfaceDefaultErasedAdapter-" in modernMethodImplIl) {
+            modernMethodImplIl
+        }
+        assertTrue(
+            "specialname newslot virtual instance int32 'get_code'()" in modernMethodImplIl
+        ) {
+            modernMethodImplIl
+        }
+        assertTrue(
+            "specialname newslot virtual instance void 'set_code'(int32 'value')" in modernMethodImplIl
+        ) {
+            modernMethodImplIl
         }
         val surfaceVerifierSource = File(
             "compiler/testData/codegen/dotnet/portableSurfaceVerifier.cs"
@@ -9186,7 +9265,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "$target is not an externally consumable CLR metadata superset of netstandard2.0:\n" +
                         comparisonOutput,
             )
-            assertTrue(Regex("OK [1-9][0-9]*").matches(comparisonOutput.trim())) { comparisonOutput }
+            assertTrue(Regex("OK [1-9][0-9]* SLOTS [0-9]+").matches(comparisonOutput.trim())) {
+                comparisonOutput
+            }
+
+            val methodImplComparison = ProcessBuilder(
+                checkNotNull(csharpToolchain).dotNetHost.path,
+                "exec",
+                surfaceVerifier.path,
+                runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
+                runtimeAssemblies.getValue(checkNotNull(DotNetTarget.fromFlagValue(target))).path,
+                methodImplLibraries.getValue("netstandard2.0").path,
+                methodImplLibraries.getValue(target).path,
+            ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
+            val methodImplOutput =
+                methodImplComparison.inputStream.bufferedReader().use { it.readText() }
+            assertEquals(
+                0,
+                methodImplComparison.waitFor(),
+                "$target did not preserve portable semantic slot satisfaction:\n$methodImplOutput",
+            )
+            assertTrue(Regex("OK [1-9][0-9]* SLOTS [1-9][0-9]*").matches(methodImplOutput.trim())) {
+                methodImplOutput
+            }
         }
 
         val corruptedStdlib = File(
@@ -9211,6 +9312,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             "The raw resource audit accepted a missing portable logical declaration"
         }
         assertTrue("MISSING MANIFEST DECLARATION" in corruptedOutput) { corruptedOutput }
+
+        val corruptedMethodImpl = File(
+            tmpdir,
+            "portable-methodimpl-corrupted/Portable.MethodImpl.dll",
+        )
+        corruptCSharpManifestSlotMethodName(
+            methodImplLibraries.getValue("net10.0"),
+            corruptedMethodImpl,
+        )
+        val corruptedMethodImplComparison = ProcessBuilder(
+            checkNotNull(csharpToolchain).dotNetHost.path,
+            "exec",
+            surfaceVerifier.path,
+            runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
+            runtimeAssemblies.getValue(DotNetTarget.NET10_0).path,
+            methodImplLibraries.getValue("netstandard2.0").path,
+            corruptedMethodImpl.path,
+        ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
+        val corruptedMethodImplOutput =
+            corruptedMethodImplComparison.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(corruptedMethodImplComparison.waitFor() != 0) {
+            "The MethodImpl audit accepted a name-only manifest slot match"
+        }
+        assertTrue("UNRESOLVED MANIFEST SLOT" in corruptedMethodImplOutput) {
+            corruptedMethodImplOutput
+        }
 
     }
 
@@ -14213,25 +14340,42 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         return Base64.getDecoder().decode(output.trim())
     }
 
-    private fun corruptCSharpManifestLogicalDeclaration(
+    private fun readCSharpImplementationManifestEnvelope(
         assembly: File,
-        output: File,
-    ) {
+    ): DotNetCSharpImplementationManifest {
         val image = assembly.readBytes()
+        val envelopeOffset = findCSharpImplementationManifestEnvelope(image)
+        val payloadSize = readLittleEndianInt(image, envelopeOffset + 12)
+        val envelopeSize = 48 + payloadSize
+        require(payloadSize >= 0 && envelopeOffset + envelopeSize <= image.size)
+        return DotNetCSharpImplementationManifestCodec.decodeManagedResource(
+            image.copyOfRange(envelopeOffset, envelopeOffset + envelopeSize),
+        )
+    }
+
+    private fun findCSharpImplementationManifestEnvelope(image: ByteArray): Int {
         val magic = "KDNCSM01".toByteArray(Charsets.US_ASCII)
         val offsets = image.indices.filter { offset ->
             offset + magic.size <= image.size &&
                     magic.indices.all { index -> image[offset + index] == magic[index] }
         }
         assertEquals(1, offsets.size, "Expected one C# implementation manifest envelope")
-        val envelopeOffset = offsets.single()
-        fun readLittleEndianInt(offset: Int): Int =
-            image[offset].toInt() and 0xff or
-                    ((image[offset + 1].toInt() and 0xff) shl 8) or
-                    ((image[offset + 2].toInt() and 0xff) shl 16) or
-                    ((image[offset + 3].toInt() and 0xff) shl 24)
+        return offsets.single()
+    }
 
-        val payloadSize = readLittleEndianInt(envelopeOffset + 12)
+    private fun readLittleEndianInt(bytes: ByteArray, offset: Int): Int =
+        bytes[offset].toInt() and 0xff or
+                ((bytes[offset + 1].toInt() and 0xff) shl 8) or
+                ((bytes[offset + 2].toInt() and 0xff) shl 16) or
+                ((bytes[offset + 3].toInt() and 0xff) shl 24)
+
+    private fun corruptCSharpManifestLogicalDeclaration(
+        assembly: File,
+        output: File,
+    ) {
+        val image = assembly.readBytes()
+        val envelopeOffset = findCSharpImplementationManifestEnvelope(image)
+        val payloadSize = readLittleEndianInt(image, envelopeOffset + 12)
         val payloadOffset = envelopeOffset + 48
         require(payloadSize >= 0 && payloadOffset + payloadSize <= image.size)
         val payload = image.copyOfRange(payloadOffset, payloadOffset + payloadSize)
@@ -14251,6 +14395,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val corruptedPayloadText = encodedPayload.replaceFirst(
             "I\t$encodedLogicalKey\t",
             "I\t$replacementField\t",
+        )
+        val corruptedPayload = corruptedPayloadText.toByteArray(Charsets.UTF_8)
+        assertEquals(payload.size, corruptedPayload.size)
+        corruptedPayload.copyInto(image, payloadOffset)
+        MessageDigest.getInstance("SHA-256")
+            .digest(corruptedPayload)
+            .copyInto(image, envelopeOffset + 16)
+        output.parentFile?.mkdirs()
+        output.writeBytes(image)
+    }
+
+    private fun corruptCSharpManifestSlotMethodName(
+        assembly: File,
+        output: File,
+    ) {
+        val image = assembly.readBytes()
+        val envelopeOffset = findCSharpImplementationManifestEnvelope(image)
+        val payloadSize = readLittleEndianInt(image, envelopeOffset + 12)
+        val payloadOffset = envelopeOffset + 48
+        require(payloadSize >= 0 && payloadOffset + payloadSize <= image.size)
+        val payload = image.copyOfRange(payloadOffset, payloadOffset + payloadSize)
+        val encodedPayload = payload.toString(Charsets.UTF_8)
+        val slotRecord = encodedPayload.lineSequence()
+            .first { record -> record.startsWith("S\t") }
+        val fields = slotRecord.split('\t').toMutableList()
+        assertEquals(9, fields.size)
+        val encodedMethodName = fields[4]
+        val methodName = Base64.getUrlDecoder()
+            .decode(encodedMethodName)
+            .toString(Charsets.UTF_8)
+        val replacementLastCharacter = if (methodName.last() == 'X') 'Y' else 'X'
+        val replacementMethodName = methodName.dropLast(1) + replacementLastCharacter
+        val replacementField = Base64.getUrlEncoder()
+            .withoutPadding()
+            .encodeToString(replacementMethodName.toByteArray(Charsets.UTF_8))
+        assertEquals(encodedMethodName.length, replacementField.length)
+        fields[4] = replacementField
+        val corruptedPayloadText = encodedPayload.replaceFirst(
+            slotRecord,
+            fields.joinToString("\t"),
         )
         val corruptedPayload = corruptedPayloadText.toByteArray(Charsets.UTF_8)
         assertEquals(payload.size, corruptedPayload.size)

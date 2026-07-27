@@ -83,19 +83,75 @@ internal static class Program
         internal CSharpManifestContract(
             int schemaVersion,
             string assemblyName,
+            string targetProfile,
             string logicalIdentityScheme,
-            HashSet<string> logicalDeclarations)
+            HashSet<string> logicalDeclarations,
+            List<CSharpManifestSlot> slots)
         {
             SchemaVersion = schemaVersion;
             AssemblyName = assemblyName;
+            TargetProfile = targetProfile;
             LogicalIdentityScheme = logicalIdentityScheme;
             LogicalDeclarations = logicalDeclarations;
+            Slots = slots;
         }
 
         internal int SchemaVersion { get; }
         internal string AssemblyName { get; }
+        internal string TargetProfile { get; }
         internal string LogicalIdentityScheme { get; }
         internal HashSet<string> LogicalDeclarations { get; }
+        internal List<CSharpManifestSlot> Slots { get; }
+    }
+
+    private sealed class CSharpManifestSlot
+    {
+        internal CSharpManifestSlot(
+            string assemblyName,
+            string logicalKey,
+            string role,
+            string ownerPath,
+            string methodName,
+            int genericArity,
+            string returnType,
+            string[] parameterTypes,
+            string defaultKind,
+            string semanticBodyView)
+        {
+            AssemblyName = assemblyName;
+            LogicalKey = logicalKey;
+            Role = role;
+            OwnerPath = ownerPath;
+            MethodName = methodName;
+            GenericArity = genericArity;
+            ReturnType = returnType;
+            ParameterTypes = parameterTypes;
+            DefaultKind = defaultKind;
+            SemanticBodyView = semanticBodyView;
+        }
+
+        internal string AssemblyName { get; }
+        internal string LogicalKey { get; }
+        internal string Role { get; }
+        internal string OwnerPath { get; }
+        internal string MethodName { get; }
+        internal int GenericArity { get; }
+        internal string ReturnType { get; }
+        internal string[] ParameterTypes { get; }
+        internal string DefaultKind { get; }
+        internal string SemanticBodyView { get; }
+
+        internal string SemanticKey =>
+            AssemblyName + "|" + LogicalKey + "|" + Role;
+
+        internal string LocatorKey =>
+            OwnerPath + "|" + MethodName + "|" +
+            GenericArity.ToString(CultureInfo.InvariantCulture) + "|" +
+            NormalizeManifestType(ReturnType, AssemblyName) + "|(" +
+            string.Join(
+                ",",
+                ParameterTypes.Select(type => NormalizeManifestType(type, AssemblyName))) +
+            ")";
     }
 
     private static int Main(string[] args)
@@ -111,25 +167,45 @@ internal static class Program
         PairLoadContext platformContext = new PairLoadContext(Path.GetDirectoryName(Path.GetFullPath(args[1])));
         try
         {
-            Dictionary<string, SurfaceItem> portable = Capture(
+            Assembly[] portableAssemblies =
+            {
                 portableContext.LoadFromAssemblyPath(Path.GetFullPath(args[0])),
-                portableContext.LoadFromAssemblyPath(Path.GetFullPath(args[2])));
-            Dictionary<string, SurfaceItem> platform = Capture(
+                portableContext.LoadFromAssemblyPath(Path.GetFullPath(args[2])),
+            };
+            Assembly[] platformAssemblies =
+            {
                 platformContext.LoadFromAssemblyPath(Path.GetFullPath(args[1])),
-                platformContext.LoadFromAssemblyPath(Path.GetFullPath(args[3])));
+                platformContext.LoadFromAssemblyPath(Path.GetFullPath(args[3])),
+            };
+            Dictionary<string, SurfaceItem> portable = Capture(portableAssemblies);
+            Dictionary<string, SurfaceItem> platform = Capture(platformAssemblies);
             Dictionary<string, ResourceItem> portableResources =
                 CaptureResources(args[0], args[2]);
             Dictionary<string, ResourceItem> platformResources =
                 CaptureResources(args[1], args[3]);
             if (portable.Count == 0)
                 throw new InvalidOperationException("The portable CLR surface is empty.");
-            string expectedManifestKey = "Kotlin.Stdlib|" + CSharpManifestResourceName;
-            if (!portableResources.ContainsKey(expectedManifestKey))
+            if (!portableResources.Values.Any(resource => resource.Manifest != null))
                 throw new InvalidOperationException(
-                    "The portable stdlib has no embedded C# implementation manifest.");
+                    "The portable pair has no embedded C# implementation manifest.");
 
             List<string> differences = Compare(portable, platform);
             differences.AddRange(CompareResources(portableResources, platformResources));
+            HashSet<string> portableSatisfactions =
+                CaptureSlotSatisfactions(
+                    portableAssemblies,
+                    portableResources,
+                    differences,
+                    "PORTABLE");
+            HashSet<string> platformSatisfactions =
+                CaptureSlotSatisfactions(
+                    platformAssemblies,
+                    platformResources,
+                    differences,
+                    "PLATFORM");
+            differences.AddRange(CompareSlotContracts(portableResources, platformResources));
+            differences.AddRange(
+                CompareSlotSatisfactions(portableSatisfactions, platformSatisfactions));
             if (differences.Count != 0)
             {
                 foreach (string difference in differences)
@@ -138,8 +214,13 @@ internal static class Program
             }
 
             Console.WriteLine(
-                "OK " + (portable.Count + portableResources.Count)
-                    .ToString(CultureInfo.InvariantCulture));
+                "OK " + (
+                    portable.Count +
+                    portableResources.Count +
+                    portableSatisfactions.Count)
+                    .ToString(CultureInfo.InvariantCulture) +
+                " SLOTS " +
+                portableSatisfactions.Count.ToString(CultureInfo.InvariantCulture));
             return 0;
         }
         catch (Exception failure)
@@ -349,6 +430,8 @@ internal static class Program
             throw new BadImageFormatException(
                 "The C# implementation manifest has an unknown logical-identity scheme.");
         var logicalDeclarations = new HashSet<string>(StringComparer.Ordinal);
+        var defaultKinds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var semanticBodyViews = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (string record in records)
         {
             string[] fields = record.Split('\t');
@@ -356,18 +439,65 @@ internal static class Program
             if (fields[0] == "I" && fields.Length == 8)
                 logicalKey = DecodeManifestField(fields[1]);
             else if (fields[0] == "M" && fields.Length == 13)
+            {
                 logicalKey = DecodeManifestField(fields[2]);
+                defaultKinds.Add(logicalKey, DecodeManifestField(fields[6]));
+                semanticBodyViews.Add(
+                    logicalKey,
+                    DecodeNullableManifestField(fields[7]));
+            }
             else if (fields[0] == "X" && fields.Length == 8)
                 logicalKey = DecodeManifestField(fields[2]);
             if (logicalKey != null && !logicalDeclarations.Add(logicalKey))
                 throw new BadImageFormatException(
                     "Duplicate C# implementation logical declaration: " + logicalKey);
         }
+        var slots = new List<CSharpManifestSlot>();
+        foreach (string record in records)
+        {
+            string[] fields = record.Split('\t');
+            if ((fields[0] != "S" && fields[0] != "Y") || fields.Length != 9)
+                continue;
+            string logicalKey = DecodeManifestField(fields[1]);
+            string role = DecodeManifestField(fields[2]);
+            string ownerPath = DecodeManifestField(fields[3]);
+            string methodName = DecodeManifestField(fields[4]);
+            int genericArity = int.Parse(
+                DecodeManifestField(fields[6]),
+                CultureInfo.InvariantCulture);
+            string returnType = DecodeManifestField(fields[7]);
+            string parameters = DecodeManifestField(fields[8]);
+            slots.Add(
+                new CSharpManifestSlot(
+                    assemblyName,
+                    logicalKey,
+                    role,
+                    ownerPath,
+                    methodName,
+                    genericArity,
+                    returnType,
+                    parameters.Length == 0
+                        ? Array.Empty<string>()
+                        : parameters.Split('\0'),
+                    defaultKinds.TryGetValue(logicalKey, out string defaultKind)
+                        ? defaultKind
+                        : null,
+                    semanticBodyViews.TryGetValue(logicalKey, out string semanticBodyView)
+                        ? semanticBodyView
+                        : null));
+        }
+        foreach (IGrouping<string, CSharpManifestSlot> duplicate in slots
+            .GroupBy(slot => slot.SemanticKey, StringComparer.Ordinal)
+            .Where(group => group.Count() != 1))
+            throw new BadImageFormatException(
+                "Duplicate C# implementation semantic slot: " + duplicate.Key);
         return new CSharpManifestContract(
             schemaVersion,
             assemblyName,
+            targetProfile,
             logicalIdentityScheme,
-            logicalDeclarations);
+            logicalDeclarations,
+            slots);
     }
 
     private static string DecodeManifestField(string encoded)
@@ -379,6 +509,9 @@ internal static class Program
         base64 = base64.PadRight(base64.Length + ((4 - base64.Length % 4) % 4), '=');
         return StrictUtf8.GetString(Convert.FromBase64String(base64));
     }
+
+    private static string DecodeNullableManifestField(string encoded) =>
+        encoded == "~" ? null : DecodeManifestField(encoded);
 
     private static int ReadInt32LittleEndian(byte[] bytes, int offset) =>
         bytes[offset] |
@@ -433,6 +566,327 @@ internal static class Program
                         "MISSING MANIFEST DECLARATION|" + required.Key + "|" +
                         logicalDeclaration);
             }
+        }
+        return differences;
+    }
+
+    private static List<string> CompareSlotContracts(
+        Dictionary<string, ResourceItem> portable,
+        Dictionary<string, ResourceItem> platform)
+    {
+        var differences = new List<string>();
+        foreach (ResourceItem requiredResource in portable.Values
+            .Where(resource => resource.Manifest != null)
+            .OrderBy(resource => resource.Key, StringComparer.Ordinal))
+        {
+            if (!platform.TryGetValue(requiredResource.Key, out ResourceItem actualResource) ||
+                actualResource.Manifest == null)
+                continue;
+            Dictionary<string, CSharpManifestSlot> actualSlots = actualResource.Manifest.Slots
+                .ToDictionary(slot => slot.SemanticKey, StringComparer.Ordinal);
+            foreach (CSharpManifestSlot required in requiredResource.Manifest.Slots
+                .OrderBy(slot => slot.SemanticKey, StringComparer.Ordinal))
+            {
+                if (!actualSlots.TryGetValue(required.SemanticKey, out CSharpManifestSlot actual))
+                {
+                    differences.Add("MISSING SEMANTIC SLOT|" + required.SemanticKey);
+                    continue;
+                }
+                if (!string.Equals(
+                        required.LocatorKey,
+                        actual.LocatorKey,
+                        StringComparison.Ordinal))
+                    differences.Add(
+                        "CHANGED SEMANTIC SLOT|" + required.SemanticKey +
+                        "|portable=" + required.LocatorKey +
+                        "|platform=" + actual.LocatorKey);
+            }
+        }
+        return differences;
+    }
+
+    private static HashSet<string> CaptureSlotSatisfactions(
+        Assembly[] assemblies,
+        Dictionary<string, ResourceItem> resources,
+        List<string> differences,
+        string side)
+    {
+        Dictionary<string, CSharpManifestSlot> slotsByMethod =
+            ResolveManifestSlots(assemblies, resources, differences, side);
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        foreach (Assembly assembly in assemblies.OrderBy(
+            value => value.GetName().Name,
+            StringComparer.Ordinal))
+        {
+            foreach (Type type in assembly.GetTypes().OrderBy(TypeIdentity, StringComparer.Ordinal))
+            {
+                if (type.IsInterface)
+                    continue;
+                bool externallyConsumable = TypeAccess(type) != 0;
+                foreach (Type implemented in type.GetInterfaces()
+                    .OrderBy(TypeIdentity, StringComparer.Ordinal))
+                {
+                    InterfaceMapping mapping;
+                    try
+                    {
+                        mapping = type.GetInterfaceMap(implemented);
+                    }
+                    catch (Exception failure)
+                    {
+                        if (!type.IsAbstract)
+                            differences.Add(
+                                "UNRESOLVED INTERFACE MAP|" + side + "|" +
+                                TypeIdentity(type) + "|" + TypeIdentity(implemented) +
+                                "|" + failure.GetType().FullName);
+                        continue;
+                    }
+                    for (int index = 0; index < mapping.InterfaceMethods.Length; index++)
+                    {
+                        MethodInfo declaration = mapping.InterfaceMethods[index];
+                        if (!slotsByMethod.TryGetValue(
+                                MethodDefinitionKey(declaration),
+                                out CSharpManifestSlot slot) ||
+                            slot.Role == "HELPER")
+                            continue;
+                        MethodInfo target = mapping.TargetMethods[index];
+                        string signature = ConstructedMethodShape(declaration);
+                        string key =
+                            TypeIdentity(type) + "|" + slot.SemanticKey + "|" + signature;
+                        if (target == null || target.IsAbstract)
+                        {
+                            if (!type.IsAbstract)
+                                differences.Add(
+                                    "MISSING SLOT SATISFIER|" + side + "|" + key);
+                            continue;
+                        }
+                        if (!externallyConsumable)
+                            continue;
+                        if (!result.Add(key))
+                            differences.Add(
+                                "AMBIGUOUS SLOT SATISFIER|" + side + "|" + key);
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private static Dictionary<string, CSharpManifestSlot> ResolveManifestSlots(
+        Assembly[] assemblies,
+        Dictionary<string, ResourceItem> resources,
+        List<string> differences,
+        string side)
+    {
+        Dictionary<string, Assembly> assembliesByName = assemblies.ToDictionary(
+            assembly => assembly.GetName().Name,
+            StringComparer.Ordinal);
+        var result = new Dictionary<string, CSharpManifestSlot>(StringComparer.Ordinal);
+        foreach (CSharpManifestContract manifest in resources.Values
+            .Where(resource => resource.Manifest != null)
+            .Select(resource => resource.Manifest)
+            .OrderBy(value => value.AssemblyName, StringComparer.Ordinal))
+        {
+            if (!assembliesByName.TryGetValue(manifest.AssemblyName, out Assembly assembly))
+            {
+                differences.Add(
+                    "MISSING MANIFEST ASSEMBLY|" + side + "|" + manifest.AssemblyName);
+                continue;
+            }
+            foreach (CSharpManifestSlot slot in manifest.Slots
+                .OrderBy(value => value.SemanticKey, StringComparer.Ordinal))
+            {
+                MethodInfo[] candidates = assembly.GetTypes()
+                    .Where(type =>
+                        string.Equals(TypePath(type), slot.OwnerPath, StringComparison.Ordinal))
+                    .SelectMany(type => type.GetMethods(
+                        BindingFlags.Public |
+                        BindingFlags.NonPublic |
+                        BindingFlags.Instance |
+                        BindingFlags.Static |
+                        BindingFlags.DeclaredOnly))
+                    .Where(method => ManifestSlotMatches(method, slot))
+                    .ToArray();
+                if (candidates.Length == 0)
+                {
+                    differences.Add(
+                        "UNRESOLVED MANIFEST SLOT|" + side + "|" +
+                        slot.SemanticKey + "|" + slot.LocatorKey);
+                    continue;
+                }
+                if (candidates.Length != 1)
+                {
+                    differences.Add(
+                        "AMBIGUOUS MANIFEST SLOT|" + side + "|" +
+                        slot.SemanticKey + "|" + slot.LocatorKey);
+                    continue;
+                }
+                MethodInfo method = candidates[0];
+                if ((slot.DefaultKind == "PORTABLE_HELPER" ||
+                        slot.DefaultKind == "DIM_WITH_HELPER") &&
+                    slot.Role == "HELPER" &&
+                    method.IsAbstract)
+                    differences.Add(
+                        "MISSING HELPER BODY|" + side + "|" + slot.SemanticKey);
+                if (slot.DefaultKind == "DIM_WITH_HELPER" &&
+                    slot.SemanticBodyView == null)
+                    differences.Add(
+                        "MISSING SEMANTIC BODY VIEW|" + side + "|" + slot.SemanticKey);
+                if (slot.DefaultKind == "DIM_WITH_HELPER" &&
+                    string.Equals(
+                        slot.Role,
+                        slot.SemanticBodyView,
+                        StringComparison.Ordinal) &&
+                    string.Equals(manifest.TargetProfile, "net10.0", StringComparison.Ordinal) &&
+                    method.IsAbstract)
+                    differences.Add(
+                        "MISSING DIM BODY|" + side + "|" + slot.SemanticKey);
+                string methodKey = MethodDefinitionKey(method);
+                if (result.TryGetValue(methodKey, out CSharpManifestSlot previous))
+                    differences.Add(
+                        "AMBIGUOUS LOGICAL METHOD|" + side + "|" + methodKey +
+                        "|" + previous.SemanticKey + "|" + slot.SemanticKey);
+                else
+                    result.Add(methodKey, slot);
+            }
+        }
+        return result;
+    }
+
+    private static bool ManifestSlotMatches(MethodInfo method, CSharpManifestSlot slot)
+    {
+        if (!string.Equals(method.Name, slot.MethodName, StringComparison.Ordinal))
+            return false;
+        if (method.GetGenericArguments().Length != slot.GenericArity)
+            return false;
+        string assemblyName = method.Module.Assembly.GetName().Name;
+        if (!string.Equals(
+                RenderIlType(method.ReturnType, assemblyName),
+                NormalizeManifestType(slot.ReturnType, assemblyName),
+                StringComparison.Ordinal))
+            return false;
+        ParameterInfo[] parameters = method.GetParameters();
+        if (parameters.Length != slot.ParameterTypes.Length)
+            return false;
+        for (int index = 0; index < parameters.Length; index++)
+        {
+            if (!string.Equals(
+                    RenderIlType(parameters[index].ParameterType, assemblyName),
+                    NormalizeManifestType(slot.ParameterTypes[index], assemblyName),
+                    StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
+
+    private static string NormalizeManifestType(string type, string currentAssembly) =>
+        type.Replace("[" + currentAssembly + "]", "");
+
+    private static string RenderIlType(Type type, string currentAssembly)
+    {
+        if (type.IsGenericParameter)
+            return (type.DeclaringMethod == null ? "!" : "!!") +
+                type.GenericParameterPosition.ToString(CultureInfo.InvariantCulture);
+        if (type.IsByRef)
+            return RenderIlType(type.GetElementType(), currentAssembly) + "&";
+        if (type.IsPointer)
+            return RenderIlType(type.GetElementType(), currentAssembly) + "*";
+        if (type.IsArray)
+        {
+            if (type.GetArrayRank() == 1)
+                return RenderIlType(type.GetElementType(), currentAssembly) + "[]";
+            return RenderIlType(type.GetElementType(), currentAssembly) + "[" +
+                new string(',', type.GetArrayRank() - 1) + "]";
+        }
+        if (type == typeof(void))
+            return "void";
+        if (type == typeof(bool))
+            return "bool";
+        if (type == typeof(byte))
+            return "uint8";
+        if (type == typeof(sbyte))
+            return "int8";
+        if (type == typeof(char))
+            return "char";
+        if (type == typeof(short))
+            return "int16";
+        if (type == typeof(ushort))
+            return "uint16";
+        if (type == typeof(int))
+            return "int32";
+        if (type == typeof(uint))
+            return "uint32";
+        if (type == typeof(long))
+            return "int64";
+        if (type == typeof(ulong))
+            return "uint64";
+        if (type == typeof(float))
+            return "float32";
+        if (type == typeof(double))
+            return "float64";
+        if (type == typeof(string))
+            return "string";
+        if (type == typeof(object))
+            return "object";
+        if (type == typeof(IntPtr))
+            return "native int";
+        if (type == typeof(UIntPtr))
+            return "native uint";
+        Type definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+        string assemblyName = definition.Assembly.GetName().Name;
+        string scope = string.Equals(
+            assemblyName,
+            currentAssembly,
+            StringComparison.Ordinal)
+                ? ""
+                : "[" + assemblyName + "]";
+        string result =
+            (definition.IsValueType ? "valuetype " : "class ") +
+            scope +
+            string.Join(
+                "/",
+                TypePath(definition).Split('\0').Select(IlIdentifier));
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+            result += "<" + string.Join(
+                ",",
+                type.GetGenericArguments().Select(argument =>
+                    RenderIlType(argument, currentAssembly))) + ">";
+        return result;
+    }
+
+    private static string IlIdentifier(string value) =>
+        "'" + value.Replace("\\", "\\\\").Replace("'", "\\'") + "'";
+
+    private static string TypePath(Type type)
+    {
+        if (type.DeclaringType != null)
+            return TypePath(type.DeclaringType) + "\0" + type.Name;
+        return string.IsNullOrEmpty(type.Namespace)
+            ? type.Name
+            : type.Namespace + "." + type.Name;
+    }
+
+    private static string MethodDefinitionKey(MethodInfo method) =>
+        method.Module.Assembly.GetName().Name + "|" +
+        method.MetadataToken.ToString(CultureInfo.InvariantCulture);
+
+    private static string ConstructedMethodShape(MethodInfo method) =>
+        TypeIdentity(method.DeclaringType) + "|" + method.Name + "|" +
+        method.GetGenericArguments().Length.ToString(CultureInfo.InvariantCulture) +
+        "|(" + string.Join(
+            ",",
+            method.GetParameters().Select(parameter =>
+                TypeIdentity(parameter.ParameterType))) + ")->" +
+        TypeIdentity(method.ReturnType);
+
+    private static List<string> CompareSlotSatisfactions(
+        HashSet<string> portable,
+        HashSet<string> platform)
+    {
+        var differences = new List<string>();
+        foreach (string required in portable.OrderBy(value => value, StringComparer.Ordinal))
+        {
+            if (!platform.Contains(required))
+                differences.Add("MISSING SLOT SATISFACTION|" + required);
         }
         return differences;
     }

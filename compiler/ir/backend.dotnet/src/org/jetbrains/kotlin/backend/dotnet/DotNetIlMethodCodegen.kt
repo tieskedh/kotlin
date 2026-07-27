@@ -56,7 +56,7 @@ import org.jetbrains.kotlin.ir.types.defaultType as typeParameterDefaultType
 import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
-import org.jetbrains.kotlin.ir.util.isAccessor
+import org.jetbrains.kotlin.ir.util.isPropertyAccessor
 import org.jetbrains.kotlin.ir.util.isFalseConst
 import org.jetbrains.kotlin.ir.util.isInterface
 import org.jetbrains.kotlin.ir.util.isOriginallyLocalDeclaration
@@ -185,7 +185,7 @@ internal class DotNetIlMethodCodegen(
                 // Members of the inheritance model additionally carry virtual flags — see
                 // [dotNetVirtualFlags].
                 val visibility = function.dotNetMemberVisibility()
-                val specialname = if (function.isAccessor) "specialname " else ""
+                val specialname = if (function.isPropertyAccessor) "specialname " else ""
                 val dispatch = if (signature.hasThis) "instance" else "static"
                 val methodName = functionInfo.physicalMethodName
                     ?: (function as IrSimpleFunction).dotNetIlMethodName()
