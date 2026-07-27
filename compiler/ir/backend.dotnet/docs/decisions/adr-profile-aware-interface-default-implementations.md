@@ -119,6 +119,9 @@ typed C# surface and reaches that canonical DIM without an erased-result cast. A
 or erased view which cannot expose the same physical signature adapts by virtually dispatching to
 the canonical typed slot, boxing, casting, or widening only when that view's own ABI requires it.
 Explicit `MethodImpl` rows bind every physical view to the one logical override group.
+When that body or adapter is a property accessor, every view which owns the corresponding CLR
+Property row retains `specialname`; moving the body into a DIM must not degrade the property into
+an ordinary method for reflection or C#.
 
 When a concrete non-generic `net10.0` interface overrides a member inherited from a split generic
 interface, that interface owns one complete canonical/declared/exact adapter bundle. Each final
@@ -265,6 +268,28 @@ profile:
 This is required for upward compatibility: targeting `net10.0` does not make an abstract portable
 slot executable by itself, while a recorded DIM promotion is a real implementation the CLR can
 select.
+
+Cross-profile metadata verification compares semantic slot obligations, not `MethodImpl` table
+rows. One obligation is keyed by the existing Kotlin logical member identity, its canonical,
+erased, declared, exact, or helper role, and the complete normalized CLR signature recorded by
+the producer. The manifest locator must resolve to exactly one MethodDef by owner, method name,
+generic arity, return type, and parameter types; a name-only match is invalid.
+
+For each externally consumable concrete portable type, every manifest-addressable interface-map
+entry whose target is concrete is an upward-compatibility obligation. The corresponding runtime
+type may satisfy it through:
+
+- an explicit class `MethodImpl`;
+- a natural CLR class implementation;
+- the selected DIM; or
+- an interface-owned `MethodImpl` which records a promotion or representation adapter.
+
+The selected target must remain concrete and unambiguous. Raw row identity and row counts are not
+ABI: a correct `net10.0` variant normally removes a portable class forwarder when a selected DIM
+is effective. Non-public implementation types are still checked locally for resolvable concrete
+interface maps, but their physical type names are not promoted into cross-profile ABI identities.
+Interfaces not yet represented by the DLL manifest remain outside this bounded audit rather than
+receiving a second tooling-only identity namespace.
 
 Physical provider selection is set-based and uses only the most-specific DIM providers for the
 selected logical Kotlin default:
