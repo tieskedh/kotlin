@@ -56,6 +56,17 @@ class InnerOuter(private val seed: Int) {
         fun value(): Int = seed + offset
     }
 
+    inner class FieldNameCollision {
+        val `this$0`: InnerOuter? = null
+        val `this$0$1`: InnerOuter? = this@InnerOuter
+
+        fun propertyIsNull(): Boolean = `this$0` === null
+
+        fun reservedSuffixIsOuter(): Boolean = `this$0$1` === this@InnerOuter
+
+        fun outerSeed(): Int = seed
+    }
+
     fun hiddenValue(): Int = Hidden().value()
 }
 
@@ -76,4 +87,7 @@ fun main() {
     println(outer.ConstructorPaths(5).value())
     println(outer.ConstructorPaths().value())
     println(InnerOuter(20).Base(2).value())
+    println(outer.FieldNameCollision().propertyIsNull())
+    println(outer.FieldNameCollision().reservedSuffixIsOuter())
+    println(outer.FieldNameCollision().outerSeed())
 }

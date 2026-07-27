@@ -4,6 +4,7 @@
 object Counter {
     val base = 10
     var count = 0
+    val INSTANCE: Counter? = null
 
     fun next(): Int {
         count = count + 1
@@ -18,6 +19,7 @@ fun box(): String {
     if (Counter.next() != 11) return "FAIL next: " + Counter.count
     Counter.count = 5
     if (Counter.count != 5) return "FAIL count write: " + Counter.count
+    if (Counter.INSTANCE !== null) return "FAIL private INSTANCE backing field"
     if (!(grab() === Counter)) return "FAIL identity"
     return "OK"
 }

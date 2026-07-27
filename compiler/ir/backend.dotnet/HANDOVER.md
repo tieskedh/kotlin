@@ -1780,6 +1780,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   the data class. Each case is publication-tested on all three profiles with no KLIB or DLL left
   behind. The default-export ADR records the common lowering, CLR method-identity, Kotlin default
   evaluation, and future FIR-diagnostic rules.
+- Private field-name collisions now preserve valid Kotlin through a late class lowering rather
+  than emitter-time class rejection. The pass follows the JVM priority rule—public/protected ABI
+  fields, then static implementation fields, then remaining private fields—but reserves all
+  original spellings before choosing a suffix, so a hostile source ``this$0$1`` cannot collide
+  with the generated name for a second ``this$0``. CLR's type-distinguished same-name allowance
+  is deliberately not used because C# cannot naturally author it. Exact IL and both-profile box
+  lanes exercise an object property named `INSTANCE`, an inner property named ``this$0``, the
+  reserved-suffix case, and independent singleton/outer-field behavior. The accepted private-field
+  disambiguation ADR records the six-step target/CLR/Common/.NET/alignment/core-team decision.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
