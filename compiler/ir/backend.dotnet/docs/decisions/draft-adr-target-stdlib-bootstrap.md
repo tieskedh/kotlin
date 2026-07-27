@@ -181,27 +181,28 @@ remains outside this publication reproducibility contract. The direct PE writer 
 `draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
 depending on the external assembler flag.
 
-### Transitional installed-pair discovery
+### DLL-first installed discovery
 
 Following JVM/JS `KotlinPaths` and Native distribution ownership, the current resolver prefers the
-complete exact-profile pair at `lib/dotnet/<selected-profile>`, then the portable pair
+exact-profile DLL at `lib/dotnet/<selected-profile>`, then the portable DLL
 at:
 
 ```text
-<kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.klib
 <kotlin-home>/lib/dotnet/netstandard2.0/Kotlin.Stdlib.dll
 ```
 
-The manifest binds each companion to its declared TFM. The loader accepts only the explicit
+The embedded manifest binds each DLL to its declared TFM. The loader accepts only the explicit
 compatibility matrix: an executable profile accepts itself or `netstandard2.0`; the portable
-profile accepts only itself. A half-installed candidate is an error rather than permission to
-silently rebuild a different implementation. `-no-stdlib` remains the opt-out and, together with
-an explicit classpath, the bootstrap override.
+profile accepts only itself. A legacy sibling KLIB without the canonical DLL is an error rather
+than permission to silently rebuild a different implementation. The resolver ignores a sibling
+when the self-describing DLL is present, and focused tests install only that DLL. `-no-stdlib`
+remains the opt-out and, together with an explicit classpath, the bootstrap override.
 
-The CLI classpath and friend resolver now read `Kotlin.Metadata` from an explicitly supplied DLL.
-After installed-stdlib and Gradle DLL-first resolution land, the same directories contain only
-profile-selected DLL assets. Until then, absence of both installed files still selects the
-injected-source compatibility path. Installed-pair use no
+The CLI classpath, friend, and installed-stdlib resolvers now read `Kotlin.Metadata` from the
+selected DLL. Producer and installation tasks still write the transitional sibling until Gradle
+resolution moves; after its removal, these directories contain only profile-selected DLL assets.
+Absence of both legacy metadata and the DLL still selects the injected-source compatibility path.
+Installed-DLL use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to
 compiler-owned injected sources.
 
