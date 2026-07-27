@@ -130,9 +130,9 @@ dotnet_implementation_sha256=<DLL SHA-256>
 The embedded and sibling carriers must contain byte-identical Kotlin metadata entries and the same
 logical-to-physical declaration records. Their container/binding properties differ, and only the
 sibling carries the external DLL hash. The CLI compiler reads `Kotlin.Metadata` directly from a
-DLL; Gradle dependency, friend, and installed-stdlib wiring become DLL-first next. The sibling KLIB
-is removed only after ordinary, friend, stdlib, cross-profile, and cross-module tests no longer
-consume it.
+DLL, including profile-selected installed stdlib variants; Gradle dependency and friend wiring
+become DLL-first next. The sibling KLIB is removed only after ordinary, friend, stdlib,
+cross-profile, and cross-module tests no longer consume it.
 
 ### Migration state
 
@@ -155,8 +155,10 @@ Kotlin-library abstraction should expose the same KLIB components directly and m
 random access or caching; it must not introduce another metadata model.
 
 The legacy sibling KLIB remains accepted and hash-verified during migration. Installed-stdlib
-discovery and Gradle variants still select the pair, so producer output must continue writing it
-until those paths and their compatibility tests are DLL-first.
+discovery now selects only the best compatible profile DLL and rejects a legacy KLIB that has no
+canonical DLL; focused tests install no sibling at all. Gradle variants still publish and select
+the pair, so producer output must continue writing it until that path and its compatibility tests
+are DLL-first.
 
 Classifications:
 
@@ -178,8 +180,8 @@ Gradle, Maven, NuGet, MSBuild, Roslyn, reflection, and deployment can converge o
 DLL asset. Future signing covers executable and Kotlin metadata together. The compiler retains
 the common Kotlin metadata model instead of reconstructing Kotlin semantics from CLR signatures.
 
-The bounded ECMA-335 reader and CLI DLL-first path have landed. A direct DLL-backed Kotlin-library
-abstraction remains desirable to remove temporary extraction, but it does not block proving the
-single-artifact contract. Publication of only the DLL must not be enabled before installed-stdlib
-and Gradle dependency/friend paths have moved and the transitional sibling inputs have been
-removed from the compatibility matrix.
+The bounded ECMA-335 reader, CLI DLL-first path, and installed-stdlib DLL selection have landed. A
+direct DLL-backed Kotlin-library abstraction remains desirable to remove temporary extraction, but
+it does not block proving the single-artifact contract. Publication of only the DLL must not be
+enabled before Gradle dependency/friend paths have moved and the transitional sibling inputs have
+been removed from the compatibility matrix.

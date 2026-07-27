@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 70 generated-CLI and
+toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 71 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 850 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 851 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -180,8 +180,10 @@ landed shape as a compatibility constraint.
   resource directly from a DLL through a bounded JVM-hosted ECMA-335 reader, validate its manifest
   against the physical Assembly row, and reuse the shared KLIB deserializer through a
   compilation-scoped temporary extraction. The transitional sibling input remains accepted while
-  Gradle and installed-stdlib discovery still select pairs. Consumers call implementations in the
-  selected DLL, with no injected implementation source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
+  Gradle still publishes and selects pairs. Installed-stdlib discovery is already DLL-first:
+  it selects the best compatible profile DLL, rejects a legacy KLIB without that DLL, and is tested
+  with no installed sibling. Consumers call implementations in the selected DLL, with no injected
+  implementation source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
   library TFM, and final DLL hash; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
   explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
