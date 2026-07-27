@@ -198,9 +198,10 @@ than permission to silently rebuild a different implementation. The resolver ign
 when the self-describing DLL is present, and focused tests install only that DLL. `-no-stdlib`
 remains the opt-out and, together with an explicit classpath, the bootstrap override.
 
-The CLI classpath, friend, and installed-stdlib resolvers now read `Kotlin.Metadata` from the
-selected DLL. Producer and installation tasks still write the transitional sibling until Gradle
-resolution moves; after its removal, these directories contain only profile-selected DLL assets.
+The CLI classpath, friend, installed-stdlib, and Gradle dependency resolvers now read
+`Kotlin.Metadata` from the selected DLL. Gradle variants no longer publish the sibling. Producer
+and installation tasks still write the transitional sibling until the remaining direct compiler
+fixtures migrate; after its removal, these directories contain only profile-selected DLL assets.
 Absence of both legacy metadata and the DLL still selects the injected-source compatibility path.
 Installed-DLL use no
 longer enables `kotlin.*` packages in user sources; that temporary permission is limited to

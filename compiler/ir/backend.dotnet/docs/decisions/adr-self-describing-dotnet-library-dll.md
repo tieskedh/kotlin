@@ -118,8 +118,8 @@ rejected.
 
 Make the self-describing DLL the only canonical published Kotlin/.NET library artifact.
 
-During migration, continue writing the sibling KLIB so the existing compiler and Gradle resolver
-can operate. It is explicitly transitional and records:
+During migration, continue writing the sibling KLIB only for remaining direct compiler fixtures
+and producer/install flows. It is explicitly transitional and records:
 
 ```text
 dotnet_metadata_container=sibling-klib-v1
@@ -130,9 +130,9 @@ dotnet_implementation_sha256=<DLL SHA-256>
 The embedded and sibling carriers must contain byte-identical Kotlin metadata entries and the same
 logical-to-physical declaration records. Their container/binding properties differ, and only the
 sibling carries the external DLL hash. The CLI compiler reads `Kotlin.Metadata` directly from a
-DLL, including profile-selected installed stdlib variants; Gradle dependency and friend wiring
-become DLL-first next. The sibling KLIB is removed only after ordinary, friend, stdlib,
-cross-profile, and cross-module tests no longer consume it.
+DLL, including profile-selected installed stdlib variants, and Gradle dependency/friend wiring is
+DLL-first. The sibling KLIB is removed only after ordinary, friend, stdlib, cross-profile, and
+cross-module tests no longer consume it.
 
 ### Migration state
 
@@ -156,9 +156,16 @@ random access or caching; it must not introduce another metadata model.
 
 The legacy sibling KLIB remains accepted and hash-verified during migration. Installed-stdlib
 discovery now selects only the best compatible profile DLL and rejects a legacy KLIB that has no
-canonical DLL; focused tests install no sibling at all. Gradle variants still publish and select
-the pair, so producer output must continue writing it until that path and its compatibility tests
-are DLL-first.
+canonical DLL; focused tests install no sibling at all. Gradle API and runtime variants now publish
+only the profile-attributed DLL. Project dependencies, ordinary compilation association, and
+friend paths pass that DLL to the compiler, whose existing embedded-metadata loader recovers the
+Kotlin library view. Integration tests delete the sibling after producing a library and then
+compile both an associated source set and a separate dependent project without rebuilding the
+producer.
+
+The compile task still writes the sibling KLIB into its output directory so legacy direct CLI
+tests and producer/install flows can migrate coherently. It is no longer a Gradle variant artifact
+or a Gradle dependency identity.
 
 Classifications:
 
@@ -180,8 +187,9 @@ Gradle, Maven, NuGet, MSBuild, Roslyn, reflection, and deployment can converge o
 DLL asset. Future signing covers executable and Kotlin metadata together. The compiler retains
 the common Kotlin metadata model instead of reconstructing Kotlin semantics from CLR signatures.
 
-The bounded ECMA-335 reader, CLI DLL-first path, and installed-stdlib DLL selection have landed. A
-direct DLL-backed Kotlin-library abstraction remains desirable to remove temporary extraction, but
-it does not block proving the single-artifact contract. Publication of only the DLL must not be
-enabled before Gradle dependency/friend paths have moved and the transitional sibling inputs have
-been removed from the compatibility matrix.
+The bounded ECMA-335 reader, CLI DLL-first path, installed-stdlib DLL selection, and Gradle
+DLL-only variant publication have landed. A direct DLL-backed Kotlin-library abstraction remains
+desirable to remove temporary extraction, but it does not block proving the single-artifact
+contract. The remaining migration step is to stop producing and installing the sibling, then
+remove legacy sibling-only acceptance after every compiler-owned test and packaging flow consumes
+the DLL.

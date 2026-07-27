@@ -8,6 +8,7 @@
 
 package org.jetbrains.kotlin.gradle.unitTests
 
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 import org.jetbrains.kotlin.gradle.dsl.multiplatformExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilerArgumentsProducer.CreateCompilerArgumentsContext.Companion.lenient
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
@@ -90,10 +91,27 @@ class KotlinDotNetTargetTest {
             main.runtimeDependencyConfigurationName,
         )
         configurationNames.forEach { configurationName ->
-            val actual = project.configurations.getByName(configurationName)
+            val configuration = project.configurations.getByName(configurationName)
+            val actual = configuration
                 .attributes
                 .getAttribute(KotlinDotNetTargetFramework.ATTRIBUTE)
             assertEquals(targetFramework, actual, "Unexpected target framework on $configurationName")
+            if (configurationName == target.apiElementsConfigurationName ||
+                configurationName == target.runtimeElementsConfigurationName
+            ) {
+                val artifact = configuration.outgoing.artifacts.single()
+                val mainTask = main.compileTaskProvider.get()
+                assertEquals(project.name, artifact.name)
+                assertEquals("dll", artifact.type)
+                assertEquals("dll", artifact.extension)
+                assertTrue(mainTask in artifact.buildDependencies.getDependencies(mainTask))
+                assertEquals(
+                    "dll",
+                    configuration.outgoing.attributes.getAttribute(
+                        ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE,
+                    ),
+                )
+            }
         }
     }
 

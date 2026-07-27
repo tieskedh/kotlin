@@ -21,7 +21,7 @@ import org.jetbrains.kotlin.gradle.utils.filesProvider
 
 /**
  * A CLR friend is necessarily two-sided: the producer emits InternalsVisibleTo and the consumer
- * supplies the producer's exact metadata KLIB as a friend dependency.
+ * supplies the producer's exact self-describing DLL as a friend dependency.
  */
 internal object KotlinDotNetCompilationAssociator : KotlinCompilationAssociator {
     override fun associate(
@@ -31,10 +31,10 @@ internal object KotlinDotNetCompilationAssociator : KotlinCompilationAssociator 
     ) {
         check(target is KotlinDotNetTarget)
 
-        val producerKlib = target.project.filesProvider(main.compileKotlinTaskName) {
-            main.dotNetKlibOutputFile()
+        val producerAssembly = target.project.filesProvider(main.compileKotlinTaskName) {
+            main.dotNetAssemblyOutputFile()
         }
-        auxiliary.compileDependencyFiles += producerKlib
+        auxiliary.compileDependencyFiles += producerAssembly
 
         target.project.configurations.named(auxiliary.legacyImplementationConfigurationName).configure { configuration ->
             configuration.extendsFrom(
@@ -54,26 +54,27 @@ internal object KotlinDotNetCompilationAssociator : KotlinCompilationAssociator 
 }
 
 /**
- * The .NET compiler verifies friendship against the bound KLIB/DLL pair. Passing the compilation
- * output directory, as the default JVM-shaped resolver does, would not identify that pair.
+ * The .NET compiler verifies friendship against the producer's self-describing DLL. Passing the
+ * compilation output directory, as the default JVM-shaped resolver does, would not identify the
+ * producer assembly and its embedded Kotlin metadata.
  */
 internal object KotlinDotNetCompilationFriendPathsResolver : KotlinCompilationFriendPathsResolver {
     override fun resolveFriendPaths(
         compilation: InternalKotlinCompilation<*>,
     ): Iterable<FileCollection> {
-        val friendKlibs = compilation.project.files()
+        val friendAssemblies = compilation.project.files()
         compilation.allAssociatedCompilations.forAll { associatedCompilation ->
             val associated = associatedCompilation.internal
-            friendKlibs.from(
+            friendAssemblies.from(
                 compilation.project.filesProvider(associated.compileKotlinTaskName) {
-                    associated.dotNetKlibOutputFile()
+                    associated.dotNetAssemblyOutputFile()
                 }
             )
         }
-        return listOf(friendKlibs)
+        return listOf(friendAssemblies)
     }
 }
 
 @Suppress("UNCHECKED_CAST")
-private fun InternalKotlinCompilation<*>.dotNetKlibOutputFile(): Provider<RegularFile> =
-    (compileTaskProvider as TaskProvider<KotlinDotNetCompile>).flatMap { task -> task.klibOutputFile }
+private fun InternalKotlinCompilation<*>.dotNetAssemblyOutputFile(): Provider<RegularFile> =
+    (compileTaskProvider as TaskProvider<KotlinDotNetCompile>).flatMap { task -> task.assemblyOutputFile }

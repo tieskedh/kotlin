@@ -45,10 +45,10 @@ The profiles can require different generated IL, notably for default interface m
 preserving the same Kotlin semantics. They do not require Native's host manager, cinterop model,
 native linker, compilation caches, or per-architecture binary model.
 
-A .NET library compilation currently has two related physical outputs while the compiler resolver
-is migrating: KLIB is the transitional logical Kotlin consumer artifact, while the DLL is the CLR
-runtime/tooling artifact and already embeds the same KLIB payload. The final outgoing variant
-publishes the self-describing DLL alone under the profile attribute and producer identity.
+A .NET library compilation currently writes two related physical outputs while legacy compiler
+flows migrate: the sibling KLIB is transitional, while the DLL is the CLR runtime/tooling artifact
+and embeds the same KLIB payload. Gradle outgoing variants publish the self-describing DLL alone
+under the profile attribute and producer identity.
 
 ## 3. Kotlin Common invariant
 
@@ -75,9 +75,16 @@ The compile task passes:
 - the immutable target framework;
 - library product mode;
 - the compilation-owned module name;
-- KLIB dependencies and friend paths;
+- self-describing DLL dependencies and friend paths;
 - common compiler options, plugin options, and source structure; and
-- one output directory that will contain the matched KLIB/DLL pair.
+- one output directory that temporarily contains the DLL plus its legacy sibling KLIB.
+
+The DLL is a declared compile-task output and the target's API and runtime artifact. This follows
+KGP's normal task-output/provider model, so project dependency resolution retains producer task
+ordering and configuration-cache safety without evaluating the compiler task eagerly. Associated
+compilations use that same DLL as both dependency and friend input. The producer emits
+`InternalsVisibleTo` from the associated compilation's module identity; the consumer does not use
+an independent friend-artifact convention.
 
 The current Kotlin daemon and Build Tools API do not define a .NET toolchain or daemon target
 protocol. The first task therefore runs the compiler in-process, with incremental compilation,
@@ -154,7 +161,9 @@ Each `.NET` Gradle target is profile-coherent before dependency resolution or co
 The target follows mature Kotlin Gradle architecture without pretending that a target framework is
 a machine architecture.
 
-Friend association, DLL-first publication, executable products, test execution, profile-aware
-stdlib Gradle variants, incremental compilation, daemon support, and Build Tools API support remain
-separate work packages. None may introduce a second owner for the target framework or select
-embedded Kotlin metadata independently from its containing DLL.
+DLL-first publication and friend association are implemented. Functional model tests cover all
+three profiles and a real-compiler integration lane deletes the sibling KLIB before compiling both
+an associated compilation and a separate project dependency. Executable products, test execution,
+profile-aware stdlib Gradle variants, incremental compilation, daemon support, and Build Tools API
+support remain separate work packages. None may introduce a second owner for the target framework
+or select embedded Kotlin metadata independently from its containing DLL.

@@ -179,8 +179,9 @@ landed shape as a compatibility constraint.
   `managed-resource-klib-v1` and self-bound. The CLI classpath and friend resolver now consume that
   resource directly from a DLL through a bounded JVM-hosted ECMA-335 reader, validate its manifest
   against the physical Assembly row, and reuse the shared KLIB deserializer through a
-  compilation-scoped temporary extraction. The transitional sibling input remains accepted while
-  Gradle still publishes and selects pairs. Installed-stdlib discovery is already DLL-first:
+  compilation-scoped temporary extraction. The transitional sibling input remains accepted only
+  while direct compiler fixtures and producer/install flows migrate; Gradle publishes and selects
+  only the DLL. Installed-stdlib discovery is already DLL-first:
   it selects the best compatible profile DLL, rejects a legacy KLIB without that DLL, and is tested
   with no installed sibling. Consumers call implementations in the selected DLL, with no injected
   implementation source. The sibling KLIB manifest binds the complete unsigned assembly identity, file, selected
@@ -2494,8 +2495,11 @@ landed shape as a compatibility constraint.
   Profile selection uses the separate typed
   `org.jetbrains.kotlin.dotnet.targetFramework` attribute. Exact variants win; `net48` and
   `net10.0` may consume `netstandard2.0`, while `net48` and `net10.0` never consume one another and
-  a consumer with no profile remains ambiguous. The built-in Gradle target is not implemented yet
-  and must apply this attribute to every profile-specific resolvable and consumable configuration.
+  a consumer with no profile remains ambiguous. The built-in Gradle target applies this attribute
+  to every profile-specific resolvable and consumable configuration. Its API and runtime variants
+  publish only the self-describing DLL; project dependencies and `associateWith` dependency/friend
+  paths likewise pass that DLL. The compile task still emits a sibling KLIB only as a transitional
+  non-variant output while remaining direct compiler fixtures migrate.
   See `docs/decisions/adr-gradle-dotnet-platform-identity.md` and
   `docs/decisions/adr-gradle-dotnet-target-framework-attribute.md`.
 - `-Xdotnet-target={net48|netstandard2.0|net10.0}` (default `net48`) selects the target-framework/API

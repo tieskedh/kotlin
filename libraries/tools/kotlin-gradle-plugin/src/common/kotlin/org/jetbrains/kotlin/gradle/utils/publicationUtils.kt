@@ -52,9 +52,11 @@ internal fun ConfigurationPublications.registerArtifact(
     type: String,
     extension: String,
     classifier: String? = null,
+    configure: ConfigurablePublishArtifact.() -> Unit = {},
 ) {
     artifact(artifactProvider) { artifact ->
         artifact.configureMandatoryProperties(name, type, extension, classifier)
+        artifact.configure()
     }
 }
 

@@ -7,7 +7,7 @@
 ## Context
 
 Kotlin/.NET has one logical Kotlin platform identity but three deliberately supported target
-frameworks. Gradle needs a second attribute to select a physically compatible KLIB/DLL pair
+frameworks. Gradle needs a second attribute to select a physically compatible self-describing DLL
 without splitting Kotlin Common semantics into three platforms.
 
 ## 1. Other Kotlin targets
@@ -56,8 +56,9 @@ A consumer that does not declare a target framework receives no implicit default
 a build-model error. Gradle should retain ambiguity until the future built-in target supplies the
 attribute.
 
-The attribute applies to both halves of the Kotlin/.NET library artifact pair. KLIB metadata and
-the CLR DLL must never resolve from different target-framework variants.
+The attribute applies to the canonical self-describing DLL. Kotlin metadata is selected
+atomically because it is a private managed resource in that DLL; Gradle must not expose the
+transitional sibling KLIB as another independently selectable artifact.
 
 ## 5. Alignment with compiler architecture
 
@@ -93,6 +94,8 @@ Classifications:
 ## Consequences
 
 Gradle can model the real CLR compatibility graph without weakening Kotlin platform identity.
-The future built-in target must place this attribute on every resolvable and consumable
-profile-specific configuration, configure the matching schema, publish KLIB and DLL artifacts from
-the same variant, and pass the selected moniker to `-Xdotnet-target`.
+The built-in target places this attribute on every resolvable and consumable profile-specific
+configuration, configures the matching schema, publishes the DLL from both API and runtime
+variants, and passes the selected moniker to `-Xdotnet-target`. Exact/fallback rule tests and target
+model tests cover all three profiles; a project-dependency integration test additionally proves
+that the selected DLL is sufficient when no sibling KLIB exists.
