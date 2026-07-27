@@ -551,13 +551,14 @@ metadata audit.
 Nested/general owner-relative carriers may remain rejected until their conversion can be proved
 rather than guessed.
 
-The outstanding P0-C Gradle friend association cannot be wired responsibly yet: this repository
-has no Kotlin/.NET Gradle target or compilation model. The compiler already owns both required
-controls, but a build association must derive assembly names, profile variants, artifacts, output
-paths, and task dependencies from one product-owned compilation relationship. Injecting the two
-CLI switches into an existing JVM or metadata task would freeze the wrong architecture. Introduce
-an experimental .NET target/compilation model first, then make `associateWith` configure producer
-`InternalsVisibleTo` and consumer friend KLIB paths together before Gate A.
+The outstanding P0-C Gradle friend association cannot be wired responsibly yet. Common metadata
+and Gradle module metadata now recognize one distinct Kotlin/.NET platform identity, but this
+repository still has no built-in Kotlin/.NET target or compilation model. The compiler already
+owns both friend controls, but a build association must derive assembly names, profile variants,
+artifacts, output paths, and task dependencies from one product-owned compilation relationship.
+Add the separate target-framework attribute and experimental .NET target/compilation model first,
+then make `associateWith` configure producer `InternalsVisibleTo` and consumer friend KLIB paths
+together before Gate A.
 
 The integration coverage now also proves ordinary class-override precedence and explicit
 reabstraction across the portable-producer/net10-promotion boundary. Local runtime coverage covers
@@ -686,8 +687,8 @@ no false owner context. This closes the previously crashing cross-module generic
 
 The backend now owns one strict replay entry point,
 `:compiler:backend.dotnet:dotNetTest`, rather than allowing the FIR matrix to stand in for the
-whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 44
-library-integration tests; the current audited result is 848/0/0/0 across 16 JUnit XML suites with
+whole target. It combines 780 FIR/IL/semantic tests, 21 generated CLI tests, and 48
+library-integration tests; the current audited result is 849/0/0/0 across 16 JUnit XML suites with
 required-toolchain enforcement. The integration child task uses the private short name `dn`
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
@@ -836,7 +837,8 @@ arity, markers, and exception/cancellation design.
 
 ### Gate C — official experimental target discussion
 
-- dedicated .NET frontend session, KLIB platform identity, Gradle/KMP target, and publication model;
+- dedicated .NET frontend session and logical Gradle/Common-metadata identity are present; KLIB
+  platform marking, profile-aware Gradle/KMP target, and publication model remain required;
 - supported runtime/tier matrix required in CI;
 - shared Kotlin semantic corpus and multi-module compatibility coverage at mature-target scale;
 - structured diagnostics and structured CIL/metadata validation;

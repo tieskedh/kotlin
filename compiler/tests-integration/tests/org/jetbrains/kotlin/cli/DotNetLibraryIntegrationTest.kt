@@ -42,9 +42,11 @@ import org.jetbrains.kotlin.cli.common.arguments.cliArgument
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.dotnet.K2DotNetCompiler
 import org.jetbrains.kotlin.cli.metadata.KotlinMetadataCompiler
+import org.jetbrains.kotlin.cli.pipeline.metadata.MetadataConfigurationUpdater
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_MANUALLY_ALTERED_LANGUAGE_FEATURES
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_METADATA_FLAGS
 import org.jetbrains.kotlin.library.KLIB_PROPERTY_NEW_COMPANION_INITIALIZATION
+import org.jetbrains.kotlin.platform.isDotNet
 import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -9104,6 +9106,18 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             unrelatedConsumerDirectory,
             "Consumer with an unused Kotlin/.NET classpath library failed",
         )
+    }
+
+    @Test
+    fun testMetadataCompilerRecognizesDotNetAsItsOwnPlatform() {
+        val unknownPlatforms = mutableListOf<String>()
+        val targetPlatform = MetadataConfigurationUpdater.computeTargetPlatformOrNull(
+            platformsFromArg = listOf("DotNet"),
+            onUnknownPlatform = unknownPlatforms::add,
+        )
+
+        assertTrue(unknownPlatforms.isEmpty())
+        assertTrue(targetPlatform.isDotNet()) { "Expected DotNet metadata platform, got $targetPlatform" }
     }
 
     @Test

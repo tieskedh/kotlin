@@ -20,6 +20,7 @@ enum class StringListMetrics(
         CONCAT, AllowedListAnonymizer(
             listOf(
                 "common",
+                "dotnet",
                 "native",
                 "jvm",
                 "js",

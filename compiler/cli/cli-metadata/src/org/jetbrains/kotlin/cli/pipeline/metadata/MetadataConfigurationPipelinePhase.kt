@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.metadata.deserialization.BinaryVersion
 import org.jetbrains.kotlin.metadata.deserialization.MetadataVersion
 import org.jetbrains.kotlin.metadata.jvm.deserialization.JvmProtoBufUtil
 import org.jetbrains.kotlin.platform.CommonPlatforms
+import org.jetbrains.kotlin.platform.DotNetPlatforms
 import org.jetbrains.kotlin.platform.SimplePlatform
 import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.js.JsPlatforms
@@ -50,6 +51,7 @@ object MetadataConfigurationUpdater : ConfigurationUpdater<K2MetadataCompilerArg
         "WasmJs" to WasmPlatformWithTarget(WasmTarget.JS),
         "WasmWasi" to WasmPlatformWithTarget(WasmTarget.WASI),
         "Native" to NativePlatformUnspecifiedTarget,
+        "DotNet" to DotNetPlatforms.DefaultSimpleDotNetPlatform,
     )
 
     override fun fillConfiguration(
