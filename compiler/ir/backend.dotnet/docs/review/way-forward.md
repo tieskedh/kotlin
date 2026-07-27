@@ -269,8 +269,19 @@ resource must remain present, public, and embedded, while the C# authoring manif
 schema, assembly identity, logical-identity scheme, and portable logical declarations across
 profile-specific physical slot records. A copied platform PE with one rewritten logical
 declaration and a recomputed envelope digest is rejected as a negative oracle. Raw attribute-blob
-encoding, general MethodImpl rows, and friend-only internal surface remain open for the general
-portable-superset model. The C# source-authoring
+encoding and friend-only internal surface remain open for the general portable-superset model.
+Manifest-addressable MethodImpl obligations are now compared semantically rather than by raw row:
+the verifier resolves complete producer-recorded locators, keys each public/protected concrete
+interface-map obligation by Kotlin logical identity, physical view, and constructed CLR signature,
+and accepts an explicit mapping, natural implementation, selected DIM, or recorded promotion.
+Non-public implementation maps are validated within each variant without making their generated
+type names ABI. A generic default fixture proves portable class forwarders equivalent to a modern
+typed DIM plus erased interface adapter for ordinary, method-generic, and mutable-property
+members. It also caught and corrected modern DIM accessors which lost CLR `specialname`; the
+portable and modern Property rows now retain the same accessor shape. A corrupted same-length slot
+name proves that a name-only locator is rejected. MethodImpl rows for interfaces not yet represented by the DLL
+manifest remain explicitly outside this bounded audit instead of acquiring synthetic tooling
+identities. The C# source-authoring
 slice now independently pins its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and
 promotion MethodImpl signatures through a metadata-only reader. It also pins the public
 compiler-ABI marker and `EditorBrowsable(Never)` blobs while proving ordinary internal source API
@@ -487,10 +498,11 @@ The remaining P0-D implementation order is:
    implementor now retains its unrelated C# base state while generated adapters satisfy ordinary
    and generic Kotlin contracts. The authoring-specific raw
    MethodImpl signature, `InternalsVisibleTo` blob, and friend TypeDef rows are now audited. The
-   structured portable-superset verifier also closes the managed-resource row and C# manifest
-   logical-contract comparison without requiring byte-identical profile payloads. Close the
-   remaining general attribute-blob, MethodImpl, and internal-surface comparison in the structured
-   metadata work rather than with IL substring tests.
+   structured portable-superset verifier also closes the managed-resource row, C# manifest
+   logical-contract comparison, and manifest-addressable semantic MethodImpl obligations without
+   requiring byte-identical profile payloads. Close the remaining general attribute-blob,
+   non-manifest interface-row, and internal-surface comparison in the structured metadata work
+   rather than with IL substring tests.
 
 There is no remaining implicit-intersection representation or production-adapter migration on the
 critical path. The next backend implementation item is the foreign boundary and structured

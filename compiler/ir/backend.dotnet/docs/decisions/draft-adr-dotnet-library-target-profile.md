@@ -148,7 +148,11 @@ The implementation now:
 10. compares raw ManifestResource rows, requiring portable public resources to remain present,
     public, and embedded. The C# implementation manifest additionally retains its schema, assembly
     identity, logical-identity scheme, and every portable logical declaration while profile-owned
-    physical slot records may differ.
+    physical slot records may differ; and
+11. resolves manifest slot locators with complete CLR signatures and compares concrete semantic
+    interface-map obligations for externally consumable types. A platform variant may discharge
+    an obligation with an explicit MethodImpl, a natural class implementation, a selected DIM, or
+    a recorded interface promotion; raw MethodImpl row equality is deliberately not required.
 
 The repository's opt-in stdlib producer and installer create all three profile variants under
 their corresponding `lib/dotnet/<profile>` directories. A focused integration lane proves that a
@@ -163,9 +167,16 @@ assemblies, types, members, parameters, returns, and generic parameters; only
 `TargetFrameworkAttribute` is excluded because its profile value must differ. A target-owned
 `@TestOnly` hook produces each runtime variant without turning runtime generation into a library
 side effect. The same verifier reads managed-resource rows and validates the embedded C# manifest
-envelope and logical declaration floor without loading its payload as code. This audit does not
-yet compare raw attribute-blob encoding, general MethodImpl rows, or internal friend-only surface;
-those remain part of the future structured metadata model and ABI-freeze audit.
+envelope and logical declaration floor without loading its payload as code. It also resolves every
+manifest locator by owner, generic arity, result, and parameters, then uses CLR interface maps to
+verify the semantic MethodImpl obligations of public/protected concrete types. A generic portable
+default fixture proves that helper-backed class forwarders and a modern typed DIM plus erased
+interface adapter satisfy the same method, generic-method, and mutable-property slots. The modern
+property DIMs must also retain the portable accessors' `specialname` metadata. A copied modern PE with a same-length
+manifest method-name corruption and recomputed envelope digest proves that name-only matching is
+rejected. Raw attribute-blob encoding, MethodImpl rows for interfaces not represented in the
+manifest, and internal friend-only surface remain part of the future structured metadata model
+and ABI-freeze audit.
 
 The user-library pair uses the module name as its unsigned CLR assembly identity at version
 `1.0.0.0`. Its KLIB carries the same assembly name, version, companion filename, and library TFM.
