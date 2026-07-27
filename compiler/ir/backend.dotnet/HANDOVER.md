@@ -1118,7 +1118,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Ordinary attributes are compared as decoded semantic multisets, not byte-identical blobs;
   exact bytes are bounded to explicitly documented compiler protocols. Managed-resource rows,
   manifest-addressable semantic MethodImpl obligations, and friend-dependent internal surface are
-  now audited. Non-manifest interface rows remain for the structured metadata audit.
+  now audited. Non-manifest public/compiler-ABI and authorized friend interface obligations now
+  form a separate physical floor keyed by the real implementing CLR type and complete constructed
+  slot signature. The effective target is intentionally excluded, so portable forwarders and
+  modern DIMs remain equivalent. A metadata-public generic fixture stays outside the C# authoring
+  manifest but participates in this audit; removing one of its `.override` rows from a reassembled
+  modern PE is rejected. The accepted decision is
+  `docs/decisions/adr-semantic-interface-mapping-audit.md`.
 - `docs/decisions/adr-profile-aware-interface-default-implementations.md` is accepted,
   and the non-generic implementation is now present. Portable profiles move each Kotlin interface
   body to a marked public `__KotlinDefaultImpls` compiler-ABI helper, keep the CLR slot abstract, and

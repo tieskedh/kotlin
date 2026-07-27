@@ -9124,11 +9124,29 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 public class ProfileDefaultImpl<T> : ProfileDefault<T>
 
+                @PublishedApi
+                internal interface ProfileCompilerContract<T> {
+                    public fun compilerTransform(value: T): T
+                }
+
+                @PublishedApi
+                internal class ProfileCompilerImpl<T> : ProfileCompilerContract<T> {
+                    override fun compilerTransform(value: T): T = value
+                }
+
                 internal open class ProfileFriendBase
 
                 internal class ProfileFriendBox<T>(
                     internal val value: T,
                 ) : ProfileFriendBase()
+
+                internal interface ProfileFriendContract<T> {
+                    public fun friendTransform(value: T): T
+                }
+
+                internal class ProfileFriendImpl<T> : ProfileFriendContract<T> {
+                    override fun friendTransform(value: T): T = value
+                }
 
                 internal fun friendValue(value: Int): Int = ProfileFriendBox(value).value
 
@@ -9154,6 +9172,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     assertTrue(assembly.isFile) { "Missing MethodImpl fixture for $target" }
                 }
             }
+        for (entry in methodImplLibraries.entries) {
+            val target = entry.key
+            val assembly = entry.value
+            val manifest = readCSharpImplementationManifestEnvelope(assembly)
+            assertTrue(
+                manifest.interfaces.none { contract ->
+                    contract.canonicalOwnerPath.any { owner ->
+                        owner.startsWith("ProfileCompilerContract", ignoreCase = false)
+                    }
+                }
+            ) {
+                "$target exposed metadata-public compiler ABI as a C# source-authoring contract"
+            }
+        }
         for (portableTarget in listOf("netstandard2.0", "net48")) {
             val assembly = methodImplLibraries.getValue(portableTarget)
             val il = checkNotNull(assembly.parentFile)
@@ -9301,7 +9333,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         comparisonOutput,
             )
             assertTrue(
-                Regex("OK [1-9][0-9]* SLOTS [0-9]+ FRIENDS 0")
+                Regex("OK [1-9][0-9]* SLOTS [0-9]+ INTERFACES [0-9]+ FRIENDS 0")
                     .matches(comparisonOutput.trim())
             ) {
                 comparisonOutput
@@ -9324,7 +9356,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "$target did not preserve portable semantic slot satisfaction:\n$methodImplOutput",
             )
             assertTrue(
-                Regex("OK [1-9][0-9]* SLOTS [1-9][0-9]* FRIENDS [1-9][0-9]*")
+                Regex(
+                    "OK [1-9][0-9]* SLOTS [1-9][0-9]* " +
+                            "INTERFACES [1-9][0-9]* FRIENDS [1-9][0-9]*"
+                )
                     .matches(methodImplOutput.trim())
             ) {
                 methodImplOutput
@@ -9378,6 +9413,62 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         }
         assertTrue("UNRESOLVED MANIFEST SLOT" in corruptedMethodImplOutput) {
             corruptedMethodImplOutput
+        }
+
+        val unresolvedPhysicalDirectory =
+            File(tmpdir, "portable-methodimpl-unresolved-physical").apply { mkdirs() }
+        val modernMethodImplText = modernMethodImplIl
+        val compilerAbiOverride = Regex(
+            """(?m)^[ \t]*\.override method[^\r\n]*ProfileCompilerContract""" +
+                    """[^\r\n]*compilerTransform__KotlinErased__[^\r\n]*(?:\r?\n)"""
+        )
+        assertEquals(
+            1,
+            compilerAbiOverride.findAll(modernMethodImplText).count(),
+            modernMethodImplText,
+        )
+        val unresolvedPhysicalIl =
+            unresolvedPhysicalDirectory.resolve("Portable.MethodImpl.il").apply {
+                writeText(compilerAbiOverride.replaceFirst(modernMethodImplText, ""))
+            }
+        val unresolvedPhysicalAssembly =
+            unresolvedPhysicalDirectory.resolve("Portable.MethodImpl.dll")
+        assertTrue(
+            DotNetIlAssembler.assembleLibrary(
+                unresolvedPhysicalIl,
+                unresolvedPhysicalAssembly,
+                DotNetTarget.NET10_0,
+                MessageCollector.NONE,
+                mapOf(
+                    DotNetCSharpImplementationManifestCodec.MANAGED_RESOURCE_NAME to
+                            DotNetCSharpImplementationManifestCodec.encodeManagedResource(
+                                readCSharpImplementationManifestEnvelope(modernMethodImplAssembly)
+                            )
+                ),
+            )
+        ) {
+            "The hostile MethodImpl fixture did not assemble"
+        }
+        val unresolvedPhysicalComparison = ProcessBuilder(
+            checkNotNull(csharpToolchain).dotNetHost.path,
+            "exec",
+            surfaceVerifier.path,
+            runtimeAssemblies.getValue(DotNetTarget.NETSTANDARD_2_0).path,
+            runtimeAssemblies.getValue(DotNetTarget.NET10_0).path,
+            methodImplLibraries.getValue("netstandard2.0").path,
+            unresolvedPhysicalAssembly.path,
+        ).directory(surfaceVerifierDirectory).redirectErrorStream(true).start()
+        val unresolvedPhysicalOutput =
+            unresolvedPhysicalComparison.inputStream.bufferedReader().use { it.readText() }
+        assertTrue(unresolvedPhysicalComparison.waitFor() != 0) {
+            "The physical interface-map audit accepted a missing compiler-ABI MethodImpl"
+        }
+        assertTrue(
+            "TypeLoadException" in unresolvedPhysicalOutput ||
+                    "UNRESOLVED INTERFACE MAP" in unresolvedPhysicalOutput ||
+                    "MISSING PHYSICAL SLOT" in unresolvedPhysicalOutput
+        ) {
+            unresolvedPhysicalOutput
         }
 
         val narrowedFriendComparison = ProcessBuilder(
