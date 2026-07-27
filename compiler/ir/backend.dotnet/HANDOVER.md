@@ -1757,6 +1757,15 @@ session state, process, and a curated task menu. Keep both files updated as you 
   execute through the derived and both parent Kotlin views on all four lanes. Intersection
   `R : T` guidance is diagnosed and never reconstructed as a C# constraint. The handwritten
   fixture remains an independent manifest-sufficiency oracle rather than the production emitter.
+- Consumer-owned generic substitution now has a positive inherited-overload pin. A Kotlin child
+  inherits `select(T)` and `select(String)` as distinct logical declarations and records no
+  producer-side intersection; a C# partial closes the child at `String` and supplies one
+  `Select(string)` body. The production generator retains both parent contracts and emits their
+  physical adapters to that body. Kotlin execution through both parent views succeeds on
+  portable, modern, and promoted-portable-parent lanes. Direct calls through the closed child
+  remain Kotlin-frontend ambiguous, which correctly proves that implementation coalescing did not
+  merge declaration identity. The accepted source-authoring ADR records the six-step
+  other-target/CLR/Common/.NET/core-team decision.
 - Interface-default property helpers now use physical-name grammar 3:
   `get_/set_...__KotlinDefault__<logical-identity-digest>`. Only the marked compiler helper is
   renamed; ordinary CLR Property rows and `get_`/`set_` interface accessors remain unchanged.
