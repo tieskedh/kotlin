@@ -31,6 +31,7 @@ import org.jetbrains.kotlin.backend.dotnet.lower.DotNetLocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetObjectClassLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPropertyReferenceLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetPrivateNestedAccessLowering
+import org.jetbrains.kotlin.backend.dotnet.lower.DotNetRenameFieldsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetReturnableBlockLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetSharedVariablesLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DotNetStaticInitializersLowering
@@ -162,8 +163,14 @@ internal val dotNetLowerings: List<NamedCompilerPhase<DotNetBackendContext, IrMo
     ::DotNetStringConcatenationLowering,
     // JVM/JS/Wasm/Native invariant: if a call statically returning Nothing somehow returns
     // (for example from foreign CLR code), throw the dedicated Kotlin exception immediately.
-    // Run last so calls introduced by every earlier bridge/helper lowering receive the guard.
+    // Run after every body-producing lowering so calls introduced by bridges/helpers receive it.
     ::DotNetKotlinNothingValueExceptionLowering,
+    // JVM precedent: after every target lowering has created its physical fields, reserve
+    // public/compiler-ABI names and deterministically suffix only later private storage. CLR
+    // metadata can distinguish same-named fields by type, but C# and common reflection tooling
+    // cannot author or consume that shape naturally, so type-distinct private fields are renamed
+    // too. The emitter retains its field-identity gate for unrenamable public ABI collisions.
+    ::DotNetRenameFieldsLowering,
 )
 
 internal object DotNetLoweringPhases {

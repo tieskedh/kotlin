@@ -1,10 +1,7 @@
-// The member pre-pass gates IL FIELD identity like method identity: the backing field of a user
-// property named INSTANCE whose type maps to the object's own class (nullability erases) collides
-// with the synthesized INSTANCE singleton field — same IL name and field signature, staticness and
-// visibility are flags, not identity — which ilasm rejects as a duplicate field declaration, so
-// the whole object is rejected with a warning and only the file facade is emitted. The identity
-// key is name plus mapped IL type: a differently-typed INSTANCE property is a legal CLR shape, so
-// B keeps both its class-typed singleton field and the int32 backing field.
+// As on JVM, public compiler-ABI fields reserve their stable names and same-named private storage
+// receives a deterministic suffix. This accepts Kotlin source whose private backing field would
+// otherwise collide exactly with the singleton field (A), and also avoids a type-distinguished
+// duplicate name (B) which CLR metadata permits but ordinary C# cannot declare naturally.
 object A {
     val INSTANCE: A? = null
 }
@@ -14,5 +11,6 @@ object B {
 }
 
 fun main() {
+    println(A.INSTANCE === null)
     println(B.INSTANCE)
 }

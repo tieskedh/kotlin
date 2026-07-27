@@ -692,6 +692,14 @@ required-toolchain enforcement. The integration child task uses the private shor
 because its name is embedded in temporary paths passed to CLR4 and Framework ILAsm. This closes
 the test-entry-point omission, not the remaining evidence items above.
 
+Private generated-field collisions now follow the mature JVM rule rather than rejecting valid
+Kotlin. A late class lowering reserves public/protected CLR and compiler-ABI field names, then
+suffixes later private storage through the existing `IrField` symbols. The rule also removes
+type-distinguished duplicate private names which CLR metadata permits but C# cannot naturally
+author. IL and executable semantic coverage pin both an object property named `INSTANCE` and an
+inner property named ``this$0`` while independently exercising the singleton and outer-receiver
+fields. The emitter retains its physical field-identity gate for unrenamable exposed collisions.
+
 The raw foreign-exception lane now validates catch/return and catch/rethrow from C# through Kotlin
 on both runtime profiles. The same CLR object retains its exact type, message, `InnerException`,
 `Data`, and an observable CLR stack trace; Kotlin source `throw e` exposes the new Kotlin throw site

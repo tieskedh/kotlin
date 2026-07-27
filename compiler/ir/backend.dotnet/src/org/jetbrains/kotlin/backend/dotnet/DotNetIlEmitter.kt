@@ -1070,19 +1070,14 @@ internal class DotNetIlEmitter(
         // return-type-only overloads are CLS-forbidden and unverified against ilasm, so they are
         // conservatively treated as the same clash.
         //
-        // The same pass gates CLR FIELD-identity clashes: DotNetObjectClassLowering synthesizes
-        // the static `INSTANCE` singleton field with the object's own type, so the backing field
-        // of a user property named `INSTANCE` mapping to the same IL type (`val INSTANCE: A? =
-        // null` — nullability erases) collides in both name and field signature — staticness and
-        // visibility are attribute flags, not part of the identity — which ilasm rejects as a
-        // duplicate field declaration (probe-verified on the modern ilasm 10.0.9, fieldprobe). A
-        // differently-typed field of the same name is a legal CLR shape (same probe) and stays
-        // supported, so the identity key is name plus mapped IL type. Stated deviation from the
-        // JVM backend, which RENAMES the clashing private backing field (`RenameFieldsLowering`
-        // yields `INSTANCE$1`): this backend has no field-renaming machinery, so the clash is
-        // rejected whole-class like the method-identity clash above. A companion singleton
-        // participates in its selected static owner's gate: a field on that same owner with the
-        // companion's name and type clashes and evicts the whole owner subtree.
+        // The same pass retains a final CLR FIELD-identity gate. The late JVM-shaped
+        // DotNetRenameFieldsLowering has already reserved public/protected ABI names and suffixed
+        // later private implementation storage, including type-distinguished duplicate names
+        // which raw CLR metadata could represent but C# cannot naturally author. A collision
+        // reaching this point therefore involves fields which the lowering may not rename and is
+        // an ABI error. The physical key remains mapped type + name because staticness and
+        // visibility are flags rather than field identity (probe-verified on modern ILAsm
+        // 10.0.9, fieldprobe).
         for ([irClass, classInfo] in availableClasses.entries.toList()) {
             // Already evicted with the subtree of an earlier failure in this snapshot.
             if (irClass !in availableClasses) continue

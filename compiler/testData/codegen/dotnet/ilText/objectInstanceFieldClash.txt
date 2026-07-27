@@ -6,11 +6,45 @@
 .assembly 'objectInstanceFieldClash' {}
 .module 'main-objectInstanceFieldClash.il'
 
+.class public auto ansi sealed 'A'
+       extends [mscorlib]System.Object
+{
+  .field public static initonly class 'A' 'INSTANCE'
+  .field private class 'A' 'INSTANCE$1'
+  .method private hidebysig specialname rtspecialname static void .cctor() cil managed
+  {
+    .maxstack 1
+    newobj instance void 'A'::.ctor()
+    stsfld class 'A' 'A'::'INSTANCE'
+    ret
+  }
+  .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
+  {
+    .maxstack 2
+    ldarg.0
+    call instance void [mscorlib]System.Object::.ctor()
+    ldarg.0
+    ldnull
+    stfld class 'A' 'A'::'INSTANCE$1'
+    ret
+  }
+  .method public hidebysig specialname instance class 'A' 'get_INSTANCE'() cil managed
+  {
+    .maxstack 1
+    ldarg.0
+    ldfld class 'A' 'A'::'INSTANCE$1'
+    ret
+  }
+  .property instance class 'A' 'INSTANCE'()
+  {
+    .get instance class 'A' 'A'::'get_INSTANCE'()
+  }
+}
 .class public auto ansi sealed 'B'
        extends [mscorlib]System.Object
 {
   .field public static initonly class 'B' 'INSTANCE'
-  .field private int32 'INSTANCE'
+  .field private int32 'INSTANCE$1'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
@@ -25,14 +59,14 @@
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
     ldc.i4 1
-    stfld int32 'B'::'INSTANCE'
+    stfld int32 'B'::'INSTANCE$1'
     ret
   }
   .method public hidebysig specialname instance int32 'get_INSTANCE'() cil managed
   {
     .maxstack 1
     ldarg.0
-    ldfld int32 'B'::'INSTANCE'
+    ldfld int32 'B'::'INSTANCE$1'
     ret
   }
   .property instance int32 'INSTANCE'()
@@ -47,6 +81,17 @@
   {
     .entrypoint
     .maxstack 3
+    ldsfld class 'A' 'A'::'INSTANCE'
+    call instance class 'A' 'A'::'get_INSTANCE'()
+    ldnull
+    ceq
+    brtrue IL_boolStrTrue_0
+    ldstr "false"
+    br IL_boolStrEnd_1
+IL_boolStrTrue_0:
+    ldstr "true"
+IL_boolStrEnd_1:
+    call void [mscorlib]System.Console::WriteLine(string)
     ldsfld class 'B' 'B'::'INSTANCE'
     call instance int32 'B'::'get_INSTANCE'()
     box [mscorlib]System.Int32

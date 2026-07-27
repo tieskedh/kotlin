@@ -1257,7 +1257,10 @@ landed shape as a compatibility constraint.
   secondary constructors, and delegating secondary constructors all preserve the outer argument;
   a delegating constructor lets its target perform the single outer-field store. Source visibility
   uses the existing nested-type mapping, and an unsupported inner member evicts only that inner
-  metadata subtree and real users.
+  metadata subtree and real users. A source property named ``this$0`` does not reject the class:
+  the late JVM-shaped field disambiguator preserves the source backing-field name, reserves an
+  existing suffix such as ``this$0$1``, and moves the synthetic outer field to the first free
+  private spelling while every symbol-based outer read follows it.
   Pins: `ilText/innerClasses.kt`, `ilText/genericInnerClasses.kt`,
   `ilText/classShapeRejected.kt`, `ilText/nestedClassesRejected.kt`; runtime:
   `box/innerClasses.kt` and `box/genericInnerClasses.kt`.
@@ -1923,16 +1926,16 @@ landed shape as a compatibility constraint.
   singleton equality/hash/string contract remains unaudited), local named objects, named
   objects inside an object/companion/interface, and IL accessor-identity clashes; `==` between
   objects stays rejected while `===` works via
-  the existing reference `ceq`. The member pre-pass additionally gates IL FIELD-identity
-  clashes, whole-class: the backing field of a user property named `INSTANCE` whose type maps to
-  the object's own class (`val INSTANCE: A? = null` — nullability erases) collides with the
-  synthesized singleton field in both name and field signature (staticness/visibility are flags,
-  not identity), which ilasm rejects as a duplicate field declaration (probed on 10.0.9,
-  fieldprobe); the identity key is name + mapped IL type, so a differently-typed `INSTANCE`
-  property is a legal CLR shape and stays supported (same probe; pinned by
-  `ilText/objectInstanceFieldClash.kt`). Stated deviation from the JVM backend, which RENAMES
-  the clashing private backing field (`RenameFieldsLowering` → `INSTANCE$1`): this backend has
-  no field-renaming machinery, so the clash is rejected like the accessor-identity clash.
+  the existing reference `ceq`. A final JVM-shaped `DotNetRenameFieldsLowering` runs after every
+  field-producing target pass. Public/protected ABI fields reserve their names, static
+  implementation storage has the next stable priority, and later private fields receive `$n`
+  suffixes. Consequently a user property named `INSTANCE`, including one whose type maps to the
+  object's own class after nullability erasure, coexists with the public singleton field. A
+  differently-typed private `INSTANCE` is suffixed too: raw CLR metadata can distinguish it, but
+  C# cannot naturally author that shape and common reflection/tooling is name-oriented. The
+  emitter's mapped-type + name gate remains a whole-class safety check for public ABI fields the
+  lowering may not rename. `ilText/objectInstanceFieldClash.kt` and the object semantic box pin
+  both exact and type-distinguished cases.
 - `const val` in an `object` is the same CLR `literal` field as on a facade, emitted on the
   object class (coexistence of `literal` fields with a `.cctor` and an `initonly` field on one
   class is probe-verified, objprobe_s9a): no accessors, no `.property` block, no `.cctor` entry,
