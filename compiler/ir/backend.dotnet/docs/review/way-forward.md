@@ -272,8 +272,10 @@ declaration and a recomputed envelope digest is rejected as a negative oracle. A
 declare `InternalsVisibleTo` now contribute a second, non-duplicated surface containing internal
 types and their non-private members plus friend-dependent members of exposed types. Both
 executable variants must retain that portable surface, and a narrowed modern fixture is rejected.
-Private declarations remain implementation details. Raw attribute-blob encoding remains open for
-the general portable-superset model.
+Private declarations remain implementation details. Ordinary custom attributes are compared as
+decoded semantic multisets, including multiplicity; semantically equivalent raw encodings are
+deliberately not a cross-profile ABI. Exact bytes remain bounded to compiler protocols which
+explicitly document that representation.
 Manifest-addressable MethodImpl obligations are now compared semantically rather than by raw row:
 the verifier resolves complete producer-recorded locators, keys each public/protected concrete
 interface-map obligation by Kotlin logical identity, physical view, and constructed CLR signature,
@@ -505,8 +507,10 @@ The remaining P0-D implementation order is:
    structured portable-superset verifier also closes the managed-resource row, C# manifest
    logical-contract comparison, manifest-addressable semantic MethodImpl obligations, and
    friend-dependent internal surface without requiring byte-identical profile payloads. Close
-   the remaining general attribute-blob and non-manifest interface-row comparisons in the
-   structured metadata work rather than with IL substring tests.
+   the remaining non-manifest interface-row comparison in the structured metadata work rather
+   than with IL substring tests. General attribute-blob equality is intentionally not required:
+   ordinary attributes retain decoded identity, arguments, and multiplicity, while only
+   explicitly documented compiler protocols freeze raw bytes.
 
 There is no remaining implicit-intersection representation or production-adapter migration on the
 critical path. The next backend implementation item is the foreign boundary and structured

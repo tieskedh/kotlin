@@ -228,10 +228,13 @@ landed shape as a compatibility constraint.
   members, plus internal or private-protected members on otherwise exposed types, must retain
   their shape in each executable variant. Public surface is not duplicated in that comparison,
   private declarations stay outside it, and a narrowed modern fixture proves that a missing
-  portable internal is rejected. Raw attribute-blob encoding and non-manifest interface rows
-  remain outside this bounded portable-superset audit. The C# authoring matrix separately audits
-  its exact `InternalsVisibleTo` blob, friend TypeDef visibility, and promotion MethodImpl
-  signatures.
+  portable internal is rejected. Ordinary custom attributes are an ABI multiset of decoded
+  attribute identity, constructor arguments, and named field/property arguments; equivalent
+  ECMA-335 blob encodings are not required to be byte-identical across profiles or PE writers.
+  Exact blob bytes are frozen only by an explicitly documented compiler protocol whose ADR names
+  that representation. The C# authoring matrix does so for `InternalsVisibleTo`,
+  `KotlinCompilerAbiAttribute`, and `EditorBrowsable(Never)`. Non-manifest interface rows remain
+  outside this bounded portable-superset audit.
   `Kotlin.Runtime` and `Kotlin.Stdlib` use the selected core-library profile and exact
   TargetFrameworkAttribute metadata. The portable variant has an exact `netstandard` AssemblyRef
   and no `mscorlib` MemberRefs. The complete
