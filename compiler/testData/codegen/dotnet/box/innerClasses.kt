@@ -51,6 +51,17 @@ class InnerOuter(private val seed: Int) {
         fun value(): Int = seed + offset
     }
 
+    inner class FieldNameCollision {
+        val `this$0`: InnerOuter? = null
+        val `this$0$1`: InnerOuter? = this@InnerOuter
+
+        fun propertyIsNull(): Boolean = `this$0` === null
+
+        fun reservedSuffixIsOuter(): Boolean = `this$0$1` === this@InnerOuter
+
+        fun outerSeed(): Int = seed
+    }
+
     fun hiddenValue(): Int = Hidden().value()
 }
 
@@ -77,5 +88,9 @@ fun box(): String {
 
     val other = InnerOuter(20)
     if (other.Base(2).value() != 22) return "fail 10: per-instance outer capture"
+    val collision = outer.FieldNameCollision()
+    if (!collision.propertyIsNull()) return "fail 11: source this\$0 backing field"
+    if (!collision.reservedSuffixIsOuter()) return "fail 12: reserved source suffix"
+    if (collision.outerSeed() != 10) return "fail 13: synthesized outer field"
     return "OK"
 }
