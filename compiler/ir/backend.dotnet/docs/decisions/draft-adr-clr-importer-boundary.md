@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical type, field, method, MemberRef, property, and generic metadata is implemented**
+- Status: **Draft candidate; physical declaration metadata and bounded type-identity resolution are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -242,6 +242,45 @@ proving that the shared signature model does not diverge. Real Framework `mscorl
 `System.Runtime` provide scale coverage. FieldDef is a necessary input for semantically decoding
 enum-valued custom attributes, but cross-assembly enum resolution still belongs to the importer
 graph above the physical reader.
+
+The seventh slice adds that physical assembly/type graph without yet creating Kotlin declarations.
+The resolver consumes an explicit binding from each source AssemblyRef row to the concrete
+assembly selected by the build frontend. It deliberately does not choose assemblies by simple
+name, version heuristics, probing directories, or host-runtime reflection. This follows JVM and
+Native dependency resolution: the class/symbol layer consumes an already selected dependency
+graph rather than silently substituting another platform library. The CLR-specific work is to
+follow TypeRef resolution scopes, nested TypeRefs, nominal TypeSpecs, ExportedType rows, and
+assembly type-forwarder chains.
+
+Every lookup is bounded and cycle-safe. Missing bindings, missing or ambiguous types, forwarding
+cycles, non-nominal TypeSpecs, and unsupported ModuleRef/File multi-module edges are distinct
+structured results. The latter are a recorded deferral rather than a name-based fallback:
+supporting multi-module assemblies requires the build frontend to select modules and bind File
+and ModuleRef edges just as it selects assemblies.
+
+The physical reader retains ExportedType token, attributes, TypeDefId hint, namespace/name, and
+Implementation handle. Current Roslyn output proves a CLR-specific augmentation to the classic
+multi-module rules: an AssemblyRef forwarder root carries `Forwarder` while its ordinary
+visibility bits are `NotPublic`, and automatically emitted nested descendants point to the
+enclosing ExportedType with flags `0`. The reader accepts that shape only when the enclosing chain
+ends in a marked AssemblyRef forwarder. Ordinary File exports must remain public and ordinary
+nested multi-module exports must remain nested-public. No C# source attribute is consulted during
+resolution.
+
+Enum classification requires the resolved declaring TypeDef to extend exactly the selected
+core-library `System.Enum` TypeDef supplied by the profile graph. Only then is the single
+runtime-special instance field `value__` interpreted as storage, and its physical type must be
+one of the eight CLR signed/unsigned integer primitives. A same-named base or field does not
+establish enum identity. The resolver does not map that storage to a Kotlin enum, numeric type, or
+annotation argument; it supplies the physical width needed by the later semantic
+CustomAttribute decoder.
+
+A real Roslyn .NET 10 destination/facade pair pins root and nested type-forwarding, exact
+destination identity, a forwarded `Int16` enum, missing bindings, ambiguity, cycles, and the
+explicit multi-module deferral. The existing Framework fixture independently resolves its
+`Int16` enum against the selected `mscorlib` `System.Enum`. The algorithm is profile-neutral;
+different emitted/reference-assembly graphs across `net48`, `netstandard2.0`, and `net10.0` are
+inputs, not reasons to change Kotlin Common semantics.
 
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,

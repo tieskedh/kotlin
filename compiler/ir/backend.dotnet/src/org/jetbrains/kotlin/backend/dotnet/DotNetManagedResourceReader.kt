@@ -163,6 +163,7 @@ private object DotNetPeMetadataReader {
                 assemblyReferences = readAssemblyReferences(metadata.tables, metadata.strings, metadata.blobs),
                 typeReferences = typeReferences,
                 typeDefinitions = typeDefinitions,
+                exportedTypes = readExportedTypes(metadata.tables, metadata.strings),
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
                 fieldDefinitions = fieldDefinitions,
                 methodDefinitions = methodDefinitions,
@@ -523,6 +524,107 @@ private object DotNetPeMetadataReader {
                     declaringType = declaringTypes[handle],
                 )
             }
+        }
+
+        private fun readExportedTypes(
+            tables: MetadataStream,
+            strings: MetadataStream,
+        ): List<DotNetClrExportedType> {
+            val table = locateMetadataTable(tables, EXPORTED_TYPE_TABLE) ?: return emptyList()
+            val exportedTypes = List(table.rowCount.toIntChecked("ExportedType row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val attributes = readU4(position)
+                position += UINT32_SIZE
+                val typeDefinitionId = readU4(position)
+                position += UINT32_SIZE
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val namespaceIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val implementationIndex = readIndex(position, table.indexSizes.implementationIndexSize)
+                val metadataName = readStringHeap(strings, nameIndex)
+                if (metadataName.isEmpty()) {
+                    malformed("ExportedType row ${rowIndex + 1} has an empty name")
+                }
+                val implementation = decodeCodedHandle(
+                    implementationIndex,
+                    tagBits = 2,
+                    tablesByTag = intArrayOf(FILE_TABLE, ASSEMBLY_REF_TABLE, EXPORTED_TYPE_TABLE),
+                    metadataTables = tables,
+                    description = "ExportedType implementation",
+                ) ?: malformed("ExportedType row ${rowIndex + 1} has no implementation")
+                val visibility = (attributes and TYPE_VISIBILITY_MASK).toInt()
+                when (implementation.table) {
+                    FILE_TABLE -> {
+                        if (visibility != TYPE_PUBLIC_VISIBILITY) {
+                            malformed("top-level ExportedType row ${rowIndex + 1} is not public")
+                        }
+                    }
+
+                    ASSEMBLY_REF_TABLE -> {
+                        if (attributes and TYPE_FORWARDER_ATTRIBUTE == 0L) {
+                            malformed(
+                                "assembly-forwarded ExportedType row ${rowIndex + 1} has no forwarder flag"
+                            )
+                        }
+                    }
+
+                    EXPORTED_TYPE_TABLE -> {
+                        if (readStringHeap(strings, namespaceIndex).isNotEmpty()) {
+                            malformed("nested ExportedType row ${rowIndex + 1} has a namespace")
+                        }
+                    }
+                }
+                DotNetClrExportedType(
+                    handle = metadataHandle(
+                        EXPORTED_TYPE_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "ExportedType",
+                    ),
+                    attributes = attributes,
+                    typeDefinitionId = typeDefinitionId,
+                    namespaceName = readStringHeap(strings, namespaceIndex),
+                    metadataName = metadataName,
+                    implementation = implementation,
+                )
+            }
+            val topLevelNames = mutableSetOf<Pair<String, String>>()
+            val nestedNames = mutableSetOf<Pair<DotNetClrMetadataHandle, String>>()
+            val exportedTypesByHandle = exportedTypes.associateBy(DotNetClrExportedType::handle)
+            fun hasForwardedEnclosingType(
+                exportedType: DotNetClrExportedType,
+                visited: MutableSet<DotNetClrMetadataHandle>,
+            ): Boolean {
+                if (!visited.add(exportedType.handle)) return false
+                return when (exportedType.implementation.table) {
+                    ASSEMBLY_REF_TABLE -> exportedType.isForwarder
+                    EXPORTED_TYPE_TABLE -> exportedTypesByHandle[exportedType.implementation]
+                        ?.let { enclosing -> hasForwardedEnclosingType(enclosing, visited) } == true
+                    else -> false
+                }
+            }
+            for (exportedType in exportedTypes) {
+                if (exportedType.implementation.table == EXPORTED_TYPE_TABLE &&
+                    exportedType.visibility != DotNetClrTypeVisibility.NESTED_PUBLIC &&
+                    !hasForwardedEnclosingType(exportedType, mutableSetOf())
+                ) {
+                    malformed(
+                        "nested ExportedType row ${exportedType.handle.row} is not nested-public"
+                    )
+                }
+                val unique = if (exportedType.implementation.table == EXPORTED_TYPE_TABLE) {
+                    nestedNames.add(exportedType.implementation to exportedType.metadataName)
+                } else {
+                    topLevelNames.add(exportedType.namespaceName to exportedType.metadataName)
+                }
+                if (!unique) {
+                    malformed(
+                        "ExportedType table contains duplicate '${exportedType.namespaceName}.${exportedType.metadataName}'"
+                    )
+                }
+            }
+            return exportedTypes
         }
 
         private fun readTypeSpecifications(
@@ -2121,6 +2223,10 @@ private object DotNetPeMetadataReader {
     private const val FIELD_SPECIAL_NAME_ATTRIBUTE = 0x0200
     private const val FIELD_RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x0400
     private const val FIELD_ATTRIBUTE_MASK = 0xb7f7
+    private const val TYPE_VISIBILITY_MASK = 0x0000_0007L
+    private const val TYPE_PUBLIC_VISIBILITY = 0x0000_0001
+    private const val TYPE_NESTED_PUBLIC_VISIBILITY = 0x0000_0002
+    private const val TYPE_FORWARDER_ATTRIBUTE = 0x0020_0000L
     private const val PROPERTY_ATTRIBUTE_MASK = 0x1600
     private const val METHOD_SEMANTICS_SETTER = 0x0001
     private const val METHOD_SEMANTICS_GETTER = 0x0002

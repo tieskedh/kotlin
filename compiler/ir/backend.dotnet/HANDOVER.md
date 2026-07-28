@@ -2024,6 +2024,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   identity and underlying storage, then decode ordinary custom attributes semantically with
   attachment and multiplicity. The fresh strict gate is 869/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 52 library integration tests).
+- The physical-resolution continuation decodes ExportedType and adds a bounded, cycle-safe
+  TypeDef/TypeRef/nominal-TypeSpec/type-forwarder resolver. It consumes exact AssemblyRef edges
+  selected by the build frontend and never performs simple-name/version/probing binding. Missing
+  bindings/types, ambiguity, cycles, non-nominal TypeSpecs, and File/ModuleRef multi-module edges
+  remain structured failures. A real Roslyn net10 facade proved that forwarder roots carry
+  Forwarder plus NotPublic visibility while automatically forwarded nested rows carry flags zero;
+  the reader admits the latter only through a marked forwarding ancestor. Enum storage is read
+  only after the direct base resolves to the caller-supplied selected core-library System.Enum
+  identity. Framework mscorlib and a forwarded modern Int16 enum cover both runtime families;
+  actual forwarders, nested types, ambiguity, cycles, missing bindings, and the explicit
+  multi-module deferral are tested. This remains physical/profile-neutral and creates no Kotlin
+  or C# declarations. Next decode CustomAttribute attachment, constructor identity, and semantic
+  values using this graph. The fresh strict gate is 870/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 53 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2076,7 +2090,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 869 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 870 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2107,9 +2121,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Continue the CLR importer above its physical field/generic/property/MemberRef foundation.**
-   Add the bounded assembly/type resolution needed for enum-valued semantic custom-attribute
-   records before introducing the CLR-to-Kotlin policy and lazy FIR provider. Preserve Kotlin
+2. **Continue the CLR importer above its physical declaration and type-resolution foundation.**
+   Add semantic custom-attribute records before introducing the CLR-to-Kotlin policy and lazy FIR
+   provider. Preserve Kotlin
    declaration identity and Common semantics; decode nullability, variance, properties, and
    exceptions at the importer boundary instead of teaching the Kotlin-owned backend surface to
    infer C# conventions. Keep structured metadata-table auditing; do not substitute IL substring

@@ -328,7 +328,18 @@ landed shape as a compatibility constraint.
    FieldSig and preserve TypeDef FieldList ownership, exact names, flags, and raw blobs.
    `value__` supplies physical enum storage only after resolved `System.Enum` ancestry confirms
    the owner; its spelling alone is not enum identity. Profile and byref-like legality stay in the
-   selected-graph import policy. It does not load target code,
+   selected-graph import policy. ExportedType rows preserve their attributes, TypeDefId hint,
+   names, and File/AssemblyRef/ExportedType implementation handle. The bounded type resolver
+   follows Module/current-assembly, AssemblyRef, nested TypeRef, nominal TypeSpec, and type-forwarder
+   edges, returning structured missing/ambiguous/cycle/non-nominal/multi-module failures. It
+   consumes exact AssemblyRef bindings selected by the build frontend; never implement a second
+   name/version/probing binder in the importer. Roslyn forwarder roots use `Forwarder` with
+   NotPublic visibility and their automatically emitted nested ExportedTypes use flags zero; accept
+   that nested shape only through a marked forwarding ancestor. File/ModuleRef multi-module
+   resolution remains explicitly unsupported until the selected module graph exists. A CLR enum
+   is a direct resolved child of the selected core-library `System.Enum` and has one valid
+   runtime-special integral `value__` field; neither spelling is sufficient by itself.
+   It does not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy
    target FIR symbol provider -> IR retaining the original physical owner/member linkage.

@@ -25,6 +25,11 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldVisibility
@@ -33,6 +38,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataHandle
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMemberReferenceSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
@@ -42,6 +48,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeReference
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolutionFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
@@ -53,6 +63,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryArtifact
 import org.jetbrains.kotlin.backend.dotnet.DotNetLibraryAbiCodec
 import org.jetbrains.kotlin.backend.dotnet.DotNetKotlinMetadataResource
 import org.jetbrains.kotlin.backend.dotnet.DotNetManagedResourceReader
+import org.jetbrains.kotlin.backend.dotnet.DotNetManagedAssemblyIdentity
 import org.jetbrains.kotlin.backend.dotnet.DotNetModernCSharpToolchain
 import org.jetbrains.kotlin.backend.dotnet.DotNetObjectInstance
 import org.jetbrains.kotlin.backend.dotnet.DotNetPhysicalDeclaration
@@ -76,6 +87,7 @@ import org.jetbrains.kotlin.test.TestCaseWithTmpdir
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -606,6 +618,36 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 enumLiteralField.signature,
             )
+            if (target == DotNetTarget.NET48) {
+                val frameworkCoreMetadata = DotNetClrMetadataReader.read(
+                    checkNotNull(frameworkIlasm).parentFile.resolve("mscorlib.dll")
+                )
+                val resolver = DotNetClrTypeResolver(
+                    DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                        if (sourceAssembly === metadata && reference.name == "mscorlib") {
+                            frameworkCoreMetadata
+                        } else {
+                            null
+                        }
+                    }
+                )
+                val systemEnumReference = metadata.typeReferences.single { reference ->
+                    reference.namespaceName == "System" && reference.metadataName == "Enum"
+                }
+                val systemEnum = (
+                        resolver.resolveTypeDefinition(metadata, systemEnumReference.handle) as
+                                DotNetClrTypeResolution.Resolved
+                        ).type
+                val resolvedTinyKind = (
+                        resolver.resolveTypeDefinition(metadata, tinyKind.handle) as
+                                DotNetClrTypeResolution.Resolved
+                        ).type
+                val resolvedStorage = resolver.resolveEnumStorage(
+                    resolvedTinyKind,
+                    systemEnum,
+                ) as DotNetClrEnumStorageResolution.Resolved
+                assertEquals(DotNetClrPrimitiveType.INT16, resolvedStorage.storageType)
+            }
 
             val malformedAssembly = File(
                 assembly.parentFile,
@@ -909,6 +951,298 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ) { "The net10 reference assembly no longer exercises a modified TypeSpec root" }
             }
         }
+    }
+
+    @Test
+    fun testResolvesPhysicalClrTypeIdentityAndEnumStorage() {
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
+        )
+        val toolchain = checkNotNull(modernCSharp)
+        val directory = File(tmpdir, "clr-type-resolution").apply { mkdirs() }
+        val destinationSource = directory.resolve("destination.cs").apply {
+            writeText(
+                """
+                namespace Forwarded
+                {
+                    public enum ExternalKind : short
+                    {
+                        Zero = 0
+                    }
+
+                    public sealed class Outer
+                    {
+                        public sealed class Inner
+                        {
+                        }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val destinationAssembly = directory.resolve("ForwardDestination.dll")
+        val destinationCompile = runModernCSharpCompiler(
+            toolchain,
+            destinationSource,
+            destinationAssembly,
+        )
+        assertEquals(0, destinationCompile.exitCode, destinationCompile.output)
+
+        val facadeSource = directory.resolve("facade.cs").apply {
+            writeText(
+                """
+                using System.Runtime.CompilerServices;
+
+                [assembly: TypeForwardedTo(typeof(Forwarded.ExternalKind))]
+                [assembly: TypeForwardedTo(typeof(Forwarded.Outer))]
+
+                namespace ForwardFacade
+                {
+                    public sealed class Marker
+                    {
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val facadeAssembly = directory.resolve("ForwardFacade.dll")
+        val facadeCompile = runModernCSharpCompiler(
+            toolchain,
+            facadeSource,
+            facadeAssembly,
+            destinationAssembly,
+        )
+        assertEquals(0, facadeCompile.exitCode, facadeCompile.output)
+
+        val destinationMetadata = DotNetClrMetadataReader.read(destinationAssembly)
+        val facadeMetadata = DotNetClrMetadataReader.read(facadeAssembly)
+        assertEquals(
+            setOf("ExternalKind", "Outer", "Inner"),
+            facadeMetadata.exportedTypes.mapTo(mutableSetOf(), DotNetClrExportedType::metadataName),
+        )
+        assertTrue(
+            facadeMetadata.exportedTypes
+                .filter { exportedType -> exportedType.implementation.table == 35 }
+                .all { exportedType ->
+                    exportedType.isForwarder &&
+                        exportedType.visibility == DotNetClrTypeVisibility.NOT_PUBLIC
+                }
+        )
+        val nestedExport = facadeMetadata.exportedTypes.single { exportedType ->
+            exportedType.metadataName == "Inner"
+        }
+        assertEquals(39, nestedExport.implementation.table)
+        assertFalse(nestedExport.isForwarder)
+        assertEquals(DotNetClrTypeVisibility.NOT_PUBLIC, nestedExport.visibility)
+
+        val systemRuntimeAssembly =
+            toolchain.referenceDirectory.resolve("System.Runtime.dll")
+        assertTrue(systemRuntimeAssembly.isFile)
+        val systemRuntimeMetadata = DotNetClrMetadataReader.read(systemRuntimeAssembly)
+        var facadeConsumerMetadata: DotNetClrAssemblyMetadata? = null
+        val binder = DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+            when {
+                (sourceAssembly === facadeMetadata ||
+                        sourceAssembly === facadeConsumerMetadata) &&
+                        reference.name == destinationMetadata.identity.name ->
+                    destinationMetadata
+
+                sourceAssembly === destinationMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name ->
+                    systemRuntimeMetadata
+
+                else -> null
+            }
+        }
+        val resolver = DotNetClrTypeResolver(binder)
+        val forwardedEnumResolution = resolver.resolveTopLevelType(
+            facadeMetadata,
+            "Forwarded",
+            "ExternalKind",
+        )
+        val forwardedEnum =
+            (forwardedEnumResolution as DotNetClrTypeResolution.Resolved).type
+        assertSame(destinationMetadata, forwardedEnum.assembly)
+        assertEquals("ExternalKind", forwardedEnum.definition.metadataName)
+
+        val systemEnumReference = destinationMetadata.typeReferences.single { reference ->
+            reference.namespaceName == "System" && reference.metadataName == "Enum"
+        }
+        val systemEnum = (
+                resolver.resolveTypeDefinition(
+                    destinationMetadata,
+                    systemEnumReference.handle,
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        assertSame(systemRuntimeMetadata, systemEnum.assembly)
+        val enumStorage =
+            resolver.resolveEnumStorage(forwardedEnum, systemEnum) as
+                    DotNetClrEnumStorageResolution.Resolved
+        assertEquals(DotNetClrPrimitiveType.INT16, enumStorage.storageType)
+        assertEquals("value__", enumStorage.storageField.name)
+
+        val nextTypeReferenceRow =
+            (facadeMetadata.typeReferences.maxOfOrNull { reference -> reference.handle.row } ?: 0) + 1
+        val forwardedOuterReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(1, nextTypeReferenceRow),
+            namespaceName = "Forwarded",
+            metadataName = "Outer",
+            resolutionScope = null,
+        )
+        val nestedReference = DotNetClrTypeReference(
+            handle = DotNetClrMetadataHandle(1, nextTypeReferenceRow + 1),
+            namespaceName = "",
+            metadataName = "Inner",
+            resolutionScope = forwardedOuterReference.handle,
+        )
+        facadeConsumerMetadata = facadeMetadata.copy(
+            typeReferences = facadeMetadata.typeReferences +
+                    forwardedOuterReference +
+                    nestedReference,
+        )
+        val nestedResolution = resolver.resolveTypeDefinition(
+            checkNotNull(facadeConsumerMetadata),
+            nestedReference.handle,
+        )
+        val nestedType = (nestedResolution as DotNetClrTypeResolution.Resolved).type
+        assertSame(destinationMetadata, nestedType.assembly)
+        assertEquals("Inner", nestedType.definition.metadataName)
+        assertEquals(
+            destinationMetadata.typeDefinitions.single { definition ->
+                definition.metadataName == "Outer"
+            }.handle,
+            nestedType.definition.declaringType,
+        )
+
+        fun emptyAssembly(
+            name: String,
+            assemblyReferences: List<DotNetClrAssemblyReference> = emptyList(),
+            typeDefinitions: List<DotNetClrTypeDefinition> = emptyList(),
+            exportedTypes: List<DotNetClrExportedType> = emptyList(),
+        ): DotNetClrAssemblyMetadata =
+            DotNetClrAssemblyMetadata(
+                identity = DotNetManagedAssemblyIdentity(
+                    name = name,
+                    version = "1.0.0.0",
+                    culture = "neutral",
+                    hasPublicKey = false,
+                ),
+                assemblyReferences = assemblyReferences,
+                typeReferences = emptyList(),
+                typeDefinitions = typeDefinitions,
+                exportedTypes = exportedTypes,
+                typeSpecifications = emptyList(),
+                fieldDefinitions = emptyList(),
+                methodDefinitions = emptyList(),
+                memberReferences = emptyList(),
+                propertyDefinitions = emptyList(),
+                methodSemantics = emptyList(),
+                genericParameterDefinitions = emptyList(),
+                genericParameterConstraints = emptyList(),
+            )
+
+        fun forwardingAssembly(name: String, targetName: String): DotNetClrAssemblyMetadata {
+            val referenceHandle = DotNetClrMetadataHandle(35, 1)
+            return emptyAssembly(
+                name = name,
+                assemblyReferences = listOf(
+                    DotNetClrAssemblyReference(
+                        handle = referenceHandle,
+                        name = targetName,
+                        version = "1.0.0.0",
+                        culture = "neutral",
+                        flags = 0,
+                        publicKeyOrToken = emptyList(),
+                        hashValue = emptyList(),
+                    )
+                ),
+                exportedTypes = listOf(
+                    DotNetClrExportedType(
+                        handle = DotNetClrMetadataHandle(39, 1),
+                        attributes = 0x0020_0001,
+                        typeDefinitionId = 0,
+                        namespaceName = "Cycle",
+                        metadataName = "Loop",
+                        implementation = referenceHandle,
+                    )
+                ),
+            )
+        }
+
+        val cycleLeft = forwardingAssembly("CycleLeft", "CycleRight")
+        val cycleRight = forwardingAssembly("CycleRight", "CycleLeft")
+        val cycleResolver = DotNetClrTypeResolver(
+            DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                when {
+                    sourceAssembly === cycleLeft && reference.name == "CycleRight" -> cycleRight
+                    sourceAssembly === cycleRight && reference.name == "CycleLeft" -> cycleLeft
+                    else -> null
+                }
+            }
+        )
+        val cycle = cycleResolver.resolveTopLevelType(cycleLeft, "Cycle", "Loop")
+            as DotNetClrTypeResolution.Unresolved
+        assertEquals(DotNetClrTypeResolutionFailure.TYPE_RESOLUTION_CYCLE, cycle.failure)
+
+        val ambiguousAssembly = emptyAssembly(
+            name = "Ambiguous",
+            typeDefinitions = listOf(
+                DotNetClrTypeDefinition(
+                    handle = DotNetClrMetadataHandle(2, 1),
+                    namespaceName = "Broken",
+                    metadataName = "Duplicate",
+                    attributes = 1,
+                    baseType = null,
+                    declaringType = null,
+                ),
+                DotNetClrTypeDefinition(
+                    handle = DotNetClrMetadataHandle(2, 2),
+                    namespaceName = "Broken",
+                    metadataName = "Duplicate",
+                    attributes = 1,
+                    baseType = null,
+                    declaringType = null,
+                ),
+            ),
+        )
+        val ambiguous = DotNetClrTypeResolver(
+            DotNetClrAssemblyReferenceBinder { _, _ -> null }
+        ).resolveTopLevelType(ambiguousAssembly, "Broken", "Duplicate")
+            as DotNetClrTypeResolution.Unresolved
+        assertEquals(DotNetClrTypeResolutionFailure.AMBIGUOUS_TYPE, ambiguous.failure)
+
+        val unbound = DotNetClrTypeResolver(
+            DotNetClrAssemblyReferenceBinder { _, _ -> null }
+        ).resolveTopLevelType(facadeMetadata, "Forwarded", "ExternalKind")
+            as DotNetClrTypeResolution.Unresolved
+        assertEquals(DotNetClrTypeResolutionFailure.UNBOUND_ASSEMBLY_REFERENCE, unbound.failure)
+
+        val multiModuleAssembly = emptyAssembly(
+            name = "MultiModule",
+            exportedTypes = listOf(
+                DotNetClrExportedType(
+                    handle = DotNetClrMetadataHandle(39, 1),
+                    attributes = 1,
+                    typeDefinitionId = 1,
+                    namespaceName = "External",
+                    metadataName = "FromAnotherModule",
+                    implementation = DotNetClrMetadataHandle(38, 1),
+                )
+            ),
+        )
+        val unsupportedMultiModule = DotNetClrTypeResolver(
+            DotNetClrAssemblyReferenceBinder { _, _ -> null }
+        ).resolveTopLevelType(
+            multiModuleAssembly,
+            "External",
+            "FromAnotherModule",
+        ) as DotNetClrTypeResolution.Unresolved
+        assertEquals(
+            DotNetClrTypeResolutionFailure.UNSUPPORTED_MULTI_MODULE_REFERENCE,
+            unsupportedMultiModule.failure,
+        )
     }
 
     @Test
