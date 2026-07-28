@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through fixed enums, and selected-graph serialized type resolution are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through constructed fixed enums, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -541,13 +541,11 @@ independently covers qualified boxed types and enums plus unbound assemblies and
 identities. Named field/property arguments remain the next slice because they additionally require
 physical member resolution and assignment-shape validation.
 
-A constructor parameter whose fixed enum type is itself a constructed nested enum still returns
-the existing structured unsupported fixed-type result. That is a correct temporary boundary, not
-the final design: resolving it requires the general TypeSig-to-resolved-structural-type
-substitution model also needed by constructed members and the FIR importer. Do not duplicate a
-custom-attribute-only signature resolver. The semantic enum value model introduced here already
-retains the required constructed identity, so that later resolver can feed it without another ABI
-change.
+At this slice, a constructor parameter whose fixed enum type was itself a constructed nested enum
+still returned the structured unsupported fixed-type result. That temporary boundary required the
+general TypeSig-to-resolved-structural-type substitution model also needed by constructed members
+and the FIR importer. The eighteenth and nineteenth slices below add and consume that general
+model; no custom-attribute-only signature resolver was introduced.
 
 The seventeenth slice decodes the ordered named-argument sequence after the fixed arguments. JVM
 binary annotation visitors and KLIB annotation records first retain an argument name plus typed
@@ -629,6 +627,39 @@ generic owner. It also checks non-public/static/readonly fields, static/read-onl
 private-set/indexed properties, missing members, type mismatch, field-versus-property mismatch,
 ordered duplicates, invalid generic arity, inheritance cycles and limits, and duplicate
 MethodSemantics accessors.
+
+The nineteenth slice uses the same resolved-signature model for constructor-typed fixed arguments
+whose enum identity is a closed generic instance.
+
+1. JVM and KLIB-backed targets retain an enum argument's declaration/type identity and its value;
+   they do not reduce a generic enum owner to an unqualified declaration name or storage integer.
+   The .NET importer must preserve the equivalent complete constructed CLR identity.
+2. The platform difference is physical: a CLR constructor signature can encode the enum as a
+   `GenericInstance` TypeSig whose arguments include primitive signature codes and nominal types
+   from several assemblies, while the attribute blob contains only the enum's underlying bits.
+   The decoder must therefore derive identity from the resolved constructor signature rather than
+   from a serialized reflection type name.
+3. Kotlin Common is unchanged. This layer creates no Kotlin enum, annotation, or type projection;
+   it only retains the foreign constructed identity beside the exactly decoded storage value.
+4. ECMA-335 custom-attribute fixed-argument rules and constructed generic type signatures are
+   profile-neutral. The selected `net48`, `netstandard2.0`, or `net10.0` reference graph still
+   determines nominal identity; no profile is made to imitate another profile's available APIs.
+5. The implementation consumes the general assembly-context-bearing signature resolver added for
+   member validation. It converts the already resolved structure into the existing semantic enum
+   identity algebra and does not invent a display-name key or perform decoder-local generic
+   substitution.
+6. The core-team choice is to accept only a complete, arity-correct constructed signature, prove
+   its exact selected `System.Enum` ancestry and `value__` storage, and decode that width. Invalid
+   generic arity is malformed metadata with a located structured failure; unsupported non-enum
+   shapes are not repaired by erasure or an open-type fallback.
+
+Real Roslyn .NET 10 metadata covers the same `Generic<int>.NestedKind` both as a tagged `object`
+argument and as a strongly typed constructor argument. Both resolve to the same complete
+constructed identity and exact `Int16` bits. A doctored constructor signature with the type
+argument removed fails at its exact fixed-argument index and retains expected versus actual
+generic arity. Primitive generic arguments are resolved to the selected graph's exact
+`System.Int32` TypeDef, so the signature and serialized-name paths agree on semantic identity
+without depending on the compiler host runtime.
 
 Generic attribute constructors whose MemberRef parent is a closed TypeSpec remain the existing
 structured temporary boundary. The resolved-signature layer can represent their types, but
@@ -717,6 +748,8 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Passing both original and unqualified-context assemblies to profile policy:
   **Reasonable platform-specific divergence**.
 - Assembly-context-bearing resolved physical signature algebra and generic substitution:
+  **Correct direction**.
+- Exact constructed generic enum identity for constructor-typed fixed arguments:
   **Correct direction**.
 - Separate selected-graph validation of named custom-attribute members:
   **Correct direction**.

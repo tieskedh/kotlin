@@ -365,3 +365,27 @@ private fun DotNetClrResolvedTypeSignature.substituteClrTypeArgumentsUnchecked(
 private class MissingClrTypeArgument(
     val index: Int,
 ) : RuntimeException()
+
+internal val DotNetClrPrimitiveType.systemTypeMetadataName: String
+    get() =
+        when (this) {
+            DotNetClrPrimitiveType.BOOLEAN -> "Boolean"
+            DotNetClrPrimitiveType.CHAR -> "Char"
+            DotNetClrPrimitiveType.INT8 -> "SByte"
+            DotNetClrPrimitiveType.UINT8 -> "Byte"
+            DotNetClrPrimitiveType.INT16 -> "Int16"
+            DotNetClrPrimitiveType.UINT16 -> "UInt16"
+            DotNetClrPrimitiveType.INT32 -> "Int32"
+            DotNetClrPrimitiveType.UINT32 -> "UInt32"
+            DotNetClrPrimitiveType.INT64 -> "Int64"
+            DotNetClrPrimitiveType.UINT64 -> "UInt64"
+            DotNetClrPrimitiveType.FLOAT32 -> "Single"
+            DotNetClrPrimitiveType.FLOAT64 -> "Double"
+            DotNetClrPrimitiveType.STRING -> "String"
+            DotNetClrPrimitiveType.NATIVE_INT -> "IntPtr"
+            DotNetClrPrimitiveType.NATIVE_UINT -> "UIntPtr"
+            DotNetClrPrimitiveType.OBJECT -> "Object"
+        }
+
+internal val DotNetClrPrimitiveType.isSystemValueType: Boolean
+    get() = this != DotNetClrPrimitiveType.STRING && this != DotNetClrPrimitiveType.OBJECT

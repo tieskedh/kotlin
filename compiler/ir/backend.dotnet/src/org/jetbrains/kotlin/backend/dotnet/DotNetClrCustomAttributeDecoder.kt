@@ -166,6 +166,7 @@ enum class DotNetClrCustomAttributeValueFailure {
     CONSTRUCTOR_MISMATCH,
     MISSING_VALUE_BLOB,
     INVALID_PROLOG,
+    INVALID_FIXED_ARGUMENT_SIGNATURE,
     TRUNCATED_VALUE,
     INVALID_BOOLEAN,
     INVALID_SERIALIZED_STRING,
@@ -196,6 +197,7 @@ sealed interface DotNetClrCustomAttributeValueDecoding {
         val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         val serializedTypeResolution: DotNetClrSerializedTypeResolution? = null,
         val enumStorageFailure: DotNetClrEnumStorageFailure? = null,
+        val signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
     ) : DotNetClrCustomAttributeValueDecoding
 
     data class Unsupported(
@@ -215,6 +217,8 @@ class DotNetClrCustomAttributeDecoder(
     private val serializedTypeResolver: DotNetClrSerializedTypeResolver,
     private val coreTypes: DotNetClrCustomAttributeCoreTypes,
 ) {
+    private val signatureResolver = DotNetClrSignatureResolver(typeResolver)
+
     fun resolveConstructor(
         assembly: DotNetClrAssemblyMetadata,
         attribute: DotNetClrCustomAttribute,
@@ -407,6 +411,13 @@ class DotNetClrCustomAttributeDecoder(
                         fixedArgumentIndex = index,
                         enumStorageFailure = failure.failure,
                     )
+                } catch (failure: CustomAttributeResolvedSignatureFailure) {
+                    return invalidValue(
+                        DotNetClrCustomAttributeValueFailure
+                            .INVALID_FIXED_ARGUMENT_SIGNATURE,
+                        fixedArgumentIndex = index,
+                        signatureResolution = failure.resolution,
+                    )
                 }
                 fixedArguments += value
             }
@@ -455,9 +466,24 @@ class DotNetClrCustomAttributeDecoder(
         assembly: DotNetClrAssemblyMetadata,
         type: DotNetClrTypeSignature,
         isArrayElement: Boolean = false,
+    ): DotNetClrCustomAttributeValueType? {
+        val resolved = when (val resolution = signatureResolver.resolve(assembly, type)) {
+            is DotNetClrResolvedSignatureResolution.Resolved -> resolution.signature
+            is DotNetClrResolvedSignatureResolution.UnresolvedType ->
+                throw CustomAttributeTypeResolutionFailure(resolution.resolution)
+
+            is DotNetClrResolvedSignatureResolution.Invalid ->
+                throw CustomAttributeResolvedSignatureFailure(resolution)
+        }
+        return fixedArgumentType(resolved, isArrayElement)
+    }
+
+    private fun fixedArgumentType(
+        type: DotNetClrResolvedTypeSignature,
+        isArrayElement: Boolean,
     ): DotNetClrCustomAttributeValueType? =
         when (type) {
-            is DotNetClrTypeSignature.Primitive -> {
+            is DotNetClrResolvedTypeSignature.Primitive -> {
                 when (type.type) {
                     DotNetClrPrimitiveType.NATIVE_INT,
                     DotNetClrPrimitiveType.NATIVE_UINT,
@@ -470,12 +496,11 @@ class DotNetClrCustomAttributeDecoder(
                 }
             }
 
-            is DotNetClrTypeSignature.SzArray -> {
+            is DotNetClrResolvedTypeSignature.SzArray -> {
                 if (isArrayElement) {
                     null
                 } else {
                     fixedArgumentType(
-                        assembly,
                         type.elementType,
                         isArrayElement = true,
                     )?.let { elementType ->
@@ -484,36 +509,56 @@ class DotNetClrCustomAttributeDecoder(
                 }
             }
 
-            is DotNetClrTypeSignature.Named ->
-                resolvedNamedFixedArgumentType(assembly, type)
+            is DotNetClrResolvedTypeSignature.Named ->
+                resolvedNominalFixedArgumentType(type)
+
+            is DotNetClrResolvedTypeSignature.GenericInstance ->
+                resolvedNominalFixedArgumentType(type)
+
+            is DotNetClrResolvedTypeSignature.Modified ->
+                fixedArgumentType(type.unmodifiedType, isArrayElement)
 
             else -> null
         }
 
-    private fun resolvedNamedFixedArgumentType(
-        assembly: DotNetClrAssemblyMetadata,
-        signature: DotNetClrTypeSignature.Named,
+    private fun resolvedNominalFixedArgumentType(
+        signature: DotNetClrResolvedTypeSignature,
     ): DotNetClrCustomAttributeValueType? {
-        val resolvedType = when (
-            val resolution = typeResolver.resolveTypeDefinition(assembly, signature.type)
-        ) {
-            is DotNetClrTypeResolution.Resolved -> resolution.type
-            is DotNetClrTypeResolution.Unresolved ->
-                throw CustomAttributeTypeResolutionFailure(resolution)
+        val namedType: DotNetClrResolvedTypeDefinition
+        val isValueType: Boolean
+        val serializedType: DotNetClrResolvedSerializedType
+        when (signature) {
+            is DotNetClrResolvedTypeSignature.Named -> {
+                namedType = signature.type
+                isValueType = signature.isValueType
+                serializedType = DotNetClrResolvedSerializedType.Named(signature.type)
+            }
+
+            is DotNetClrResolvedTypeSignature.GenericInstance -> {
+                namedType = signature.genericType.type
+                isValueType = signature.genericType.isValueType
+                serializedType = resolvedSignatureToSerializedType(signature) ?: return null
+            }
+
+            else -> error("Non-nominal custom-attribute fixed argument reached nominal mapping")
         }
-        if (resolvedType.hasSameIdentityAs(coreTypes.systemType)) {
-            return if (signature.isValueType) null else DotNetClrCustomAttributeValueType.SystemType
+        if (namedType.hasSameIdentityAs(coreTypes.systemType)) {
+            return if (isValueType || signature !is DotNetClrResolvedTypeSignature.Named) {
+                null
+            } else {
+                DotNetClrCustomAttributeValueType.SystemType
+            }
         }
         return when (
             val enumStorage =
-                typeResolver.resolveEnumStorage(resolvedType, coreTypes.systemEnum)
+                typeResolver.resolveEnumStorage(namedType, coreTypes.systemEnum)
         ) {
             is DotNetClrEnumStorageResolution.Resolved -> {
-                if (!signature.isValueType) {
+                if (!isValueType) {
                     throw CustomAttributeEnumFailure()
                 }
                 DotNetClrCustomAttributeValueType.EnumType(
-                    DotNetClrResolvedSerializedType.Named(resolvedType),
+                    serializedType,
                     enumStorage.storageType,
                 )
             }
@@ -526,6 +571,80 @@ class DotNetClrCustomAttributeDecoder(
                 throw CustomAttributeEnumFailure(enumStorage.failure)
         }
     }
+
+    private fun resolvedSignatureToSerializedType(
+        signature: DotNetClrResolvedTypeSignature,
+    ): DotNetClrResolvedSerializedType? =
+        when (signature) {
+            is DotNetClrResolvedTypeSignature.Named ->
+                DotNetClrResolvedSerializedType.Named(signature.type)
+
+            is DotNetClrResolvedTypeSignature.Primitive -> {
+                val primitiveType = when (
+                    val resolution = typeResolver.resolveTopLevelType(
+                        coreTypes.systemType.assembly,
+                        "System",
+                        signature.type.systemTypeMetadataName,
+                    )
+                ) {
+                    is DotNetClrTypeResolution.Resolved -> resolution.type
+                    is DotNetClrTypeResolution.Unresolved ->
+                        throw CustomAttributeTypeResolutionFailure(resolution)
+                }
+                DotNetClrResolvedSerializedType.Named(primitiveType)
+            }
+
+            is DotNetClrResolvedTypeSignature.GenericInstance -> {
+                val arguments =
+                    ArrayList<DotNetClrResolvedSerializedType>(signature.arguments.size)
+                for (argument in signature.arguments) {
+                    arguments += resolvedSignatureToSerializedType(argument) ?: return null
+                }
+                DotNetClrResolvedSerializedType.GenericInstance(
+                    DotNetClrResolvedSerializedType.Named(signature.genericType.type),
+                    arguments.toList(),
+                )
+            }
+
+            is DotNetClrResolvedTypeSignature.Pointer ->
+                resolvedSignatureToSerializedType(signature.elementType)?.let { element ->
+                    DotNetClrResolvedSerializedType.Pointer(element)
+                }
+
+            is DotNetClrResolvedTypeSignature.ByReference ->
+                resolvedSignatureToSerializedType(signature.elementType)?.let { element ->
+                    DotNetClrResolvedSerializedType.ByReference(element)
+                }
+
+            is DotNetClrResolvedTypeSignature.SzArray ->
+                resolvedSignatureToSerializedType(signature.elementType)?.let { element ->
+                    DotNetClrResolvedSerializedType.SzArray(element)
+                }
+
+            is DotNetClrResolvedTypeSignature.Array -> {
+                if (signature.shape.sizes.isNotEmpty() ||
+                    signature.shape.lowerBounds.isNotEmpty()
+                ) {
+                    null
+                } else {
+                    resolvedSignatureToSerializedType(signature.elementType)?.let { element ->
+                        DotNetClrResolvedSerializedType.MdArray(
+                            element,
+                            signature.shape.rank,
+                        )
+                    }
+                }
+            }
+
+            is DotNetClrResolvedTypeSignature.Modified ->
+                resolvedSignatureToSerializedType(signature.unmodifiedType)
+
+            DotNetClrResolvedTypeSignature.Void,
+            DotNetClrResolvedTypeSignature.TypedReference,
+            is DotNetClrResolvedTypeSignature.GenericParameter,
+            is DotNetClrResolvedTypeSignature.FunctionPointer,
+            -> null
+        }
 
     private fun decodeArgument(
         assembly: DotNetClrAssemblyMetadata,
@@ -846,6 +965,7 @@ class DotNetClrCustomAttributeDecoder(
         typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         serializedTypeResolution: DotNetClrSerializedTypeResolution? = null,
         enumStorageFailure: DotNetClrEnumStorageFailure? = null,
+        signatureResolution: DotNetClrResolvedSignatureResolution.Invalid? = null,
     ): DotNetClrCustomAttributeValueDecoding.Invalid =
         DotNetClrCustomAttributeValueDecoding.Invalid(
             failure,
@@ -854,6 +974,7 @@ class DotNetClrCustomAttributeDecoder(
             typeResolution,
             serializedTypeResolution,
             enumStorageFailure,
+            signatureResolution,
         )
 
     private fun unsupportedValue(
@@ -997,6 +1118,10 @@ private class CustomAttributeBlobFailure(
 
 private class CustomAttributeTypeResolutionFailure(
     val resolution: DotNetClrTypeResolution.Unresolved,
+) : Exception()
+
+private class CustomAttributeResolvedSignatureFailure(
+    val resolution: DotNetClrResolvedSignatureResolution.Invalid,
 ) : Exception()
 
 private class CustomAttributeSerializedTypeResolutionFailure(

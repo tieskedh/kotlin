@@ -71,10 +71,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParsin
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
-import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSignatureResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
@@ -1939,7 +1941,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             Type[] types,
                             object boxedType,
                             object boxedEnum,
-                            object boxedGenericEnum)
+                            object boxedGenericEnum,
+                            Generic<int>.NestedKind genericKind)
                         {
                         }
                     }
@@ -1972,7 +1975,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         typeof(Generic<string>.Nested<ExternalKind>),
                         new[] { typeof(Outer.Inner), typeof(Generic<string>.Nested<ExternalKind>) },
                         typeof(Outer.Inner), ExternalKind.Seven,
-                        Generic<int>.NestedKind.Three,
+                        Generic<int>.NestedKind.Three, Generic<int>.NestedKind.Three,
                         PublicField = 99,
                         Note = "named",
                         RelatedType = typeof(Generic<int>.NestedKind),
@@ -1989,7 +1992,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         new int[] { }, null, null,
                         ExternalKind.Zero, new ExternalKind[] { },
                         null, new Type[] { }, null, ExternalKind.Zero,
-                        Generic<string>.NestedKind.Zero,
+                        Generic<string>.NestedKind.Zero, Generic<int>.NestedKind.Zero,
                         PublicField = 0,
                         Note = null,
                         RelatedType = null,
@@ -2141,6 +2144,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val systemTypeReference = destinationMetadata.typeReferences.single { reference ->
             reference.namespaceName == "System" && reference.metadataName == "Type"
         }
+        val genericNestedKindDefinition = destinationMetadata.typeDefinitions.single { definition ->
+            definition.metadataName == "NestedKind"
+        }
         val serializedTypeResolver = DotNetClrSerializedTypeResolver(
             resolver,
             DotNetClrSerializedAssemblyBinder {
@@ -2222,6 +2228,17 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
+                            DotNetClrTypeSignature.GenericInstance(
+                                DotNetClrTypeSignature.Named(
+                                    genericNestedKindDefinition.handle,
+                                    isValueType = true,
+                                ),
+                                listOf(
+                                    DotNetClrTypeSignature.Primitive(
+                                        DotNetClrPrimitiveType.INT32
+                                    )
+                                ),
+                            ),
                         )
             }
         )
@@ -2445,6 +2462,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         3uL,
                     ),
                 ),
+                DotNetClrCustomAttributeValue.EnumValue(
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        resolvedIntGenericEnum,
+                        DotNetClrPrimitiveType.INT16,
+                    ),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT16,
+                        3uL,
+                    ),
+                ),
             ),
             decodedModernAttributes[0],
         )
@@ -2588,6 +2615,55 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             decodedModernAttributes[1][22],
         )
+        assertEquals(
+            DotNetClrCustomAttributeValue.EnumValue(
+                DotNetClrCustomAttributeValueType.EnumType(
+                    resolvedIntGenericEnum,
+                    DotNetClrPrimitiveType.INT16,
+                ),
+                DotNetClrCustomAttributeValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT16,
+                    0uL,
+                ),
+            ),
+            decodedModernAttributes[1][23],
+        )
+        val constructedEnumParameter =
+            modernConstructors.first().signature.parameterTypes.last() as
+                    DotNetClrTypeSignature.GenericInstance
+        val invalidConstructedEnumSignature = (
+                modernAttributeDecoder.decodeValue(
+                    destinationMetadata,
+                    outerAttributes.first(),
+                    modernConstructors.first().copy(
+                        signature = modernConstructors.first().signature.copy(
+                            parameterTypes =
+                                modernConstructors.first().signature.parameterTypes
+                                    .dropLast(1) +
+                                        constructedEnumParameter.copy(arguments = emptyList())
+                        )
+                    ),
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                )
+        assertEquals(
+            DotNetClrCustomAttributeValueFailure.INVALID_FIXED_ARGUMENT_SIGNATURE,
+            invalidConstructedEnumSignature.failure,
+        )
+        assertEquals(23, invalidConstructedEnumSignature.fixedArgumentIndex)
+        val invalidSignatureResolution =
+            invalidConstructedEnumSignature.signatureResolution as
+                    DotNetClrResolvedSignatureResolution.Invalid
+        assertEquals(
+            DotNetClrResolvedSignatureFailure.GENERIC_ARITY_MISMATCH,
+            invalidSignatureResolution.failure,
+        )
+        assertSame(destinationMetadata, invalidSignatureResolution.type.assembly)
+        assertEquals(
+            genericNestedKindDefinition.handle,
+            invalidSignatureResolution.type.definition.handle,
+        )
+        assertEquals(1, invalidSignatureResolution.expectedGenericArity)
+        assertEquals(0, invalidSignatureResolution.actualGenericArity)
         assertEquals(
             listOf(
                 DotNetClrCustomAttributeNamedArgument(
