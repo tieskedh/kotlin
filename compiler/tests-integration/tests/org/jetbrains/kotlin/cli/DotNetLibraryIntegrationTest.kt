@@ -29,6 +29,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttribute
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
@@ -49,6 +52,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolutionFailure
@@ -677,6 +681,59 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     systemEnum,
                 ) as DotNetClrEnumStorageResolution.Resolved
                 assertEquals(DotNetClrPrimitiveType.INT16, resolvedStorage.storageType)
+                val systemAttribute = (
+                        resolver.resolveTopLevelType(
+                            frameworkCoreMetadata,
+                            "System",
+                            "Attribute",
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type
+                val attributeDecoder = DotNetClrCustomAttributeDecoder(
+                    resolver,
+                    systemAttribute,
+                )
+                val resolvedAttributes = baseAttributes.map { attribute ->
+                    (
+                            attributeDecoder.resolveConstructor(metadata, attribute) as
+                                    DotNetClrCustomAttributeConstructorResolution.Resolved
+                            ).constructor
+                }
+                assertTrue(
+                    resolvedAttributes.all { constructor ->
+                        constructor.attributeType.assembly === frameworkCoreMetadata &&
+                                constructor.attributeType.definition.metadataName ==
+                                "ObsoleteAttribute" &&
+                                constructor.signature.parameterTypes.isEmpty()
+                    }
+                )
+                val nonAttributeConstructor = attributeDecoder.resolveConstructor(
+                    metadata,
+                    baseAttributes.first().copy(
+                        constructor = objectConstructorReference.handle
+                    ),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .ATTRIBUTE_TYPE_DOES_NOT_DERIVE_FROM_SYSTEM_ATTRIBUTE,
+                    nonAttributeConstructor.failure,
+                )
+                val fieldConstructor = attributeDecoder.resolveConstructor(
+                    metadata,
+                    baseAttributes.first().copy(constructor = emptyFieldReference.handle),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeConstructorFailure.INVALID_MEMBER_REFERENCE_KIND,
+                    fieldConstructor.failure,
+                )
+                val constructedOwnerConstructor = attributeDecoder.resolveConstructor(
+                    metadata,
+                    baseAttributes.first().copy(constructor = echoReference.handle),
+                ) as DotNetClrCustomAttributeConstructorResolution.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeConstructorFailure
+                        .UNSUPPORTED_MEMBER_REFERENCE_PARENT,
+                    constructedOwnerConstructor.failure,
+                )
             }
 
             val malformedAssembly = File(
@@ -999,13 +1056,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val destinationSource = directory.resolve("destination.cs").apply {
             writeText(
                 """
+                using System;
+
                 namespace Forwarded
                 {
+                    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+                    public sealed class SemanticProbeAttribute : Attribute
+                    {
+                        public SemanticProbeAttribute(int id)
+                        {
+                        }
+                    }
+
                     public enum ExternalKind : short
                     {
                         Zero = 0
                     }
 
+                    [SemanticProbe(7)]
+                    [SemanticProbe(8)]
                     public sealed class Outer
                     {
                         public sealed class Inner
@@ -1123,6 +1192,39 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetClrEnumStorageResolution.Resolved
         assertEquals(DotNetClrPrimitiveType.INT16, enumStorage.storageType)
         assertEquals("value__", enumStorage.storageField.name)
+        val systemAttribute = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "Attribute",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val outerDefinition = destinationMetadata.typeDefinitions.single { definition ->
+            definition.namespaceName == "Forwarded" && definition.metadataName == "Outer"
+        }
+        val outerAttributes = destinationMetadata.customAttributes.filter { attribute ->
+            attribute.parent == outerDefinition.handle
+        }
+        assertEquals(2, outerAttributes.size)
+        val modernAttributeDecoder = DotNetClrCustomAttributeDecoder(resolver, systemAttribute)
+        val modernConstructors = outerAttributes.map { attribute ->
+            (
+                    modernAttributeDecoder.resolveConstructor(destinationMetadata, attribute) as
+                            DotNetClrCustomAttributeConstructorResolution.Resolved
+                    ).constructor
+        }
+        assertTrue(
+            modernConstructors.all { constructor ->
+                constructor.constructor.table == 6 &&
+                        constructor.attributeType.assembly === destinationMetadata &&
+                        constructor.attributeType.definition.metadataName ==
+                        "SemanticProbeAttribute" &&
+                        constructor.signature.parameterTypes ==
+                        listOf(
+                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                        )
+            }
+        )
 
         val nextTypeReferenceRow =
             (facadeMetadata.typeReferences.maxOfOrNull { reference -> reference.handle.row } ?: 0) + 1
@@ -1151,9 +1253,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertSame(destinationMetadata, nestedType.assembly)
         assertEquals("Inner", nestedType.definition.metadataName)
         assertEquals(
-            destinationMetadata.typeDefinitions.single { definition ->
-                definition.metadataName == "Outer"
-            }.handle,
+            outerDefinition.handle,
             nestedType.definition.declaringType,
         )
 
@@ -1255,6 +1355,44 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         ).resolveTopLevelType(ambiguousAssembly, "Broken", "Duplicate")
             as DotNetClrTypeResolution.Unresolved
         assertEquals(DotNetClrTypeResolutionFailure.AMBIGUOUS_TYPE, ambiguous.failure)
+
+        val inheritanceCycleAssembly = emptyAssembly(
+            name = "InheritanceCycle",
+            typeDefinitions = listOf(
+                DotNetClrTypeDefinition(
+                    handle = DotNetClrMetadataHandle(2, 1),
+                    namespaceName = "Broken",
+                    metadataName = "Left",
+                    attributes = 1,
+                    baseType = DotNetClrMetadataHandle(2, 2),
+                    declaringType = null,
+                ),
+                DotNetClrTypeDefinition(
+                    handle = DotNetClrMetadataHandle(2, 2),
+                    namespaceName = "Broken",
+                    metadataName = "Right",
+                    attributes = 1,
+                    baseType = DotNetClrMetadataHandle(2, 1),
+                    declaringType = null,
+                ),
+            ),
+        )
+        val inheritanceCycleResolver = DotNetClrTypeResolver(
+            DotNetClrAssemblyReferenceBinder { _, _ -> null }
+        )
+        val inheritanceCycleType = (
+                inheritanceCycleResolver.resolveTypeDefinition(
+                    inheritanceCycleAssembly,
+                    DotNetClrMetadataHandle(2, 1),
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        assertEquals(
+            DotNetClrTypeHierarchyResolution.InheritanceCycle,
+            inheritanceCycleResolver.isSameOrDerivedFrom(
+                inheritanceCycleType,
+                systemAttribute,
+            ),
+        )
 
         val unbound = DotNetClrTypeResolver(
             DotNetClrAssemblyReferenceBinder { _, _ -> null }

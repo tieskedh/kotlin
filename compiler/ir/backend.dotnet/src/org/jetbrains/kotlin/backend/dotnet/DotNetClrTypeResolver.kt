@@ -48,6 +48,20 @@ sealed interface DotNetClrTypeResolution {
     ) : DotNetClrTypeResolution
 }
 
+sealed interface DotNetClrTypeHierarchyResolution {
+    data object Matches : DotNetClrTypeHierarchyResolution
+
+    data object DoesNotMatch : DotNetClrTypeHierarchyResolution
+
+    data class Unresolved(
+        val resolution: DotNetClrTypeResolution.Unresolved,
+    ) : DotNetClrTypeHierarchyResolution
+
+    data object InheritanceCycle : DotNetClrTypeHierarchyResolution
+
+    data object ResolutionLimitExceeded : DotNetClrTypeHierarchyResolution
+}
+
 enum class DotNetClrEnumStorageFailure {
     INVALID_BASE_TYPE_SHAPE,
     ENUM_IS_INTERFACE,
@@ -162,6 +176,30 @@ class DotNetClrTypeResolver(
             storageType = checkNotNull(storageType),
             storageField = storageField,
         )
+    }
+
+    fun isSameOrDerivedFrom(
+        type: DotNetClrResolvedTypeDefinition,
+        expectedBaseType: DotNetClrResolvedTypeDefinition,
+    ): DotNetClrTypeHierarchyResolution {
+        var current = type
+        val visited = mutableSetOf<ResolvedTypeKey>()
+        repeat(resolutionLimit) {
+            if (current.hasSameIdentityAs(expectedBaseType)) {
+                return DotNetClrTypeHierarchyResolution.Matches
+            }
+            if (!visited.add(ResolvedTypeKey(current))) {
+                return DotNetClrTypeHierarchyResolution.InheritanceCycle
+            }
+            val baseHandle =
+                current.definition.baseType ?: return DotNetClrTypeHierarchyResolution.DoesNotMatch
+            current = when (val resolution = resolveTypeDefinition(current.assembly, baseHandle)) {
+                is DotNetClrTypeResolution.Resolved -> resolution.type
+                is DotNetClrTypeResolution.Unresolved ->
+                    return DotNetClrTypeHierarchyResolution.Unresolved(resolution)
+            }
+        }
+        return DotNetClrTypeHierarchyResolution.ResolutionLimitExceeded
     }
 
     private fun resolveHandle(
@@ -609,6 +647,18 @@ class DotNetClrTypeResolver(
             private const val TOP_LEVEL_KIND = 1
             private const val NESTED_KIND = 2
         }
+    }
+
+    private class ResolvedTypeKey(
+        private val type: DotNetClrResolvedTypeDefinition,
+    ) {
+        override fun equals(other: Any?): Boolean =
+            other is ResolvedTypeKey &&
+                    type.assembly === other.type.assembly &&
+                    type.definition.handle == other.type.definition.handle
+
+        override fun hashCode(): Int =
+            31 * System.identityHashCode(type.assembly) + type.definition.handle.hashCode()
     }
 
     private companion object {
