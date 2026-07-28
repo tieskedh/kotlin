@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical type, method, property, and generic metadata is implemented**
+- Status: **Draft candidate; physical type, method, MemberRef, property, and generic metadata is implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -184,12 +184,43 @@ method-parameter constraints, and `allows ref struct`. A corrupted MethodDef gen
 against its GenericParam rows. The scale lane requires generic parameters and constraints in both
 real Framework `mscorlib` and .NET 10 `System.Runtime`.
 
+The fifth slice preserves MemberRef rows and their reusable FieldSig or MethodRefSig. Each
+reference keeps its row token, exact MemberRefParent handle, metadata name, structural signature,
+and original blob. The parent remains a TypeDef, TypeRef, ModuleRef, MethodDef, or TypeSpec handle;
+a constructed generic owner is not flattened into a display name or substituted member copy.
+Method references share the physical method-signature algebra with MethodDef, but admit the
+call-site vararg sentinel and still reject non-managed calling conventions. Field references use
+a standalone `DotNetClrFieldSignature` that can later be reused by FieldDef rather than creating a
+second field-type model.
+
+This follows the JVM rule that foreign linkage retains owner, member kind, name, and descriptor
+until a later provider maps it to Kotlin. The CLR-specific shape is necessary because one
+MemberRef table carries both fields and methods, can name a member through a TypeSpec owner, and
+method return types and custom modifiers participate in physical identity. The physical layer
+does not look up a same-named MethodDef, infer a property, or apply generic substitution.
+
+FieldSig decoding follows the current .NET augmentation `FieldSig ::= FIELD Type`. It therefore
+retains modern by-reference and typed-reference field forms instead of rejecting them according
+to the older ECMA grammar. This does not make such fields ordinary Kotlin properties or permit
+them on every target profile: legality depends on the declaring type, byref-like rules, selected
+reference graph, and future import policy. Nested byrefs and void fields still fail structurally.
+
+The Framework/modern IL fixture independently emits an external constructor MethodRef, an
+external static FieldRef, and a MethodRef whose parent is a constructed generic TypeSpec. A
+corrupted FieldSig header fails as a located bad image. A separate Roslyn .NET 10 producer and
+consumer exercise a real `ref` field MemberRef, while the scale lane requires MemberRefs in both
+Framework `mscorlib` and .NET 10 `System.Runtime`. This foundation is deliberately added before
+semantic custom-attribute decoding because ordinary CustomAttribute constructors are commonly
+identified through MemberRef; decoding their blobs without the constructor's physical parameter
+signature would be guessing.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
-MemberRef, resolved generic-constraint, and nullable-attribute projection still remain above or
-after this physical foundation, and no FIR declaration is created yet. In this sentence,
+resolved generic-constraint, and nullable-attribute projection still remain above or after this
+physical foundation, and no FIR declaration is created yet. In this sentence,
 “Property projection” means Kotlin-facing property synthesis; physical Property rows and
-associations are already implemented, as are unresolved physical GenericParam constraints.
+associations are already implemented, as are unresolved physical GenericParam constraints and
+MemberRef signatures. Physical FieldDef rows are not implemented yet.
 
 ## Kotlin Common invariant
 
@@ -240,12 +271,13 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Bounded JVM-hosted physical reader: **Correct direction**.
 - CLR-specific immutable metadata model: **Reasonable platform-specific divergence**.
 - Lossless TypeSpec and MethodDef signature model: **Correct direction**.
+- Lossless MemberRef and reusable FieldSig model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
 - Physical GenericParam/GenericParamConstraint preservation: **Correct direction**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- Remaining field/MemberRef signatures, semantic custom attributes, type forwarding, Kotlin-facing
+- Remaining FieldDef rows, semantic custom attributes, type forwarding, Kotlin-facing
   property synthesis, events, resolved constraint semantics, nullability enhancement, FIR symbols,
   and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.

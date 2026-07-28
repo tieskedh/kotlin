@@ -319,7 +319,13 @@ landed shape as a compatibility constraint.
    unique, and constraint rows remain contiguous by owner. Do not reinterpret
    ReferenceTypeConstraint as Kotlin non-nullability, DefaultConstructorConstraint as Kotlin
    syntax, or AllowByRefLike as ordinary Kotlin generics. TypeSpec constraints remain unresolved
-   until the cycle-safe, profile-aware import resolver. It does not load target code,
+   until the cycle-safe, profile-aware import resolver. MemberRef rows preserve their exact
+   TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
+   method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
+   allow call-site vararg sentinels; FieldRef signatures use the reusable FieldSig model and
+   retain modern by-reference and typed-reference forms. Never substitute a constructed TypeSpec
+   owner or resolve a same-named definition in this physical layer. Profile and byref-like
+   legality stay in the selected-graph import policy. It does not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy
    target FIR symbol provider -> IR retaining the original physical owner/member linkage.

@@ -25,11 +25,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMemberReferenceSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
@@ -150,6 +152,45 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   {
                   }
 
+                  .class public auto ansi beforefieldinit 'GenericOwner`1'<T>
+                         extends [mscorlib]System.Object
+                  {
+                    .method public hidebysig static !0 'Echo'(!0 'value') cil managed
+                    {
+                      .maxstack 1
+                      ldarg.0
+                      ret
+                    }
+                  }
+
+                  .class public auto ansi beforefieldinit 'MemberRefHost'
+                         extends [mscorlib]System.Object
+                  {
+                    .method public hidebysig static object 'MakeObject'() cil managed
+                    {
+                      .maxstack 1
+                      newobj instance void [mscorlib]System.Object::.ctor()
+                      ret
+                    }
+
+                    .method public hidebysig static string 'ReadEmpty'() cil managed
+                    {
+                      .maxstack 1
+                      ldsfld string [mscorlib]System.String::Empty
+                      ret
+                    }
+
+                    .method public hidebysig static int32 'ReadGeneric'(
+                        int32 'value'
+                    ) cil managed
+                    {
+                      .maxstack 1
+                      ldarg.0
+                      call !0 class Fixture.'GenericOwner`1'<int32>::'Echo'(!0)
+                      ret
+                    }
+                  }
+
                   .class public auto ansi beforefieldinit 'SignatureHost`1'<(
                       class Fixture.Base,
                       class Fixture.IMarker
@@ -248,6 +289,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val marker = fixtureTypes.getValue("IMarker")
             val box = fixtureTypes.getValue("IBox`1")
             val variant = fixtureTypes.getValue("IVariant`2")
+            val genericOwner = fixtureTypes.getValue("GenericOwner`1")
             val signatureHost = fixtureTypes.getValue("SignatureHost`1")
             val propertyHost = fixtureTypes.getValue("PropertyHost")
             assertEquals(DotNetClrTypeVisibility.PUBLIC, base.visibility)
@@ -271,7 +313,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ),
                 ),
                 metadata.typeSpecifications.single { specification ->
-                    specification.signature is DotNetClrTypeSignature.GenericInstance
+                    val signature = specification.signature
+                    signature is DotNetClrTypeSignature.GenericInstance &&
+                            signature.genericType.type == box.handle
                 }.signature,
             )
             val transform = metadata.methodDefinitions.single { it.name == "Transform" }
@@ -436,6 +480,65 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(propertyAccessors.all(DotNetClrMethodDefinition::isSpecialName))
             assertTrue(propertyAccessors.single { it.name == "FetchName" }.isStatic)
 
+            val objectConstructorReference = metadata.memberReferences.single { reference ->
+                reference.name == ".ctor" && reference.parent == systemObject.handle
+            }
+            val objectConstructorSignature =
+                (objectConstructorReference.signature as DotNetClrMemberReferenceSignature.Method).signature
+            assertEquals(DotNetClrSignatureCallingConvention.DEFAULT, objectConstructorSignature.callingConvention)
+            assertTrue(objectConstructorSignature.hasThis)
+            assertEquals(DotNetClrTypeSignature.Void, objectConstructorSignature.returnType)
+            assertTrue(objectConstructorSignature.parameterTypes.isEmpty())
+
+            val systemString = metadata.typeReferences.single { reference ->
+                reference.namespaceName == "System" && reference.metadataName == "String"
+            }
+            val emptyFieldReference = metadata.memberReferences.single { reference ->
+                reference.name == "Empty" && reference.parent == systemString.handle
+            }
+            assertEquals(
+                DotNetClrMemberReferenceSignature.Field(
+                    DotNetClrFieldSignature(
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING)
+                    )
+                ),
+                emptyFieldReference.signature,
+            )
+            assertTrue(emptyFieldReference.rawSignature.isNotEmpty())
+
+            val echoReference = metadata.memberReferences.single { reference ->
+                reference.name == "Echo" &&
+                        metadata.typeSpecifications.any { specification ->
+                            specification.handle == reference.parent
+                        }
+            }
+            val echoOwner = metadata.typeSpecifications.single { specification ->
+                specification.handle == echoReference.parent
+            }
+            assertEquals(
+                DotNetClrTypeSignature.GenericInstance(
+                    genericType = DotNetClrTypeSignature.Named(
+                        genericOwner.handle,
+                        isValueType = false,
+                    ),
+                    arguments = listOf(
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                    ),
+                ),
+                echoOwner.signature,
+            )
+            val echoSignature =
+                (echoReference.signature as DotNetClrMemberReferenceSignature.Method).signature
+            assertFalse(echoSignature.hasThis)
+            assertEquals(
+                DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    0,
+                ),
+                echoSignature.returnType,
+            )
+            assertEquals(listOf(echoSignature.returnType), echoSignature.parameterTypes)
+
             val malformedAssembly = File(
                 assembly.parentFile,
                 "ImporterFixture-malformed-signature.dll",
@@ -490,6 +593,28 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 "invalid property signature header" in checkNotNull(malformedProperty.message)
             ) {
                 malformedProperty.message
+            }
+
+            val malformedMemberReferenceAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-malformed-member-reference-signature.dll",
+            )
+            val malformedMemberReferenceImage = assembly.readBytes()
+            val rawFieldSignature = ByteArray(emptyFieldReference.rawSignature.size) { index ->
+                emptyFieldReference.rawSignature[index].toByte()
+            }
+            val fieldSignatureOffset =
+                malformedMemberReferenceImage.uniqueSequenceOffset(rawFieldSignature)
+            malformedMemberReferenceImage[fieldSignatureOffset] = 0x07
+            malformedMemberReferenceAssembly.writeBytes(malformedMemberReferenceImage)
+            val malformedMemberReference = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.read(malformedMemberReferenceAssembly)
+            }
+            assertTrue(
+                "unsupported signature calling convention 0x7" in
+                        checkNotNull(malformedMemberReference.message)
+            ) {
+                malformedMemberReference.message
             }
         }
 
@@ -590,6 +715,71 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             },
         )
 
+        val refFieldProducerSource = File(tmpdir, "clr-metadata/RefFieldProducer.cs").apply {
+            writeText(
+                """
+                namespace ModernFields
+                {
+                    public ref struct RefFieldOwner
+                    {
+                        public ref int Value;
+
+                        public RefFieldOwner(ref int value)
+                        {
+                            Value = ref value;
+                        }
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val refFieldProducerAssembly = File(tmpdir, "clr-metadata/RefFieldProducer.dll")
+        val refFieldProducerCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            refFieldProducerSource,
+            refFieldProducerAssembly,
+        )
+        assertEquals(0, refFieldProducerCompile.exitCode, refFieldProducerCompile.output)
+        val refFieldConsumerSource = File(tmpdir, "clr-metadata/RefFieldConsumer.cs").apply {
+            writeText(
+                """
+                namespace ModernFields
+                {
+                    public static class RefFieldConsumer
+                    {
+                        public static ref int Read(ref RefFieldOwner owner)
+                            => ref owner.Value;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val refFieldConsumerAssembly = File(tmpdir, "clr-metadata/RefFieldConsumer.dll")
+        val refFieldConsumerCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            refFieldConsumerSource,
+            refFieldConsumerAssembly,
+            refFieldProducerAssembly,
+        )
+        assertEquals(0, refFieldConsumerCompile.exitCode, refFieldConsumerCompile.output)
+        val refFieldConsumerMetadata = DotNetClrMetadataReader.read(refFieldConsumerAssembly)
+        val refFieldOwnerReference = refFieldConsumerMetadata.typeReferences.single { reference ->
+            reference.namespaceName == "ModernFields" && reference.metadataName == "RefFieldOwner"
+        }
+        val refFieldReference = refFieldConsumerMetadata.memberReferences.single { reference ->
+            reference.name == "Value" && reference.parent == refFieldOwnerReference.handle
+        }
+        assertEquals(
+            DotNetClrMemberReferenceSignature.Field(
+                DotNetClrFieldSignature(
+                    DotNetClrTypeSignature.ByReference(
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                    )
+                )
+            ),
+            refFieldReference.signature,
+        )
+
         val profileCoreAssemblies = listOf(
             checkNotNull(frameworkIlasm).parentFile.resolve("mscorlib.dll") to "mscorlib",
             checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll") to "System.Runtime",
@@ -601,6 +791,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(entry.second, coreMetadata.identity.name)
             assertTrue(coreMetadata.typeDefinitions.size > 100)
             assertTrue(coreMetadata.methodDefinitions.size > 100)
+            assertTrue(coreMetadata.memberReferences.isNotEmpty())
             assertTrue(coreMetadata.propertyDefinitions.isNotEmpty())
             assertTrue(coreMetadata.methodSemantics.isNotEmpty())
             assertTrue(coreMetadata.genericParameterDefinitions.isNotEmpty())

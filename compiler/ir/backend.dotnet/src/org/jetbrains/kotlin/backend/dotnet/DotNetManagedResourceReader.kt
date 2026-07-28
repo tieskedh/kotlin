@@ -160,6 +160,11 @@ private object DotNetPeMetadataReader {
                 typeDefinitions = typeDefinitions,
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
                 methodDefinitions = methodDefinitions,
+                memberReferences = readMemberReferences(
+                    metadata.tables,
+                    metadata.strings,
+                    metadata.blobs,
+                ),
                 propertyDefinitions = propertyDefinitions,
                 methodSemantics = readMethodSemantics(
                     metadata.tables,
@@ -605,6 +610,61 @@ private object DotNetPeMetadataReader {
                     implementationAttributes = implementationAttributes,
                     attributes = attributes,
                     signature = signature,
+                    rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readMemberReferences(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrMemberReference> {
+            val table = locateMetadataTable(tables, MEMBER_REF_TABLE) ?: return emptyList()
+            return List(table.rowCount.toIntChecked("MemberRef row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val parentIndex = readIndex(position, table.indexSizes.memberRefParentIndexSize)
+                position += table.indexSizes.memberRefParentIndexSize
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val signatureIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val parent = decodeCodedHandle(
+                    value = parentIndex,
+                    tagBits = 3,
+                    tablesByTag = intArrayOf(
+                        TYPE_DEF_TABLE,
+                        TYPE_REF_TABLE,
+                        MODULE_REF_TABLE,
+                        METHOD_DEF_TABLE,
+                        TYPE_SPEC_TABLE,
+                    ),
+                    metadataTables = tables,
+                    description = "MemberRef parent",
+                ) ?: malformed("MemberRef row ${rowIndex + 1} has a nil parent")
+                val name = readStringHeap(strings, nameIndex)
+                if (name.isEmpty()) malformed("MemberRef row ${rowIndex + 1} has an empty name")
+                val rawSignature = readBlobHeap(blobs, signatureIndex)
+                if (rawSignature.isEmpty()) {
+                    malformed("MemberRef row ${rowIndex + 1} has an empty signature")
+                }
+                if (rawSignature.size > MAX_SIGNATURE_BLOB_SIZE) {
+                    malformed("MemberRef row ${rowIndex + 1} has an oversized signature")
+                }
+                val handle = metadataHandle(
+                    MEMBER_REF_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "MemberRef",
+                )
+                DotNetClrMemberReference(
+                    handle = handle,
+                    parent = parent,
+                    name = name,
+                    signature = SignatureBlobReader(
+                        bytes = rawSignature,
+                        metadataTables = tables,
+                        description = "MemberRef token 0x${handle.token.toUInt().toString(16)}",
+                    ).readMemberReferenceSignature(),
                     rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
                 )
             }
@@ -1069,6 +1129,34 @@ private object DotNetPeMetadataReader {
                     signature.callingConvention != DotNetClrSignatureCallingConvention.VARARG
                 ) {
                     malformed("$description has a non-managed calling convention")
+                }
+                if (position != bytes.size) {
+                    malformed("$description has ${bytes.size - position} trailing signature bytes")
+                }
+                return signature
+            }
+
+            fun readMemberReferenceSignature(): DotNetClrMemberReferenceSignature {
+                val signature = if (peekByte() == SIGNATURE_FIELD) {
+                    readByte()
+                    DotNetClrMemberReferenceSignature.Field(
+                        signature = DotNetClrFieldSignature(
+                            fieldType = readType(
+                                depth = 0,
+                                allowVoid = false,
+                                allowByReference = true,
+                                allowTypedReference = true,
+                            )
+                        )
+                    )
+                } else {
+                    val method = readMethodSignature(depth = 0, allowSentinel = true)
+                    if (method.callingConvention != DotNetClrSignatureCallingConvention.DEFAULT &&
+                        method.callingConvention != DotNetClrSignatureCallingConvention.VARARG
+                    ) {
+                        malformed("$description has a non-managed calling convention")
+                    }
+                    DotNetClrMemberReferenceSignature.Method(method)
                 }
                 if (position != bytes.size) {
                     malformed("$description has ${bytes.size - position} trailing signature bytes")
@@ -1787,7 +1875,7 @@ private object DotNetPeMetadataReader {
             get() = codedIndexSize(2, 0, 26, 35, 1)
         val typeDefOrRefIndexSize
             get() = codedIndexSize(2, 2, 1, 27)
-        private val memberRefParentIndexSize
+        val memberRefParentIndexSize
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
         private val hasConstantIndexSize
             get() = codedIndexSize(2, 4, 8, 23)
@@ -1903,6 +1991,7 @@ private object DotNetPeMetadataReader {
     private const val TYPE_DEF_TABLE = 2
     private const val FIELD_TABLE = 4
     private const val METHOD_DEF_TABLE = 6
+    private const val MEMBER_REF_TABLE = 10
     private const val EVENT_TABLE = 20
     private const val PROPERTY_MAP_TABLE = 21
     private const val PROPERTY_TABLE = 23
@@ -1973,6 +2062,7 @@ private object DotNetPeMetadataReader {
     private const val SIGNATURE_THISCALL = 0x03
     private const val SIGNATURE_FASTCALL = 0x04
     private const val SIGNATURE_VARARG = 0x05
+    private const val SIGNATURE_FIELD = 0x06
     private const val SIGNATURE_UNMANAGED = 0x09
     private const val SIGNATURE_NATIVE_VARARG = 0x0b
     private const val SIGNATURE_GENERIC = 0x10

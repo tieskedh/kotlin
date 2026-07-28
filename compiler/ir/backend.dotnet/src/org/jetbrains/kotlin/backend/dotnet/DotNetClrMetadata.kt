@@ -184,6 +184,28 @@ data class DotNetClrMethodSignature(
     val varargParameterStart: Int?,
 )
 
+data class DotNetClrFieldSignature(
+    val fieldType: DotNetClrTypeSignature,
+)
+
+sealed interface DotNetClrMemberReferenceSignature {
+    data class Method(
+        val signature: DotNetClrMethodSignature,
+    ) : DotNetClrMemberReferenceSignature
+
+    data class Field(
+        val signature: DotNetClrFieldSignature,
+    ) : DotNetClrMemberReferenceSignature
+}
+
+data class DotNetClrMemberReference(
+    val handle: DotNetClrMetadataHandle,
+    val parent: DotNetClrMetadataHandle,
+    val name: String,
+    val signature: DotNetClrMemberReferenceSignature,
+    val rawSignature: List<Int>,
+)
+
 enum class DotNetClrMethodVisibility {
     COMPILER_CONTROLLED,
     PRIVATE,
@@ -339,6 +361,7 @@ data class DotNetClrAssemblyMetadata(
     val typeDefinitions: List<DotNetClrTypeDefinition>,
     val typeSpecifications: List<DotNetClrTypeSpecification>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
+    val memberReferences: List<DotNetClrMemberReference>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,
     val methodSemantics: List<DotNetClrMethodSemantics>,
     val genericParameterDefinitions: List<DotNetClrGenericParameterDefinition>,
