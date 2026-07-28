@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through fixed enums, and serialized type/assembly-name syntax are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through fixed enums, and selected-graph serialized type resolution are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -476,6 +476,33 @@ Tests cover quoted names and values, escaped separators, the full known property
 invalid tokens/versions, missing values, and unclosed quotes. This parser is a CLR-specific
 physical necessity; it does not alter Kotlin Common type identity.
 
+The fifteenth slice resolves a parsed serialized type only through a new build-frontend-owned
+binder. This matches JVM classpath and Native platform-library architecture: the declaration/type
+resolver consumes an already selected dependency graph and does not discover dependencies itself.
+The CLR-specific binder input contains the original attribute-owning assembly, the current
+unqualified-name context assembly, and the parsed optional AssemblyName qualifier. That is enough
+for profile-owned version unification, retargeting, facade, and unqualified custom-attribute-name
+policy without hard-coding one runtime's loader behavior in the importer.
+
+After binding, the existing bounded TypeDef/TypeRef/ExportedType resolver selects the exact
+top-level and nested TypeDef. The serialized resolver verifies that the sum of encoded
+per-component generic arities equals the final TypeDef's physical GenericParam count, recursively
+resolves constructed arguments, and applies pointer, by-reference, SZARRAY, and
+multidimensional-array modifiers into a typed resolved algebra. Open generic types remain named
+definitions; constructed types never lose their argument identities.
+
+An unqualified generic argument receives the selected enclosing type's assembly as context while
+the binder also retains the original attribute-owning assembly. This is a deliberate interface
+instead of a guessed search order. Invalid type syntax, unsupported Reflection.Emit shapes,
+invalid AssemblyName syntax, unbound selected edges, unresolved TypeDefs, and generic-arity
+mismatches are distinct results. Nested generic-argument failures carry an index path.
+
+The real .NET 10 destination fixture resolves a nested ordinary type and a nested generic type
+whose arguments come from `System.Runtime` and the destination assembly, then preserves array,
+pointer, and by-reference shape. It also proves unqualified argument context, invalid and unbound
+qualifiers, and a missing assembly inside a generic argument. The algorithm is profile-neutral;
+the supplied binder is where `net48`, `netstandard2.0`, and `net10.0` select different graphs.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -552,6 +579,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Runtime-compatible AssemblyName syntax with exact retained identity input:
   **Correct direction**.
+- Build-frontend-owned binding plus target resolver for serialized CLR types:
+  **Correct direction**.
+- Passing both original and unqualified-context assemblies to profile policy:
+  **Reasonable platform-specific divergence**.
 - Structured deferral of serialized type names, boxed/named enums, and named arguments:
   **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.

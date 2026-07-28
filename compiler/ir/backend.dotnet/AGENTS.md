@@ -370,7 +370,11 @@ landed shape as a compatibility constraint.
    against the build frontend's selected graph are separate layers. Parse AssemblyName with the
    CLR lexer rules: case-insensitive known properties, exclusive full key/token, exact version
    components, quoted/escaped values, and retained Desktop-compatible unknown properties. Parsing
-   still never selects an assembly; pass the result to the selected-graph binder.
+   still never selects an assembly; pass the result to the selected-graph binder. That binder
+   receives both the original attribute-owning assembly and current unqualified-name context,
+   then returns an assembly already selected for the profile. Resolve top-level/nested TypeDefs,
+   verify physical GenericParam arity, recursively resolve arguments, and preserve pointer/byref/
+   array modifiers. Never add probing or a simple-name fallback.
    Assembly definitions retain their full public key and computed eight-byte public-key token;
    `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
    key/token, so this still does not authorize exact-match binding inside the physical resolver.
