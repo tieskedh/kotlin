@@ -368,12 +368,23 @@ landed shape as a compatibility constraint.
    Invalid serialized type edges remain structured resolution failures; do not erase, stringify,
    probe, fall back by simple name, or partially skip them. Named arguments retain their ordered
    field/property kind, exact non-empty CLR name, declared serialized type, semantic value, and
-   duplicates. The blob has no member token: selected-graph member validation is a later layer and
-   must not replace that encoded identity with a currently resolved FieldDef or Property.
-   A constructed nested enum in a constructor signature remains a structured unsupported fixed
-   type until the general
-   TypeSig-to-resolved-structural-type substitution model exists; do not add an attribute-only
-   substitute.
+   duplicates. The blob has no member token: selected-graph member validation is a separate layer
+   and never replaces that encoded identity with a currently resolved FieldDef or Property. Raw
+   TypeSig handles are assembly-relative, so resolve them to the assembly-context-bearing
+   structural signature algebra before comparison or substitution; never move a raw substituted
+   handle into a different assembly context. Named-member validation follows the ordinary CLR
+   attribute contract, not malformed-metadata reflection quirks: use the encoded field/property
+   species, stop at its nearest declaring level, require an exact substituted value type, and
+   accept only public writable instance fields or non-indexed properties with public instance
+   get and set/init accessors. Preserve custom modifiers in the resolved signature; ignore them
+   only for accessor shape equality, including the net10 init-only setter marker. Repeated
+   assignment to the same resolved member, ambiguous rows/accessors, invalid arity, unresolved
+   edges, cycles, and traversal limits are structured invalid results. Generic base TypeSpecs are
+   substituted through the general resolved signature model. Closed TypeSpec-owned generic
+   attribute constructors remain structured unsupported until constructor resolution retains the
+   constructed owner view; do not approximate one as its open TypeDef. A constructed nested enum
+   in a constructor signature remains a structured unsupported fixed type until that constructor
+   path consumes the same general model; do not add a decoder-local substitute.
    Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
    nested metadata names, per-component arity, recursive generic arguments, normalized
    pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host
