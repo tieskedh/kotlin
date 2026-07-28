@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and custom-attribute constructor resolution are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and scalar custom-attribute values are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -343,6 +343,36 @@ requires a constructed declaring-type identity and substitution model that must 
 the general CLR member resolver. Semantic fixed and named argument decoding remains the next
 layer.
 
+The tenth slice decodes scalar fixed arguments from the value blob after constructor resolution.
+As on JVM, the constructor's resolved parameter types determine how bytes become typed values;
+the importer does not guess a value type from its width. The CLR-specific representation is the
+ECMA-335 `CustomAttrib` prolog, little-endian scalar payloads, packed UTF-8 `SerString`, and final
+named-argument count. The implementation follows the same type-code split as
+`System.Reflection.Metadata`'s `CustomAttributeDecoder`, but runs on the JVM and never loads the
+target assembly.
+
+The decoded model distinguishes booleans, UTF-16 code units, integral type plus exact bits,
+IEEE-754 payload bits, and nullable strings. Exact float bits are retained because reflection
+consumers can observe signed zero and NaN payloads; any compatibility normalization must be a
+separate explicit policy rather than accidental loss in the reader. A nil blob is accepted only
+for a zero-parameter constructor. The reader rejects invalid prologs, truncation, non-`0`/`1`
+booleans, malformed or non-canonical packed lengths, invalid UTF-8, and trailing bytes.
+Constructor handles are qualified by the assembly containing the CustomAttribute row, because a
+metadata token is not globally unique.
+
+This remains uniform across `net48`, `netstandard2.0`, and `net10.0`: the profiles can expose
+different attribute classes, but the value format and Kotlin Common boundary do not change.
+Arrays, tagged `object`, `System.Type`, enum, and named arguments return structured unsupported
+results rather than being approximated. They are the next semantic slices; only after all
+supported values are typed may the import policy project an ordinary CLR attribute into a
+Kotlin-facing declaration or compare profile surfaces.
+
+The real Framework fixture covers the legal no-argument representation plus malformed scalar
+blobs. The Roslyn .NET 10 fixture covers signed and unsigned integers, nullable UTF-8 strings,
+booleans, characters, signed zero, and NaN. Hostile cases pin cross-assembly token mismatch,
+truncation, invalid boolean and UTF-8 data, non-canonical string lengths, trailing bytes, and the
+explicit named/tagged-object deferrals.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -408,6 +438,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Exact custom-attribute constructor and `System.Attribute` hierarchy resolution:
   **Correct direction**.
 - Rejecting TypeSpec-owned attribute constructors until constructed-member substitution exists:
+  **Correct temporary implementation, but not a final design**.
+- Constructor-typed scalar custom-attribute decoding with exact observable bits:
+  **Correct direction**.
+- Structured deferral of array, tagged-object, type, enum, and named values:
   **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
