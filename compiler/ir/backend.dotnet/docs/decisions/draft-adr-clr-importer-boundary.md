@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability and nominal constraint validation, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -830,6 +830,42 @@ selected graphs prove unresolved edges, a real inheritance cycle, and the resolu
 Roslyn .NET 10 metadata proves that `ProbeConstraintValue` reaches both
 `System.ValueType` and `IProbeConstraint<ProbeConstraintValue>`.
 
+The twenty-fourth slice applies exact nominal assignability to individual resolved
+GenericParamConstraint rows.
+
+1. Kotlin's common type checker validates each substituted upper bound separately. JVM foreign
+   bounds and KLIB Kotlin bounds use the same subtype machinery; an unsupported/error type is not
+   silently reported as an ordinary bound violation. The .NET importer likewise keeps
+   constraint-shape resolution, nominal subtype proof, and later source diagnostics separate.
+2. CLR constraint legality is broader than nominal reachability. A GenericParamConstraint may
+   name a class, interface, constructed type, or another parameter, while GenericParam flags add
+   reference-type, non-nullable-value-type, and default-constructor rules. Modern metadata also
+   has by-ref-like eligibility, and valid type arguments include primitives and arrays whose CLR
+   identities/conversions are not nominal TypeDef views in the current resolved-signature model.
+3. Kotlin Common is unchanged. A foreign CLR constraint does not become a Kotlin upper bound
+   merely because this physical validator can prove it, and a CLR constraint violation cannot be
+   weakened into a Kotlin warning. FIR projection remains a later policy operation.
+4. Exact nominal bound reachability is profile-neutral. Special constraints and by-ref-like
+   eligibility require selected-profile capability and physical type classification; in
+   particular, recognizing a modern flag does not make its rule available on `net48` or the
+   `netstandard2.0` floor.
+5. `DotNetClrNominalConstraintValidator` consumes the already resolved constructed-type contract
+   and the shared assignability resolver. It returns one result per physical constraint row:
+   satisfied, violated, unsupported non-nominal argument/constraint, or invalid assignability.
+   The result retains the original parameter binding and therefore its special flags, but exposes
+   no aggregate “all constraints satisfied” bit.
+6. The core-team choice is to land this deliberately named partial validator rather than mix
+   primitive mapping, dependent-parameter reasoning, constructors, nullability, and by-ref-like
+   rules into one optimistic boolean. Proven violations are useful evidence; unsupported and
+   invalid are not violations, and all nominal rows being satisfied is not complete CLR generic
+   constraint satisfaction.
+
+Real Roslyn .NET 10 coverage proves both nominal rows of
+`ConstrainedProbeAttribute<ProbeConstraintValue>` and proves that an ordinary class violates them.
+Synthetic contracts cover a primitive argument, a non-nominal constraint, and an assignability
+resolution limit. The retained parameter still independently proves the physical `struct` and
+`new()` flags; this slice makes no claim about satisfying those flags.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -909,6 +945,11 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Bounded exact-nominal assignability over selected imported hierarchy views:
   **Correct direction**.
 - Deferring CLR variance and conversion rules until physical type classification is available:
+  **Correct temporary implementation, but not a final design**.
+- Per-row nominal GenericParamConstraint validation with non-boolean unsupported/invalid results:
+  **Correct direction**.
+- Treating nominal validation as incomplete until special constraints, dependent parameters,
+  primitives, arrays, and by-ref-like eligibility are implemented:
   **Correct temporary implementation, but not a final design**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
