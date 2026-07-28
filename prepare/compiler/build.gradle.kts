@@ -455,6 +455,9 @@ val dotNetStdlibProfiles = linkedMapOf(
 val dotNetStdlibOutputDirectories = dotNetStdlibProfiles.keys.associateWith { targetFramework ->
     layout.buildDirectory.dir("dotnet-stdlib/$targetFramework")
 }
+val dotNetStdlibSources = fileTree(rootProject.file("libraries/stdlib/dotnet/src")) {
+    include("**/*.kt")
+}
 val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, taskSuffix) ->
     val outputDirectory = dotNetStdlibOutputDirectories.getValue(targetFramework)
     tasks.register<JavaExec>("produceDotNetStdlib$taskSuffix") {
@@ -473,7 +476,9 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
             "-Xdotnet-target=$targetFramework",
             "-d", outputDirectory.get().asFile.absolutePath,
         )
+        args(dotNetStdlibSources.files.sortedBy { it.invariantSeparatorsPath }.map { it.absolutePath })
 
+        inputs.files(dotNetStdlibSources)
         outputs.files(
             outputDirectory.map { it.file("Kotlin.Runtime.dll") },
             outputDirectory.map { it.file("Kotlin.Stdlib.dll") },

@@ -238,7 +238,7 @@ private val IrFile.implementationSourceFileName: String
 internal val IrFile.isDotNetStdlibImplementationSource: Boolean
     get() = DotNetStdlibLibrary.isImplementationSource(this)
 
-/** Marker for implementation source injected by [DOTNET_STDLIB_SOURCES], never a user class. */
+/** Marker for a product or fallback stdlib implementation declaration, never a user class. */
 internal val IrClass.isDotNetStdlibImplementation: Boolean
     get() = DotNetStdlibLibrary.implementationClassIlName(this) != null
 

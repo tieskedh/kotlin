@@ -856,6 +856,21 @@ After P0:
 - add standard `MODULE:` coverage and a target-owned test module;
 - decide signing and user-library/assembly versioning before publication.
 
+**Source-product progress (2026-07-28):** the first P1 migration slice moves the complete current
+Kotlin/.NET bootstrap stdlib implementation from compiler string literals to ordinary
+`libraries/stdlib/dotnet/src` Kotlin files. This follows Common/JVM/JS/Wasm and Native in making
+library sources the product input. The actual CLR difference is the need to build three physical
+profile variants and to break the compiler/stdlib installation cycle; therefore the backend JAR
+temporarily packages the same files as a read-only fallback. The logical declarations and bodies
+remain identical across profiles, so Kotlin Common semantics do not change; only later target
+lowerings may select profile-legal CLR representations. Repository Gradle tasks compile the
+ordinary files directly and reject incomplete or unrelated source sets. Direct-source and fallback
+products are byte-identical in packed metadata, IL, and DLL output. Private/file-local
+`IdSignature`s are now excluded from the cross-module physical declaration index, preventing
+checkout paths and non-bindable implementation details from becoming ABI. The fallback remains
+transitional; generated Common sources plus narrow .NET actuals and a fully installed platform
+pair remain the core-team endpoint.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
