@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and primitive/array/tagged-object custom-attribute values are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and primitive/array/tagged-object/fixed-enum custom-attribute values are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -401,6 +401,29 @@ cover invalid and oversized lengths, pre-allocation truncation detection, unknow
 tagged types, jagged arrays, and excessive boxing depth. `System.Type`, enums, and named
 field/property arguments remain the next semantic type-resolution layer.
 
+The twelfth slice decodes enum fixed arguments whose exact type comes from the resolved
+constructor signature. JVM annotation deserialization likewise keeps an enum declaration identity
+plus its entry/value rather than erasing it to the underlying integer. The CLR difference is that
+the blob stores only the enum's underlying bits, so the decoder resolves the signature's
+TypeDef/TypeRef through the selected assembly graph and reuses the exact `System.Enum` plus
+`value__` storage proof before consuming those bits.
+
+The decoded value therefore retains both the resolved enum TypeDef identity and an integral value
+whose signedness and width exactly match the physical storage field. Empty and non-empty enum
+arrays retain that same element identity. A named signature encoded as `class` when it resolves
+to an enum is malformed rather than a request to box it; unresolved type edges and invalid enum
+storage are located structured failures. Resolved type wrappers compare by selected assembly
+instance plus metadata handle, making repeated resolver results usable as physical graph keys
+without pretending that row numbers are cross-build ABI identity.
+
+This again does not vary by profile. Framework resolves a synthetic fixed value against its
+selected `mscorlib` `System.Enum`; real Roslyn .NET 10 output resolves `Int16` enum scalar and
+array values through `System.Runtime` forwarding. Kotlin Common still sees no Kotlin enum until
+the import policy deliberately projects the foreign declaration. Boxed enums, named enum
+arguments, and `System.Type` values remain unsupported because their types are serialized as CLR
+reflection names; the next layer must parse and resolve those names rather than treating strings
+as type identity.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -471,7 +494,8 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Typed array and tagged-object decoding with bounded untrusted-input recursion:
   **Correct direction**.
-- Structured deferral of type, enum, and named values:
+- Exact fixed-enum identity and storage decoding: **Correct direction**.
+- Structured deferral of serialized type names, boxed/named enums, and named arguments:
   **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.

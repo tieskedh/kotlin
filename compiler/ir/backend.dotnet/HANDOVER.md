@@ -2096,6 +2096,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Windows ILAsm/SAC concurrency path separately if this frequency persists. The subsequent fresh
   strict aggregate gate is clean at 870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
   CLI, and 53 library integration tests).
+- The fixed-enum custom-attribute continuation resolves a constructor signature's named type
+  through the selected graph, proves exact selected `System.Enum` ancestry and valid `value__`
+  storage, then decodes only that storage width. Values retain the resolved enum identity plus
+  exact integral bits; enum arrays retain it when empty. A false `class` signature, unresolved
+  type edge, or invalid enum shape fails structurally. Resolved type wrappers now compare by
+  selected assembly instance plus metadata handle so repeated resolutions are stable physical
+  graph keys, not cross-build ABI keys. Framework synthetic coverage decodes an Int16 enum and
+  malformed/unresolved signatures; real Roslyn .NET 10 output covers Int16 scalar and array values.
+  System.Type, boxed/named enums, and named arguments remain unsupported until a bounded CLR
+  serialized-type-name parser resolves their textual type identities. The fresh strict gate is
+  870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 53 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
