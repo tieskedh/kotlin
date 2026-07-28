@@ -580,6 +580,62 @@ Real Roslyn .NET 10 output covers field and property arguments containing scalar
 `System.Type`, enums, boxed enums, and null/non-null arrays. Framework synthetic metadata proves
 ordered duplicate retention and located invalid kind, name, and truncation failures.
 
+The eighteenth slice adds that selected-graph validator and, first, the general resolved-signature
+foundation it requires.
+
+1. JVM and KLIB-backed targets begin with the annotation declaration's logical parameter identity
+   and validate the typed constant against that declaration. They do not use a foreign runtime's
+   opportunistic reflection lookup as declaration identity. The .NET backend follows the same
+   layering: encoded kind/name/type/value remains the annotation-like record, while a separately
+   resolved CLR member proves that the record is usable.
+2. The unavoidable CLR difference is that a custom-attribute named argument contains no
+   FieldDef/Property token. CoreCLR first decodes the name and type and later enumerates or looks
+   up members on the currently loaded attribute class. Its `CustomAttributeData` path and actual
+   instance-creation path even differ for malformed or version-skewed metadata. The compiler
+   therefore validates the documented ordinary CLR contract rather than treating either runtime
+   implementation quirk as Kotlin semantics.
+3. Kotlin Common is unchanged. Validation creates no Kotlin property, annotation parameter, or
+   default value and never changes the decoded sequence. A later FIR projector may consume only a
+   valid result, but the foreign CLR record and its multiplicity remain available for diagnostics
+   and semantic comparison.
+4. The rules are legal on every supported profile: a named field must be public, instance, and
+   writable; a named property must be non-indexed and have public instance getter and setter/init
+   accessors with consistent physical signatures. `net10.0` init-only setters carry a required
+   modifier on the setter return; resolved signatures preserve that modifier while accessor-shape
+   comparison deliberately ignores modifiers. `net48` and `netstandard2.0` need no imitation of
+   init syntax. All three profiles otherwise use the same validation algorithm over their
+   frontend-selected reference graph.
+5. As on the mature importers, type identity is resolved before language projection. A new
+   assembly-context-bearing signature algebra resolves every nominal node in TypeDef/TypeRef/
+   TypeSpec, generic-instance, modifier, array, pointer, by-reference, and function-pointer
+   structure. It can then substitute a generic base view without losing which assembly owns a
+   nested handle. This is the general TypeSig-to-resolved-structural-type layer previously
+   required by the ADR, not a custom-attribute-only substitute.
+6. Where CLR metadata still permits several behaviours, the selected rule is the one a Kotlin core
+   review should choose: the encoded field/property tag is authoritative; lookup is restricted to
+   that member species; the nearest declaring level with that kind and name hides older levels;
+   the encoded value type must exactly match the substituted physical type; ambiguous members,
+   repeated assignment to the same resolved member, cycles, bad arity, invalid accessors, and
+   resource-limit exhaustion are structured invalid results. No lookup fallback repairs an invalid
+   producer.
+
+The generic substitution is not theoretical. Roslyn accepts a non-generic attribute deriving from
+`BaseAttribute<int>` and emits named assignments to inherited `T` fields and properties. The
+validator resolves the base TypeSpec, proves its physical generic arity, substitutes `T = int`
+through both member and accessor signatures, and retains the declaring base view next to the
+original encoded argument. Real Roslyn .NET 10 coverage includes that field/property pair, an
+ordinary setter, an init setter, and an exactly typed property whose enum is nested in a closed
+generic owner. It also checks non-public/static/readonly fields, static/read-only/write-only/
+private-set/indexed properties, missing members, type mismatch, field-versus-property mismatch,
+ordered duplicates, invalid generic arity, inheritance cycles and limits, and duplicate
+MethodSemantics accessors.
+
+Generic attribute constructors whose MemberRef parent is a closed TypeSpec remain the existing
+structured temporary boundary. The resolved-signature layer can represent their types, but
+constructor resolution must first retain the constructed owner view rather than silently reducing
+it to an open TypeDef. That follow-up can reuse this foundation; `OPEN_GENERIC_ATTRIBUTE_TYPE` is a
+defensive validator result, not the final generic-attribute design.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -660,14 +716,21 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Passing both original and unqualified-context assemblies to profile policy:
   **Reasonable platform-specific divergence**.
-- Structured deferral of serialized type names, boxed/named enums, and named arguments:
-  **Correct temporary implementation, but not a final design**.
+- Assembly-context-bearing resolved physical signature algebra and generic substitution:
+  **Correct direction**.
+- Separate selected-graph validation of named custom-attribute members:
+  **Correct direction**.
+- Preserving encoded named-argument identity beside, rather than replacing it with, a resolved
+  FieldDef/Property: **Correct direction**.
+- Applying the documented ordinary CLR attribute contract instead of CoreCLR malformed-metadata
+  quirks: **Reasonable platform-specific divergence**.
+- Rejecting closed generic attribute constructors until constructor resolution retains their
+  constructed TypeSpec owner: **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- Remaining semantic custom-attribute values, Kotlin-facing
-  property synthesis, events, resolved constraint semantics, nullability enhancement, FIR symbols,
-  and backend calls:
+- Kotlin-facing custom-attribute/annotation projection, property synthesis, events, resolved
+  constraint semantics, nullability enhancement, FIR symbols, and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
 
 The cost is a substantial target-owned metadata and import layer. The alternative is greater:
