@@ -130,6 +130,12 @@ class DotNetClrTypeResolver(
             context = ResolutionContext(),
         )
 
+    fun resolveNestedType(
+        enclosing: DotNetClrResolvedTypeDefinition,
+        metadataName: String,
+    ): DotNetClrTypeResolution =
+        resolveNestedType(enclosing, metadataName, ResolutionContext())
+
     fun resolveEnumStorage(
         type: DotNetClrResolvedTypeDefinition,
         systemEnum: DotNetClrResolvedTypeDefinition,

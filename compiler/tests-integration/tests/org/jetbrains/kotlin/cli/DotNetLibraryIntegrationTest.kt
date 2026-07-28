@@ -59,12 +59,16 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyContentType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyBinder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParser
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParsing
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParser
@@ -1720,6 +1724,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         Seven = 7
                     }
 
+                    public sealed class Generic<T>
+                    {
+                        public sealed class Nested<U>
+                        {
+                        }
+                    }
+
                     [SemanticProbe(
                         7, "portable", true, '\u03bb', 4294967295u,
                         -1, 255, -2, 65535, -3L, 18446744073709551615UL, -0.0f, -0.0,
@@ -2147,6 +2158,98 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             decodedModernAttributes[1][17],
         )
+
+        val serializedTypeResolver = DotNetClrSerializedTypeResolver(
+            resolver,
+            DotNetClrSerializedAssemblyBinder {
+                    _,
+                    unqualifiedContextAssembly,
+                    assemblyName,
+                ->
+                when (assemblyName?.name) {
+                    null -> unqualifiedContextAssembly
+                    destinationMetadata.identity.name -> destinationMetadata
+                    systemRuntimeMetadata.identity.name -> systemRuntimeMetadata
+                    else -> null
+                }
+            },
+        )
+        val resolvedNested = (
+                serializedTypeResolver.resolve(
+                    destinationMetadata,
+                    "Forwarded.Outer+Inner, ForwardDestination",
+                ) as DotNetClrSerializedTypeResolution.Resolved
+                ).type as DotNetClrResolvedSerializedType.Named
+        assertSame(destinationMetadata, resolvedNested.type.assembly)
+        assertEquals("Inner", resolvedNested.type.definition.metadataName)
+
+        val resolvedGeneric = (
+                serializedTypeResolver.resolve(
+                    destinationMetadata,
+                    "Forwarded.Generic`1+Nested`1" +
+                            "[[System.String, System.Runtime]," +
+                            "[Forwarded.ExternalKind, ForwardDestination]]" +
+                            "[]&, ForwardDestination",
+                ) as DotNetClrSerializedTypeResolution.Resolved
+                ).type as DotNetClrResolvedSerializedType.ByReference
+        val resolvedGenericArray =
+            resolvedGeneric.elementType as DotNetClrResolvedSerializedType.SzArray
+        val resolvedGenericInstance =
+            resolvedGenericArray.elementType as
+                    DotNetClrResolvedSerializedType.GenericInstance
+        assertEquals("Nested`1", resolvedGenericInstance.genericType.type.definition.metadataName)
+        assertEquals(2, resolvedGenericInstance.arguments.size)
+        assertEquals(
+            "String",
+            (
+                    resolvedGenericInstance.arguments[0] as
+                            DotNetClrResolvedSerializedType.Named
+                    ).type.definition.metadataName,
+        )
+        assertEquals(
+            forwardedEnum,
+            (
+                    resolvedGenericInstance.arguments[1] as
+                            DotNetClrResolvedSerializedType.Named
+                    ).type,
+        )
+
+        val unqualifiedGenericArgument = (
+                serializedTypeResolver.resolve(
+                    destinationMetadata,
+                    "Forwarded.Generic`1[Forwarded.ExternalKind], ForwardDestination",
+                ) as DotNetClrSerializedTypeResolution.Resolved
+                ).type as DotNetClrResolvedSerializedType.GenericInstance
+        assertEquals(
+            forwardedEnum,
+            (
+                    unqualifiedGenericArgument.arguments.single() as
+                            DotNetClrResolvedSerializedType.Named
+                    ).type,
+        )
+
+        val invalidSerializedAssembly =
+            serializedTypeResolver.resolve(
+                destinationMetadata,
+                "Forwarded.Outer, Broken, Version=1",
+            ) as DotNetClrSerializedTypeResolution.InvalidAssemblyName
+        assertEquals(
+            DotNetClrSerializedAssemblyNameFailure.INVALID_VERSION,
+            invalidSerializedAssembly.parsing.failure,
+        )
+        val unboundSerializedAssembly =
+            serializedTypeResolver.resolve(
+                destinationMetadata,
+                "Forwarded.Outer, Missing",
+            ) as DotNetClrSerializedTypeResolution.UnboundAssembly
+        assertEquals("Missing", unboundSerializedAssembly.assemblyName?.name)
+        val missingGenericArgumentAssembly =
+            serializedTypeResolver.resolve(
+                destinationMetadata,
+                "Forwarded.Generic`1[[Forwarded.ExternalKind, Missing]], " +
+                        "ForwardDestination",
+            ) as DotNetClrSerializedTypeResolution.UnboundAssembly
+        assertEquals(listOf(0), missingGenericArgumentAssembly.genericArgumentPath)
 
         val nextTypeReferenceRow =
             (facadeMetadata.typeReferences.maxOfOrNull { reference -> reference.handle.row } ?: 0) + 1
