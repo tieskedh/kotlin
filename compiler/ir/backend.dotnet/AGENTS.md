@@ -311,8 +311,15 @@ landed shape as a compatibility constraint.
    property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
    MethodSemantics, never from `get_`/`set_` spelling; CTS structural invariants are enforced while
    optional CLS naming and shape rules remain input for later Kotlin import-policy diagnostics.
-   The property decoder follows the official .NET by-reference signature augmentation. It does
-   not load target code,
+   The property decoder follows the official .NET by-reference signature augmentation.
+   GenericParam and GenericParamConstraint rows preserve parameter token/number/owner/name, raw
+   flags, variance, reference/value/default-constructor constraints, modern `AllowByRefLike`, and
+   every TypeDef/TypeRef/TypeSpec constraint handle. Method signature arity must agree with its
+   parameter rows; numbers are zero-based and contiguous, owner/name/number and constraints are
+   unique, and constraint rows remain contiguous by owner. Do not reinterpret
+   ReferenceTypeConstraint as Kotlin non-nullability, DefaultConstructorConstraint as Kotlin
+   syntax, or AllowByRefLike as ordinary Kotlin generics. TypeSpec constraints remain unresolved
+   until the cycle-safe, profile-aware import resolver. It does not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy
    target FIR symbol provider -> IR retaining the original physical owner/member linkage.
