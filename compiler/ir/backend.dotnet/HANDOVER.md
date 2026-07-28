@@ -2172,6 +2172,28 @@ session state, process, and a curated task menu. Keep both files updated as you 
   together immediately in isolation without changes. The subsequent fresh aggregate gate is clean
   at 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
   tests).
+- The named-argument validation continuation adds a general assembly-context-bearing resolved CLR
+  signature algebra before applying member policy. It preserves every nominal node across
+  assemblies and structurally carries primitives, generic parameters/instances, arrays,
+  pointers/byrefs, modifiers, and function pointers, so substituting an inherited generic view
+  never relocates an assembly-relative raw handle. The separate validator retains the encoded
+  kind/name/type/value/order record and resolves only an auxiliary selected-graph member. It uses
+  the encoded field/property species, nearest same-species declaring level, exact substituted
+  physical type, public writable instance fields, and non-indexed properties with public instance
+  get plus set/init accessors. Duplicate resolved assignments, ambiguous members/accessors,
+  visibility/writeability failures, bad generic arity/substitution, unresolved edges, cycles, and
+  traversal limits are structured invalid results. This follows JVM/KLIB's logical
+  name-plus-typed-value boundary while making the necessary CLR-specific name-to-current-member
+  validation explicit; CoreCLR's differing malformed-metadata behaviours in CustomAttributeData
+  and actual instantiation are not adopted as Kotlin semantics. A real Roslyn .NET 10 attribute
+  derives from `BaseAttribute<int>` and proves inherited `T` field/property substitution,
+  ordinary and init properties, an exactly typed enum property nested in a closed generic owner,
+  plus hostile field/property shapes. Synthetic selected metadata covers invalid arity,
+  inheritance cycle/limit, duplicate accessors, wrong kind, type mismatch, and duplicate
+  assignment. Closed TypeSpec-owned generic attribute constructors remain the next structured
+  temporary boundary; constructor resolution must retain the constructed owner view and reuse
+  this signature foundation. The fresh strict gate is 871/0/0/0 across 16 XML suites (796
+  FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

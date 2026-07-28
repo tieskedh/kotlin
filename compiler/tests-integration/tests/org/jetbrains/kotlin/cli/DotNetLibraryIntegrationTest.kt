@@ -36,6 +36,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorRe
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgument
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentValidation
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentValidationFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValue
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueDecoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueFailure
@@ -69,6 +72,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedSerializedType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedCustomAttributeNamedMember
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrResolvedTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeResolver
@@ -1884,15 +1889,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                 namespace Forwarded
                 {
+                    public abstract class SemanticProbeBaseAttribute<T> : Attribute
+                    {
+                        public T InheritedField;
+                        public T InheritedProperty { get; set; }
+                    }
+
                     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-                    public sealed class SemanticProbeAttribute : Attribute
+                    public sealed class SemanticProbeAttribute :
+                        SemanticProbeBaseAttribute<int>
                     {
                         public int PublicField;
+                        private int PrivateField;
+                        public static int StaticField;
+                        public readonly int ReadOnlyField;
                         public string Note { get; set; }
                         public Type RelatedType { get; set; }
                         public ExternalKind KindProperty { get; set; }
+                        public Generic<int>.NestedKind GenericKindProperty { get; set; }
                         public object BoxedProperty { get; set; }
                         public int[] NumbersProperty { get; set; }
+                        public int InitProperty { get; init; }
+                        public static int StaticProperty { get; set; }
+                        public int ReadOnlyProperty { get; }
+                        public int WriteOnlyProperty { set { } }
+                        public int PrivateSetterProperty { get; private set; }
+                        public int this[int index] { get => index; set { } }
 
                         public SemanticProbeAttribute(
                             int id,
@@ -1955,8 +1977,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         Note = "named",
                         RelatedType = typeof(Generic<int>.NestedKind),
                         KindProperty = ExternalKind.Seven,
+                        GenericKindProperty = Generic<int>.NestedKind.Three,
                         BoxedProperty = ExternalKind.Minus,
-                        NumbersProperty = new[] { 4, 5 })]
+                        NumbersProperty = new[] { 4, 5 },
+                        InitProperty = 103,
+                        InheritedField = 101,
+                        InheritedProperty = 102)]
                     [SemanticProbe(
                         8, null, false, '\0', 0u,
                         0, 0, 0, 0, 0L, 0UL, float.NaN, double.NaN,
@@ -1968,8 +1994,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         Note = null,
                         RelatedType = null,
                         KindProperty = ExternalKind.Zero,
+                        GenericKindProperty = Generic<int>.NestedKind.Zero,
                         BoxedProperty = null,
-                        NumbersProperty = null)]
+                        NumbersProperty = null,
+                        InitProperty = 0,
+                        InheritedField = 0,
+                        InheritedProperty = 0)]
                     public sealed class Outer
                     {
                         public sealed class Inner
@@ -2601,6 +2631,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 DotNetClrCustomAttributeNamedArgument(
                     DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "GenericKindProperty",
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        resolvedIntGenericEnum,
+                        DotNetClrPrimitiveType.INT16,
+                    ),
+                    DotNetClrCustomAttributeValue.EnumValue(
+                        DotNetClrCustomAttributeValueType.EnumType(
+                            resolvedIntGenericEnum,
+                            DotNetClrPrimitiveType.INT16,
+                        ),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT16,
+                            3uL,
+                        ),
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
                     "BoxedProperty",
                     DotNetClrCustomAttributeValueType.TaggedObject,
                     DotNetClrCustomAttributeValue.EnumValue(
@@ -2638,6 +2686,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 5uL,
                             ),
                         ),
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "InitProperty",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        103uL,
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.FIELD,
+                    "InheritedField",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        101uL,
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "InheritedProperty",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        102uL,
                     ),
                 ),
             ),
@@ -2686,6 +2761,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 DotNetClrCustomAttributeNamedArgument(
                     DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "GenericKindProperty",
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        resolvedIntGenericEnum,
+                        DotNetClrPrimitiveType.INT16,
+                    ),
+                    DotNetClrCustomAttributeValue.EnumValue(
+                        DotNetClrCustomAttributeValueType.EnumType(
+                            resolvedIntGenericEnum,
+                            DotNetClrPrimitiveType.INT16,
+                        ),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT16,
+                            0uL,
+                        ),
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
                     "BoxedProperty",
                     DotNetClrCustomAttributeValueType.TaggedObject,
                     DotNetClrCustomAttributeValue.StringValue(null),
@@ -2707,8 +2800,362 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         null,
                     ),
                 ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "InitProperty",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        0uL,
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.FIELD,
+                    "InheritedField",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        0uL,
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "InheritedProperty",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        0uL,
+                    ),
+                ),
             ),
             decodedModernAttributeValues[1].namedArguments,
+        )
+
+        val namedArgumentValidator =
+            DotNetClrCustomAttributeNamedArgumentValidator(
+                resolver,
+                DotNetClrCustomAttributeCoreTypes(
+                    systemAttribute,
+                    systemEnum,
+                    systemType,
+                ),
+            )
+        val validatedNamedArguments = decodedModernAttributeValues.map { decodedAttribute ->
+            namedArgumentValidator.validate(decodedAttribute) as
+                    DotNetClrCustomAttributeNamedArgumentValidation.Valid
+        }
+        assertEquals(
+            decodedModernAttributeValues.map { attribute -> attribute.namedArguments },
+            validatedNamedArguments.map { validation ->
+                validation.namedArguments.map { argument -> argument.argument }
+            },
+        )
+        val inheritedField = validatedNamedArguments.first().namedArguments.single { argument ->
+            argument.argument.name == "InheritedField"
+        }.member as DotNetClrResolvedCustomAttributeNamedMember.Field
+        assertEquals(
+            "SemanticProbeBaseAttribute`1",
+            inheritedField.declaringType.type.definition.metadataName,
+        )
+        assertEquals(
+            listOf(
+                DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+            ),
+            inheritedField.declaringType.arguments,
+        )
+        assertEquals(
+            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+            inheritedField.effectiveType,
+        )
+        val inheritedProperty =
+            validatedNamedArguments.first().namedArguments.single { argument ->
+                argument.argument.name == "InheritedProperty"
+            }.member as DotNetClrResolvedCustomAttributeNamedMember.Property
+        assertEquals(
+            inheritedField.declaringType,
+            inheritedProperty.declaringType,
+        )
+        assertEquals(
+            DotNetClrResolvedTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+            inheritedProperty.effectiveType,
+        )
+        assertEquals("get_InheritedProperty", inheritedProperty.getter.name)
+        assertEquals("set_InheritedProperty", inheritedProperty.setter.name)
+
+        val integerNamedArgument =
+            decodedModernAttributeValues.first().namedArguments.single { argument ->
+                argument.name == "PublicField"
+            }
+
+        fun assertNamedArgumentFailure(
+            expected: DotNetClrCustomAttributeNamedArgumentValidationFailure,
+            argument: DotNetClrCustomAttributeNamedArgument,
+        ) {
+            val invalid = namedArgumentValidator.validate(
+                decodedModernAttributeValues.first().copy(
+                    namedArguments = listOf(argument)
+                )
+            ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+            assertEquals(expected, invalid.failure)
+            assertEquals(0, invalid.namedArgumentIndex)
+        }
+
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.MEMBER_NOT_FOUND,
+            integerNamedArgument.copy(name = "Missing"),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.MEMBER_NOT_FOUND,
+            integerNamedArgument.copy(
+                kind = DotNetClrCustomAttributeNamedArgumentKind.PROPERTY
+            ),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.MEMBER_TYPE_MISMATCH,
+            integerNamedArgument.copy(
+                type = DotNetClrCustomAttributeValueType.Primitive(
+                    DotNetClrPrimitiveType.STRING
+                ),
+                value = DotNetClrCustomAttributeValue.StringValue("wrong"),
+            ),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.FIELD_NOT_PUBLIC,
+            integerNamedArgument.copy(name = "PrivateField"),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.FIELD_IS_STATIC,
+            integerNamedArgument.copy(name = "StaticField"),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.FIELD_IS_READ_ONLY,
+            integerNamedArgument.copy(name = "ReadOnlyField"),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.PROPERTY_IS_STATIC,
+            integerNamedArgument.copy(
+                kind = DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                name = "StaticProperty",
+            ),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.PROPERTY_SETTER_MISSING,
+            integerNamedArgument.copy(
+                kind = DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                name = "ReadOnlyProperty",
+            ),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.PROPERTY_GETTER_MISSING,
+            integerNamedArgument.copy(
+                kind = DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                name = "WriteOnlyProperty",
+            ),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure
+                .PROPERTY_ACCESSOR_NOT_PUBLIC,
+            integerNamedArgument.copy(
+                kind = DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                name = "PrivateSetterProperty",
+            ),
+        )
+        assertNamedArgumentFailure(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.PROPERTY_IS_INDEXED,
+            integerNamedArgument.copy(
+                kind = DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                name = "Item",
+            ),
+        )
+        val duplicateNamedArgument = namedArgumentValidator.validate(
+            decodedModernAttributeValues.first().copy(
+                namedArguments = listOf(
+                    integerNamedArgument,
+                    integerNamedArgument.copy(
+                        value = DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT32,
+                            100uL,
+                        )
+                    ),
+                )
+            )
+        ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.DUPLICATE_MEMBER,
+            duplicateNamedArgument.failure,
+        )
+        assertEquals(1, duplicateNamedArgument.namedArgumentIndex)
+
+        fun validateAgainstMetadata(
+            selectedMetadata: DotNetClrAssemblyMetadata,
+            namedArguments: List<DotNetClrCustomAttributeNamedArgument>,
+            inheritanceLimit: Int = 256,
+        ): DotNetClrCustomAttributeNamedArgumentValidation {
+            val selectedResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { sourceAssembly, reference ->
+                    if (sourceAssembly === selectedMetadata &&
+                        reference.name == systemRuntimeMetadata.identity.name
+                    ) {
+                        systemRuntimeMetadata
+                    } else {
+                        null
+                    }
+                }
+            )
+            val selectedAttributeType = DotNetClrResolvedTypeDefinition(
+                selectedMetadata,
+                selectedMetadata.typeDefinitions.single { definition ->
+                    definition.handle ==
+                            decodedModernAttributeValues.first()
+                                .constructor.attributeType.definition.handle
+                },
+            )
+            val selectedAttribute = decodedModernAttributeValues.first().copy(
+                constructor = decodedModernAttributeValues.first().constructor.copy(
+                    sourceAssembly = selectedMetadata,
+                    attributeType = selectedAttributeType,
+                ),
+                namedArguments = namedArguments,
+            )
+            return DotNetClrCustomAttributeNamedArgumentValidator(
+                selectedResolver,
+                DotNetClrCustomAttributeCoreTypes(
+                    systemAttribute,
+                    systemEnum,
+                    systemType,
+                ),
+                inheritanceLimit,
+            ).validate(selectedAttribute)
+        }
+
+        val inheritedIntegerArgument =
+            decodedModernAttributeValues.first().namedArguments.single { argument ->
+                argument.name == "InheritedField"
+            }
+        val semanticProbeType =
+            decodedModernAttributeValues.first().constructor.attributeType.definition
+        val semanticProbeBaseSpecification =
+            destinationMetadata.typeSpecifications.single { specification ->
+                specification.handle == semanticProbeType.baseType
+            }
+        val semanticProbeBaseSignature =
+            semanticProbeBaseSpecification.signature as DotNetClrTypeSignature.GenericInstance
+        val invalidGenericArityMetadata = destinationMetadata.copy(
+            typeSpecifications = destinationMetadata.typeSpecifications.map { specification ->
+                if (specification.handle == semanticProbeBaseSpecification.handle) {
+                    specification.copy(
+                        signature = semanticProbeBaseSignature.copy(arguments = emptyList())
+                    )
+                } else {
+                    specification
+                }
+            }
+        )
+        val invalidGenericArity = validateAgainstMetadata(
+            invalidGenericArityMetadata,
+            listOf(inheritedIntegerArgument),
+        ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure
+                .INVALID_RESOLVED_SIGNATURE,
+            invalidGenericArity.failure,
+        )
+        assertEquals(
+            1,
+            invalidGenericArity.signatureResolution?.expectedGenericArity,
+        )
+        assertEquals(
+            0,
+            invalidGenericArity.signatureResolution?.actualGenericArity,
+        )
+
+        val invalidSubstitutionMetadata = destinationMetadata.copy(
+            fieldDefinitions = destinationMetadata.fieldDefinitions.map { field ->
+                if (field.handle == inheritedField.field.handle) {
+                    field.copy(
+                        signature = field.signature.copy(
+                            fieldType = DotNetClrTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.TYPE,
+                                1,
+                            )
+                        )
+                    )
+                } else {
+                    field
+                }
+            }
+        )
+        val invalidSubstitution = validateAgainstMetadata(
+            invalidSubstitutionMetadata,
+            listOf(inheritedIntegerArgument),
+        ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure
+                .GENERIC_SUBSTITUTION_FAILED,
+            invalidSubstitution.failure,
+        )
+        assertEquals(1, invalidSubstitution.signatureSubstitution?.parameterIndex)
+        assertEquals(1, invalidSubstitution.signatureSubstitution?.argumentCount)
+
+        val cyclicMetadata = destinationMetadata.copy(
+            typeDefinitions = destinationMetadata.typeDefinitions.map { definition ->
+                if (definition.handle == semanticProbeType.handle) {
+                    definition.copy(baseType = definition.handle)
+                } else {
+                    definition
+                }
+            }
+        )
+        val inheritanceCycle = validateAgainstMetadata(
+            cyclicMetadata,
+            listOf(integerNamedArgument.copy(name = "Missing")),
+        ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure.INHERITANCE_CYCLE,
+            inheritanceCycle.failure,
+        )
+        val inheritanceLimit = validateAgainstMetadata(
+            destinationMetadata,
+            listOf(integerNamedArgument.copy(name = "Missing")),
+            inheritanceLimit = 1,
+        ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure
+                .INHERITANCE_LIMIT_EXCEEDED,
+            inheritanceLimit.failure,
+        )
+
+        val noteArgument =
+            decodedModernAttributeValues.first().namedArguments.single { argument ->
+                argument.name == "Note"
+            }
+        val noteProperty = destinationMetadata.propertyDefinitions.single { property ->
+            property.declaringType == semanticProbeType.handle &&
+                    property.name == "Note"
+        }
+        val noteGetter = destinationMetadata.methodSemantics.single { semantics ->
+            semantics.association == noteProperty.handle &&
+                    semantics.kind == DotNetClrMethodSemanticsKind.GETTER
+        }
+        val duplicateAccessorMetadata = destinationMetadata.copy(
+            methodSemantics = destinationMetadata.methodSemantics +
+                    noteGetter.copy(
+                        handle = DotNetClrMetadataHandle(
+                            24,
+                            destinationMetadata.methodSemantics.maxOf { semantics ->
+                                semantics.handle.row
+                            } + 1,
+                        )
+                    )
+        )
+        val duplicateAccessor = validateAgainstMetadata(
+            duplicateAccessorMetadata,
+            listOf(noteArgument),
+        ) as DotNetClrCustomAttributeNamedArgumentValidation.Invalid
+        assertEquals(
+            DotNetClrCustomAttributeNamedArgumentValidationFailure
+                .PROPERTY_ACCESSOR_AMBIGUOUS,
+            duplicateAccessor.failure,
         )
 
         val resolvedNested = (
