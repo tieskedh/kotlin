@@ -328,8 +328,15 @@ landed shape as a compatibility constraint.
    view, and reject arity, resolution, non-nominal shape, method-parameter scope, and
    class/interface mismatches structurally. This physical hierarchy operation is profile-neutral;
    DIM body placement does not alter nominal interface identity. Transitive assignability and CLR
-   variance are a later shared selected-graph operation, not reuse of the module-local
-   `DotNetIlClassInfo` codegen graph and not FIR projection. MemberRef rows preserve their exact
+   variance are a shared selected-graph operation, not reuse of the module-local
+   `DotNetIlClassInfo` codegen graph and not FIR projection. The current imported assignability
+   resolver implements only bounded exact nominal reachability through resolved class/interface
+   views. It compares selected assembly identity plus every reified argument, deduplicates
+   diamonds, and reports unresolved hierarchy, cycles, and limits structurally when no exact path
+   proves the relation. A positive path does not replace whole-import malformed-graph validation.
+   Until physical reference/value/ref-like classification exists, do not add optimistic CLR
+   variance, array, boxing, `Nullable<T>`, or generic-parameter conversions to this walker.
+   MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
    allow call-site vararg sentinels; FieldRef signatures use the reusable FieldSig model and

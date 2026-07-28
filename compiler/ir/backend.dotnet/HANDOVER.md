@@ -2251,6 +2251,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   special-constraint satisfaction, and FIR supertype projection remain deliberately separate.
   The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   54 library integration tests).
+- The exact-nominal-assignability continuation adds a bounded breadth-first walk over those
+  selected base/interface views. Identity includes the resolved assembly plus every reified type
+  argument; generic base and interface substitutions compose transitively, diamonds deduplicate,
+  and unresolved hierarchy, cycles, and limits remain structured outcomes instead of becoming
+  `false`. A reachable exact path is a positive proof; whole-import validation still owns
+  malformed unrelated branches. Dual-ILAsm coverage proves transitive generic views, invariant
+  argument mismatch, and an interface diamond on `net48` and `net10.0`; synthetic graphs prove
+  unresolved/cycle/limit results, while real Roslyn metadata proves
+  `ProbeConstraintValue` reaches both `System.ValueType` and its exact
+  `IProbeConstraint<ProbeConstraintValue>` view. CLR variance, arrays, boxing, `Nullable<T>`, and
+  generic-parameter assignability remain deliberately deferred until shared physical
+  reference/value/ref-like classification exists. The fresh strict gate is 871/0/0/0 across 16
+  XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

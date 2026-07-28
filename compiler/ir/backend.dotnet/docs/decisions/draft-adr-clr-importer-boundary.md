@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy-edge resolution, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -790,6 +790,46 @@ selected metadata covers owner and interface arity, out-of-range owner substitut
 method parameters, non-nominal TypeSpecs, a class in an InterfaceImpl row, an interface as a class
 base, and an interface with a TypeDef.Extends edge.
 
+The twenty-third slice walks those views for exact nominal assignability.
+
+1. Kotlin's common type checker and the JVM/KLIB importers establish subtyping by following
+   declared, substituted supertypes. A repeated interface in a diamond is one logical reachable
+   supertype; it is not a cycle or a second identity. Missing/error supertypes remain diagnostic
+   information rather than silently proving `false`.
+2. CLR nominal assignability likewise includes exact type identity, the transitive class base
+   chain, and implemented-interface reachability. Unlike erased JVM signatures, constructed CLR
+   views remain reified and invariant unless the generic interface or delegate declaration
+   authorizes CLR variance. CLR additionally has array conversions, boxing, generic-parameter
+   constraints, and `Nullable<T>` rules. The
+   [official Type.IsAssignableFrom contract](https://learn.microsoft.com/en-us/dotnet/api/system.type.isassignablefrom?view=net-10.0)
+   describes the complete runtime relation; this slice implements only its exact nominal
+   class/interface subset.
+3. Kotlin Common is unchanged. This operation answers whether one foreign physical view reaches
+   another; it does not make a new Kotlin subtype, reinterpret Kotlin declaration-site variance,
+   or permit a foreign conversion in Kotlin source. FIR import policy remains authoritative.
+4. Exact class/interface reachability has the same meaning on `net48`, `netstandard2.0`, and
+   `net10.0`. DIM availability is irrelevant. The compiler walks the build frontend's selected
+   metadata graph and never calls host reflection, so the host runtime cannot substitute its own
+   profile.
+5. `DotNetClrTypeAssignabilityResolver` performs a bounded breadth-first walk over resolved base
+   and InterfaceImpl views. Equality includes selected assembly identity and all reified
+   arguments. Diamonds are deduplicated, cycles are detected on the completed adjacency graph,
+   and unresolved hierarchy plus resource limits remain structured results. An exact reachable
+   path is a positive proof; if none exists, an encountered malformed edge or cycle is reported
+   instead of being weakened to `NotAssignable`. Whole-import graph validation remains a separate
+   diagnostic pass and may still reject an unrelated malformed branch.
+6. The core-team choice is to land exact nominal reachability before variance or conversion
+   policy. Treating every differing generic argument as invariant is conservative: it can defer a
+   legal CLR variant conversion but cannot invent one. Variance requires selected-graph
+   reference/value/ref-like classification; arrays, boxing, `Nullable<T>`, and type parameters
+   require their own explicit rules. None belongs as an optimistic fallback in this walker.
+
+The dual-ILAsm fixture proves transitive generic-base and interface substitution, exact generic
+invariance, and a non-cyclic interface diamond on Framework and modern metadata. Synthetic
+selected graphs prove unresolved edges, a real inheritance cycle, and the resolution bound. Real
+Roslyn .NET 10 metadata proves that `ProbeConstraintValue` reaches both
+`System.ValueType` and `IProbeConstraint<ProbeConstraintValue>`.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -866,6 +906,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Keeping imported hierarchy resolution separate from module-local IL codegen assignability:
   **Correct direction**.
+- Bounded exact-nominal assignability over selected imported hierarchy views:
+  **Correct direction**.
+- Deferring CLR variance and conversion rules until physical type classification is available:
+  **Correct temporary implementation, but not a final design**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
