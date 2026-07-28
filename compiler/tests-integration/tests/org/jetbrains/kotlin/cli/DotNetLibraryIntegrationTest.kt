@@ -91,11 +91,15 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParsing
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyViewResolution
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyViewResolutionFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeHierarchyViewResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeViewResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
@@ -448,8 +452,19 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   }
 
                   .class public auto ansi beforefieldinit 'IntArrayBox'
-                         extends [mscorlib]System.Object
+                         extends Fixture.Base
                          implements class 'Fixture.IBox`1'<int32[]>
+                  {
+                  }
+
+                  .class public auto ansi beforefieldinit 'GenericBase`1'<T>
+                         extends Fixture.Base
+                  {
+                  }
+
+                  .class public auto ansi beforefieldinit 'GenericBox`1'<T>
+                         extends class 'Fixture.GenericBase`1'<!0[]>
+                         implements class 'Fixture.IBox`1'<!0[]>
                   {
                   }
 
@@ -602,6 +617,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val marker = fixtureTypes.getValue("IMarker")
             val box = fixtureTypes.getValue("IBox`1")
             val variant = fixtureTypes.getValue("IVariant`2")
+            val intArrayBox = fixtureTypes.getValue("IntArrayBox")
+            val genericBase = fixtureTypes.getValue("GenericBase`1")
+            val genericBox = fixtureTypes.getValue("GenericBox`1")
             val tinyKind = fixtureTypes.getValue("TinyKind")
             val genericOwner = fixtureTypes.getValue("GenericOwner`1")
             val signatureHost = fixtureTypes.getValue("SignatureHost`1")
@@ -633,6 +651,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
             assertEquals("System", obsoleteType.namespaceName)
             assertEquals("ObsoleteAttribute", obsoleteType.metadataName)
+            val intArrayBoxInterfaceSpecification =
+                metadata.typeSpecifications.single { specification ->
+                    val signature = specification.signature
+                    signature is DotNetClrTypeSignature.GenericInstance &&
+                            signature.genericType.type == box.handle &&
+                            signature.arguments.singleOrNull() is DotNetClrTypeSignature.SzArray &&
+                            (signature.arguments.single() as
+                                    DotNetClrTypeSignature.SzArray).elementType is
+                                    DotNetClrTypeSignature.Primitive
+                }
             assertEquals(
                 DotNetClrTypeSignature.GenericInstance(
                     genericType = DotNetClrTypeSignature.Named(
@@ -645,11 +673,346 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         )
                     ),
                 ),
+                intArrayBoxInterfaceSpecification.signature,
+            )
+            val intArrayBoxImplementation =
+                metadata.interfaceImplementations.single { implementation ->
+                    implementation.implementingType == intArrayBox.handle
+                }
+            assertEquals(
+                intArrayBoxInterfaceSpecification.handle,
+                intArrayBoxImplementation.interfaceType,
+            )
+            val genericBoxImplementation =
+                metadata.interfaceImplementations.single { implementation ->
+                    implementation.implementingType == genericBox.handle
+                }
+            val genericBoxInterfaceSpecification =
                 metadata.typeSpecifications.single { specification ->
-                    val signature = specification.signature
-                    signature is DotNetClrTypeSignature.GenericInstance &&
-                            signature.genericType.type == box.handle
-                }.signature,
+                    specification.handle == genericBoxImplementation.interfaceType
+                }
+            assertEquals(
+                DotNetClrTypeSignature.GenericInstance(
+                    genericType = DotNetClrTypeSignature.Named(
+                        type = box.handle,
+                        isValueType = false,
+                    ),
+                    arguments = listOf(
+                        DotNetClrTypeSignature.SzArray(
+                            DotNetClrTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.TYPE,
+                                0,
+                            )
+                        )
+                    ),
+                ),
+                genericBoxInterfaceSpecification.signature,
+            )
+
+            val localTypeResolver = DotNetClrTypeResolver(
+                DotNetClrAssemblyReferenceBinder { _, _ -> null }
+            )
+            val hierarchyResolver =
+                DotNetClrTypeHierarchyViewResolver(localTypeResolver)
+            fun resolvedLocalType(
+                definition: DotNetClrTypeDefinition,
+            ): DotNetClrResolvedTypeDefinition =
+                (
+                        localTypeResolver.resolveTypeDefinition(metadata, definition.handle) as
+                                DotNetClrTypeResolution.Resolved
+                        ).type
+
+            val resolvedIntArrayBoxHierarchy = (
+                    hierarchyResolver.resolve(
+                        DotNetClrResolvedTypeView(
+                            resolvedLocalType(intArrayBox),
+                            emptyList(),
+                        )
+                    ) as DotNetClrTypeHierarchyViewResolution.Resolved
+                    ).hierarchy
+            assertEquals(
+                "Base",
+                resolvedIntArrayBoxHierarchy.baseType?.type?.definition?.metadataName,
+            )
+            val resolvedIntArrayBoxInterface =
+                resolvedIntArrayBoxHierarchy.interfaces.single()
+            assertEquals(
+                intArrayBoxImplementation.handle,
+                resolvedIntArrayBoxInterface.row.handle,
+            )
+            assertEquals(
+                "IBox`1",
+                resolvedIntArrayBoxInterface.interfaceType.type.definition.metadataName,
+            )
+            assertEquals(
+                listOf(
+                    DotNetClrResolvedTypeSignature.SzArray(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    )
+                ),
+                resolvedIntArrayBoxInterface.interfaceType.arguments,
+            )
+
+            val resolvedBase = resolvedLocalType(base)
+            val resolvedGenericBoxHierarchy = (
+                    hierarchyResolver.resolve(
+                        DotNetClrResolvedTypeView(
+                            resolvedLocalType(genericBox),
+                            listOf(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedBase,
+                                    isValueType = false,
+                                )
+                            ),
+                        )
+                    ) as DotNetClrTypeHierarchyViewResolution.Resolved
+                    ).hierarchy
+            assertEquals(
+                listOf(
+                    DotNetClrResolvedTypeSignature.SzArray(
+                        DotNetClrResolvedTypeSignature.Named(
+                            resolvedBase,
+                            isValueType = false,
+                        )
+                    )
+                ),
+                resolvedGenericBoxHierarchy.interfaces.single().interfaceType.arguments,
+            )
+            assertEquals(
+                "GenericBase`1",
+                resolvedGenericBoxHierarchy.baseType?.type?.definition?.metadataName,
+            )
+            assertEquals(
+                listOf(
+                    DotNetClrResolvedTypeSignature.SzArray(
+                        DotNetClrResolvedTypeSignature.Named(
+                            resolvedBase,
+                            isValueType = false,
+                        )
+                    )
+                ),
+                resolvedGenericBoxHierarchy.baseType?.arguments,
+            )
+            assertEquals(
+                genericBase.handle,
+                resolvedGenericBoxHierarchy.baseType?.type?.definition?.handle,
+            )
+
+            fun resolveHierarchy(
+                selectedMetadata: DotNetClrAssemblyMetadata,
+                definitionHandle: DotNetClrMetadataHandle,
+                arguments: List<DotNetClrResolvedTypeSignature>,
+            ): DotNetClrTypeHierarchyViewResolution {
+                val selectedResolver = DotNetClrTypeResolver(
+                    DotNetClrAssemblyReferenceBinder { _, _ -> null }
+                )
+                val selectedType = (
+                        selectedResolver.resolveTypeDefinition(
+                            selectedMetadata,
+                            definitionHandle,
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type
+                return DotNetClrTypeHierarchyViewResolver(selectedResolver).resolve(
+                    DotNetClrResolvedTypeView(selectedType, arguments)
+                )
+            }
+
+            val invalidOwnerArity = resolveHierarchy(
+                metadata,
+                genericBox.handle,
+                emptyList(),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeHierarchyViewResolutionFailure
+                    .OWNER_GENERIC_ARITY_MISMATCH,
+                invalidOwnerArity.failure,
+            )
+            assertEquals(1, invalidOwnerArity.expectedGenericArity)
+            assertEquals(0, invalidOwnerArity.actualGenericArity)
+
+            fun metadataWithGenericBoxInterfaceSignature(
+                signature: DotNetClrTypeSignature,
+            ): DotNetClrAssemblyMetadata =
+                metadata.copy(
+                    typeSpecifications = metadata.typeSpecifications.map { specification ->
+                        if (specification.handle ==
+                            genericBoxInterfaceSpecification.handle
+                        ) {
+                            specification.copy(signature = signature)
+                        } else {
+                            specification
+                        }
+                    }
+                )
+
+            val genericBoxInterfaceSignature =
+                genericBoxInterfaceSpecification.signature as
+                        DotNetClrTypeSignature.GenericInstance
+            val invalidInterfaceArity = resolveHierarchy(
+                metadataWithGenericBoxInterfaceSignature(
+                    genericBoxInterfaceSignature.copy(arguments = emptyList())
+                ),
+                genericBox.handle,
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeHierarchyViewResolutionFailure
+                    .INTERFACE_TYPE_RESOLUTION_FAILED,
+                invalidInterfaceArity.failure,
+            )
+            assertEquals(
+                DotNetClrTypeViewResolutionFailure.INVALID_TYPE_SPECIFICATION,
+                invalidInterfaceArity.typeViewResolution?.failure,
+            )
+            assertEquals(
+                DotNetClrResolvedSignatureFailure.GENERIC_ARITY_MISMATCH,
+                invalidInterfaceArity.typeViewResolution
+                    ?.signatureResolution?.failure,
+            )
+
+            val invalidInterfaceSubstitution = resolveHierarchy(
+                metadataWithGenericBoxInterfaceSignature(
+                    genericBoxInterfaceSignature.copy(
+                        arguments = listOf(
+                            DotNetClrTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.TYPE,
+                                1,
+                            )
+                        )
+                    )
+                ),
+                genericBox.handle,
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeViewResolutionFailure
+                    .TYPE_ARGUMENT_SUBSTITUTION_FAILED,
+                invalidInterfaceSubstitution.typeViewResolution?.failure,
+            )
+            assertEquals(
+                DotNetClrResolvedSignatureSubstitutionFailure
+                    .TYPE_ARGUMENT_OUT_OF_RANGE,
+                invalidInterfaceSubstitution.typeViewResolution
+                    ?.signatureSubstitution?.failure,
+            )
+
+            val methodParameterInterface = resolveHierarchy(
+                metadataWithGenericBoxInterfaceSignature(
+                    genericBoxInterfaceSignature.copy(
+                        arguments = listOf(
+                            DotNetClrTypeSignature.GenericParameter(
+                                DotNetClrGenericParameterKind.METHOD,
+                                0,
+                            )
+                        )
+                    )
+                ),
+                genericBox.handle,
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeViewResolutionFailure
+                    .METHOD_TYPE_PARAMETER_NOT_ALLOWED,
+                methodParameterInterface.typeViewResolution?.failure,
+            )
+
+            val nonNominalInterface = resolveHierarchy(
+                metadataWithGenericBoxInterfaceSignature(
+                    DotNetClrTypeSignature.SzArray(
+                        DotNetClrTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    )
+                ),
+                genericBox.handle,
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeViewResolutionFailure
+                    .NON_NOMINAL_TYPE_SPECIFICATION,
+                nonNominalInterface.typeViewResolution?.failure,
+            )
+
+            val nonInterfaceTargetMetadata = metadata.copy(
+                interfaceImplementations = metadata.interfaceImplementations.map {
+                        implementation ->
+                    if (implementation.handle == intArrayBoxImplementation.handle) {
+                        implementation.copy(interfaceType = base.handle)
+                    } else {
+                        implementation
+                    }
+                }
+            )
+            val nonInterfaceTarget = resolveHierarchy(
+                nonInterfaceTargetMetadata,
+                intArrayBox.handle,
+                emptyList(),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeHierarchyViewResolutionFailure
+                    .INTERFACE_TARGET_IS_NOT_INTERFACE,
+                nonInterfaceTarget.failure,
+            )
+            assertEquals(
+                "Base",
+                nonInterfaceTarget.invalidTarget?.type?.definition?.metadataName,
+            )
+
+            val interfaceBaseMetadata = metadata.copy(
+                typeDefinitions = metadata.typeDefinitions.map { definition ->
+                    if (definition.handle == intArrayBox.handle) {
+                        definition.copy(baseType = marker.handle)
+                    } else {
+                        definition
+                    }
+                }
+            )
+            val interfaceBase = resolveHierarchy(
+                interfaceBaseMetadata,
+                intArrayBox.handle,
+                emptyList(),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeHierarchyViewResolutionFailure.BASE_TYPE_IS_INTERFACE,
+                interfaceBase.failure,
+            )
+
+            val interfaceWithBaseMetadata = metadata.copy(
+                typeDefinitions = metadata.typeDefinitions.map { definition ->
+                    if (definition.handle == marker.handle) {
+                        definition.copy(baseType = base.handle)
+                    } else {
+                        definition
+                    }
+                }
+            )
+            val interfaceWithBase = resolveHierarchy(
+                interfaceWithBaseMetadata,
+                marker.handle,
+                emptyList(),
+            ) as DotNetClrTypeHierarchyViewResolution.Invalid
+            assertEquals(
+                DotNetClrTypeHierarchyViewResolutionFailure
+                    .INTERFACE_HAS_BASE_TYPE,
+                interfaceWithBase.failure,
             )
             val transform = metadata.methodDefinitions.single { it.name == "Transform" }
             assertEquals(signatureHost.handle, transform.declaringType)
@@ -737,17 +1100,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 hostConstraints,
             )
-            val localTypeResolver = DotNetClrTypeResolver(
-                DotNetClrAssemblyReferenceBinder { _, _ -> null }
-            )
-            val resolvedSignatureHost = (
-                    localTypeResolver.resolveTypeDefinition(metadata, signatureHost.handle) as
-                            DotNetClrTypeResolution.Resolved
-                    ).type
-            val resolvedBase = (
-                    localTypeResolver.resolveTypeDefinition(metadata, base.handle) as
-                            DotNetClrTypeResolution.Resolved
-                    ).type
+            val resolvedSignatureHost = resolvedLocalType(signatureHost)
             val resolvedHostConstraints = (
                     DotNetClrConstructedTypeConstraintResolver(localTypeResolver).resolve(
                         DotNetClrResolvedTypeView(
@@ -2386,6 +2739,33 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             constrainedAttributeParameter.argument,
         )
+        val resolvedProbeConstraintHierarchy = (
+                DotNetClrTypeHierarchyViewResolver(resolver).resolve(
+                    DotNetClrResolvedTypeView(
+                        resolvedProbeConstraintValue,
+                        emptyList(),
+                    )
+                ) as DotNetClrTypeHierarchyViewResolution.Resolved
+                ).hierarchy
+        assertTrue(
+            checkNotNull(resolvedProbeConstraintHierarchy.baseType)
+                .type.hasSameIdentityAs(systemValueType)
+        )
+        val resolvedProbeConstraintInterface =
+            resolvedProbeConstraintHierarchy.interfaces.single().interfaceType
+        assertEquals(
+            "IProbeConstraint`1",
+            resolvedProbeConstraintInterface.type.definition.metadataName,
+        )
+        assertEquals(
+            listOf(
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedProbeConstraintValue,
+                    isValueType = true,
+                )
+            ),
+            resolvedProbeConstraintInterface.arguments,
+        )
         val nominalConstraintBinding =
             constrainedAttributeParameter.constraints.single { constraint ->
                 constraint.type is DotNetClrResolvedGenericConstraintType.Nominal
@@ -3949,6 +4329,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assemblyReferences = assemblyReferences,
                 typeReferences = emptyList(),
                 typeDefinitions = typeDefinitions,
+                interfaceImplementations = emptyList(),
                 exportedTypes = exportedTypes,
                 typeSpecifications = emptyList(),
                 fieldDefinitions = emptyList(),
