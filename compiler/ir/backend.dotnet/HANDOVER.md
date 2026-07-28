@@ -1995,6 +1995,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   semantically, including their attachment multiplicity, before nullability enhancement and FIR.
   The fresh strict gate is 869/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   52 library integration tests).
+- The physical-MemberRef continuation adds the dependency required for semantic custom-attribute
+  decoding without crossing the importer boundary. Each row keeps its token, exact
+  TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and a closed
+  method-or-field signature variant. Method refs reuse the structural MethodDef signature model
+  while admitting call-site vararg sentinels; field refs use a standalone FieldSig model that a
+  later FieldDef reader can reuse. The official current .NET grammar requires physical retention
+  of by-reference and typed-reference fields; the selected profile and byref-like rules remain
+  later import-policy checks and do not become Kotlin Common types. The Framework/modern fixture
+  covers an external constructor, an external field, and a generic method reached through a
+  constructed TypeSpec owner; a malformed FieldSig fails closed. A separate Roslyn net10 producer
+  and consumer cover a real `ref` field MemberRef, and both real core assemblies must expose
+  MemberRefs. No member is resolved by display name and no generic owner is pre-substituted. Next
+  decode ordinary custom attributes by constructor signature, semantic value, attachment, and
+  multiplicity before nullability enhancement and FIR. The fresh strict gate is 869/0/0/0 across
+  16 XML suites (796 FIR/IL/box, 21 generated CLI, and 52 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2078,13 +2093,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Continue the CLR importer above its physical generic/property/signature foundation.** Add
+2. **Continue the CLR importer above its physical generic/property/MemberRef foundation.** Add
    semantic custom-attribute records before introducing the CLR-to-Kotlin policy and lazy FIR
-   provider; add Field/MemberRef
-   signatures when their first consumer requires them. Preserve Kotlin declaration identity and
-   Common semantics; decode nullability, variance, properties, and exceptions at the importer
-   boundary instead of teaching the Kotlin-owned backend surface to infer C# conventions. Keep
-   structured metadata-table auditing; do not substitute IL substring checks.
+   provider; add FieldDef rows when their first consumer requires them. Preserve Kotlin
+   declaration identity and Common semantics; decode nullability, variance, properties, and
+   exceptions at the importer boundary instead of teaching the Kotlin-owned backend surface to
+   infer C# conventions. Keep structured metadata-table auditing; do not substitute IL substring
+   checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
