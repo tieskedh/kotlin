@@ -549,6 +549,37 @@ custom-attribute-only signature resolver. The semantic enum value model introduc
 retains the required constructed identity, so that later resolver can feed it without another ABI
 change.
 
+The seventeenth slice decodes the ordered named-argument sequence after the fixed arguments. JVM
+binary annotation visitors and KLIB annotation records first retain an argument name plus typed
+constant; class/member projection happens in the frontend layer. The CLR-specific record contains
+two additional physical facts: a `0x53` field versus `0x54` property kind and an explicit
+`FieldOrPropType` before the `SerString` name and value. The implementation follows
+`System.Reflection.Metadata.CustomAttributeDecoder` and feeds that type back through the same
+primitive/array/tagged/System.Type/serialized-enum value algebra.
+
+Each decoded named argument therefore retains its field/property kind, exact non-empty CLR name,
+declared serialized value type, and semantic value. The list retains source order and duplicates.
+It is deliberately not converted to a Kotlin argument map: CLR attribute instantiation applies the
+assignments in encoded order, malformed input can repeat a name, and the importer must not erase
+observable or diagnostic evidence before policy. Invalid kind codes, nil or empty names,
+truncation, serialized-type failures, and enum failures report the named-argument index separately
+from a fixed-argument index.
+
+The blob does not contain a FieldDef, Property, or accessor token. Resolving the record to whichever
+member happens to exist in the currently selected attribute assembly would therefore be validation,
+not recovery of encoded identity. The authoritative semantic record remains kind/name/type/value.
+A later selected-graph validator must apply CLR inheritance and hiding plus the language/runtime
+requirements for a public non-static writable field or public get-and-set/init property, and must
+verify assignment-compatible physical type. Its result may diagnose an unusable attribute or
+support Kotlin projection, but it must not replace the encoded record with a MemberDef identity.
+
+This division preserves Kotlin Common because no foreign field or property is manufactured as a
+Kotlin annotation parameter yet. It also obeys the same ECMA-335 format on `net48`,
+`netstandard2.0`, and `net10.0`; only later member binding sees profile-specific assembly graphs.
+Real Roslyn .NET 10 output covers field and property arguments containing scalars, null strings,
+`System.Type`, enums, boxed enums, and null/non-null arrays. Framework synthetic metadata proves
+ordered duplicate retention and located invalid kind, name, and truncation failures.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
