@@ -2289,6 +2289,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   By-ref-like remains an orthogonal exact decoded `IsByRefLikeAttribute` dimension and must not be
   inferred from value ancestry or a same-named marker. The fresh strict gate is 871/0/0/0 across
   16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The by-ref-like-classification continuation adds that orthogonal dimension through the existing
+  ordinary custom-attribute constructor/value decoder. It requires the exact selected
+  `System.Runtime.CompilerServices.IsByRefLikeAttribute` identity, an empty decoded payload,
+  single multiplicity, and a non-nullable-value target. Missing selected marker identity remains
+  `MARKER_UNAVAILABLE`; it is not guessed from a name. Real Roslyn .NET 10 coverage distinguishes
+  a ref struct, ordinary struct, class, primitive, and a struct with a same-short-name foreign
+  marker. Synthetic selected metadata covers duplicate exact markers, truncated marker payload,
+  marker-on-reference, and the unavailable catalog. This classification still does not authorize
+  Kotlin boxing/capture/heap storage or generic use; `AllowByRefLike` and profile/ref-safety policy
+  remain separate. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box,
+  21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

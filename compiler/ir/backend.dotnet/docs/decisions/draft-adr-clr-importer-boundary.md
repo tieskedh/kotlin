@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal constraint validation, and verified physical reference/value/Nullable classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal constraint validation, and verified physical reference/value/Nullable/by-ref-like classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -905,6 +905,40 @@ Framework 4.8 coverage classifies a class, enum, and `Nullable<int>` against the
 construction, an ordinary struct, `System.ValueType`/`System.Enum` themselves, and hostile false
 class/value bits, open generic arity, generic parameters, and a bounded hierarchy.
 
+The twenty-sixth slice adds the orthogonal CLR by-ref-like dimension.
+
+1. Mature Kotlin importers preserve semantically resolved annotations/attributes separately from
+   nominal type identity. Target-specific compiler markers are recognized by their selected
+   declaration identity and contract, not by a short name. The .NET importer follows that same
+   semantic-attribute boundary.
+2. CLR by-ref-like structs are ordinary non-nullable value types plus the compiler/runtime marker
+   `System.Runtime.CompilerServices.IsByRefLikeAttribute`. They cannot be placed on the managed
+   heap. Modern generic parameters additionally require the `AllowByRefLike` flag before such a
+   type argument is legal. The [official Type.IsByRefLike contract](https://learn.microsoft.com/en-us/dotnet/api/system.type.isbyreflike?view=net-10.0),
+   [marker contract](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.compilerservices.isbyreflikeattribute),
+   and [.NET ECMA augment](https://github.com/dotnet/runtime/blob/main/docs/design/specs/Ecma-335-Augments.md#byreflike-types-in-generics)
+   are authoritative.
+3. Kotlin Common is unchanged. A foreign by-ref-like value does not become a Kotlin value class,
+   ordinary generic argument, capturable local, boxable `Any`, or heap-storable value. FIR policy
+   and backend legality must explicitly model or reject every such use.
+4. The marker type is supplied by the selected profile. If that identity is unavailable,
+   non-nullable nominal values classify as `MARKER_UNAVAILABLE`, not as ordinary structs.
+   Recognition alone does not enable use: `net10.0` must still enforce `AllowByRefLike` and ref
+   safety, while portable profiles cannot inherit modern generic support.
+5. `DotNetClrByRefLikeClassifier` composes the physical kind classifier with the existing ordinary
+   custom-attribute constructor/value decoder. It requires exact selected marker identity, a
+   decoded empty marker payload, single multiplicity, and a non-nullable-value target. Invalid
+   constructors, payloads, duplicates, and target kinds remain structured results.
+6. The core-team choice is to reuse ordinary semantic attribute comparison rather than introduce
+   a marker-name shortcut or raw-blob special case. A foreign attribute with the same short name
+   is unrelated. Profile absence remains explicit, and by-ref-like classification stays separate
+   from the later decision whether a particular Kotlin construct can safely use it.
+
+Real Roslyn .NET 10 coverage distinguishes a `ref struct`, an ordinary struct, a class, a
+primitive, and a struct carrying a same-short-name foreign marker. Synthetic selected metadata
+covers a missing marker catalog, duplicate exact markers, a truncated marker value, and an exact
+marker attached to a reference class.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -996,6 +1030,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   **Correct direction**.
 - Deferring by-ref-like classification to exact decoded marker semantics rather than value-type
   ancestry or name matching: **Correct direction**.
+- Exact decoded and multiplicity-aware selected-profile by-ref-like marker classification:
+  **Correct direction**.
+- Keeping by-ref-like identity separate from Kotlin usability and `AllowByRefLike` legality:
+  **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
