@@ -22,6 +22,7 @@ import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.arguments.K2DotNetCompilerArguments
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
 import org.jetbrains.kotlin.cli.common.kotlinPaths
+import org.jetbrains.kotlin.cli.common.setupCommonKlibArguments
 import org.jetbrains.kotlin.cli.jvm.config.JvmClasspathRoot
 import org.jetbrains.kotlin.cli.pipeline.AbstractConfigurationPhase
 import org.jetbrains.kotlin.cli.pipeline.ArgumentsPipelineArtifact
@@ -57,6 +58,11 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         configuration: CompilerConfiguration,
     ) {
         val arguments = input.arguments
+        configuration.setupCommonKlibArguments(
+            arguments,
+            canBeMetadataKlibCompilation = false,
+            rootDisposable = input.rootDisposable,
+        )
         configuration.dotNetProducesStdlib = arguments.dotNetProduceStdlib
         configuration.dotNetProducesLibrary = arguments.dotNetProduceLibrary
         if (arguments.dotNetProduceStdlib && arguments.dotNetProduceLibrary) {
@@ -67,10 +73,21 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
         if (arguments.dotNetProduceStdlib) {
             if (arguments.freeArgs.isNotEmpty()) {
-                configuration.report(
-                    COMPILER_ARGUMENTS_ERROR,
-                    "-Xdotnet-produce-stdlib compiles the compiler-owned bootstrap sources and accepts no user source files."
-                )
+                val suppliedSourceNames = arguments.freeArgs.map { File(it).name }
+                val duplicateSourceNames = suppliedSourceNames.groupingBy { it }
+                    .eachCount()
+                    .filterValues { it > 1 }
+                    .keys
+                if (duplicateSourceNames.isNotEmpty() ||
+                    suppliedSourceNames.toSet() != DOTNET_STDLIB_SOURCES.keys
+                ) {
+                    configuration.report(
+                        COMPILER_ARGUMENTS_ERROR,
+                        "-Xdotnet-produce-stdlib requires exactly the complete Kotlin/.NET " +
+                                "stdlib source set ${DOTNET_STDLIB_SOURCES.keys.sorted()}; received " +
+                                "${suppliedSourceNames.sorted()}."
+                    )
+                }
             }
             if (arguments.noStdlib) {
                 configuration.report(
@@ -240,7 +257,7 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
 
         val usesBootstrapStdlibSources = when {
-            arguments.dotNetProduceStdlib -> true
+            arguments.dotNetProduceStdlib -> arguments.freeArgs.isEmpty()
             arguments.noStdlib -> false
             configuration.addInstalledDotNetStdlib() -> false
             else -> true
@@ -250,7 +267,8 @@ object DotNetConfigurationUpdater : ConfigurationUpdater<K2DotNetCompilerArgumen
         }
         // Only the temporary compiler-owned source corpus needs permission to declare kotlin.*
         // packages. An installed stdlib must not broaden the user's source-package permissions.
-        val allowsKotlinPackage = arguments.allowKotlinPackage || usesBootstrapStdlibSources
+        val allowsKotlinPackage =
+            arguments.allowKotlinPackage || arguments.dotNetProduceStdlib || usesBootstrapStdlibSources
         configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, allowsKotlinPackage)
         configuration.languageVersionSettings =
             configuration.languageVersionSettings.withAllowKotlinPackage(allowsKotlinPackage)

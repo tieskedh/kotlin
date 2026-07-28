@@ -86,9 +86,10 @@ val actualDotNetArguments by compilerArgumentsLevel(CompilerArgumentsLevelNames.
         name = "Xdotnet-produce-stdlib"
         compilerName = "dotNetProduceStdlib"
         description = (
-                "Produce the experimental self-describing Kotlin.Stdlib.dll in the -d directory. " +
+                        "Produce the experimental self-describing Kotlin.Stdlib.dll in the -d directory. " +
                         "The library uses the selected net48, netstandard2.0, or net10.0 target profile. " +
-                        "This build mode accepts no user source files."
+                        "When the complete product source set is supplied, those files are compiled directly; " +
+                        "otherwise the compiler uses its packaged bootstrap fallback."
                 ).asReleaseDependent()
         valueType = BooleanType.defaultFalse
 

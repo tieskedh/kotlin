@@ -143,12 +143,14 @@ compiler-helper boundary for host arrays. Array `asIterable()` uses the correspo
 the first common operations, `Iterable<T>.first()` and `last()`, remain in the bootstrap stdlib
 source until the explicit stdlib product consumes the checked-in common source graph.
 
-The mature product is a paired `Kotlin.Stdlib.klib` plus `Kotlin.Stdlib.dll`, built once from the
+The mature product is one self-describing `Kotlin.Stdlib.dll`, built once from the
 common/common-non-JVM and .NET-specific source sets against the selected target profile. The
-embedded `DOTNET_STDLIB_SOURCES` corpus is bootstrap machinery, not the final source-distribution
-model. No new stdlib-generator target is needed merely for `first`/`last`; those bodies already
-belong to the common generated corpus. A future builtins generator entry may supply the bodyless
-.NET array actuals.
+current implementation already lives in ordinary `libraries/stdlib/dotnet/src` files;
+`DOTNET_STDLIB_SOURCES` is only the backend-resource view of those same files for temporary
+same-run bootstrap compatibility. It is not the final generated source graph. No new
+stdlib-generator target is needed merely for `first`/`last`; those bodies already belong to the
+common generated corpus. A future builtins generator entry may supply the bodyless .NET array
+actuals.
 
 ## C# and foreign CLR boundaries
 

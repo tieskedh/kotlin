@@ -23,6 +23,12 @@ sourceSets {
     "test" {}
 }
 
+tasks.named<ProcessResources>("processResources") {
+    from(rootProject.file("libraries/stdlib/dotnet/src")) {
+        into("kotlin-dotnet-stdlib")
+    }
+}
+
 tasks.register("dotNetTest") {
     group = "verification"
     description = "Runs the strict Kotlin/.NET semantic, IL, CLI, and library-integration gates."

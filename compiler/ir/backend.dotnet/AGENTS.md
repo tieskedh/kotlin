@@ -12,10 +12,10 @@ below).
 
 The commit gate is
 `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon`. It enables strict
-toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 70 generated-CLI and
+toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 51
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 867 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 868 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -171,9 +171,13 @@ landed shape as a compatibility constraint.
   assemblies call the Kotlin-internal, metadata-public generic `dotNetArrayIterator` and
   `dotNetArrayIterable` factories on `Kotlin.Collections.CollectionsKt`; those methods, rather
   than implementation class names or constructors, are the compiler/stdlib ABI. This follows the
-  JVM/JS helper boundary for host-array iteration. The default bootstrap path still injects stdlib source into
-  the same frontend/lowering run and `DotNetIlEmitter` partitions the lowered module into USER and
-  STDLIB ownership scopes. The accepted library-artifact endpoint is one self-describing DLL
+  JVM/JS helper boundary for host-array iteration. The canonical current stdlib implementation is
+  ordinary Kotlin source under `libraries/stdlib/dotnet/src`; repository product tasks compile
+  that complete source set directly for each profile. The backend JAR packages the same files only
+  as a byte-identical bootstrap fallback, never as a second implementation. The default fallback
+  path still injects those sources into the same frontend/lowering run and `DotNetIlEmitter`
+  partitions the lowered module into USER and STDLIB ownership scopes. The accepted
+  library-artifact endpoint is one self-describing DLL
   (`docs/decisions/adr-self-describing-dotnet-library-dll.md`). Every produced user/stdlib DLL
   embeds the complete packed KLIB as the private managed resource `Kotlin.Metadata`, marked
   `managed-resource-klib-v1` and self-bound. The CLI classpath and friend resolver now consume that
@@ -188,9 +192,11 @@ landed shape as a compatibility constraint.
   with no injected implementation source. The embedded manifest binds the complete unsigned
   assembly identity, file, selected library TFM, and self implementation; an arbitrary metadata KLIB never becomes a CLR
   reference. The POC-only `-Xdotnet-produce-stdlib -d <directory>` route now follows JS/Wasm's
-  explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: with no user source
-  inputs, one resolved frontend/IR run serializes the compiler-owned declarations and emits the
-  self-describing profile-specific `Kotlin.Stdlib.dll` together with its
+  explicit KLIB-product selection and Native's dedicated `LIBRARY` pipeline: it accepts either
+  the exact complete product-owned source set or no source inputs for the packaged fallback. An
+  incomplete, duplicate, or unrelated set is a compiler-arguments error. One resolved frontend/IR
+  run serializes the stdlib declarations and emits the self-describing profile-specific
+  `Kotlin.Stdlib.dll` together with its
   `Kotlin.Runtime.dll`. It is never an executable-build
   side effect. The artifact boundary follows JVM's single native library product while the
   embedded payload reuses the common KLIB serialization used by JS/Wasm/Native. Every assembled
@@ -2081,7 +2087,14 @@ landed shape as a compatibility constraint.
   excepted — they are not user-module declarations and reserve no user facade name
   (`DotNetMappedExceptions.isExceptionStdlibDeclaration` and the emitter ownership scope filter
   them out).
-- The bootstrap stdlib (`DotNetStdlibSource`) is a map of injected source files, one per package.
+- The bootstrap stdlib's canonical implementation is ordinary Kotlin source under
+  `libraries/stdlib/dotnet/src`, one file per current package. `DotNetStdlibSource` only loads the
+  backend-JAR resource copy for same-run bootstrap compatibility. Tests require that copy to be
+  text-identical to the ordinary files, and direct-source/fallback products to have identical
+  packed KLIB entries, IL, and DLL bytes. The physical declaration index contains only
+  cross-module declarations: private/private-to-this/local `IdSignature`s must not be exported,
+  because file-local signatures may contain checkout paths and private implementations are not
+  bindable ABI.
   Resolution-only declarations such as `println`, `Char.code`, and array operations are filtered
   through the intrinsic/exception registries and never emitted into a facade. The ordinary Kotlin
   `ArrayIterator<T>`/`ArrayIterable<T>` declarations and the Iterable/List `first()`/`last()` bodies are
