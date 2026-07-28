@@ -282,6 +282,26 @@ explicit multi-module deferral. The existing Framework fixture independently res
 different emitted/reference-assembly graphs across `net48`, `netstandard2.0`, and `net10.0` are
 inputs, not reasons to change Kotlin Common semantics.
 
+The eighth slice preserves CustomAttribute rows before interpreting their values. Each row keeps
+its own token, exact HasCustomAttribute parent, MethodDef-or-MemberRef constructor handle, and the
+raw value bytes. A nil Value index remains distinct from a present zero-length blob. Rows are not
+grouped or deduplicated: attachment and multiplicity are semantic inputs, and two identical
+attribute rows remain two occurrences.
+
+This matches the JVM importer rule that annotation ownership and repeated annotations are retained
+before annotation arguments are enhanced or mapped to Kotlin. The CLR-specific difference is the
+wide HasCustomAttribute coded-index domain and the constructor indirection through either a local
+MethodDef or an external MemberRef. The reader validates coded handles and bounds the blob but does
+not yet decide whether the constructor shape or blob content is a legal custom attribute. That
+decision requires constructor resolution and enum storage from the selected assembly graph.
+
+The dual-ILAsm fixture attaches two byte-identical `ObsoleteAttribute` rows to one TypeDef and
+asserts both rows, their shared external constructor identity, and their original value bytes.
+Real Framework `mscorlib` and .NET 10 `System.Runtime` supply broad parent/constructor/value scale.
+This row layer remains profile-neutral and does not turn a CLR attribute into a Kotlin annotation.
+The next slice resolves constructors and decodes fixed and named arguments into semantic values;
+only that decoded form participates in ordinary attribute comparison.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this

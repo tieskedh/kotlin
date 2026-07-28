@@ -2038,6 +2038,14 @@ session state, process, and a curated task menu. Keep both files updated as you 
   or C# declarations. Next decode CustomAttribute attachment, constructor identity, and semantic
   values using this graph. The fresh strict gate is 870/0/0/0 across 16 XML suites
   (796 FIR/IL/box, 21 generated CLI, and 53 library integration tests).
+- The physical-CustomAttribute continuation retains each row token, exact HasCustomAttribute
+  parent, MethodDef/MemberRef constructor, multiplicity, and nullable raw blob. Nil remains
+  distinct from a present empty blob; rows are never grouped or compared by bytes. A duplicate
+  TypeDef attribute assembled independently on both profiles pins multiplicity and the external
+  constructor edge, while both real core assemblies provide scale. Constructor legality and
+  semantic fixed/named argument decoding remain the next layer. The fresh strict gate is
+  870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 53 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
