@@ -30,6 +30,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrBlob
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttribute
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
@@ -694,9 +695,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             "Attribute",
                         ) as DotNetClrTypeResolution.Resolved
                         ).type
+                val systemType = (
+                        resolver.resolveTopLevelType(
+                            frameworkCoreMetadata,
+                            "System",
+                            "Type",
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type
                 val attributeDecoder = DotNetClrCustomAttributeDecoder(
                     resolver,
-                    systemAttribute,
+                    DotNetClrCustomAttributeCoreTypes(
+                        systemAttribute,
+                        systemEnum,
+                        systemType,
+                    ),
                 )
                 val resolvedAttributes = baseAttributes.map { attribute ->
                     (
@@ -722,6 +734,88 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                                 DotNetClrCustomAttributeValueDecoding.Decoded
                         decoded.attribute.fixedArguments.isEmpty()
                     }
+                )
+                val fixedEnum = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0xfe.toByte(), 0xff.toByte(), 0, 0)
+                        )
+                    ),
+                    resolvedAttributes.first().copy(
+                        signature = resolvedAttributes.first().signature.copy(
+                            parameterTypes = listOf(
+                                DotNetClrTypeSignature.Named(
+                                    tinyKind.handle,
+                                    isValueType = true,
+                                )
+                            )
+                        )
+                    ),
+                ) as DotNetClrCustomAttributeValueDecoding.Decoded
+                val fixedEnumValue =
+                    fixedEnum.attribute.fixedArguments.single() as
+                            DotNetClrCustomAttributeValue.EnumValue
+                assertTrue(fixedEnumValue.type.type.hasSameIdentityAs(resolvedTinyKind))
+                assertEquals(
+                    DotNetClrPrimitiveType.INT16,
+                    fixedEnumValue.type.storageType,
+                )
+                assertEquals(
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT16,
+                        0xfffeuL,
+                    ),
+                    fixedEnumValue.storageValue,
+                )
+                val invalidEnumSignature = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0, 0, 0, 0)
+                        )
+                    ),
+                    resolvedAttributes.first().copy(
+                        signature = resolvedAttributes.first().signature.copy(
+                            parameterTypes = listOf(
+                                DotNetClrTypeSignature.Named(
+                                    tinyKind.handle,
+                                    isValueType = false,
+                                )
+                            )
+                        )
+                    ),
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.INVALID_ENUM_TYPE,
+                    invalidEnumSignature.failure,
+                )
+                assertEquals(0, invalidEnumSignature.fixedArgumentIndex)
+                val unresolvedFixedType = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0, 0, 0, 0)
+                        )
+                    ),
+                    resolvedAttributes.first().copy(
+                        signature = resolvedAttributes.first().signature.copy(
+                            parameterTypes = listOf(
+                                DotNetClrTypeSignature.Named(
+                                    DotNetClrMetadataHandle(1, 0x00ff_ffff),
+                                    isValueType = true,
+                                )
+                            )
+                        )
+                    ),
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.TYPE_RESOLUTION_FAILED,
+                    unresolvedFixedType.failure,
+                )
+                assertEquals(
+                    DotNetClrTypeResolutionFailure.INVALID_HANDLE,
+                    unresolvedFixedType.typeResolution?.failure,
                 )
                 val crossAssemblyConstructor = attributeDecoder.decodeValue(
                     metadata,
@@ -1362,24 +1456,30 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             double ratio,
                             int[] numbers,
                             object boxed,
-                            object[] mixed)
+                            object[] mixed,
+                            ExternalKind kind,
+                            ExternalKind[] kinds)
                         {
                         }
                     }
 
                     public enum ExternalKind : short
                     {
-                        Zero = 0
+                        Minus = -2,
+                        Zero = 0,
+                        Seven = 7
                     }
 
                     [SemanticProbe(
                         7, "portable", true, '\u03bb', 4294967295u,
                         -1, 255, -2, 65535, -3L, 18446744073709551615UL, -0.0f, -0.0,
-                        new[] { 1, -2 }, 42, new object[] { "x", 3, null })]
+                        new[] { 1, -2 }, 42, new object[] { "x", 3, null },
+                        ExternalKind.Minus, new[] { ExternalKind.Minus, ExternalKind.Seven })]
                     [SemanticProbe(
                         8, null, false, '\0', 0u,
                         0, 0, 0, 0, 0L, 0UL, float.NaN, double.NaN,
-                        new int[] { }, null, null)]
+                        new int[] { }, null, null,
+                        ExternalKind.Zero, new ExternalKind[] { })]
                     public sealed class Outer
                     {
                         public sealed class Inner
@@ -1504,6 +1604,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "Attribute",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val systemType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "Type",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
         val outerDefinition = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" && definition.metadataName == "Outer"
         }
@@ -1511,7 +1618,14 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             attribute.parent == outerDefinition.handle
         }
         assertEquals(2, outerAttributes.size)
-        val modernAttributeDecoder = DotNetClrCustomAttributeDecoder(resolver, systemAttribute)
+        val modernAttributeDecoder = DotNetClrCustomAttributeDecoder(
+            resolver,
+            DotNetClrCustomAttributeCoreTypes(
+                systemAttribute,
+                systemEnum,
+                systemType,
+            ),
+        )
         val modernConstructors = outerAttributes.map { attribute ->
             (
                     modernAttributeDecoder.resolveConstructor(destinationMetadata, attribute) as
@@ -1545,6 +1659,16 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
                             DotNetClrTypeSignature.SzArray(
                                 DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+                            ),
+                            DotNetClrTypeSignature.Named(
+                                forwardedEnum.definition.handle,
+                                isValueType = true,
+                            ),
+                            DotNetClrTypeSignature.SzArray(
+                                DotNetClrTypeSignature.Named(
+                                    forwardedEnum.definition.handle,
+                                    isValueType = true,
+                                )
                             ),
                         )
             }
@@ -1633,6 +1757,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         DotNetClrCustomAttributeValue.StringValue(null),
                     ),
                 ),
+                DotNetClrCustomAttributeValue.EnumValue(
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        forwardedEnum,
+                        DotNetClrPrimitiveType.INT16,
+                    ),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT16,
+                        0xfffeuL,
+                    ),
+                ),
+                DotNetClrCustomAttributeValue.ArrayValue(
+                    DotNetClrCustomAttributeValueType.SzArray(
+                        DotNetClrCustomAttributeValueType.EnumType(
+                            forwardedEnum,
+                            DotNetClrPrimitiveType.INT16,
+                        )
+                    ),
+                    listOf(
+                        DotNetClrCustomAttributeValue.EnumValue(
+                            DotNetClrCustomAttributeValueType.EnumType(
+                                forwardedEnum,
+                                DotNetClrPrimitiveType.INT16,
+                            ),
+                            DotNetClrCustomAttributeValue.IntegralValue(
+                                DotNetClrPrimitiveType.INT16,
+                                0xfffeuL,
+                            ),
+                        ),
+                        DotNetClrCustomAttributeValue.EnumValue(
+                            DotNetClrCustomAttributeValueType.EnumType(
+                                forwardedEnum,
+                                DotNetClrPrimitiveType.INT16,
+                            ),
+                            DotNetClrCustomAttributeValue.IntegralValue(
+                                DotNetClrPrimitiveType.INT16,
+                                7uL,
+                            ),
+                        ),
+                    ),
+                ),
             ),
             decodedModernAttributes[0],
         )
@@ -1707,6 +1871,31 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 null,
             ),
             decodedModernAttributes[1][15],
+        )
+        assertEquals(
+            DotNetClrCustomAttributeValue.EnumValue(
+                DotNetClrCustomAttributeValueType.EnumType(
+                    forwardedEnum,
+                    DotNetClrPrimitiveType.INT16,
+                ),
+                DotNetClrCustomAttributeValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT16,
+                    0uL,
+                ),
+            ),
+            decodedModernAttributes[1][16],
+        )
+        assertEquals(
+            DotNetClrCustomAttributeValue.ArrayValue(
+                DotNetClrCustomAttributeValueType.SzArray(
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        forwardedEnum,
+                        DotNetClrPrimitiveType.INT16,
+                    )
+                ),
+                emptyList(),
+            ),
+            decodedModernAttributes[1][17],
         )
 
         val nextTypeReferenceRow =

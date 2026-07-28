@@ -358,8 +358,11 @@ landed shape as a compatibility constraint.
    tagged object values use the same typed decoder; arrays retain their element type when null or
    empty, heterogeneous object arrays retain each element's encoded type, and jagged arrays fail.
    Keep the element-count and tagged-depth resource bounds as diagnostics, not ABI semantics.
-   System.Type, enums, and named arguments currently fail as structured unsupported values; do
-   not erase, stringify, or partially skip them.
+   A fixed enum type comes only from the resolved constructor signature and selected
+   `System.Enum`/`value__` storage proof; retain its exact resolved type plus underlying bits and
+   reject a false `class` signature. System.Type, boxed or named enums, and named arguments
+   currently fail as structured unsupported values because their types require a parsed CLR
+   serialized name; do not erase, stringify, or partially skip them.
    Assembly definitions retain their full public key and computed eight-byte public-key token;
    `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
    key/token, so this still does not authorize exact-match binding inside the physical resolver.
