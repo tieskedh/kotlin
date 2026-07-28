@@ -36,6 +36,34 @@ sealed interface DotNetClrCustomAttributeConstructorResolution {
     ) : DotNetClrCustomAttributeConstructorResolution
 }
 
+sealed interface DotNetClrCustomAttributeValueType {
+    data class Primitive(
+        val type: DotNetClrPrimitiveType,
+    ) : DotNetClrCustomAttributeValueType {
+        init {
+            require(
+                type != DotNetClrPrimitiveType.NATIVE_INT &&
+                        type != DotNetClrPrimitiveType.NATIVE_UINT &&
+                        type != DotNetClrPrimitiveType.OBJECT
+            ) {
+                "Unsupported custom-attribute primitive value type: $type"
+            }
+        }
+    }
+
+    data object TaggedObject : DotNetClrCustomAttributeValueType
+
+    data class SzArray(
+        val elementType: DotNetClrCustomAttributeValueType,
+    ) : DotNetClrCustomAttributeValueType {
+        init {
+            require(elementType !is SzArray) {
+                "Custom-attribute arrays cannot be jagged"
+            }
+        }
+    }
+}
+
 sealed interface DotNetClrCustomAttributeValue {
     data class BooleanValue(
         val value: Boolean,
@@ -95,6 +123,11 @@ sealed interface DotNetClrCustomAttributeValue {
     data class StringValue(
         val value: String?,
     ) : DotNetClrCustomAttributeValue
+
+    data class ArrayValue(
+        val type: DotNetClrCustomAttributeValueType.SzArray,
+        val elements: List<DotNetClrCustomAttributeValue>?,
+    ) : DotNetClrCustomAttributeValue
 }
 
 data class DotNetClrDecodedCustomAttribute(
@@ -110,11 +143,15 @@ enum class DotNetClrCustomAttributeValueFailure {
     INVALID_BOOLEAN,
     INVALID_SERIALIZED_STRING,
     INVALID_UTF8,
+    INVALID_SERIALIZATION_TYPE_CODE,
+    INVALID_ARRAY_LENGTH,
+    VALUE_LIMIT_EXCEEDED,
     TRAILING_DATA,
 }
 
 enum class DotNetClrCustomAttributeValueUnsupported {
     FIXED_ARGUMENT_TYPE,
+    TYPE_OR_ENUM_ARGUMENT,
     NAMED_ARGUMENTS,
 }
 
@@ -272,12 +309,12 @@ class DotNetClrCustomAttributeDecoder(
     }
 
     /**
-     * Decodes primitive and string fixed arguments supported by ECMA-335.
+     * Decodes primitive, string, array, and tagged-object fixed arguments supported by ECMA-335.
      *
-     * Arrays, tagged objects, System.Type, enums, and named arguments remain structured
-     * unsupported results until their required type-resolution layers are available.
+     * System.Type, enums, and named arguments remain structured unsupported results until their
+     * required type-resolution layers are available.
      */
-    fun decodeScalarValue(
+    fun decodeValue(
         assembly: DotNetClrAssemblyMetadata,
         attribute: DotNetClrCustomAttribute,
         constructor: DotNetClrResolvedCustomAttributeConstructor,
@@ -304,14 +341,20 @@ class DotNetClrCustomAttributeDecoder(
                 ArrayList<DotNetClrCustomAttributeValue>(constructor.signature.parameterTypes.size)
             constructor.signature.parameterTypes.forEachIndexed { index, parameterType ->
                 val value = try {
-                    decodeScalarFixedArgument(reader, parameterType)
+                    val valueType = fixedArgumentType(parameterType)
+                        ?: return unsupportedValue(
+                            DotNetClrCustomAttributeValueUnsupported.FIXED_ARGUMENT_TYPE,
+                            index,
+                        )
+                    decodeArgument(reader, valueType, nestingDepth = 0)
                 } catch (failure: CustomAttributeBlobFailure) {
                     return invalidValue(failure.failure, index)
-                }
-                    ?: return unsupportedValue(
-                        DotNetClrCustomAttributeValueUnsupported.FIXED_ARGUMENT_TYPE,
+                } catch (unsupported: CustomAttributeUnsupportedFailure) {
+                    return unsupportedValue(
+                        unsupported.unsupported,
                         index,
                     )
+                }
                 fixedArguments += value
             }
             val namedArgumentCount = reader.readUnsigned(2).toInt()
@@ -329,12 +372,63 @@ class DotNetClrCustomAttributeDecoder(
         }
     }
 
-    private fun decodeScalarFixedArgument(
-        reader: CustomAttributeBlobReader,
+    private fun fixedArgumentType(
         type: DotNetClrTypeSignature,
-    ): DotNetClrCustomAttributeValue? {
-        val primitive = (type as? DotNetClrTypeSignature.Primitive)?.type ?: return null
-        return when (primitive) {
+        isArrayElement: Boolean = false,
+    ): DotNetClrCustomAttributeValueType? =
+        when (type) {
+            is DotNetClrTypeSignature.Primitive -> {
+                when (type.type) {
+                    DotNetClrPrimitiveType.NATIVE_INT,
+                    DotNetClrPrimitiveType.NATIVE_UINT,
+                    -> null
+
+                    DotNetClrPrimitiveType.OBJECT ->
+                        DotNetClrCustomAttributeValueType.TaggedObject
+
+                    else -> DotNetClrCustomAttributeValueType.Primitive(type.type)
+                }
+            }
+
+            is DotNetClrTypeSignature.SzArray -> {
+                if (isArrayElement) {
+                    null
+                } else {
+                    fixedArgumentType(type.elementType, isArrayElement = true)?.let { elementType ->
+                        DotNetClrCustomAttributeValueType.SzArray(elementType)
+                    }
+                }
+            }
+
+            else -> null
+        }
+
+    private fun decodeArgument(
+        reader: CustomAttributeBlobReader,
+        type: DotNetClrCustomAttributeValueType,
+        nestingDepth: Int,
+    ): DotNetClrCustomAttributeValue =
+        when (type) {
+            is DotNetClrCustomAttributeValueType.Primitive ->
+                decodePrimitiveArgument(reader, type.type)
+
+            DotNetClrCustomAttributeValueType.TaggedObject -> {
+                if (nestingDepth >= MAX_VALUE_NESTING_DEPTH) {
+                    reader.fail(DotNetClrCustomAttributeValueFailure.VALUE_LIMIT_EXCEEDED)
+                }
+                val taggedType = readTaggedArgumentType(reader)
+                decodeArgument(reader, taggedType, nestingDepth + 1)
+            }
+
+            is DotNetClrCustomAttributeValueType.SzArray ->
+                decodeArrayArgument(reader, type, nestingDepth)
+        }
+
+    private fun decodePrimitiveArgument(
+        reader: CustomAttributeBlobReader,
+        primitive: DotNetClrPrimitiveType,
+    ): DotNetClrCustomAttributeValue =
+        when (primitive) {
             DotNetClrPrimitiveType.BOOLEAN -> {
                 when (val value = reader.readUnsigned(1).toInt()) {
                     0 -> DotNetClrCustomAttributeValue.BooleanValue(false)
@@ -380,9 +474,105 @@ class DotNetClrCustomAttributeDecoder(
             DotNetClrPrimitiveType.NATIVE_INT,
             DotNetClrPrimitiveType.NATIVE_UINT,
             DotNetClrPrimitiveType.OBJECT,
-            -> null
+            -> error("Unsupported custom-attribute primitive reached value decoding: $primitive")
+        }
+
+    private fun readTaggedArgumentType(
+        reader: CustomAttributeBlobReader,
+        isArrayElement: Boolean = false,
+    ): DotNetClrCustomAttributeValueType {
+        val code = reader.readUnsigned(1).toInt()
+        val primitive = SERIALIZATION_PRIMITIVE_TYPES[code]
+        if (primitive != null) return DotNetClrCustomAttributeValueType.Primitive(primitive)
+        return when (code) {
+            SERIALIZATION_TYPE_TAGGED_OBJECT ->
+                DotNetClrCustomAttributeValueType.TaggedObject
+
+            SERIALIZATION_TYPE_SZARRAY -> {
+                if (isArrayElement) {
+                    reader.fail(
+                        DotNetClrCustomAttributeValueFailure.INVALID_SERIALIZATION_TYPE_CODE
+                    )
+                }
+                DotNetClrCustomAttributeValueType.SzArray(
+                    readTaggedArgumentType(reader, isArrayElement = true)
+                )
+            }
+
+            SERIALIZATION_TYPE_SYSTEM_TYPE,
+            SERIALIZATION_TYPE_ENUM,
+            -> throw CustomAttributeUnsupportedFailure(
+                DotNetClrCustomAttributeValueUnsupported.TYPE_OR_ENUM_ARGUMENT
+            )
+
+            else -> reader.fail(
+                DotNetClrCustomAttributeValueFailure.INVALID_SERIALIZATION_TYPE_CODE
+            )
         }
     }
+
+    private fun decodeArrayArgument(
+        reader: CustomAttributeBlobReader,
+        type: DotNetClrCustomAttributeValueType.SzArray,
+        nestingDepth: Int,
+    ): DotNetClrCustomAttributeValue.ArrayValue {
+        val encodedCount = reader.readUnsigned(4)
+        if (encodedCount == NULL_ARRAY_LENGTH) {
+            return DotNetClrCustomAttributeValue.ArrayValue(type, null)
+        }
+        if (encodedCount > Int.MAX_VALUE.toULong()) {
+            reader.fail(DotNetClrCustomAttributeValueFailure.INVALID_ARRAY_LENGTH)
+        }
+        val count = encodedCount.toInt()
+        if (count > MAX_ARRAY_ELEMENT_COUNT) {
+            reader.fail(DotNetClrCustomAttributeValueFailure.VALUE_LIMIT_EXCEEDED)
+        }
+        val minimumElementSize = minimumEncodedSize(type.elementType)
+        if (count > reader.remainingByteCount / minimumElementSize) {
+            reader.fail(DotNetClrCustomAttributeValueFailure.TRUNCATED_VALUE)
+        }
+        val elements = ArrayList<DotNetClrCustomAttributeValue>(count)
+        repeat(count) {
+            elements += decodeArgument(reader, type.elementType, nestingDepth)
+        }
+        return DotNetClrCustomAttributeValue.ArrayValue(type, elements.toList())
+    }
+
+    private fun minimumEncodedSize(type: DotNetClrCustomAttributeValueType): Int =
+        when (type) {
+            is DotNetClrCustomAttributeValueType.Primitive -> {
+                when (type.type) {
+                    DotNetClrPrimitiveType.INT64,
+                    DotNetClrPrimitiveType.UINT64,
+                    DotNetClrPrimitiveType.FLOAT64,
+                    -> 8
+
+                    DotNetClrPrimitiveType.INT32,
+                    DotNetClrPrimitiveType.UINT32,
+                    DotNetClrPrimitiveType.FLOAT32,
+                    -> 4
+
+                    DotNetClrPrimitiveType.CHAR,
+                    DotNetClrPrimitiveType.INT16,
+                    DotNetClrPrimitiveType.UINT16,
+                    -> 2
+
+                    DotNetClrPrimitiveType.BOOLEAN,
+                    DotNetClrPrimitiveType.INT8,
+                    DotNetClrPrimitiveType.UINT8,
+                    DotNetClrPrimitiveType.STRING,
+                    -> 1
+
+                    DotNetClrPrimitiveType.NATIVE_INT,
+                    DotNetClrPrimitiveType.NATIVE_UINT,
+                    DotNetClrPrimitiveType.OBJECT,
+                    -> error("Unsupported custom-attribute primitive has no encoded size")
+                }
+            }
+
+            DotNetClrCustomAttributeValueType.TaggedObject -> 2
+            is DotNetClrCustomAttributeValueType.SzArray -> 4
+        }
 
     private fun integralValue(
         type: DotNetClrPrimitiveType,
@@ -396,7 +586,7 @@ class DotNetClrCustomAttributeDecoder(
         fixedArguments: List<DotNetClrCustomAttributeValue>,
     ): DotNetClrCustomAttributeValueDecoding.Decoded =
         DotNetClrCustomAttributeValueDecoding.Decoded(
-            DotNetClrDecodedCustomAttribute(constructor, fixedArguments)
+            DotNetClrDecodedCustomAttribute(constructor, fixedArguments.toList())
         )
 
     private fun invalidValue(
@@ -423,6 +613,28 @@ class DotNetClrCustomAttributeDecoder(
         const val METHOD_DEF_TABLE = 6
         const val MEMBER_REF_TABLE = 10
         const val CUSTOM_ATTRIBUTE_PROLOG = 1
+        const val SERIALIZATION_TYPE_SZARRAY = 0x1d
+        const val SERIALIZATION_TYPE_SYSTEM_TYPE = 0x50
+        const val SERIALIZATION_TYPE_TAGGED_OBJECT = 0x51
+        const val SERIALIZATION_TYPE_ENUM = 0x55
+        const val MAX_VALUE_NESTING_DEPTH = 32
+        const val MAX_ARRAY_ELEMENT_COUNT = 1_000_000
+        val NULL_ARRAY_LENGTH = UInt.MAX_VALUE.toULong()
+        val SERIALIZATION_PRIMITIVE_TYPES = mapOf(
+            0x02 to DotNetClrPrimitiveType.BOOLEAN,
+            0x03 to DotNetClrPrimitiveType.CHAR,
+            0x04 to DotNetClrPrimitiveType.INT8,
+            0x05 to DotNetClrPrimitiveType.UINT8,
+            0x06 to DotNetClrPrimitiveType.INT16,
+            0x07 to DotNetClrPrimitiveType.UINT16,
+            0x08 to DotNetClrPrimitiveType.INT32,
+            0x09 to DotNetClrPrimitiveType.UINT32,
+            0x0a to DotNetClrPrimitiveType.INT64,
+            0x0b to DotNetClrPrimitiveType.UINT64,
+            0x0c to DotNetClrPrimitiveType.FLOAT32,
+            0x0d to DotNetClrPrimitiveType.FLOAT64,
+            0x0e to DotNetClrPrimitiveType.STRING,
+        )
     }
 }
 
@@ -433,6 +645,9 @@ private class CustomAttributeBlobReader(
 
     val isAtEnd: Boolean
         get() = offset == bytes.size
+
+    val remainingByteCount: Int
+        get() = bytes.size - offset
 
     fun readUnsigned(byteCount: Int): ULong {
         if (byteCount !in 1..8 || bytes.size - offset < byteCount) {
@@ -515,4 +730,8 @@ private class CustomAttributeBlobReader(
 private class CustomAttributeBlobFailure(
     val failure: DotNetClrCustomAttributeValueFailure,
     val fixedArgumentIndex: Int?,
+) : Exception()
+
+private class CustomAttributeUnsupportedFailure(
+    val unsupported: DotNetClrCustomAttributeValueUnsupported,
 ) : Exception()

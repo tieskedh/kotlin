@@ -2079,6 +2079,23 @@ session state, process, and a curated task menu. Keep both files updated as you 
   unsupported results. Next add those forms using resolved type identity and enum storage; never
   stringify them or compare their original bytes. The fresh strict gate is 870/0/0/0 across 16
   XML suites (796 FIR/IL/box, 21 generated CLI, and 53 library integration tests).
+- The array/tagged-object custom-attribute continuation generalizes the constructor-driven value
+  algebra to one-dimensional SZARRAY and per-value serialized type codes. Null and empty arrays
+  retain their declared element type; heterogeneous object arrays retain each actual encoded
+  element type; Roslyn's tagged nullable-string representation for a null object is preserved.
+  Jagged arrays, impossible negative lengths, unknown type codes, truncation before allocation,
+  more than one million elements, and more than 32 tagged levels fail structurally. Those two
+  bounds are untrusted-input resource guards, not ABI. Real .NET 10 output covers non-empty,
+  empty, null, boxed, and heterogeneous values; Framework hostile blobs cover every failure
+  boundary. System.Type, enums, and named arguments remain explicit unsupported results. Next
+  resolve serialized CLR type names and enum storage before decoding those forms. During the
+  strict gate, unrelated box tests intermittently reported only that ILAsm had not produced their
+  temporary DLL (`exceptionMessageDefaults`, `genericInnerClasses`, then `classComposition`);
+  every named test passed immediately in isolation. No failing assembler diagnostic or shared
+  semantic shape was present. Keep requiring a subsequent clean aggregate gate; investigate the
+  Windows ILAsm/SAC concurrency path separately if this frequency persists. The subsequent fresh
+  strict aggregate gate is clean at 870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+  CLI, and 53 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
