@@ -172,6 +172,7 @@ private object DotNetPeMetadataReader {
                     metadata.strings,
                     metadata.blobs,
                 ),
+                customAttributes = readCustomAttributes(metadata.tables, metadata.blobs),
                 propertyDefinitions = propertyDefinitions,
                 methodSemantics = readMethodSemantics(
                     metadata.tables,
@@ -848,6 +849,56 @@ private object DotNetPeMetadataReader {
                         description = "MemberRef token 0x${handle.token.toUInt().toString(16)}",
                     ).readMemberReferenceSignature(),
                     rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readCustomAttributes(
+            tables: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrCustomAttribute> {
+            val table = locateMetadataTable(tables, CUSTOM_ATTRIBUTE_TABLE) ?: return emptyList()
+            val valuesByBlobIndex = mutableMapOf<Long, DotNetClrBlob>()
+            return List(table.rowCount.toIntChecked("CustomAttribute row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val parentIndex = readIndex(position, table.indexSizes.hasCustomAttributeIndexSize)
+                position += table.indexSizes.hasCustomAttributeIndexSize
+                val constructorIndex = readIndex(position, table.indexSizes.customAttributeTypeIndexSize)
+                position += table.indexSizes.customAttributeTypeIndexSize
+                val valueIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val rawValue = if (valueIndex == 0L) {
+                    null
+                } else {
+                    valuesByBlobIndex.getOrPut(valueIndex) {
+                        val valueSize = readBlobHeapSize(blobs, valueIndex)
+                        if (valueSize > MAX_CUSTOM_ATTRIBUTE_BLOB_SIZE) {
+                            malformed("CustomAttribute row ${rowIndex + 1} has an oversized value")
+                        }
+                        DotNetClrBlob.wrapOwned(readBlobHeap(blobs, valueIndex))
+                    }
+                }
+                DotNetClrCustomAttribute(
+                    handle = metadataHandle(
+                        CUSTOM_ATTRIBUTE_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "CustomAttribute",
+                    ),
+                    parent = decodeCodedHandle(
+                        parentIndex,
+                        tagBits = 5,
+                        tablesByTag = HAS_CUSTOM_ATTRIBUTE_TABLES,
+                        metadataTables = tables,
+                        description = "CustomAttribute parent",
+                    ) ?: malformed("CustomAttribute row ${rowIndex + 1} has no parent"),
+                    constructor = decodeCodedHandle(
+                        constructorIndex,
+                        tagBits = 3,
+                        tablesByTag = CUSTOM_ATTRIBUTE_TYPE_TABLES,
+                        metadataTables = tables,
+                        description = "CustomAttribute constructor",
+                    ) ?: malformed("CustomAttribute row ${rowIndex + 1} has no constructor"),
+                    rawValue = rawValue,
                 )
             }
         }
@@ -1754,6 +1805,7 @@ private object DotNetPeMetadataReader {
             val tag = (value and tagMask.toLong()).toInt()
             val table = tablesByTag.getOrNull(tag)
                 ?: malformed("$description has invalid tag $tag")
+            if (table < 0) malformed("$description has invalid tag $tag")
             return metadataHandle(table, value ushr tagBits, metadataTables, description)
         }
 
@@ -2082,13 +2134,13 @@ private object DotNetPeMetadataReader {
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
         private val hasConstantIndexSize
             get() = codedIndexSize(2, 4, 8, 23)
-        private val hasCustomAttributeIndexSize
+        val hasCustomAttributeIndexSize
             get() = codedIndexSize(
                 5,
                 6, 4, 1, 2, 8, 9, 10, 0, 14, 23, 20,
                 17, 26, 27, 32, 35, 38, 39, 40, 42, 44, 43,
             )
-        private val customAttributeTypeIndexSize
+        val customAttributeTypeIndexSize
             get() = codedIndexSize(3, 6, 10)
         private val hasFieldMarshalIndexSize
             get() = codedIndexSize(1, 4, 8)
@@ -2194,7 +2246,12 @@ private object DotNetPeMetadataReader {
     private const val TYPE_DEF_TABLE = 2
     private const val FIELD_TABLE = 4
     private const val METHOD_DEF_TABLE = 6
+    private const val PARAMETER_TABLE = 8
+    private const val INTERFACE_IMPLEMENTATION_TABLE = 9
     private const val MEMBER_REF_TABLE = 10
+    private const val CUSTOM_ATTRIBUTE_TABLE = 12
+    private const val DECLARATIVE_SECURITY_TABLE = 14
+    private const val STANDALONE_SIGNATURE_TABLE = 17
     private const val EVENT_TABLE = 20
     private const val PROPERTY_MAP_TABLE = 21
     private const val PROPERTY_TABLE = 23
@@ -2210,6 +2267,36 @@ private object DotNetPeMetadataReader {
     private const val FILE_TABLE = 38
     private const val ASSEMBLY_REF_TABLE = 35
     private const val EXPORTED_TYPE_TABLE = 39
+    private val HAS_CUSTOM_ATTRIBUTE_TABLES = intArrayOf(
+        METHOD_DEF_TABLE,
+        FIELD_TABLE,
+        TYPE_REF_TABLE,
+        TYPE_DEF_TABLE,
+        PARAMETER_TABLE,
+        INTERFACE_IMPLEMENTATION_TABLE,
+        MEMBER_REF_TABLE,
+        MODULE_TABLE,
+        DECLARATIVE_SECURITY_TABLE,
+        PROPERTY_TABLE,
+        EVENT_TABLE,
+        STANDALONE_SIGNATURE_TABLE,
+        MODULE_REF_TABLE,
+        TYPE_SPEC_TABLE,
+        ASSEMBLY_TABLE,
+        ASSEMBLY_REF_TABLE,
+        FILE_TABLE,
+        EXPORTED_TYPE_TABLE,
+        MANIFEST_RESOURCE_TABLE,
+        GENERIC_PARAM_TABLE,
+        GENERIC_PARAM_CONSTRAINT_TABLE,
+        METHOD_SPEC_TABLE,
+    )
+    private val CUSTOM_ATTRIBUTE_TYPE_TABLES = intArrayOf(
+        -1,
+        -1,
+        METHOD_DEF_TABLE,
+        MEMBER_REF_TABLE,
+    )
     private const val STRING_HEAP_LARGE = 0x1
     private const val GUID_HEAP_LARGE = 0x2
     private const val BLOB_HEAP_LARGE = 0x4
@@ -2238,6 +2325,7 @@ private object DotNetPeMetadataReader {
     private const val GENERIC_PARAMETER_ATTRIBUTE_MASK = 0x003f
     private const val MAX_SIGNATURE_DEPTH = 128
     private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
+    private const val MAX_CUSTOM_ATTRIBUTE_BLOB_SIZE = 64 * 1024 * 1024
     private const val ELEMENT_TYPE_VOID = 0x01
     private const val ELEMENT_TYPE_BOOLEAN = 0x02
     private const val ELEMENT_TYPE_CHAR = 0x03

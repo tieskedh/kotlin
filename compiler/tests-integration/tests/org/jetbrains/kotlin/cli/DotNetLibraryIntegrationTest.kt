@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReference
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyMetadata
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrAssemblyReferenceBinder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttribute
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrFieldDefinition
@@ -137,6 +138,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   .class public auto ansi beforefieldinit 'Base'
                          extends [mscorlib]System.Object
                   {
+                    .custom instance void [mscorlib]System.ObsoleteAttribute::.ctor() = (
+                      01 00 00 00
+                    )
+                    .custom instance void [mscorlib]System.ObsoleteAttribute::.ctor() = (
+                      01 00 00 00
+                    )
                   }
 
                   .class public auto ansi beforefieldinit 'Outer'
@@ -325,6 +332,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(marker.isInterface)
             assertTrue(marker.isAbstract)
             assertFalse(marker.isSealed)
+            val baseAttributes = metadata.customAttributes.filter { attribute ->
+                attribute.parent == base.handle
+            }
+            assertEquals(2, baseAttributes.size)
+            assertEquals(1, baseAttributes.map(DotNetClrCustomAttribute::constructor).toSet().size)
+            assertTrue(
+                baseAttributes.all { attribute ->
+                    attribute.rawValue?.toUnsignedIntList() == listOf(1, 0, 0, 0)
+                }
+            )
+            val obsoleteConstructor = metadata.memberReferences.single { reference ->
+                reference.handle == baseAttributes.first().constructor
+            }
+            assertEquals(".ctor", obsoleteConstructor.name)
+            val obsoleteType = metadata.typeReferences.single { reference ->
+                reference.handle == obsoleteConstructor.parent
+            }
+            assertEquals("System", obsoleteType.namespaceName)
+            assertEquals("ObsoleteAttribute", obsoleteType.metadataName)
             assertEquals(
                 DotNetClrTypeSignature.GenericInstance(
                     genericType = DotNetClrTypeSignature.Named(
@@ -939,6 +965,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(coreMetadata.fieldDefinitions.size > 100)
             assertTrue(coreMetadata.methodDefinitions.size > 100)
             assertTrue(coreMetadata.memberReferences.isNotEmpty())
+            assertTrue(coreMetadata.customAttributes.isNotEmpty())
             assertTrue(coreMetadata.propertyDefinitions.isNotEmpty())
             assertTrue(coreMetadata.methodSemantics.isNotEmpty())
             assertTrue(coreMetadata.genericParameterDefinitions.isNotEmpty())
@@ -1137,6 +1164,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 fieldDefinitions = emptyList(),
                 methodDefinitions = emptyList(),
                 memberReferences = emptyList(),
+                customAttributes = emptyList(),
                 propertyDefinitions = emptyList(),
                 methodSemantics = emptyList(),
                 genericParameterDefinitions = emptyList(),

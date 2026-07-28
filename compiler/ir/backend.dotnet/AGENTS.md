@@ -339,6 +339,11 @@ landed shape as a compatibility constraint.
    resolution remains explicitly unsupported until the selected module graph exists. A CLR enum
    is a direct resolved child of the selected core-library `System.Enum` and has one valid
    runtime-special integral `value__` field; neither spelling is sufficient by itself.
+   CustomAttribute rows preserve their token, exact HasCustomAttribute parent,
+   MethodDef-or-MemberRef constructor handle, multiplicity, and nullable raw blob. Nil and present
+   empty blobs are different physical states. Never group attributes, infer attachment, validate
+   constructor shape by name alone, or use raw bytes as ordinary semantic equality. Constructor
+   resolution and semantic fixed/named argument decoding belong immediately above this row layer.
    It does not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy

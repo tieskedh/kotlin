@@ -276,6 +276,42 @@ data class DotNetClrMemberReference(
     val rawSignature: List<Int>,
 )
 
+class DotNetClrBlob private constructor(
+    private val content: ByteArray,
+) {
+    val size: Int
+        get() = content.size
+
+    fun toByteArray(): ByteArray = content.copyOf()
+
+    fun toUnsignedIntList(): List<Int> =
+        content.map { byte -> byte.toInt() and 0xff }
+
+    override fun equals(other: Any?): Boolean =
+        other is DotNetClrBlob && content.contentEquals(other.content)
+
+    override fun hashCode(): Int = content.contentHashCode()
+
+    companion object {
+        fun copyOf(bytes: ByteArray): DotNetClrBlob =
+            DotNetClrBlob(bytes.copyOf())
+
+        internal fun wrapOwned(bytes: ByteArray): DotNetClrBlob =
+            DotNetClrBlob(bytes)
+    }
+}
+
+data class DotNetClrCustomAttribute(
+    val handle: DotNetClrMetadataHandle,
+    val parent: DotNetClrMetadataHandle,
+    val constructor: DotNetClrMetadataHandle,
+    /**
+     * Null is a nil Value index. An empty list is a present zero-length blob; ECMA-335 permits
+     * both in specific constructor/member shapes, so the physical layer must distinguish them.
+     */
+    val rawValue: DotNetClrBlob?,
+)
+
 enum class DotNetClrMethodVisibility {
     COMPILER_CONTROLLED,
     PRIVATE,
@@ -434,6 +470,7 @@ data class DotNetClrAssemblyMetadata(
     val fieldDefinitions: List<DotNetClrFieldDefinition>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
     val memberReferences: List<DotNetClrMemberReference>,
+    val customAttributes: List<DotNetClrCustomAttribute>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,
     val methodSemantics: List<DotNetClrMethodSemantics>,
     val genericParameterDefinitions: List<DotNetClrGenericParameterDefinition>,
