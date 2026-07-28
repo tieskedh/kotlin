@@ -2068,6 +2068,17 @@ session state, process, and a curated task menu. Keep both files updated as you 
   fixed and named argument values semantically, using exact enum storage and preserving
   multiplicity. The fresh strict gate is 870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21
   generated CLI, and 53 library integration tests).
+- The scalar custom-attribute-value continuation decodes fixed arguments only after exact
+  constructor resolution. It supports boolean, char, all fixed-width signed/unsigned integers,
+  float/double with exact IEEE payload bits, and nullable strict UTF-8 SerString. A nil blob is
+  legal only for a no-argument constructor; invalid prologs, truncation, non-canonical packed
+  string lengths, invalid UTF-8/boolean values, trailing data, and a same-numbered token from a
+  different assembly fail structurally. Framework coverage supplies no-argument and hostile
+  blobs; Roslyn .NET 10 coverage supplies signed/unsigned values, nullable strings, chars, signed
+  zero, and NaN. Arrays, tagged object, System.Type, enum, and named arguments remain explicit
+  unsupported results. Next add those forms using resolved type identity and enum storage; never
+  stringify them or compare their original bytes. The fresh strict gate is 870/0/0/0 across 16
+  XML suites (796 FIR/IL/box, 21 generated CLI, and 53 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

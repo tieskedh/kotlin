@@ -351,7 +351,12 @@ landed shape as a compatibility constraint.
    not create Kotlin annotations before import policy. A MemberRef constructor owned by TypeSpec
    currently fails with a structured unsupported-parent result; do not approximate it as its open
    generic TypeDef. Replace that boundary only with the general constructed-member substitution
-   model needed by the importer.
+   model needed by the importer. Scalar fixed arguments are decoded from the resolved constructor
+   signature into typed values, never inferred from blob width. Preserve exact integral and
+   IEEE-754 bits, strict nullable UTF-8 SerString semantics, and the assembly qualification of the
+   constructor token. Nil is valid only for a no-argument constructor. Arrays, tagged object,
+   System.Type, enums, and named arguments currently fail as structured unsupported values; do
+   not erase, stringify, or partially skip them.
    Assembly definitions retain their full public key and computed eight-byte public-key token;
    `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
    key/token, so this still does not authorize exact-match binding inside the physical resolver.
