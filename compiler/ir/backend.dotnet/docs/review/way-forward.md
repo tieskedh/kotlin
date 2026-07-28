@@ -1,7 +1,7 @@
 # Kotlin/.NET backend way forward
 
-> **Baseline:** branch `dotnet`, rebased on `origin/master` at `0349ed5cd`, implementation
-> re-audited through `8f9a4540d` on 2026-07-21
+> **Baseline:** branch `dotnet`, rebased on `origin/master` at `6fb64e0c0`, upstream impact
+> re-audited on 2026-07-28
 >
 > **Status:** living pre-ABI execution plan
 >
@@ -689,6 +689,10 @@ Commit replayable tests for:
 - same-generation runtime, stdlib, producer, and consumer profile combinations plus stale-schema
   rejection;
 - nullable import/export, reflection visibility, and raw foreign exceptions.
+- Kotlin-owned initializer failures: original `Error` identity, first non-`Error`
+  `ExceptionInInitializerError`, later `NoClassDefFoundError`, inherited poisoning, top-level
+  files, and cross-module access. CLR `TypeInitializationException` may be an internal mechanism,
+  not the final Kotlin observation.
 
 Benchmarks may guide optional capabilities only when their source, environment, and result parser
 are committed. Prose reports of a local probe do not establish ABI.

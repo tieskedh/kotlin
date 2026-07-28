@@ -19,6 +19,8 @@ copying a snapshot review into binding design law.
    records re-verification performed after the two reviews and may promote, downgrade, or split a
    review item. Every normative representation or ABI decision still belongs in an ADR under
    [`../decisions`](../decisions).
+5. [`upstream-sync-2026-07-28.md`](upstream-sync-2026-07-28.md) records the six-step impact review
+   and adaptations for the rebase from `0349ed5cd` to `6fb64e0c0`.
 
 Authority order for implementation work:
 
@@ -34,8 +36,8 @@ choice.
 
 ## Current status
 
-- Snapshot review: `8dd89907d`. The living execution plan has been re-audited through
-  `d01ab02ba`; do not read the snapshot commit as the current implementation state.
+- Snapshot review: `8dd89907d`. The branch is based on `origin/master` at `6fb64e0c0`; do not
+  read the snapshot commit as the current implementation state.
 - Maturity: high-quality prototype; credible trajectory; not open for third-party binary ABI.
 - Immediate objective: Gate A in [`way-forward.md`](way-forward.md).
 - Required profiles: `net48` applications/libraries, `netstandard2.0` portable libraries, and

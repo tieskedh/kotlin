@@ -75,10 +75,15 @@ import org.jetbrains.kotlin.test.utils.MultiModuleInfoDumper
 import org.jetbrains.kotlin.test.utils.withExtension
 import org.jetbrains.kotlin.utils.bind
 import org.junit.jupiter.api.Assumptions
+import org.junit.jupiter.api.parallel.ResourceLock
 import org.opentest4j.TestAbortedException
 import java.io.File
 import java.util.concurrent.TimeUnit
 
+// Framework ILAsm and the Windows PowerShell CLR 4 host are external, process-wide resources.
+// Unbounded JUnit 5 fan-out produces nondeterministic empty host failures and occasionally no PE
+// output. Keep only the Framework lane exclusive; modern .NET boxes remain parallel.
+@ResourceLock("kotlin-dotnet-framework-toolchain")
 abstract class AbstractDotNetIlTextTestBase(
     private val parser: FirParser,
 ) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
@@ -134,6 +139,7 @@ open class AbstractFirLightTreeDotNetBoxTest : AbstractDotNetBoxTestBase(FirPars
 @FirPsiCodegenTest
 open class AbstractFirPsiDotNetBoxTest : AbstractDotNetBoxTestBase(FirParser.Psi)
 
+@ResourceLock("kotlin-dotnet-framework-toolchain")
 abstract class AbstractDotNetFrameworkBoxTestBase(
     private val parser: FirParser,
 ) : AbstractKotlinCompilerWithTargetBackendTest(TargetBackend.DOTNET) {
