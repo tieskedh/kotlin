@@ -350,6 +350,9 @@ data class DotNetClrMethodDefinition(
     val isSpecialName: Boolean
         get() = attributes and SPECIAL_NAME_ATTRIBUTE != 0
 
+    val isRuntimeSpecialName: Boolean
+        get() = attributes and RUNTIME_SPECIAL_NAME_ATTRIBUTE != 0
+
     private companion object {
         const val METHOD_ACCESS_MASK = 0x7
         const val STATIC_ATTRIBUTE = 0x10
@@ -357,6 +360,7 @@ data class DotNetClrMethodDefinition(
         const val VIRTUAL_ATTRIBUTE = 0x40
         const val ABSTRACT_ATTRIBUTE = 0x400
         const val SPECIAL_NAME_ATTRIBUTE = 0x800
+        const val RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x1000
     }
 }
 

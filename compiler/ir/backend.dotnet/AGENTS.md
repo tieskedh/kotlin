@@ -343,7 +343,15 @@ landed shape as a compatibility constraint.
    MethodDef-or-MemberRef constructor handle, multiplicity, and nullable raw blob. Nil and present
    empty blobs are different physical states. Never group attributes, infer attachment, validate
    constructor shape by name alone, or use raw bytes as ordinary semantic equality. Constructor
-   resolution and semantic fixed/named argument decoding belong immediately above this row layer.
+   resolution belongs immediately above this row layer and precedes value decoding. Resolve an
+   exact local MethodDef or external MemberRef owner, require the real instance `.ctor` signature,
+   and prove ancestry against the selected profile graph's exact `System.Attribute` TypeDef with
+   the bounded cycle-safe type resolver. Never infer attribute identity from a suffix, a display
+   name, or a host-runtime type. Semantic fixed/named argument decoding is the next layer and must
+   not create Kotlin annotations before import policy. A MemberRef constructor owned by TypeSpec
+   currently fails with a structured unsupported-parent result; do not approximate it as its open
+   generic TypeDef. Replace that boundary only with the general constructed-member substitution
+   model needed by the importer.
    Assembly definitions retain their full public key and computed eight-byte public-key token;
    `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
    key/token, so this still does not authorize exact-match binding inside the physical resolver.
