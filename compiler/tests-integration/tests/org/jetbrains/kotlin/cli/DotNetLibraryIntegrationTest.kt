@@ -27,8 +27,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
@@ -153,6 +157,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                       ret
                     }
                   }
+
+                  .class public auto ansi beforefieldinit 'PropertyHost'
+                         extends [mscorlib]System.Object
+                  {
+                    .method public hidebysig specialname instance int32 'ReadAt'(
+                        int32 'index'
+                    ) cil managed
+                    {
+                      .maxstack 1
+                      ldarg.1
+                      ret
+                    }
+
+                    .method public hidebysig specialname instance void 'WriteAt'(
+                        int32 'index',
+                        int32 'value'
+                    ) cil managed
+                    {
+                      .maxstack 0
+                      ret
+                    }
+
+                    .property instance int32 'CLR Item'(int32)
+                    {
+                      .get instance int32 'Fixture.PropertyHost'::'ReadAt'(int32)
+                      .set instance void 'Fixture.PropertyHost'::'WriteAt'(int32, int32)
+                    }
+
+                    .method public hidebysig specialname static string 'FetchName'() cil managed
+                    {
+                      .maxstack 1
+                      ldstr "name"
+                      ret
+                    }
+
+                    .property string 'Odd Name'()
+                    {
+                      .get string 'Fixture.PropertyHost'::'FetchName'()
+                    }
+                  }
                 }
                 """.trimIndent()
             )
@@ -190,6 +234,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val marker = fixtureTypes.getValue("IMarker")
             val box = fixtureTypes.getValue("IBox`1")
             val signatureHost = fixtureTypes.getValue("SignatureHost`1")
+            val propertyHost = fixtureTypes.getValue("PropertyHost")
             assertEquals(DotNetClrTypeVisibility.PUBLIC, base.visibility)
             assertEquals(systemObject.handle, base.baseType)
             assertEquals(base.handle, outer.baseType)
@@ -256,6 +301,58 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 transform.signature.parameterTypes,
             )
 
+            val indexedProperty = metadata.propertyDefinitions.single { it.name == "CLR Item" }
+            assertEquals(propertyHost.handle, indexedProperty.declaringType)
+            assertFalse(indexedProperty.isSpecialName)
+            assertEquals(
+                DotNetClrPropertySignature(
+                    hasThis = true,
+                    propertyType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                    indexParameterTypes = listOf(
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                    ),
+                ),
+                indexedProperty.signature,
+            )
+            assertTrue(indexedProperty.rawSignature.isNotEmpty())
+            val indexedSemantics = metadata.methodSemantics
+                .filter { semantics -> semantics.association == indexedProperty.handle }
+                .associateBy(DotNetClrMethodSemantics::kind)
+            assertEquals(
+                "ReadAt",
+                metadata.methodDefinitions.single {
+                    method -> method.handle == indexedSemantics.getValue(DotNetClrMethodSemanticsKind.GETTER).method
+                }.name,
+            )
+            assertEquals(
+                "WriteAt",
+                metadata.methodDefinitions.single {
+                    method -> method.handle == indexedSemantics.getValue(DotNetClrMethodSemanticsKind.SETTER).method
+                }.name,
+            )
+
+            val staticProperty = metadata.propertyDefinitions.single { it.name == "Odd Name" }
+            assertEquals(propertyHost.handle, staticProperty.declaringType)
+            assertEquals(
+                DotNetClrPropertySignature(
+                    hasThis = false,
+                    propertyType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.STRING),
+                    indexParameterTypes = emptyList(),
+                ),
+                staticProperty.signature,
+            )
+            val staticGetterSemantics = metadata.methodSemantics.single { semantics ->
+                semantics.association == staticProperty.handle
+            }
+            assertEquals(DotNetClrMethodSemanticsKind.GETTER, staticGetterSemantics.kind)
+            val propertyAccessors = metadata.methodDefinitions.filter { method ->
+                indexedSemantics.values.any { semantics -> semantics.method == method.handle } ||
+                        staticGetterSemantics.method == method.handle
+            }
+            assertEquals(setOf("ReadAt", "WriteAt", "FetchName"), propertyAccessors.mapTo(mutableSetOf()) { it.name })
+            assertTrue(propertyAccessors.all(DotNetClrMethodDefinition::isSpecialName))
+            assertTrue(propertyAccessors.single { it.name == "FetchName" }.isStatic)
+
             val malformedAssembly = File(
                 assembly.parentFile,
                 "ImporterFixture-malformed-signature.dll",
@@ -273,6 +370,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue("unsupported signature calling convention" in checkNotNull(malformed.message)) {
                 malformed.message
             }
+
+            val malformedPropertyAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-malformed-property-signature.dll",
+            )
+            val malformedPropertyImage = assembly.readBytes()
+            val rawPropertySignature = ByteArray(indexedProperty.rawSignature.size) { index ->
+                indexedProperty.rawSignature[index].toByte()
+            }
+            val propertySignatureOffset = malformedPropertyImage.uniqueSequenceOffset(rawPropertySignature)
+            malformedPropertyImage[propertySignatureOffset] = 0x09
+            malformedPropertyAssembly.writeBytes(malformedPropertyImage)
+            val malformedProperty = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.read(malformedPropertyAssembly)
+            }
+            assertTrue(
+                "invalid property signature header" in checkNotNull(malformedProperty.message)
+            ) {
+                malformedProperty.message
+            }
         }
 
         val profileCoreAssemblies = listOf(
@@ -286,6 +403,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertEquals(entry.second, coreMetadata.identity.name)
             assertTrue(coreMetadata.typeDefinitions.size > 100)
             assertTrue(coreMetadata.methodDefinitions.size > 100)
+            assertTrue(coreMetadata.propertyDefinitions.isNotEmpty())
+            assertTrue(coreMetadata.methodSemantics.isNotEmpty())
             if (entry.second == "System.Runtime") {
                 assertTrue(
                     coreMetadata.typeSpecifications.any { specification ->
