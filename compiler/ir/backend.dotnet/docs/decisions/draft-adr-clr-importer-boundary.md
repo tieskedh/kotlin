@@ -503,6 +503,52 @@ pointer, and by-reference shape. It also proves unqualified argument context, in
 qualifiers, and a missing assembly inside a generic argument. The algorithm is profile-neutral;
 the supplied binder is where `net48`, `netstandard2.0`, and `net10.0` select different graphs.
 
+The sixteenth slice feeds that resolved type algebra back into ordinary custom-attribute values.
+JVM annotation deserialization represents a class literal by its resolved class/type identity and
+an enum argument by its enum declaration plus value; JS, Wasm, and Native retain the corresponding
+KLIB declaration identity before their platform representations are produced. None treats a
+serialized display name or an enum's storage integer as the semantic value. The .NET-specific
+difference is physical only: ECMA-335 stores a `System.Type` argument as a nullable reflection
+`SerString`, and a boxed or named enum prefixes its storage bits with serialization code `0x55`
+and a reflection type name. This slice consumes that form for boxed enums; named field/property
+arguments reuse it in the following slice.
+
+The custom-attribute decoder therefore receives the same selected-graph serialized-type resolver
+as the rest of the importer. A non-null `System.Type` value retains the complete resolved
+named/generic/pointer/by-reference/array algebra, while an encoded null remains a distinct null
+type value. `Type[]` retains `System.Type` as its element kind even when empty or null. A serialized
+enum name must resolve to either one named TypeDef or a constructed instance of one named TypeDef,
+with no pointer, by-reference, or array modifier, and then pass the existing exact selected-
+`System.Enum` ancestry and `value__` storage proof before any bits are read. The complete
+constructed identity is retained because C# enums nested in generic classes are themselves
+generic CLR types. Boxed enum values use the same enum-value algebra as constructor-typed fixed
+enums; no second identity or body exists for the boxed case.
+
+This does not transgress Kotlin Common: the layer creates neither a Kotlin class literal nor a
+Kotlin enum entry, and it does not equate a foreign enum with a Kotlin enum. It only preserves the
+foreign semantic identity needed by later import policy. It also follows the same ECMA-335 value
+rules on `net48`, `netstandard2.0`, and `net10.0`; profile differences belong solely to the
+frontend-selected assembly binder. The decoder never invokes host `Type.GetType`, probes the
+filesystem, falls back by simple name, or lets C# display spelling become an identity.
+
+Invalid type syntax, AssemblyName syntax, binding, or TypeDef resolution is returned with the
+complete serialized-type-resolution result. A resolved non-enum, an enum name carrying a pointer,
+by-reference, or array modifier, invalid enum storage, and a null enum name are invalid enum values
+rather than integers or skipped arguments. Real Roslyn .NET 10 output covers constructed nested
+`System.Type`, type arrays, null type values, boxed type values, ordinary boxed `Int16` enums, and
+two constructed views of an `Int16` enum nested in a generic class. The Framework fixture
+independently covers qualified boxed types and enums plus unbound assemblies and false enum
+identities. Named field/property arguments remain the next slice because they additionally require
+physical member resolution and assignment-shape validation.
+
+A constructor parameter whose fixed enum type is itself a constructed nested enum still returns
+the existing structured unsupported fixed-type result. That is a correct temporary boundary, not
+the final design: resolving it requires the general TypeSig-to-resolved-structural-type
+substitution model also needed by constructed members and the FIR importer. Do not duplicate a
+custom-attribute-only signature resolver. The semantic enum value model introduced here already
+retains the required constructed identity, so that later resolver can feed it without another ABI
+change.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this

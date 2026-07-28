@@ -15,7 +15,7 @@ The commit gate is
 toolchain enforcement and owns 796 FIR/IL/semantic tests, 21 generated-CLI tests, and 51
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 869 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 871 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -360,9 +360,17 @@ landed shape as a compatibility constraint.
    Keep the element-count and tagged-depth resource bounds as diagnostics, not ABI semantics.
    A fixed enum type comes only from the resolved constructor signature and selected
    `System.Enum`/`value__` storage proof; retain its exact resolved type plus underlying bits and
-   reject a false `class` signature. System.Type, boxed or named enums, and named arguments
-   currently fail as structured unsupported values because their types require a parsed CLR
-   serialized name; do not erase, stringify, or partially skip them.
+   reject a false `class` signature. System.Type values retain the complete selected-graph
+   serialized-type algebra (or explicit null), including inside arrays and tagged objects.
+   Boxed enum values resolve their serialized name to a named TypeDef or constructed nominal view,
+   retain that complete identity (including a generic enclosing type), repeat the exact
+   `System.Enum`/`value__` proof on the definition, and then reuse the fixed-enum value model.
+   Invalid serialized type edges remain structured resolution failures; do not erase, stringify,
+   probe, fall back by simple name, or partially skip them. Named arguments remain a separate
+   physical field/property-resolution layer. A constructed nested enum in a constructor
+   signature remains a structured unsupported fixed type until the general
+   TypeSig-to-resolved-structural-type substitution model exists; do not add an attribute-only
+   substitute.
    Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
    nested metadata names, per-component arity, recursive generic arguments, normalized
    pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host
