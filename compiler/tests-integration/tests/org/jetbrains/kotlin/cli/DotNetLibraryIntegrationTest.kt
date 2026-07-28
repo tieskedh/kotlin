@@ -23,7 +23,14 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameter
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpTypeParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
+import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
 import org.jetbrains.kotlin.backend.dotnet.DotNetInterfaceDefaultBodyPlacement
@@ -73,14 +80,20 @@ import java.util.zip.ZipOutputStream
 
 class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     @Test
-    fun testReadsPhysicalClrAssemblyAndTypeMetadata() {
+    fun testReadsPhysicalClrMetadataAndSignatures() {
+        val frameworkIlasm = DotNetIlAssembler.findFrameworkIlasm()
         requireOrAssumeToolchain(
-            DotNetIlAssembler.findFrameworkIlasm() != null,
+            frameworkIlasm != null,
             ".NET Framework ilasm is not available",
         )
         requireOrAssumeToolchain(
             DotNetIlAssembler.findModernIlasm() != null,
             "Modern ilasm is not available",
+        )
+        val modernCSharp = DotNetIlAssembler.findModernCSharpCompiler()
+        requireOrAssumeToolchain(
+            modernCSharp != null,
+            "Modern Roslyn and the net10 reference pack are not available",
         )
         val ilFile = File(tmpdir, "clr-metadata/ImporterFixture.il").apply {
             parentFile.mkdirs()
@@ -113,6 +126,32 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                   .class interface public abstract auto ansi 'IMarker'
                   {
+                  }
+
+                  .class interface public abstract auto ansi 'IBox`1'<T>
+                  {
+                  }
+
+                  .class public auto ansi beforefieldinit 'IntArrayBox'
+                         extends [mscorlib]System.Object
+                         implements class 'Fixture.IBox`1'<int32[]>
+                  {
+                  }
+
+                  .class public auto ansi beforefieldinit 'SignatureHost`1'<T>
+                         extends [mscorlib]System.Object
+                  {
+                    .method public hidebysig instance !!0 'Transform'<M>(
+                        !0[] 'input',
+                        int32& 'value',
+                        int32[-8192...-8188,-268435456...-268435453] 'matrix',
+                        !!0 'argument'
+                    ) cil managed
+                    {
+                      .maxstack 1
+                      ldarg.s 'argument'
+                      ret
+                    }
                   }
                 }
                 """.trimIndent()
@@ -149,6 +188,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val outer = fixtureTypes.getValue("Outer")
             val nested = fixtureTypes.getValue("Nested")
             val marker = fixtureTypes.getValue("IMarker")
+            val box = fixtureTypes.getValue("IBox`1")
+            val signatureHost = fixtureTypes.getValue("SignatureHost`1")
             assertEquals(DotNetClrTypeVisibility.PUBLIC, base.visibility)
             assertEquals(systemObject.handle, base.baseType)
             assertEquals(base.handle, outer.baseType)
@@ -157,6 +198,101 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(marker.isInterface)
             assertTrue(marker.isAbstract)
             assertFalse(marker.isSealed)
+            assertEquals(
+                DotNetClrTypeSignature.GenericInstance(
+                    genericType = DotNetClrTypeSignature.Named(
+                        type = box.handle,
+                        isValueType = false,
+                    ),
+                    arguments = listOf(
+                        DotNetClrTypeSignature.SzArray(
+                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                        )
+                    ),
+                ),
+                metadata.typeSpecifications.single().signature,
+            )
+            val transform = metadata.methodDefinitions.single { it.name == "Transform" }
+            assertEquals(signatureHost.handle, transform.declaringType)
+            assertEquals(DotNetClrMethodVisibility.PUBLIC, transform.visibility)
+            assertFalse(transform.isStatic)
+            assertFalse(transform.isAbstract)
+            assertEquals(DotNetClrSignatureCallingConvention.DEFAULT, transform.signature.callingConvention)
+            assertTrue(transform.signature.hasThis)
+            assertFalse(transform.signature.hasExplicitThis)
+            assertEquals(1, transform.signature.genericParameterCount)
+            assertEquals(null, transform.signature.varargParameterStart)
+            assertEquals(
+                DotNetClrTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.METHOD,
+                    0,
+                ),
+                transform.signature.returnType,
+            )
+            assertEquals(
+                listOf(
+                    DotNetClrTypeSignature.SzArray(
+                        DotNetClrTypeSignature.GenericParameter(
+                            DotNetClrGenericParameterKind.TYPE,
+                            0,
+                        )
+                    ),
+                    DotNetClrTypeSignature.ByReference(
+                        DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                    ),
+                    DotNetClrTypeSignature.Array(
+                        elementType = DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32),
+                        shape = DotNetClrArrayShape(
+                            rank = 2,
+                            sizes = listOf(5, 4),
+                            lowerBounds = listOf(-8192, -268435456),
+                        ),
+                    ),
+                    DotNetClrTypeSignature.GenericParameter(
+                        DotNetClrGenericParameterKind.METHOD,
+                        0,
+                    ),
+                ),
+                transform.signature.parameterTypes,
+            )
+
+            val malformedAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-malformed-signature.dll",
+            )
+            val malformedImage = assembly.readBytes()
+            val rawMethodSignature = ByteArray(transform.rawSignature.size) { index ->
+                transform.rawSignature[index].toByte()
+            }
+            val signatureOffset = malformedImage.uniqueSequenceOffset(rawMethodSignature)
+            malformedImage[signatureOffset] = 0x3f
+            malformedAssembly.writeBytes(malformedImage)
+            val malformed = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.read(malformedAssembly)
+            }
+            assertTrue("unsupported signature calling convention" in checkNotNull(malformed.message)) {
+                malformed.message
+            }
+        }
+
+        val profileCoreAssemblies = listOf(
+            checkNotNull(frameworkIlasm).parentFile.resolve("mscorlib.dll") to "mscorlib",
+            checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll") to "System.Runtime",
+        )
+        for (entry in profileCoreAssemblies) {
+            val coreAssembly = entry.first
+            assertTrue(coreAssembly.isFile) { "Missing profile core assembly '${coreAssembly.path}'" }
+            val coreMetadata = DotNetClrMetadataReader.read(coreAssembly)
+            assertEquals(entry.second, coreMetadata.identity.name)
+            assertTrue(coreMetadata.typeDefinitions.size > 100)
+            assertTrue(coreMetadata.methodDefinitions.size > 100)
+            if (entry.second == "System.Runtime") {
+                assertTrue(
+                    coreMetadata.typeSpecifications.any { specification ->
+                        specification.signature is DotNetClrTypeSignature.Modified
+                    }
+                ) { "The net10 reference assembly no longer exercises a modified TypeSpec root" }
+            }
         }
     }
 
@@ -15718,5 +15854,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val output = process.inputStream.bufferedReader().use { it.readText() }
         assertEquals(0, process.waitFor(), "$description failed:\n$output")
         assertEquals("OK", output.trim(), "$description produced unexpected output")
+    }
+
+    private fun ByteArray.uniqueSequenceOffset(sequence: ByteArray): Int {
+        val matches = (0..size - sequence.size).filter { offset ->
+            sequence.indices.all { index -> this[offset + index] == sequence[index] }
+        }
+        assertEquals(1, matches.size, "Expected one physical metadata blob match")
+        return matches.single()
     }
 }
