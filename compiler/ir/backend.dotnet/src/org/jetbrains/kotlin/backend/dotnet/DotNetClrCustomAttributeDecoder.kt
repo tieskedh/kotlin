@@ -144,9 +144,22 @@ sealed interface DotNetClrCustomAttributeValue {
     }
 }
 
+enum class DotNetClrCustomAttributeNamedArgumentKind {
+    FIELD,
+    PROPERTY,
+}
+
+data class DotNetClrCustomAttributeNamedArgument(
+    val kind: DotNetClrCustomAttributeNamedArgumentKind,
+    val name: String,
+    val type: DotNetClrCustomAttributeValueType,
+    val value: DotNetClrCustomAttributeValue,
+)
+
 data class DotNetClrDecodedCustomAttribute(
     val constructor: DotNetClrResolvedCustomAttributeConstructor,
     val fixedArguments: List<DotNetClrCustomAttributeValue>,
+    val namedArguments: List<DotNetClrCustomAttributeNamedArgument>,
 )
 
 enum class DotNetClrCustomAttributeValueFailure {
@@ -158,6 +171,8 @@ enum class DotNetClrCustomAttributeValueFailure {
     INVALID_SERIALIZED_STRING,
     INVALID_UTF8,
     INVALID_SERIALIZATION_TYPE_CODE,
+    INVALID_NAMED_ARGUMENT_KIND,
+    INVALID_NAMED_ARGUMENT_NAME,
     INVALID_ARRAY_LENGTH,
     TYPE_RESOLUTION_FAILED,
     INVALID_ENUM_TYPE,
@@ -167,7 +182,6 @@ enum class DotNetClrCustomAttributeValueFailure {
 
 enum class DotNetClrCustomAttributeValueUnsupported {
     FIXED_ARGUMENT_TYPE,
-    NAMED_ARGUMENTS,
 }
 
 sealed interface DotNetClrCustomAttributeValueDecoding {
@@ -178,6 +192,7 @@ sealed interface DotNetClrCustomAttributeValueDecoding {
     data class Invalid(
         val failure: DotNetClrCustomAttributeValueFailure,
         val fixedArgumentIndex: Int? = null,
+        val namedArgumentIndex: Int? = null,
         val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         val serializedTypeResolution: DotNetClrSerializedTypeResolution? = null,
         val enumStorageFailure: DotNetClrEnumStorageFailure? = null,
@@ -331,11 +346,8 @@ class DotNetClrCustomAttributeDecoder(
     }
 
     /**
-     * Decodes primitive, string, array, tagged-object, type, and enum fixed arguments supported by
-     * ECMA-335.
-     *
-     * Named arguments remain a structured unsupported result until physical field/property
-     * resolution is available.
+     * Decodes primitive, string, array, tagged-object, type, and enum fixed and named arguments
+     * supported by ECMA-335.
      */
     fun decodeValue(
         assembly: DotNetClrAssemblyMetadata,
@@ -350,7 +362,7 @@ class DotNetClrCustomAttributeDecoder(
         val rawValue = attribute.rawValue
         if (rawValue == null) {
             return if (constructor.signature.parameterTypes.isEmpty()) {
-                decodedValue(constructor, emptyList())
+                decodedValue(constructor, emptyList(), emptyList())
             } else {
                 invalidValue(DotNetClrCustomAttributeValueFailure.MISSING_VALUE_BLOB)
             }
@@ -399,15 +411,41 @@ class DotNetClrCustomAttributeDecoder(
                 fixedArguments += value
             }
             val namedArgumentCount = reader.readUnsigned(2).toInt()
-            if (namedArgumentCount != 0) {
-                return unsupportedValue(
-                    DotNetClrCustomAttributeValueUnsupported.NAMED_ARGUMENTS
-                )
+            val namedArguments =
+                ArrayList<DotNetClrCustomAttributeNamedArgument>(namedArgumentCount)
+            repeat(namedArgumentCount) { index ->
+                val namedArgument = try {
+                    decodeNamedArgument(assembly, reader)
+                } catch (failure: CustomAttributeBlobFailure) {
+                    return invalidValue(
+                        failure.failure,
+                        namedArgumentIndex = index,
+                    )
+                } catch (failure: CustomAttributeTypeResolutionFailure) {
+                    return invalidValue(
+                        DotNetClrCustomAttributeValueFailure.TYPE_RESOLUTION_FAILED,
+                        namedArgumentIndex = index,
+                        typeResolution = failure.resolution,
+                    )
+                } catch (failure: CustomAttributeSerializedTypeResolutionFailure) {
+                    return invalidValue(
+                        DotNetClrCustomAttributeValueFailure.TYPE_RESOLUTION_FAILED,
+                        namedArgumentIndex = index,
+                        serializedTypeResolution = failure.resolution,
+                    )
+                } catch (failure: CustomAttributeEnumFailure) {
+                    return invalidValue(
+                        DotNetClrCustomAttributeValueFailure.INVALID_ENUM_TYPE,
+                        namedArgumentIndex = index,
+                        enumStorageFailure = failure.failure,
+                    )
+                }
+                namedArguments += namedArgument
             }
             if (!reader.isAtEnd) {
                 return invalidValue(DotNetClrCustomAttributeValueFailure.TRAILING_DATA)
             }
-            decodedValue(constructor, fixedArguments)
+            decodedValue(constructor, fixedArguments, namedArguments)
         } catch (failure: CustomAttributeBlobFailure) {
             invalidValue(failure.failure, failure.fixedArgumentIndex)
         }
@@ -503,7 +541,7 @@ class DotNetClrCustomAttributeDecoder(
                 if (nestingDepth >= MAX_VALUE_NESTING_DEPTH) {
                     reader.fail(DotNetClrCustomAttributeValueFailure.VALUE_LIMIT_EXCEEDED)
                 }
-                val taggedType = readTaggedArgumentType(assembly, reader)
+                val taggedType = readSerializedArgumentType(assembly, reader)
                 decodeArgument(assembly, reader, taggedType, nestingDepth + 1)
             }
 
@@ -570,7 +608,7 @@ class DotNetClrCustomAttributeDecoder(
             -> error("Unsupported custom-attribute primitive reached value decoding: $primitive")
         }
 
-    private fun readTaggedArgumentType(
+    private fun readSerializedArgumentType(
         assembly: DotNetClrAssemblyMetadata,
         reader: CustomAttributeBlobReader,
         isArrayElement: Boolean = false,
@@ -589,7 +627,7 @@ class DotNetClrCustomAttributeDecoder(
                     )
                 }
                 DotNetClrCustomAttributeValueType.SzArray(
-                    readTaggedArgumentType(
+                    readSerializedArgumentType(
                         assembly,
                         reader,
                         isArrayElement = true,
@@ -611,6 +649,33 @@ class DotNetClrCustomAttributeDecoder(
                 DotNetClrCustomAttributeValueFailure.INVALID_SERIALIZATION_TYPE_CODE
             )
         }
+    }
+
+    private fun decodeNamedArgument(
+        assembly: DotNetClrAssemblyMetadata,
+        reader: CustomAttributeBlobReader,
+    ): DotNetClrCustomAttributeNamedArgument {
+        val kind = when (reader.readUnsigned(1).toInt()) {
+            SERIALIZATION_NAMED_ARGUMENT_FIELD ->
+                DotNetClrCustomAttributeNamedArgumentKind.FIELD
+
+            SERIALIZATION_NAMED_ARGUMENT_PROPERTY ->
+                DotNetClrCustomAttributeNamedArgumentKind.PROPERTY
+
+            else ->
+                reader.fail(DotNetClrCustomAttributeValueFailure.INVALID_NAMED_ARGUMENT_KIND)
+        }
+        val type = readSerializedArgumentType(assembly, reader)
+        val name = reader.readSerializedString()
+        if (name.isNullOrEmpty()) {
+            reader.fail(DotNetClrCustomAttributeValueFailure.INVALID_NAMED_ARGUMENT_NAME)
+        }
+        return DotNetClrCustomAttributeNamedArgument(
+            kind,
+            name,
+            type,
+            decodeArgument(assembly, reader, type, nestingDepth = 0),
+        )
     }
 
     private fun decodeArrayArgument(
@@ -764,14 +829,20 @@ class DotNetClrCustomAttributeDecoder(
     private fun decodedValue(
         constructor: DotNetClrResolvedCustomAttributeConstructor,
         fixedArguments: List<DotNetClrCustomAttributeValue>,
+        namedArguments: List<DotNetClrCustomAttributeNamedArgument>,
     ): DotNetClrCustomAttributeValueDecoding.Decoded =
         DotNetClrCustomAttributeValueDecoding.Decoded(
-            DotNetClrDecodedCustomAttribute(constructor, fixedArguments.toList())
+            DotNetClrDecodedCustomAttribute(
+                constructor,
+                fixedArguments.toList(),
+                namedArguments.toList(),
+            )
         )
 
     private fun invalidValue(
         failure: DotNetClrCustomAttributeValueFailure,
         fixedArgumentIndex: Int? = null,
+        namedArgumentIndex: Int? = null,
         typeResolution: DotNetClrTypeResolution.Unresolved? = null,
         serializedTypeResolution: DotNetClrSerializedTypeResolution? = null,
         enumStorageFailure: DotNetClrEnumStorageFailure? = null,
@@ -779,6 +850,7 @@ class DotNetClrCustomAttributeDecoder(
         DotNetClrCustomAttributeValueDecoding.Invalid(
             failure,
             fixedArgumentIndex,
+            namedArgumentIndex,
             typeResolution,
             serializedTypeResolution,
             enumStorageFailure,
@@ -805,6 +877,8 @@ class DotNetClrCustomAttributeDecoder(
         const val SERIALIZATION_TYPE_SZARRAY = 0x1d
         const val SERIALIZATION_TYPE_SYSTEM_TYPE = 0x50
         const val SERIALIZATION_TYPE_TAGGED_OBJECT = 0x51
+        const val SERIALIZATION_NAMED_ARGUMENT_FIELD = 0x53
+        const val SERIALIZATION_NAMED_ARGUMENT_PROPERTY = 0x54
         const val SERIALIZATION_TYPE_ENUM = 0x55
         const val MAX_VALUE_NESTING_DEPTH = 32
         const val MAX_ARRAY_ELEMENT_COUNT = 1_000_000
