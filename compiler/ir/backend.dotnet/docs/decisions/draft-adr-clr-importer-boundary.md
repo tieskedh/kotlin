@@ -135,10 +135,30 @@ independent oracle in the existing C# test tooling. The same test walks the real
 `mscorlib` implementation and the .NET 10 `System.Runtime` reference assembly; the latter pins a
 modified TypeSpec root that the older ECMA TypeSpec diagram omits.
 
+The third slice preserves CLR Property, PropertyMap, and MethodSemantics rows. A physical property
+records its metadata token, declaring TypeDef, exact metadata name, flags, structural property
+signature, index-parameter types, and original signature blob. Accessor association is taken only
+from MethodSemantics; it is never inferred from `get_`/`set_` names. Each accessor remains the
+original MethodDef, and non-accessor `Other` semantics are retained. The reader enforces CTS
+structural rules such as one owner per Property, valid association kinds, and same-TypeDef
+Property/accessor ownership, but it does not reject a valid CTS image merely for violating
+optional CLS naming or accessor-shape conventions. Those coherence checks belong to the later
+Kotlin import policy.
+
+The Property signature grammar follows the official .NET augmentation as well as ECMA-335:
+by-reference property results and index parameters can be represented physically, while invalid
+headers, nil blobs, excessive counts, and trailing bytes fail as bad images. A direct Framework
+and modern fixture deliberately uses property and accessor names that do not follow C# spelling,
+proving that metadata association is authoritative. Corrupting the property signature header
+fails closed. The scale lane also requires real `mscorlib` and .NET 10 `System.Runtime` Property
+and MethodSemantics rows to decode.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 MemberRef, generic-constraint, and nullable-attribute projection still remain above or after this
-signature foundation, and no FIR declaration is created yet.
+physical foundation, and no FIR declaration is created yet. In this sentence, “Property
+projection” means Kotlin-facing property synthesis; physical Property rows and associations are
+already implemented.
 
 ## Kotlin Common invariant
 
@@ -189,11 +209,13 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Bounded JVM-hosted physical reader: **Correct direction**.
 - CLR-specific immutable metadata model: **Reasonable platform-specific divergence**.
 - Lossless TypeSpec and MethodDef signature model: **Correct direction**.
+- Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- Remaining field/property/MemberRef signatures, semantic custom attributes, type forwarding,
-  properties, events, generic constraints, nullability enhancement, FIR symbols, and backend calls:
+- Remaining field/MemberRef signatures, semantic custom attributes, type forwarding, Kotlin-facing
+  property synthesis, events, generic constraints, nullability enhancement, FIR symbols, and
+  backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
 
 The cost is a substantial target-owned metadata and import layer. The alternative is greater:

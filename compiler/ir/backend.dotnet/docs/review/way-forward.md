@@ -904,6 +904,21 @@ remains profile-neutral physical input and creates no Kotlin type or FIR symbol.
 generic constraints, semantic attributes/nullability, and import policy are the next boundary
 layers.
 
+**CLR-property-metadata progress (2026-07-28):** the next physical-importer slice decodes
+Property, PropertyMap, and MethodSemantics as first-class CLR metadata instead of reconstructing a
+property from accessor names. This matches the mature-target separation: the foreign binary model
+is preserved first and Kotlin-facing convenience is synthesized later. The actual CLR difference
+is that a Property row already groups accessor MethodDefs and carries its own signature, including
+indexed and, under the official .NET augmentation, by-reference forms. The physical model
+therefore retains the property token, declaring TypeDef, exact metadata name, flags, signature,
+raw bytes, and each getter/setter/other association. It enforces CTS ownership and semantics-kind
+rules but does not turn optional CLS/C# naming conventions into Kotlin validity rules. A
+dual-profile IL fixture deliberately binds unusually named accessors and both indexed instance
+and static properties; corrupted signature input fails closed. Real Framework `mscorlib` and
+.NET 10 `System.Runtime` rows are also decoded. No Kotlin property or FIR symbol is created yet.
+GenericParam/constraints, semantic attributes/nullability, MemberRef/Field signatures as needed,
+and then the import-policy/provider layers remain next.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:
