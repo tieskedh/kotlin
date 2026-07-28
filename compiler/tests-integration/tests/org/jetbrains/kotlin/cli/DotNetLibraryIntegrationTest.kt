@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.cli
 
+import org.jetbrains.kotlin.backend.dotnet.DOTNET_STDLIB_SOURCES
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
 import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
@@ -10422,6 +10423,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     }
 
     @Test
+    fun testStdlibProductRejectsIncompleteOrdinarySourceSet() {
+        val sourceFile = dotNetStdlibSourceFiles().first()
+        val [diagnostics, exitCode] = AbstractCliTest.executeCompilerGrabOutput(
+            K2DotNetCompiler(),
+            listOf(
+                K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, "net10.0",
+                K2DotNetCompilerArguments::destination.cliArgument, File(tmpdir, "incomplete-stdlib").path,
+                sourceFile.path,
+            )
+        )
+
+        assertEquals(ExitCode.COMPILATION_ERROR, exitCode, diagnostics)
+        assertTrue("-Xdotnet-produce-stdlib requires exactly the complete Kotlin/.NET stdlib source set" in diagnostics) {
+            diagnostics
+        }
+    }
+
+    @Test
     fun testProducesNet10StdlibDll() {
         requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
         produceAndConsumeSelfDescribingStdlib("net10.0")
@@ -13525,6 +13545,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
     private fun produceAndConsumeSelfDescribingStdlib(target: String) {
         val firstDirectory = produceSelfDescribingStdlib(target, "first")
         val secondDirectory = produceSelfDescribingStdlib(target, "second")
+        val sourceDirectory = produceSelfDescribingStdlib(
+            target,
+            "ordinary-sources",
+            dotNetStdlibSourceFiles(),
+        )
         assertArrayEquals(
             firstDirectory.resolve("Kotlin.Stdlib.dll").readKlibCarrier(),
             secondDirectory.resolve("Kotlin.Stdlib.dll").readKlibCarrier(),
@@ -13545,17 +13570,37 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             secondDirectory.resolve(DotNetRuntimeArtifact.ASSEMBLY_FILE_NAME).readBytes(),
             "Distribution-owned runtime output must be reproducible for target $target",
         )
+        assertKlibPayloadEquals(
+            firstDirectory.resolve("Kotlin.Stdlib.dll"),
+            sourceDirectory.resolve("Kotlin.Stdlib.dll"),
+            "Ordinary source and packaged-fallback stdlib metadata differ for target $target",
+        )
+        assertArrayEquals(
+            firstDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
+            sourceDirectory.resolve("Kotlin.Stdlib.il").readBytes(),
+            "Ordinary source and packaged-fallback stdlib IL differ for target $target",
+        )
+        assertArrayEquals(
+            firstDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            sourceDirectory.resolve("Kotlin.Stdlib.dll").readBytes(),
+            "Ordinary source and packaged-fallback stdlib DLLs differ for target $target",
+        )
         consumeSelfDescribingStdlib(firstDirectory, target)
         consumeInstalledStdlib(firstDirectory, target)
     }
 
-    private fun produceSelfDescribingStdlib(target: String, run: String): File {
+    private fun produceSelfDescribingStdlib(
+        target: String,
+        run: String,
+        sourceFiles: List<File> = emptyList(),
+    ): File {
         val stdlibDirectory = File(tmpdir, "produced-$target-stdlib-$run")
         compileInProcess(
             K2DotNetCompiler(),
             K2DotNetCompilerArguments::dotNetProduceStdlib.cliArgument,
             K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
             K2DotNetCompilerArguments::destination.cliArgument, stdlibDirectory.path,
+            *sourceFiles.map(File::getPath).toTypedArray(),
         )
 
         val implementationLibrary = stdlibDirectory.resolve("Kotlin.Stdlib.dll")
@@ -13574,6 +13619,11 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertTrue(manifest.getProperty("unique_name") == "Kotlin.Stdlib")
         assertTrue(manifest.getProperty("dotnet_assembly_file") == "Kotlin.Stdlib.dll")
         assertEquals(target, manifest.getProperty("dotnet_library_tfm"))
+        val physicalDeclarations = DotNetLibraryAbiCodec.decode(manifest)
+        assertTrue(physicalDeclarations.keys.none { "[ File '" in it }) {
+            "Cross-module stdlib ABI contains file-private declaration identities: " +
+                    physicalDeclarations.keys.filter { "[ File '" in it }
+        }
         assertEquals(
             DotNetKotlinMetadataResource.EMBEDDED_KLIB_FORMAT,
             manifest.getProperty(DotNetKotlinMetadataResource.CONTAINER_FORMAT_PROPERTY),
@@ -13652,6 +13702,46 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "'emptyList'<'T'>()" in il
         )
         return stdlibDirectory
+    }
+
+    private fun dotNetStdlibSourceFiles(): List<File> {
+        val sourceDirectory = File("libraries/stdlib/dotnet/src").absoluteFile
+        assertTrue(sourceDirectory.isDirectory) {
+            "Missing ordinary Kotlin/.NET stdlib source directory: $sourceDirectory"
+        }
+        val sourceFiles = sourceDirectory.walkTopDown()
+            .filter(File::isFile)
+            .filter { it.extension == "kt" }
+            .sortedBy { it.invariantSeparatorsPath }
+            .toList()
+        assertEquals(DOTNET_STDLIB_SOURCES.keys.sorted(), sourceFiles.map(File::getName).sorted())
+        for (sourceFile in sourceFiles) {
+            assertEquals(
+                sourceFile.readText(),
+                DOTNET_STDLIB_SOURCES.getValue(sourceFile.name),
+                "Packaged fallback source differs from ${sourceFile.path}",
+            )
+        }
+        return sourceFiles
+    }
+
+    private fun assertKlibPayloadEquals(expected: File, actual: File, message: String) {
+        assertEquals(expected.readKlibManifest(), actual.readKlibManifest(), "$message: manifest")
+        val expectedEntries = expected.readKlibPayloadEntries()
+        val actualEntries = actual.readKlibPayloadEntries()
+        assertEquals(expectedEntries.keys, actualEntries.keys, "$message: entry names")
+        for (entryName in expectedEntries.keys.sorted()) {
+            assertArrayEquals(
+                expectedEntries.getValue(entryName),
+                actualEntries.getValue(entryName),
+                "$message: $entryName",
+            )
+        }
+        assertArrayEquals(
+            expected.readKlibCarrier(),
+            actual.readKlibCarrier(),
+            "$message: packed KLIB",
+        )
     }
 
     private fun consumeSelfDescribingStdlib(stdlibDirectory: File, target: String) {

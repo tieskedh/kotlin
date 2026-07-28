@@ -1914,6 +1914,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   Cross-parser/profile boxes and a portable producer consumed separately on net48/net10 pass;
   the fresh strict gate is 867/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   50 library integration tests).
+- The first ordinary stdlib-source-product continuation moves the complete current bootstrap
+  implementation out of `DotNetStdlibSource` string literals and into canonical Kotlin files under
+  `libraries/stdlib/dotnet/src`. Repository Gradle producers pass that source set directly for
+  `net48`, `netstandard2.0`, and `net10.0`; the backend JAR packages the same files only as the
+  temporary no-installed-pair fallback. The producer rejects incomplete or duplicate explicit
+  input, and the shared Common KLIB argument configurator now governs .NET library products as it
+  does JS/Native KLIB pipelines. Direct-source and packaged-fallback `net48`/`net10.0` products
+  have byte-identical packed KLIB entries, IL, and DLLs. That comparison exposed file-private
+  `IdSignature`s with checkout paths in the physical declaration manifest; private,
+  private-to-this, and local declarations now stay in the implementation but never enter the
+  cross-module index. All three real repository profile tasks pass. The fresh strict gate is
+  868/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 51 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1966,7 +1979,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 867 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 868 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -1990,11 +2003,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
 
 ## Task menu (recommended order)
 
-1. **Move Kotlin-authorable runtime and stdlib code into ordinary source products.** The installed
-   profile pair is now produced, authenticated, selected, and packaged as a distribution product.
-   Compile generated common stdlib sources plus narrow .NET actuals through the ordinary library
-   producer instead of expanding handwritten compiler strings. Keep the current same-run builder
-   only until all bootstrap tests can select a complete pair.
+1. **Continue the ordinary stdlib source product into generated Common plus .NET actuals.** The
+   complete current bootstrap source now lives under `libraries/stdlib/dotnet/src`, the explicit
+   profile products compile it directly, and the backend resource is only a byte-identical
+   compatibility fallback. Split generated-common declarations from narrow .NET actuals as the
+   supported surface grows; do not add a permanent target-specific copy of Common algorithms.
+   Keep the current same-run fallback only until all bootstrap tests select a complete installed
+   pair.
 2. **Prototype the CLR importer and structured foreign boundary.** Preserve Kotlin declaration
    identity and common semantics; decode ordinary CLR metadata, nullability, variance,
    constraints, properties, and exceptions at the importer boundary instead of teaching the

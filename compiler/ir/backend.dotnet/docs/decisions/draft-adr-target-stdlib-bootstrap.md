@@ -9,6 +9,12 @@
 > supersedes this draft's two-file publication endpoint. The migration is complete: the DLL embeds
 > the authoritative KLIB payload, and no standalone Kotlin/.NET KLIB is produced, installed,
 > resolved, or accepted.
+>
+> **Source-ownership amendment (2026-07-28):**
+> the canonical bootstrap implementation now consists of ordinary Kotlin files under
+> `libraries/stdlib/dotnet/src`. Repository profile-product tasks pass that complete source set to
+> the compiler. The backend JAR packages a byte-identical read-only copy only as a temporary
+> no-installed-stdlib bootstrap fallback; it is not a second implementation.
 
 This is a repository-local decision record for the experimental .NET backend. The `dotnet` branch
 is a proof of concept; this document does not claim a public Kotlin or Kotlin/.NET commitment.
@@ -122,6 +128,35 @@ generated common sources, each bootstrap extraction must identify its generator/
 and preserve its semantics. The eventual .NET stdlib build should compile the common generated
 corpus plus narrowly generated .NET actuals rather than maintain a permanent handwritten fork.
 
+The first source-ownership slice makes that endpoint possible without pretending the broad corpus
+already compiles. Its one canonical implementation is stored as ordinary `.kt` files under
+`libraries/stdlib/dotnet/src`. The explicit repository producer compiles those files directly.
+`DotNetStdlibSource` is now only a resource catalog: the backend build packages the same files and
+loads them when a compiler has neither an installed platform pair nor explicit stdlib-product
+sources. Tests require every packaged fallback file to be text-identical to its repository source.
+
+This decision follows the mature target product model:
+
+- Common/JVM/JS/Wasm generated stdlib source is materialized under the relevant library source
+  tree and compiled as a library product;
+- Native likewise compiles generated runtime/stdlib Kotlin source from its product source tree;
+- no mature target treats a compiler string literal as the permanent source of an ordinary
+  Kotlin library declaration.
+
+The CLR-specific constraint is not source ownership but product shape: the same logical source set
+must produce profile-selected `net48`, `netstandard2.0`, and `net10.0` DLL pairs, and a standalone
+bootstrap compiler still needs a cycle-breaking fallback before a platform pair is installed.
+Packaging the canonical source files as compiler resources satisfies that temporary bootstrap
+constraint without creating a second source namespace. It does not permit profile-dependent
+Kotlin declarations or bodies; profile-dependent CLR representation remains a backend-lowering
+decision. This preserves Kotlin Common semantics and respects each profile's CLR capabilities.
+
+Classification: ordinary source-product ownership is **Correct direction**. Retaining the
+packaged-source fallback is a **Correct temporary implementation, but not a final design**. The
+core-team endpoint is generated Common sources plus narrow .NET actuals compiled by the ordinary
+library product, followed by removal of same-run fallback production once every compiler
+distribution and test bootstrap supplies a complete platform pair.
+
 ## Major-target production precedent
 
 JS and Wasm select either KLIB serialization or executable linking in `WebCliPipeline`; an
@@ -143,14 +178,17 @@ The POC adds an explicit compiler product route:
 -Xdotnet-produce-stdlib -Xdotnet-target={net48|netstandard2.0|net10.0} -d <directory>
 ```
 
-This provisional build control accepts no user source files, owns the `Kotlin.Stdlib` module name,
-and cannot be combined with `-no-stdlib` or CLR export selectors. It is not a source annotation or
-a proposed end-user stdlib API. From one resolved frontend session it serializes all compiler-owned
-bootstrap declarations, lowers their executable implementations for the selected profile, packs
-the metadata as a private managed resource, and assembles the corresponding DLL:
+This provisional build control owns the `Kotlin.Stdlib` module name and cannot be combined with
+`-no-stdlib` or CLR export selectors. It accepts either no source arguments, selecting the packaged
+bootstrap fallback, or exactly the complete product-owned source set. An incomplete, duplicate, or
+unrelated source set is rejected. The repository Gradle producer always supplies the ordinary
+sources explicitly. This is not a source annotation or a proposed end-user stdlib API. From one
+resolved frontend session it serializes the resolved stdlib declarations, lowers their executable
+implementations for the selected profile, packs the metadata as a private managed resource, and
+assembles the corresponding DLL:
 
 ```text
-compiler-owned stdlib source
+ordinary product source or packaged fallback
             |
       frontend resolution
        /              \
@@ -175,6 +213,14 @@ Assembly-row validation bind it to the implementation. Executable/test assembly
 remains outside this publication reproducibility contract. The direct PE writer described in
 `draft-adr-il-assembly-pipeline.md` must eventually own deterministic PE construction rather than
 depending on the external assembler flag.
+
+The explicit ordinary-source route and packaged-fallback route must also produce identical packed
+KLIB entries, IL, and DLL bytes for the same profile. The physical declaration index is a
+cross-module contract and therefore contains only declarations that can participate in
+cross-module linkage. Private, private-to-this, and local declarations remain present in the CLR
+implementation where needed, but their file-local `IdSignature`s are not exported into that
+index. Such signatures may contain source-location identity and would otherwise make checkout
+paths observable in an alleged ABI and make private implementation details look bindable.
 
 ### DLL-first installed discovery
 
@@ -263,10 +309,13 @@ complete compiler classpath. Its three constituent tasks are `produceDotNetStdli
 their corresponding Kotlin-home profile directory; IL remains a build diagnostic. Neither aggregate task
 participates in ordinary `dist` or `distKotlinc`, so ordinary builds do not acquire those host-tool
 requirements. `distKotlinc` is a whole-home `Sync` and therefore removes an earlier optional
-installation; invoking `installDotNetStdlib` afterward restores all three variants.
+installation; invoking `installDotNetStdlib` afterward restores all three variants. Each profile
+producer declares `libraries/stdlib/dotnet/src/**/*.kt` as task input and passes those source files
+to the compiler, rather than silently selecting the fallback resource.
 
-The default bootstrap producer still injects the stdlib source into the same frontend/IR run as the
-program, lowers the combined IR once, and emits it through two declaration-ownership scopes:
+The default bootstrap fallback still injects the packaged copy of the canonical stdlib source into
+the same frontend/IR run as the program, lowers the combined IR once, and emits it through two
+declaration-ownership scopes:
 
 ```text
 injected stdlib source + user source
@@ -328,7 +377,7 @@ Costs and limits:
 - installing the discoverable target assembly is opt-in rather than part of the normal distribution;
 - the metadata-public implementation and facade names are compiler/stdlib contracts;
 - the current physical-member mapping covers only compiler-owned stdlib shapes; and
-- the standalone producer is still limited to the compiler-owned bootstrap stdlib.
+- the standalone producer is still limited to the exact bootstrap stdlib source product.
 
 ## Validation
 
@@ -359,7 +408,10 @@ wrong-profile runtime siblings are rejected instead of triggering an implicit re
 embedded stdlib KLIB participates in the same physical-declaration
 binder as any other Kotlin/.NET library; the separate stdlib record controls installation and
 packaging only. Each producer is also run twice; the packed KLIB and compiler-owned IL are
-byte-identical. Finally, each produced DLL is installed into a temporary portable-profile Kotlin
+byte-identical. The ordinary-source and packaged-fallback producer routes additionally emit
+byte-identical packed KLIB entries, textual IL, and DLLs for `net48` and `net10.0`; the manifest
+asserts that no file-private identity entered the physical declaration index. An incomplete
+ordinary source set is rejected before compilation. Finally, each produced DLL is installed into a temporary portable-profile Kotlin
 home and consumed by an ordinary compilation with neither `-no-stdlib` nor a manual metadata
 classpath; the consumer does not regenerate the stdlib facade or runtime. The repository producer
 and install tasks are also exercised as products: the producer emits the expected DLL pair and
