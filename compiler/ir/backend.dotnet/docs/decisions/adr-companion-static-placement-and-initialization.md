@@ -111,9 +111,28 @@ declaration index, and consumers never derive either one.
 Construction, companion-block calls, companion-block property access, and companion-object
 access trigger the same semantic owner. Companion-extension calls do not.
 
-CLR `TypeInitializationException` wrapping and failure caching are accepted physical runtime
-consequences, but the backend must test and document their interaction with Kotlin exception
-classification before the ABI freezes.
+CLR `TypeInitializationException` wrapping and failure caching are accepted only as physical
+runtime mechanisms. They do not define the observable behavior of a Kotlin-owned initializer.
+The common Kotlin contract now requires:
+
+- an original Kotlin `Error` to be rethrown as the same object on the first failed access;
+- another first failure to become Kotlin `ExceptionInInitializerError` with the original cause;
+- a later access to the failed logical class or file to throw Kotlin
+  `NoClassDefFoundError`; and
+- inherited and cross-module initialization edges to preserve the same logical failure state.
+
+A foreign CLR type initializer remains a foreign exception boundary and preserves its original
+CLR exception object under the accepted exception-classification design. The target must implement
+the Kotlin-owned distinction above the physical `.cctor` mechanism—most likely by catching and
+recording failure inside the initializer and classifying it in the compiler-owned ensure entry.
+Completing the physical `.cctor` after recording a failure also removes the CLR's automatic
+active-use barrier. The backend must therefore prove that every Kotlin-owned active-use path
+re-enters the logical barrier before user code runs: constructors, static methods and accessors,
+direct singleton loads, generated adapters, and cross-module calls. Merely checking the existing
+dependency-graph calls to `<EnsureCompanionInitialized>` would allow construction or static method
+execution after a swallowed initializer failure and is architecturally insufficient. The
+state/synchronization protocol, active-use coverage, and both-profile tests are required before
+ABI freeze.
 
 ### 6. Initialization order is explicit
 
