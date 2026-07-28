@@ -1927,6 +1927,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   cross-module index. All three real repository profile tasks pass. The fresh strict gate is
   868/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 51 library integration
   tests).
+- The CLR-importer continuation begins the next P1 foundation at the physical metadata boundary.
+  A shared bounded PE/ECMA-335 engine now serves both the existing embedded-resource loader and a
+  read-only CLR model; it exposes assembly identity, AssemblyRef, TypeRef, TypeDef,
+  TypeDefOrRef base handles, nested-owner edges, visibility, and raw type flags without loading
+  target code or inventing Kotlin declarations. This follows the JVM foreign-class/provider split
+  while preserving CLR-specific metadata identity. The same direct IL fixture is assembled by
+  Framework and modern ILAsm and pins assembly scope, version, TypeRef resolution, inheritance,
+  nesting, and interface flags. Encountering a TypeSpec remains a raw handle until the next
+  signature/generics slice; it is not silently coerced to a TypeDef. The layered decision and
+  six-step comparison are recorded in
+  `docs/decisions/draft-adr-clr-importer-boundary.md`. Next add lossless signatures, methods,
+  properties, generic constraints, and semantically decoded attributes before introducing the
+  Kotlin import policy or lazy FIR provider. The fresh strict gate is 869/0/0/0 across 16 XML
+  suites (796 FIR/IL/box, 21 generated CLI, and 52 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -1979,7 +1993,7 @@ session state, process, and a curated task menu. Keep both files updated as you 
 - **Run tests:** `./gradlew :compiler:backend.dotnet:dotNetTest --rerun -q --no-daemon` is the
   strict commit gate. Do NOT trust the quiet console alone. Verify the JUnit XML under
   `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-  `compiler/tests-integration/build/test-results/dn/`; the current total is 868 tests across 16
+  `compiler/tests-integration/build/test-results/dn/`; the current total is 869 tests across 16
   files with zero failures, errors, or skips. Strict mode turns missing tools and SAC refusal into
   failures. The internal `dn` task name preserves CLR4/Framework ILAsm path-length budget; invoke
   the backend-owned aggregate rather than treating that child as public API.
@@ -2010,11 +2024,13 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Prototype the CLR importer and structured foreign boundary.** Preserve Kotlin declaration
-   identity and common semantics; decode ordinary CLR metadata, nullability, variance,
-   constraints, properties, and exceptions at the importer boundary instead of teaching the
-   Kotlin-owned backend surface to infer C# conventions. Keep structured metadata-table auditing;
-   do not substitute IL substring checks.
+2. **Continue the CLR importer above its physical type foundation.** Add lossless signature,
+   TypeSpec, MethodDef, Property, generic-parameter/constraint, and semantic custom-attribute
+   records before introducing the CLR-to-Kotlin policy and lazy FIR provider. Preserve Kotlin
+   declaration identity and Common semantics; decode nullability, variance, properties, and
+   exceptions at the importer boundary instead of teaching the Kotlin-owned backend surface to
+   infer C# conventions. Keep structured metadata-table auditing; do not substitute IL substring
+   checks.
 3. **Grow collection abstractions only from a concrete stdlib implementation need.** Reuse the
    table-driven erased-interface bridge policy for the next ordinary collection implementation;
    do not add a runtime interface speculatively or map imported CLR collection interfaces as part
