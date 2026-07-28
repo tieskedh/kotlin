@@ -73,6 +73,30 @@ data class DotNetClrTypeDefinition(
     }
 }
 
+/**
+ * Physical ExportedType row. [typeDefinitionId] is only the ECMA-335 hint into another module's
+ * TypeDef table; it is not a metadata token in this PE image.
+ */
+data class DotNetClrExportedType(
+    val handle: DotNetClrMetadataHandle,
+    val attributes: Long,
+    val typeDefinitionId: Long,
+    val namespaceName: String,
+    val metadataName: String,
+    val implementation: DotNetClrMetadataHandle,
+) {
+    val visibility: DotNetClrTypeVisibility
+        get() = DotNetClrTypeVisibility.entries[(attributes and TYPE_VISIBILITY_MASK).toInt()]
+
+    val isForwarder: Boolean
+        get() = attributes and FORWARDER_ATTRIBUTE != 0L
+
+    private companion object {
+        const val TYPE_VISIBILITY_MASK = 0x7L
+        const val FORWARDER_ATTRIBUTE = 0x0020_0000L
+    }
+}
+
 enum class DotNetClrPrimitiveType {
     BOOLEAN,
     CHAR,
@@ -405,6 +429,7 @@ data class DotNetClrAssemblyMetadata(
     val assemblyReferences: List<DotNetClrAssemblyReference>,
     val typeReferences: List<DotNetClrTypeReference>,
     val typeDefinitions: List<DotNetClrTypeDefinition>,
+    val exportedTypes: List<DotNetClrExportedType>,
     val typeSpecifications: List<DotNetClrTypeSpecification>,
     val fieldDefinitions: List<DotNetClrFieldDefinition>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
