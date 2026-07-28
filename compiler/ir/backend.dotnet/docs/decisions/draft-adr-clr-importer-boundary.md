@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through fixed enums, and serialized type-name syntax are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through fixed enums, and serialized type/assembly-name syntax are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -452,6 +452,30 @@ arrays/pointers/byrefs, equivalent array spellings, the open-generic-array ambig
 forms, and excessive nesting. Real Roslyn value integration follows after assembly-name parsing
 and selected-graph resolution.
 
+The fourteenth slice parses the retained AssemblyName display-name tail without binding it. This
+follows the same division used by JVM classpath resolution: parsing a binary name or descriptor
+does not authorize the class finder to choose an arbitrary archive. The CLR-specific syntax has a
+quoted/escaped simple name and case-insensitive `Version`, `Culture`, `PublicKeyToken`,
+`PublicKey`, `ProcessorArchitecture`, `Retargetable`, and `ContentType` properties.
+
+The parser mirrors the .NET runtime lexer for whitespace, quotes, and `\\`, `\,`, `\=`, quote,
+tab, carriage-return, and newline escapes. Known properties are validated and may occur once;
+`PublicKey` and `PublicKeyToken` are mutually exclusive. The parsed model distinguishes an absent
+key/token from explicitly null, retains whether full public-key identity was requested, and keeps
+two through four exact version components. Unknown properties are accepted and retained, matching
+Desktop compatibility, but they do not silently become Kotlin or compiler ABI.
+
+Keeping version components exact instead of immediately applying host `System.Version` behavior
+is deliberate. `net48`, `netstandard2.0`, and `net10.0` can have different binding/unification
+policy, and the build frontend must select the graph edge. The next resolver passes this parsed
+qualifier to that frontend-owned binder and then verifies the returned producer identity; neither
+this parser nor the physical type resolver probes by name.
+
+Tests cover quoted names and values, escaped separators, the full known property set, the official
+`neutral` and explicit-null forms, unknown-property retention, duplicate public-key identity,
+invalid tokens/versions, missing values, and unclosed quotes. This parser is a CLR-specific
+physical necessity; it does not alter Kotlin Common type identity.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -525,6 +549,8 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Exact fixed-enum identity and storage decoding: **Correct direction**.
 - Bounded structural CLR serialized-type-name parser: **Correct direction**.
 - Keeping AssemblyName parsing and selected-graph binding out of type-name syntax:
+  **Correct direction**.
+- Runtime-compatible AssemblyName syntax with exact retained identity input:
   **Correct direction**.
 - Structured deferral of serialized type names, boxed/named enums, and named arguments:
   **Correct temporary implementation, but not a final design**.

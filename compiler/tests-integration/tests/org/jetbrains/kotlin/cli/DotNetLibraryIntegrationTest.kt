@@ -58,6 +58,13 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyContentType
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParser
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyNameParsing
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyProperty
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedAssemblyVersion
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedProcessorArchitecture
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeModifier
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSerializedTypeNameParser
@@ -275,6 +282,86 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         assertEquals(
             DotNetClrSerializedTypeNameFailure.NESTING_LIMIT_EXCEEDED,
             excessiveNesting.failure,
+        )
+
+        val assemblyName = (
+                DotNetClrSerializedAssemblyNameParser.parse(
+                    "\"Odd\\,Name\", Version=1.2.65535.4, Culture=\"\", " +
+                            "PublicKey=00ff, ProcessorArchitecture=MSIL, " +
+                            "Retargetable=Yes, ContentType=WindowsRuntime, " +
+                            "Future=\"x\\,y\""
+                ) as DotNetClrSerializedAssemblyNameParsing.Parsed
+                ).assemblyName
+        assertEquals("Odd,Name", assemblyName.name)
+        assertEquals(
+            DotNetClrSerializedAssemblyVersion(listOf(1, 2, 65535, 4)),
+            assemblyName.version,
+        )
+        assertEquals("", assemblyName.cultureName)
+        assertEquals(listOf(0, 255), assemblyName.publicKeyOrToken)
+        assertTrue(assemblyName.hasPublicKey)
+        assertEquals(
+            DotNetClrSerializedProcessorArchitecture.MSIL,
+            assemblyName.processorArchitecture,
+        )
+        assertTrue(assemblyName.isRetargetable)
+        assertEquals(
+            DotNetClrSerializedAssemblyContentType.WINDOWS_RUNTIME,
+            assemblyName.contentType,
+        )
+        assertEquals(
+            listOf(DotNetClrSerializedAssemblyProperty("Future", "x,y")),
+            assemblyName.unknownProperties,
+        )
+
+        val explicitNullToken = (
+                DotNetClrSerializedAssemblyNameParser.parse(
+                    "Portable, Culture=neutral, PublicKeyToken=null"
+                ) as DotNetClrSerializedAssemblyNameParsing.Parsed
+                ).assemblyName
+        assertEquals("", explicitNullToken.cultureName)
+        assertEquals(emptyList<Int>(), explicitNullToken.publicKeyOrToken)
+        assertFalse(explicitNullToken.hasPublicKey)
+
+        val duplicateKey =
+            DotNetClrSerializedAssemblyNameParser.parse(
+                "Broken, PublicKeyToken=null, PublicKey=00"
+            ) as DotNetClrSerializedAssemblyNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedAssemblyNameFailure.DUPLICATE_PROPERTY,
+            duplicateKey.failure,
+        )
+        val malformedToken =
+            DotNetClrSerializedAssemblyNameParser.parse(
+                "Broken, PublicKeyToken=0011"
+            ) as DotNetClrSerializedAssemblyNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedAssemblyNameFailure.INVALID_PUBLIC_KEY_OR_TOKEN,
+            malformedToken.failure,
+        )
+        val malformedVersion =
+            DotNetClrSerializedAssemblyNameParser.parse(
+                "Broken, Version=1"
+            ) as DotNetClrSerializedAssemblyNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedAssemblyNameFailure.INVALID_VERSION,
+            malformedVersion.failure,
+        )
+        val missingValue =
+            DotNetClrSerializedAssemblyNameParser.parse(
+                "Broken, Culture="
+            ) as DotNetClrSerializedAssemblyNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedAssemblyNameFailure.UNEXPECTED_TOKEN,
+            missingValue.failure,
+        )
+        val unclosedQuote =
+            DotNetClrSerializedAssemblyNameParser.parse(
+                "Broken, Culture=\"neutral"
+            ) as DotNetClrSerializedAssemblyNameParsing.Invalid
+        assertEquals(
+            DotNetClrSerializedAssemblyNameFailure.UNCLOSED_QUOTE,
+            unclosedQuote.failure,
         )
     }
 
