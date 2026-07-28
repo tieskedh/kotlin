@@ -916,8 +916,22 @@ rules but does not turn optional CLS/C# naming conventions into Kotlin validity 
 dual-profile IL fixture deliberately binds unusually named accessors and both indexed instance
 and static properties; corrupted signature input fails closed. Real Framework `mscorlib` and
 .NET 10 `System.Runtime` rows are also decoded. No Kotlin property or FIR symbol is created yet.
-GenericParam/constraints, semantic attributes/nullability, MemberRef/Field signatures as needed,
-and then the import-policy/provider layers remain next.
+GenericParam/constraints are implemented by the continuation below; semantic
+attributes/nullability, MemberRef/Field signatures as needed, and then the
+import-policy/provider layers remain next.
+
+**CLR-generic-metadata progress (2026-07-28):** GenericParam and GenericParamConstraint now retain
+their physical row identities, owners, zero-based positions, metadata names, raw flags, variance,
+special constraints, and TypeDef/TypeRef/TypeSpec constraint handles. This follows JVM's raw
+foreign-type-parameter then FIR-enhancement split. The real CLR divergence is that variance and
+reference/value/default-constructor constraints are runtime flags, open constraints can be
+TypeSpecs, and .NET 10 adds `AllowByRefLike`. The reader validates row and method-arity coherence
+without treating those CLR flags as Kotlin nullability or ordinary Kotlin upper bounds. Framework
+and modern ILAsm exercise invariant/variant parameters and open constraints; a Roslyn fixture
+adds reference, value, constructor, recursive parameter, and `allows ref struct` forms. Real
+`mscorlib` and `System.Runtime` metadata and a corrupted generic-arity copy are covered. Constraint
+resolution/classification, semantic attributes/nullability, and the lazy import policy/provider
+remain next.
 
 ## 5. Explicitly parked work
 
