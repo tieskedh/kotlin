@@ -66,6 +66,12 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintSatisfaction
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintValidator
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassification
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassificationUnsupported
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeClassifier
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeCoreTypes
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrPhysicalTypeKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
@@ -1564,6 +1570,69 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         resolver.resolveTypeDefinition(metadata, systemObject.handle) as
                                 DotNetClrTypeResolution.Resolved
                         ).type
+                val frameworkSystemValueType = (
+                        resolver.resolveTopLevelType(
+                            frameworkCoreMetadata,
+                            "System",
+                            "ValueType",
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type
+                val frameworkSystemNullable = (
+                        resolver.resolveTopLevelType(
+                            frameworkCoreMetadata,
+                            "System",
+                            "Nullable`1",
+                        ) as DotNetClrTypeResolution.Resolved
+                        ).type
+                val frameworkPhysicalTypeClassifier =
+                    DotNetClrPhysicalTypeClassifier(
+                        resolver,
+                        DotNetClrPhysicalTypeCoreTypes(
+                            frameworkSystemValueType,
+                            systemEnum,
+                            frameworkSystemNullable,
+                        ),
+                    )
+                assertEquals(
+                    DotNetClrPhysicalTypeKind.REFERENCE,
+                    (
+                            frameworkPhysicalTypeClassifier.classify(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedLocalType(base),
+                                    isValueType = false,
+                                )
+                            ) as DotNetClrPhysicalTypeClassification.Classified
+                            ).kind,
+                )
+                assertEquals(
+                    DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE,
+                    (
+                            frameworkPhysicalTypeClassifier.classify(
+                                DotNetClrResolvedTypeSignature.Named(
+                                    resolvedTinyKind,
+                                    isValueType = true,
+                                )
+                            ) as DotNetClrPhysicalTypeClassification.Classified
+                            ).kind,
+                )
+                assertEquals(
+                    DotNetClrPhysicalTypeKind.NULLABLE_VALUE,
+                    (
+                            frameworkPhysicalTypeClassifier.classify(
+                                DotNetClrResolvedTypeSignature.GenericInstance(
+                                    DotNetClrResolvedTypeSignature.Named(
+                                        frameworkSystemNullable,
+                                        isValueType = true,
+                                    ),
+                                    listOf(
+                                        DotNetClrResolvedTypeSignature.Primitive(
+                                            DotNetClrPrimitiveType.INT32
+                                        )
+                                    ),
+                                )
+                            ) as DotNetClrPhysicalTypeClassification.Classified
+                            ).kind,
+                )
                 val serializedTypeResolver = DotNetClrSerializedTypeResolver(
                     resolver,
                     DotNetClrSerializedAssemblyBinder {
@@ -2764,6 +2833,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "Object",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val systemNullableType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "Nullable`1",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
         val outerDefinition = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" && definition.metadataName == "Outer"
         }
@@ -3111,6 +3187,180 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             1,
             (
                     limitedConstraint.resolution as
+                            DotNetClrTypeAssignability.ResolutionLimitExceeded
+                    ).limit,
+        )
+
+        val physicalTypeClassifier = DotNetClrPhysicalTypeClassifier(
+            resolver,
+            DotNetClrPhysicalTypeCoreTypes(
+                systemValueType,
+                systemEnum,
+                systemNullableType,
+            ),
+        )
+        fun assertPhysicalTypeKind(
+            expectedKind: DotNetClrPhysicalTypeKind,
+            type: DotNetClrResolvedTypeSignature,
+        ) {
+            val classified =
+                physicalTypeClassifier.classify(type) as
+                        DotNetClrPhysicalTypeClassification.Classified
+            assertEquals(expectedKind, classified.kind)
+        }
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE,
+            DotNetClrResolvedTypeSignature.Primitive(
+                DotNetClrPrimitiveType.INT32
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.REFERENCE,
+            DotNetClrResolvedTypeSignature.Primitive(
+                DotNetClrPrimitiveType.STRING
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.REFERENCE,
+            DotNetClrResolvedTypeSignature.SzArray(
+                DotNetClrResolvedTypeSignature.Primitive(
+                    DotNetClrPrimitiveType.INT32
+                )
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.REFERENCE,
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedOuter,
+                isValueType = false,
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE,
+            DotNetClrResolvedTypeSignature.Named(
+                resolvedProbeConstraintValue,
+                isValueType = true,
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.NON_NULLABLE_VALUE,
+            DotNetClrResolvedTypeSignature.Named(
+                forwardedEnum,
+                isValueType = true,
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.REFERENCE,
+            DotNetClrResolvedTypeSignature.Named(
+                systemValueType,
+                isValueType = false,
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.REFERENCE,
+            DotNetClrResolvedTypeSignature.Named(
+                systemEnum,
+                isValueType = false,
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.NULLABLE_VALUE,
+            DotNetClrResolvedTypeSignature.GenericInstance(
+                DotNetClrResolvedTypeSignature.Named(
+                    systemNullableType,
+                    isValueType = true,
+                ),
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+            ),
+        )
+        assertPhysicalTypeKind(
+            DotNetClrPhysicalTypeKind.REFERENCE,
+            DotNetClrResolvedTypeSignature.GenericInstance(
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedProbeConstraintInterface.type,
+                    isValueType = false,
+                ),
+                resolvedProbeConstraintInterface.arguments,
+            ),
+        )
+
+        val falseClassEncoding =
+            physicalTypeClassifier.classify(
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedProbeConstraintValue,
+                    isValueType = false,
+                )
+            ) as DotNetClrPhysicalTypeClassification.Invalid
+        assertEquals(
+            DotNetClrPhysicalTypeClassificationFailure.SIGNATURE_KIND_MISMATCH,
+            falseClassEncoding.failure,
+        )
+        assertFalse(checkNotNull(falseClassEncoding.encodedAsValueType))
+        assertTrue(checkNotNull(falseClassEncoding.definitionIsValueType))
+
+        val falseValueEncoding =
+            physicalTypeClassifier.classify(
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedOuter,
+                    isValueType = true,
+                )
+            ) as DotNetClrPhysicalTypeClassification.Invalid
+        assertEquals(
+            DotNetClrPhysicalTypeClassificationFailure.SIGNATURE_KIND_MISMATCH,
+            falseValueEncoding.failure,
+        )
+        assertTrue(checkNotNull(falseValueEncoding.encodedAsValueType))
+        assertFalse(checkNotNull(falseValueEncoding.definitionIsValueType))
+
+        val openNullable =
+            physicalTypeClassifier.classify(
+                DotNetClrResolvedTypeSignature.Named(
+                    systemNullableType,
+                    isValueType = true,
+                )
+            ) as DotNetClrPhysicalTypeClassification.Invalid
+        assertEquals(
+            DotNetClrPhysicalTypeClassificationFailure.GENERIC_ARITY_MISMATCH,
+            openNullable.failure,
+        )
+        assertEquals(1, openNullable.expectedGenericArity)
+        assertEquals(0, openNullable.actualGenericArity)
+
+        val unsupportedTypeParameter =
+            physicalTypeClassifier.classify(
+                DotNetClrResolvedTypeSignature.GenericParameter(
+                    DotNetClrGenericParameterKind.TYPE,
+                    0,
+                )
+            ) as DotNetClrPhysicalTypeClassification.Unsupported
+        assertEquals(
+            DotNetClrPhysicalTypeClassificationUnsupported.GENERIC_PARAMETER,
+            unsupportedTypeParameter.reason,
+        )
+
+        val limitedPhysicalType =
+            DotNetClrPhysicalTypeClassifier(
+                resolver,
+                DotNetClrPhysicalTypeCoreTypes(
+                    systemValueType,
+                    systemEnum,
+                    systemNullableType,
+                ),
+                resolutionLimit = 1,
+            ).classify(
+                DotNetClrResolvedTypeSignature.Named(
+                    resolvedOuter,
+                    isValueType = false,
+                )
+            ) as DotNetClrPhysicalTypeClassification.InvalidHierarchy
+        assertEquals(
+            1,
+            (
+                    limitedPhysicalType.resolution as
                             DotNetClrTypeAssignability.ResolutionLimitExceeded
                     ).limit,
         )

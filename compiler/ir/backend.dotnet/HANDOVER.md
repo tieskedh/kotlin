@@ -2277,6 +2277,18 @@ session state, process, and a curated task menu. Keep both files updated as you 
   physical-classification work rather than attribute-local logic. The fresh strict gate is
   871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
   tests).
+- The physical-type-classification continuation centralizes `REFERENCE`,
+  `NON_NULLABLE_VALUE`, and exact CLR `NULLABLE_VALUE` categories for complete resolved
+  signatures. It combines the signature's class/value bit with selected
+  `System.ValueType`/`System.Enum` ancestry, treats those two root classes themselves as
+  references, identifies only the selected `System.Nullable<T>` construction as nullable value,
+  and classifies primitives/arrays intrinsically. Framework 4.8 tests use its selected
+  `mscorlib`; Roslyn .NET 10 tests cover classes, interfaces, structs, enums, roots, primitives,
+  arrays, and Nullable plus false kind bits, open arity, type parameters, and hierarchy limits.
+  This is physical storage classification, not Kotlin nullability or built-in mapping.
+  By-ref-like remains an orthogonal exact decoded `IsByRefLikeAttribute` dimension and must not be
+  inferred from value ancestry or a same-named marker. The fresh strict gate is 871/0/0/0 across
+  16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
