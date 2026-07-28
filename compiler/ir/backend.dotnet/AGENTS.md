@@ -367,7 +367,10 @@ landed shape as a compatibility constraint.
    nested metadata names, per-component arity, recursive generic arguments, normalized
    pointer/byref/array modifiers, and the AssemblyName display-name tail. Do not call host
    `Type.GetType`, probe, or bind by simple name. AssemblyName property parsing and resolution
-   against the build frontend's selected graph are the next layer.
+   against the build frontend's selected graph are separate layers. Parse AssemblyName with the
+   CLR lexer rules: case-insensitive known properties, exclusive full key/token, exact version
+   components, quoted/escaped values, and retained Desktop-compatible unknown properties. Parsing
+   still never selects an assembly; pass the result to the selected-graph binder.
    Assembly definitions retain their full public key and computed eight-byte public-key token;
    `hasPublicKey` is derived, not the resolved identity. An AssemblyRef may legitimately omit a
    key/token, so this still does not authorize exact-match binding inside the physical resolver.

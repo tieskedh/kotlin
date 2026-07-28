@@ -2091,9 +2091,10 @@ session state, process, and a curated task menu. Keep both files updated as you 
   resolve serialized CLR type names and enum storage before decoding those forms. During the
   strict gate, unrelated box tests intermittently reported only that ILAsm had not produced their
   temporary DLL (`exceptionMessageDefaults`, `genericInnerClasses`, then `classComposition`);
-  every named test passed immediately in isolation. No failing assembler diagnostic or shared
-  semantic shape was present. Keep requiring a subsequent clean aggregate gate; investigate the
-  Windows ILAsm/SAC concurrency path separately if this frequency persists. The subsequent fresh
+  `userExceptionInheritance` later showed the same symptom; every named test passed immediately
+  in isolation. No failing assembler diagnostic or shared semantic shape was present. Keep
+  requiring a subsequent clean aggregate gate; investigate the Windows ILAsm/SAC concurrency path
+  separately if this frequency persists. The subsequent fresh
   strict aggregate gate is clean at 870/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
   CLI, and 53 library integration tests).
 - The fixed-enum custom-attribute continuation resolves a constructor signature's named type
@@ -2119,6 +2120,16 @@ session state, process, and a curated task menu. Keep both files updated as you 
   type/constructed shape only through the selected build graph, then feed real Roslyn System.Type
   and serialized enum values into the attribute decoder. The fresh strict gate is 871/0/0/0
   across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The serialized-AssemblyName continuation mirrors the runtime lexer and parses case-insensitive
+  Version/Culture/PublicKeyToken/PublicKey/ProcessorArchitecture/Retargetable/ContentType
+  properties, quotes and standard escapes, explicit null versus absent key material, exact 2–4
+  version components, and Desktop-compatible unknown properties. Duplicate known properties,
+  competing key/token forms, invalid hex/version/architecture/content values, missing values, and
+  malformed quotes fail with offsets. It still performs no binding. Next give the parsed
+  qualifier to a build-frontend-owned selected-graph binder, verify the chosen producer, and
+  resolve top-level/nested/generic/modifier type structure without host loading or probing. The
+  subsequent fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated
+  CLI, and 54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
