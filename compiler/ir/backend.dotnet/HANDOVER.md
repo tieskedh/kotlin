@@ -1961,6 +1961,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   GenericParam/constraints, and decoded ordinary attributes on the same physical foundation. The
   fresh strict gate remains 869/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
   52 library integration tests).
+- The physical-property continuation keeps CLR metadata separate from Kotlin import policy.
+  Property and PropertyMap rows now preserve token, owner TypeDef, exact metadata name, flags,
+  structural result/index signature, and raw signature bytes; MethodSemantics rows preserve
+  getter, setter, other, and event associations to the original MethodDefs. Property association
+  is never inferred from `get_`/`set_` spelling. The reader enforces CTS row ownership,
+  same-TypeDef property/accessor association, legal semantics kinds, bounded signatures, and the
+  official .NET by-reference PropertySig augmentation, while optional CLS/C# naming and accessor
+  coherence remain decisions for the later Kotlin import policy. The independently assembled
+  Framework/modern fixture uses deliberately nonconventional accessor/property names, indexed
+  instance and static properties, and a corrupted-property-signature copy; the scale lane also
+  requires real Framework mscorlib and net10 System.Runtime Property/MethodSemantics rows. No
+  Kotlin property or FIR symbol is synthesized. Next add GenericParam/constraints and semantic
+  ordinary attributes/nullability before the import policy/provider. The fresh strict gate is
+  869/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 52 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2044,9 +2059,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Continue the CLR importer above its physical signature foundation.** Add Property and
-   MethodSemantics associations, GenericParam/constraints, and semantic custom-attribute records
-   before introducing the CLR-to-Kotlin policy and lazy FIR provider; add Field/MemberRef
+2. **Continue the CLR importer above its physical property/signature foundation.** Add
+   GenericParam/constraints and semantic custom-attribute records before introducing the
+   CLR-to-Kotlin policy and lazy FIR provider; add Field/MemberRef
    signatures when their first consumer requires them. Preserve Kotlin declaration identity and
    Common semantics; decode nullability, variance, properties, and exceptions at the importer
    boundary instead of teaching the Kotlin-owned backend surface to infer C# conventions. Keep

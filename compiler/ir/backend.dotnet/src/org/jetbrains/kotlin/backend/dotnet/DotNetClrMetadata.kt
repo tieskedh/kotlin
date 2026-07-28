@@ -232,6 +232,44 @@ data class DotNetClrMethodDefinition(
     }
 }
 
+data class DotNetClrPropertySignature(
+    val hasThis: Boolean,
+    val propertyType: DotNetClrTypeSignature,
+    val indexParameterTypes: List<DotNetClrTypeSignature>,
+)
+
+data class DotNetClrPropertyDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val declaringType: DotNetClrMetadataHandle,
+    val name: String,
+    val attributes: Int,
+    val signature: DotNetClrPropertySignature,
+    val rawSignature: List<Int>,
+) {
+    val isSpecialName: Boolean
+        get() = attributes and SPECIAL_NAME_ATTRIBUTE != 0
+
+    private companion object {
+        const val SPECIAL_NAME_ATTRIBUTE = 0x200
+    }
+}
+
+enum class DotNetClrMethodSemanticsKind {
+    SETTER,
+    GETTER,
+    OTHER,
+    ADD_ON,
+    REMOVE_ON,
+    FIRE,
+}
+
+data class DotNetClrMethodSemantics(
+    val handle: DotNetClrMetadataHandle,
+    val kind: DotNetClrMethodSemanticsKind,
+    val method: DotNetClrMetadataHandle,
+    val association: DotNetClrMetadataHandle,
+)
+
 data class DotNetClrTypeSpecification(
     val handle: DotNetClrMetadataHandle,
     val signature: DotNetClrTypeSignature,
@@ -252,4 +290,6 @@ data class DotNetClrAssemblyMetadata(
     val typeDefinitions: List<DotNetClrTypeDefinition>,
     val typeSpecifications: List<DotNetClrTypeSpecification>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
+    val propertyDefinitions: List<DotNetClrPropertyDefinition>,
+    val methodSemantics: List<DotNetClrMethodSemantics>,
 )
