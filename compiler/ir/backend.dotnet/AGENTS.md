@@ -336,6 +336,13 @@ landed shape as a compatibility constraint.
    proves the relation. A positive path does not replace whole-import malformed-graph validation.
    Until physical reference/value/ref-like classification exists, do not add optimistic CLR
    variance, array, boxing, `Nullable<T>`, or generic-parameter conversions to this walker.
+   Nominal GenericParamConstraint validation is a separately named partial operation. Validate
+   each resolved row through the shared assignability resolver and preserve satisfied, violated,
+   unsupported non-nominal, and invalid-assignability outcomes distinctly. Retain the parameter
+   binding and its special flags, but never turn “all nominal rows satisfied” into a complete
+   constraint-satisfaction boolean. Primitive/array arguments, dependent parameter constraints,
+   reference/value/default-constructor flags, and by-ref-like eligibility require shared physical
+   classification and selected-profile policy.
    MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely

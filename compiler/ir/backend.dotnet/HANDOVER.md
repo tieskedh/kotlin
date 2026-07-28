@@ -2264,6 +2264,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   generic-parameter assignability remain deliberately deferred until shared physical
   reference/value/ref-like classification exists. The fresh strict gate is 871/0/0/0 across 16
   XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The nominal-constraint-validation continuation applies that shared assignability relation to
+  each resolved GenericParamConstraint row without claiming complete CLR constraint satisfaction.
+  Results retain the original binding and distinguish satisfied, violated, unsupported
+  non-nominal argument/constraint, and invalid assignability; there is deliberately no aggregate
+  “all constraints satisfied” flag while special flags remain unchecked. Real Roslyn .NET 10
+  coverage proves both `System.ValueType` and
+  `IProbeConstraint<ProbeConstraintValue>` for the constrained struct and proves that an ordinary
+  class violates both. Synthetic contracts cover a primitive argument, a non-nominal constraint,
+  and a resolution limit. Reference/value/default-constructor flags, dependent parameter
+  constraints, primitive/array identity, and by-ref-like eligibility remain the next shared
+  physical-classification work rather than attribute-local logic. The fresh strict gate is
+  871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.

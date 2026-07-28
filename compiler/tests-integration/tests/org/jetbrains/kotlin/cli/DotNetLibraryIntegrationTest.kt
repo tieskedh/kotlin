@@ -63,6 +63,9 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemanticsKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintSatisfaction
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintUnsupported
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrNominalConstraintValidator
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
@@ -2754,6 +2757,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     "ValueType",
                 ) as DotNetClrTypeResolution.Resolved
                 ).type
+        val systemObjectType = (
+                resolver.resolveTopLevelType(
+                    systemRuntimeMetadata,
+                    "System",
+                    "Object",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
         val outerDefinition = destinationMetadata.typeDefinitions.single { definition ->
             definition.namespaceName == "Forwarded" && definition.metadataName == "Outer"
         }
@@ -2982,6 +2992,127 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 resolvedProbeConstraintView,
                 DotNetClrResolvedTypeView(systemValueType, emptyList()),
             ),
+        )
+        val nominalConstraintValidator =
+            DotNetClrNominalConstraintValidator(resolver)
+        val satisfiedNominalConstraints =
+            nominalConstraintValidator.validate(
+                constrainedAttributeConstructor.attributeTypeConstraints
+            )
+        assertEquals(
+            2,
+            satisfiedNominalConstraints.parameters.single().constraints.size,
+        )
+        assertTrue(
+            satisfiedNominalConstraints.parameters.single().constraints.all { validation ->
+                validation.satisfaction ===
+                        DotNetClrNominalConstraintSatisfaction.Satisfied
+            }
+        )
+
+        fun constraintsWithArgument(
+            argument: DotNetClrResolvedTypeSignature,
+        ) = constrainedAttributeConstructor.attributeTypeConstraints.copy(
+            parameters = listOf(
+                constrainedAttributeParameter.copy(argument = argument)
+            )
+        )
+
+        val resolvedOuter = (
+                resolver.resolveTopLevelType(
+                    destinationMetadata,
+                    "Forwarded",
+                    "Outer",
+                ) as DotNetClrTypeResolution.Resolved
+                ).type
+        val violatedNominalConstraints =
+            nominalConstraintValidator.validate(
+                constraintsWithArgument(
+                    DotNetClrResolvedTypeSignature.Named(
+                        resolvedOuter,
+                        isValueType = false,
+                    )
+                )
+            )
+        assertTrue(
+            violatedNominalConstraints.parameters.single().constraints.all { validation ->
+                validation.satisfaction ===
+                        DotNetClrNominalConstraintSatisfaction.Violated
+            }
+        )
+
+        val unsupportedArgumentConstraints =
+            nominalConstraintValidator.validate(
+                constraintsWithArgument(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                )
+            )
+        assertTrue(
+            unsupportedArgumentConstraints.parameters.single().constraints.all { validation ->
+                val unsupported =
+                    validation.satisfaction as
+                            DotNetClrNominalConstraintSatisfaction.Unsupported
+                unsupported.reason ==
+                        DotNetClrNominalConstraintUnsupported.NON_NOMINAL_ARGUMENT
+            }
+        )
+
+        val nonNominalConstraint =
+            constrainedAttributeParameter.constraints.first().copy(
+                type = DotNetClrResolvedGenericConstraintType.Specification(
+                    DotNetClrResolvedTypeSignature.SzArray(
+                        DotNetClrResolvedTypeSignature.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    )
+                )
+            )
+        val unsupportedConstraintContract =
+            constrainedAttributeConstructor.attributeTypeConstraints.copy(
+                parameters = listOf(
+                    constrainedAttributeParameter.copy(
+                        constraints = listOf(nonNominalConstraint)
+                    )
+                )
+            )
+        val unsupportedConstraint =
+            nominalConstraintValidator.validate(unsupportedConstraintContract)
+                .parameters.single().constraints.single().satisfaction as
+                    DotNetClrNominalConstraintSatisfaction.Unsupported
+        assertEquals(
+            DotNetClrNominalConstraintUnsupported.NON_NOMINAL_CONSTRAINT,
+            unsupportedConstraint.reason,
+        )
+
+        val distantConstraint =
+            constrainedAttributeParameter.constraints.first().copy(
+                type = DotNetClrResolvedGenericConstraintType.Nominal(
+                    systemObjectType
+                )
+            )
+        val limitedConstraintContract =
+            constrainedAttributeConstructor.attributeTypeConstraints.copy(
+                parameters = listOf(
+                    constrainedAttributeParameter.copy(
+                        constraints = listOf(distantConstraint)
+                    )
+                )
+            )
+        val limitedConstraint =
+            DotNetClrNominalConstraintValidator(
+                resolver,
+                resolutionLimit = 1,
+            ).validate(limitedConstraintContract)
+                .parameters.single().constraints.single().satisfaction as
+                    DotNetClrNominalConstraintSatisfaction.InvalidAssignability
+        assertEquals(
+            1,
+            (
+                    limitedConstraint.resolution as
+                            DotNetClrTypeAssignability.ResolutionLimitExceeded
+                    ).limit,
         )
         val nominalConstraintBinding =
             constrainedAttributeParameter.constraints.single { constraint ->

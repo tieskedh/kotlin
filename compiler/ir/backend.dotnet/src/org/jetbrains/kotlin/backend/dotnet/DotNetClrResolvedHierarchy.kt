@@ -338,7 +338,7 @@ class DotNetClrTypeHierarchyViewResolver(
         )
 }
 
-private fun DotNetClrResolvedTypeDefinition.genericArity(): Int =
+internal fun DotNetClrResolvedTypeDefinition.genericArity(): Int =
     assembly.genericParameterDefinitions.count { parameter ->
         parameter.owner == definition.handle
     }
