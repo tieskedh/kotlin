@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through constructed fixed enums, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -316,10 +316,12 @@ later semantic attribute type keys. Real signed `mscorlib` and `System.Runtime` 
 non-empty keys and eight-byte tokens; a Roslyn .NET 10 AssemblyRef independently matches the
 computed destination token.
 
-The ninth slice resolves the constructor edge before reading the custom-attribute value blob. This
+The ninth slice first resolves the constructor edge before reading the custom-attribute value blob.
+This
 follows the JVM importer rule that a foreign annotation class and constructor are resolved before
 annotation arguments are interpreted. The CLR-specific difference is that the constructor token
-is either a local MethodDef or a MemberRef whose owner is a TypeDef or TypeRef. The resolver
+is either a local MethodDef or a MemberRef. The initial slice admits a TypeDef/TypeRef owner; the
+twentieth slice below adds the closed TypeSpec owner required by generic attributes. The resolver
 requires the exact `.ctor` instance shape, non-generic default calling convention, `void` return,
 and a concrete attribute class derived from the caller-supplied selected core-library
 `System.Attribute` TypeDef. It never infers attribute identity from a type suffix or constructor
@@ -337,11 +339,10 @@ The Framework fixture resolves two external MemberRef constructors on
 `System.Object`, and retains both attribute occurrences. A Roslyn .NET 10 fixture resolves two
 local MethodDef constructors on a custom attribute with an `Int32` parameter. A synthetic cyclic
 inheritance graph proves that malformed metadata terminates with a structured cycle result.
-MemberRefs owned by a constructed TypeSpec fail with a dedicated unsupported-parent result. That
-is a correct temporary boundary, not a final generic-attribute design: resolving such owners
-requires a constructed declaring-type identity and substitution model that must be shared with
-the general CLR member resolver. Semantic fixed and named argument decoding remains the next
-layer.
+At this slice, MemberRefs owned by a constructed TypeSpec failed with a dedicated unsupported-
+parent result. That was a correct temporary boundary: resolving such owners requires a
+constructed declaring-type identity and substitution model shared with the general CLR member
+resolver. The eighteenth through twentieth slices add that model and remove the boundary.
 
 The tenth slice decodes scalar fixed arguments from the value blob after constructor resolution.
 As on JVM, the constructor's resolved parameter types determine how bytes become typed values;
@@ -656,16 +657,54 @@ whose enum identity is a closed generic instance.
 Real Roslyn .NET 10 metadata covers the same `Generic<int>.NestedKind` both as a tagged `object`
 argument and as a strongly typed constructor argument. Both resolve to the same complete
 constructed identity and exact `Int16` bits. A doctored constructor signature with the type
-argument removed fails at its exact fixed-argument index and retains expected versus actual
-generic arity. Primitive generic arguments are resolved to the selected graph's exact
-`System.Int32` TypeDef, so the signature and serialized-name paths agree on semantic identity
-without depending on the compiler host runtime.
+argument removed is rejected during constructor-signature resolution, before blob decoding, and
+retains expected versus actual generic arity. Primitive generic arguments are resolved to the
+selected graph's exact `System.Int32` TypeDef, so the signature and serialized-name paths agree on
+semantic identity without depending on the compiler host runtime.
 
-Generic attribute constructors whose MemberRef parent is a closed TypeSpec remain the existing
-structured temporary boundary. The resolved-signature layer can represent their types, but
-constructor resolution must first retain the constructed owner view rather than silently reducing
-it to an open TypeDef. That follow-up can reuse this foundation; `OPEN_GENERIC_ATTRIBUTE_TYPE` is a
-defensive validator result, not the final generic-attribute design.
+The twentieth slice admits a custom-attribute constructor whose MemberRef owner is a closed
+generic TypeSpec.
+
+1. JVM and KLIB-backed importers retain the annotation class identity together with the
+   substituted constructor and parameter types. Erasure may be part of a target ABI, but an
+   importer does not discard the logical generic owner before annotation values are interpreted.
+2. The CLR-specific representation is reified rather than erased. A generic attribute application
+   points to a constructor MemberRef whose owner is a `GenericInstance` TypeSpec, while the
+   MemberRef signature may use owner `VAR` parameters. The owner view and every substituted
+   parameter therefore need assembly-context-bearing resolved types.
+3. Kotlin Common is unchanged. A foreign generic attribute application must be fully closed; it
+   does not make Kotlin annotations generic, change Kotlin type parameters, or collapse
+   `[A<Int>]` and `[A<String>]` into one occurrence. Encoded attachment, order, and multiplicity
+   remain authoritative.
+4. The physical reader/resolver remains profile-neutral and preserves such metadata from any
+   selected assembly. The
+   [C# 11 generic-attributes design](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/proposals/csharp-11.0/generic-attributes)
+   states that .NET Core added the required runtime support. Therefore Kotlin-facing generic-
+   attribute projection and future emission are supported only for a profile which proves that
+   capability, currently `net10.0`; neither `net48` nor the `netstandard2.0` portability floor
+   inherits that promise merely because modern Roslyn can describe the metadata. Ordinary non-
+   generic attributes remain uniform.
+5. The implementation follows the same resolved declaration/view pattern already used for generic
+   base members. `DotNetClrResolvedCustomAttributeConstructor` now carries a closed
+   `DotNetClrResolvedTypeView` plus an already resolved and owner-substituted method signature.
+   Value decoding and named-member validation consume that authoritative result; neither
+   reconstructs a TypeSpec or substitutes raw assembly-relative handles.
+6. The core-team choice is to reject an open, partially open, non-generic-instance, value-type, or
+   wrong-arity owner before blob decoding. Unresolved constructor types, out-of-range owner
+   parameters, and residual method type parameters are distinct structured failures. There is no
+   fallback to the open TypeDef and no display-name identity.
+
+Real Roslyn .NET 10 metadata covers `GenericProbeAttribute<T>(T)` applied once as `<int>` and once
+as `<ExternalKind>`. Both constructor fixed arguments and the public named field `T Value` are
+substituted through the same closed view; the enum path retains its exact `Int16` storage.
+Doctored metadata covers missing owner arity, an open owner argument, a non-nominal array owner, an
+out-of-range owner parameter, a residual method parameter, and an unresolved constructor type.
+
+Satisfaction of CLR generic constraints is deliberately not implemented as attribute-local logic.
+It is a deferred selected-graph constructed-type validator shared by foreign base types,
+interfaces, member owners, and generic attributes. It must be completed before a generic foreign
+attribute is projected as a stable Kotlin annotation; until then this slice proves and preserves
+physical closed identity and signature substitution, not all runtime-instantiation legality.
 
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
@@ -731,8 +770,10 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Physical GenericParam/GenericParamConstraint preservation: **Correct direction**.
 - Exact custom-attribute constructor and `System.Attribute` hierarchy resolution:
   **Correct direction**.
-- Rejecting TypeSpec-owned attribute constructors until constructed-member substitution exists:
-  **Correct temporary implementation, but not a final design**.
+- Closed TypeSpec-owned generic attribute identity and constructor substitution:
+  **Correct direction**.
+- Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
+  proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
   **Correct direction**.
 - Typed array and tagged-object decoding with bounded untrusted-input recursion:
@@ -757,8 +798,8 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
   FieldDef/Property: **Correct direction**.
 - Applying the documented ordinary CLR attribute contract instead of CoreCLR malformed-metadata
   quirks: **Reasonable platform-specific divergence**.
-- Rejecting closed generic attribute constructors until constructor resolution retains their
-  constructed TypeSpec owner: **Correct temporary implementation, but not a final design**.
+- Shared CLR generic-constraint satisfaction before stable foreign generic-attribute projection:
+  **Deferred problem that must be recorded before the importer surface becomes stable**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
