@@ -354,7 +354,10 @@ landed shape as a compatibility constraint.
    model needed by the importer. Scalar fixed arguments are decoded from the resolved constructor
    signature into typed values, never inferred from blob width. Preserve exact integral and
    IEEE-754 bits, strict nullable UTF-8 SerString semantics, and the assembly qualification of the
-   constructor token. Nil is valid only for a no-argument constructor. Arrays, tagged object,
+   constructor token. Nil is valid only for a no-argument constructor. One-dimensional arrays and
+   tagged object values use the same typed decoder; arrays retain their element type when null or
+   empty, heterogeneous object arrays retain each element's encoded type, and jagged arrays fail.
+   Keep the element-count and tagged-depth resource bounds as diagnostics, not ABI semantics.
    System.Type, enums, and named arguments currently fail as structured unsupported values; do
    not erase, stringify, or partially skip them.
    Assembly definitions retain their full public key and computed eight-byte public-key token;

@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValue
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueDecoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueFailure
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueUnsupported
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrEnumStorageResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrExportedType
@@ -713,7 +714,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
                 assertTrue(
                     baseAttributes.zip(resolvedAttributes).all { [attribute, constructor] ->
-                        val decoded = attributeDecoder.decodeScalarValue(
+                        val decoded = attributeDecoder.decodeValue(
                             metadata,
                             attribute,
                             constructor,
@@ -722,7 +723,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         decoded.attribute.fixedArguments.isEmpty()
                     }
                 )
-                val crossAssemblyConstructor = attributeDecoder.decodeScalarValue(
+                val crossAssemblyConstructor = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first(),
                     resolvedAttributes.first().copy(sourceAssembly = frameworkCoreMetadata),
@@ -759,7 +760,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         .UNSUPPORTED_MEMBER_REFERENCE_PARENT,
                     constructedOwnerConstructor.failure,
                 )
-                val missingValue = attributeDecoder.decodeScalarValue(
+                val missingValue = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(rawValue = null),
                     resolvedAttributes.first().copy(
@@ -776,7 +777,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetClrCustomAttributeValueFailure.MISSING_VALUE_BLOB,
                     missingValue.failure,
                 )
-                val invalidBoolean = attributeDecoder.decodeScalarValue(
+                val invalidBoolean = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
                         rawValue = DotNetClrBlob.copyOf(
@@ -798,7 +799,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     invalidBoolean.failure,
                 )
                 assertEquals(0, invalidBoolean.fixedArgumentIndex)
-                val invalidUtf8 = attributeDecoder.decodeScalarValue(
+                val invalidUtf8 = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
                         rawValue = DotNetClrBlob.copyOf(
@@ -820,14 +821,15 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     invalidUtf8.failure,
                 )
                 assertEquals(0, invalidUtf8.fixedArgumentIndex)
-                val unsupportedObject = attributeDecoder.decodeScalarValue(
+                val unsupportedNamedType = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first(),
                     resolvedAttributes.first().copy(
                         signature = resolvedAttributes.first().signature.copy(
                             parameterTypes = listOf(
-                                DotNetClrTypeSignature.Primitive(
-                                    DotNetClrPrimitiveType.OBJECT
+                                DotNetClrTypeSignature.Named(
+                                    systemObject.handle,
+                                    isValueType = false,
                                 )
                             )
                         )
@@ -835,10 +837,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ) as DotNetClrCustomAttributeValueDecoding.Unsupported
                 assertEquals(
                     DotNetClrCustomAttributeValueUnsupported.FIXED_ARGUMENT_TYPE,
-                    unsupportedObject.unsupported,
+                    unsupportedNamedType.unsupported,
                 )
-                assertEquals(0, unsupportedObject.fixedArgumentIndex)
-                val truncatedInteger = attributeDecoder.decodeScalarValue(
+                assertEquals(0, unsupportedNamedType.fixedArgumentIndex)
+                val truncatedInteger = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
                         rawValue = DotNetClrBlob.copyOf(byteArrayOf(1, 0, 7))
@@ -858,7 +860,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     truncatedInteger.failure,
                 )
                 assertEquals(0, truncatedInteger.fixedArgumentIndex)
-                val nonCanonicalString = attributeDecoder.decodeScalarValue(
+                val nonCanonicalString = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
                         rawValue = DotNetClrBlob.copyOf(
@@ -880,7 +882,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     nonCanonicalString.failure,
                 )
                 assertEquals(0, nonCanonicalString.fixedArgumentIndex)
-                val trailingData = attributeDecoder.decodeScalarValue(
+                val trailingData = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
                         rawValue = DotNetClrBlob.copyOf(byteArrayOf(1, 0, 0, 0, 1))
@@ -891,7 +893,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetClrCustomAttributeValueFailure.TRAILING_DATA,
                     trailingData.failure,
                 )
-                val namedArguments = attributeDecoder.decodeScalarValue(
+                val namedArguments = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
                         rawValue = DotNetClrBlob.copyOf(byteArrayOf(1, 0, 1, 0))
@@ -901,6 +903,119 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 assertEquals(
                     DotNetClrCustomAttributeValueUnsupported.NAMED_ARGUMENTS,
                     namedArguments.unsupported,
+                )
+                val intArrayConstructor = resolvedAttributes.first().copy(
+                    signature = resolvedAttributes.first().signature.copy(
+                        parameterTypes = listOf(
+                            DotNetClrTypeSignature.SzArray(
+                                DotNetClrTypeSignature.Primitive(
+                                    DotNetClrPrimitiveType.INT32
+                                )
+                            )
+                        )
+                    )
+                )
+                val invalidArrayLength = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0xfe.toByte(), 0xff.toByte(), 0xff.toByte(), 0xff.toByte())
+                        )
+                    ),
+                    intArrayConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.INVALID_ARRAY_LENGTH,
+                    invalidArrayLength.failure,
+                )
+                val oversizedArray = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0x41, 0x42, 0x0f, 0)
+                        )
+                    ),
+                    intArrayConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.VALUE_LIMIT_EXCEEDED,
+                    oversizedArray.failure,
+                )
+                val truncatedArray = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 2, 0, 0, 0, 1, 0, 0, 0, 0, 0)
+                        )
+                    ),
+                    intArrayConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.TRUNCATED_VALUE,
+                    truncatedArray.failure,
+                )
+                val objectConstructor = resolvedAttributes.first().copy(
+                    signature = resolvedAttributes.first().signature.copy(
+                        parameterTypes = listOf(
+                            DotNetClrTypeSignature.Primitive(
+                                DotNetClrPrimitiveType.OBJECT
+                            )
+                        )
+                    )
+                )
+                val invalidTaggedType = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0x7f, 0, 0)
+                        )
+                    ),
+                    objectConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.INVALID_SERIALIZATION_TYPE_CODE,
+                    invalidTaggedType.failure,
+                )
+                val unresolvedTaggedType = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0x50, 0xff.toByte(), 0, 0)
+                        )
+                    ),
+                    objectConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Unsupported
+                assertEquals(
+                    DotNetClrCustomAttributeValueUnsupported.TYPE_OR_ENUM_ARGUMENT,
+                    unresolvedTaggedType.unsupported,
+                )
+                val nestedArray = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 0x1d, 0x1d, 0, 0)
+                        )
+                    ),
+                    objectConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.INVALID_SERIALIZATION_TYPE_CODE,
+                    nestedArray.failure,
+                )
+                val excessiveBoxing = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0) +
+                                    ByteArray(33) { 0x51 } +
+                                    byteArrayOf(0x0e, 0xff.toByte(), 0, 0)
+                        )
+                    ),
+                    objectConstructor,
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.VALUE_LIMIT_EXCEEDED,
+                    excessiveBoxing.failure,
                 )
             }
 
@@ -1244,7 +1359,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             long signedLong,
                             ulong unsignedLong,
                             float single,
-                            double ratio)
+                            double ratio,
+                            int[] numbers,
+                            object boxed,
+                            object[] mixed)
                         {
                         }
                     }
@@ -1256,10 +1374,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
 
                     [SemanticProbe(
                         7, "portable", true, '\u03bb', 4294967295u,
-                        -1, 255, -2, 65535, -3L, 18446744073709551615UL, -0.0f, -0.0)]
+                        -1, 255, -2, 65535, -3L, 18446744073709551615UL, -0.0f, -0.0,
+                        new[] { 1, -2 }, 42, new object[] { "x", 3, null })]
                     [SemanticProbe(
                         8, null, false, '\0', 0u,
-                        0, 0, 0, 0, 0L, 0UL, float.NaN, double.NaN)]
+                        0, 0, 0, 0, 0L, 0UL, float.NaN, double.NaN,
+                        new int[] { }, null, null)]
                     public sealed class Outer
                     {
                         public sealed class Inner
@@ -1419,13 +1539,20 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.UINT64),
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.FLOAT32),
                             DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.FLOAT64),
+                            DotNetClrTypeSignature.SzArray(
+                                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.INT32)
+                            ),
+                            DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT),
+                            DotNetClrTypeSignature.SzArray(
+                                DotNetClrTypeSignature.Primitive(DotNetClrPrimitiveType.OBJECT)
+                            ),
                         )
             }
         )
         val decodedModernAttributes =
             outerAttributes.zip(modernConstructors).map { [attribute, constructor] ->
                 (
-                        modernAttributeDecoder.decodeScalarValue(
+                        modernAttributeDecoder.decodeValue(
                             destinationMetadata,
                             attribute,
                             constructor,
@@ -1472,6 +1599,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
                 DotNetClrCustomAttributeValue.Float32Value(Int.MIN_VALUE),
                 DotNetClrCustomAttributeValue.Float64Value(Long.MIN_VALUE),
+                DotNetClrCustomAttributeValue.ArrayValue(
+                    DotNetClrCustomAttributeValueType.SzArray(
+                        DotNetClrCustomAttributeValueType.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    ),
+                    listOf(
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT32,
+                            1uL,
+                        ),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT32,
+                            0xffff_fffeuL,
+                        ),
+                    ),
+                ),
+                DotNetClrCustomAttributeValue.IntegralValue(
+                    DotNetClrPrimitiveType.INT32,
+                    42uL,
+                ),
+                DotNetClrCustomAttributeValue.ArrayValue(
+                    DotNetClrCustomAttributeValueType.SzArray(
+                        DotNetClrCustomAttributeValueType.TaggedObject
+                    ),
+                    listOf(
+                        DotNetClrCustomAttributeValue.StringValue("x"),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT32,
+                            3uL,
+                        ),
+                        DotNetClrCustomAttributeValue.StringValue(null),
+                    ),
+                ),
             ),
             decodedModernAttributes[0],
         )
@@ -1513,16 +1674,40 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     0uL,
                 ),
             ),
-            decodedModernAttributes[1].dropLast(2),
+            decodedModernAttributes[1].take(11),
         )
         val decodedSingleNaN =
             (decodedModernAttributes[1][11] as
                     DotNetClrCustomAttributeValue.Float32Value).bits
         assertTrue(Float.fromBits(decodedSingleNaN).isNaN())
         val decodedDoubleNaN =
-            (decodedModernAttributes[1].last() as
+            (decodedModernAttributes[1][12] as
                     DotNetClrCustomAttributeValue.Float64Value).bits
         assertTrue(Double.fromBits(decodedDoubleNaN).isNaN())
+        assertEquals(
+            DotNetClrCustomAttributeValue.ArrayValue(
+                DotNetClrCustomAttributeValueType.SzArray(
+                    DotNetClrCustomAttributeValueType.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+                emptyList(),
+            ),
+            decodedModernAttributes[1][13],
+        )
+        assertEquals(
+            DotNetClrCustomAttributeValue.StringValue(null),
+            decodedModernAttributes[1][14],
+        )
+        assertEquals(
+            DotNetClrCustomAttributeValue.ArrayValue(
+                DotNetClrCustomAttributeValueType.SzArray(
+                    DotNetClrCustomAttributeValueType.TaggedObject
+                ),
+                null,
+            ),
+            decodedModernAttributes[1][15],
+        )
 
         val nextTypeReferenceRow =
             (facadeMetadata.typeReferences.maxOfOrNull { reference -> reference.handle.row } ?: 0) + 1
