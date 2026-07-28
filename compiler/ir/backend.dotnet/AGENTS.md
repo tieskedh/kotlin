@@ -343,6 +343,14 @@ landed shape as a compatibility constraint.
    constraint-satisfaction boolean. Primitive/array arguments, dependent parameter constraints,
    reference/value/default-constructor flags, and by-ref-like eligibility require shared physical
    classification and selected-profile policy.
+   The shared physical signature classifier distinguishes reference, non-nullable value, and
+   exact `System.Nullable<T>` categories using an explicit selected-core catalog. Validate a
+   nominal signature's encoded `class`/`valuetype` bit against its selected
+   `System.ValueType` hierarchy; remember that `System.ValueType` and `System.Enum` themselves are
+   reference classes. Primitives and arrays use their intrinsic CLR categories. Never turn
+   physical `Nullable<T>` into Kotlin nullability or trust a display name/host runtime. By-ref-like
+   remains a separate exact decoded `IsByRefLikeAttribute` dimension; do not infer it from value
+   ancestry or a same-named foreign attribute.
    MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely

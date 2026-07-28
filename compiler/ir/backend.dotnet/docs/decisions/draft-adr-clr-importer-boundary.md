@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability and nominal constraint validation, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type/constraint/hierarchy resolution with exact nominal assignability, nominal constraint validation, and verified physical reference/value/Nullable classification, custom-attribute values through closed generic attribute owners, and selected-graph named-member validation are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -866,6 +866,45 @@ Synthetic contracts cover a primitive argument, a non-nominal constraint, and an
 resolution limit. The retained parameter still independently proves the physical `struct` and
 `new()` flags; this slice makes no claim about satisfying those flags.
 
+The twenty-fifth slice classifies resolved signatures as physical reference, non-nullable value,
+or nullable value types.
+
+1. Kotlin's common type system and the JVM/JS/Native/Wasm backends ask their target type-system
+   context for primitive, class, value/inline, array, and nullable categories. They do not infer
+   storage kind from source spelling after lowering. The CLR importer needs the same centralized
+   category boundary before special constraints, boxing, variance, or FIR projection can use it.
+2. CLR signatures physically encode `class` versus `valuetype`, but that bit must agree with the
+   selected TypeDef hierarchy. Ordinary value types derive from `System.ValueType`; enum
+   definitions derive from `System.Enum`, while `System.ValueType` and `System.Enum` themselves
+   are abstract reference classes. `System.Nullable<T>` is a distinct value-type construction,
+   primitives carry intrinsic categories, and CLR arrays are reference types. The
+   [official ValueType contract](https://learn.microsoft.com/en-us/dotnet/api/system.valuetype)
+   and [Nullable contract](https://learn.microsoft.com/en-us/dotnet/fundamentals/runtime-libraries/system-nullable%7Bt%7D)
+   are the semantic references.
+3. Kotlin Common is unchanged. Physical `NULLABLE_VALUE` describes CLR `System.Nullable<T>`; it
+   does not make an imported type Kotlin-nullable or collapse Kotlin's nullable reference
+   semantics. Likewise a CLR primitive category does not select a Kotlin built-in mapping.
+4. Classification uses the exact core types selected for the target graph. The algorithm is the
+   same on `net48`, `netstandard2.0`, and `net10.0`, but their core TypeDefs and available
+   constructions come from their own reference assemblies. It never asks the host JVM or a host
+   .NET runtime.
+5. `DotNetClrPhysicalTypeClassifier` consumes a complete resolved signature and an explicit
+   selected-core catalog containing `System.ValueType`, `System.Enum`, and
+   `System.Nullable<T>`. It validates generic arity and the encoded class/value bit against the
+   shared hierarchy relation, special-cases the two reference roots, classifies primitives and
+   arrays directly, and returns structured unsupported or invalid-hierarchy outcomes for forms
+   that cannot yet be legal generic arguments.
+6. The core-team choice is to verify both signature evidence and selected hierarchy instead of
+   trusting either in isolation. By-ref-like status is deliberately not inferred from value-type
+   ancestry: it is an orthogonal semantic `IsByRefLikeAttribute` marker whose exact identity,
+   payload, and multiplicity must be decoded through the ordinary attribute layer before profile
+   policy can use it.
+
+Framework 4.8 coverage classifies a class, enum, and `Nullable<int>` against the selected
+`mscorlib` definitions. Roslyn .NET 10 coverage adds primitives, arrays, an interface
+construction, an ordinary struct, `System.ValueType`/`System.Enum` themselves, and hostile false
+class/value bits, open generic arity, generic parameters, and a bounded hierarchy.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -951,6 +990,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Treating nominal validation as incomplete until special constraints, dependent parameters,
   primitives, arrays, and by-ref-like eligibility are implemented:
   **Correct temporary implementation, but not a final design**.
+- Selected-core-verified reference/non-nullable-value/Nullable signature classification:
+  **Correct direction**.
+- Keeping CLR `Nullable<T>` classification distinct from Kotlin nullability:
+  **Correct direction**.
+- Deferring by-ref-like classification to exact decoded marker semantics rather than value-type
+  ancestry or name matching: **Correct direction**.
 - Profile-neutral physical retention with Kotlin-facing generic-attribute support gated to a
   proven runtime profile: **Reasonable platform-specific divergence**.
 - Constructor-typed scalar custom-attribute decoding with exact observable bits:
