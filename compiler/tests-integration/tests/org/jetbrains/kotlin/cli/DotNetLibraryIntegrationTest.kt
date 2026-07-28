@@ -25,7 +25,10 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapeFallback
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpWrongShapePolicy
 import org.jetbrains.kotlin.backend.dotnet.DotNetBadImageFormatException
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrArrayShape
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterConstraint
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterKind
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrGenericParameterVariance
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMetadataReader
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodSemantics
@@ -34,6 +37,7 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrMethodVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPrimitiveType
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrPropertySignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrSignatureCallingConvention
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeDefinition
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
@@ -136,16 +140,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   {
                   }
 
+                  .class interface public abstract auto ansi 'IVariant`2'<+ 'TOut', - 'TIn'>
+                  {
+                  }
+
                   .class public auto ansi beforefieldinit 'IntArrayBox'
                          extends [mscorlib]System.Object
                          implements class 'Fixture.IBox`1'<int32[]>
                   {
                   }
 
-                  .class public auto ansi beforefieldinit 'SignatureHost`1'<T>
+                  .class public auto ansi beforefieldinit 'SignatureHost`1'<(
+                      class Fixture.Base,
+                      class Fixture.IMarker
+                  ) 'T'>
                          extends [mscorlib]System.Object
                   {
-                    .method public hidebysig instance !!0 'Transform'<M>(
+                    .method public hidebysig instance !!0 'Transform'<(
+                        !0,
+                        class Fixture.IMarker
+                    ) 'M'>(
                         !0[] 'input',
                         int32& 'value',
                         int32[-8192...-8188,-268435456...-268435453] 'matrix',
@@ -233,6 +247,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val nested = fixtureTypes.getValue("Nested")
             val marker = fixtureTypes.getValue("IMarker")
             val box = fixtureTypes.getValue("IBox`1")
+            val variant = fixtureTypes.getValue("IVariant`2")
             val signatureHost = fixtureTypes.getValue("SignatureHost`1")
             val propertyHost = fixtureTypes.getValue("PropertyHost")
             assertEquals(DotNetClrTypeVisibility.PUBLIC, base.visibility)
@@ -255,7 +270,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         )
                     ),
                 ),
-                metadata.typeSpecifications.single().signature,
+                metadata.typeSpecifications.single { specification ->
+                    specification.signature is DotNetClrTypeSignature.GenericInstance
+                }.signature,
             )
             val transform = metadata.methodDefinitions.single { it.name == "Transform" }
             assertEquals(signatureHost.handle, transform.declaringType)
@@ -299,6 +316,72 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     ),
                 ),
                 transform.signature.parameterTypes,
+            )
+
+            val boxParameter = metadata.genericParameterDefinitions.single { parameter ->
+                parameter.owner == box.handle
+            }
+            assertEquals(0, boxParameter.number)
+            assertEquals("T", boxParameter.name)
+            assertEquals(DotNetClrGenericParameterVariance.INVARIANT, boxParameter.variance)
+            assertFalse(boxParameter.hasReferenceTypeConstraint)
+            assertFalse(boxParameter.hasNotNullableValueTypeConstraint)
+            assertFalse(boxParameter.hasDefaultConstructorConstraint)
+            assertFalse(boxParameter.allowsByRefLike)
+
+            val variantParameters = metadata.genericParameterDefinitions
+                .filter { parameter -> parameter.owner == variant.handle }
+                .sortedBy(DotNetClrGenericParameterDefinition::number)
+            assertEquals(listOf("TOut", "TIn"), variantParameters.map(DotNetClrGenericParameterDefinition::name))
+            assertEquals(
+                listOf(
+                    DotNetClrGenericParameterVariance.COVARIANT,
+                    DotNetClrGenericParameterVariance.CONTRAVARIANT,
+                ),
+                variantParameters.map(DotNetClrGenericParameterDefinition::variance),
+            )
+
+            val hostParameter = metadata.genericParameterDefinitions.single { parameter ->
+                parameter.owner == signatureHost.handle
+            }
+            val hostConstraints = metadata.genericParameterConstraints
+                .filter { constraint -> constraint.owner == hostParameter.handle }
+                .map(DotNetClrGenericParameterConstraint::constraint)
+                .map { constraint ->
+                    metadata.typeSpecifications.single { specification ->
+                        specification.handle == constraint
+                    }.signature
+                }
+                .toSet()
+            assertEquals(
+                setOf(
+                    DotNetClrTypeSignature.Named(base.handle, isValueType = false),
+                    DotNetClrTypeSignature.Named(marker.handle, isValueType = false),
+                ),
+                hostConstraints,
+            )
+
+            val transformParameter = metadata.genericParameterDefinitions.single { parameter ->
+                parameter.owner == transform.handle
+            }
+            assertEquals(0, transformParameter.number)
+            assertEquals("M", transformParameter.name)
+            val transformConstraints = metadata.genericParameterConstraints
+                .filter { constraint -> constraint.owner == transformParameter.handle }
+                .map(DotNetClrGenericParameterConstraint::constraint)
+            assertEquals(
+                setOf(
+                    DotNetClrTypeSignature.GenericParameter(
+                        DotNetClrGenericParameterKind.TYPE,
+                        0,
+                    ),
+                    DotNetClrTypeSignature.Named(marker.handle, isValueType = false),
+                ),
+                transformConstraints.mapTo(mutableSetOf()) { constraint ->
+                    metadata.typeSpecifications.single { specification ->
+                        specification.handle == constraint
+                    }.signature
+                },
             )
 
             val indexedProperty = metadata.propertyDefinitions.single { it.name == "CLR Item" }
@@ -371,6 +454,24 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 malformed.message
             }
 
+            val malformedGenericAssembly = File(
+                assembly.parentFile,
+                "ImporterFixture-malformed-generic-count.dll",
+            )
+            val malformedGenericImage = assembly.readBytes()
+            val genericSignatureOffset = malformedGenericImage.uniqueSequenceOffset(rawMethodSignature)
+            malformedGenericImage[genericSignatureOffset + 1] = 0x02
+            malformedGenericAssembly.writeBytes(malformedGenericImage)
+            val malformedGeneric = assertThrows(DotNetBadImageFormatException::class.java) {
+                DotNetClrMetadataReader.read(malformedGenericAssembly)
+            }
+            assertTrue(
+                "declares 2 generic parameters in its signature but owns 1 GenericParam rows" in
+                        checkNotNull(malformedGeneric.message)
+            ) {
+                malformedGeneric.message
+            }
+
             val malformedPropertyAssembly = File(
                 assembly.parentFile,
                 "ImporterFixture-malformed-property-signature.dll",
@@ -392,6 +493,103 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             }
         }
 
+        val modernGenericsSource = File(tmpdir, "clr-metadata/ModernGenerics.cs").apply {
+            writeText(
+                """
+                namespace ModernGenerics
+                {
+                    public interface IVariance<out TOut, in TIn>
+                    {
+                    }
+
+                    public class ConstraintBase
+                    {
+                    }
+
+                    public interface IConstraint
+                    {
+                    }
+
+                    public static class GenericHost
+                    {
+                        public static T AcceptReference<T>(T value)
+                            where T : class, new()
+                            => value;
+
+                        public static T AcceptValue<T>(T value)
+                            where T : struct
+                            => value;
+
+                        public static T AcceptByRefLike<T>(T value)
+                            where T : allows ref struct
+                            => value;
+
+                        public static TResult Convert<TSource, TResult>(TSource value)
+                            where TSource : ConstraintBase, IConstraint, new()
+                            where TResult : TSource, IConstraint
+                            => default;
+                    }
+                }
+                """.trimIndent()
+            )
+        }
+        val modernGenericsAssembly = File(tmpdir, "clr-metadata/ModernGenerics.dll")
+        val modernGenericsCompile = runModernCSharpCompiler(
+            checkNotNull(modernCSharp),
+            modernGenericsSource,
+            modernGenericsAssembly,
+        )
+        assertEquals(0, modernGenericsCompile.exitCode, modernGenericsCompile.output)
+        val modernGenericsMetadata = DotNetClrMetadataReader.read(modernGenericsAssembly)
+        val modernGenericTypes = modernGenericsMetadata.typeDefinitions
+            .filter { type -> type.namespaceName == "ModernGenerics" }
+            .associateBy(DotNetClrTypeDefinition::metadataName)
+        val varianceType = modernGenericTypes.getValue("IVariance`2")
+        assertEquals(
+            listOf(
+                DotNetClrGenericParameterVariance.COVARIANT,
+                DotNetClrGenericParameterVariance.CONTRAVARIANT,
+            ),
+            modernGenericsMetadata.genericParameterDefinitions
+                .filter { parameter -> parameter.owner == varianceType.handle }
+                .sortedBy(DotNetClrGenericParameterDefinition::number)
+                .map(DotNetClrGenericParameterDefinition::variance),
+        )
+        val modernMethods = modernGenericsMetadata.methodDefinitions.associateBy(DotNetClrMethodDefinition::name)
+        val referenceParameter = modernGenericsMetadata.genericParameterDefinitions.single { parameter ->
+            parameter.owner == modernMethods.getValue("AcceptReference").handle
+        }
+        assertTrue(referenceParameter.hasReferenceTypeConstraint)
+        assertTrue(referenceParameter.hasDefaultConstructorConstraint)
+        assertFalse(referenceParameter.hasNotNullableValueTypeConstraint)
+        assertFalse(referenceParameter.allowsByRefLike)
+        val valueParameter = modernGenericsMetadata.genericParameterDefinitions.single { parameter ->
+            parameter.owner == modernMethods.getValue("AcceptValue").handle
+        }
+        assertFalse(valueParameter.hasReferenceTypeConstraint)
+        assertTrue(valueParameter.hasNotNullableValueTypeConstraint)
+        assertTrue(valueParameter.hasDefaultConstructorConstraint)
+        assertFalse(valueParameter.allowsByRefLike)
+        val byRefLikeParameter = modernGenericsMetadata.genericParameterDefinitions.single { parameter ->
+            parameter.owner == modernMethods.getValue("AcceptByRefLike").handle
+        }
+        assertTrue(byRefLikeParameter.allowsByRefLike)
+        assertFalse(byRefLikeParameter.hasReferenceTypeConstraint)
+        assertFalse(byRefLikeParameter.hasNotNullableValueTypeConstraint)
+        assertFalse(byRefLikeParameter.hasDefaultConstructorConstraint)
+        val convertParameters = modernGenericsMetadata.genericParameterDefinitions
+            .filter { parameter -> parameter.owner == modernMethods.getValue("Convert").handle }
+            .sortedBy(DotNetClrGenericParameterDefinition::number)
+        assertEquals(listOf("TSource", "TResult"), convertParameters.map(DotNetClrGenericParameterDefinition::name))
+        assertEquals(
+            listOf(2, 2),
+            convertParameters.map { parameter ->
+                modernGenericsMetadata.genericParameterConstraints.count { constraint ->
+                    constraint.owner == parameter.handle
+                }
+            },
+        )
+
         val profileCoreAssemblies = listOf(
             checkNotNull(frameworkIlasm).parentFile.resolve("mscorlib.dll") to "mscorlib",
             checkNotNull(modernCSharp).referenceDirectory.resolve("System.Runtime.dll") to "System.Runtime",
@@ -405,6 +603,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             assertTrue(coreMetadata.methodDefinitions.size > 100)
             assertTrue(coreMetadata.propertyDefinitions.isNotEmpty())
             assertTrue(coreMetadata.methodSemantics.isNotEmpty())
+            assertTrue(coreMetadata.genericParameterDefinitions.isNotEmpty())
+            assertTrue(coreMetadata.genericParameterConstraints.isNotEmpty())
             if (entry.second == "System.Runtime") {
                 assertTrue(
                     coreMetadata.typeSpecifications.any { specification ->

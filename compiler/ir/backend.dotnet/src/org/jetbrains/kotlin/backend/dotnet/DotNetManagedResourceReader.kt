@@ -136,6 +136,8 @@ private object DotNetPeMetadataReader {
 
         fun readClrMetadata(): DotNetClrAssemblyMetadata {
             val metadata = readMetadataImage()
+            val typeReferences = readTypeReferences(metadata.tables, metadata.strings)
+            val typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings)
             val methodDefinitions = readMethodDefinitions(
                 metadata.tables,
                 metadata.strings,
@@ -146,11 +148,16 @@ private object DotNetPeMetadataReader {
                 metadata.strings,
                 metadata.blobs,
             )
+            val genericParameterDefinitions = readGenericParameterDefinitions(
+                metadata.tables,
+                metadata.strings,
+                methodDefinitions,
+            )
             return DotNetClrAssemblyMetadata(
                 identity = metadata.assemblyIdentity,
                 assemblyReferences = readAssemblyReferences(metadata.tables, metadata.strings, metadata.blobs),
-                typeReferences = readTypeReferences(metadata.tables, metadata.strings),
-                typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings),
+                typeReferences = typeReferences,
+                typeDefinitions = typeDefinitions,
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
                 methodDefinitions = methodDefinitions,
                 propertyDefinitions = propertyDefinitions,
@@ -158,6 +165,11 @@ private object DotNetPeMetadataReader {
                     metadata.tables,
                     methodDefinitions,
                     propertyDefinitions,
+                ),
+                genericParameterDefinitions = genericParameterDefinitions,
+                genericParameterConstraints = readGenericParameterConstraints(
+                    metadata.tables,
+                    genericParameterDefinitions,
                 ),
             )
         }
@@ -846,6 +858,170 @@ private object DotNetPeMetadataReader {
                 )
             }
             return kind
+        }
+
+        private fun readGenericParameterDefinitions(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            methodDefinitions: List<DotNetClrMethodDefinition>,
+        ): List<DotNetClrGenericParameterDefinition> {
+            val table = locateMetadataTable(tables, GENERIC_PARAM_TABLE)
+                ?: return validateMethodGenericParameterCounts(emptyList(), methodDefinitions)
+            val parameters = List(table.rowCount.toIntChecked("GenericParam row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val number = readU2(position)
+                position += UINT16_SIZE
+                val attributes = readU2(position)
+                position += UINT16_SIZE
+                if (attributes and GENERIC_PARAMETER_ATTRIBUTE_MASK.inv() != 0 ||
+                    attributes and GENERIC_PARAMETER_VARIANCE_MASK == GENERIC_PARAMETER_VARIANCE_MASK
+                ) {
+                    malformed("GenericParam row ${rowIndex + 1} has invalid attribute flags")
+                }
+                val ownerIndex = readIndex(position, table.indexSizes.typeOrMethodDefIndexSize)
+                position += table.indexSizes.typeOrMethodDefIndexSize
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                if (nameIndex == 0L) {
+                    malformed("GenericParam row ${rowIndex + 1} has a null name")
+                }
+                val owner = decodeCodedHandle(
+                    value = ownerIndex,
+                    tagBits = 1,
+                    tablesByTag = intArrayOf(TYPE_DEF_TABLE, METHOD_DEF_TABLE),
+                    metadataTables = tables,
+                    description = "GenericParam owner",
+                ) ?: malformed("GenericParam row ${rowIndex + 1} has a nil owner")
+                if (owner.table == METHOD_DEF_TABLE &&
+                    attributes and GENERIC_PARAMETER_VARIANCE_MASK != 0
+                ) {
+                    malformed("GenericParam row ${rowIndex + 1} gives a method parameter variance")
+                }
+                DotNetClrGenericParameterDefinition(
+                    handle = metadataHandle(
+                        GENERIC_PARAM_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "GenericParam",
+                    ),
+                    number = number,
+                    attributes = attributes,
+                    owner = owner,
+                    name = readStringHeap(strings, nameIndex),
+                )
+            }
+            validateGenericParameterRows(parameters)
+            return validateMethodGenericParameterCounts(parameters, methodDefinitions)
+        }
+
+        private fun validateGenericParameterRows(
+            parameters: List<DotNetClrGenericParameterDefinition>,
+        ) {
+            val ownerAndName = mutableSetOf<Pair<DotNetClrMetadataHandle, String>>()
+            val ownerAndNumber = mutableSetOf<Pair<DotNetClrMetadataHandle, Int>>()
+            for (parameter in parameters) {
+                if (!ownerAndName.add(parameter.owner to parameter.name)) {
+                    malformed(
+                        "GenericParam owner token 0x${parameter.owner.token.toUInt().toString(16)} " +
+                                "has duplicate parameter name '${parameter.name}'"
+                    )
+                }
+                if (!ownerAndNumber.add(parameter.owner to parameter.number)) {
+                    malformed(
+                        "GenericParam owner token 0x${parameter.owner.token.toUInt().toString(16)} " +
+                                "has duplicate parameter number ${parameter.number}"
+                    )
+                }
+            }
+            for ([owner, ownedParameters] in parameters.groupBy(DotNetClrGenericParameterDefinition::owner)) {
+                val numbers = ownedParameters.map(DotNetClrGenericParameterDefinition::number).sorted()
+                for ([expectedNumber, actualNumber] in numbers.withIndex()) {
+                    if (actualNumber != expectedNumber) {
+                        malformed(
+                            "GenericParam owner token 0x${owner.token.toUInt().toString(16)} " +
+                                    "has a gap before parameter number $actualNumber"
+                        )
+                    }
+                }
+            }
+        }
+
+        private fun validateMethodGenericParameterCounts(
+            parameters: List<DotNetClrGenericParameterDefinition>,
+            methodDefinitions: List<DotNetClrMethodDefinition>,
+        ): List<DotNetClrGenericParameterDefinition> {
+            val methodParameterCounts = parameters
+                .filter { parameter -> parameter.owner.table == METHOD_DEF_TABLE }
+                .groupingBy(DotNetClrGenericParameterDefinition::owner)
+                .eachCount()
+            for (method in methodDefinitions) {
+                val actualCount = methodParameterCounts[method.handle] ?: 0
+                val expectedCount = method.signature.genericParameterCount
+                if (actualCount != expectedCount) {
+                    malformed(
+                        "MethodDef token 0x${method.handle.token.toUInt().toString(16)} declares " +
+                                "$expectedCount generic parameters in its signature but owns $actualCount GenericParam rows"
+                    )
+                }
+            }
+            return parameters
+        }
+
+        private fun readGenericParameterConstraints(
+            tables: MetadataStream,
+            genericParameters: List<DotNetClrGenericParameterDefinition>,
+        ): List<DotNetClrGenericParameterConstraint> {
+            val table = locateMetadataTable(tables, GENERIC_PARAM_CONSTRAINT_TABLE) ?: return emptyList()
+            val genericParametersByHandle =
+                genericParameters.associateBy(DotNetClrGenericParameterDefinition::handle)
+            val seenConstraints =
+                mutableSetOf<Pair<DotNetClrMetadataHandle, DotNetClrMetadataHandle>>()
+            val completedOwners = mutableSetOf<DotNetClrMetadataHandle>()
+            var currentOwner: DotNetClrMetadataHandle? = null
+            return List(table.rowCount.toIntChecked("GenericParamConstraint row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val ownerIndex = readIndex(
+                    position,
+                    table.indexSizes.tableIndexSize(GENERIC_PARAM_TABLE),
+                )
+                position += table.indexSizes.tableIndexSize(GENERIC_PARAM_TABLE)
+                val constraintIndex = readIndex(position, table.indexSizes.typeDefOrRefIndexSize)
+                val owner = metadataHandle(
+                    GENERIC_PARAM_TABLE,
+                    ownerIndex,
+                    tables,
+                    "GenericParamConstraint owner",
+                )
+                if (owner !in genericParametersByHandle) {
+                    malformed("GenericParamConstraint row ${rowIndex + 1} refers to an unread GenericParam")
+                }
+                if (owner != currentOwner) {
+                    currentOwner?.let(completedOwners::add)
+                    if (owner in completedOwners) {
+                        malformed("GenericParamConstraint rows for one owner are not contiguous")
+                    }
+                    currentOwner = owner
+                }
+                val constraint = decodeCodedHandle(
+                    value = constraintIndex,
+                    tagBits = 2,
+                    tablesByTag = intArrayOf(TYPE_DEF_TABLE, TYPE_REF_TABLE, TYPE_SPEC_TABLE),
+                    metadataTables = tables,
+                    description = "GenericParamConstraint constraint",
+                ) ?: malformed("GenericParamConstraint row ${rowIndex + 1} has a nil constraint")
+                if (!seenConstraints.add(owner to constraint)) {
+                    malformed("GenericParamConstraint row ${rowIndex + 1} duplicates a constraint")
+                }
+                DotNetClrGenericParameterConstraint(
+                    handle = metadataHandle(
+                        GENERIC_PARAM_CONSTRAINT_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "GenericParamConstraint",
+                    ),
+                    owner = owner,
+                    constraint = constraint,
+                )
+            }
         }
 
         private fun readNestedTypeOwners(
@@ -1601,6 +1777,9 @@ private object DotNetPeMetadataReader {
             39 -> 8 + stringIndexSize * 2 + implementationIndexSize
             MANIFEST_RESOURCE_TABLE -> 8 + stringIndexSize + implementationIndexSize
             NESTED_CLASS_TABLE -> tableIndexSize(TYPE_DEF_TABLE) * 2
+            GENERIC_PARAM_TABLE -> 4 + typeOrMethodDefIndexSize + stringIndexSize
+            METHOD_SPEC_TABLE -> methodDefOrRefIndexSize + blobIndexSize
+            GENERIC_PARAM_CONSTRAINT_TABLE -> tableIndexSize(GENERIC_PARAM_TABLE) + typeDefOrRefIndexSize
             else -> error("CLR metadata reader requires unsupported metadata table $table")
         }
 
@@ -1626,6 +1805,8 @@ private object DotNetPeMetadataReader {
             get() = codedIndexSize(2, 2, 6, 32)
         val hasSemanticsIndexSize
             get() = codedIndexSize(1, 20, 23)
+        val typeOrMethodDefIndexSize
+            get() = codedIndexSize(1, TYPE_DEF_TABLE, METHOD_DEF_TABLE)
         private val methodDefOrRefIndexSize
             get() = codedIndexSize(1, 6, 10)
         private val memberForwardedIndexSize
@@ -1730,6 +1911,9 @@ private object DotNetPeMetadataReader {
     private const val TYPE_SPEC_TABLE = 27
     private const val MANIFEST_RESOURCE_TABLE = 40
     private const val NESTED_CLASS_TABLE = 41
+    private const val GENERIC_PARAM_TABLE = 42
+    private const val METHOD_SPEC_TABLE = 43
+    private const val GENERIC_PARAM_CONSTRAINT_TABLE = 44
     private const val ASSEMBLY_TABLE = 32
     private const val FILE_TABLE = 38
     private const val ASSEMBLY_REF_TABLE = 35
@@ -1747,6 +1931,8 @@ private object DotNetPeMetadataReader {
     private const val METHOD_SEMANTICS_ADD_ON = 0x0008
     private const val METHOD_SEMANTICS_REMOVE_ON = 0x0010
     private const val METHOD_SEMANTICS_FIRE = 0x0020
+    private const val GENERIC_PARAMETER_VARIANCE_MASK = 0x0003
+    private const val GENERIC_PARAMETER_ATTRIBUTE_MASK = 0x003f
     private const val MAX_SIGNATURE_DEPTH = 128
     private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
     private const val ELEMENT_TYPE_VOID = 0x01

@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; the read-only physical metadata/signature foundation is implemented**
+- Status: **Draft candidate; physical type, method, property, and generic metadata is implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -153,12 +153,43 @@ proving that metadata association is authoritative. Corrupting the property sign
 fails closed. The scale lane also requires real `mscorlib` and .NET 10 `System.Runtime` Property
 and MethodSemantics rows to decode.
 
+The fourth slice preserves GenericParam and GenericParamConstraint rows. Each generic parameter
+keeps its token, zero-based number, owner TypeDef/MethodDef, descriptive metadata name, raw flags,
+variance, reference-type/value-type/default-constructor constraints, and the modern
+`AllowByRefLike` flag. Each ordinary constraint keeps its own row token, GenericParam owner, and
+TypeDef/TypeRef/TypeSpec handle. The physical layer does not normalize a TypeSpec constraint to a
+TypeDef merely because both eventually resolve to the same type.
+
+This follows the JVM importer's separation between raw foreign type parameters and later lazy FIR
+bound enhancement. The CLR-specific divergence is necessary because declaration-site variance
+and special constraints are runtime metadata, a constraint can itself be an open TypeSpec, and
+.NET 10 adds `AllowByRefLike`; Java classfiles have no equivalent physical combination. The reader
+validates flags, owner/name/number uniqueness, contiguous zero-based numbering, contiguous
+constraint ownership, duplicate constraints, and agreement between a MethodDef signature's
+generic arity and its GenericParam rows. Constraint classification as base class versus interface,
+recursive TypeSpec resolution, variance-position legality, visibility, and profile compatibility
+require the resolved assembly graph and remain importer-policy work.
+
+No special CLR flag is silently reinterpreted as a Kotlin Common rule. In particular,
+ReferenceTypeConstraint is not Kotlin definitely-non-null, NotNullableValueTypeConstraint is not a
+Kotlin nullability annotation, DefaultConstructorConstraint has no direct Kotlin type-parameter
+syntax, and AllowByRefLike requires a future explicit ref-like boundary. The physical reader
+recognizes the modern flag profile-neutrally; the selected reference graph later decides whether
+that metadata is legal for `net48`, `netstandard2.0`, or `net10.0`.
+
+The shared IL fixture covers invariant, covariant, and contravariant type parameters plus class,
+interface, and owner-type-parameter constraints under both Framework and modern ILAsm. A Roslyn
+.NET 10 fixture independently covers reference/value/default-constructor flags, recursive
+method-parameter constraints, and `allows ref struct`. A corrupted MethodDef generic count fails
+against its GenericParam rows. The scale lane requires generic parameters and constraints in both
+real Framework `mscorlib` and .NET 10 `System.Runtime`.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
-MemberRef, generic-constraint, and nullable-attribute projection still remain above or after this
-physical foundation, and no FIR declaration is created yet. In this sentence, “Property
-projection” means Kotlin-facing property synthesis; physical Property rows and associations are
-already implemented.
+MemberRef, resolved generic-constraint, and nullable-attribute projection still remain above or
+after this physical foundation, and no FIR declaration is created yet. In this sentence,
+“Property projection” means Kotlin-facing property synthesis; physical Property rows and
+associations are already implemented, as are unresolved physical GenericParam constraints.
 
 ## Kotlin Common invariant
 
@@ -210,12 +241,13 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - CLR-specific immutable metadata model: **Reasonable platform-specific divergence**.
 - Lossless TypeSpec and MethodDef signature model: **Correct direction**.
 - Physical Property/PropertyMap/MethodSemantics preservation: **Correct direction**.
+- Physical GenericParam/GenericParamConstraint preservation: **Correct direction**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
 - Remaining field/MemberRef signatures, semantic custom attributes, type forwarding, Kotlin-facing
-  property synthesis, events, generic constraints, nullability enhancement, FIR symbols, and
-  backend calls:
+  property synthesis, events, resolved constraint semantics, nullability enhancement, FIR symbols,
+  and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
 
 The cost is a substantial target-owned metadata and import layer. The alternative is greater:

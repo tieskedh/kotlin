@@ -270,6 +270,55 @@ data class DotNetClrMethodSemantics(
     val association: DotNetClrMetadataHandle,
 )
 
+enum class DotNetClrGenericParameterVariance {
+    INVARIANT,
+    COVARIANT,
+    CONTRAVARIANT,
+}
+
+data class DotNetClrGenericParameterDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val number: Int,
+    val attributes: Int,
+    val owner: DotNetClrMetadataHandle,
+    val name: String,
+) {
+    val variance: DotNetClrGenericParameterVariance
+        get() = when (attributes and VARIANCE_MASK) {
+            COVARIANT_ATTRIBUTE -> DotNetClrGenericParameterVariance.COVARIANT
+            CONTRAVARIANT_ATTRIBUTE -> DotNetClrGenericParameterVariance.CONTRAVARIANT
+            else -> DotNetClrGenericParameterVariance.INVARIANT
+        }
+
+    val hasReferenceTypeConstraint: Boolean
+        get() = attributes and REFERENCE_TYPE_CONSTRAINT_ATTRIBUTE != 0
+
+    val hasNotNullableValueTypeConstraint: Boolean
+        get() = attributes and NOT_NULLABLE_VALUE_TYPE_CONSTRAINT_ATTRIBUTE != 0
+
+    val hasDefaultConstructorConstraint: Boolean
+        get() = attributes and DEFAULT_CONSTRUCTOR_CONSTRAINT_ATTRIBUTE != 0
+
+    val allowsByRefLike: Boolean
+        get() = attributes and ALLOW_BY_REF_LIKE_ATTRIBUTE != 0
+
+    private companion object {
+        const val VARIANCE_MASK = 0x0003
+        const val COVARIANT_ATTRIBUTE = 0x0001
+        const val CONTRAVARIANT_ATTRIBUTE = 0x0002
+        const val REFERENCE_TYPE_CONSTRAINT_ATTRIBUTE = 0x0004
+        const val NOT_NULLABLE_VALUE_TYPE_CONSTRAINT_ATTRIBUTE = 0x0008
+        const val DEFAULT_CONSTRUCTOR_CONSTRAINT_ATTRIBUTE = 0x0010
+        const val ALLOW_BY_REF_LIKE_ATTRIBUTE = 0x0020
+    }
+}
+
+data class DotNetClrGenericParameterConstraint(
+    val handle: DotNetClrMetadataHandle,
+    val owner: DotNetClrMetadataHandle,
+    val constraint: DotNetClrMetadataHandle,
+)
+
 data class DotNetClrTypeSpecification(
     val handle: DotNetClrMetadataHandle,
     val signature: DotNetClrTypeSignature,
@@ -292,4 +341,6 @@ data class DotNetClrAssemblyMetadata(
     val methodDefinitions: List<DotNetClrMethodDefinition>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,
     val methodSemantics: List<DotNetClrMethodSemantics>,
+    val genericParameterDefinitions: List<DotNetClrGenericParameterDefinition>,
+    val genericParameterConstraints: List<DotNetClrGenericParameterConstraint>,
 )
