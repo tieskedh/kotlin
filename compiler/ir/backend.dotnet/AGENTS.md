@@ -349,8 +349,13 @@ landed shape as a compatibility constraint.
    `System.ValueType` hierarchy; remember that `System.ValueType` and `System.Enum` themselves are
    reference classes. Primitives and arrays use their intrinsic CLR categories. Never turn
    physical `Nullable<T>` into Kotlin nullability or trust a display name/host runtime. By-ref-like
-   remains a separate exact decoded `IsByRefLikeAttribute` dimension; do not infer it from value
-   ancestry or a same-named foreign attribute.
+   is a separate exact decoded `IsByRefLikeAttribute` dimension: resolve the selected marker
+   identity through the ordinary custom-attribute constructor/value layer, require an empty
+   semantic payload, preserve multiplicity, and reject duplicate markers or a marker on a
+   non-value target. A same-short-name foreign attribute is unrelated. If the selected profile
+   lacks the marker identity, retain `MARKER_UNAVAILABLE`; never infer ordinary-struct status.
+   Classification still does not authorize Kotlin capture, boxing, heap storage, or generic use;
+   `AllowByRefLike` and profile/ref-safety policy remain later gates.
    MemberRef rows preserve their exact
    TypeDef/TypeRef/ModuleRef/MethodDef/TypeSpec parent, metadata name, raw blob, and closed
    method-or-field signature kind. MethodRef signatures reuse the method algebra but uniquely
