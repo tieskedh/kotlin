@@ -206,7 +206,7 @@ internal class DotNetLocalDeclarationPopupLowering(context: DotNetBackendContext
 }
 
 private object DotNetLocalClassVisibilityPolicy : VisibilityPolicy {
-    override fun forClass(declaration: IrClass, inInlineFunctionScope: Boolean): DescriptorVisibility =
+    override fun forClass(declaration: IrClass, inPublicInlineScope: Boolean): DescriptorVisibility =
         DescriptorVisibilities.PRIVATE
 
     // The local type itself is private/notpublic. A public metadata constructor is needed for a
