@@ -1976,6 +1976,25 @@ session state, process, and a curated task menu. Keep both files updated as you 
   ordinary attributes/nullability before the import policy/provider. The fresh strict gate is
   869/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 52 library integration
   tests).
+- The physical-generic continuation decodes GenericParam and GenericParamConstraint without
+  crossing into Kotlin import policy. Parameters retain row token, zero-based number,
+  TypeDef/MethodDef owner, descriptive metadata name, raw flags, variance,
+  reference/value/default-constructor special constraints, and .NET 10 `AllowByRefLike`.
+  Constraint rows retain their own token and exact TypeDef/TypeRef/TypeSpec target; direct-looking
+  constraints produced by both ILAsm versions were TypeSpecs, confirming that the later resolver
+  must not infer encoding from source spelling. The reader validates flag values, owner/name/
+  number uniqueness, contiguous numbering and constraint ownership, duplicate constraints, and
+  MethodDef-signature arity against owned rows. Recursive resolution, class/interface
+  classification, visibility, variance-position legality, and profile compatibility stay above
+  this layer. CLR reference/value flags do not become Kotlin nullability, `new()` does not become
+  invented Kotlin syntax, and `AllowByRefLike` requires an explicit future ref-like boundary.
+  The dual-ILAsm fixture covers invariant/covariant/contravariant owners and class/interface/open
+  type-parameter constraints. A Roslyn net10 fixture covers reference/value/constructor flags,
+  owner-relative method constraints, and `allows ref struct`; real mscorlib/System.Runtime plus a
+  corrupted method-generic count are covered. Next decode ordinary custom attributes
+  semantically, including their attachment multiplicity, before nullability enhancement and FIR.
+  The fresh strict gate is 869/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  52 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2059,9 +2078,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Continue the CLR importer above its physical property/signature foundation.** Add
-   GenericParam/constraints and semantic custom-attribute records before introducing the
-   CLR-to-Kotlin policy and lazy FIR provider; add Field/MemberRef
+2. **Continue the CLR importer above its physical generic/property/signature foundation.** Add
+   semantic custom-attribute records before introducing the CLR-to-Kotlin policy and lazy FIR
+   provider; add Field/MemberRef
    signatures when their first consumer requires them. Preserve Kotlin declaration identity and
    Common semantics; decode nullability, variance, properties, and exceptions at the importer
    boundary instead of teaching the Kotlin-owned backend surface to infer C# conventions. Keep
