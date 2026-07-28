@@ -628,17 +628,29 @@ backed state, method generics, callable references, private enclosing access, an
 The physical KLIB record is authoritative for cross-module holder calls and for their static
 default dispatchers, and producer variants assemble on all three profiles.
 
-Schema 10 additionally records one exact physical `<EnsureCompanionInitialized>` entry per logical
-classifier initialization event and the exact singleton-field owner/name for every Kotlin object.
-Its `.cctor` calls producer-recorded superclass and selected
-interface entries before executing local state, while generic construction routes every closed
-construction through the same non-generic holder. Local runtime coverage pins source ordering,
-once-only state, private inheritance, abstract-only interface independence, and generic-global
-identity. Mixed companion-block/companion-object initializers now share one source-ordered stream,
-and generic-owner companions place their singleton on the same non-generic holder. A separately
-compiled `netstandard2.0` producer/`net10.0` consumer executes the graph, an ordinary object, and a
-generic companion through recorded physical metadata. Protected members which would acquire
-holder-relative CLR `family` access remain rejected pending a deliberate bridge/export design.
+Schema 15 records one exact physical `<EnsureInitialized>` entry per logical classifier
+initialization event and the exact singleton-field owner/name for every Kotlin object. Its
+`.cctor` calls producer-recorded superclass and selected interface entries before executing local
+state, while generic construction routes every closed construction through one non-generic
+holder. Existing companion state uses `<CompanionStatics>`; an interface or generic classifier
+which needs only an event uses the distinct `<StaticInitialization>` holder. Local runtime
+coverage pins source ordering, once-only state, private inheritance, abstract-only interface
+independence, generic-global identity, and failed initialization. Mixed companion-block/
+companion-object initializers share one source-ordered stream, and generic-owner companions place
+their singleton on the same non-generic holder. A separately compiled `netstandard2.0` producer is
+consumed by both runtime profiles through recorded physical metadata. Protected members which
+would acquire holder-relative CLR `family` access remain rejected pending a deliberate
+bridge/export design.
+
+The accepted `adr-kotlin-static-initialization-failures.md` closes the Kotlin-owned failure item.
+Compiler-generated class and file `.cctor` methods catch the original `System.Exception`, publish
+private failure state, and complete so CLR `TypeInitializationException` never becomes Kotlin
+behavior. The logical barrier atomically rethrows the first Kotlin `Error` object, otherwise
+constructs `ExceptionInInitializerError(cause)`, and constructs `NoClassDefFoundError` on later
+use. Constructors, Kotlin static functions/accessors, top-level functions/accessors, singleton
+loads, generated static machinery, dependency edges, and cross-module singleton reads re-enter
+the barrier. Foreign CLR initializers remain untouched. Runtime surface level 8 and schema 15
+reject the incompatible unpublished predecessor.
 
 The accepted `adr-hybrid-generic-nullability-and-covariant-returns.md` fixes the remaining
 nullability representation. ABI schema 11 replaced the unshipped schema-10 signature model:
@@ -691,8 +703,8 @@ Commit replayable tests for:
 - nullable import/export, reflection visibility, and raw foreign exceptions.
 - Kotlin-owned initializer failures: original `Error` identity, first non-`Error`
   `ExceptionInInitializerError`, later `NoClassDefFoundError`, inherited poisoning, top-level
-  files, and cross-module access. CLR `TypeInitializationException` may be an internal mechanism,
-  not the final Kotlin observation.
+  files, generic closed constructions, and cross-module access. CLR
+  `TypeInitializationException` must not be the final Kotlin observation.
 
 Benchmarks may guide optional capabilities only when their source, environment, and result parser
 are committed. Prose reports of a local probe do not establish ABI.
@@ -713,10 +725,18 @@ old assembler as a net10 requirement would erase the accepted profile capability
 Failed assembler attempts remove partial PE/runtimeconfig output. The retained pairing evidence is
 therefore closed by a complete net48 matrix and an explicit net10 capability boundary.
 
-The current supported Kotlin box corpus now has symmetric execution lanes: all 116 cases run for
+The current supported Kotlin box corpus now has symmetric execution lanes: all 117 cases run for
 `net48` and `net10.0` under both FIR parsers on real Framework CLR 4 and CoreCLR hosts. This closes
 the full-profile semantic-lane item for the currently accepted feature set; expanding the common
 semantic corpus remains continuous target work rather than a reason to weaken the gate.
+
+**Implementation status (2026-07-28):** Kotlin-owned initializer-failure coverage now executes
+companions, inherited class events, a generic derived class across distinct closed
+constructions, ordinary objects, exact `Error` identity, and file-facade failures on both runtime
+profiles and both FIR parsers. A portable producer is consumed separately from `net48` and
+`net10.0`; the test asserts producer-recorded barriers and their ordering before external
+singleton-field reads. The remaining C# raw-singleton-field bypass belongs to the deliberate
+export-facade work before ABI stability and is not a Kotlin semantic gap.
 
 The full library-integration class now also pins a portable generic interface default-argument
 dispatcher consumed on both runtime profiles. Consumer synthesis retains the recorded instance

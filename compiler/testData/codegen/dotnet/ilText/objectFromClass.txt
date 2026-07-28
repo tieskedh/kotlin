@@ -1,4 +1,9 @@
 .assembly extern mscorlib {}
+.assembly extern System
+{
+  .ver 4:0:0:0
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+}
 .assembly extern Kotlin.Runtime
 {
   .ver 1:0:0:0
@@ -11,16 +16,52 @@
 {
   .field public static initonly class 'A' 'INSTANCE'
   .field private string 'tag'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'A'::.ctor()
-    stsfld class 'A' 'A'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'A'::.ctor()
+      stsfld class 'A' 'A'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'A'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldsfld object 'A'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'A'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "A"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 2
+    call void 'A'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ldarg.0
@@ -53,6 +94,7 @@
   .method public hidebysig instance string 'readTag'() cil managed
   {
     .maxstack 1
+    call void 'A'::'<EnsureInitialized>'()
     ldsfld class 'A' 'A'::'INSTANCE'
     call instance string 'A'::'get_tag'()
     ret
@@ -71,11 +113,13 @@
   {
     .entrypoint
     .maxstack 1
+    call void 'A'::'<EnsureInitialized>'()
     ldsfld class 'A' 'A'::'INSTANCE'
     pop
     newobj instance void 'User'::.ctor()
     call instance string 'User'::'readTag'()
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'A'::'<EnsureInitialized>'()
     ldsfld class 'A' 'A'::'INSTANCE'
     call class 'A' 'objectFromClassKt'::'pass'(class 'A')
     call instance string 'A'::'get_tag'()

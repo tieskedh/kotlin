@@ -555,24 +555,53 @@
     }
   }
   .field public static initonly class 'FactoryBase'/'Companion' 'Companion'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldnull
-    newobj instance void 'FactoryBase'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-    stsfld class 'FactoryBase'/'Companion' 'FactoryBase'::'Companion'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldnull
+      newobj instance void 'FactoryBase'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+      stsfld class 'FactoryBase'/'Companion' 'FactoryBase'::'Companion'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'FactoryBase'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
-  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 1
+    .maxstack 2
+    ldsfld object 'FactoryBase'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'FactoryBase'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "FactoryBase"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'FactoryBase'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -585,22 +614,51 @@
        extends 'FactoryBase'
 {
   .field private string 'value'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    call void 'FactoryBase'::'<EnsureCompanionInitialized>'()
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      call void 'FactoryBase'::'<EnsureInitialized>'()
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'FactoryLeaf'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
-  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 1
+    .maxstack 2
+    ldsfld object 'FactoryLeaf'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'FactoryLeaf'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "FactoryLeaf"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor(string 'value') cil managed
   {
     .maxstack 2
+    call void 'FactoryLeaf'::'<EnsureInitialized>'()
     ldarg.0
     call instance void 'FactoryBase'::.ctor()
     ldarg.0
@@ -757,6 +815,7 @@ IL_genericInterfaceJoin_1:
     ldloc 4
     call instance string class 'Constrained`1'<class 'Token'>::'marker'()
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'FactoryBase'::'<EnsureInitialized>'()
     ldsfld class 'FactoryBase'/'Companion' 'FactoryBase'::'Companion'
     ldstr "factory"
     call instance class 'FactoryBase' 'FactoryBase'/'Companion'::'create'(string)

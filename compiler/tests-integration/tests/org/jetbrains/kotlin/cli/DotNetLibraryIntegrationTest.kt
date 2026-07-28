@@ -6,7 +6,7 @@
 package org.jetbrains.kotlin.cli
 
 import org.jetbrains.kotlin.backend.dotnet.DotNetDefaultArgumentDispatcher
-import org.jetbrains.kotlin.backend.dotnet.DotNetCompanionInitialization
+import org.jetbrains.kotlin.backend.dotnet.DotNetStaticInitialization
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpDefaultKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpErasedOwnerRelativeConstraint
 import org.jetbrains.kotlin.backend.dotnet.DotNetCSharpImplementationManifest
@@ -83,9 +83,9 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             ),
             "C:sample/Counter" to DotNetPhysicalDeclaration.Class(
                 ownerPath = listOf("sample.Counter"),
-                companionInitialization = DotNetCompanionInitialization(
+                staticInitialization = DotNetStaticInitialization(
                     ownerPath = listOf("sample.Counter", "<CompanionStatics>"),
-                    methodName = "<EnsureCompanionInitialized>",
+                    methodName = "<EnsureInitialized>",
                 ),
                 objectInstance = DotNetObjectInstance(
                     ownerPath = listOf("sample.Counter", "<CompanionStatics>"),
@@ -157,7 +157,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             putAll(DotNetLibraryAbiCodec.encode(declarations))
         }
 
-        assertEquals("14", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
+        assertEquals("15", properties.getProperty(DotNetLibraryAbiCodec.ABI_VERSION_PROPERTY))
         assertEquals(declarations, DotNetLibraryAbiCodec.decode(properties))
         assertEquals(
             "be089ff358019a018b5e1ce2af85aedd",
@@ -8840,7 +8840,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 K2DotNetCompilerArguments::destination.cliArgument, directory.path,
             )
             val il = directory.resolve("Companion.Initialization.Library.il").readText()
-            assertTrue("'<EnsureCompanionInitialized>'" in il) { il }
+            assertTrue("'<EnsureInitialized>'" in il) { il }
             assertTrue("KotlinCompilerAbiAttribute" in il) { il }
         }
 
@@ -8918,13 +8918,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
         val consumerIl = consumerDirectory.resolve("CompanionInitializationConsumer.il").readText()
         assertTrue(
             "call void [Companion.Initialization.Library]'companioninit.ProducerChild'::" +
-                    "'<EnsureCompanionInitialized>'()" in consumerIl
+                    "'<EnsureInitialized>'()" in consumerIl
         ) { consumerIl }
         assertTrue("ldsfld" in consumerIl && "'<CompanionStatics>'::'Companion'" in consumerIl) { consumerIl }
         assertTrue("'companioninit.ProducerSingleton'::'INSTANCE'" in consumerIl) { consumerIl }
         assertTrue(
             "call void [Companion.Initialization.Library]'companioninit.GenericPrivateState`1'/" +
-                    "'<CompanionStatics>'::'<EnsureCompanionInitialized>'()" in consumerIl
+                    "'<CompanionStatics>'::'<EnsureInitialized>'()" in consumerIl
         ) { consumerIl }
         runDotNet(
             modernDotNetHostOrSkip(),
@@ -8932,6 +8932,276 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             consumerDirectory,
             "Companion-initialization cross-module consumer failed",
         )
+    }
+
+    @Test
+    fun testStaticInitializationFailuresPreserveKotlinSemanticsAcrossModules() {
+        requireOrAssumeToolchain(DotNetIlAssembler.findModernIlasm() != null, "Modern ilasm is not available")
+        requireOrAssumeToolchain(
+            DotNetIlAssembler.findFrameworkIlasm() != null,
+            ".NET Framework ilasm is not available",
+        )
+        val dotnetHost = modernDotNetHostOrSkip()
+        val frameworkHost = DotNetIlAssembler.findFrameworkPowerShellHost()
+        requireOrAssumeToolchain(frameworkHost != null, "Windows PowerShell CLR 4 host is not available")
+
+        val producerDirectory = File(tmpdir, "static-initialization-failure-producer").apply { mkdirs() }
+        val declarationsSource = producerDirectory.resolve("declarations.kt").apply {
+            writeText(
+                """
+                package staticfailure
+
+                public val classCause: IllegalStateException = IllegalStateException("class")
+                public val genericClassCause: IllegalStateException = IllegalStateException("generic class")
+                public val objectCause: IllegalStateException = IllegalStateException("object")
+                public val fileCause: IllegalStateException = IllegalStateException("file")
+
+                public class ProducerFailure {
+                    public companion object {
+                        public val never: Int = throw classCause
+                    }
+                }
+
+                public open class ProducerGenericParentFailure {
+                    public companion object {
+                        public val never: Int = throw genericClassCause
+                    }
+                }
+
+                public class ProducerGenericChildFailure<T> : ProducerGenericParentFailure()
+
+                public object ProducerObjectFailure {
+                    public val never: Int = throw objectCause
+                }
+
+                public class ProducerExactError(message: String) : Error(message)
+
+                public val exactCause: ProducerExactError = ProducerExactError("exact")
+
+                public object ProducerExactFailure {
+                    public val never: Int = throw exactCause
+                }
+                """.trimIndent()
+            )
+        }
+        val fileFailureSource = producerDirectory.resolve("failingFile.kt").apply {
+            writeText(
+                """
+                package staticfailure
+
+                public val failingFileValue: Int = throw fileCause
+                public val unreachableFileValue: Int = 42
+                """.trimIndent()
+            )
+        }
+        compileInProcess(
+            K2DotNetCompiler(),
+            declarationsSource.path,
+            fileFailureSource.path,
+            K2DotNetCompilerArguments::dotNetProduceLibrary.cliArgument,
+            K2DotNetCompilerArguments::dotNetTarget.cliArgument, "netstandard2.0",
+            K2DotNetCompilerArguments::moduleName.cliArgument, "Static.Initialization.Failures",
+            K2DotNetCompilerArguments::destination.cliArgument, producerDirectory.path,
+        )
+
+        val producerAssembly = producerDirectory.resolve("Static.Initialization.Failures.dll")
+        val producerIl = producerDirectory.resolve("Static.Initialization.Failures.il").readText()
+        assertTrue("StaticInitialization'::'Capture'" in producerIl) { producerIl }
+        assertTrue("StaticInitialization'::'Observe'" in producerIl) { producerIl }
+        assertTrue("StaticInitialization'::'Throw'" in producerIl) { producerIl }
+        assertTrue("'<static-initialization-failure>'" in producerIl) { producerIl }
+        assertTrue("'<StaticInitialization>'" in producerIl) { producerIl }
+        val producerDeclarations = DotNetLibraryAbiCodec.decode(producerAssembly.readKlibManifest())
+        val initializationOwners = producerDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .filter { it.staticInitialization != null }
+            .mapTo(linkedSetOf()) { it.ownerPath.last() }
+        assertTrue("staticfailure.ProducerFailure" in initializationOwners) {
+            initializationOwners.toString()
+        }
+        assertTrue("staticfailure.ProducerObjectFailure" in initializationOwners) {
+            initializationOwners.toString()
+        }
+        assertTrue("staticfailure.ProducerExactFailure" in initializationOwners) {
+            initializationOwners.toString()
+        }
+        val genericChildDeclaration = producerDeclarations.values
+            .filterIsInstance<DotNetPhysicalDeclaration.Class>()
+            .single { declaration ->
+                declaration.staticInitialization?.ownerPath?.last() == "<StaticInitialization>"
+            }
+        assertEquals("staticfailure.ProducerGenericChildFailure`1", genericChildDeclaration.ownerPath.last())
+        assertEquals(
+            "<StaticInitialization>",
+            genericChildDeclaration.staticInitialization?.ownerPath?.last(),
+        )
+
+        val consumerSource = File(tmpdir, "static-initialization-failure-consumer.kt").apply {
+            writeText(
+                """
+                package consumer
+
+                import staticfailure.ProducerExactError
+                import staticfailure.ProducerExactFailure
+                import staticfailure.ProducerFailure
+                import staticfailure.ProducerGenericChildFailure
+                import staticfailure.ProducerObjectFailure
+                import staticfailure.classCause
+                import staticfailure.exactCause
+                import staticfailure.failingFileValue
+                import staticfailure.fileCause
+                import staticfailure.genericClassCause
+                import staticfailure.objectCause
+                import staticfailure.unreachableFileValue
+
+                private fun failureMessage(failure: Throwable): String? = failure.message
+                private fun failureCause(failure: Throwable): Throwable? = failure.cause
+
+                fun main() {
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerFailure()
+                        throw Error("class first did not fail")
+                    } catch (failure: ExceptionInInitializerError) {
+                        if (failureCause(failure) !== classCause) throw Error("class cause identity")
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerFailure()
+                        throw Error("class later did not fail")
+                    } catch (failure: NoClassDefFoundError) {
+                        if (failureMessage(failure) !=
+                            "Could not initialize class staticfailure.ProducerFailure"
+                        ) {
+                            throw Error("class later message=" + failureMessage(failure))
+                        }
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerGenericChildFailure<String>()
+                        throw Error("generic class first did not fail")
+                    } catch (failure: ExceptionInInitializerError) {
+                        if (failureCause(failure) !== genericClassCause) {
+                            throw Error("generic class cause identity")
+                        }
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerGenericChildFailure<Int>()
+                        throw Error("generic class later did not fail")
+                    } catch (failure: NoClassDefFoundError) {
+                        if (failureMessage(failure) !=
+                            "Could not initialize class staticfailure.ProducerGenericChildFailure"
+                        ) {
+                            throw Error("generic class later message=" + failureMessage(failure))
+                        }
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerObjectFailure.never
+                        throw Error("object first did not fail")
+                    } catch (failure: ExceptionInInitializerError) {
+                        if (failureCause(failure) !== objectCause) throw Error("object cause identity")
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerObjectFailure.never
+                        throw Error("object later did not fail")
+                    } catch (failure: NoClassDefFoundError) {
+                        if (failureMessage(failure) !=
+                            "Could not initialize class staticfailure.ProducerObjectFailure"
+                        ) {
+                            throw Error("object later message=" + failureMessage(failure))
+                        }
+                    }
+
+                    try {
+                        ProducerExactFailure.never
+                        throw Error("exact Error first did not fail")
+                    } catch (failure: ProducerExactError) {
+                        if (failure !== exactCause) throw Error("exact Error identity")
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        ProducerExactFailure.never
+                        throw Error("exact Error later did not fail")
+                    } catch (failure: NoClassDefFoundError) {
+                        if (failureMessage(failure) !=
+                            "Could not initialize class staticfailure.ProducerExactFailure"
+                        ) {
+                            throw Error("exact Error later message=" + failureMessage(failure))
+                        }
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        failingFileValue
+                        throw Error("file first did not fail")
+                    } catch (failure: ExceptionInInitializerError) {
+                        if (failureCause(failure) !== fileCause) throw Error("file cause identity")
+                    }
+
+                    @Suppress("INVISIBLE_REFERENCE")
+                    try {
+                        unreachableFileValue
+                        throw Error("file later did not fail")
+                    } catch (failure: NoClassDefFoundError) {
+                        if (failureMessage(failure) != "Could not initialize file") {
+                            throw Error("file later message=" + failureMessage(failure))
+                        }
+                    }
+
+                    println("OK")
+                }
+                """.trimIndent()
+            )
+        }
+
+        for (target in listOf("net48", "net10.0")) {
+            val consumerDirectory = File(tmpdir, "static-initialization-failure-$target").apply { mkdirs() }
+            val consumerAssembly = consumerDirectory.resolve(
+                if (target == "net48") "StaticInitializationFailureConsumer.exe"
+                else "StaticInitializationFailureConsumer.dll"
+            )
+            compileInProcess(
+                K2DotNetCompiler(),
+                consumerSource.path,
+                K2DotNetCompilerArguments::classpath.cliArgument, producerAssembly.path,
+                K2DotNetCompilerArguments::dotNetTarget.cliArgument, target,
+                K2DotNetCompilerArguments::moduleName.cliArgument, "StaticInitializationFailureConsumer",
+                K2DotNetCompilerArguments::destination.cliArgument, consumerAssembly.path,
+            )
+            val consumerIl = consumerDirectory.resolve("StaticInitializationFailureConsumer.il").readText()
+            assertTrue(
+                "call void [Static.Initialization.Failures]'staticfailure.ProducerObjectFailure'::" +
+                        "'<EnsureInitialized>'()" in consumerIl
+            ) { consumerIl }
+            assertTrue(
+                "ldsfld class [Static.Initialization.Failures]'staticfailure.ProducerObjectFailure' " +
+                        "[Static.Initialization.Failures]'staticfailure.ProducerObjectFailure'::'INSTANCE'" in consumerIl
+            ) { consumerIl }
+
+            if (target == "net48") {
+                runAssemblerPairing(
+                    frameworkExecutionCommand(checkNotNull(frameworkHost), consumerAssembly),
+                    consumerDirectory,
+                    "Framework static-initialization failure consumer",
+                )
+            } else {
+                runDotNet(
+                    dotnetHost,
+                    consumerAssembly,
+                    consumerDirectory,
+                    "CoreCLR static-initialization failure consumer failed",
+                )
+            }
+        }
     }
 
     @Test

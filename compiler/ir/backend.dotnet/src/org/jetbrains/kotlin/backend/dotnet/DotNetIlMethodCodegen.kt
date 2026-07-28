@@ -2,7 +2,7 @@ package org.jetbrains.kotlin.backend.dotnet
 
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_DATA_CLASS_COMPONENT_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZER
-import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_INITIALIZATION_ENTRY
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_ENTRY
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_GENERIC_INTERFACE_CANONICAL_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
@@ -33,9 +33,10 @@ import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrContainerExpression
 import org.jetbrains.kotlin.ir.expressions.IrDelegatingConstructorCall
 import org.jetbrains.kotlin.ir.expressions.IrDoWhileLoop
-import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrExpression
 import org.jetbrains.kotlin.ir.expressions.IrExpressionBody
+import org.jetbrains.kotlin.ir.expressions.IrGetField
+import org.jetbrains.kotlin.ir.expressions.IrGetValue
 import org.jetbrains.kotlin.ir.expressions.IrGetObjectValue
 import org.jetbrains.kotlin.ir.expressions.IrInstanceInitializerCall
 import org.jetbrains.kotlin.ir.expressions.IrReturn
@@ -309,7 +310,7 @@ internal class DotNetIlMethodCodegen(
         dotNetMemberVisibility() == "public" &&
                 (origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
                         origin == DOTNET_INTERFACE_DEFAULT_HELPER ||
-                        origin == DOTNET_COMPANION_INITIALIZATION_ENTRY ||
+                        origin == DOTNET_STATIC_INITIALIZATION_ENTRY ||
                         (this is IrSimpleFunction && name.asString().endsWith("\$default")) ||
                         visibility != DescriptorVisibilities.PUBLIC)
 
@@ -739,6 +740,11 @@ internal class DotNetIlMethodCodegen(
             // A side-effect-free value read in statement position (e.g. the trailing `<unary>`
             // read of a desugared `x++` block) compiles to nothing.
             expression is IrGetValue -> Unit
+            // A static singleton-field read is an active-use operation even when its value is
+            // discarded. The static-initialization usage lowering prefixes it with the Kotlin
+            // failure barrier; still perform and discard the physical read so CLR initialization
+            // and volatile/publication rules are not silently weakened.
+            expression is IrGetField -> emitDiscardableExpression(expression)
             // A side-effect-free constant in statement position compiles to nothing — the
             // canonical shape is the `null` result branch of a Unit-typed safe call
             // (`obj?.method()` desugars to a when whose null branch is a bare `null` constant).

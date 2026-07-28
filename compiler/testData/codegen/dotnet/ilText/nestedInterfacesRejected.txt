@@ -90,19 +90,47 @@
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
     .field public static initonly class 'GenericCompanionInterface'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'GenericCompanionInterface'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'GenericCompanionInterface'/'Companion' 'GenericCompanionInterface'/'<CompanionStatics>'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'GenericCompanionInterface'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'GenericCompanionInterface'/'Companion' 'GenericCompanionInterface'/'<CompanionStatics>'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'GenericCompanionInterface'/'<CompanionStatics>'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'GenericCompanionInterface'/'<CompanionStatics>'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'GenericCompanionInterface'/'<CompanionStatics>'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "GenericCompanionInterface"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
   }
@@ -151,19 +179,47 @@
     }
   }
   .field public static initonly class 'MarkedCompanionInterface'/'Companion' 'Companion'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldnull
-    newobj instance void 'MarkedCompanionInterface'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-    stsfld class 'MarkedCompanionInterface'/'Companion' 'MarkedCompanionInterface'::'Companion'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldnull
+      newobj instance void 'MarkedCompanionInterface'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+      stsfld class 'MarkedCompanionInterface'/'Companion' 'MarkedCompanionInterface'::'Companion'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'MarkedCompanionInterface'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
-  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 1
+    .maxstack 2
+    ldsfld object 'MarkedCompanionInterface'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'MarkedCompanionInterface'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "MarkedCompanionInterface"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
 }

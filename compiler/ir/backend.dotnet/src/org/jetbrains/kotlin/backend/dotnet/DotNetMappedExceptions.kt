@@ -31,6 +31,8 @@ internal enum class DotNetKotlinExceptionTypeId(val abiValue: Int) {
     NULL_POINTER_EXCEPTION(12),
     CLASS_CAST_EXCEPTION(13),
     CANCELLATION_EXCEPTION(14),
+    EXCEPTION_IN_INITIALIZER_ERROR(15),
+    NO_CLASS_DEF_FOUND_ERROR(16),
 }
 
 /**
@@ -211,6 +213,42 @@ internal object DotNetMappedExceptions {
             DotNetKotlinExceptionTypeId.ERROR,
             hasMessageCauseCtor = true,
             hasCauseCtor = true,
+        )
+        put(
+            FqName("kotlin.ExceptionInInitializerError"),
+            Entry.Mapped(
+                carrierPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.exceptionInInitializerErrorTypeRef),
+                constructorPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.exceptionInInitializerErrorTypeRef),
+                typedCatchPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.exceptionInInitializerErrorTypeRef),
+                classifierTypeId = DotNetKotlinExceptionTypeId.EXCEPTION_IN_INITIALIZER_ERROR,
+                hasMessageCauseCtor = false,
+                hasCauseCtor = true,
+                physicalSupertypeRefs = setOf(
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.errorTypeRef),
+                    exceptionType,
+                ),
+            )
+        )
+        put(
+            FqName("kotlin.NoClassDefFoundError"),
+            Entry.Mapped(
+                carrierPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noClassDefFoundErrorTypeRef),
+                constructorPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noClassDefFoundErrorTypeRef),
+                typedCatchPhysicalTypeRef =
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.noClassDefFoundErrorTypeRef),
+                classifierTypeId = DotNetKotlinExceptionTypeId.NO_CLASS_DEF_FOUND_ERROR,
+                hasMessageCauseCtor = false,
+                hasCauseCtor = false,
+                physicalSupertypeRefs = setOf(
+                    PhysicalTypeRef.Exact(DotNetRuntimeLibrary.errorTypeRef),
+                    exceptionType,
+                ),
+            )
         )
         exactlyMapped(
             "IllegalArgumentException", "ArgumentException",

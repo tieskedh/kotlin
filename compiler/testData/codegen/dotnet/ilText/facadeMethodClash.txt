@@ -9,15 +9,18 @@
 .class public abstract sealed auto ansi beforefieldinit 'facadeMethodClashKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .method public hidebysig static string 'get_y'() cil managed
   {
     .maxstack 1
+    call void 'facadeMethodClashKt'::'<EnsureInitialized>'()
     ldstr "d"
     ret
   }
   .method public hidebysig static int32 'survivor'() cil managed
   {
     .maxstack 1
+    call void 'facadeMethodClashKt'::'<EnsureInitialized>'()
     ldc.i4 42
     ret
   }
@@ -25,6 +28,7 @@
   {
     .entrypoint
     .maxstack 3
+    call void 'facadeMethodClashKt'::'<EnsureInitialized>'()
     call string 'facadeMethodClashKt'::'get_y'()
     dup
     brtrue IL_stringValueNotNull_0
@@ -38,6 +42,24 @@ IL_stringValueNotNull_0:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'facadeMethodClashKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'facadeMethodClashKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
 }

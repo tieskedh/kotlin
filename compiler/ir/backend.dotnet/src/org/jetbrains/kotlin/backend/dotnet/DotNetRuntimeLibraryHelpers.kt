@@ -1709,6 +1709,116 @@ $primitiveArrayHelperTypeIl
             |    }
             |  }
             |
+            |  // One failure-state object is allocated only when a Kotlin-owned CLR type
+            |  // initializer fails. The CLR still supplies once-only execution and publication;
+            |  // this object supplies Kotlin's first-observer/later-observer distinction after the
+            |  // physical .cctor catches the original System.Exception.
+            |  .class private auto ansi sealed beforefieldinit StaticInitializationFailureState
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    .field private initonly class ${coreLibraryReference}System.Exception 'reason'
+            |    .field private int32 'observed'
+            |
+            |    .method assembly hidebysig specialname rtspecialname instance void .ctor(
+            |        class ${coreLibraryReference}System.Exception 'reason') cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      call instance void ${coreLibraryReference}System.Object::.ctor()
+            |      ldarg.0
+            |      ldarg.1
+            |      stfld class ${coreLibraryReference}System.Exception Kotlin.Runtime.Internal.StaticInitializationFailureState::'reason'
+            |      ret
+            |    }
+            |
+            |    .method assembly hidebysig instance class ${coreLibraryReference}System.Exception 'Observe'() cil managed
+            |    {
+            |      .maxstack 2
+            |      ldarg.0
+            |      ldflda int32 Kotlin.Runtime.Internal.StaticInitializationFailureState::'observed'
+            |      ldc.i4.1
+            |      call int32 ${coreLibraryReference}System.Threading.Interlocked::Exchange(int32&, int32)
+            |      brtrue SIF_Later
+            |
+            |      ldarg.0
+            |      ldfld class ${coreLibraryReference}System.Exception Kotlin.Runtime.Internal.StaticInitializationFailureState::'reason'
+            |      ret
+            |
+            |    SIF_Later:
+            |      ldnull
+            |      ret
+            |    }
+            |  }
+            |
+            |  // Public only as compiler/runtime ABI. Generated assemblies keep their private
+            |  // state fields object-typed, so the concrete failure-state class is not part of
+            |  // producer metadata and may evolve with Kotlin.Runtime.
+            |  .class public abstract sealed auto ansi beforefieldinit StaticInitialization
+            |         extends ${coreLibraryReference}System.Object
+            |  {
+            |    $compilerAbiTypeAttributesIl
+            |    .method public hidebysig static object 'Capture'(
+            |        class ${coreLibraryReference}System.Exception 'reason') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      newobj instance void Kotlin.Runtime.Internal.StaticInitializationFailureState::.ctor(
+            |          class ${coreLibraryReference}System.Exception)
+            |      ret
+            |    }
+            |
+            |    .method public hidebysig static class ${coreLibraryReference}System.Exception 'Observe'(
+            |        object 'state') cil managed
+            |    {
+            |      .maxstack 1
+            |      ldarg.0
+            |      castclass Kotlin.Runtime.Internal.StaticInitializationFailureState
+            |      callvirt instance class ${coreLibraryReference}System.Exception Kotlin.Runtime.Internal.StaticInitializationFailureState::'Observe'()
+            |      ret
+            |    }
+            |
+            |    // Target implementation of the Common non-JVM
+            |    // kotlin.internal.staticInitializationFailure(reason, className) contract.
+            |    .method public hidebysig static void 'Throw'(
+            |        class ${coreLibraryReference}System.Exception 'reason',
+            |        string 'className') cil managed
+            |    {
+            |      .maxstack 3
+            |      ldarg.0
+            |      brfalse SIF_NoReason
+            |      ldarg.0
+            |      ldc.i4.4
+            |      call bool Kotlin.Runtime.Internal.ExceptionClassifier::'IsKotlinExceptionInstance'(
+            |          class ${coreLibraryReference}System.Exception, int32)
+            |      brfalse SIF_Wrap
+            |      ldarg.0
+            |      throw
+            |
+            |    SIF_Wrap:
+            |      ldarg.0
+            |      newobj instance void Kotlin.ExceptionInInitializerError::.ctor(
+            |          class ${coreLibraryReference}System.Exception)
+            |      throw
+            |
+            |    SIF_NoReason:
+            |      ldstr "Could not initialize "
+            |      ldarg.1
+            |      brfalse SIF_File
+            |      ldstr "class "
+            |      ldarg.1
+            |      call string ${coreLibraryReference}System.String::Concat(string, string)
+            |      br SIF_Message
+            |
+            |    SIF_File:
+            |      ldstr "file"
+            |
+            |    SIF_Message:
+            |      call string ${coreLibraryReference}System.String::Concat(string, string)
+            |      newobj instance void Kotlin.NoClassDefFoundError::.ctor(string)
+            |      throw
+            |    }
+            |  }
+            |
             |  // The only runtime authority for Kotlin logical exception membership. Broad
             |  // categories cannot be represented by the CLR inheritance tree without either
             |  // wrapping foreign exceptions or collapsing Kotlin's Exception/Error split.
@@ -1767,6 +1877,12 @@ $primitiveArrayHelperTypeIl
             |      ldarg.1
             |      ldc.i4.s 14
             |      beq EC_Cancellation
+            |      ldarg.1
+            |      ldc.i4.s 15
+            |      beq EC_ExceptionInInitializerError
+            |      ldarg.1
+            |      ldc.i4.s 16
+            |      beq EC_NoClassDefFoundError
             |      br EC_False
             |
             |    EC_Exception:
@@ -1855,6 +1971,14 @@ $primitiveArrayHelperTypeIl
             |    EC_Cancellation:
             |      ldarg.0
             |      isinst ${coreLibraryReference}System.OperationCanceledException
+            |      br EC_MatchedObject
+            |    EC_ExceptionInInitializerError:
+            |      ldarg.0
+            |      isinst Kotlin.ExceptionInInitializerError
+            |      br EC_MatchedObject
+            |    EC_NoClassDefFoundError:
+            |      ldarg.0
+            |      isinst Kotlin.NoClassDefFoundError
             |    EC_MatchedObject:
             |      ldnull
             |      cgt.un
@@ -2820,6 +2944,24 @@ $primitiveArrayHelperTypeIl
         "call string [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
                 "${"Kotlin.Runtime.Internal.Intrinsics".toIlIdentifier()}::" +
                 "${"StringValueOf".toIlIdentifier()}(object)"
+
+    /** Captures one original CLR exception in the runtime-owned per-initializer failure state. */
+    fun captureStaticInitializationFailureCallInstruction(coreLibraryReference: String): String =
+        "call object [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.StaticInitialization".toIlIdentifier()}::" +
+                "${"Capture".toIlIdentifier()}(class ${coreLibraryReference}System.Exception)"
+
+    /** Atomically exposes the original reason once and null to every later failed active use. */
+    fun observeStaticInitializationFailureCallInstruction(coreLibraryReference: String): String =
+        "call class ${coreLibraryReference}System.Exception [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.StaticInitialization".toIlIdentifier()}::" +
+                "${"Observe".toIlIdentifier()}(object)"
+
+    /** Target implementation of Common non-JVM static-initialization failure classification. */
+    fun throwStaticInitializationFailureCallInstruction(coreLibraryReference: String): String =
+        "call void [${DotNetRuntimeLibrary.ASSEMBLY_NAME}]" +
+                "${"Kotlin.Runtime.Internal.StaticInitialization".toIlIdentifier()}::" +
+                "${"Throw".toIlIdentifier()}(class ${coreLibraryReference}System.Exception, string)"
 
     /** Nullable shallow content equality for every supported CLR vector representation. */
     fun arrayContentEqualsCallInstruction(coreLibraryReference: String): String =

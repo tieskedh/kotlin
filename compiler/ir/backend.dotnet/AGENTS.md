@@ -15,7 +15,7 @@ The commit gate is
 toolchain enforcement and owns both the 780 FIR/IL/semantic tests and the 70 generated-CLI and
 library-integration tests. Audit all 16 JUnit XML files under
 `compiler/fir/fir2ir/build/test-results/dotNetTest/` and
-`compiler/tests-integration/build/test-results/dn/`; the current baseline is 850 tests with zero
+`compiler/tests-integration/build/test-results/dn/`; the current baseline is 867 tests with zero
 failures, errors, or skips. `dn` is an intentionally short private child-task name because the
 Gradle convention embeds it in paths consumed by CLR4 and Framework ILAsm, which retain
 `MAX_PATH` behavior. Do not replace the aggregate gate with only its FIR child.
@@ -2021,12 +2021,13 @@ landed shape as a compatibility constraint.
   failure to the declaration that actually failed: a
   companion failure surfaces out of the enclosing type's render (the companion renders only
   recursively inside it), so the render fixpoint re-tags it with the companion
-  (`DotNetIlUnsupportedClassException`) before evicting. This raw CLR failure behavior is a
-  physical probe result, not the final semantics of a Kotlin-owned initializer. Since the
-  2026-07-28 upstream sync, the required Common contract is explicit: first Kotlin `Error`
-  preserves its object, another first failure becomes `ExceptionInInitializerError(cause)`, and
-  later logical access becomes `NoClassDefFoundError`. Implement that classification above
-  `.cctor` while preserving foreign CLR initializer exceptions as their original objects.
+  (`DotNetIlUnsupportedClassException`) before evicting. This raw CLR failure behavior remains
+  useful physical probe evidence, but no longer defines a Kotlin-owned initializer. The
+  generalized static-initialization failure lowering catches the original exception inside the
+  compiler-generated `.cctor`, records private logical state, and makes every Kotlin active use
+  call `<EnsureInitialized>`. The first Kotlin `Error` preserves its object, another first failure
+  becomes `ExceptionInInitializerError(cause)`, and later logical access becomes
+  `NoClassDefFoundError`. Foreign CLR initializer exceptions remain untouched.
   `box/nestedSingletons.kt` and
   `box/propertyReferences.kt` execute the two singleton-field cases on CoreCLR; their IL goldens
   pin the private field plus assembly bridge. A separate invalid declaration nested
@@ -2168,6 +2169,37 @@ landed shape as a compatibility constraint.
   Narrow/foreign export admission, constructor collisions, remaining foreign/generic boundary
   coverage, the complete built-in mapping table, and any non-physical hierarchy metadata remain
   open before Gate B.
+- Kotlin-owned static-initialization failures (decision:
+  `docs/decisions/adr-kotlin-static-initialization-failures.md`; follows JVM observable semantics
+  and the JS/Wasm declaration-plus-usage lowering split, with CLR-specific synchronization):
+  retain CLR `.cctor` for once-only execution, re-entrancy, and publication, but never let a
+  Kotlin throwable escape it. Compiler-generated class and file initializers catch the original
+  physical `System.Exception` and store a private object-typed failure state. The stable
+  `<EnsureInitialized>` barrier asks `Kotlin.Runtime.Internal.StaticInitialization.Observe` for
+  the original reason once and null on later use. It then invokes the existing Common non-JVM
+  `kotlin.internal.staticInitializationFailure(reason, className)` contract through the runtime's
+  target implementation: the first Kotlin `Error` is the same object, the first other failure is
+  an exact `Kotlin.ExceptionInInitializerError` with that object as cause, and later observers
+  receive an exact `Kotlin.NoClassDefFoundError`. `Interlocked.Exchange` selects one first
+  observer under concurrency. Foreign CLR `.cctor` methods are never rewritten.
+  The graph and failure lowerings are deliberately general rather than companion-only.
+  Constructors, static functions/accessors, top-level functions/accessors, singleton-field reads,
+  generated static machinery, and cross-module dependencies enter the logical barrier before user
+  code. Producer methods carry their own file-facade prologue; public/friend-reachable classifier
+  events record the exact barrier owner and name in physical ABI schema 15. Existing companion
+  storage uses `<CompanionStatics>`, while a generic classifier or interface which only needs an
+  initialization event uses a separate non-generic `<StaticInitialization>` holder. No closed CLR
+  generic construction owns a distinct Kotlin failure state.
+  Runtime surface level 8 adds the exact internal Kotlin error identities and two marked public
+  compiler/runtime helper methods; the concrete state type stays runtime-internal. PSI and
+  LightTree boxes execute companions, inherited generic/non-generic events, ordinary objects,
+  exact `Error` identity, and top-level files on Framework CLR 4 and CoreCLR 10. A
+  `netstandard2.0` producer is consumed separately by both runtime profiles, preserving original
+  cause identity and producer-recorded singleton barriers. A direct C# read of a raw public
+  singleton field can still bypass the logical barrier after the caught `.cctor` completes.
+  Before ABI stability, deliberate C# singleton exports/generator adapters must expose a
+  barrier-calling property or method; do not solve that interop item by weakening Kotlin
+  semantics or restoring `TypeInitializationException`.
 - Exhaustive `when` without a source `else` follows the JVM intrinsic-registry model: fir2ir's
   synthetic `noWhenBranchMatchedException` call is registered in `DotNetIlIntrinsicMethods` and
   emits an inline parameterless exception construction + `throw`, in both value and statement

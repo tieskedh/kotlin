@@ -302,6 +302,15 @@ public open class Error : Throwable {
     public constructor(cause: Throwable?) : super(cause)
 }
 
+internal open class ExceptionInInitializerError : Error {
+    internal constructor(message: String) : super(message)
+    internal constructor(cause: Throwable) : super(null, cause)
+}
+
+internal open class NoClassDefFoundError : Error {
+    internal constructor(message: String?) : super(message)
+}
+
 public open class RuntimeException : Exception {
     public constructor() : super()
     public constructor(message: String?) : super(message)

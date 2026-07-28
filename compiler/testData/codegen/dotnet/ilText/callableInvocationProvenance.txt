@@ -34,16 +34,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field assembly static initonly class 'callableInvocationProvenanceKt$main$zero$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableInvocationProvenanceKt$main$zero$1'::.ctor()
-    stsfld class 'callableInvocationProvenanceKt$main$zero$1' 'callableInvocationProvenanceKt$main$zero$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableInvocationProvenanceKt$main$zero$1'::.ctor()
+      stsfld class 'callableInvocationProvenanceKt$main$zero$1' 'callableInvocationProvenanceKt$main$zero$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableInvocationProvenanceKt$main$zero$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableInvocationProvenanceKt$main$zero$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableInvocationProvenanceKt$main$zero$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableInvocationProvenanceKt$main$zero$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -68,16 +102,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field assembly static initonly class 'callableInvocationProvenanceKt$main$lambda$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableInvocationProvenanceKt$main$lambda$1'::.ctor()
-    stsfld class 'callableInvocationProvenanceKt$main$lambda$1' 'callableInvocationProvenanceKt$main$lambda$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableInvocationProvenanceKt$main$lambda$1'::.ctor()
+      stsfld class 'callableInvocationProvenanceKt$main$lambda$1' 'callableInvocationProvenanceKt$main$lambda$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableInvocationProvenanceKt$main$lambda$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableInvocationProvenanceKt$main$lambda$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableInvocationProvenanceKt$main$lambda$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableInvocationProvenanceKt$main$lambda$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -115,16 +183,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction2`2'<int32, int32>
 {
   .field assembly static initonly class 'callableInvocationProvenanceKt$main$sum$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableInvocationProvenanceKt$main$sum$1'::.ctor()
-    stsfld class 'callableInvocationProvenanceKt$main$sum$1' 'callableInvocationProvenanceKt$main$sum$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableInvocationProvenanceKt$main$sum$1'::.ctor()
+      stsfld class 'callableInvocationProvenanceKt$main$sum$1' 'callableInvocationProvenanceKt$main$sum$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableInvocationProvenanceKt$main$sum$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableInvocationProvenanceKt$main$sum$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableInvocationProvenanceKt$main$sum$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableInvocationProvenanceKt$main$sum$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -165,16 +267,50 @@
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field assembly static initonly class 'callableInvocationProvenanceKt$main$reference$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableInvocationProvenanceKt$main$reference$1'::.ctor()
-    stsfld class 'callableInvocationProvenanceKt$main$reference$1' 'callableInvocationProvenanceKt$main$reference$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableInvocationProvenanceKt$main$reference$1'::.ctor()
+      stsfld class 'callableInvocationProvenanceKt$main$reference$1' 'callableInvocationProvenanceKt$main$reference$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableInvocationProvenanceKt$main$reference$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableInvocationProvenanceKt$main$reference$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableInvocationProvenanceKt$main$reference$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "functionReference"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 6
+    call void 'callableInvocationProvenanceKt$main$reference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableInvocationProvenance.kt:380:422:#increment(kotlin.Int){}"
     ldc.i4 1
@@ -226,16 +362,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<object, int32>
 {
   .field assembly static initonly class 'callableInvocationProvenanceKt$main$acceptsAny$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableInvocationProvenanceKt$main$acceptsAny$1'::.ctor()
-    stsfld class 'callableInvocationProvenanceKt$main$acceptsAny$1' 'callableInvocationProvenanceKt$main$acceptsAny$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableInvocationProvenanceKt$main$acceptsAny$1'::.ctor()
+      stsfld class 'callableInvocationProvenanceKt$main$acceptsAny$1' 'callableInvocationProvenanceKt$main$acceptsAny$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableInvocationProvenanceKt$main$acceptsAny$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableInvocationProvenanceKt$main$acceptsAny$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableInvocationProvenanceKt$main$acceptsAny$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableInvocationProvenanceKt$main$acceptsAny$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -432,6 +602,7 @@ IL_callableExactEnd_1:
       [62] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, object> '<exactCallable>@62',
       [63] class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32> '<exactCallable>@63'
     )
+    call void 'callableInvocationProvenanceKt$main$zero$1'::'<EnsureInitialized>'()
     ldsfld class 'callableInvocationProvenanceKt$main$zero$1' 'callableInvocationProvenanceKt$main$zero$1'::'INSTANCE'
     stloc.0
     ldloc.0
@@ -466,6 +637,7 @@ IL_callableExactEnd_1:
     ldloc 4
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableInvocationProvenanceKt$main$lambda$1'::'<EnsureInitialized>'()
     ldsfld class 'callableInvocationProvenanceKt$main$lambda$1' 'callableInvocationProvenanceKt$main$lambda$1'::'INSTANCE'
     stloc 6
     ldloc 6
@@ -642,6 +814,7 @@ IL_strValueNotNull_16:
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
 IL_strValueEnd_17:
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableInvocationProvenanceKt$main$sum$1'::'<EnsureInitialized>'()
     ldsfld class 'callableInvocationProvenanceKt$main$sum$1' 'callableInvocationProvenanceKt$main$sum$1'::'INSTANCE'
     stloc 32
     ldloc 32
@@ -700,6 +873,7 @@ IL_callableExactEnd_19:
     ldloc 38
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableInvocationProvenanceKt$main$reference$1'::'<EnsureInitialized>'()
     ldsfld class 'callableInvocationProvenanceKt$main$reference$1' 'callableInvocationProvenanceKt$main$reference$1'::'INSTANCE'
     stloc 41
     ldloc 41
@@ -751,6 +925,7 @@ IL_callableExactEnd_23:
     ldloc 46
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableInvocationProvenanceKt$main$acceptsAny$1'::'<EnsureInitialized>'()
     ldsfld class 'callableInvocationProvenanceKt$main$acceptsAny$1' 'callableInvocationProvenanceKt$main$acceptsAny$1'::'INSTANCE'
     stloc 49
     ldloc 49

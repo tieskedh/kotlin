@@ -43,7 +43,8 @@ choice.
 - Required profiles: `net48` applications/libraries, `netstandard2.0` portable libraries, and
   `net10.0` applications/libraries. Profile-specific code generation is intentional.
 - Selected semantic direction: Kotlin-owned primitive-array wrappers and classified, identity-
-  preserving CLR exceptions. The accepted pre-ABI ADRs own the details.
+  preserving CLR exceptions, including Kotlin-owned static-initialization failure state above CLR
+  `.cctor`. The accepted pre-ABI ADRs own the details.
 - Nothing has shipped. Existing prototype artifacts have no compatibility standing until an
   explicit freeze is recorded.
 - No new public runtime capability, generic-interface surface, exception mapping, array-bearing

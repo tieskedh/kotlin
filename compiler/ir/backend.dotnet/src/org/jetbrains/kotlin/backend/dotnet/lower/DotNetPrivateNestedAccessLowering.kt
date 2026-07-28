@@ -74,7 +74,7 @@ internal class DotNetPrivateNestedAccessLowering(
                     else -> null
                 } ?: return expression
                 if (
-                    nestedOwner.origin != DOTNET_COMPANION_STATIC_HOLDER && !nestedOwner.isCompanion ||
+                    nestedOwner.origin != DOTNET_STATIC_HOLDER && !nestedOwner.isCompanion ||
                     target.visibility != DescriptorVisibilities.PRIVATE
                 ) return expression
                 if (currentClass.isNestedWithin(nestedOwner)) return expression

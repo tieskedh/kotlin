@@ -51,24 +51,53 @@
       }
     }
     .field public static initonly class 'DirectOwner'/'Nested'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'DirectOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'DirectOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'DirectOwner'/'Nested'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'DirectOwner'/'Nested'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'DirectOwner'/'Nested'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "DirectOwner.Nested"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'DirectOwner'/'Nested'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -90,16 +119,50 @@
   {
     .field private static initonly class 'ObjectOwner'/'Hidden' 'INSTANCE'
     .field private int32 'captured'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'ObjectOwner'/'Hidden'::.ctor()
-      stsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        newobj instance void 'ObjectOwner'/'Hidden'::.ctor()
+        stsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'ObjectOwner'/'Hidden'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
+      ret
+    }
+    .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+    {
+      .maxstack 2
+      ldsfld object 'ObjectOwner'/'Hidden'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'ObjectOwner'/'Hidden'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "ObjectOwner.Hidden"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 2
+      call void 'ObjectOwner'/'Hidden'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
@@ -117,6 +180,8 @@
     .method assembly hidebysig static class 'ObjectOwner'/'Hidden' 'access$<get-INSTANCE>$p'() cil managed
     {
       .maxstack 1
+      call void 'ObjectOwner'/'Hidden'::'<EnsureInitialized>'()
+      call void 'ObjectOwner'/'Hidden'::'<EnsureInitialized>'()
       ldsfld class 'ObjectOwner'/'Hidden' 'ObjectOwner'/'Hidden'::'INSTANCE'
       ret
     }
@@ -183,24 +248,53 @@
         }
       }
       .field public static initonly class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'Companion'
+      .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        ldnull
-        newobj instance void 'DeepOwner'/'Middle'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-        stsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
+        .locals init (
+          [0] class [mscorlib]System.Exception 'reason'
+        )
+        .try {
+          ldnull
+          newobj instance void 'DeepOwner'/'Middle'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+          stsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
+          leave IL_tryEnd_0
+        }
+        catch [mscorlib]System.Exception {
+          stloc.0
+          ldloc.0
+          call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+          stsfld object 'DeepOwner'/'Middle'/'Nested'::'<static-initialization-failure>'
+          leave IL_tryEnd_0
+        }
+    IL_tryEnd_0:
         ret
       }
-      .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+      .method public hidebysig static void '<EnsureInitialized>'() cil managed
       {
         .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
         .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-        .maxstack 1
+        .maxstack 2
+        ldsfld object 'DeepOwner'/'Middle'/'Nested'::'<static-initialization-failure>'
+        ldnull
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldsfld object 'DeepOwner'/'Middle'/'Nested'::'<static-initialization-failure>'
+        call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+        ldstr "DeepOwner.Middle.Nested"
+        call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+        newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+        throw
+    IL_whenNext_1:
         ret
       }
       .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 1
+        call void 'DeepOwner'/'Middle'/'Nested'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ret
@@ -262,24 +356,53 @@
       }
     }
     .field public static initonly class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'GenericAncestor`1'/'CompanionHolder'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'GenericAncestor`1'/'CompanionHolder'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'GenericAncestor`1'/'CompanionHolder'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'GenericAncestor`1'/'CompanionHolder'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "GenericAncestor.CompanionHolder"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'GenericAncestor`1'/'CompanionHolder'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -293,16 +416,52 @@
     {
       .field public static initonly class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'INSTANCE'
       .field private int32 'captured'
+      .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        newobj instance void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::.ctor()
-        stsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
+        .locals init (
+          [0] class [mscorlib]System.Exception 'reason'
+        )
+        .try {
+          newobj instance void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::.ctor()
+          stsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
+          leave IL_tryEnd_0
+        }
+        catch [mscorlib]System.Exception {
+          stloc.0
+          ldloc.0
+          call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+          stsfld object 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
+          leave IL_tryEnd_0
+        }
+    IL_tryEnd_0:
+        ret
+      }
+      .method public hidebysig static void '<EnsureInitialized>'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+        .maxstack 2
+        ldsfld object 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
+        ldnull
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldsfld object 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<static-initialization-failure>'
+        call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+        ldstr "GenericAncestor.ObjectHolder.Singleton"
+        call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+        newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+        throw
+    IL_whenNext_1:
         ret
       }
       .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
+        call void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
@@ -346,16 +505,52 @@
   {
     .field public static initonly class 'DirectGenericObjectOwner`1'/'Singleton' 'INSTANCE'
     .field private int32 'captured'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'DirectGenericObjectOwner`1'/'Singleton'::.ctor()
-      stsfld class 'DirectGenericObjectOwner`1'/'Singleton' 'DirectGenericObjectOwner`1'/'Singleton'::'INSTANCE'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        newobj instance void 'DirectGenericObjectOwner`1'/'Singleton'::.ctor()
+        stsfld class 'DirectGenericObjectOwner`1'/'Singleton' 'DirectGenericObjectOwner`1'/'Singleton'::'INSTANCE'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'DirectGenericObjectOwner`1'/'Singleton'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
+      ret
+    }
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 2
+      ldsfld object 'DirectGenericObjectOwner`1'/'Singleton'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'DirectGenericObjectOwner`1'/'Singleton'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "DirectGenericObjectOwner.Singleton"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 2
+      call void 'DirectGenericObjectOwner`1'/'Singleton'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
@@ -394,16 +589,52 @@
     {
       .field public static initonly class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'INSTANCE'
       .field private int32 'captured'
+      .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        newobj instance void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::.ctor()
-        stsfld class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'INSTANCE'
+        .locals init (
+          [0] class [mscorlib]System.Exception 'reason'
+        )
+        .try {
+          newobj instance void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::.ctor()
+          stsfld class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'INSTANCE'
+          leave IL_tryEnd_0
+        }
+        catch [mscorlib]System.Exception {
+          stloc.0
+          ldloc.0
+          call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+          stsfld object 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<static-initialization-failure>'
+          leave IL_tryEnd_0
+        }
+    IL_tryEnd_0:
+        ret
+      }
+      .method public hidebysig static void '<EnsureInitialized>'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+        .maxstack 2
+        ldsfld object 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<static-initialization-failure>'
+        ldnull
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldsfld object 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<static-initialization-failure>'
+        call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+        ldstr "GenericNestedObjectOwner.Generic.Singleton"
+        call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+        newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+        throw
+    IL_whenNext_1:
         ret
       }
       .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 2
+        call void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ldarg.0
@@ -479,24 +710,53 @@
       }
     }
     .field public static initonly class 'ModalOwner'/'OpenNested'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'ModalOwner'/'OpenNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'ModalOwner'/'OpenNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'ModalOwner'/'OpenNested'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'ModalOwner'/'OpenNested'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'ModalOwner'/'OpenNested'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "ModalOwner.OpenNested"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'ModalOwner'/'OpenNested'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -539,24 +799,53 @@
       }
     }
     .field public static initonly class 'ModalOwner'/'AbstractNested'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'ModalOwner'/'AbstractNested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'ModalOwner'/'AbstractNested'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'ModalOwner'/'AbstractNested'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'ModalOwner'/'AbstractNested'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "ModalOwner.AbstractNested"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'ModalOwner'/'AbstractNested'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -619,24 +908,53 @@
     }
     .field private int32 'seed'
     .field public static initonly class 'AccessOwner'/'Nested'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'AccessOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'AccessOwner'/'Nested'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'AccessOwner'/'Nested'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'AccessOwner'/'Nested'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'AccessOwner'/'Nested'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "AccessOwner.Nested"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor(int32 'seed') cil managed
     {
       .maxstack 2
+      call void 'AccessOwner'/'Nested'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ldarg.0
@@ -654,6 +972,7 @@
     .method public hidebysig instance int32 'throughCompanion'() cil managed
     {
       .maxstack 2
+      call void 'AccessOwner'/'Nested'::'<EnsureInitialized>'()
       ldsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
       ldarg.0
       call instance int32 'AccessOwner'/'Nested'::'get_seed'()
@@ -705,24 +1024,53 @@
       }
     }
     .field public static initonly class 'ForwardOwner'/'Factory'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'ForwardOwner'/'Factory'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'ForwardOwner'/'Factory'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'ForwardOwner'/'Factory'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'ForwardOwner'/'Factory'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "ForwardOwner.Factory"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'ForwardOwner'/'Factory'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -802,24 +1150,53 @@
       }
     }
     .field public static initonly class 'HierarchyOwner'/'Base'/'Companion' 'Companion'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      ldnull
-      newobj instance void 'HierarchyOwner'/'Base'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-      stsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        ldnull
+        newobj instance void 'HierarchyOwner'/'Base'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+        stsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'HierarchyOwner'/'Base'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'HierarchyOwner'/'Base'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'HierarchyOwner'/'Base'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "HierarchyOwner.Base"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'HierarchyOwner'/'Base'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -828,22 +1205,51 @@
   .class nested public auto ansi sealed 'Derived'
          extends 'HierarchyOwner'/'Base'
   {
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      call void 'HierarchyOwner'/'Base'::'<EnsureCompanionInitialized>'()
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        call void 'HierarchyOwner'/'Base'::'<EnsureInitialized>'()
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'HierarchyOwner'/'Derived'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
       ret
     }
-    .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
     {
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-      .maxstack 1
+      .maxstack 2
+      ldsfld object 'HierarchyOwner'/'Derived'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'HierarchyOwner'/'Derived'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "HierarchyOwner.Derived"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'HierarchyOwner'/'Derived'::'<EnsureInitialized>'()
       ldarg.0
       call instance void 'HierarchyOwner'/'Base'::.ctor()
       ret
@@ -860,23 +1266,40 @@
 .class public abstract sealed auto ansi 'nestedSingletonsKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static int32 'initializationCount'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldc.i4 0
-    stsfld int32 'nestedSingletonsKt'::'initializationCount'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldc.i4 0
+      stsfld int32 'nestedSingletonsKt'::'initializationCount'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'nestedSingletonsKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method public hidebysig specialname static int32 'get_initializationCount'() cil managed
   {
     .maxstack 1
+    call void 'nestedSingletonsKt'::'<EnsureInitialized>'()
     ldsfld int32 'nestedSingletonsKt'::'initializationCount'
     ret
   }
   .method public hidebysig specialname static void 'set_initializationCount'(int32 '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'nestedSingletonsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld int32 'nestedSingletonsKt'::'initializationCount'
     ret
@@ -884,6 +1307,7 @@
   .method public hidebysig static int32 'nextInitialization'() cil managed
   {
     .maxstack 2
+    call void 'nestedSingletonsKt'::'<EnsureInitialized>'()
     call int32 'nestedSingletonsKt'::'get_initializationCount'()
     ldc.i4 1
     add
@@ -898,12 +1322,14 @@
     .locals init (
       [0] class 'AccessOwner'/'Nested' 'access'
     )
+    call void 'nestedSingletonsKt'::'<EnsureInitialized>'()
     call int32 'nestedSingletonsKt'::'get_initializationCount'()
     box [mscorlib]System.Int32
     ldnull
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'DirectOwner'/'Nested'::'<EnsureInitialized>'()
     ldsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
     call instance int32 'DirectOwner'/'Nested'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -911,6 +1337,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'DirectOwner'/'Nested'::'<EnsureInitialized>'()
     ldsfld class 'DirectOwner'/'Nested'/'Companion' 'DirectOwner'/'Nested'::'Companion'
     call instance int32 'DirectOwner'/'Nested'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -931,6 +1358,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'DeepOwner'/'Middle'/'Nested'::'<EnsureInitialized>'()
     ldsfld class 'DeepOwner'/'Middle'/'Nested'/'Companion' 'DeepOwner'/'Middle'/'Nested'::'Companion'
     call instance int32 'DeepOwner'/'Middle'/'Nested'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -938,6 +1366,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'GenericAncestor`1'/'CompanionHolder'::'<EnsureInitialized>'()
     ldsfld class 'GenericAncestor`1'/'CompanionHolder'/'Companion' 'GenericAncestor`1'/'CompanionHolder'::'Companion'
     call instance int32 'GenericAncestor`1'/'CompanionHolder'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -945,6 +1374,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'<EnsureInitialized>'()
     ldsfld class 'GenericAncestor`1'/'ObjectHolder'/'Singleton' 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'INSTANCE'
     call instance int32 'GenericAncestor`1'/'ObjectHolder'/'Singleton'::'get_captured'()
     box [mscorlib]System.Int32
@@ -952,6 +1382,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'DirectGenericObjectOwner`1'/'Singleton'::'<EnsureInitialized>'()
     ldsfld class 'DirectGenericObjectOwner`1'/'Singleton' 'DirectGenericObjectOwner`1'/'Singleton'::'INSTANCE'
     call instance int32 'DirectGenericObjectOwner`1'/'Singleton'::'get_captured'()
     box [mscorlib]System.Int32
@@ -959,6 +1390,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'<EnsureInitialized>'()
     ldsfld class 'GenericNestedObjectOwner'/'Generic`1'/'Singleton' 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'INSTANCE'
     call instance int32 'GenericNestedObjectOwner'/'Generic`1'/'Singleton'::'get_captured'()
     box [mscorlib]System.Int32
@@ -966,6 +1398,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'ModalOwner'/'OpenNested'::'<EnsureInitialized>'()
     ldsfld class 'ModalOwner'/'OpenNested'/'Companion' 'ModalOwner'/'OpenNested'::'Companion'
     call instance int32 'ModalOwner'/'OpenNested'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -973,6 +1406,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'ModalOwner'/'AbstractNested'::'<EnsureInitialized>'()
     ldsfld class 'ModalOwner'/'AbstractNested'/'Companion' 'ModalOwner'/'AbstractNested'::'Companion'
     call instance int32 'ModalOwner'/'AbstractNested'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -980,6 +1414,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'HierarchyOwner'/'Base'::'<EnsureInitialized>'()
     ldsfld class 'HierarchyOwner'/'Base'/'Companion' 'HierarchyOwner'/'Base'::'Companion'
     call instance int32 'HierarchyOwner'/'Base'/'Companion'::'get_captured'()
     box [mscorlib]System.Int32
@@ -1003,6 +1438,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'AccessOwner'/'Nested'::'<EnsureInitialized>'()
     ldsfld class 'AccessOwner'/'Nested'/'Companion' 'AccessOwner'/'Nested'::'Companion'
     ldloc.0
     call instance int32 'AccessOwner'/'Nested'/'Companion'::'read'(class 'AccessOwner'/'Nested')
@@ -1011,6 +1447,7 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'ForwardOwner'/'Factory'::'<EnsureInitialized>'()
     ldsfld class 'ForwardOwner'/'Factory'/'Companion' 'ForwardOwner'/'Factory'::'Companion'
     ldc.i4 12
     call instance class 'ForwardOwner'/'Later' 'ForwardOwner'/'Factory'/'Companion'::'create'(int32)
@@ -1026,6 +1463,24 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'nestedSingletonsKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'nestedSingletonsKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property int32 'initializationCount'()

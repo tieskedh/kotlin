@@ -21,6 +21,7 @@ import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrFactory
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -29,8 +30,10 @@ import org.jetbrains.kotlin.ir.declarations.createEmptyExternalPackageFragment
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
+import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContext
 import org.jetbrains.kotlin.ir.types.IrTypeSystemContextImpl
+import org.jetbrains.kotlin.ir.types.makeNullable
 import org.jetbrains.kotlin.ir.util.createThisReceiverParameter
 import org.jetbrains.kotlin.ir.util.SymbolTable
 import org.jetbrains.kotlin.name.FqName
@@ -87,9 +90,14 @@ internal data class DotNetLoweredInterfaceDefaultClassForwarder(
     val physicalView: DotNetInterfaceDefaultPromotionView = DotNetInterfaceDefaultPromotionView.CANONICAL,
 )
 
-internal data class DotNetLoweredCompanionInitialization(
+internal data class DotNetLoweredStaticInitialization(
     val physicalOwner: IrClass,
     val entry: IrSimpleFunction,
+)
+
+internal data class DotNetLoweredStaticInitializationFailure(
+    val entry: IrSimpleFunction,
+    val failureState: IrField,
 )
 
 internal class DotNetBackendContext(
@@ -140,12 +148,18 @@ internal class DotNetBackendContext(
     val companionStaticOwners: MutableMap<IrClass, IrClass> = linkedMapOf()
     /** Kotlin object declaration to the synthesized field carrying its one CLR instance. */
     val objectInstanceFields: MutableMap<IrClass, IrField> = linkedMapOf()
-    /** Logical classifier to its stable, producer-recorded companion-initialization entry. */
-    val companionInitializations:
-        MutableMap<IrClass, DotNetLoweredCompanionInitialization> = linkedMapOf()
-    /** Synthetic calls bound directly to producer-recorded companion-initialization entries. */
-    val externalCompanionInitializations:
-        MutableMap<IrSimpleFunction, DotNetBoundCompanionInitialization> = linkedMapOf()
+    /** Logical classifier to its stable, producer-recorded static-initialization entry. */
+    val staticInitializations:
+        MutableMap<IrClass, DotNetLoweredStaticInitialization> = linkedMapOf()
+    /** Synthetic calls bound directly to producer-recorded static-initialization entries. */
+    val externalStaticInitializations:
+        MutableMap<IrSimpleFunction, DotNetBoundStaticInitialization> = linkedMapOf()
+    /** External logical classifier to the synthetic IR call target bound above. */
+    val externalStaticInitializationEntries:
+        MutableMap<IrClass, IrSimpleFunction> = linkedMapOf()
+    /** Physical class/file initializer owner to its caught-failure state and logical barrier. */
+    val staticInitializationFailures:
+        MutableMap<IrDeclarationParent, DotNetLoweredStaticInitializationFailure> = linkedMapOf()
     override val sharedVariablesManager: SharedVariablesManager = DotNetSharedVariablesManager(irBuiltIns, irFactory)
     override val innerClassesSupport: InnerClassesSupport = DotNetInnerClassesSupport(irFactory)
     override val diagnosticReporter: IrDiagnosticReporter = KtDiagnosticReporterWithImplicitIrBasedContext(
@@ -173,20 +187,33 @@ internal class DotNetSymbols(
         FqName("kotlin.internal"),
     )
 
-    private fun buildInternalThrowFunction(
+    private fun buildInternalFunction(
         name: String,
-        hasMessageParameter: Boolean = false,
+        returnType: IrType,
+        parameters: List<Pair<String, IrType>> = emptyList(),
     ): IrSimpleFunctionSymbol =
         irFactory.buildFun {
             origin = IrDeclarationOrigin.IR_BUILTINS_STUB
             this.name = Name.identifier(name)
             visibility = DescriptorVisibilities.INTERNAL
             modality = Modality.FINAL
-            returnType = irBuiltIns.nothingType
+            this.returnType = returnType
         }.apply {
             parent = kotlinInternalPackage
-            if (hasMessageParameter) addValueParameter("message", irBuiltIns.stringType)
+            for (parameter in parameters) {
+                addValueParameter(parameter.first, parameter.second)
+            }
         }.symbol
+
+    private fun buildInternalThrowFunction(
+        name: String,
+        hasMessageParameter: Boolean = false,
+    ): IrSimpleFunctionSymbol =
+        buildInternalFunction(
+            name,
+            irBuiltIns.nothingType,
+            if (hasMessageParameter) listOf("message" to irBuiltIns.stringType) else emptyList(),
+        )
 
     override val getProgressionLastElementByReturnType: Map<IrClassifierSymbol, IrSimpleFunctionSymbol> = emptyMap()
     override val syntheticConstructorMarker: IrClassSymbol = run {
@@ -217,6 +244,27 @@ internal class DotNetSymbols(
         get() = unsupportedSymbol("throwTypeCastException")
     override val throwKotlinNothingValueException: IrSimpleFunctionSymbol =
         buildInternalThrowFunction("throwKotlinNothingValueException")
+    val captureStaticInitializationFailure: IrSimpleFunctionSymbol =
+        buildInternalFunction(
+            "captureStaticInitializationFailure",
+            irBuiltIns.anyType,
+            listOf("reason" to irBuiltIns.throwableType),
+        )
+    val observeStaticInitializationFailure: IrSimpleFunctionSymbol =
+        buildInternalFunction(
+            "observeStaticInitializationFailure",
+            irBuiltIns.throwableType.makeNullable(),
+            listOf("state" to irBuiltIns.anyType),
+        )
+    val staticInitializationFailure: IrSimpleFunctionSymbol =
+        buildInternalFunction(
+            "staticInitializationFailure",
+            irBuiltIns.nothingType,
+            listOf(
+                "reason" to irBuiltIns.throwableType.makeNullable(),
+                "className" to irBuiltIns.stringType.makeNullable(),
+            ),
+        )
     override val stringBuilder: IrClassSymbol
         get() = unsupportedSymbol("stringBuilder")
     override val coroutineSuspendedGetter: IrSimpleFunctionSymbol

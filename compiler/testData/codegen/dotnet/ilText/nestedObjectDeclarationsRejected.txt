@@ -35,16 +35,52 @@
          extends [mscorlib]System.Object
   {
     .field public static initonly class 'BrokenObjectOwner'/'GoodObject' 'INSTANCE'
+    .field private static object '<static-initialization-failure>'
     .method private hidebysig specialname rtspecialname static void .cctor() cil managed
     {
       .maxstack 1
-      newobj instance void 'BrokenObjectOwner'/'GoodObject'::.ctor()
-      stsfld class 'BrokenObjectOwner'/'GoodObject' 'BrokenObjectOwner'/'GoodObject'::'INSTANCE'
+      .locals init (
+        [0] class [mscorlib]System.Exception 'reason'
+      )
+      .try {
+        newobj instance void 'BrokenObjectOwner'/'GoodObject'::.ctor()
+        stsfld class 'BrokenObjectOwner'/'GoodObject' 'BrokenObjectOwner'/'GoodObject'::'INSTANCE'
+        leave IL_tryEnd_0
+      }
+      catch [mscorlib]System.Exception {
+        stloc.0
+        ldloc.0
+        call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+        stsfld object 'BrokenObjectOwner'/'GoodObject'::'<static-initialization-failure>'
+        leave IL_tryEnd_0
+      }
+  IL_tryEnd_0:
+      ret
+    }
+    .method public hidebysig static void '<EnsureInitialized>'() cil managed
+    {
+      .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+      .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+      .maxstack 2
+      ldsfld object 'BrokenObjectOwner'/'GoodObject'::'<static-initialization-failure>'
+      ldnull
+      ceq
+      ldc.i4.0
+      ceq
+      brfalse IL_whenNext_1
+      ldsfld object 'BrokenObjectOwner'/'GoodObject'::'<static-initialization-failure>'
+      call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+      ldstr "BrokenObjectOwner.GoodObject"
+      call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+      newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+      throw
+  IL_whenNext_1:
       ret
     }
     .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'BrokenObjectOwner'/'GoodObject'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
@@ -56,7 +92,7 @@
       ret
     }
   }
-  .class nested public auto ansi sealed 'GenericBroken`1'<'T'>
+  .class nested public auto ansi sealed beforefieldinit 'GenericBroken`1'<'T'>
          extends [mscorlib]System.Object
   {
     .class nested public abstract sealed auto ansi '<CompanionStatics>'
@@ -65,19 +101,47 @@
       .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
       .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
       .field public static initonly class 'BrokenObjectOwner'/'GenericBroken`1'/'Companion' 'Companion'
+      .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        ldnull
-        newobj instance void 'BrokenObjectOwner'/'GenericBroken`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-        stsfld class 'BrokenObjectOwner'/'GenericBroken`1'/'Companion' 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'Companion'
+        .locals init (
+          [0] class [mscorlib]System.Exception 'reason'
+        )
+        .try {
+          ldnull
+          newobj instance void 'BrokenObjectOwner'/'GenericBroken`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+          stsfld class 'BrokenObjectOwner'/'GenericBroken`1'/'Companion' 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'Companion'
+          leave IL_tryEnd_0
+        }
+        catch [mscorlib]System.Exception {
+          stloc.0
+          ldloc.0
+          call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+          stsfld object 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+          leave IL_tryEnd_0
+        }
+    IL_tryEnd_0:
         ret
       }
-      .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+      .method public hidebysig static void '<EnsureInitialized>'() cil managed
       {
         .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
         .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-        .maxstack 1
+        .maxstack 2
+        ldsfld object 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+        ldnull
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldsfld object 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+        call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+        ldstr "BrokenObjectOwner.GenericBroken"
+        call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+        newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+        throw
+    IL_whenNext_1:
         ret
       }
     }
@@ -99,31 +163,62 @@
         ret
       }
     }
-    .method private hidebysig specialname rtspecialname static void .cctor() cil managed
-    {
-      .maxstack 1
-      call void 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
-      ret
-    }
     .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
     {
       .maxstack 1
+      call void 'BrokenObjectOwner'/'GenericBroken`1'/'<CompanionStatics>'::'<EnsureInitialized>'()
       ldarg.0
       call instance void [mscorlib]System.Object::.ctor()
       ret
     }
   }
   .field public static initonly class 'BrokenObjectOwner' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'BrokenObjectOwner'::.ctor()
-    stsfld class 'BrokenObjectOwner' 'BrokenObjectOwner'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'BrokenObjectOwner'::.ctor()
+      stsfld class 'BrokenObjectOwner' 'BrokenObjectOwner'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'BrokenObjectOwner'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+    .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+    .maxstack 2
+    ldsfld object 'BrokenObjectOwner'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'BrokenObjectOwner'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "BrokenObjectOwner"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'BrokenObjectOwner'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -156,16 +251,52 @@
            extends [mscorlib]System.Object
     {
       .field public static initonly class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'INSTANCE'
+      .field private static object '<static-initialization-failure>'
       .method private hidebysig specialname rtspecialname static void .cctor() cil managed
       {
         .maxstack 1
-        newobj instance void 'BrokenCompanionOwner'/'Companion'/'GoodObject'::.ctor()
-        stsfld class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'INSTANCE'
+        .locals init (
+          [0] class [mscorlib]System.Exception 'reason'
+        )
+        .try {
+          newobj instance void 'BrokenCompanionOwner'/'Companion'/'GoodObject'::.ctor()
+          stsfld class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'INSTANCE'
+          leave IL_tryEnd_0
+        }
+        catch [mscorlib]System.Exception {
+          stloc.0
+          ldloc.0
+          call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+          stsfld object 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'<static-initialization-failure>'
+          leave IL_tryEnd_0
+        }
+    IL_tryEnd_0:
+        ret
+      }
+      .method public hidebysig static void '<EnsureInitialized>'() cil managed
+      {
+        .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
+        .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
+        .maxstack 2
+        ldsfld object 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'<static-initialization-failure>'
+        ldnull
+        ceq
+        ldc.i4.0
+        ceq
+        brfalse IL_whenNext_1
+        ldsfld object 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'<static-initialization-failure>'
+        call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+        ldstr "BrokenCompanionOwner.Companion.GoodObject"
+        call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+        newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+        throw
+    IL_whenNext_1:
         ret
       }
       .method private hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 1
+        call void 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ret
@@ -177,7 +308,7 @@
         ret
       }
     }
-    .class nested public auto ansi sealed 'GenericBroken`1'<'T'>
+    .class nested public auto ansi sealed beforefieldinit 'GenericBroken`1'<'T'>
            extends [mscorlib]System.Object
     {
       .class nested public abstract sealed auto ansi '<CompanionStatics>'
@@ -186,19 +317,47 @@
         .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
         .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
         .field public static initonly class 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion' 'Companion'
+        .field private static object '<static-initialization-failure>'
         .method private hidebysig specialname rtspecialname static void .cctor() cil managed
         {
           .maxstack 1
-          ldnull
-          newobj instance void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-          stsfld class 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion' 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'Companion'
+          .locals init (
+            [0] class [mscorlib]System.Exception 'reason'
+          )
+          .try {
+            ldnull
+            newobj instance void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+            stsfld class 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'Companion' 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'Companion'
+            leave IL_tryEnd_0
+          }
+          catch [mscorlib]System.Exception {
+            stloc.0
+            ldloc.0
+            call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+            stsfld object 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+            leave IL_tryEnd_0
+          }
+      IL_tryEnd_0:
           ret
         }
-        .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+        .method public hidebysig static void '<EnsureInitialized>'() cil managed
         {
           .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
           .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-          .maxstack 1
+          .maxstack 2
+          ldsfld object 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+          ldnull
+          ceq
+          ldc.i4.0
+          ceq
+          brfalse IL_whenNext_1
+          ldsfld object 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'<static-initialization-failure>'
+          call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+          ldstr "BrokenCompanionOwner.Companion.GenericBroken"
+          call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+          newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+          throw
+      IL_whenNext_1:
           ret
         }
       }
@@ -220,15 +379,10 @@
           ret
         }
       }
-      .method private hidebysig specialname rtspecialname static void .cctor() cil managed
-      {
-        .maxstack 1
-        call void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'<EnsureCompanionInitialized>'()
-        ret
-      }
       .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
       {
         .maxstack 1
+        call void 'BrokenCompanionOwner'/'Companion'/'GenericBroken`1'/'<CompanionStatics>'::'<EnsureInitialized>'()
         ldarg.0
         call instance void [mscorlib]System.Object::.ctor()
         ret
@@ -250,24 +404,53 @@
     }
   }
   .field public static initonly class 'BrokenCompanionOwner'/'Companion' 'Companion'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldnull
-    newobj instance void 'BrokenCompanionOwner'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
-    stsfld class 'BrokenCompanionOwner'/'Companion' 'BrokenCompanionOwner'::'Companion'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldnull
+      newobj instance void 'BrokenCompanionOwner'/'Companion'::.ctor(class [Kotlin.Runtime]'Kotlin.Runtime.Internal.SyntheticConstructorMarker')
+      stsfld class 'BrokenCompanionOwner'/'Companion' 'BrokenCompanionOwner'::'Companion'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'BrokenCompanionOwner'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
-  .method public hidebysig static void '<EnsureCompanionInitialized>'() cil managed
+  .method public hidebysig static void '<EnsureInitialized>'() cil managed
   {
     .custom instance void [Kotlin.Runtime]'Kotlin.Runtime.Internal.KotlinCompilerAbiAttribute'::.ctor() = (01 00 00 00)
     .custom instance void [System]System.ComponentModel.EditorBrowsableAttribute::.ctor(valuetype [System]System.ComponentModel.EditorBrowsableState) = (01 00 01 00 00 00 00 00)
-    .maxstack 1
+    .maxstack 2
+    ldsfld object 'BrokenCompanionOwner'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'BrokenCompanionOwner'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "BrokenCompanionOwner"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'BrokenCompanionOwner'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -320,9 +503,11 @@
     add
     stloc.1
     ldloc.1
+    call void 'BrokenObjectOwner'/'GoodObject'::'<EnsureInitialized>'()
     ldsfld class 'BrokenObjectOwner'/'GoodObject' 'BrokenObjectOwner'/'GoodObject'::'INSTANCE'
     call instance int32 'BrokenObjectOwner'/'GoodObject'::'value'()
     add
+    call void 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'<EnsureInitialized>'()
     ldsfld class 'BrokenCompanionOwner'/'Companion'/'GoodObject' 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'INSTANCE'
     call instance int32 'BrokenCompanionOwner'/'Companion'/'GoodObject'::'value'()
     add

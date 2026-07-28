@@ -151,12 +151,20 @@ Every item below records:
    synchronization protocol must work on both CLR 4 and CoreCLR 10; a net10-only shortcut cannot
    redefine common behavior.
 5. Do not accept raw `TypeInitializationException` leakage as final Kotlin behavior. Extend the
-   existing `<EnsureCompanionInitialized>` design and runtime classifier rather than inventing a
+   existing initialization-entry design and runtime classifier rather than inventing a
    parallel exception hierarchy. Cover classes, companions, objects, top-level files, inherited
    failures, original `Error` identity, repeated access, and cross-module access.
-6. **Classification: Deferred problem that must be recorded before the ABI becomes stable.**
-   Treating the current raw CLR consequence as final would be **Architecturally wrong and should
+6. **Original classification: Deferred problem that must be recorded before the ABI becomes
+   stable.** Treating the raw CLR consequence as final would be **Architecturally wrong and should
    be changed**.
+
+**Follow-up (2026-07-28):** this item is implemented and accepted in
+`docs/decisions/adr-kotlin-static-initialization-failures.md`. The generalized
+`<EnsureInitialized>` barrier catches the original throwable inside Kotlin-generated `.cctor`
+methods, retains CLR once-only publication, and performs first/later Kotlin classification from
+runtime-owned state. The implementation covers classes, companions, inherited generic and
+non-generic events, objects, files, original `Error` identity, and portable cross-module access on
+both runtime profiles. Current classification: **Correct direction**.
 
 ## 8. Build, test, and Gradle API changes
 
@@ -191,10 +199,10 @@ out of the .NET backend.
 ## Result
 
 The rebase does not invalidate the self-describing-DLL, embedded-KLIB, profile-pair, primitive-
-array, exception-classification, interface-default, or C# authoring directions. It strengthens
-their dependency on correct logical module ownership and exposes one foundational follow-up:
-Kotlin-owned initializer failures must be classified above the CLR `.cctor` mechanism before ABI
-stability.
+array, exception-classification, interface-default, or C# authoring directions. It strengthened
+their dependency on correct logical module ownership and exposed one foundational follow-up.
+That follow-up is now implemented: Kotlin-owned initializer failures are classified above the CLR
+`.cctor` mechanism.
 
 ## Verification
 
