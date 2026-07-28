@@ -34,6 +34,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeCoreTypes
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeConstructorResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeDecoder
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgument
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeNamedArgumentKind
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValue
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueDecoding
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrCustomAttributeValueFailure
@@ -1267,11 +1269,12 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         rawValue = DotNetClrBlob.copyOf(byteArrayOf(1, 0, 1, 0))
                     ),
                     resolvedAttributes.first(),
-                ) as DotNetClrCustomAttributeValueDecoding.Unsupported
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
                 assertEquals(
-                    DotNetClrCustomAttributeValueUnsupported.NAMED_ARGUMENTS,
-                    namedArguments.unsupported,
+                    DotNetClrCustomAttributeValueFailure.TRUNCATED_VALUE,
+                    namedArguments.failure,
                 )
+                assertEquals(0, namedArguments.namedArgumentIndex)
                 val intArrayConstructor = resolvedAttributes.first().copy(
                     signature = resolvedAttributes.first().signature.copy(
                         parameterTypes = listOf(
@@ -1336,6 +1339,76 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     require(bytes.size < 0x80)
                     return byteArrayOf(bytes.size.toByte()) + bytes
                 }
+                val duplicateNamedArguments = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 2, 0) +
+                                    byteArrayOf(0x53, 0x08) +
+                                    serializedString("X") +
+                                    byteArrayOf(1, 0, 0, 0) +
+                                    byteArrayOf(0x53, 0x08) +
+                                    serializedString("X") +
+                                    byteArrayOf(2, 0, 0, 0)
+                        )
+                    ),
+                    resolvedAttributes.first(),
+                ) as DotNetClrCustomAttributeValueDecoding.Decoded
+                assertEquals(
+                    listOf(
+                        DotNetClrCustomAttributeNamedArgument(
+                            DotNetClrCustomAttributeNamedArgumentKind.FIELD,
+                            "X",
+                            DotNetClrCustomAttributeValueType.Primitive(
+                                DotNetClrPrimitiveType.INT32
+                            ),
+                            DotNetClrCustomAttributeValue.IntegralValue(
+                                DotNetClrPrimitiveType.INT32,
+                                1uL,
+                            ),
+                        ),
+                        DotNetClrCustomAttributeNamedArgument(
+                            DotNetClrCustomAttributeNamedArgumentKind.FIELD,
+                            "X",
+                            DotNetClrCustomAttributeValueType.Primitive(
+                                DotNetClrPrimitiveType.INT32
+                            ),
+                            DotNetClrCustomAttributeValue.IntegralValue(
+                                DotNetClrPrimitiveType.INT32,
+                                2uL,
+                            ),
+                        ),
+                    ),
+                    duplicateNamedArguments.attribute.namedArguments,
+                )
+                val invalidNamedArgumentKind = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 1, 0, 0x52)
+                        )
+                    ),
+                    resolvedAttributes.first(),
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.INVALID_NAMED_ARGUMENT_KIND,
+                    invalidNamedArgumentKind.failure,
+                )
+                assertEquals(0, invalidNamedArgumentKind.namedArgumentIndex)
+                val nullNamedArgumentName = attributeDecoder.decodeValue(
+                    metadata,
+                    baseAttributes.first().copy(
+                        rawValue = DotNetClrBlob.copyOf(
+                            byteArrayOf(1, 0, 1, 0, 0x53, 0x08, 0xff.toByte())
+                        )
+                    ),
+                    resolvedAttributes.first(),
+                ) as DotNetClrCustomAttributeValueDecoding.Invalid
+                assertEquals(
+                    DotNetClrCustomAttributeValueFailure.INVALID_NAMED_ARGUMENT_NAME,
+                    nullNamedArgumentName.failure,
+                )
+                assertEquals(0, nullNamedArgumentName.namedArgumentIndex)
                 val boxedType = attributeDecoder.decodeValue(
                     metadata,
                     baseAttributes.first().copy(
@@ -1814,6 +1887,13 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
                     public sealed class SemanticProbeAttribute : Attribute
                     {
+                        public int PublicField;
+                        public string Note { get; set; }
+                        public Type RelatedType { get; set; }
+                        public ExternalKind KindProperty { get; set; }
+                        public object BoxedProperty { get; set; }
+                        public int[] NumbersProperty { get; set; }
+
                         public SemanticProbeAttribute(
                             int id,
                             string label,
@@ -1870,14 +1950,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         typeof(Generic<string>.Nested<ExternalKind>),
                         new[] { typeof(Outer.Inner), typeof(Generic<string>.Nested<ExternalKind>) },
                         typeof(Outer.Inner), ExternalKind.Seven,
-                        Generic<int>.NestedKind.Three)]
+                        Generic<int>.NestedKind.Three,
+                        PublicField = 99,
+                        Note = "named",
+                        RelatedType = typeof(Generic<int>.NestedKind),
+                        KindProperty = ExternalKind.Seven,
+                        BoxedProperty = ExternalKind.Minus,
+                        NumbersProperty = new[] { 4, 5 })]
                     [SemanticProbe(
                         8, null, false, '\0', 0u,
                         0, 0, 0, 0, 0L, 0UL, float.NaN, double.NaN,
                         new int[] { }, null, null,
                         ExternalKind.Zero, new ExternalKind[] { },
                         null, new Type[] { }, null, ExternalKind.Zero,
-                        Generic<string>.NestedKind.Zero)]
+                        Generic<string>.NestedKind.Zero,
+                        PublicField = 0,
+                        Note = null,
+                        RelatedType = null,
+                        KindProperty = ExternalKind.Zero,
+                        BoxedProperty = null,
+                        NumbersProperty = null)]
                     public sealed class Outer
                     {
                         public sealed class Inner
@@ -2103,7 +2195,7 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                         )
             }
         )
-        val decodedModernAttributes =
+        val decodedModernAttributeValues =
             outerAttributes.zip(modernConstructors).map { [attribute, constructor] ->
                 (
                         modernAttributeDecoder.decodeValue(
@@ -2112,8 +2204,10 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                             constructor,
                         ) as
                                 DotNetClrCustomAttributeValueDecoding.Decoded
-                        ).attribute.fixedArguments
+                        ).attribute
             }
+        val decodedModernAttributes =
+            decodedModernAttributeValues.map { attribute -> attribute.fixedArguments }
         val resolvedInner = (
                 resolver.resolveNestedType(
                     DotNetClrResolvedTypeDefinition(destinationMetadata, outerDefinition),
@@ -2463,6 +2557,158 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 ),
             ),
             decodedModernAttributes[1][22],
+        )
+        assertEquals(
+            listOf(
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.FIELD,
+                    "PublicField",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        99uL,
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "Note",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.STRING),
+                    DotNetClrCustomAttributeValue.StringValue("named"),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "RelatedType",
+                    DotNetClrCustomAttributeValueType.SystemType,
+                    DotNetClrCustomAttributeValue.TypeValue(resolvedIntGenericEnum),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "KindProperty",
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        DotNetClrResolvedSerializedType.Named(forwardedEnum),
+                        DotNetClrPrimitiveType.INT16,
+                    ),
+                    DotNetClrCustomAttributeValue.EnumValue(
+                        DotNetClrCustomAttributeValueType.EnumType(
+                            DotNetClrResolvedSerializedType.Named(forwardedEnum),
+                            DotNetClrPrimitiveType.INT16,
+                        ),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT16,
+                            7uL,
+                        ),
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "BoxedProperty",
+                    DotNetClrCustomAttributeValueType.TaggedObject,
+                    DotNetClrCustomAttributeValue.EnumValue(
+                        DotNetClrCustomAttributeValueType.EnumType(
+                            DotNetClrResolvedSerializedType.Named(forwardedEnum),
+                            DotNetClrPrimitiveType.INT16,
+                        ),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT16,
+                            0xfffeuL,
+                        ),
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "NumbersProperty",
+                    DotNetClrCustomAttributeValueType.SzArray(
+                        DotNetClrCustomAttributeValueType.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    ),
+                    DotNetClrCustomAttributeValue.ArrayValue(
+                        DotNetClrCustomAttributeValueType.SzArray(
+                            DotNetClrCustomAttributeValueType.Primitive(
+                                DotNetClrPrimitiveType.INT32
+                            )
+                        ),
+                        listOf(
+                            DotNetClrCustomAttributeValue.IntegralValue(
+                                DotNetClrPrimitiveType.INT32,
+                                4uL,
+                            ),
+                            DotNetClrCustomAttributeValue.IntegralValue(
+                                DotNetClrPrimitiveType.INT32,
+                                5uL,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            decodedModernAttributeValues[0].namedArguments,
+        )
+        assertEquals(
+            listOf(
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.FIELD,
+                    "PublicField",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.INT32),
+                    DotNetClrCustomAttributeValue.IntegralValue(
+                        DotNetClrPrimitiveType.INT32,
+                        0uL,
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "Note",
+                    DotNetClrCustomAttributeValueType.Primitive(DotNetClrPrimitiveType.STRING),
+                    DotNetClrCustomAttributeValue.StringValue(null),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "RelatedType",
+                    DotNetClrCustomAttributeValueType.SystemType,
+                    DotNetClrCustomAttributeValue.TypeValue(null),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "KindProperty",
+                    DotNetClrCustomAttributeValueType.EnumType(
+                        DotNetClrResolvedSerializedType.Named(forwardedEnum),
+                        DotNetClrPrimitiveType.INT16,
+                    ),
+                    DotNetClrCustomAttributeValue.EnumValue(
+                        DotNetClrCustomAttributeValueType.EnumType(
+                            DotNetClrResolvedSerializedType.Named(forwardedEnum),
+                            DotNetClrPrimitiveType.INT16,
+                        ),
+                        DotNetClrCustomAttributeValue.IntegralValue(
+                            DotNetClrPrimitiveType.INT16,
+                            0uL,
+                        ),
+                    ),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "BoxedProperty",
+                    DotNetClrCustomAttributeValueType.TaggedObject,
+                    DotNetClrCustomAttributeValue.StringValue(null),
+                ),
+                DotNetClrCustomAttributeNamedArgument(
+                    DotNetClrCustomAttributeNamedArgumentKind.PROPERTY,
+                    "NumbersProperty",
+                    DotNetClrCustomAttributeValueType.SzArray(
+                        DotNetClrCustomAttributeValueType.Primitive(
+                            DotNetClrPrimitiveType.INT32
+                        )
+                    ),
+                    DotNetClrCustomAttributeValue.ArrayValue(
+                        DotNetClrCustomAttributeValueType.SzArray(
+                            DotNetClrCustomAttributeValueType.Primitive(
+                                DotNetClrPrimitiveType.INT32
+                            )
+                        ),
+                        null,
+                    ),
+                ),
+            ),
+            decodedModernAttributeValues[1].namedArguments,
         )
 
         val resolvedNested = (

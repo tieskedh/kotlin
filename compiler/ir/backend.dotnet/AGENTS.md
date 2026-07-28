@@ -366,9 +366,12 @@ landed shape as a compatibility constraint.
    retain that complete identity (including a generic enclosing type), repeat the exact
    `System.Enum`/`value__` proof on the definition, and then reuse the fixed-enum value model.
    Invalid serialized type edges remain structured resolution failures; do not erase, stringify,
-   probe, fall back by simple name, or partially skip them. Named arguments remain a separate
-   physical field/property-resolution layer. A constructed nested enum in a constructor
-   signature remains a structured unsupported fixed type until the general
+   probe, fall back by simple name, or partially skip them. Named arguments retain their ordered
+   field/property kind, exact non-empty CLR name, declared serialized type, semantic value, and
+   duplicates. The blob has no member token: selected-graph member validation is a later layer and
+   must not replace that encoded identity with a currently resolved FieldDef or Property.
+   A constructed nested enum in a constructor signature remains a structured unsupported fixed
+   type until the general
    TypeSig-to-resolved-structural-type substitution model exists; do not add an attribute-only
    substitute.
    Serialized CLR type names are parsed structurally before binding: retain escaped top-level and
