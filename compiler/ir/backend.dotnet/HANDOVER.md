@@ -2194,6 +2194,19 @@ session state, process, and a curated task menu. Keep both files updated as you 
   temporary boundary; constructor resolution must retain the constructed owner view and reuse
   this signature foundation. The fresh strict gate is 871/0/0/0 across 16 XML suites (796
   FIR/IL/box, 21 generated CLI, and 54 library integration tests).
+- The constructed-enum fixed-argument continuation now consumes the general resolved-signature
+  model instead of maintaining the former decoder boundary. A constructor parameter such as
+  `Generic<int>.NestedKind` retains its complete selected-graph constructed identity and exact
+  `Int16` storage bits; primitive signature arguments resolve to the selected core assembly's
+  `System.Int32`, so strongly typed and boxed serialized paths agree without host reflection.
+  Roslyn .NET 10 coverage exercises both representations in one attribute. A doctored missing type
+  argument returns `INVALID_FIXED_ARGUMENT_SIGNATURE` at fixed argument 23 with the expected and
+  actual generic arity instead of erasing to the open enum definition. The implementation reuses
+  the assembly-context-bearing resolver and performs no custom-attribute-local substitution.
+  Closed TypeSpec-owned generic attribute constructors remain the next structured temporary
+  boundary because constructor resolution must retain and substitute the constructed owner view.
+  The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and
+  54 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
