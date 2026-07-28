@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, and primitive/array/tagged-object/fixed-enum custom-attribute values are implemented**
+- Status: **Draft candidate; physical declaration metadata, bounded type-identity resolution, custom-attribute values through fixed enums, and serialized type-name syntax are implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -424,6 +424,34 @@ arguments, and `System.Type` values remain unsupported because their types are s
 reflection names; the next layer must parse and resolve those names rather than treating strings
 as type identity.
 
+The thirteenth slice parses the CLR reflection type-name syntax used inside `System.Type` and
+serialized enum values without binding it. JVM class-literal annotation arguments likewise pass
+through a structural class/type model before symbol resolution. The CLR-specific grammar adds
+escaped identifiers, nested `+` components, backtick arity, bracketed assembly-qualified generic
+arguments, pointer/by-reference suffixes, SZARRAY versus multidimensional arrays, and an optional
+AssemblyName display-name tail.
+
+The result retains top-level namespace and metadata name, every nested metadata-name component,
+per-component generic arity, recursively parsed generic arguments, normalized modifiers, and the
+unparsed assembly display name. `[,]` and `[*,*]` normalize to the same rank-two array because the
+CLR treats them as the same completed-runtime type. In contrast, ``Pair`2[,]`` remains an open
+generic type followed by an array modifier, not an invented empty generic-argument list.
+Reflection.Emit-only bounded array forms return structured unsupported results.
+
+Assembly display-name property parsing and assembly binding are deliberately not part of this
+syntax layer. The build frontend still owns the selected graph, and later resolution must check a
+parsed qualifier against that graph rather than call host `Type.GetType`, probe the filesystem, or
+choose an assembly by simple name. This preserves Kotlin Common's type identity boundary and
+works identically for names produced on `net48`, `netstandard2.0`, and `net10.0`.
+
+The JVM-hosted parser bounds input length, recursive generic depth, generic argument count, and
+component count. It rejects invalid escapes, arities, empty/mismatched generic arguments, malformed
+by-reference shapes, empty assembly tails, and unexpected tokens with exact offsets. Tests cover
+escaped namespace/nested characters, open and constructed generics, assembly-qualified arguments,
+arrays/pointers/byrefs, equivalent array spellings, the open-generic-array ambiguity, malformed
+forms, and excessive nesting. Real Roslyn value integration follows after assembly-name parsing
+and selected-graph resolution.
+
 Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
 evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
 resolved generic-constraint, and nullable-attribute projection still remain above or after this
@@ -495,6 +523,9 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 - Typed array and tagged-object decoding with bounded untrusted-input recursion:
   **Correct direction**.
 - Exact fixed-enum identity and storage decoding: **Correct direction**.
+- Bounded structural CLR serialized-type-name parser: **Correct direction**.
+- Keeping AssemblyName parsing and selected-graph binding out of type-name syntax:
+  **Correct direction**.
 - Structured deferral of serialized type names, boxed/named enums, and named arguments:
   **Correct temporary implementation, but not a final design**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
