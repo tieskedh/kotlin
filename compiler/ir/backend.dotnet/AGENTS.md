@@ -306,7 +306,13 @@ landed shape as a compatibility constraint.
    canonical compressed integers: custom modifiers are legal at the extra CLR-supported type
    positions and may retain an unresolved TypeSpec handle, while named/generic type constructors
    remain TypeDef/TypeRef and a later resolver must reject modifier cycles. MethodDef signatures
-   never admit a call-site vararg sentinel. It does not load target code,
+   never admit a call-site vararg sentinel. Property, PropertyMap, and MethodSemantics rows now
+   retain the physical property token, declaring TypeDef, metadata name/flags, structural
+   property/index signature, raw blob, and accessor MethodDef handles. Association comes only from
+   MethodSemantics, never from `get_`/`set_` spelling; CTS structural invariants are enforced while
+   optional CLS naming and shape rules remain input for later Kotlin import-policy diagnostics.
+   The property decoder follows the official .NET by-reference signature augmentation. It does
+   not load target code,
    apply C# display rules, or manufacture FIR declarations. Future mapping is layered physical
    model -> CLR-to-Kotlin import policy -> lazy
    target FIR symbol provider -> IR retaining the original physical owner/member linkage.

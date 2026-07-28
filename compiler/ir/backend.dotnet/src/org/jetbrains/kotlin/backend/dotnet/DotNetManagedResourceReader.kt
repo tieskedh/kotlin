@@ -136,16 +136,28 @@ private object DotNetPeMetadataReader {
 
         fun readClrMetadata(): DotNetClrAssemblyMetadata {
             val metadata = readMetadataImage()
+            val methodDefinitions = readMethodDefinitions(
+                metadata.tables,
+                metadata.strings,
+                metadata.blobs,
+            )
+            val propertyDefinitions = readPropertyDefinitions(
+                metadata.tables,
+                metadata.strings,
+                metadata.blobs,
+            )
             return DotNetClrAssemblyMetadata(
                 identity = metadata.assemblyIdentity,
                 assemblyReferences = readAssemblyReferences(metadata.tables, metadata.strings, metadata.blobs),
                 typeReferences = readTypeReferences(metadata.tables, metadata.strings),
                 typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings),
                 typeSpecifications = readTypeSpecifications(metadata.tables, metadata.blobs),
-                methodDefinitions = readMethodDefinitions(
+                methodDefinitions = methodDefinitions,
+                propertyDefinitions = propertyDefinitions,
+                methodSemantics = readMethodSemantics(
                     metadata.tables,
-                    metadata.strings,
-                    metadata.blobs,
+                    methodDefinitions,
+                    propertyDefinitions,
                 ),
             )
         }
@@ -631,6 +643,211 @@ private object DotNetPeMetadataReader {
             return owners.map { owner -> checkNotNull(owner) }
         }
 
+        private fun readPropertyDefinitions(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrPropertyDefinition> {
+            val table = locateMetadataTable(tables, PROPERTY_TABLE) ?: return emptyList()
+            val owners = readPropertyOwners(tables, table.rowCount)
+            return List(table.rowCount.toIntChecked("Property row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val attributes = readU2(position)
+                position += UINT16_SIZE
+                if (attributes and PROPERTY_ATTRIBUTE_MASK.inv() != 0) {
+                    malformed("Property row ${rowIndex + 1} has invalid attribute flags")
+                }
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val signatureIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val name = readStringHeap(strings, nameIndex)
+                if (name.isEmpty()) malformed("Property row ${rowIndex + 1} has an empty name")
+                val rawSignature = readBlobHeap(blobs, signatureIndex)
+                if (rawSignature.isEmpty()) {
+                    malformed("Property row ${rowIndex + 1} has an empty signature")
+                }
+                if (rawSignature.size > MAX_SIGNATURE_BLOB_SIZE) {
+                    malformed("Property row ${rowIndex + 1} has an oversized signature")
+                }
+                val handle = metadataHandle(
+                    PROPERTY_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "Property",
+                )
+                DotNetClrPropertyDefinition(
+                    handle = handle,
+                    declaringType = owners[rowIndex],
+                    name = name,
+                    attributes = attributes,
+                    signature = SignatureBlobReader(
+                        bytes = rawSignature,
+                        metadataTables = tables,
+                        description = "Property token 0x${handle.token.toUInt().toString(16)}",
+                    ).readPropertySignature(),
+                    rawSignature = rawSignature.map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readPropertyOwners(
+            tables: MetadataStream,
+            propertyCount: Long,
+        ): List<DotNetClrMetadataHandle> {
+            val mapTable = locateMetadataTable(tables, PROPERTY_MAP_TABLE)
+                ?: malformed("Property rows exist without a PropertyMap table")
+            val maps = List(mapTable.rowCount.toIntChecked("PropertyMap row count")) { rowIndex ->
+                var position = mapTable.offset + rowIndex.toLong() * mapTable.rowSize
+                val parentIndex = readIndex(
+                    position,
+                    mapTable.indexSizes.tableIndexSize(TYPE_DEF_TABLE),
+                )
+                position += mapTable.indexSizes.tableIndexSize(TYPE_DEF_TABLE)
+                val propertyStart = readIndex(
+                    position,
+                    mapTable.indexSizes.tableIndexSize(PROPERTY_TABLE),
+                )
+                PropertyOwnerRun(
+                    owner = metadataHandle(
+                        TYPE_DEF_TABLE,
+                        parentIndex,
+                        tables,
+                        "PropertyMap parent",
+                    ),
+                    propertyStart = propertyStart,
+                )
+            }
+            var previousParentRow = 0
+            var previousPropertyStart = 0L
+            for ([mapIndex, map] in maps.withIndex()) {
+                if (map.owner.row <= previousParentRow) {
+                    malformed("PropertyMap Parent indices are not strictly ordered")
+                }
+                if (map.propertyStart !in 1..propertyCount + 1) {
+                    malformed(
+                        "PropertyMap row ${mapIndex + 1} has invalid PropertyList index ${map.propertyStart}"
+                    )
+                }
+                if (map.propertyStart <= previousPropertyStart) {
+                    malformed("PropertyMap PropertyList indices are not strictly ordered")
+                }
+                previousParentRow = map.owner.row
+                previousPropertyStart = map.propertyStart
+            }
+            if (maps.firstOrNull()?.propertyStart != 1L) {
+                malformed("one or more Property rows have no declaring TypeDef")
+            }
+            val owners = arrayOfNulls<DotNetClrMetadataHandle>(
+                propertyCount.toIntChecked("Property row count")
+            )
+            for (mapIndex in maps.indices) {
+                val map = maps[mapIndex]
+                val end = maps.getOrNull(mapIndex + 1)?.propertyStart ?: (propertyCount + 1)
+                for (propertyRow in map.propertyStart until end) {
+                    owners[(propertyRow - 1).toInt()] = map.owner
+                }
+            }
+            if (owners.any { owner -> owner == null }) {
+                malformed("one or more Property rows have no declaring TypeDef")
+            }
+            return owners.map { owner -> checkNotNull(owner) }
+        }
+
+        private fun readMethodSemantics(
+            tables: MetadataStream,
+            methodDefinitions: List<DotNetClrMethodDefinition>,
+            propertyDefinitions: List<DotNetClrPropertyDefinition>,
+        ): List<DotNetClrMethodSemantics> {
+            val table = locateMetadataTable(tables, METHOD_SEMANTICS_TABLE) ?: return emptyList()
+            val methodsByHandle = methodDefinitions.associateBy(DotNetClrMethodDefinition::handle)
+            val propertiesByHandle = propertyDefinitions.associateBy(DotNetClrPropertyDefinition::handle)
+            return List(table.rowCount.toIntChecked("MethodSemantics row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val semantics = readU2(position)
+                position += UINT16_SIZE
+                val methodIndex = readIndex(
+                    position,
+                    table.indexSizes.tableIndexSize(METHOD_DEF_TABLE),
+                )
+                position += table.indexSizes.tableIndexSize(METHOD_DEF_TABLE)
+                val associationIndex = readIndex(position, table.indexSizes.hasSemanticsIndexSize)
+                val methodHandle = metadataHandle(
+                    METHOD_DEF_TABLE,
+                    methodIndex,
+                    tables,
+                    "MethodSemantics method",
+                )
+                val associationHandle = decodeCodedHandle(
+                    value = associationIndex,
+                    tagBits = 1,
+                    tablesByTag = intArrayOf(EVENT_TABLE, PROPERTY_TABLE),
+                    metadataTables = tables,
+                    description = "MethodSemantics association",
+                ) ?: malformed("MethodSemantics row ${rowIndex + 1} has a nil association")
+                val kind = decodeMethodSemanticsKind(
+                    semantics,
+                    associationHandle,
+                    rowIndex,
+                )
+                val method = methodsByHandle[methodHandle]
+                    ?: malformed("MethodSemantics row ${rowIndex + 1} refers to an unread MethodDef")
+                if (associationHandle.table == PROPERTY_TABLE) {
+                    val property = propertiesByHandle[associationHandle]
+                        ?: malformed("MethodSemantics row ${rowIndex + 1} refers to an unread Property")
+                    if (method.declaringType != property.declaringType) {
+                        malformed(
+                            "MethodSemantics row ${rowIndex + 1} associates members from different types"
+                        )
+                    }
+                }
+                DotNetClrMethodSemantics(
+                    handle = metadataHandle(
+                        METHOD_SEMANTICS_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "MethodSemantics",
+                    ),
+                    kind = kind,
+                    method = methodHandle,
+                    association = associationHandle,
+                )
+            }
+        }
+
+        private fun decodeMethodSemanticsKind(
+            semantics: Int,
+            association: DotNetClrMetadataHandle,
+            rowIndex: Int,
+        ): DotNetClrMethodSemanticsKind {
+            val kind = when (semantics) {
+                METHOD_SEMANTICS_SETTER -> DotNetClrMethodSemanticsKind.SETTER
+                METHOD_SEMANTICS_GETTER -> DotNetClrMethodSemanticsKind.GETTER
+                METHOD_SEMANTICS_OTHER -> DotNetClrMethodSemanticsKind.OTHER
+                METHOD_SEMANTICS_ADD_ON -> DotNetClrMethodSemanticsKind.ADD_ON
+                METHOD_SEMANTICS_REMOVE_ON -> DotNetClrMethodSemanticsKind.REMOVE_ON
+                METHOD_SEMANTICS_FIRE -> DotNetClrMethodSemanticsKind.FIRE
+                else -> malformed("MethodSemantics row ${rowIndex + 1} has invalid semantics flags")
+            }
+            val validForAssociation = when (association.table) {
+                PROPERTY_TABLE ->
+                    kind == DotNetClrMethodSemanticsKind.SETTER ||
+                            kind == DotNetClrMethodSemanticsKind.GETTER ||
+                            kind == DotNetClrMethodSemanticsKind.OTHER
+                EVENT_TABLE ->
+                    kind == DotNetClrMethodSemanticsKind.ADD_ON ||
+                            kind == DotNetClrMethodSemanticsKind.REMOVE_ON ||
+                            kind == DotNetClrMethodSemanticsKind.FIRE ||
+                            kind == DotNetClrMethodSemanticsKind.OTHER
+                else -> false
+            }
+            if (!validForAssociation) {
+                malformed(
+                    "MethodSemantics row ${rowIndex + 1} has semantics incompatible with its association"
+                )
+            }
+            return kind
+        }
+
         private fun readNestedTypeOwners(
             tables: MetadataStream,
         ): Map<DotNetClrMetadataHandle, DotNetClrMetadataHandle> {
@@ -681,6 +898,37 @@ private object DotNetPeMetadataReader {
                     malformed("$description has ${bytes.size - position} trailing signature bytes")
                 }
                 return signature
+            }
+
+            fun readPropertySignature(): DotNetClrPropertySignature {
+                val header = readByte()
+                if (header and SIGNATURE_PROPERTY_MASK != SIGNATURE_PROPERTY) {
+                    malformed("$description has an invalid property signature header")
+                }
+                val parameterCount = readCompressedUnsigned("property index-parameter count")
+                ensureCollectionFits(parameterCount, "property index parameters")
+                val propertyType = readType(
+                    depth = 0,
+                    allowVoid = false,
+                    allowByReference = true,
+                    allowTypedReference = true,
+                )
+                val indexParameterTypes = List(parameterCount) {
+                    readType(
+                        depth = 0,
+                        allowVoid = false,
+                        allowByReference = true,
+                        allowTypedReference = true,
+                    )
+                }
+                if (position != bytes.size) {
+                    malformed("$description has ${bytes.size - position} trailing signature bytes")
+                }
+                return DotNetClrPropertySignature(
+                    hasThis = header and SIGNATURE_HAS_THIS != 0,
+                    propertyType = propertyType,
+                    indexParameterTypes = indexParameterTypes,
+                )
             }
 
             private fun readType(
@@ -1376,7 +1624,7 @@ private object DotNetPeMetadataReader {
             get() = codedIndexSize(1, 4, 8)
         private val hasDeclSecurityIndexSize
             get() = codedIndexSize(2, 2, 6, 32)
-        private val hasSemanticsIndexSize
+        val hasSemanticsIndexSize
             get() = codedIndexSize(1, 20, 23)
         private val methodDefOrRefIndexSize
             get() = codedIndexSize(1, 6, 10)
@@ -1419,6 +1667,11 @@ private object DotNetPeMetadataReader {
         val offset: Long,
         val attributes: Int,
         val implementation: Long,
+    )
+
+    private data class PropertyOwnerRun(
+        val owner: DotNetClrMetadataHandle,
+        val propertyStart: Long,
     )
 
     private data class MetadataTableLocation(
@@ -1469,6 +1722,10 @@ private object DotNetPeMetadataReader {
     private const val TYPE_DEF_TABLE = 2
     private const val FIELD_TABLE = 4
     private const val METHOD_DEF_TABLE = 6
+    private const val EVENT_TABLE = 20
+    private const val PROPERTY_MAP_TABLE = 21
+    private const val PROPERTY_TABLE = 23
+    private const val METHOD_SEMANTICS_TABLE = 24
     private const val MODULE_REF_TABLE = 26
     private const val TYPE_SPEC_TABLE = 27
     private const val MANIFEST_RESOURCE_TABLE = 40
@@ -1483,6 +1740,13 @@ private object DotNetPeMetadataReader {
     private const val ASSEMBLY_PUBLIC_KEY_FLAG = 0x1L
     private const val METHOD_ACCESS_MASK = 0x7
     private const val METHOD_STATIC_ATTRIBUTE = 0x10
+    private const val PROPERTY_ATTRIBUTE_MASK = 0x1600
+    private const val METHOD_SEMANTICS_SETTER = 0x0001
+    private const val METHOD_SEMANTICS_GETTER = 0x0002
+    private const val METHOD_SEMANTICS_OTHER = 0x0004
+    private const val METHOD_SEMANTICS_ADD_ON = 0x0008
+    private const val METHOD_SEMANTICS_REMOVE_ON = 0x0010
+    private const val METHOD_SEMANTICS_FIRE = 0x0020
     private const val MAX_SIGNATURE_DEPTH = 128
     private const val MAX_SIGNATURE_BLOB_SIZE = 1024 * 1024
     private const val ELEMENT_TYPE_VOID = 0x01
@@ -1529,6 +1793,8 @@ private object DotNetPeMetadataReader {
     private const val SIGNATURE_HAS_THIS = 0x20
     private const val SIGNATURE_EXPLICIT_THIS = 0x40
     private const val SIGNATURE_RESERVED_MASK = 0x80
+    private const val SIGNATURE_PROPERTY = 0x08
+    private const val SIGNATURE_PROPERTY_MASK = 0xdf
     private const val UINT16_INDEX_LIMIT = 1L shl 16
     private const val UINT16_SIZE = 2L
     private const val UINT32_SIZE = 4L
