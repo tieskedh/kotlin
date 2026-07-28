@@ -188,6 +188,52 @@ data class DotNetClrFieldSignature(
     val fieldType: DotNetClrTypeSignature,
 )
 
+enum class DotNetClrFieldVisibility {
+    COMPILER_CONTROLLED,
+    PRIVATE,
+    FAMILY_AND_ASSEMBLY,
+    ASSEMBLY,
+    FAMILY,
+    FAMILY_OR_ASSEMBLY,
+    PUBLIC,
+}
+
+data class DotNetClrFieldDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val declaringType: DotNetClrMetadataHandle,
+    val name: String,
+    val attributes: Int,
+    val signature: DotNetClrFieldSignature,
+    val rawSignature: List<Int>,
+) {
+    val visibility: DotNetClrFieldVisibility
+        get() = DotNetClrFieldVisibility.entries[attributes and FIELD_ACCESS_MASK]
+
+    val isStatic: Boolean
+        get() = attributes and STATIC_ATTRIBUTE != 0
+
+    val isInitOnly: Boolean
+        get() = attributes and INIT_ONLY_ATTRIBUTE != 0
+
+    val isLiteral: Boolean
+        get() = attributes and LITERAL_ATTRIBUTE != 0
+
+    val isSpecialName: Boolean
+        get() = attributes and SPECIAL_NAME_ATTRIBUTE != 0
+
+    val isRuntimeSpecialName: Boolean
+        get() = attributes and RUNTIME_SPECIAL_NAME_ATTRIBUTE != 0
+
+    private companion object {
+        const val FIELD_ACCESS_MASK = 0x0007
+        const val STATIC_ATTRIBUTE = 0x0010
+        const val INIT_ONLY_ATTRIBUTE = 0x0020
+        const val LITERAL_ATTRIBUTE = 0x0040
+        const val SPECIAL_NAME_ATTRIBUTE = 0x0200
+        const val RUNTIME_SPECIAL_NAME_ATTRIBUTE = 0x0400
+    }
+}
+
 sealed interface DotNetClrMemberReferenceSignature {
     data class Method(
         val signature: DotNetClrMethodSignature,
@@ -360,6 +406,7 @@ data class DotNetClrAssemblyMetadata(
     val typeReferences: List<DotNetClrTypeReference>,
     val typeDefinitions: List<DotNetClrTypeDefinition>,
     val typeSpecifications: List<DotNetClrTypeSpecification>,
+    val fieldDefinitions: List<DotNetClrFieldDefinition>,
     val methodDefinitions: List<DotNetClrMethodDefinition>,
     val memberReferences: List<DotNetClrMemberReference>,
     val propertyDefinitions: List<DotNetClrPropertyDefinition>,

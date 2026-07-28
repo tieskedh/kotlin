@@ -2010,6 +2010,20 @@ session state, process, and a curated task menu. Keep both files updated as you 
   decode ordinary custom attributes by constructor signature, semantic value, attachment, and
   multiplicity before nullability enhancement and FIR. The fresh strict gate is 869/0/0/0 across
   16 XML suites (796 FIR/IL/box, 21 generated CLI, and 52 library integration tests).
+- The physical-FieldDef continuation completes the field-signature dependency exposed by enum
+  custom-attribute arguments. Field rows retain token, TypeDef FieldList owner, exact name, raw
+  FieldAttributes, reusable FieldSig, and original bytes. Field and method ownership now share
+  one bounded TypeDef-list partition decoder, while FieldDef and FieldRef share the same signature
+  decoder. This follows JVM's physical foreign-field/member separation; CLR-specific enum
+  `value__`, literal fields, and modern by-reference fields remain physical facts until resolved
+  import policy. The reader rejects invalid flag combinations, malformed signatures, and missing
+  owners without applying optional CLS/C# projection rules. Dual-ILAsm tests cover generic,
+  static init-only, enum-storage, and literal fields plus a malformed FieldSig. Roslyn net10
+  proves the same `ref field` shape through producer FieldDef and consumer FieldRef; both real core
+  assemblies provide scale coverage. Next build cycle-safe assembly/type resolution for enum
+  identity and underlying storage, then decode ordinary custom attributes semantically with
+  attachment and multiplicity. The fresh strict gate is 869/0/0/0 across 16 XML suites
+  (796 FIR/IL/box, 21 generated CLI, and 52 library integration tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
@@ -2093,9 +2107,9 @@ session state, process, and a curated task menu. Keep both files updated as you 
    supported surface grows; do not add a permanent target-specific copy of Common algorithms.
    Keep the current same-run fallback only until all bootstrap tests select a complete installed
    pair.
-2. **Continue the CLR importer above its physical generic/property/MemberRef foundation.** Add
-   semantic custom-attribute records before introducing the CLR-to-Kotlin policy and lazy FIR
-   provider; add FieldDef rows when their first consumer requires them. Preserve Kotlin
+2. **Continue the CLR importer above its physical field/generic/property/MemberRef foundation.**
+   Add the bounded assembly/type resolution needed for enum-valued semantic custom-attribute
+   records before introducing the CLR-to-Kotlin policy and lazy FIR provider. Preserve Kotlin
    declaration identity and Common semantics; decode nullability, variance, properties, and
    exceptions at the importer boundary instead of teaching the Kotlin-owned backend surface to
    infer C# conventions. Keep structured metadata-table auditing; do not substitute IL substring
