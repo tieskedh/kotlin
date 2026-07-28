@@ -44,43 +44,58 @@
 .class public abstract sealed auto ansi 'demo.primitiveArrayExportsKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static class [Kotlin.Runtime]'Kotlin.IntArray' 'buffer'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 3
     .locals init (
       [0] int32[] '<arrayOfStorage>',
-      [1] int32 '<arrayElement>'
+      [1] int32 '<arrayElement>',
+      [2] class [mscorlib]System.Exception 'reason'
     )
-    ldc.i4 2
-    newarr int32
-    stloc.0
-    ldc.i4 1
-    stloc.1
-    ldloc.0
-    ldc.i4 0
-    ldloc.1
-    stelem int32
-    ldc.i4 2
-    stloc.1
-    ldloc.0
-    ldc.i4 1
-    ldloc.1
-    stelem int32
-    ldloc.0
-    newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
-    stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
+    .try {
+      ldc.i4 2
+      newarr int32
+      stloc.0
+      ldc.i4 1
+      stloc.1
+      ldloc.0
+      ldc.i4 0
+      ldloc.1
+      stelem int32
+      ldc.i4 2
+      stloc.1
+      ldloc.0
+      ldc.i4 1
+      ldloc.1
+      stelem int32
+      ldloc.0
+      newobj instance void [Kotlin.Runtime]'Kotlin.IntArray'::.ctor(int32[])
+      stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.2
+      ldloc.2
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'demo.primitiveArrayExportsKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method public hidebysig specialname static class [Kotlin.Runtime]'Kotlin.IntArray' 'get_buffer'() cil managed
   {
     .maxstack 1
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
     ret
   }
   .method public hidebysig specialname static void 'set_buffer'(class [Kotlin.Runtime]'Kotlin.IntArray' '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld class [Kotlin.Runtime]'Kotlin.IntArray' 'demo.primitiveArrayExportsKt'::'buffer'
     ret
@@ -114,6 +129,7 @@
       [3] int32 '<arrayIndex>@3',
       [4] int32 '<arrayValue>'
     )
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     stloc.0
     ldc.i4 0
@@ -151,6 +167,7 @@
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.IntArray' 'maybe'(class [Kotlin.Runtime]'Kotlin.IntArray' 'values') cil managed
   {
     .maxstack 1
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     ret
   }
@@ -170,6 +187,7 @@
   .method public hidebysig static bool 'same'(class [Kotlin.Runtime]'Kotlin.IntArray' 'first', class [Kotlin.Runtime]'Kotlin.IntArray' 'second') cil managed
   {
     .maxstack 2
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     ldarg.1
     ceq
@@ -192,6 +210,7 @@
   .method public hidebysig static int32[] 'generic'(int32[] 'values') cil managed
   {
     .maxstack 1
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldarg.0
     ret
   }
@@ -210,8 +229,27 @@
   {
     .entrypoint
     .maxstack 1
+    call void 'demo.primitiveArrayExportsKt'::'<EnsureInitialized>'()
     ldstr "primitive-array-exports"
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'demo.primitiveArrayExportsKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'demo.primitiveArrayExportsKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property class [Kotlin.Runtime]'Kotlin.IntArray' 'buffer'()

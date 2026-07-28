@@ -9,29 +9,46 @@
 .class public abstract sealed auto ansi 'topLevelPropertiesKt'
        extends [mscorlib]System.Object
 {
+  .field private static object '<static-initialization-failure>'
   .field private static int32 'counter'
   .field private static string 'name'
   .field private static int32 'observed'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    ldc.i4 10
-    stsfld int32 'topLevelPropertiesKt'::'counter'
-    ldstr "kotlin"
-    stsfld string 'topLevelPropertiesKt'::'name'
-    ldc.i4 0
-    stsfld int32 'topLevelPropertiesKt'::'observed'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      ldc.i4 10
+      stsfld int32 'topLevelPropertiesKt'::'counter'
+      ldstr "kotlin"
+      stsfld string 'topLevelPropertiesKt'::'name'
+      ldc.i4 0
+      stsfld int32 'topLevelPropertiesKt'::'observed'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'topLevelPropertiesKt'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
     ret
   }
   .method public hidebysig specialname static int32 'get_counter'() cil managed
   {
     .maxstack 1
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     ldsfld int32 'topLevelPropertiesKt'::'counter'
     ret
   }
   .method public hidebysig specialname static void 'set_counter'(int32 '<set-?>') cil managed
   {
     .maxstack 1
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     ldarg.0
     stsfld int32 'topLevelPropertiesKt'::'counter'
     ret
@@ -39,12 +56,14 @@
   .method public hidebysig specialname static string 'get_name'() cil managed
   {
     .maxstack 1
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     ldsfld string 'topLevelPropertiesKt'::'name'
     ret
   }
   .method public hidebysig specialname static int32 'get_custom'() cil managed
   {
     .maxstack 2
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     call int32 'topLevelPropertiesKt'::'get_counter'()
     ldc.i4 1
     add
@@ -53,12 +72,14 @@
   .method public hidebysig specialname static int32 'get_observed'() cil managed
   {
     .maxstack 1
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     ldsfld int32 'topLevelPropertiesKt'::'observed'
     ret
   }
   .method public hidebysig specialname static void 'set_observed'(int32 'value') cil managed
   {
     .maxstack 2
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     call int32 'topLevelPropertiesKt'::'get_counter'()
     ldc.i4 1
     add
@@ -71,6 +92,7 @@
   {
     .entrypoint
     .maxstack 3
+    call void 'topLevelPropertiesKt'::'<EnsureInitialized>'()
     call int32 'topLevelPropertiesKt'::'get_counter'()
     ldc.i4 5
     add
@@ -97,6 +119,24 @@
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'topLevelPropertiesKt'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'topLevelPropertiesKt'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldnull
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .property int32 'counter'()

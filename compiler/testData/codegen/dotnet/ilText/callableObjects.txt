@@ -34,16 +34,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field assembly static initonly class 'callableObjectsKt$cached$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$cached$1'::.ctor()
-    stsfld class 'callableObjectsKt$cached$1' 'callableObjectsKt$cached$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$cached$1'::.ctor()
+      stsfld class 'callableObjectsKt$cached$1' 'callableObjectsKt$cached$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$cached$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$cached$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$cached$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$cached$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -68,16 +102,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$zero$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$zero$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$zero$1' 'callableObjectsKt$main$zero$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$zero$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$zero$1' 'callableObjectsKt$main$zero$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$zero$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$zero$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$zero$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$zero$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -102,16 +170,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$one$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$one$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$one$1' 'callableObjectsKt$main$one$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$one$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$one$1' 'callableObjectsKt$main$one$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$one$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$one$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$one$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$one$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -149,16 +251,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function2', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction2`3'<int32, int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction2`2'<int32, int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$two$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$two$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$two$1' 'callableObjectsKt$main$two$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$two$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$two$1' 'callableObjectsKt$main$two$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$two$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$two$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$two$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$two$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -199,16 +335,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function3', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$three$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$three$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$three$1' 'callableObjectsKt$main$three$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$three$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$three$1' 'callableObjectsKt$main$three$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$three$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$three$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$three$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$three$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -243,16 +413,50 @@
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<int32, int32>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$reference$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$reference$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$reference$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$reference$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$reference$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$reference$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "functionReference"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 6
+    call void 'callableObjectsKt$main$reference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableObjects.kt:580:622:#increment(kotlin.Int){}"
     ldc.i4 1
@@ -304,16 +508,50 @@
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function3', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction3`4'<int32, int32, int32, int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$threeReference$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$threeReference$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$threeReference$1' 'callableObjectsKt$main$threeReference$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$threeReference$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$threeReference$1' 'callableObjectsKt$main$threeReference$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$threeReference$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$threeReference$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$threeReference$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "functionReference"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 6
+    call void 'callableObjectsKt$main$threeReference$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableObjects.kt:624:703:#sumThree(kotlin.Int;kotlin.Int;kotlin.Int){}"
     ldc.i4 3
@@ -362,16 +600,50 @@
        implements [Kotlin.Runtime]'Kotlin.KFunction', [Kotlin.Runtime]'Kotlin.Function0'
 {
   .field assembly static initonly class 'callableObjectsKt$main$unit$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$unit$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$unit$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$unit$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$unit$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$unit$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "functionReference"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 6
+    call void 'callableObjectsKt$main$unit$1'::'<EnsureInitialized>'()
     ldarg.0
     ldstr "local:callableObjects.kt:705:745:#mark(){}"
     ldc.i4 0
@@ -404,16 +676,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<object, string>
 {
   .field assembly static initonly class 'callableObjectsKt$main$broad$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$broad$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$broad$1' 'callableObjectsKt$main$broad$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$broad$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$broad$1' 'callableObjectsKt$main$broad$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$broad$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$broad$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$broad$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$broad$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -438,16 +744,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<int32>
 {
   .field assembly static initonly class 'callableObjectsKt$main$primitive$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$primitive$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$primitive$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$primitive$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$primitive$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$primitive$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$primitive$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -472,16 +812,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
 {
   .field assembly static initonly class 'callableObjectsKt$main$text$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$text$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$text$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$text$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$text$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$text$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$text$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -507,16 +881,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>>
 {
   .field assembly static initonly class 'callableObjectsKt$main$nullablePresent$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$nullablePresent$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$nullablePresent$1' 'callableObjectsKt$main$nullablePresent$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$nullablePresent$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$nullablePresent$1' 'callableObjectsKt$main$nullablePresent$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$nullablePresent$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$nullablePresent$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$nullablePresent$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$nullablePresent$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -542,16 +950,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function0', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction0`1'<valuetype [mscorlib]System.Nullable`1<int32>>
 {
   .field assembly static initonly class 'callableObjectsKt$main$nullableAbsent$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$nullableAbsent$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$nullableAbsent$1' 'callableObjectsKt$main$nullableAbsent$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$nullableAbsent$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$nullableAbsent$1' 'callableObjectsKt$main$nullableAbsent$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$nullableAbsent$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$nullableAbsent$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$nullableAbsent$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$nullableAbsent$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -581,16 +1023,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<bool, bool>, class [Kotlin.Runtime]'Kotlin.Runtime.Internal.TypedArgumentsFunction1`1'<bool>
 {
   .field assembly static initonly class 'callableObjectsKt$main$boolean$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$boolean$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$boolean$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$boolean$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$boolean$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$boolean$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$boolean$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -628,16 +1104,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
 {
   .field assembly static initonly class 'callableObjectsKt$main$extension$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$extension$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$extension$1' 'callableObjectsKt$main$extension$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$extension$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$extension$1' 'callableObjectsKt$main$extension$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$extension$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$extension$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$extension$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$extension$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -663,16 +1173,50 @@
        implements [Kotlin.Runtime]'Kotlin.Function1', class [Kotlin.Runtime]'Kotlin.Runtime.Internal.ExactFunction1`2'<string, string>
 {
   .field assembly static initonly class 'callableObjectsKt$main$1' 'INSTANCE'
+  .field private static object '<static-initialization-failure>'
   .method private hidebysig specialname rtspecialname static void .cctor() cil managed
   {
     .maxstack 1
-    newobj instance void 'callableObjectsKt$main$1'::.ctor()
-    stsfld class 'callableObjectsKt$main$1' 'callableObjectsKt$main$1'::'INSTANCE'
+    .locals init (
+      [0] class [mscorlib]System.Exception 'reason'
+    )
+    .try {
+      newobj instance void 'callableObjectsKt$main$1'::.ctor()
+      stsfld class 'callableObjectsKt$main$1' 'callableObjectsKt$main$1'::'INSTANCE'
+      leave IL_tryEnd_0
+    }
+    catch [mscorlib]System.Exception {
+      stloc.0
+      ldloc.0
+      call object [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Capture'(class [mscorlib]System.Exception)
+      stsfld object 'callableObjectsKt$main$1'::'<static-initialization-failure>'
+      leave IL_tryEnd_0
+    }
+IL_tryEnd_0:
+    ret
+  }
+  .method assembly hidebysig static void '<EnsureInitialized>'() cil managed
+  {
+    .maxstack 2
+    ldsfld object 'callableObjectsKt$main$1'::'<static-initialization-failure>'
+    ldnull
+    ceq
+    ldc.i4.0
+    ceq
+    brfalse IL_whenNext_1
+    ldsfld object 'callableObjectsKt$main$1'::'<static-initialization-failure>'
+    call class [mscorlib]System.Exception [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Observe'(object)
+    ldstr "lambda"
+    call void [Kotlin.Runtime]'Kotlin.Runtime.Internal.StaticInitialization'::'Throw'(class [mscorlib]System.Exception, string)
+    newobj instance void [Kotlin.Runtime]'Kotlin.KotlinNothingValueException'::.ctor()
+    throw
+IL_whenNext_1:
     ret
   }
   .method public hidebysig specialname rtspecialname instance void .ctor() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$main$1'::'<EnsureInitialized>'()
     ldarg.0
     call instance void [mscorlib]System.Object::.ctor()
     ret
@@ -724,6 +1268,7 @@
   .method public hidebysig static class [Kotlin.Runtime]'Kotlin.Function0' 'cached'() cil managed
   {
     .maxstack 1
+    call void 'callableObjectsKt$cached$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$cached$1' 'callableObjectsKt$cached$1'::'INSTANCE'
     ret
   }
@@ -886,18 +1431,25 @@ IL_callableExactEnd_1:
       [77] int32 '<callableResult>@77',
       [78] class [Kotlin.Runtime]'Kotlin.Function0' 'nullableCallable'
     )
+    call void 'callableObjectsKt$main$zero$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$zero$1' 'callableObjectsKt$main$zero$1'::'INSTANCE'
     stloc.0
+    call void 'callableObjectsKt$main$one$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$one$1' 'callableObjectsKt$main$one$1'::'INSTANCE'
     stloc.1
+    call void 'callableObjectsKt$main$two$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$two$1' 'callableObjectsKt$main$two$1'::'INSTANCE'
     stloc.2
+    call void 'callableObjectsKt$main$three$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$three$1' 'callableObjectsKt$main$three$1'::'INSTANCE'
     stloc.3
+    call void 'callableObjectsKt$main$reference$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$reference$1' 'callableObjectsKt$main$reference$1'::'INSTANCE'
     stloc 4
+    call void 'callableObjectsKt$main$threeReference$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$threeReference$1' 'callableObjectsKt$main$threeReference$1'::'INSTANCE'
     stloc 5
+    call void 'callableObjectsKt$main$unit$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$unit$1' 'callableObjectsKt$main$unit$1'::'INSTANCE'
     stloc 6
     ldloc.0
@@ -1102,6 +1654,7 @@ IL_boolStrTrue_12:
     ldstr "true"
 IL_boolStrEnd_13:
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$broad$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$broad$1' 'callableObjectsKt$main$broad$1'::'INSTANCE'
     stloc 35
     ldloc 35
@@ -1139,6 +1692,7 @@ IL_callableExactEnd_17:
     ldloc 40
     call string [Kotlin.Runtime]'Kotlin.Runtime.Internal.Intrinsics'::'StringValueOf'(object)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$primitive$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$primitive$1' 'callableObjectsKt$main$primitive$1'::'INSTANCE'
     stloc 41
     ldloc 41
@@ -1153,6 +1707,7 @@ IL_boolStrTrue_18:
     ldstr "true"
 IL_boolStrEnd_19:
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$text$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$text$1' 'callableObjectsKt$main$text$1'::'INSTANCE'
     stloc 43
     ldloc 43
@@ -1178,8 +1733,10 @@ IL_callableErasedFallback_20:
 IL_callableExactEnd_21:
     ldloc 47
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$nullablePresent$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$nullablePresent$1' 'callableObjectsKt$main$nullablePresent$1'::'INSTANCE'
     stloc 48
+    call void 'callableObjectsKt$main$nullableAbsent$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$nullableAbsent$1' 'callableObjectsKt$main$nullableAbsent$1'::'INSTANCE'
     stloc 49
     ldloc 48
@@ -1257,6 +1814,7 @@ IL_boolStrTrue_29:
     ldstr "true"
 IL_boolStrEnd_30:
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$boolean$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$boolean$1' 'callableObjectsKt$main$boolean$1'::'INSTANCE'
     stloc 60
     ldloc 60
@@ -1326,6 +1884,7 @@ IL_boolStrTrue_39:
     ldstr "true"
 IL_boolStrEnd_40:
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$extension$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$extension$1' 'callableObjectsKt$main$extension$1'::'INSTANCE'
     stloc 68
     ldloc 68
@@ -1389,6 +1948,7 @@ IL_callableExactEnd_44:
     call class [mscorlib]System.Globalization.CultureInfo [mscorlib]System.Globalization.CultureInfo::get_InvariantCulture()
     callvirt instance string [mscorlib]System.IFormattable::ToString(string, class [mscorlib]System.IFormatProvider)
     call void [mscorlib]System.Console::WriteLine(string)
+    call void 'callableObjectsKt$main$1'::'<EnsureInitialized>'()
     ldsfld class 'callableObjectsKt$main$1' 'callableObjectsKt$main$1'::'INSTANCE'
     ldstr "generic exact"
     call !!0 'callableObjectsKt'::'callGeneric'<string>(class [Kotlin.Runtime]'Kotlin.Function1', !!0)

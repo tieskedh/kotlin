@@ -3,8 +3,9 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.defaultArgumentsDispatchFunction
 import org.jetbrains.kotlin.backend.common.lower.LocalDeclarationsLowering
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
-import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_STATIC_HOLDER
-import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COMPANION_INITIALIZATION_ENTRY
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_HOLDER
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_ENTRY
+import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_INITIALIZATION_FAILURE_STATE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_COVARIANT_RETURN_BRIDGE
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_FORWARDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_INTERFACE_DEFAULT_SLOT_BRIDGE
@@ -29,6 +30,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationParent
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
 import org.jetbrains.kotlin.ir.declarations.IrField
@@ -96,12 +98,14 @@ internal class DotNetIlEmitter(
             Map<IrSimpleFunction, DotNetBoundInterfaceDefaultImplementation> = emptyMap(),
     private val externalDefaultArgumentDispatchers:
             Map<IrSimpleFunction, DotNetBoundDefaultArgumentDispatcher> = emptyMap(),
-    private val companionInitializations:
-            Map<IrClass, DotNetLoweredCompanionInitialization> = emptyMap(),
+    private val staticInitializations:
+            Map<IrClass, DotNetLoweredStaticInitialization> = emptyMap(),
+    private val staticInitializationFailures:
+            Map<IrDeclarationParent, DotNetLoweredStaticInitializationFailure> = emptyMap(),
     private val objectInstanceFields:
             Map<IrClass, IrField> = emptyMap(),
-    private val externalCompanionInitializations:
-            Map<IrSimpleFunction, DotNetBoundCompanionInitialization> = emptyMap(),
+    private val externalStaticInitializations:
+            Map<IrSimpleFunction, DotNetBoundStaticInitialization> = emptyMap(),
     private val interfaceDefaultPromotions:
             List<DotNetLoweredInterfaceDefaultPromotion> = emptyList(),
     private val genericInterfaceViewBridges:
@@ -165,7 +169,12 @@ internal class DotNetIlEmitter(
         }.toMap()
         val topLevelFunctionsByFile = files.associateWith { file ->
             file.declarations.filterIsInstance<IrSimpleFunction>().filter { function ->
-                function.origin != DOTNET_STATIC_INITIALIZER && emissionScope.owns(function)
+                function.origin != DOTNET_STATIC_INITIALIZER &&
+                        (
+                                emissionScope.owns(function) ||
+                                        function.origin == DOTNET_STATIC_INITIALIZATION_ENTRY &&
+                                        file in staticInitializersByFile
+                                )
             }
         }
 
@@ -946,8 +955,8 @@ internal class DotNetIlEmitter(
                 typeMapper,
             )
         }
-        for ([entry, binding] in externalCompanionInitializations) {
-            availableFunctions[entry] = externalDeclarations.companionInitializationFunctionInfo(
+        for ([entry, binding] in externalStaticInitializations) {
+            availableFunctions[entry] = externalDeclarations.staticInitializationFunctionInfo(
                 entry,
                 binding,
                 typeMapper,
@@ -1194,6 +1203,7 @@ internal class DotNetIlEmitter(
         val renderedMethods = LinkedHashMap<IrSimpleFunction, DotNetIlRenderedMethod>()
         val renderedStaticInitializers = LinkedHashMap<IrFile, DotNetIlRenderedMethod>()
         val staticFieldLines = LinkedHashMap<IrFile, Map<IrProperty, String>>()
+        val staticInitializationFailureFieldLines = LinkedHashMap<IrFile, String>()
         val failedInitializerFiles = hashSetOf<IrFile>()
 
         // Evicts one top-level property: its accessors leave the callable surface (and the
@@ -1299,6 +1309,7 @@ internal class DotNetIlEmitter(
             renderedMethods.clear()
             renderedStaticInitializers.clear()
             staticFieldLines.clear()
+            staticInitializationFailureFieldLines.clear()
             var anyDeclarationRemoved = false
             for (irClass in availableClasses.keys.toList()) {
                 // Already evicted with the subtree of an earlier failure in this round.
@@ -1405,11 +1416,19 @@ internal class DotNetIlEmitter(
                         ).render()
                     }
                     staticFieldLines[file] = fieldLines
-                    renderedInitializer?.let { renderedStaticInitializers[file] = it }
+                    renderedInitializer?.let {
+                        renderedStaticInitializers[file] = it
+                    }
                 } catch (e: DotNetIlUnsupportedException) {
                     failFilePropertyGroup(file, e.reason)
                     anyDeclarationRemoved = true
                 }
+            }
+            for (file in files) {
+                val failure = staticInitializationFailures[file] ?: continue
+                if (failure.entry !in availableFunctions) continue
+                staticInitializationFailureFieldLines[file] =
+                    renderField(failure.failureState, typeMapper, isStatic = true)
             }
         } while (anyDeclarationRemoved)
 
@@ -1684,6 +1703,7 @@ internal class DotNetIlEmitter(
                     }
                 }
                 val facadeFields = mutableListOf<String>()
+                staticInitializationFailureFieldLines[file]?.let { facadeFields += it }
                 val facadePropertyBlocks = mutableListOf<String>()
                 val fieldLines = staticFieldLines[file].orEmpty()
                 for (property in topLevelPropertiesByFile.getValue(file)) {
@@ -1741,7 +1761,7 @@ internal class DotNetIlEmitter(
             genericInterfaceIntersectionSlots,
             covariantReturnBridges,
             interfaceDefaultClassForwarders,
-            companionInitializations,
+            staticInitializations,
             objectInstanceFields,
         )
         val managedResources = cSharpImplementationManifestTarget?.let { target ->
@@ -1896,32 +1916,32 @@ internal class DotNetIlEmitter(
         externalDeclarations: DotNetExternalDeclarations,
     ) {
         val name = irClass.diagnosticName()
-        val companionStaticHolder = if (irClass.origin == DOTNET_COMPANION_STATIC_HOLDER) {
+        val staticHolder = if (irClass.origin == DOTNET_STATIC_HOLDER) {
             irClass
         } else {
             irClass.declarations.filterIsInstance<IrClass>()
-                .singleOrNull { it.origin == DOTNET_COMPANION_STATIC_HOLDER }
+                .singleOrNull { it.origin == DOTNET_STATIC_HOLDER }
         }
-        if (companionStaticHolder != null) {
-            val protectedMember = companionStaticHolder.declarations.filterIsInstance<IrDeclarationWithVisibility>()
+        if (staticHolder != null) {
+            val protectedMember = staticHolder.declarations.filterIsInstance<IrDeclarationWithVisibility>()
                 .firstOrNull { it.visibility == DescriptorVisibilities.PROTECTED }
             if (protectedMember != null) {
                 dotNetUnsupported(
-                    "companion-block member '${(protectedMember as IrDeclarationWithName).name.asString()}' " +
+                    "relocated static member '${(protectedMember as IrDeclarationWithName).name.asString()}' " +
                             "of '$name' has protected visibility; a holder-relative CLR family member would " +
                             "not preserve owner-subclass access"
                 )
             }
             if (
-                companionStaticHolder.declarations.any {
+                staticHolder.declarations.any {
                     it is IrSimpleFunction && it.origin == DOTNET_STATIC_INITIALIZER
-                } && companionStaticHolder.declarations.none {
-                    it is IrSimpleFunction && it.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY
+                } && staticHolder.declarations.none {
+                    it is IrSimpleFunction && it.origin == DOTNET_STATIC_INITIALIZATION_ENTRY
                 }
             ) {
                 dotNetUnsupported(
-                    "companion static holder of '$name' has field-backed state; " +
-                            "no stable companion-initialization entry was emitted"
+                    "static holder of '$name' has initializer state; " +
+                            "no stable static-initialization entry was emitted"
                 )
             }
         }
@@ -2041,12 +2061,12 @@ internal class DotNetIlEmitter(
         }
         if (companionBlockMember != null) {
             if (irClass.superTypes.any { !it.isAny() } && irClass.declarations.none {
-                    it is IrSimpleFunction && it.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY
+                    it is IrSimpleFunction && it.origin == DOTNET_STATIC_INITIALIZATION_ENTRY
                 }
             ) {
                 dotNetUnsupported(
                     "class '$name' inherits companion-block members or initialization obligations; " +
-                            "no stable companion-initialization entry was emitted"
+                            "no stable static-initialization entry was emitted"
                 )
             }
         }
@@ -2277,7 +2297,10 @@ internal class DotNetIlEmitter(
                         )
                     }
                 is IrField ->
-                    if (declaration.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE) {
+                    if (
+                        declaration.origin != IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE &&
+                        declaration.origin != DOTNET_STATIC_INITIALIZATION_FAILURE_STATE
+                    ) {
                         dotNetUnsupported(
                             "unsupported field '${declaration.name.asString()}' of interface '$name'"
                         )
@@ -2322,9 +2345,9 @@ internal class DotNetIlEmitter(
                 "companion-block $description of interface '$interfaceName' escaped companion static holder lowering"
             )
         }
-        if (member.origin == DOTNET_COMPANION_INITIALIZATION_ENTRY) {
+        if (member.origin == DOTNET_STATIC_INITIALIZATION_ENTRY) {
             if (!member.isStaticMethodOfClass || member.body == null || member.typeParameters.isNotEmpty()) {
-                dotNetUnsupported("companion-initialization $description of interface '$interfaceName' has an invalid shape")
+                dotNetUnsupported("static-initialization $description of interface '$interfaceName' has an invalid shape")
             }
             return
         }
@@ -2791,6 +2814,8 @@ internal class DotNetIlEmitter(
                     when (declaration.origin) {
                         IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE ->
                             renderedFields += renderObjectInstanceField(declaration, typeMapper)
+                        DOTNET_STATIC_INITIALIZATION_FAILURE_STATE ->
+                            renderedFields += renderField(declaration, typeMapper)
                         IrDeclarationOrigin.DELEGATE,
                         IrDeclarationOrigin.FIELD_FOR_OUTER_THIS,
                         LocalDeclarationsLowering.DECLARATION_ORIGIN_FIELD_FOR_CAPTURED_VALUE,
@@ -2875,7 +2900,7 @@ internal class DotNetIlEmitter(
                 renderedFields,
                 renderedProperties,
                 renderedAttributes = irClass.dotNetCompilerAbiTypeAttributes(),
-                isStaticHolder = irClass.origin == DOTNET_COMPANION_STATIC_HOLDER,
+                isStaticHolder = irClass.origin == DOTNET_STATIC_HOLDER,
                 hasClassInitializer = hasClassInitializer,
                 isNested = classInfo.isNested,
                 nestedVisibility = irClass.dotNetNestedTypeVisibility(),
@@ -3205,7 +3230,7 @@ internal class DotNetIlEmitter(
 
     private fun IrClass.dotNetCompilerAbiTypeAttributes(): List<String> =
         if (
-            origin == DOTNET_DEFAULT_IMPLS || origin == DOTNET_COMPANION_STATIC_HOLDER ||
+            origin == DOTNET_DEFAULT_IMPLS || origin == DOTNET_STATIC_HOLDER ||
             visibility == DescriptorVisibilities.INTERNAL && isPublishedApi()
         ) {
             listOf(
