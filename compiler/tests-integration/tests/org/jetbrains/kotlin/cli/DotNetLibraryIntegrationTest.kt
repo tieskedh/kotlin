@@ -99,6 +99,8 @@ import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolution
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeSignature
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignability
+import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeAssignabilityResolver
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeViewResolutionFailure
 import org.jetbrains.kotlin.backend.dotnet.DotNetClrTypeVisibility
 import org.jetbrains.kotlin.backend.dotnet.DotNetIlAssembler
@@ -451,6 +453,26 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                   {
                   }
 
+                  .class interface public abstract auto ansi 'IDiamondTop'
+                  {
+                  }
+
+                  .class interface public abstract auto ansi 'IDiamondLeft'
+                         implements Fixture.IDiamondTop
+                  {
+                  }
+
+                  .class interface public abstract auto ansi 'IDiamondRight'
+                         implements Fixture.IDiamondTop
+                  {
+                  }
+
+                  .class public auto ansi beforefieldinit 'Diamond'
+                         extends Fixture.Base
+                         implements Fixture.IDiamondLeft, Fixture.IDiamondRight
+                  {
+                  }
+
                   .class public auto ansi beforefieldinit 'IntArrayBox'
                          extends Fixture.Base
                          implements class 'Fixture.IBox`1'<int32[]>
@@ -617,6 +639,8 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
             val marker = fixtureTypes.getValue("IMarker")
             val box = fixtureTypes.getValue("IBox`1")
             val variant = fixtureTypes.getValue("IVariant`2")
+            val diamondTop = fixtureTypes.getValue("IDiamondTop")
+            val diamond = fixtureTypes.getValue("Diamond")
             val intArrayBox = fixtureTypes.getValue("IntArrayBox")
             val genericBase = fixtureTypes.getValue("GenericBase`1")
             val genericBox = fixtureTypes.getValue("GenericBox`1")
@@ -799,6 +823,77 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 genericBase.handle,
                 resolvedGenericBoxHierarchy.baseType?.type?.definition?.handle,
             )
+            val resolvedGenericBoxView = resolvedGenericBoxHierarchy.type
+            val resolvedGenericBaseView =
+                checkNotNull(resolvedGenericBoxHierarchy.baseType)
+            val resolvedGenericBoxInterfaceView =
+                resolvedGenericBoxHierarchy.interfaces.single().interfaceType
+            val assignabilityResolver =
+                DotNetClrTypeAssignabilityResolver(localTypeResolver)
+            assertSame(
+                DotNetClrTypeAssignability.Assignable,
+                assignabilityResolver.isAssignable(
+                    resolvedGenericBoxView,
+                    resolvedGenericBoxView,
+                ),
+            )
+            assertSame(
+                DotNetClrTypeAssignability.Assignable,
+                assignabilityResolver.isAssignable(
+                    resolvedGenericBoxView,
+                    resolvedGenericBaseView,
+                ),
+            )
+            assertSame(
+                DotNetClrTypeAssignability.Assignable,
+                assignabilityResolver.isAssignable(
+                    resolvedGenericBoxView,
+                    resolvedGenericBoxInterfaceView,
+                ),
+            )
+            assertSame(
+                DotNetClrTypeAssignability.Assignable,
+                assignabilityResolver.isAssignable(
+                    resolvedGenericBoxView,
+                    DotNetClrResolvedTypeView(resolvedBase, emptyList()),
+                ),
+            )
+            assertSame(
+                DotNetClrTypeAssignability.Assignable,
+                assignabilityResolver.isAssignable(
+                    DotNetClrResolvedTypeView(
+                        resolvedLocalType(diamond),
+                        emptyList(),
+                    ),
+                    DotNetClrResolvedTypeView(
+                        resolvedLocalType(diamondTop),
+                        emptyList(),
+                    ),
+                ),
+            )
+            val invariantlyDifferentBoxView = DotNetClrResolvedTypeView(
+                resolvedLocalType(box),
+                listOf(
+                    DotNetClrResolvedTypeSignature.Named(
+                        resolvedBase,
+                        isValueType = false,
+                    )
+                ),
+            )
+            assertSame(
+                DotNetClrTypeAssignability.NotAssignable,
+                assignabilityResolver.isAssignable(
+                    resolvedGenericBoxInterfaceView,
+                    invariantlyDifferentBoxView,
+                ),
+            )
+            assertSame(
+                DotNetClrTypeAssignability.NotAssignable,
+                assignabilityResolver.isAssignable(
+                    invariantlyDifferentBoxView,
+                    resolvedGenericBoxInterfaceView,
+                ),
+            )
 
             fun resolveHierarchy(
                 selectedMetadata: DotNetClrAssemblyMetadata,
@@ -818,6 +913,109 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                     DotNetClrResolvedTypeView(selectedType, arguments)
                 )
             }
+
+            fun resolveAssignability(
+                selectedMetadata: DotNetClrAssemblyMetadata,
+                actualHandle: DotNetClrMetadataHandle,
+                actualArguments: List<DotNetClrResolvedTypeSignature>,
+                expectedHandle: DotNetClrMetadataHandle,
+                expectedArguments: List<DotNetClrResolvedTypeSignature>,
+                resolutionLimit: Int = 256,
+            ): DotNetClrTypeAssignability {
+                val selectedResolver = DotNetClrTypeResolver(
+                    DotNetClrAssemblyReferenceBinder { _, _ -> null }
+                )
+                fun selectedView(
+                    handle: DotNetClrMetadataHandle,
+                    arguments: List<DotNetClrResolvedTypeSignature>,
+                ): DotNetClrResolvedTypeView {
+                    val type = (
+                            selectedResolver.resolveTypeDefinition(
+                                selectedMetadata,
+                                handle,
+                            ) as DotNetClrTypeResolution.Resolved
+                            ).type
+                    return DotNetClrResolvedTypeView(type, arguments)
+                }
+                return DotNetClrTypeAssignabilityResolver(
+                    selectedResolver,
+                    resolutionLimit,
+                ).isAssignable(
+                    selectedView(actualHandle, actualArguments),
+                    selectedView(expectedHandle, expectedArguments),
+                )
+            }
+
+            val assignabilityLimit = resolveAssignability(
+                metadata,
+                genericBox.handle,
+                listOf(
+                    DotNetClrResolvedTypeSignature.Primitive(
+                        DotNetClrPrimitiveType.INT32
+                    )
+                ),
+                base.handle,
+                emptyList(),
+                resolutionLimit = 1,
+            ) as DotNetClrTypeAssignability.ResolutionLimitExceeded
+            assertEquals(1, assignabilityLimit.limit)
+            assertEquals(
+                "GenericBase`1",
+                assignabilityLimit.type.type.definition.metadataName,
+            )
+
+            val cyclicHierarchyMetadata = metadata.copy(
+                typeDefinitions = metadata.typeDefinitions.map { definition ->
+                    if (definition.handle == base.handle) {
+                        definition.copy(baseType = outer.handle)
+                    } else {
+                        definition
+                    }
+                }
+            )
+            val cyclicAssignability = resolveAssignability(
+                cyclicHierarchyMetadata,
+                intArrayBox.handle,
+                emptyList(),
+                marker.handle,
+                emptyList(),
+            ) as DotNetClrTypeAssignability.InheritanceCycle
+            assertEquals(
+                "Base",
+                cyclicAssignability.type.type.definition.metadataName,
+            )
+
+            val unresolvedBaseHandle = DotNetClrMetadataHandle(1, 0x00ff_ffff)
+            val unresolvedHierarchyMetadata = metadata.copy(
+                typeDefinitions = metadata.typeDefinitions.map { definition ->
+                    if (definition.handle == base.handle) {
+                        definition.copy(baseType = unresolvedBaseHandle)
+                    } else {
+                        definition
+                    }
+                }
+            )
+            val unresolvedAssignability = resolveAssignability(
+                unresolvedHierarchyMetadata,
+                intArrayBox.handle,
+                emptyList(),
+                marker.handle,
+                emptyList(),
+            ) as DotNetClrTypeAssignability.InvalidHierarchy
+            assertEquals(
+                "Base",
+                unresolvedAssignability.type.type.definition.metadataName,
+            )
+            assertEquals(
+                DotNetClrTypeHierarchyViewResolutionFailure
+                    .BASE_TYPE_RESOLUTION_FAILED,
+                unresolvedAssignability.resolution.failure,
+            )
+            assertEquals(
+                DotNetClrTypeResolutionFailure.INVALID_HANDLE,
+                unresolvedAssignability.resolution.typeViewResolution
+                    ?.typeResolution?.failure,
+            )
 
             val invalidOwnerArity = resolveHierarchy(
                 metadata,
@@ -2765,6 +2963,25 @@ class DotNetLibraryIntegrationTest : TestCaseWithTmpdir() {
                 )
             ),
             resolvedProbeConstraintInterface.arguments,
+        )
+        val selectedAssignability = DotNetClrTypeAssignabilityResolver(resolver)
+        val resolvedProbeConstraintView = DotNetClrResolvedTypeView(
+            resolvedProbeConstraintValue,
+            emptyList(),
+        )
+        assertSame(
+            DotNetClrTypeAssignability.Assignable,
+            selectedAssignability.isAssignable(
+                resolvedProbeConstraintView,
+                resolvedProbeConstraintInterface,
+            ),
+        )
+        assertSame(
+            DotNetClrTypeAssignability.Assignable,
+            selectedAssignability.isAssignable(
+                resolvedProbeConstraintView,
+                DotNetClrResolvedTypeView(systemValueType, emptyList()),
+            ),
         )
         val nominalConstraintBinding =
             constrainedAttributeParameter.constraints.single { constraint ->
