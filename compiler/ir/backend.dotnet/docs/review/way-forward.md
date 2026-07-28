@@ -871,6 +871,21 @@ checkout paths and non-bindable implementation details from becoming ABI. The fa
 transitional; generated Common sources plus narrow .NET actuals and a fully installed platform
 pair remain the core-team endpoint.
 
+**CLR-importer progress (2026-07-28):** the first importer slice follows the JVM foreign
+classfile/provider split without pretending that CLR metadata is Java metadata. A single bounded,
+JVM-hosted PE/ECMA-335 engine now serves both embedded-resource loading and an immutable physical
+CLR model. It exposes assembly identity and references, type references and definitions,
+TypeDefOrRef base handles, nested ownership, visibility, and raw type flags. The actual CLR
+difference is that properties, return types, TypeSpec signatures, declaration-site variance,
+constraints, custom modifiers, and nullable-reference attributes live in a richer metadata graph;
+those remain physical importer inputs rather than C# naming conventions or backend guesses.
+Kotlin-produced DLLs remain KLIB-authoritative, and no CLR row is mapped directly to IR. Common
+semantics are unchanged, while each compilation will eventually resolve only the selected
+`net48`, `netstandard2.0`, or `net10.0` reference graph. One direct IL fixture assembled by both
+Framework and modern ILAsm proves assembly scope, inheritance, nesting, and flags. Lossless
+signatures, methods, properties, generic constraints, semantic attributes, import policy, and the
+lazy FIR provider remain subsequent slices. See `../decisions/draft-adr-clr-importer-boundary.md`.
+
 ## 5. Explicitly parked work
 
 These may remain unimplemented during foundation correction, but must fail loudly:

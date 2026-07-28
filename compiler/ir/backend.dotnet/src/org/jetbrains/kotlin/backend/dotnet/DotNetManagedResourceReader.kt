@@ -34,23 +34,126 @@ data class DotNetManagedAssemblyIdentity(
     val hasPublicKey: Boolean,
 )
 
+/**
+ * Raw ECMA-335 metadata handle. It identifies one physical row and deliberately carries no
+ * Kotlin or C# source meaning.
+ */
+data class DotNetClrMetadataHandle(
+    val table: Int,
+    val row: Int,
+) {
+    init {
+        require(table in 0 until 64) { "CLR metadata table must be in 0..63: $table" }
+        require(row in 1..0x00ff_ffff) { "CLR metadata row must be in 1..0x00ffffff: $row" }
+    }
+
+    val token: Int
+        get() = table shl 24 or row
+}
+
+enum class DotNetClrTypeVisibility {
+    NOT_PUBLIC,
+    PUBLIC,
+    NESTED_PUBLIC,
+    NESTED_PRIVATE,
+    NESTED_FAMILY,
+    NESTED_ASSEMBLY,
+    NESTED_FAMILY_AND_ASSEMBLY,
+    NESTED_FAMILY_OR_ASSEMBLY,
+}
+
+data class DotNetClrAssemblyReference(
+    val handle: DotNetClrMetadataHandle,
+    val name: String,
+    val version: String,
+    val culture: String,
+    val flags: Long,
+    val publicKeyOrToken: List<Int>,
+    val hashValue: List<Int>,
+)
+
+data class DotNetClrTypeReference(
+    val handle: DotNetClrMetadataHandle,
+    val namespaceName: String,
+    val metadataName: String,
+    val resolutionScope: DotNetClrMetadataHandle?,
+)
+
+data class DotNetClrTypeDefinition(
+    val handle: DotNetClrMetadataHandle,
+    val namespaceName: String,
+    val metadataName: String,
+    val attributes: Long,
+    val baseType: DotNetClrMetadataHandle?,
+    val declaringType: DotNetClrMetadataHandle?,
+) {
+    val visibility: DotNetClrTypeVisibility
+        get() = DotNetClrTypeVisibility.entries[(attributes and TYPE_VISIBILITY_MASK).toInt()]
+
+    val isInterface: Boolean
+        get() = attributes and INTERFACE_ATTRIBUTE != 0L
+
+    val isAbstract: Boolean
+        get() = attributes and ABSTRACT_ATTRIBUTE != 0L
+
+    val isSealed: Boolean
+        get() = attributes and SEALED_ATTRIBUTE != 0L
+
+    private companion object {
+        const val TYPE_VISIBILITY_MASK = 0x7L
+        const val INTERFACE_ATTRIBUTE = 0x20L
+        const val ABSTRACT_ATTRIBUTE = 0x80L
+        const val SEALED_ATTRIBUTE = 0x100L
+    }
+}
+
+/**
+ * Physical CLR assembly metadata before any Kotlin import policy is applied.
+ *
+ * The importer layer may later interpret these rows as Kotlin declarations. This model itself
+ * retains CLR names, tokens, flags, nesting, and references without inventing Kotlin identities.
+ */
+data class DotNetClrAssemblyMetadata(
+    val identity: DotNetManagedAssemblyIdentity,
+    val assemblyReferences: List<DotNetClrAssemblyReference>,
+    val typeReferences: List<DotNetClrTypeReference>,
+    val typeDefinitions: List<DotNetClrTypeDefinition>,
+)
+
+object DotNetClrMetadataReader {
+    fun read(file: File): DotNetClrAssemblyMetadata =
+        DotNetPeMetadataReader.readClrMetadata(file)
+}
+
 class DotNetBadImageFormatException(message: String, cause: Throwable? = null) :
     Exception(message, cause)
 
+object DotNetManagedResourceReader {
+    fun read(file: File, resourceName: String): DotNetManagedResource? =
+        DotNetPeMetadataReader.readManagedResource(file, resourceName)
+}
+
 /**
- * Reads one embedded ECMA-335 ManifestResource directly from a PE image.
+ * Reads bounded ECMA-335 metadata directly from a PE image.
  *
  * The compiler is JVM-hosted, so library loading must not depend on a .NET sidecar. This reader
- * deliberately implements only the PE/CLI metadata needed to locate ManifestResource rows. Every
- * file offset, RVA, stream, table, heap index, row count, and resource length is checked before it
- * is used.
+ * currently exposes managed resources plus the first physical CLR importer model. Every file
+ * offset, RVA, stream, table, heap index, row count, coded handle, and resource length is checked
+ * before it is used.
  */
-object DotNetManagedResourceReader {
-    fun read(file: File, resourceName: String): DotNetManagedResource? {
+private object DotNetPeMetadataReader {
+    fun readManagedResource(file: File, resourceName: String): DotNetManagedResource? {
         require(resourceName.isNotEmpty()) { "Managed-resource name must not be empty" }
+        return read(file) { image -> image.readManagedResource(resourceName) }
+    }
+
+    fun readClrMetadata(file: File): DotNetClrAssemblyMetadata =
+        read(file, PeImage::readClrMetadata)
+
+    private fun <T> read(file: File, action: (PeImage) -> T): T {
         try {
             RandomAccessFile(file, "r").use { input ->
-                return PeImage(input, file.path).readManagedResource(resourceName)
+                return action(PeImage(input, file.path))
             }
         } catch (exception: DotNetBadImageFormatException) {
             throw exception
@@ -69,6 +172,65 @@ object DotNetManagedResourceReader {
         private val fileSize = input.length()
 
         fun readManagedResource(resourceName: String): DotNetManagedResource? {
+            val metadata = readMetadataImage()
+            val resourceRow =
+                findManifestResource(metadata.tables, metadata.strings, resourceName) ?: return null
+            if (resourceRow.implementation != 0L) {
+                malformed("managed resource '$resourceName' is linked instead of embedded")
+            }
+            if (metadata.resourcesRva == 0L || metadata.resourcesSize < UINT32_SIZE) {
+                malformed("CLI header has no managed-resource directory")
+            }
+            if (resourceRow.offset > metadata.resourcesSize - UINT32_SIZE) {
+                malformed("managed resource '$resourceName' has an invalid directory offset")
+            }
+            val lengthRva = checkedAdd(
+                metadata.resourcesRva,
+                resourceRow.offset,
+                "managed-resource RVA",
+            )
+            val lengthOffset = rvaToFileOffset(
+                lengthRva,
+                UINT32_SIZE,
+                metadata.sections,
+                "managed resource '$resourceName'",
+            )
+            val contentSize = readU4(lengthOffset)
+            if (contentSize > MAX_MANAGED_RESOURCE_SIZE) {
+                malformed(
+                    "managed resource '$resourceName' is too large " +
+                            "($contentSize bytes; limit is $MAX_MANAGED_RESOURCE_SIZE)",
+                )
+            }
+            val resourceEnd = checkedAdd(resourceRow.offset, UINT32_SIZE + contentSize, "managed-resource size")
+            if (resourceEnd > metadata.resourcesSize) {
+                malformed("managed resource '$resourceName' extends beyond the CLI resource directory")
+            }
+            val contentOffset = rvaToFileOffset(
+                checkedAdd(lengthRva, UINT32_SIZE, "managed-resource content RVA"),
+                contentSize,
+                metadata.sections,
+                "managed resource '$resourceName' content",
+            )
+            return DotNetManagedResource(
+                assemblyIdentity = metadata.assemblyIdentity,
+                name = resourceName,
+                attributes = resourceRow.attributes,
+                content = readBytes(contentOffset, contentSize.toInt()),
+            )
+        }
+
+        fun readClrMetadata(): DotNetClrAssemblyMetadata {
+            val metadata = readMetadataImage()
+            return DotNetClrAssemblyMetadata(
+                identity = metadata.assemblyIdentity,
+                assemblyReferences = readAssemblyReferences(metadata.tables, metadata.strings, metadata.blobs),
+                typeReferences = readTypeReferences(metadata.tables, metadata.strings),
+                typeDefinitions = readTypeDefinitions(metadata.tables, metadata.strings),
+            )
+        }
+
+        private fun readMetadataImage(): MetadataImage {
             checkRange(0, DOS_HEADER_SIZE, "DOS header")
             if (readU2(0) != DOS_SIGNATURE) malformed("missing DOS signature")
             val peOffset = readU4(DOS_PE_POINTER_OFFSET)
@@ -136,41 +298,14 @@ object DotNetManagedResourceReader {
                 ?: malformed("CLI metadata has no strings heap")
             val blobs = streams["#Blob"]
             val assemblyIdentity = readAssemblyIdentity(tables, strings, blobs)
-            val resourceRow = findManifestResource(tables, strings, resourceName) ?: return null
-            if (resourceRow.implementation != 0L) {
-                malformed("managed resource '$resourceName' is linked instead of embedded")
-            }
-            if (resourcesRva == 0L || resourcesSize < UINT32_SIZE) {
-                malformed("CLI header has no managed-resource directory")
-            }
-            if (resourceRow.offset > resourcesSize - UINT32_SIZE) {
-                malformed("managed resource '$resourceName' has an invalid directory offset")
-            }
-            val lengthRva = checkedAdd(resourcesRva, resourceRow.offset, "managed-resource RVA")
-            val lengthOffset =
-                rvaToFileOffset(lengthRva, UINT32_SIZE, sections, "managed resource '$resourceName'")
-            val contentSize = readU4(lengthOffset)
-            if (contentSize > MAX_MANAGED_RESOURCE_SIZE) {
-                malformed(
-                    "managed resource '$resourceName' is too large " +
-                            "($contentSize bytes; limit is $MAX_MANAGED_RESOURCE_SIZE)",
-                )
-            }
-            val resourceEnd = checkedAdd(resourceRow.offset, UINT32_SIZE + contentSize, "managed-resource size")
-            if (resourceEnd > resourcesSize) {
-                malformed("managed resource '$resourceName' extends beyond the CLI resource directory")
-            }
-            val contentOffset = rvaToFileOffset(
-                checkedAdd(lengthRva, UINT32_SIZE, "managed-resource content RVA"),
-                contentSize,
-                sections,
-                "managed resource '$resourceName' content",
-            )
-            return DotNetManagedResource(
+            return MetadataImage(
                 assemblyIdentity = assemblyIdentity,
-                name = resourceName,
-                attributes = resourceRow.attributes,
-                content = readBytes(contentOffset, contentSize.toInt()),
+                sections = sections,
+                tables = tables,
+                strings = strings,
+                blobs = blobs,
+                resourcesRva = resourcesRva,
+                resourcesSize = resourcesSize,
             )
         }
 
@@ -315,6 +450,175 @@ object DotNetManagedResourceReader {
             )
         }
 
+        private fun readAssemblyReferences(
+            tables: MetadataStream,
+            strings: MetadataStream,
+            blobs: MetadataStream?,
+        ): List<DotNetClrAssemblyReference> {
+            val table = locateMetadataTable(tables, ASSEMBLY_REF_TABLE) ?: return emptyList()
+            return List(table.rowCount.toIntChecked("AssemblyRef row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val major = readU2(position)
+                position += UINT16_SIZE
+                val minor = readU2(position)
+                position += UINT16_SIZE
+                val build = readU2(position)
+                position += UINT16_SIZE
+                val revision = readU2(position)
+                position += UINT16_SIZE
+                val flags = readU4(position)
+                position += UINT32_SIZE
+                val publicKeyOrTokenIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                position += table.indexSizes.blobIndexSize
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val cultureIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val hashValueIndex = readIndex(position, table.indexSizes.blobIndexSize)
+                val name = readStringHeap(strings, nameIndex)
+                if (name.isEmpty()) malformed("AssemblyRef row ${rowIndex + 1} has an empty name")
+                DotNetClrAssemblyReference(
+                    handle = metadataHandle(
+                        ASSEMBLY_REF_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "AssemblyRef",
+                    ),
+                    name = name,
+                    version = "$major.$minor.$build.$revision",
+                    culture = readStringHeap(strings, cultureIndex).ifEmpty { "neutral" },
+                    flags = flags,
+                    publicKeyOrToken = readBlobHeap(blobs, publicKeyOrTokenIndex)
+                        .map { byte -> byte.toInt() and 0xff },
+                    hashValue = readBlobHeap(blobs, hashValueIndex)
+                        .map { byte -> byte.toInt() and 0xff },
+                )
+            }
+        }
+
+        private fun readTypeReferences(
+            tables: MetadataStream,
+            strings: MetadataStream,
+        ): List<DotNetClrTypeReference> {
+            val table = locateMetadataTable(tables, TYPE_REF_TABLE) ?: return emptyList()
+            return List(table.rowCount.toIntChecked("TypeRef row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val resolutionScope = readIndex(position, table.indexSizes.resolutionScopeIndexSize)
+                position += table.indexSizes.resolutionScopeIndexSize
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val namespaceIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                val metadataName = readStringHeap(strings, nameIndex)
+                if (metadataName.isEmpty()) malformed("TypeRef row ${rowIndex + 1} has an empty name")
+                DotNetClrTypeReference(
+                    handle = metadataHandle(
+                        TYPE_REF_TABLE,
+                        rowIndex.toLong() + 1,
+                        tables,
+                        "TypeRef",
+                    ),
+                    namespaceName = readStringHeap(strings, namespaceIndex),
+                    metadataName = metadataName,
+                    resolutionScope = decodeCodedHandle(
+                        resolutionScope,
+                        tagBits = 2,
+                        tablesByTag = intArrayOf(MODULE_TABLE, MODULE_REF_TABLE, ASSEMBLY_REF_TABLE, TYPE_REF_TABLE),
+                        metadataTables = tables,
+                        description = "TypeRef resolution scope",
+                    ),
+                )
+            }
+        }
+
+        private fun readTypeDefinitions(
+            tables: MetadataStream,
+            strings: MetadataStream,
+        ): List<DotNetClrTypeDefinition> {
+            val table = locateMetadataTable(tables, TYPE_DEF_TABLE) ?: return emptyList()
+            val declaringTypes = readNestedTypeOwners(tables)
+            return List(table.rowCount.toIntChecked("TypeDef row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val attributes = readU4(position)
+                position += UINT32_SIZE
+                val nameIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val namespaceIndex = readIndex(position, table.indexSizes.stringIndexSize)
+                position += table.indexSizes.stringIndexSize
+                val extends = readIndex(position, table.indexSizes.typeDefOrRefIndexSize)
+                val handle = metadataHandle(
+                    TYPE_DEF_TABLE,
+                    rowIndex.toLong() + 1,
+                    tables,
+                    "TypeDef",
+                )
+                val metadataName = readStringHeap(strings, nameIndex)
+                if (metadataName.isEmpty()) malformed("TypeDef row ${rowIndex + 1} has an empty name")
+                DotNetClrTypeDefinition(
+                    handle = handle,
+                    namespaceName = readStringHeap(strings, namespaceIndex),
+                    metadataName = metadataName,
+                    attributes = attributes,
+                    baseType = decodeCodedHandle(
+                        extends,
+                        tagBits = 2,
+                        tablesByTag = intArrayOf(TYPE_DEF_TABLE, TYPE_REF_TABLE, TYPE_SPEC_TABLE),
+                        metadataTables = tables,
+                        description = "TypeDef base type",
+                    ),
+                    declaringType = declaringTypes[handle],
+                )
+            }
+        }
+
+        private fun readNestedTypeOwners(
+            tables: MetadataStream,
+        ): Map<DotNetClrMetadataHandle, DotNetClrMetadataHandle> {
+            val table = locateMetadataTable(tables, NESTED_CLASS_TABLE) ?: return emptyMap()
+            val result = linkedMapOf<DotNetClrMetadataHandle, DotNetClrMetadataHandle>()
+            repeat(table.rowCount.toIntChecked("NestedClass row count")) { rowIndex ->
+                var position = table.offset + rowIndex.toLong() * table.rowSize
+                val nestedIndex = readIndex(position, table.indexSizes.tableIndexSize(TYPE_DEF_TABLE))
+                position += table.indexSizes.tableIndexSize(TYPE_DEF_TABLE)
+                val enclosingIndex = readIndex(position, table.indexSizes.tableIndexSize(TYPE_DEF_TABLE))
+                val nested = metadataHandle(TYPE_DEF_TABLE, nestedIndex, tables, "nested TypeDef")
+                val enclosing = metadataHandle(TYPE_DEF_TABLE, enclosingIndex, tables, "enclosing TypeDef")
+                if (result.put(nested, enclosing) != null) {
+                    malformed("TypeDef token 0x${nested.token.toUInt().toString(16)} has multiple declaring types")
+                }
+            }
+            return result
+        }
+
+        private fun decodeCodedHandle(
+            value: Long,
+            tagBits: Int,
+            tablesByTag: IntArray,
+            metadataTables: MetadataStream,
+            description: String,
+        ): DotNetClrMetadataHandle? {
+            if (value == 0L) return null
+            val tagMask = (1 shl tagBits) - 1
+            val tag = (value and tagMask.toLong()).toInt()
+            val table = tablesByTag.getOrNull(tag)
+                ?: malformed("$description has invalid tag $tag")
+            return metadataHandle(table, value ushr tagBits, metadataTables, description)
+        }
+
+        private fun metadataHandle(
+            table: Int,
+            row: Long,
+            metadataTables: MetadataStream,
+            description: String,
+        ): DotNetClrMetadataHandle {
+            val location = locateMetadataTable(metadataTables, table)
+                ?: malformed("$description refers to absent metadata table $table")
+            if (row !in 1..location.rowCount) {
+                malformed("$description refers to invalid row $row in metadata table $table")
+            }
+            if (row > 0x00ff_ffffL) malformed("$description row $row does not fit a metadata token")
+            return DotNetClrMetadataHandle(table, row.toInt())
+        }
+
         private fun locateMetadataTable(
             tables: MetadataStream,
             targetTable: Int,
@@ -384,8 +688,22 @@ object DotNetManagedResourceReader {
             }
         }
 
-        private fun readBlobHeapSize(blobs: MetadataStream?, index: Long): Long {
-            if (index == 0L) return 0
+        private fun readBlobHeap(blobs: MetadataStream?, index: Long): ByteArray {
+            if (index == 0L) return ByteArray(0)
+            val entry = locateBlobHeapEntry(blobs, index)
+            if (entry.size > Int.MAX_VALUE.toLong()) {
+                malformed("metadata blob at index $index is too large")
+            }
+            return readBytes(entry.offset, entry.size.toInt())
+        }
+
+        private fun readBlobHeapSize(blobs: MetadataStream?, index: Long): Long =
+            if (index == 0L) 0 else locateBlobHeapEntry(blobs, index).size
+
+        private fun locateBlobHeapEntry(
+            blobs: MetadataStream?,
+            index: Long,
+        ): BlobHeapEntry {
             if (blobs == null) malformed("metadata blob index $index exists without a #Blob heap")
             if (index >= blobs.size) malformed("metadata blob index $index is out of bounds")
             val offset = blobs.offset + index
@@ -416,7 +734,10 @@ object DotNetManagedResourceReader {
                 contentSize,
                 "metadata blob at index $index",
             )
-            return contentSize
+            return BlobHeapEntry(
+                offset = offset + headerSize,
+                size = contentSize,
+            )
         }
 
         private fun rvaToFileOffset(
@@ -593,12 +914,13 @@ object DotNetManagedResourceReader {
             38 -> 4 + stringIndexSize + blobIndexSize
             39 -> 8 + stringIndexSize * 2 + implementationIndexSize
             MANIFEST_RESOURCE_TABLE -> 8 + stringIndexSize + implementationIndexSize
-            else -> error("ManifestResource offset requires unsupported metadata table $table")
+            NESTED_CLASS_TABLE -> tableIndexSize(TYPE_DEF_TABLE) * 2
+            else -> error("CLR metadata reader requires unsupported metadata table $table")
         }
 
-        private val resolutionScopeIndexSize
+        val resolutionScopeIndexSize
             get() = codedIndexSize(2, 0, 26, 35, 1)
-        private val typeDefOrRefIndexSize
+        val typeDefOrRefIndexSize
             get() = codedIndexSize(2, 2, 1, 27)
         private val memberRefParentIndexSize
             get() = codedIndexSize(3, 2, 1, 26, 6, 27)
@@ -623,7 +945,7 @@ object DotNetManagedResourceReader {
         private val memberForwardedIndexSize
             get() = codedIndexSize(1, 4, 6)
 
-        private fun tableIndexSize(table: Int): Int =
+        fun tableIndexSize(table: Int): Int =
             if (rowCounts[table] < UINT16_INDEX_LIMIT) 2 else 4
 
         private fun codedIndexSize(tagBits: Int, vararg tables: Int): Int {
@@ -639,7 +961,19 @@ object DotNetManagedResourceReader {
         val rawOffset: Long,
     )
 
+    private data class MetadataImage(
+        val assemblyIdentity: DotNetManagedAssemblyIdentity,
+        val sections: List<Section>,
+        val tables: MetadataStream,
+        val strings: MetadataStream,
+        val blobs: MetadataStream?,
+        val resourcesRva: Long,
+        val resourcesSize: Long,
+    )
+
     private data class MetadataStream(val offset: Long, val size: Long)
+
+    private data class BlobHeapEntry(val offset: Long, val size: Long)
 
     private data class ManifestResourceRow(
         val offset: Long,
@@ -690,7 +1024,13 @@ object DotNetManagedResourceReader {
     private const val TABLES_VALID_MASK_OFFSET = 8L
     private const val TABLES_ROW_COUNTS_OFFSET = 24L
     private const val METADATA_TABLE_COUNT = 64
+    private const val MODULE_TABLE = 0
+    private const val TYPE_REF_TABLE = 1
+    private const val TYPE_DEF_TABLE = 2
+    private const val MODULE_REF_TABLE = 26
+    private const val TYPE_SPEC_TABLE = 27
     private const val MANIFEST_RESOURCE_TABLE = 40
+    private const val NESTED_CLASS_TABLE = 41
     private const val ASSEMBLY_TABLE = 32
     private const val FILE_TABLE = 38
     private const val ASSEMBLY_REF_TABLE = 35
