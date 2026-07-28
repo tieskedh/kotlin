@@ -2157,6 +2157,21 @@ session state, process, and a curated task menu. Keep both files updated as you 
   substitute. Next resolve named field/property arguments and decode them into the same semantic
   value algebra. The fresh strict gate is 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21
   generated CLI, and 54 library integration tests).
+- The named custom-attribute-argument continuation retains the ordered encoded sequence of
+  field/property kind, non-empty CLR name, declared serialized type, and semantic value. It reuses
+  the complete value algebra for scalars, arrays, tagged objects, System.Type, and serialized
+  enums; duplicates are not collapsed into a map. This follows JVM/KLIB's name-plus-typed-value
+  boundary while preserving the CLR-only member-kind and declared-type fields. The blob carries no
+  member token, so later selected-graph field/property validation must not replace the
+  authoritative record with whichever MemberDef currently resolves. Real Roslyn .NET 10 output
+  covers field/property scalar, null, type, enum, boxed enum, and array values; Framework hostile
+  blobs cover ordered duplicates and located invalid kind/name/truncation. Next add the separate
+  member-validity layer with CLR inheritance/hiding, writable-public shape, and physical type
+  compatibility, then project only valid records into FIR. The first strict run had unrelated
+  `propertyReferences` missing-output and `nestedObjectDeclarations` exit-one failures; both passed
+  together immediately in isolation without changes. The subsequent fresh aggregate gate is clean
+  at 871/0/0/0 across 16 XML suites (796 FIR/IL/box, 21 generated CLI, and 54 library integration
+  tests).
 - `git stash@{0}` holds a superseded partial implementation (object-boxing nullability, replaced
   by the hybrid model). It is droppable; do not build on it, do not touch it otherwise.
 - `.claude/settings.json` contains `"worktree": {"bgIsolation": "none"}` — deliberate; leave it.
