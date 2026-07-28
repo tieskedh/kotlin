@@ -1,6 +1,6 @@
 # Draft ADR: Structured CLR importer boundary
 
-- Status: **Draft candidate; the read-only physical metadata foundation is implemented**
+- Status: **Draft candidate; the read-only physical metadata/signature foundation is implemented**
 - Date: 2026-07-28
 - Scope: ordinary foreign CLR assemblies referenced by Kotlin/.NET compilations
 
@@ -96,10 +96,49 @@ IR with retained physical linkage
    retained for diagnostics and unsupported-form rejection.
 
 The first implemented slice exposes assembly identity, AssemblyRef rows, TypeRef rows, TypeDef
-rows, TypeDefOrRef base handles, nested-owner edges, and raw type flags/visibility. It deliberately
-does not resolve TypeSpec signatures or create FIR declarations yet. Observing a TypeSpec where a
-source spelling looked like a simple base type is valid physical evidence, not permission to
-silently coerce that token to a TypeDef.
+rows, TypeDefOrRef base handles, nested-owner edges, and raw type flags/visibility.
+
+The second slice adds a lossless physical signature algebra and decodes TypeSpec and MethodDef
+signatures. It preserves, rather than display-renders:
+
+- primitive kinds and `class` versus `valuetype`;
+- TypeDef/TypeRef/TypeSpec handles;
+- type and method generic-parameter positions;
+- generic instantiations;
+- managed and unmanaged pointers, by-reference parameters/returns, and typed references in their
+  legal grammatical contexts;
+- SZARRAY versus general arrays, including rank, sizes, and signed lower bounds;
+- required and optional custom modifiers in the positions accepted by the selected CLR profile;
+- function-pointer calling convention, `this` flags, generic arity, and vararg boundary; and
+- the original blob for diagnostics and unsupported-form rejection.
+
+The decoder follows ECMA-335 plus the official
+[.NET ECMA augmentations](https://github.com/dotnet/runtime/blob/main/docs/design/specs/Ecma-335-Augments.md)
+rather than treating the older grammar diagrams as a complete description of accepted CLR
+metadata. In particular,
+MethodDef signatures cannot contain a call-site vararg sentinel, by-reference and typed-reference
+forms cannot become arbitrary generic arguments, and compressed integers must use their canonical
+width. Conversely, custom modifiers are accepted at the additional type positions used by the CLR
+and current .NET reference assemblies, and a modifier may retain a TypeSpec handle. The reader
+does not recursively resolve that handle; the later resolver must reject cycles. A
+`CLASS`/`VALUETYPE` or generic-type constructor token is restricted to TypeDef/TypeRef as required
+by the actual CLR, even though older ECMA text names the broader coded-index family. The physical
+MethodDef owner is derived from the TypeDef MethodList partition and remains a metadata handle.
+Raw blob equality is not promoted to Kotlin type equality.
+
+One direct fixture assembled independently by Framework and modern ILAsm covers generic TypeSpec,
+type and method generic parameters, by-reference parameters, SZARRAY, and bounded multidimensional
+arrays including two- and four-byte negative lower bounds. A copied assembly with a corrupted
+method-signature blob must fail as a located bad image. The compiler test does not invoke
+reflection or Roslyn to perform production decoding; `System.Reflection.Metadata` remains an
+independent oracle in the existing C# test tooling. The same test walks the real Framework
+`mscorlib` implementation and the .NET 10 `System.Runtime` reference assembly; the latter pins a
+modified TypeSpec root that the older ECMA TypeSpec diagram omits.
+
+Observing a TypeSpec where a source spelling looked like a simple base type remains valid physical
+evidence, not permission to coerce that token to a TypeDef or a Kotlin type. Property, field,
+MemberRef, generic-constraint, and nullable-attribute projection still remain above or after this
+signature foundation, and no FIR declaration is created yet.
 
 ## Kotlin Common invariant
 
@@ -149,11 +188,12 @@ overloads and exact slot identity and would make tooling conventions redefine Ko
 
 - Bounded JVM-hosted physical reader: **Correct direction**.
 - CLR-specific immutable metadata model: **Reasonable platform-specific divergence**.
+- Lossless TypeSpec and MethodDef signature model: **Correct direction**.
 - Separate lazy FIR import policy/provider: **Correct direction**.
 - Reusing embedded KLIB for Kotlin-produced DLLs: **Correct direction**.
 - Mapping raw CLR rows directly to Kotlin IR: **Architecturally wrong and should be changed**.
-- TypeSpec/signature decoding, semantic custom attributes, type forwarding, methods, properties,
-  events, generic constraints, nullability enhancement, FIR symbols, and backend foreign calls:
+- Remaining field/property/MemberRef signatures, semantic custom attributes, type forwarding,
+  properties, events, generic constraints, nullability enhancement, FIR symbols, and backend calls:
   **Deferred problems that must be recorded before the importer surface becomes stable**.
 
 The cost is a substantial target-owned metadata and import layer. The alternative is greater:
