@@ -459,7 +459,7 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
     val outputDirectory = dotNetStdlibOutputDirectories.getValue(targetFramework)
     tasks.register<JavaExec>("produceDotNetStdlib$taskSuffix") {
         group = "distribution"
-        description = "Produces the experimental $targetFramework self-describing Kotlin/.NET stdlib DLL."
+        description = "Produces the experimental $targetFramework Kotlin/.NET runtime/stdlib DLL pair."
         dependsOn(distKotlinc)
 
         classpath = fileTree(File("$distDir/kotlinc/lib")) {
@@ -475,6 +475,7 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
         )
 
         outputs.files(
+            outputDirectory.map { it.file("Kotlin.Runtime.dll") },
             outputDirectory.map { it.file("Kotlin.Stdlib.dll") },
             outputDirectory.map { it.file("Kotlin.Stdlib.il") },
         )
@@ -483,7 +484,7 @@ val produceDotNetStdlibVariants = dotNetStdlibProfiles.map { (targetFramework, t
 
 val produceDotNetStdlib = tasks.register("produceDotNetStdlib") {
     group = "distribution"
-    description = "Produces all experimental Kotlin/.NET stdlib profile variants."
+    description = "Produces all experimental Kotlin/.NET runtime/stdlib profile pairs."
     dependsOn(produceDotNetStdlibVariants)
 }
 
@@ -493,11 +494,11 @@ val produceDotNetStdlib = tasks.register("produceDotNetStdlib") {
 // on it.
 val installDotNetStdlib = tasks.register<Sync>("installDotNetStdlib") {
     group = "distribution"
-    description = "Installs all experimental Kotlin/.NET stdlib variants into the Kotlin distribution."
+    description = "Installs all experimental Kotlin/.NET runtime/stdlib pairs into the Kotlin distribution."
     dependsOn(produceDotNetStdlib)
     dotNetStdlibOutputDirectories.forEach { (targetFramework, outputDirectory) ->
         from(outputDirectory) {
-            include("Kotlin.Stdlib.dll")
+            include("Kotlin.Runtime.dll", "Kotlin.Stdlib.dll")
             into(targetFramework)
         }
     }
