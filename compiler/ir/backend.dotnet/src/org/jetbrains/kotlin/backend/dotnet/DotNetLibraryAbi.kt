@@ -8,8 +8,10 @@ package org.jetbrains.kotlin.backend.dotnet
 import org.jetbrains.kotlin.backend.common.serialization.signature.PublicIdSignatureComputer
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_STATIC_HOLDER
 import org.jetbrains.kotlin.backend.dotnet.lower.DOTNET_DEFAULT_IMPLS
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclaration
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithVisibility
 import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
@@ -1016,7 +1018,12 @@ internal fun collectDotNetMetadataLinkageKeys(
     val signatureComputer = PublicIdSignatureComputer(DotNetIrMangler)
 
     fun addFunction(function: IrSimpleFunction) {
-        if (function.isFakeOverride || isIntrinsicDeclaration(function)) return
+        if (!function.isDotNetCrossModuleDeclaration ||
+            function.isFakeOverride ||
+            isIntrinsicDeclaration(function)
+        ) {
+            return
+        }
         if (!with(DotNetIrMangler) { function.isExported(compatibleMode = false) }) return
         function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)?.let { key -> put(function, key) }
     }
@@ -1030,7 +1037,9 @@ internal fun collectDotNetMetadataLinkageKeys(
 
     fun addClass(irClass: IrClass) {
         if (DotNetMappedExceptions.isExceptionStdlibDeclaration(irClass)) return
-        if (with(DotNetIrMangler) { irClass.isExported(compatibleMode = false) }) {
+        if (irClass.isDotNetCrossModuleDeclaration &&
+            with(DotNetIrMangler) { irClass.isExported(compatibleMode = false) }
+        ) {
             irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)?.let { key -> put(irClass, key) }
         }
         for (declaration in irClass.declarations) {
@@ -1058,6 +1067,26 @@ internal fun collectDotNetMetadataLinkageKeys(
         }
     }
 }
+
+/**
+ * The DLL's physical declaration index is a cross-module binding contract. File-private and local
+ * declarations have valid file-local IdSignatures for backend-internal use, but exporting those
+ * signatures would leak checkout paths and make a private implementation look externally bindable.
+ */
+private val IrDeclaration.isDotNetCrossModuleDeclaration: Boolean
+    get() {
+        var declaration: IrDeclaration? = this
+        while (declaration is IrDeclarationWithVisibility) {
+            if (declaration.visibility == DescriptorVisibilities.PRIVATE ||
+                declaration.visibility == DescriptorVisibilities.PRIVATE_TO_THIS ||
+                declaration.visibility == DescriptorVisibilities.LOCAL
+            ) {
+                return false
+            }
+            declaration = declaration.parent as? IrDeclaration
+        }
+        return true
+    }
 
 /**
  * Stable identity suffix for one logical generic-interface slot.
@@ -1544,9 +1573,7 @@ internal fun collectDotNetLibraryDeclarations(
         val classInfo = entry.value
         if (irClass in compilerAbiClasses) continue
         if (irClass.fileOrNull !in files || irClass.isOriginallyLocalDeclaration) continue
-        val logicalKey = preLoweringDeclarationKeys[irClass]
-            ?: irClass.computeDotNetLibraryAbiKeyOrNull("C", signatureComputer)
-            ?: continue
+        val logicalKey = preLoweringDeclarationKeys[irClass] ?: continue
         val genericInterface = genericInterfaces[irClass]
         val staticInitialization = staticInitializations[irClass]?.let { lowered ->
             val entryInfo = availableFunctions[lowered.entry]
@@ -1608,9 +1635,7 @@ internal fun collectDotNetLibraryDeclarations(
             continue
         }
         if (function.fileOrNull !in files || function.isOriginallyLocalDeclaration || function.isFakeOverride) continue
-        val logicalKey = preLoweringDeclarationKeys[function]
-            ?: function.computeDotNetLibraryAbiKeyOrNull("F", signatureComputer)
-            ?: continue
+        val logicalKey = preLoweringDeclarationKeys[function] ?: continue
         val interfaceDefaultImplementation = interfaceDefaultImplementations[function]?.let { lowered ->
             val helperInfo = availableFunctions[lowered.helper]
                 ?: error(
