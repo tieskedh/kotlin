@@ -25,6 +25,12 @@ data class DotNetClrResolvedCustomAttributeConstructor(
     val constructor: DotNetClrMetadataHandle,
 )
 
+data class DotNetClrCustomAttributeCoreTypes(
+    val systemAttribute: DotNetClrResolvedTypeDefinition,
+    val systemEnum: DotNetClrResolvedTypeDefinition,
+    val systemType: DotNetClrResolvedTypeDefinition,
+)
+
 sealed interface DotNetClrCustomAttributeConstructorResolution {
     data class Resolved(
         val constructor: DotNetClrResolvedCustomAttributeConstructor,
@@ -52,6 +58,17 @@ sealed interface DotNetClrCustomAttributeValueType {
     }
 
     data object TaggedObject : DotNetClrCustomAttributeValueType
+
+    data object SystemType : DotNetClrCustomAttributeValueType
+
+    data class EnumType(
+        val type: DotNetClrResolvedTypeDefinition,
+        val storageType: DotNetClrPrimitiveType,
+    ) : DotNetClrCustomAttributeValueType {
+        init {
+            customAttributeIntegralBitWidth(storageType)
+        }
+    }
 
     data class SzArray(
         val elementType: DotNetClrCustomAttributeValueType,
@@ -81,25 +98,7 @@ sealed interface DotNetClrCustomAttributeValue {
         val bits: ULong,
     ) : DotNetClrCustomAttributeValue {
         init {
-            val bitWidth = when (type) {
-                DotNetClrPrimitiveType.INT8,
-                DotNetClrPrimitiveType.UINT8,
-                -> 8
-
-                DotNetClrPrimitiveType.INT16,
-                DotNetClrPrimitiveType.UINT16,
-                -> 16
-
-                DotNetClrPrimitiveType.INT32,
-                DotNetClrPrimitiveType.UINT32,
-                -> 32
-
-                DotNetClrPrimitiveType.INT64,
-                DotNetClrPrimitiveType.UINT64,
-                -> 64
-
-                else -> error("Custom-attribute integral value cannot have type $type")
-            }
+            val bitWidth = customAttributeIntegralBitWidth(type)
             require(bitWidth == 64 || bits < (1uL shl bitWidth)) {
                 "Custom-attribute $type value does not fit in $bitWidth bits"
             }
@@ -128,6 +127,17 @@ sealed interface DotNetClrCustomAttributeValue {
         val type: DotNetClrCustomAttributeValueType.SzArray,
         val elements: List<DotNetClrCustomAttributeValue>?,
     ) : DotNetClrCustomAttributeValue
+
+    data class EnumValue(
+        val type: DotNetClrCustomAttributeValueType.EnumType,
+        val storageValue: IntegralValue,
+    ) : DotNetClrCustomAttributeValue {
+        init {
+            require(storageValue.type == type.storageType) {
+                "Custom-attribute enum storage value does not match its declared storage type"
+            }
+        }
+    }
 }
 
 data class DotNetClrDecodedCustomAttribute(
@@ -145,6 +155,8 @@ enum class DotNetClrCustomAttributeValueFailure {
     INVALID_UTF8,
     INVALID_SERIALIZATION_TYPE_CODE,
     INVALID_ARRAY_LENGTH,
+    TYPE_RESOLUTION_FAILED,
+    INVALID_ENUM_TYPE,
     VALUE_LIMIT_EXCEEDED,
     TRAILING_DATA,
 }
@@ -163,6 +175,8 @@ sealed interface DotNetClrCustomAttributeValueDecoding {
     data class Invalid(
         val failure: DotNetClrCustomAttributeValueFailure,
         val fixedArgumentIndex: Int? = null,
+        val typeResolution: DotNetClrTypeResolution.Unresolved? = null,
+        val enumStorageFailure: DotNetClrEnumStorageFailure? = null,
     ) : DotNetClrCustomAttributeValueDecoding
 
     data class Unsupported(
@@ -179,7 +193,7 @@ sealed interface DotNetClrCustomAttributeValueDecoding {
  */
 class DotNetClrCustomAttributeDecoder(
     private val typeResolver: DotNetClrTypeResolver,
-    private val systemAttribute: DotNetClrResolvedTypeDefinition,
+    private val coreTypes: DotNetClrCustomAttributeCoreTypes,
 ) {
     fun resolveConstructor(
         assembly: DotNetClrAssemblyMetadata,
@@ -273,7 +287,10 @@ class DotNetClrCustomAttributeDecoder(
         if (attributeType.definition.isAbstract) {
             return invalid(DotNetClrCustomAttributeConstructorFailure.ATTRIBUTE_TYPE_IS_ABSTRACT)
         }
-        when (val hierarchy = typeResolver.isSameOrDerivedFrom(attributeType, systemAttribute)) {
+        when (
+            val hierarchy =
+                typeResolver.isSameOrDerivedFrom(attributeType, coreTypes.systemAttribute)
+        ) {
             DotNetClrTypeHierarchyResolution.Matches -> Unit
             DotNetClrTypeHierarchyResolution.DoesNotMatch ->
                 return invalid(
@@ -341,7 +358,7 @@ class DotNetClrCustomAttributeDecoder(
                 ArrayList<DotNetClrCustomAttributeValue>(constructor.signature.parameterTypes.size)
             constructor.signature.parameterTypes.forEachIndexed { index, parameterType ->
                 val value = try {
-                    val valueType = fixedArgumentType(parameterType)
+                    val valueType = fixedArgumentType(assembly, parameterType)
                         ?: return unsupportedValue(
                             DotNetClrCustomAttributeValueUnsupported.FIXED_ARGUMENT_TYPE,
                             index,
@@ -353,6 +370,18 @@ class DotNetClrCustomAttributeDecoder(
                     return unsupportedValue(
                         unsupported.unsupported,
                         index,
+                    )
+                } catch (failure: CustomAttributeTypeResolutionFailure) {
+                    return invalidValue(
+                        DotNetClrCustomAttributeValueFailure.TYPE_RESOLUTION_FAILED,
+                        fixedArgumentIndex = index,
+                        typeResolution = failure.resolution,
+                    )
+                } catch (failure: CustomAttributeEnumFailure) {
+                    return invalidValue(
+                        DotNetClrCustomAttributeValueFailure.INVALID_ENUM_TYPE,
+                        fixedArgumentIndex = index,
+                        enumStorageFailure = failure.failure,
                     )
                 }
                 fixedArguments += value
@@ -373,6 +402,7 @@ class DotNetClrCustomAttributeDecoder(
     }
 
     private fun fixedArgumentType(
+        assembly: DotNetClrAssemblyMetadata,
         type: DotNetClrTypeSignature,
         isArrayElement: Boolean = false,
     ): DotNetClrCustomAttributeValueType? =
@@ -394,14 +424,58 @@ class DotNetClrCustomAttributeDecoder(
                 if (isArrayElement) {
                     null
                 } else {
-                    fixedArgumentType(type.elementType, isArrayElement = true)?.let { elementType ->
+                    fixedArgumentType(
+                        assembly,
+                        type.elementType,
+                        isArrayElement = true,
+                    )?.let { elementType ->
                         DotNetClrCustomAttributeValueType.SzArray(elementType)
                     }
                 }
             }
 
+            is DotNetClrTypeSignature.Named ->
+                resolvedNamedFixedArgumentType(assembly, type)
+
             else -> null
         }
+
+    private fun resolvedNamedFixedArgumentType(
+        assembly: DotNetClrAssemblyMetadata,
+        signature: DotNetClrTypeSignature.Named,
+    ): DotNetClrCustomAttributeValueType? {
+        val resolvedType = when (
+            val resolution = typeResolver.resolveTypeDefinition(assembly, signature.type)
+        ) {
+            is DotNetClrTypeResolution.Resolved -> resolution.type
+            is DotNetClrTypeResolution.Unresolved ->
+                throw CustomAttributeTypeResolutionFailure(resolution)
+        }
+        if (resolvedType.hasSameIdentityAs(coreTypes.systemType)) {
+            return if (signature.isValueType) null else DotNetClrCustomAttributeValueType.SystemType
+        }
+        return when (
+            val enumStorage =
+                typeResolver.resolveEnumStorage(resolvedType, coreTypes.systemEnum)
+        ) {
+            is DotNetClrEnumStorageResolution.Resolved -> {
+                if (!signature.isValueType) {
+                    throw CustomAttributeEnumFailure()
+                }
+                DotNetClrCustomAttributeValueType.EnumType(
+                    resolvedType,
+                    enumStorage.storageType,
+                )
+            }
+
+            DotNetClrEnumStorageResolution.NotEnum -> null
+            is DotNetClrEnumStorageResolution.UnresolvedBaseType ->
+                throw CustomAttributeTypeResolutionFailure(enumStorage.resolution)
+
+            is DotNetClrEnumStorageResolution.Invalid ->
+                throw CustomAttributeEnumFailure(enumStorage.failure)
+        }
+    }
 
     private fun decodeArgument(
         reader: CustomAttributeBlobReader,
@@ -422,6 +496,14 @@ class DotNetClrCustomAttributeDecoder(
 
             is DotNetClrCustomAttributeValueType.SzArray ->
                 decodeArrayArgument(reader, type, nestingDepth)
+
+            DotNetClrCustomAttributeValueType.SystemType ->
+                throw CustomAttributeUnsupportedFailure(
+                    DotNetClrCustomAttributeValueUnsupported.TYPE_OR_ENUM_ARGUMENT
+                )
+
+            is DotNetClrCustomAttributeValueType.EnumType ->
+                decodeEnumArgument(reader, type)
         }
 
     private fun decodePrimitiveArgument(
@@ -538,6 +620,17 @@ class DotNetClrCustomAttributeDecoder(
         return DotNetClrCustomAttributeValue.ArrayValue(type, elements.toList())
     }
 
+    private fun decodeEnumArgument(
+        reader: CustomAttributeBlobReader,
+        type: DotNetClrCustomAttributeValueType.EnumType,
+    ): DotNetClrCustomAttributeValue.EnumValue {
+        val byteCount = customAttributeIntegralBitWidth(type.storageType) / 8
+        return DotNetClrCustomAttributeValue.EnumValue(
+            type,
+            integralValue(type.storageType, reader, byteCount),
+        )
+    }
+
     private fun minimumEncodedSize(type: DotNetClrCustomAttributeValueType): Int =
         when (type) {
             is DotNetClrCustomAttributeValueType.Primitive -> {
@@ -571,6 +664,9 @@ class DotNetClrCustomAttributeDecoder(
             }
 
             DotNetClrCustomAttributeValueType.TaggedObject -> 2
+            DotNetClrCustomAttributeValueType.SystemType -> 1
+            is DotNetClrCustomAttributeValueType.EnumType ->
+                customAttributeIntegralBitWidth(type.storageType) / 8
             is DotNetClrCustomAttributeValueType.SzArray -> 4
         }
 
@@ -592,8 +688,15 @@ class DotNetClrCustomAttributeDecoder(
     private fun invalidValue(
         failure: DotNetClrCustomAttributeValueFailure,
         fixedArgumentIndex: Int? = null,
+        typeResolution: DotNetClrTypeResolution.Unresolved? = null,
+        enumStorageFailure: DotNetClrEnumStorageFailure? = null,
     ): DotNetClrCustomAttributeValueDecoding.Invalid =
-        DotNetClrCustomAttributeValueDecoding.Invalid(failure, fixedArgumentIndex)
+        DotNetClrCustomAttributeValueDecoding.Invalid(
+            failure,
+            fixedArgumentIndex,
+            typeResolution,
+            enumStorageFailure,
+        )
 
     private fun unsupportedValue(
         unsupported: DotNetClrCustomAttributeValueUnsupported,
@@ -735,3 +838,32 @@ private class CustomAttributeBlobFailure(
 private class CustomAttributeUnsupportedFailure(
     val unsupported: DotNetClrCustomAttributeValueUnsupported,
 ) : Exception()
+
+private class CustomAttributeTypeResolutionFailure(
+    val resolution: DotNetClrTypeResolution.Unresolved,
+) : Exception()
+
+private class CustomAttributeEnumFailure(
+    val failure: DotNetClrEnumStorageFailure? = null,
+) : Exception()
+
+private fun customAttributeIntegralBitWidth(type: DotNetClrPrimitiveType): Int =
+    when (type) {
+        DotNetClrPrimitiveType.INT8,
+        DotNetClrPrimitiveType.UINT8,
+        -> 8
+
+        DotNetClrPrimitiveType.INT16,
+        DotNetClrPrimitiveType.UINT16,
+        -> 16
+
+        DotNetClrPrimitiveType.INT32,
+        DotNetClrPrimitiveType.UINT32,
+        -> 32
+
+        DotNetClrPrimitiveType.INT64,
+        DotNetClrPrimitiveType.UINT64,
+        -> 64
+
+        else -> error("Custom-attribute integral value cannot have type $type")
+    }
